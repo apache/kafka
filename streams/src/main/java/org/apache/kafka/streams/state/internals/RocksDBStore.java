@@ -750,20 +750,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     @Override
     public ReadOnlyKeyValueStore<Bytes, byte[]> readOnly(final IsolationLevel isolationLevel) {
-        return new ReadOnlyView(viewAccessor(isolationLevel));
-    }
-
-    /**
-     * Returns the {@link DBAccessor} that should be used for reads at the given isolation level.
-     * For READ_COMMITTED on a transactional store this is the underlying {@link DirectDBAccessor};
-     * otherwise it is the active {@code dbAccessor} (which may consult the transaction buffer).
-     */
-    DBAccessor viewAccessor(final IsolationLevel isolationLevel) {
-        Objects.requireNonNull(isolationLevel, "isolationLevel cannot be null");
-        if (isolationLevel == IsolationLevel.READ_COMMITTED && dbAccessor instanceof TransactionalDBAccessor) {
-            return ((TransactionalDBAccessor) dbAccessor).underlying;
-        }
-        return dbAccessor;
+        return new ReadOnlyView(dbAccessor.readOnly(isolationLevel));
     }
 
     // Read helpers for isolation-level views that sit above this store (e.g. LogicalKeyValueSegment.readOnly).
@@ -1078,6 +1065,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         void reset();
         void close();
 
+        default DBAccessor readOnly(final IsolationLevel isolationLevel) {
+            Objects.requireNonNull(isolationLevel, "isolationLevel cannot be null");
+            return this;
+        }
+
         default ManagedKeyValueIterator<Bytes, byte[]> all(final ColumnFamilyHandle cf, final String storeName, final boolean forward) {
             final RocksIterator iter = newIterator(cf);
             if (forward) {
@@ -1254,6 +1246,16 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         public void close() {
             buffer.close();
             underlying.close();
+        }
+
+        @Override
+        public DBAccessor readOnly(final IsolationLevel isolationLevel) {
+            Objects.requireNonNull(isolationLevel, "isolationLevel cannot be null");
+            if (isolationLevel == IsolationLevel.READ_COMMITTED) {
+                return underlying;
+            } else {
+                return this;
+            }
         }
 
         @Override

@@ -318,7 +318,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     }
 
     private static List<LogicalKeyValueSegment> viewSegments(final List<LogicalKeyValueSegment> segments,
-                                                              final IsolationLevel level) {
+                                                             final IsolationLevel level) {
         if (level == IsolationLevel.READ_UNCOMMITTED) {
             return segments;
         }

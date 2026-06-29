@@ -91,7 +91,7 @@ public class LogicalKeyValueSegment implements Segment, VersionedStoreSegment {
      */
     @Override
     public LogicalKeyValueSegment readOnly(final IsolationLevel level) {
-        return new LogicalKeyValueSegment(id, name, physicalStore, physicalStore.viewAccessor(level));
+        return new LogicalKeyValueSegment(id, name, physicalStore, physicalStore.dbAccessor.readOnly(level));
     }
 
     private void rejectIfReadOnly() {
