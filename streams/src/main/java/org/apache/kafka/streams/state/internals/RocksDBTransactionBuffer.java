@@ -279,14 +279,11 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
 
     @Override
     void discardPendingBatch() {
-        // Called from rollback() under the snapshotLock write lock: discard the staged position
-        // alongside the staged writes and range tombstones.
         writeBatch.clear();
         rangeTombstones = Collections.emptyNavigableMap();
         pendingPosition = Position.emptyPosition();
     }
 
-    /** Stage the current record's position into the uncommitted transaction (owner write path). */
     void updatePosition(final StateStoreContext stateStoreContext) {
         snapshotLock.writeLock().lock();
         try {
@@ -296,7 +293,6 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
         }
     }
 
-    /** A point-in-time copy of the uncommitted position deltas, for isolation-aware (IQ) reads. */
     Position pendingPosition() {
         snapshotLock.readLock().lock();
         try {
@@ -306,7 +302,6 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
         }
     }
 
-    /** Merge the uncommitted position deltas into {@code committed} and clear them (commit path). */
     void mergePendingPositionInto(final Position committed) {
         snapshotLock.writeLock().lock();
         try {
