@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.api;
 
+import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.common.header.Headers;
 
 /**
@@ -30,6 +31,7 @@ import org.apache.kafka.common.header.Headers;
  * @param <K> The type of the key
  * @param <V> The type of the value
  */
+@Evolving
 public interface ReadOnlyRecord<K, V> {
 
     /**
