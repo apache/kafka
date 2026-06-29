@@ -25,7 +25,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 
 import org.slf4j.Logger;
@@ -207,18 +206,28 @@ public class ClientTelemetryUtils {
                 .orElse(CompressionType.NONE);
     }
 
-    public static ByteBuffer compress(ByteBuffer serializedMetrics, CompressionType compressionType) throws IOException {
+    public static ByteBuffer compress(byte[] serializedMetrics, CompressionType compressionType) throws IOException {
         try (ByteBufferOutputStream compressedOut = new ByteBufferOutputStream(512)) {
             Compression compression = Compression.of(compressionType).build();
             try (OutputStream out = compression.wrapForOutput(compressedOut, RecordBatch.CURRENT_MAGIC_VALUE)) {
-                out.write(Utils.toArray(serializedMetrics.duplicate()));
+                out.write(serializedMetrics);
             }
             compressedOut.buffer().flip();
             return compressedOut.buffer();
         }
     }
 
-    public static ByteBuffer serializeMetricsData(List<SinglePointMetric> metrics) {
+    /**
+     * Assembles and compresses a {@code MetricsData} payload for the given metrics. The io.opentelemetry
+     * types are relocated in the shaded clients jar, so keeping this assembly in main code lets test code
+     * build and compress a payload without referencing io.opentelemetry directly. The layout mirrors the
+     * payload produced by {@link ClientTelemetryReporter} (one resource metric per single point metric).
+     *
+     * @param metrics the metrics to assemble into a {@code MetricsData} payload
+     * @param compressionType the compression to apply
+     * @return the compressed {@code MetricsData} payload
+     */
+    public static ByteBuffer compressMetrics(List<SinglePointMetric> metrics, CompressionType compressionType) throws IOException {
         MetricsData.Builder builder = MetricsData.newBuilder();
         for (SinglePointMetric metric : metrics) {
             builder.addResourceMetrics(ResourceMetrics.newBuilder()
@@ -228,7 +237,7 @@ public class ClientTelemetryUtils {
                     .build())
                 .build());
         }
-        return ByteBuffer.wrap(builder.build().toByteArray());
+        return compress(builder.build().toByteArray(), compressionType);
     }
 
     public static ByteBuffer decompress(ByteBuffer metrics, CompressionType compressionType, int maxDecompressedBytes) {

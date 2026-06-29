@@ -140,9 +140,9 @@ public class ClientTelemetryUtilsTest {
     @ParameterizedTest
     @EnumSource(CompressionType.class)
     public void testCompressDecompress(CompressionType compressionType) throws IOException {
-        ByteBuffer serialized = ClientTelemetryUtils.serializeMetricsData(sampleMetrics());
-        byte[] raw = Utils.toArray(serialized.duplicate());
-        ByteBuffer compressed = ClientTelemetryUtils.compress(serialized, compressionType);
+        List<SinglePointMetric> metrics = sampleMetrics();
+        byte[] raw = Utils.toArray(ClientTelemetryUtils.compressMetrics(metrics, CompressionType.NONE));
+        ByteBuffer compressed = ClientTelemetryUtils.compressMetrics(metrics, compressionType);
         assertNotNull(compressed);
         if (compressionType != CompressionType.NONE) {
             assertTrue(compressed.limit() < raw.length);
@@ -172,9 +172,9 @@ public class ClientTelemetryUtilsTest {
     @Test
     public void testDecompressExceedingMaxSizeThrows() throws IOException {
         // Compress a payload then verify decompression with a small limit throws.
-        ByteBuffer serialized = ClientTelemetryUtils.serializeMetricsData(sampleMetrics());
-        byte[] raw = Utils.toArray(serialized.duplicate());
-        ByteBuffer compressed = ClientTelemetryUtils.compress(serialized, CompressionType.GZIP);
+        List<SinglePointMetric> metrics = sampleMetrics();
+        byte[] raw = Utils.toArray(ClientTelemetryUtils.compressMetrics(metrics, CompressionType.NONE));
+        ByteBuffer compressed = ClientTelemetryUtils.compressMetrics(metrics, CompressionType.GZIP);
 
         // Set limit smaller than the actual decompressed size
         int smallLimit = raw.length - 1;
@@ -185,9 +185,9 @@ public class ClientTelemetryUtilsTest {
 
     @Test
     public void testDecompressWithPayloadSizeSucceeds() throws IOException {
-        ByteBuffer serialized = ClientTelemetryUtils.serializeMetricsData(sampleMetrics());
-        byte[] raw = Utils.toArray(serialized.duplicate());
-        ByteBuffer compressed = ClientTelemetryUtils.compress(serialized, CompressionType.GZIP);
+        List<SinglePointMetric> metrics = sampleMetrics();
+        byte[] raw = Utils.toArray(ClientTelemetryUtils.compressMetrics(metrics, CompressionType.NONE));
+        ByteBuffer compressed = ClientTelemetryUtils.compressMetrics(metrics, CompressionType.GZIP);
 
         // Set limit to exact limit prior compression.
         ByteBuffer result = ClientTelemetryUtils.decompress(compressed, CompressionType.GZIP, raw.length);

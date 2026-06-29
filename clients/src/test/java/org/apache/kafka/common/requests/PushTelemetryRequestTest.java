@@ -53,9 +53,9 @@ public class PushTelemetryRequestTest {
     @ParameterizedTest
     @EnumSource(CompressionType.class)
     public void testMetricsDataCompression(CompressionType compressionType) throws IOException {
-        ByteBuffer serialized = ClientTelemetryUtils.serializeMetricsData(sampleMetrics());
-        byte[] raw = Utils.toArray(serialized.duplicate());
-        PushTelemetryRequest req = getPushTelemetryRequest(serialized, raw, compressionType);
+        List<SinglePointMetric> metrics = sampleMetrics();
+        byte[] raw = Utils.toArray(ClientTelemetryUtils.compressMetrics(metrics, CompressionType.NONE));
+        PushTelemetryRequest req = getPushTelemetryRequest(metrics, raw, compressionType);
 
         ByteBuffer receivedMetricsBuffer = req.metricsData(1024 * 1024);
         assertNotNull(receivedMetricsBuffer);
@@ -63,8 +63,8 @@ public class PushTelemetryRequestTest {
         assertArrayEquals(raw, Utils.toArray(receivedMetricsBuffer));
     }
 
-    private PushTelemetryRequest getPushTelemetryRequest(ByteBuffer serializedMetrics, byte[] raw, CompressionType compressionType) throws IOException {
-        ByteBuffer compressedData = ClientTelemetryUtils.compress(serializedMetrics, compressionType);
+    private PushTelemetryRequest getPushTelemetryRequest(List<SinglePointMetric> metrics, byte[] raw, CompressionType compressionType) throws IOException {
+        ByteBuffer compressedData = ClientTelemetryUtils.compressMetrics(metrics, compressionType);
         if (compressionType != CompressionType.NONE) {
             assertTrue(compressedData.limit() < raw.length);
         } else {
