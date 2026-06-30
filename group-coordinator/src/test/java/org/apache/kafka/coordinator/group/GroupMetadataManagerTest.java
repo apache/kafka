@@ -3105,6 +3105,69 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testStaticMemberRejoinsWithSameMemberIdAndDifferentInstanceId() {
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+        String instanceId1 = "instance-1";
+        String instanceId2 = "instance-2";
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .buildCoordinatorMetadataImage();
+
+        // Consumer group with one static member using instanceId1.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId1)
+                    .setState(MemberState.STABLE)
+                    .setInstanceId(instanceId1)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setClientId(DEFAULT_CLIENT_ID)
+                    .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+                    .setSubscribedTopicNames(List.of("foo", "bar"))
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)), 10))
+                    .build())
+                .withAssignment(memberId1, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)))
+                .withAssignmentEpoch(10)
+                .withMetadataHash(computeGroupHash(Map.of(
+                    fooTopicName, computeTopicHash(fooTopicName, metadataImage))
+                )))
+            .build();
+
+        assertEquals(
+            Map.of(instanceId1, memberId1),
+            context.groupMetadataManager.consumerGroup(groupId).staticMembers()
+        );
+
+        // Member rejoins with the same member id and a different instance id.
+        context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId1)
+                .setInstanceId(instanceId2)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(List.of("foo", "bar"))
+                .setTopicPartitions(List.of()));
+
+        assertEquals(
+            Map.of(instanceId2, memberId1),
+            context.groupMetadataManager.consumerGroup(groupId).staticMembers()
+        );
+    }
+
+    @Test
     public void testShouldThrownUnreleasedInstanceIdExceptionWhenNewMemberJoinsWithInUseInstanceId() {
         String groupId = "fooup";
         // Use a static member id as it makes the test easier.
