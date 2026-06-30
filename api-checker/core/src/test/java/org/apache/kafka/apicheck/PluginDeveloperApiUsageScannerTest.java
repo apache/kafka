@@ -75,9 +75,11 @@ class PluginDeveloperApiUsageScannerTest {
         assertFalse(violations.isEmpty(), "Reference to an internal Kafka class must be reported");
         PublicApiViolation v = violations.get(0);
         assertEquals("INTERNAL_API_USAGE", v.getViolationType());
-        assertEquals("org.apache.kafka.internals.SecretCabal", v.getClassName());
-        assertTrue(v.getDescription().contains("com.example.InternalConsumer"),
-                "violation must name the consumer class. got: " + v.getDescription());
+        // className is the consumer (offender) so the report's `Summary by Class` groups by the
+        // file a developer needs to open; the leaked target lives in the description.
+        assertEquals("com.example.InternalConsumer", v.getClassName());
+        assertTrue(v.getDescription().contains("org.apache.kafka.internals.SecretCabal"),
+                "violation description must name the leaked internal class. got: " + v.getDescription());
     }
 
     @Test
@@ -107,7 +109,7 @@ class PluginDeveloperApiUsageScannerTest {
         List<PublicApiViolation> violations = scanner.scan(List.of(jar)).violations();
 
         assertFalse(violations.isEmpty(), "scan of jar should find the internal reference");
-        assertEquals("org.apache.kafka.internals.Hidden", violations.get(0).getClassName());
+        assertEquals("com.example.JarConsumer", violations.get(0).getClassName());
     }
 
     @Test
@@ -130,7 +132,7 @@ class PluginDeveloperApiUsageScannerTest {
         PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(always(false));
         List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).violations();
 
-        assertTrue(violations.stream().anyMatch(v -> "org.apache.kafka.internals.Hidden".equals(v.getClassName())),
+        assertTrue(violations.stream().anyMatch(v -> "com.example.FieldHolder".equals(v.getClassName())),
                 "field-type reference must be reported, got: " + violations);
     }
 
@@ -204,7 +206,9 @@ class PluginDeveloperApiUsageScannerTest {
 
         assertFalse(violations.isEmpty(),
                 "Reference to a Private-nested type must be flagged even when its outer is Public; got: " + violations);
-        assertEquals("org.apache.kafka.Outer$Inner", violations.get(0).getClassName());
+        assertEquals("com.example.NestedConsumer", violations.get(0).getClassName());
+        assertTrue(violations.get(0).getDescription().contains("org.apache.kafka.Outer$Inner"),
+                "description must carry the leaked nested type; got: " + violations.get(0).getDescription());
     }
 
     @Test
@@ -245,7 +249,7 @@ class PluginDeveloperApiUsageScannerTest {
         PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(always(false));
         List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).violations();
 
-        assertTrue(violations.stream().anyMatch(v -> "org.apache.kafka.internals.Boom".equals(v.getClassName())),
+        assertTrue(violations.stream().anyMatch(v -> "com.example.CatchConsumer".equals(v.getClassName())),
                 "exception-table entry must be reported; got: " + violations);
     }
 
@@ -262,7 +266,7 @@ class PluginDeveloperApiUsageScannerTest {
         PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(always(false));
         List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).violations();
 
-        assertTrue(violations.stream().anyMatch(v -> "org.apache.kafka.internals.Hidden".equals(v.getClassName())),
+        assertTrue(violations.stream().anyMatch(v -> "com.example.HeaderRef".equals(v.getClassName())),
                 "method-header return-type ref must flush as a violation; got: " + violations);
     }
 
@@ -293,7 +297,7 @@ class PluginDeveloperApiUsageScannerTest {
         PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(always(false));
         List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).violations();
 
-        assertTrue(violations.stream().anyMatch(v -> "org.apache.kafka.internals.Hidden".equals(v.getClassName())),
+        assertTrue(violations.stream().anyMatch(v -> "com.example.AbstractConsumer".equals(v.getClassName())),
                 "abstract-method header ref must be flushed at visitEnd; got: " + violations);
     }
 

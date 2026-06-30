@@ -168,7 +168,11 @@ class PublicApiCheckerTest {
         assertFalse(result.violations().isEmpty(),
                 "unannotated Kafka class reference must be flagged: " + result.violations());
         assertEquals("INTERNAL_API_USAGE", result.violations().get(0).getViolationType());
-        assertEquals("org.apache.kafka.internals.Hidden", result.violations().get(0).getClassName());
+        // className tracks the consumer (offender), so `Summary by Class` in the report groups
+        // by the file a developer has to open. The leaked target lives in the description.
+        assertEquals("com.example.Consumer", result.violations().get(0).getClassName());
+        assertTrue(result.violations().get(0).getDescription().contains("org.apache.kafka.internals.Hidden"),
+                "description must carry the leaked internal type: " + result.violations().get(0).getDescription());
     }
 
     @Test

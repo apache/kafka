@@ -196,9 +196,9 @@ public class PluginDeveloperApiUsageScanner {
         String location = formatLocation(consumerClass, memberName, line);
         String key = referenceKey(consumerClass, binaryName, memberName, line);
         if (suppressionReason != null) {
-            recordSuppression(suppressions, key, binaryName, memberName, location, suppressionReason);
+            recordSuppression(suppressions, key, consumerClass, binaryName, memberName, location, suppressionReason);
         } else {
-            recordViolation(violations, key, binaryName, memberName, location);
+            recordViolation(violations, key, consumerClass, binaryName, memberName, location);
         }
     }
 
@@ -236,25 +236,28 @@ public class PluginDeveloperApiUsageScanner {
     }
 
     private static void recordSuppression(Map<String, PublicApiViolation> suppressions,
-                                          String key, String binaryName, String memberName,
-                                          String location, String reason) {
+                                          String key, String consumerClass, String binaryName,
+                                          String memberName, String location, String reason) {
         boolean noReason = reason.isEmpty();
         String prettyReason = noReason ? NO_REASON_GIVEN : reason;
         LOG.info("Suppressed internal-API reference to {} from {}: {}", binaryName, location, prettyReason);
         String description = String.format(
                 "Suppressed reference to internal Kafka class %s from %s — reason: %s",
                 binaryName, location, prettyReason);
+        // className is the offender (consumer) so the report's `Summary by Class` groups by the
+        // file a developer needs to open — the leaked target lives in the description.
         suppressions.putIfAbsent(key,
-                new PublicApiViolation(binaryName, "SUPPRESSED_INTERNAL_API_USAGE", description, memberName, noReason));
+                new PublicApiViolation(consumerClass, "SUPPRESSED_INTERNAL_API_USAGE", description, memberName, noReason));
     }
 
     private static void recordViolation(Map<String, PublicApiViolation> violations,
-                                        String key, String binaryName, String memberName, String location) {
+                                        String key, String consumerClass, String binaryName,
+                                        String memberName, String location) {
         String description = String.format(
                 "Bytecode reference to internal Kafka class %s from %s",
                 binaryName, location);
         violations.putIfAbsent(key,
-                new PublicApiViolation(binaryName, "INTERNAL_API_USAGE", description, memberName));
+                new PublicApiViolation(consumerClass, "INTERNAL_API_USAGE", description, memberName));
     }
 
     /**
