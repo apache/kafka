@@ -195,6 +195,14 @@ public class StreamsGroup implements Group {
     private final TimelineHashMap<String, TimelineHashMap<Integer, Set<String>>> currentWarmupTaskToProcessIds;
 
     /**
+     * The latest per-task changelog offsets and end-offsets reported by each member, keyed by member ID.
+     * This is transient telemetry that the assignor uses to estimate task lag for warm-up promotion. Per KIP-1071
+     * it is not persisted to the {@code __consumer_offsets} topic; it is held in memory and re-reported by members
+     * on the task-offset interval (and is therefore lost on coordinator failover until re-reported).
+     */
+    private final Map<String, MemberTaskOffsets> taskOffsets = new HashMap<>();
+
+    /**
      * The Streams topology.
      */
     private final TimelineObject<Optional<StreamsTopology>> topology;
@@ -522,6 +530,32 @@ public class StreamsGroup implements Group {
         removeStaticMember(oldMember);
         maybeUpdateGroupState();
         endpointToPartitionsCache.remove(memberId);
+        taskOffsets.remove(memberId);
+    }
+
+    /**
+     * Updates the latest per-task changelog offsets reported by a member. These are transient and not persisted.
+     *
+     * @param memberId        The member ID.
+     * @param memberOffsets   The reported task offsets and end-offsets.
+     */
+    public void updateTaskOffsets(String memberId, MemberTaskOffsets memberOffsets) {
+        taskOffsets.put(memberId, memberOffsets);
+    }
+
+    /**
+     * @return The latest per-task changelog offsets reported by the given member, or
+     *         {@link MemberTaskOffsets#EMPTY} if the member has not reported any.
+     */
+    public MemberTaskOffsets taskOffsets(String memberId) {
+        return taskOffsets.getOrDefault(memberId, MemberTaskOffsets.EMPTY);
+    }
+
+    /**
+     * @return An immutable map of the latest per-task changelog offsets reported by each member, keyed by member ID.
+     */
+    public Map<String, MemberTaskOffsets> taskOffsets() {
+        return Collections.unmodifiableMap(taskOffsets);
     }
 
     /**

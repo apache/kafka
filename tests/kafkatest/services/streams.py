@@ -447,11 +447,33 @@ class StreamsBrokerCompatibilityService(StreamsTestBaseService):
 
 
 class StreamsBrokerDownResilienceService(StreamsTestBaseService):
-    def __init__(self, test_context, kafka, configs):
+    def __init__(self, test_context, kafka, group_protocol="classic", extra_configs=None):
         super(StreamsBrokerDownResilienceService, self).__init__(test_context,
                                                                  kafka,
                                                                  "org.apache.kafka.streams.tests.StreamsBrokerDownResilienceTest",
-                                                                 configs)
+                                                                 "")
+        self.GROUP_PROTOCOL = group_protocol
+        self.EXTRA_CONFIGS = extra_configs or {}
+
+    def prop_file(self):
+        properties = {streams_property.STATE_DIR: self.state_dir,
+                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
+                      streams_property.GROUP_PROTOCOL: self.GROUP_PROTOCOL,
+                      # Required configs for broker down resilience
+                      # Consumer max.poll.interval > min(max.block.ms, ((retries + 1) * request.timeout)
+                      "consumer.max.poll.interval.ms": 50000,
+                      "producer.retries": 2,
+                      "producer.request.timeout.ms": 15000,
+                      "producer.max.block.ms": 30000,
+                      "acceptable.recovery.lag": "9223372036854775807", # enable a one-shot assignment
+                      "session.timeout.ms": "10000" # set back to 10s for tests. See KIP-735
+                      }
+
+        # Merge any extra configs
+        properties.update(self.EXTRA_CONFIGS)
+
+        cfg = KafkaConfig(**properties)
+        return cfg.render()
 
     def start_cmd(self, node):
         args = self.args.copy()
@@ -465,8 +487,7 @@ class StreamsBrokerDownResilienceService(StreamsTestBaseService):
 
         cmd = "( export KAFKA_LOG4J_OPTS=\"%(log4j_param)s%(log4j)s\"; " \
               "INCLUDE_TEST_JARS=true %(kafka_run_class)s %(streams_class_name)s " \
-              " %(config_file)s %(user_test_args1)s %(user_test_args2)s %(user_test_args3)s" \
-              " %(user_test_args4)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
+              " %(config_file)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
 
         self.logger.info("Executing: " + cmd)
 

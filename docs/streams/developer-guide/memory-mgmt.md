@@ -124,7 +124,7 @@ Following from the example first shown in section [State Stores](processor-api.h
 
 Record caches are not supported for [versioned state stores](processor-api.html#streams-developer-guide-state-store-versioned).
 
-To avoid reading stale data, you can `flush()` the store before creating the iterator. Note, that flushing too often can lead to performance degration if RocksDB is used, so we advice to avoid flushing manually in general.
+To avoid reading stale data, you can `flush()` the store before creating the iterator. Note, that flushing too often can lead to performance degradation if RocksDB is used, so we advise to avoid flushing manually in general.
 
 # RocksDB
 

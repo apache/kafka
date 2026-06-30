@@ -65,6 +65,7 @@ import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.Endpoint;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.KeyValue;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.TaskIds;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.TaskOffset;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.Topology;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData.Status;
@@ -166,6 +167,7 @@ import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
 import org.apache.kafka.coordinator.group.streams.topics.TopicConfigurationException;
+import org.apache.kafka.coordinator.group.util.UpdatedMembersAndTargetAssignmentView;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
@@ -2077,6 +2079,8 @@ public class GroupMetadataManager {
         List<TaskIds> ownedActiveTasks,
         List<TaskIds> ownedStandbyTasks,
         List<TaskIds> ownedWarmupTasks,
+        List<TaskOffset> taskOffsets,
+        List<TaskOffset> taskEndOffsets,
         String processId,
         Endpoint userEndpoint,
         List<KeyValue> clientTags,
@@ -2126,6 +2130,14 @@ public class GroupMetadataManager {
                 isJoining,
                 records
             );
+        }
+
+        // Store the latest task changelog offsets/end-offsets reported by the member. These are transient telemetry
+        // (used by the assignor to estimate task lag) and are not persisted. Task offsets and end-offsets are reported
+        // independently: a null list means "unchanged since the last heartbeat", so we retain the previously reported
+        // value for whichever of the two is null and only update when at least one is reported.
+        if (taskOffsets != null || taskEndOffsets != null) {
+            group.updateTaskOffsets(memberId, group.taskOffsets(memberId).update(taskOffsets, taskEndOffsets));
         }
 
         // 1. Create or update the member.
@@ -4145,24 +4157,23 @@ public class GroupMetadataManager {
             updatedMember
         ).orElse(defaultConsumerGroupAssignor.name());
         try {
+            UpdatedMembersAndTargetAssignmentView<ConsumerGroupMember, Assignment> updatedMembersAndTargetAssignment =
+                new UpdatedMembersAndTargetAssignmentView<>(
+                    group.members(),
+                    group.staticMembers(),
+                    group.targetAssignment()
+                );
+            updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), updatedMember.instanceId(), updatedMember);
+
             TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder assignmentResultBuilder =
                 new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(group.groupId(), groupEpoch, consumerGroupAssignors.get(preferredServerAssignor))
                     .withTime(time)
-                    .withMembers(group.members())
-                    .withStaticMembers(group.staticMembers())
+                    .withMembers(updatedMembersAndTargetAssignment.members())
                     .withSubscriptionType(subscriptionType)
-                    .withTargetAssignment(group.targetAssignment())
+                    .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
                     .withInvertedTargetAssignment(group.invertedTargetAssignment())
                     .withMetadataImage(metadataImage)
-                    .withResolvedRegularExpressions(group.resolvedRegularExpressions())
-                    .addOrUpdateMember(updatedMember.memberId(), updatedMember);
-
-            // If the instance id was associated to a different member, it means that the
-            // static member is replaced by the current member hence we remove the previous one.
-            String previousMemberId = group.staticMemberId(updatedMember.instanceId());
-            if (previousMemberId != null && !updatedMember.memberId().equals(previousMemberId)) {
-                assignmentResultBuilder.removeMember(previousMemberId);
-            }
+                    .withResolvedRegularExpressions(group.resolvedRegularExpressions());
 
             long startTimeMs = time.milliseconds();
             TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
@@ -4229,16 +4240,23 @@ public class GroupMetadataManager {
                 stripInitValue(shareGroupStatePartitionMetadata.get(group.groupId()).initializedTopics()) :
                 Map.of();
 
+            UpdatedMembersAndTargetAssignmentView<ShareGroupMember, Assignment> updatedMembersAndTargetAssignment =
+                new UpdatedMembersAndTargetAssignmentView<>(
+                    group.members(),
+                    Map.of(),
+                    group.targetAssignment()
+                );
+            updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), updatedMember.instanceId(), updatedMember);
+
             TargetAssignmentBuilder.ShareTargetAssignmentBuilder assignmentResultBuilder =
                 new TargetAssignmentBuilder.ShareTargetAssignmentBuilder(group.groupId(), groupEpoch, shareGroupAssignor)
                     .withTime(time)
-                    .withMembers(group.members())
+                    .withMembers(updatedMembersAndTargetAssignment.members())
                     .withSubscriptionType(subscriptionType)
-                    .withTargetAssignment(group.targetAssignment())
+                    .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
                     .withTopicAssignablePartitionsMap(initializedTopicPartitions)
                     .withInvertedTargetAssignment(group.invertedTargetAssignment())
-                    .withMetadataImage(metadataImage)
-                    .addOrUpdateMember(updatedMember.memberId(), updatedMember);
+                    .withMetadataImage(metadataImage);
 
             long startTimeMs = time.milliseconds();
             TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
@@ -4326,6 +4344,16 @@ public class GroupMetadataManager {
 
         TaskAssignor assignor = streamsGroupAssignor(group.groupId());
         try {
+            UpdatedMembersAndTargetAssignmentView<StreamsGroupMember, TasksTuple> updatedMembersAndTargetAssignment =
+                new UpdatedMembersAndTargetAssignmentView<>(
+                    group.members(),
+                    group.staticMembers(),
+                    group.targetAssignment()
+                );
+            updatedMember.ifPresent(member ->
+                updatedMembersAndTargetAssignment.addOrUpdateMember(member.memberId(), member.instanceId().orElse(null), member)
+            );
+
             org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder assignmentResultBuilder =
                 new org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder(
                     group.groupId(),
@@ -4334,23 +4362,11 @@ public class GroupMetadataManager {
                     assignmentConfigs
                 )
                 .withTime(time)
-                .withMembers(group.members())
+                .withMembers(updatedMembersAndTargetAssignment.members())
                 .withTopology(configuredTopology)
-                .withStaticMembers(group.staticMembers())
                 .withMetadataImage(metadataImage)
-                .withTargetAssignment(group.targetAssignment());
-
-            updatedMember.ifPresent(member -> {
-                assignmentResultBuilder.addOrUpdateMember(member.memberId(), member);
-                // If the instance id was associated to a different member, it means that the
-                // static member is replaced by the current member hence we remove the previous one.
-                member.instanceId().ifPresent(instanceId -> {
-                    StreamsGroupMember previousMember = group.staticMember(instanceId);
-                    if (previousMember != null && !member.memberId().equals(previousMember.memberId())) {
-                        assignmentResultBuilder.removeMember(previousMember.memberId());
-                    }
-                });
-            });
+                .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
+                .withTaskOffsets(group.taskOffsets());
 
             long startTimeMs = time.milliseconds();
             org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
@@ -5401,6 +5417,8 @@ public class GroupMetadataManager {
                 request.activeTasks(),
                 request.standbyTasks(),
                 request.warmupTasks(),
+                request.taskOffsets(),
+                request.taskEndOffsets(),
                 request.processId(),
                 request.userEndpoint(),
                 request.clientTags(),
