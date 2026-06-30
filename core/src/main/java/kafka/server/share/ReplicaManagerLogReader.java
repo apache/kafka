@@ -25,6 +25,7 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManager;
 import org.apache.kafka.server.share.LogReader;
 import org.apache.kafka.server.storage.log.FetchParams;
+import org.apache.kafka.server.util.timer.TimerTask;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogReadResult;
 import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
@@ -37,6 +38,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -185,8 +187,9 @@ public class ReplicaManagerLogReader implements LogReader {
      * RemoteStorageFetchInfo is the descriptor surfaced by a prior local read as
      * FetchDataInfo#delayedRemoteStorageFetch. The read runs on the remote storage reader pool so the
      * caller's thread is not blocked; the future completes exceptionally when remote storage is not
-     * configured or the read could not be completed. Used internally by readAsync (package-private so
-     * it remains unit-testable).
+     * configured, the read could not be completed, or the read does not finish within the configured
+     * remote fetch timeout ({@code remote.fetch.max.wait.ms}). Used internally by readAsync
+     * (package-private so it remains unit-testable).
      */
     // Visibility for testing
     CompletableFuture<FetchDataInfo> readRemote(RemoteStorageFetchInfo remoteStorageFetchInfo) {
@@ -218,6 +221,33 @@ public class ReplicaManagerLogReader implements LogReader {
             future.completeExceptionally(e);
         }
 
+        // Bound the wait on the remote read so a stalled remote tier cannot pin the read (and the
+        // resources held while it is pending) indefinitely. Use the broker's timer wheel - as
+        // DelayedShareFetch does for its remote fetch - rather than CompletableFuture#orTimeout. On
+        // expiry the future completes exceptionally with a TimeoutException, which the caller treats
+        // as a (skippable) read error.
+        if (!future.isDone()) {
+            long timeoutMs = remoteFetchMaxWaitMs();
+            TimerTask timeoutTask = new TimerTask(timeoutMs) {
+                @Override
+                public void run() {
+                    future.completeExceptionally(new TimeoutException(
+                        "Remote read for " + remoteStorageFetchInfo + " did not complete within " + timeoutMs + " ms."));
+                }
+            };
+            // Cancel the timer task once the read completes (either outcome) so it does not linger in the wheel.
+            future.whenComplete((info, exception) -> timeoutTask.cancel());
+            replicaManager.addShareFetchTimerRequest(timeoutTask);
+        }
+
         return future;
+    }
+
+    /**
+     * The maximum time to wait for a remote-tier read, taken from the broker's
+     * {@code remote.fetch.max.wait.ms}. Read per call since the config is dynamically reconfigurable.
+     */
+    private long remoteFetchMaxWaitMs() {
+        return replicaManager.config().remoteLogManagerConfig().remoteFetchMaxWaitMs();
     }
 }
