@@ -439,6 +439,7 @@ org.apache.kafka.server.metrics.ForwardingManagerMetricsTest:
 - testRemoteTimeMs
 - testTimeoutMs
 org.apache.kafka.server.metrics.LinuxIoMetricsCollectorTest:
+- testAllMetricsWithRealWorldValues
 - testReadProcFile
 - testUnableToReadNonexistentProcFile
 org.apache.kafka.server.metrics.NodeMetricsTest:
