@@ -68,7 +68,7 @@ public class ElectionBenchmarks {
         }
     }
 
-    /** A multi-voter quorum elects the local node as leader. */
+    /** The local node wins an election and becomes leader.*/
     @Benchmark
     public void electLeader(UnattachedWithMultipleVoters state, KRaftBenchmarkingCounters counters) throws Exception {
         state.context.unattachedToLeader();
