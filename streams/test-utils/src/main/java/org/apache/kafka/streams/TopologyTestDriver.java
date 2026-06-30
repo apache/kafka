@@ -267,7 +267,7 @@ public class TopologyTestDriver implements Closeable {
     };
 
     /**
-     * Create a new test diver instance.
+     * Create a new test driver instance.
      * Default test properties are used to initialize the driver instance
      *
      * @param topology the topology to be tested
@@ -279,7 +279,7 @@ public class TopologyTestDriver implements Closeable {
     }
 
     /**
-     * Create a new test diver instance.
+     * Create a new test driver instance.
      * Initialized the internally mocked wall-clock time with {@link System#currentTimeMillis() current system time}.
      *
      * @param topology the topology to be tested
@@ -293,7 +293,7 @@ public class TopologyTestDriver implements Closeable {
     }
 
     /**
-     * Create a new test diver instance.
+     * Create a new test driver instance.
      *
      * @param topology the topology to be tested
      * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
@@ -306,7 +306,7 @@ public class TopologyTestDriver implements Closeable {
     }
 
     /**
-     * Create a new test diver instance.
+     * Create a new test driver instance.
      *
      * @param topology               the topology to be tested
      * @param config                 the configuration for the topology
@@ -324,7 +324,7 @@ public class TopologyTestDriver implements Closeable {
     }
 
     /**
-     * Create a new test diver instance. Package-private core constructor shared by the (deprecated)
+     * Create a new test driver instance. Package-private core constructor shared by the (deprecated)
      * public constructors and by {@link TopologyTestDriverBuilder}, which is the blessed entry point.
      *
      * @param builder builder for the topology to be tested

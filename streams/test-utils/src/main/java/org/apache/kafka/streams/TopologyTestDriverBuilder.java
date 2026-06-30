@@ -27,7 +27,7 @@ import java.util.Properties;
  * Fluent builder for a {@link TopologyTestDriver}.
  *
  * <p>This is the entry point for constructing a {@link TopologyTestDriver}.
- * Configure the builder, optionally declare topic partition counts, and call {@link #build()}.
+ * Configure the builder and call {@link #build()}.
  * The {@link TopologyTestDriver} constructors remain functional but are deprecated in favor of
  * this builder.</p>
  *
@@ -41,7 +41,6 @@ import java.util.Properties;
 public class TopologyTestDriverBuilder {
 
     private final Topology topology;
-    private final Map<String, Integer> declaredTopics = new LinkedHashMap<>();
     private Properties config = new Properties();
     private Optional<Instant> initialWallClockTime = Optional.empty();
 
