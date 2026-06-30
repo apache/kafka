@@ -438,4 +438,23 @@ public class ReplicaManagerLogReaderTest {
         assertSame(remoteData, result.get(TOPIC_ID_PARTITION).info());
         assertSame(localData, result.get(TOPIC_ID_PARTITION_2).info());
     }
+
+    @Test
+    public void testReadAsyncSkipsPartitionsWithNoReadResult() throws Exception {
+        ReplicaManager replicaManager = mockReplicaManager();
+        // The local read returns a result only for partition 2; partition 1 has no read result at all.
+        FetchDataInfo localData = localData();
+        stubReadFromLog(replicaManager,
+            List.of(new Tuple2<>(TOPIC_ID_PARTITION_2, localReadResult(localData, Errors.NONE))));
+
+        ReplicaManagerLogReader logReader = new ReplicaManagerLogReader(replicaManager);
+        LinkedHashMap<TopicIdPartition, LogReadResult> result =
+            logReader.readAsync(fetchParams(), Set.of(TOPIC_ID_PARTITION, TOPIC_ID_PARTITION_2),
+                offsets(TOPIC_ID_PARTITION, TOPIC_ID_PARTITION_2),
+                maxBytes(TOPIC_ID_PARTITION, TOPIC_ID_PARTITION_2), true).get(10, TimeUnit.SECONDS);
+
+        // Partition 1 had no read result, so it is skipped (absent from the map); only partition 2 is present.
+        assertEquals(Set.of(TOPIC_ID_PARTITION_2), result.keySet());
+        assertSame(localData, result.get(TOPIC_ID_PARTITION_2).info());
+    }
 }

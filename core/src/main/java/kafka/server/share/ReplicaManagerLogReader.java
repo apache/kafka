@@ -118,13 +118,13 @@ public class ReplicaManagerLogReader implements LogReader {
         LinkedHashMap<TopicIdPartition, LogReadResult> localReadResults =
             read(fetchParams, partitionsToFetch, topicPartitionFetchOffsets, partitionMaxBytes);
 
-        // One future per partition; combined into a single future once every partition has resolved.
+        // Only look at partitions with non-null read results.
         LinkedHashMap<TopicIdPartition, CompletableFuture<LogReadResult>> futures = new LinkedHashMap<>();
         for (TopicIdPartition topicIdPartition : partitionsToFetch) {
             LogReadResult logReadResult = localReadResults.get(topicIdPartition);
             if (logReadResult == null) {
-                futures.put(topicIdPartition, CompletableFuture.completedFuture(
-                    new LogReadResult(Errors.UNKNOWN_SERVER_ERROR)));
+                // Just skip
+                log.debug("Log read result for partition {} is null", topicIdPartition);
                 continue;
             }
 
@@ -149,6 +149,7 @@ public class ReplicaManagerLogReader implements LogReader {
                     return withInfoAndError(logReadResult, localFetchDataInfo, Errors.forException(cause));
                 }
                 if (remoteFetchDataInfo == null) {
+                    // We want to return successful local read results so no skipping.
                     return withInfoAndError(logReadResult, localFetchDataInfo, Errors.UNKNOWN_SERVER_ERROR);
                 }
                 return withInfoAndError(logReadResult, remoteFetchDataInfo, Errors.NONE);
