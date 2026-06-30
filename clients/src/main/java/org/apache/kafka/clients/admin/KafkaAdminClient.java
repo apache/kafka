@@ -1173,6 +1173,14 @@ public class KafkaAdminClient extends AdminClient {
         private final List<Call> newCalls = new LinkedList<>();
 
         /**
+         * Set when the bootstrap DNS resolution permanently fails. Once non-null, any further
+         * call submitted via {@link #enqueue} is failed immediately with this exception so the
+         * error surfaces on every API call, not just the ones that were in-flight at the time
+         * of the failure.
+         */
+        private volatile BootstrapResolutionException bootstrapException = null;
+
+        /**
          * Maps node ID strings to their readiness deadlines.  A node will appear in this
          * map if there are callsToSend which are waiting for it to be ready, and there
          * are no calls in flight using the node.
@@ -1595,6 +1603,7 @@ public class KafkaAdminClient extends AdminClient {
                 try {
                     responses = client.poll(Math.max(0L, pollTimeout), now);
                 } catch (BootstrapResolutionException e) {
+                    bootstrapException = e;
                     failAllPendingCalls(e, now);
                     break;
                 }
@@ -1650,13 +1659,15 @@ public class KafkaAdminClient extends AdminClient {
             }
             boolean accepted = false;
             synchronized (this) {
-                if (!closing) {
+                if (bootstrapException == null && !closing) {
                     newCalls.add(call);
                     accepted = true;
                 }
             }
             if (accepted) {
                 client.wakeup(); // wake the thread if it is in poll()
+            } else if (bootstrapException != null) {
+                call.fail(time.milliseconds(), bootstrapException);
             } else {
                 log.debug("The AdminClient thread has exited. Timing out {}.", call);
                 call.handleTimeoutFailure(time.milliseconds(),

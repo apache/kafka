@@ -11900,6 +11900,11 @@ public class KafkaAdminClientTest {
                 }
                 fail("Expected BootstrapResolutionException to be thrown within " + maxWaitTime + "ms");
             });
+
+            // After the first failure, any further API call must also surface the bootstrap error.
+            ExecutionException e = assertThrows(ExecutionException.class,
+                () -> admin.listTopics().names().get());
+            assertInstanceOf(BootstrapResolutionException.class, e.getCause());
         }
     }
 }
