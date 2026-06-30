@@ -105,15 +105,8 @@ public final class ClientUtils {
             if (Thread.currentThread().isInterrupted()) {
                 break;
             }
-
-            final String host = getHost(url);
-            final Integer port = getPort(url);
-
-            if (host == null || port == null)
-                throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
-
             try {
-                addresses.addAll(resolveAddress(url, host, port, clientDnsLookup));
+                addresses.addAll(resolveAddress(url, getHost(url), getPort(url), clientDnsLookup));
             } catch (UnknownHostException e) {
                 // Silently ignore - this matches the original behavior
             }
