@@ -1714,6 +1714,10 @@ org.apache.kafka.streams.processor.UsePartitionTimeOnInvalidTimestampTest:
 - usePartitionTimeOnInvalidTimestamp
 org.apache.kafka.streams.processor.WallclockTimestampExtractorTest:
 - extractSystemTimestamp
+org.apache.kafka.streams.processor.api.ReadOnlyRecordTest:
+- readOnlyAccessorsShouldTolerateNullKeyAndValue
+- readOnlyHeadersShouldBeNonNullAndEmptyWhenConstructedWithoutHeaders
+- recordShouldBeAssignableToReadOnlyRecordAndExposeSameAccessors
 org.apache.kafka.streams.processor.internals.AbstractProcessorContextTest:
 - appConfigsShouldReturnParsedValues
 - appConfigsShouldReturnUnrecognizedValues
@@ -5517,6 +5521,7 @@ org.apache.kafka.streams.state.internals.RocksDBMigratingSessionStoreWithHeaders
 - commitShouldMergePendingIntoCommittedPosition
 - committedPositionShouldExcludeStagedWritesUntilCommit
 - nonTransactionalStoreShouldUpdateCommittedPositionDirectly
+- offsetColumnFamilyWritesShouldNotLeakIntoDataIteration
 - prefixScanShouldNotThrowConcurrentModificationException
 - readOnlyCommittedShouldHideStagedPutWhileUncommittedExposesIt
 - readOnlyCommittedShouldNotSeeStagedDelete
@@ -5695,6 +5700,7 @@ org.apache.kafka.streams.state.internals.RocksDBStoreTest:
 - commitShouldMergePendingIntoCommittedPosition
 - committedPositionShouldExcludeStagedWritesUntilCommit
 - nonTransactionalStoreShouldUpdateCommittedPositionDirectly
+- offsetColumnFamilyWritesShouldNotLeakIntoDataIteration
 - prefixScanShouldNotThrowConcurrentModificationException
 - readOnlyCommittedShouldHideStagedPutWhileUncommittedExposesIt
 - readOnlyCommittedShouldNotSeeStagedDelete
@@ -6192,6 +6198,7 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedStoreTest:
 - commitShouldMergePendingIntoCommittedPosition
 - committedPositionShouldExcludeStagedWritesUntilCommit
 - nonTransactionalStoreShouldUpdateCommittedPositionDirectly
+- offsetColumnFamilyWritesShouldNotLeakIntoDataIteration
 - prefixScanShouldNotThrowConcurrentModificationException
 - readOnlyCommittedShouldHideStagedPutWhileUncommittedExposesIt
 - readOnlyCommittedShouldNotSeeStagedDelete
@@ -6289,6 +6296,7 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedStoreWithHeadersTest:
 - commitShouldMergePendingIntoCommittedPosition
 - committedPositionShouldExcludeStagedWritesUntilCommit
 - nonTransactionalStoreShouldUpdateCommittedPositionDirectly
+- offsetColumnFamilyWritesShouldNotLeakIntoDataIteration
 - prefixScanShouldNotThrowConcurrentModificationException
 - readOnlyCommittedShouldHideStagedPutWhileUncommittedExposesIt
 - readOnlyCommittedShouldNotSeeStagedDelete

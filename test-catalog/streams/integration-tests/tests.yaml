@@ -144,6 +144,8 @@ org.apache.kafka.streams.integration.KStreamAggregationIntegrationTest:
 - shouldReduceWindowed
 org.apache.kafka.streams.integration.KStreamKStreamIntegrationTest:
 - shouldOuterJoin
+org.apache.kafka.streams.integration.KStreamKStreamOuterJoinTransactionalStoreIntegrationTest:
+- shouldEmitOuterRecordWithTransactionalStateStores
 org.apache.kafka.streams.integration.KStreamRepartitionIntegrationTest:
 - shouldCreateOnlyOneRepartitionTopicWhenRepartitionIsFollowedByGroupByKey
 - shouldCreateRepartitionTopicIfKeyChangingOperationWasNotPerformed
