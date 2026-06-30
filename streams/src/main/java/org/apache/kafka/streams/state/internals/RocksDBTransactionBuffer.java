@@ -112,6 +112,30 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
     }
 
     /**
+     * Stages a write for the offsets/position/status column family. Unlike {@link #stage}, this only
+     * appends to the shared {@link WriteBatch} (so the entry commits atomically with the staged data) and
+     * deliberately does NOT touch the shared {@code pendingWrites} staging map. Offsets-CF entries are never
+     * served from the buffer on reads (the transactional accessor bypasses the buffer for this CF), so
+     * keeping them out of {@code pendingWrites} prevents them from leaking into data-CF
+     * {@link #range}/{@link #all} scans (e.g. the {@code "position"} key surfacing in a {@code ListValueStore}
+     * iteration and failing to deserialize as a value list).
+     */
+    void stageOffsetWrite(final ColumnFamilyHandle cf, final Bytes key, final byte[] value) {
+        snapshotLock.writeLock().lock();
+        try {
+            if (value != null) {
+                writeBatch.put(cf, key.get(), value);
+            } else {
+                writeBatch.delete(cf, key.get());
+            }
+        } catch (final RocksDBException e) {
+            throw new ProcessorStateException("Error staging offset write in transaction buffer for store " + storeName, e);
+        } finally {
+            snapshotLock.writeLock().unlock();
+        }
+    }
+
+    /**
      * Stages a range deletion for an explicit column family. Updates the shared
      * {@code pendingWrites} and {@code rangeTombstones} so iterators opened before
      * commit hide the deleted range, and appends the range delete to the shared

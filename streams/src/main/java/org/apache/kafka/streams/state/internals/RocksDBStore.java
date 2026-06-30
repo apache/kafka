@@ -1241,12 +1241,24 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         @Override
         public void put(final ColumnFamilyHandle columnFamily, final byte[] key, final byte[] value) throws RocksDBException {
-            buffer.stage(columnFamily, Bytes.wrap(key), value);
+            if (columnFamily.equals(offsetsColumnFamily)) {
+                // Offsets/position/status entries live in a separate column family and are never read
+                // back through the buffer (see get() above, which bypasses the buffer for this CF). Stage
+                // them in the WriteBatch only so they commit atomically with the data, but do NOT add them
+                // to the shared staging map, otherwise they would leak into data-CF range()/all() scans.
+                buffer.stageOffsetWrite(columnFamily, Bytes.wrap(key), value);
+            } else {
+                buffer.stage(columnFamily, Bytes.wrap(key), value);
+            }
         }
 
         @Override
         public void delete(final ColumnFamilyHandle columnFamily, final byte[] key) throws RocksDBException {
-            buffer.stage(columnFamily, Bytes.wrap(key), null);
+            if (columnFamily.equals(offsetsColumnFamily)) {
+                buffer.stageOffsetWrite(columnFamily, Bytes.wrap(key), null);
+            } else {
+                buffer.stage(columnFamily, Bytes.wrap(key), null);
+            }
         }
 
         @Override
