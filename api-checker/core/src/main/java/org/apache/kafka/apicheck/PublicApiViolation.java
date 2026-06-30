@@ -31,12 +31,24 @@ public class PublicApiViolation {
     private final String violationType;
     private final String description;
     private final String memberName;
+    private final boolean lacksReason;
 
     public PublicApiViolation(String className, String violationType, String description, String memberName) {
+        this(className, violationType, description, memberName, false);
+    }
+
+    /**
+     * Suppression-constructor variant: pass {@code lacksReason=true} when the underlying
+     * {@code @SuppressKafkaInternalApiUsage} carried no {@code value()}. KIP-1265 makes the
+     * reason required, so the reporter surfaces unjustified suppressions as a warning.
+     */
+    public PublicApiViolation(String className, String violationType, String description,
+                              String memberName, boolean lacksReason) {
         this.className = className;
         this.violationType = violationType;
         this.description = description;
         this.memberName = memberName;
+        this.lacksReason = lacksReason;
     }
 
     public String getClassName() {
@@ -78,13 +90,12 @@ public class PublicApiViolation {
     }
 
     /**
-     * @return true iff this suppression's description ends with {@link #NO_REASON_MARKER} —
-     *         i.e. the {@code @SuppressKafkaInternalApiUsage} annotation carried no
-     *         {@code value()}. KIP-1265 describes the reason as required, so the checker warns
-     *         on unjustified suppressions.
+     * @return true iff this represents a suppression whose {@code @SuppressKafkaInternalApiUsage}
+     *         annotation carried no {@code value()}. KIP-1265 makes the reason required, so the
+     *         checker warns on unjustified suppressions.
      */
     public boolean lacksReason() {
-        return description != null && description.endsWith("reason: " + NO_REASON_MARKER);
+        return lacksReason;
     }
 
     @Override

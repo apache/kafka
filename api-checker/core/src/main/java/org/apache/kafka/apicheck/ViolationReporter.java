@@ -120,6 +120,27 @@ public class ViolationReporter {
     }
 
     /**
+     * Print to console using {@link #shouldUseColors()} to decide whether to emit ANSI escapes.
+     * Callers in unknown environments (Gradle / Maven tasks that may run under CI / redirected
+     * output) should prefer this overload over hard-coding {@code useColors=true}.
+     */
+    public void printToConsole(List<PublicApiViolation> violations,
+                               List<PublicApiViolation> suppressions) {
+        printToConsole(violations, suppressions, shouldUseColors());
+    }
+
+    /**
+     * True when stdout is attached to a real terminal and the user hasn't opted out via the
+     * {@code NO_COLOR} convention (<a href="https://no-color.org/">no-color.org</a>). Returns
+     * false under CI or when output has been redirected, so colored output doesn't leak ANSI
+     * escapes into logs/files.
+     */
+    public static boolean shouldUseColors() {
+        if (System.getenv("NO_COLOR") != null) return false;
+        return System.console() != null;
+    }
+
+    /**
      * Print violations to console with color coding (if supported). Suppressions are listed at the
      * end so reviewers see what was waived (each with reason).
      */

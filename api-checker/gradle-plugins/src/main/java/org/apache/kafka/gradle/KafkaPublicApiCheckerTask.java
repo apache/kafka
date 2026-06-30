@@ -98,7 +98,7 @@ public class KafkaPublicApiCheckerTask extends DefaultTask {
             reporter.writeTextReport(violations, suppressions, report);
 
             // Print summary to console
-            reporter.printToConsole(violations, suppressions, true);
+            reporter.printToConsole(violations, suppressions);
 
             getLogger().info("Public API check completed. Report written to: {}", report.getAbsolutePath());
 

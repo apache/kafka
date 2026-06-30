@@ -154,9 +154,15 @@ A Kafka class is considered public when:
 2. It is a nested class whose nearest annotated enclosing class is `@InterfaceAudience.Public`
    (Hadoop-style audience inheritance — see the KIP for details).
 
-Classes outside `org.apache.kafka.*` are out of scope; classes carrying `@Deprecated` are
-treated as out of scope on both sides of the check so deprecated public APIs you still
-reference don't appear as violations.
+Classes outside `org.apache.kafka.*` are out of scope. `@Deprecated` is handled
+asymmetrically:
+
+- **Producer side** (Kafka's own `docsJar` cascade): a `@Deprecated` reference is treated
+  as out of scope so an already-deprecated public method that still names an internal type
+  doesn't show up as a fresh leak.
+- **Consumer side** (this checker): a `@Deprecated` *internal* class is still flagged, on
+  the grounds that the deprecated ones are the most likely to be removed in the next
+  release. Consumers should migrate off them, not lean on them.
 
 ## Known limitations
 

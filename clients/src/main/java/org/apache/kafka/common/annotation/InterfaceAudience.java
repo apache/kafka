@@ -23,10 +23,11 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Annotation to inform users of the intended audience of a particular package, class or method.
- * Currently the audience can be {@link Public} or {@link Private}. Audience is orthogonal to
- * {@link InterfaceStability}: a class may be public-audience and evolving-stability at the same
- * time.
+ * Annotation to inform users of the intended audience of a particular class. The audience can
+ * be {@link Public} or {@link Private}; the annotations target {@code TYPE} only — methods and
+ * fields inherit the audience of their declaring class, and packages are intentionally not
+ * a granularity the checker enforces. Audience is orthogonal to {@link InterfaceStability}:
+ * a class may be public-audience and evolving-stability at the same time.
  *
  * <p>If no audience annotation is present on a class, it is assumed to be {@link Private}
  * (internal). External code must not depend on classes without an explicit {@link Public}

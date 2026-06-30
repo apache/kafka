@@ -215,10 +215,9 @@ final class CascadeValidator {
             }
             // Generic type arguments (e.g. Map<String, InternalFoo>) live in the
             // signature, not the erased descriptor — walk them too so the cascade
-            // catches leaks the type-erasure layer would otherwise hide.
-            collectSignatureRefs(signature, "INVALID_PARAMETER_TYPE",
-                    "Public method signature exposes non-public API type",
-                    cls.binaryName(), name, surface, buffered);
+            // catches leaks the type-erasure layer would otherwise hide. Position-aware
+            // so a return-type leak doesn't get mislabeled as a parameter.
+            collectMethodSignatureRefs(signature, cls.binaryName(), name, surface, buffered);
 
             return new BufferedMemberVisitor(buffered);
         }
@@ -315,6 +314,10 @@ final class CascadeValidator {
      * Walk a generic JVM signature and route each referenced class type through the cascade
      * check. {@code signature} is the optional generic descriptor ASM hands to
      * {@code visitMethod}/{@code visitField}; it's null for non-generic members.
+     *
+     * <p>Used for field signatures and the class-header signature, both of which have a
+     * single cascade label; method signatures go through {@link #collectMethodSignatureRefs}
+     * so the return-type / parameter-type / exception-type positions get distinct labels.
      */
     private static void collectSignatureRefs(String signature, String violationType, String message,
                                              String owner, String memberName, ApiSurface surface,
@@ -327,6 +330,68 @@ final class CascadeValidator {
                         violationType, message, owner, memberName, surface, violations);
             }
         });
+    }
+
+    /**
+     * Walk a method signature using ASM's position-aware sub-visitor hooks so generic
+     * leaks get labeled by where they actually sit: a leaking return-type
+     * argument becomes {@code INVALID_RETURN_TYPE}, a parameter argument becomes
+     * {@code INVALID_PARAMETER_TYPE}, and a generic throws-clause becomes
+     * {@code INVALID_EXCEPTION_TYPE}. Type-parameter bounds
+     * ({@code <T extends InternalFoo>}) fall under the parameter label since they constrain
+     * caller-supplied types.
+     */
+    private static void collectMethodSignatureRefs(String signature, String owner, String memberName,
+                                                   ApiSurface surface, List<PublicApiViolation> violations) {
+        if (signature == null) return;
+        new SignatureReader(signature).accept(new SignatureVisitor(Opcodes.ASM9) {
+            @Override
+            public SignatureVisitor visitReturnType() {
+                return classTypeCollector("INVALID_RETURN_TYPE",
+                        "Public method signature return type exposes non-public API type",
+                        owner, memberName, surface, violations);
+            }
+
+            @Override
+            public SignatureVisitor visitParameterType() {
+                return classTypeCollector("INVALID_PARAMETER_TYPE",
+                        "Public method signature parameter type exposes non-public API type",
+                        owner, memberName, surface, violations);
+            }
+
+            @Override
+            public SignatureVisitor visitExceptionType() {
+                return classTypeCollector("INVALID_EXCEPTION_TYPE",
+                        "Public method signature exception type exposes non-public API type",
+                        owner, memberName, surface, violations);
+            }
+
+            @Override
+            public SignatureVisitor visitClassBound() {
+                return classTypeCollector("INVALID_PARAMETER_TYPE",
+                        "Public method type parameter bound exposes non-public API type",
+                        owner, memberName, surface, violations);
+            }
+
+            @Override
+            public SignatureVisitor visitInterfaceBound() {
+                return classTypeCollector("INVALID_PARAMETER_TYPE",
+                        "Public method type parameter bound exposes non-public API type",
+                        owner, memberName, surface, violations);
+            }
+        });
+    }
+
+    private static SignatureVisitor classTypeCollector(String violationType, String message, String owner,
+                                                       String memberName, ApiSurface surface,
+                                                       List<PublicApiViolation> violations) {
+        return new SignatureVisitor(Opcodes.ASM9) {
+            @Override
+            public void visitClassType(String name) {
+                checkBinaryReference(name.replace('/', '.'),
+                        violationType, message, owner, memberName, surface, violations);
+            }
+        };
     }
 
     /** Recurse through array element types to find the concrete reference type, then check it. */
@@ -345,6 +410,10 @@ final class CascadeValidator {
      * Apply the cascade rule to one referenced type. The reference is a violation iff it is
      * in {@code org.apache.kafka.*}, not deprecated, and not in the surface's
      * effective-Public-dotted set.
+     *
+     * <p>The descriptor walk and the generic-signature walk overlap (e.g. {@code Windows} in
+     * {@code extends Windows<TimeWindow>} is seen by both), so dedup before adding to keep
+     * one entry per leaked type per member.
      */
     private static void checkBinaryReference(String binaryName, String violationType, String message,
                                              String owner, String methodName, ApiSurface surface,
@@ -352,7 +421,19 @@ final class CascadeValidator {
         if (!binaryName.startsWith("org.apache.kafka.")) return;
         if (surface.isDeprecated(binaryName)) return;
         if (surface.isEffectivelyPublic(binaryName)) return;
-        violations.add(new PublicApiViolation(owner, violationType, message + ": " + binaryName, methodName));
+        // Dedup on the semantic key (type + violation position + owner + member) rather than
+        // the human-readable description, so the descriptor walk and the signature walk don't
+        // produce two findings for the same leak just because they word the message differently.
+        String descriptionSuffix = ": " + binaryName;
+        for (PublicApiViolation existing : violations) {
+            if (violationType.equals(existing.getViolationType())
+                    && owner.equals(existing.getClassName())
+                    && java.util.Objects.equals(methodName, existing.getMemberName())
+                    && existing.getDescription().endsWith(descriptionSuffix)) {
+                return;
+            }
+        }
+        violations.add(new PublicApiViolation(owner, violationType, message + descriptionSuffix, methodName));
     }
 
     /**
@@ -361,12 +442,14 @@ final class CascadeValidator {
      * annotation is appended so reviewers can audit every escape hatch on every build.
      */
     private static PublicApiViolation asSuppression(PublicApiViolation original, String reason) {
-        String prettyReason = reason.isEmpty() ? PublicApiViolation.NO_REASON_MARKER : reason;
+        boolean noReason = reason.isEmpty();
+        String prettyReason = noReason ? PublicApiViolation.NO_REASON_MARKER : reason;
         String description = "Suppressed " + original.getViolationType() + " in "
                 + original.getClassName() + "#" + original.getMemberName()
                 + " — " + original.getDescription()
                 + " — reason: " + prettyReason;
-        return new PublicApiViolation(original.getClassName(), "SUPPRESSED", description, original.getMemberName());
+        return new PublicApiViolation(original.getClassName(), "SUPPRESSED",
+                description, original.getMemberName(), noReason);
     }
 
 }

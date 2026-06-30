@@ -148,7 +148,7 @@ public class KafkaInternalApiCheckerMojo extends AbstractMojo {
 
         ViolationReporter reporter = new ViolationReporter();
         reporter.writeTextReport(violations, suppressions, reportFile);
-        reporter.printToConsole(violations, suppressions, true);
+        reporter.printToConsole(violations, suppressions);
 
         getLog().info("Internal API usage check completed. Report written to: " + reportFile.getAbsolutePath());
 

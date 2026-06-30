@@ -81,18 +81,34 @@ class CascadeValidatorTest {
     }
 
     @Test
-    void publicMethodWithInternalInGenericSignature_emitsParameterTypeViolation() throws IOException {
+    void publicMethodWithInternalInGenericReturnSignature_emitsReturnTypeViolation() throws IOException {
         // The erased descriptor is `()Ljava/util/Map;` — no internal type. The generic signature
         // `()Ljava/util/Map<Ljava/lang/String;Lorg/apache/kafka/internals/Internal;>;` carries
-        // the internal type as a Map value parameter. Cascade must walk the signature.
+        // the internal type as a Map value parameter on the *return* position. The signature
+        // walker is position-aware so it surfaces this as INVALID_RETURN_TYPE rather than
+        // mislabeling it as a parameter type.
         CheckResult r = run(owner()
                 .method(AsmClassFactory.method("getStuff")
                         .returns("Ljava/util/Map;")
                         .signature("()Ljava/util/Map<Ljava/lang/String;Lorg/apache/kafka/internals/Internal;>;")));
 
+        assertTrue(r.violations().stream().anyMatch(v -> "INVALID_RETURN_TYPE".equals(v.getViolationType())
+                        && v.getDescription().contains(INTERNAL_BIN)),
+                "generic return-type argument should surface as INVALID_RETURN_TYPE; got: " + r.violations());
+    }
+
+    @Test
+    void publicMethodWithInternalInGenericParameterSignature_emitsParameterTypeViolation() throws IOException {
+        // Generic on the parameter side: `void take(java.util.List<o.a.k.internals.Internal>)`.
+        CheckResult r = run(owner()
+                .method(AsmClassFactory.method("take")
+                        .returns("V")
+                        .param("Ljava/util/List;")
+                        .signature("(Ljava/util/List<Lorg/apache/kafka/internals/Internal;>;)V")));
+
         assertTrue(r.violations().stream().anyMatch(v -> "INVALID_PARAMETER_TYPE".equals(v.getViolationType())
                         && v.getDescription().contains(INTERNAL_BIN)),
-                "generic type argument should surface as an INVALID_PARAMETER_TYPE; got: " + r.violations());
+                "generic parameter-type argument should surface as INVALID_PARAMETER_TYPE; got: " + r.violations());
     }
 
     @Test
@@ -327,6 +343,23 @@ class CascadeValidatorTest {
         assertTrue(r.suppressions().get(0).getDescription().contains("reason: (no reason given)"),
                 "empty reason must render as '(no reason given)': "
                         + r.suppressions().get(0).getDescription());
+    }
+
+    @Test
+    void descriptorAndSignatureWalks_dedupSameType() throws IOException {
+        // When the type appears in both the erased descriptor AND the generic signature (this
+        // happens for non-generic types and for the outer type in `Outer<...>`), the cascade
+        // mustn't emit two violations for the same (member, type, position).
+        CheckResult r = run(owner()
+                .method(AsmClassFactory.method("doIt")
+                        .returns(INTERNAL_DESC)
+                        .signature("()L" + AsmClassFactory.toInternal(INTERNAL_BIN) + ";")));
+
+        long internalHits = r.violations().stream()
+                .filter(v -> v.getDescription().contains(INTERNAL_BIN))
+                .count();
+        assertEquals(1, internalHits,
+                "descriptor and signature walks must dedup the same type/position: " + r.violations());
     }
 
     @Test

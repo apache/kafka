@@ -71,6 +71,12 @@ import java.util.jar.JarFile;
  *   <li><b>Inlined compile-time constants</b> — Java inlines {@code public static final}
  *       primitive/String constants at the use site, so {@code InternalClass.SOME_CONSTANT}
  *       leaves no reference in the consumer's bytecode at all. This is documented in the KIP.</li>
+ *   <li><b>Nested types referenced only through a generic type argument</b> — e.g.
+ *       {@code Foo<Outer.Inner>} in a signature. The signature visitor handles the outer type
+ *       via {@link SignatureVisitor#visitClassType} but doesn't override
+ *       {@link SignatureVisitor#visitInnerClassType}, so the inner type is missed. Direct
+ *       (non-generic) references like {@code Outer.Inner} as a return / parameter / field
+ *       type carry {@code Outer$Inner} in the erased descriptor and ARE caught.</li>
  * </ul>
  */
 public class PluginDeveloperApiUsageScanner {
@@ -232,13 +238,14 @@ public class PluginDeveloperApiUsageScanner {
     private static void recordSuppression(Map<String, PublicApiViolation> suppressions,
                                           String key, String binaryName, String memberName,
                                           String location, String reason) {
-        String prettyReason = reason.isEmpty() ? NO_REASON_GIVEN : reason;
+        boolean noReason = reason.isEmpty();
+        String prettyReason = noReason ? NO_REASON_GIVEN : reason;
         LOG.info("Suppressed internal-API reference to {} from {}: {}", binaryName, location, prettyReason);
         String description = String.format(
                 "Suppressed reference to internal Kafka class %s from %s — reason: %s",
                 binaryName, location, prettyReason);
         suppressions.putIfAbsent(key,
-                new PublicApiViolation(binaryName, "SUPPRESSED_INTERNAL_API_USAGE", description, memberName));
+                new PublicApiViolation(binaryName, "SUPPRESSED_INTERNAL_API_USAGE", description, memberName, noReason));
     }
 
     private static void recordViolation(Map<String, PublicApiViolation> violations,
@@ -250,7 +257,6 @@ public class PluginDeveloperApiUsageScanner {
                 new PublicApiViolation(binaryName, "INTERNAL_API_USAGE", description, memberName));
     }
 
-    /** Convert any of: {@code Lorg/apache/kafka/Foo;}, {@code [Lorg/apache/kafka/Foo;}, {@code org/apache/kafka/Foo} to the bare internal form. */
     /**
      * Return the ASM internal name for a reference-typed {@link Type} (OBJECT or ARRAY), or
      * {@code null} for VOID/primitive types. {@link Type#getInternalName()} is only documented

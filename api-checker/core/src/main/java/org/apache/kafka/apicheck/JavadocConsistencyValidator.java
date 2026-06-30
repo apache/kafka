@@ -99,6 +99,11 @@ final class JavadocConsistencyValidator {
     private static boolean isClassHtmlFile(String path) {
         if (!path.endsWith(".html")) return false;
         if (!path.startsWith("org/apache/kafka/")) return false;
+        // Skip the auxiliary trees javadoc emits when options.use() / options.linksource() are on:
+        // .../class-use/Foo.html (cross-reference index) and .../src-html/Foo.html (source listing).
+        // Neither is a class page, but both would parse as one and produce a bogus
+        // MISSING_PUBLICAPI_ANNOTATION for "...class-use.Foo" or "...src-html.Foo".
+        if (path.contains("/class-use/") || path.contains("/src-html/")) return false;
         String fileName = path.substring(path.lastIndexOf('/') + 1);
         // Class HTML files start with an uppercase letter; structural pages (index, overview-tree,
         // package-summary, …) don't.

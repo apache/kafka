@@ -128,7 +128,7 @@ public class KafkaInternalApiCheckerTask extends DefaultTask {
         ViolationReporter reporter = new ViolationReporter();
         File report = reportFile.get().getAsFile();
         reporter.writeTextReport(violations, suppressions, report);
-        reporter.printToConsole(violations, suppressions, true);
+        reporter.printToConsole(violations, suppressions);
 
         getLogger().info("Internal API usage check completed. Report written to: {}", report.getAbsolutePath());
 
