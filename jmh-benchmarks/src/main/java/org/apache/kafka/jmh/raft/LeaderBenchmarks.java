@@ -35,6 +35,12 @@ import org.openjdk.jmh.annotations.Warmup;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Benchmarks for the leader request-handling path. The outer class is intentionally not a JMH
+ * {@code @State}: each benchmark declares the starting state it needs as a nested {@code @State}
+ * parameter, so future leader scenarios (e.g. a lagging-follower fetch or a commit) can have their own
+ * setup without forcing a single shared {@code @Setup} on the whole class.
+ */
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @Warmup(iterations = RaftClientBenchmarkContext.AVERAGE_TIME_WARMUP_ITERATIONS)
@@ -69,11 +75,15 @@ public class LeaderBenchmarks {
     }
 
     /**
-     * Leader handles a valid FETCH from a fully caught-up follower (fetch offset == log end offset),
-     * which does not advance the high watermark — the steady-state heartbeat-style fetch.
+     * Leader handles a FETCH from a fully caught-up follower (fetch offset == log end offset) that asks
+     * not to wait ({@code maxWaitMs = 0}), so the leader replies immediately rather than deferring.
+     *
+     * <p>Note: a real caught-up follower long-polls with {@code maxWaitMs > 0}, and such a fetch is
+     * <em>deferred</em> (held until new data arrives or the wait times out) — it would not produce an
+     * immediate response. This benchmark deliberately uses {@code maxWaitMs = 0} to measure the immediate-reply path
      */
     @Benchmark
-    public void handleFetchFromCaughtUpFollower(
+    public void handleNoWaitFetchFromCaughtUpFollower(
         LeaderWithCaughtUpFollower state,
         KRaftBenchmarkingCounters counters
     ) throws Exception {

@@ -26,13 +26,16 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.IntSupplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public final class RaftClientBenchmarkContext {
-    // Standardized JMH iteration counts, shared by all raft benchmarks so every benchmark of a given mode is configured identically
+    // Standardized JMH iteration counts, shared by all raft benchmarks so every benchmark of a given
+    // mode is configured identically.
 
-    //  SingleShotTime measures a single operation per iteration, so it needs many iterations to build a stable distribution
+    // SingleShotTime measures a single operation per iteration, so it needs many iterations to build
+    // a stable distribution.
     public static final int SINGLE_SHOT_WARMUP_ITERATIONS = 50;
     public static final int SINGLE_SHOT_MEASUREMENT_ITERATIONS = 30;
     public static final int SINGLE_SHOT_FORKS = 5;
@@ -55,18 +58,26 @@ public final class RaftClientBenchmarkContext {
     private final MockNetworkChannel channel;
     private final List<ReplicaKey> voters;
 
-    private int lastFlushCount;
-    private int lastReadCount;
-    private int lastTruncationCount;
-    private int lastRequestsSent;
-    private int lastQuorumWrites;
-    private int lastQuorumReads;
+    // Each tracks one cumulative mock counter as a drainable delta against a baseline. The baseline is
+    // reset by zeroCountersOnSetup() at the end of benchmark setup.
+    private final DrainableCounter logFlushes;
+    private final DrainableCounter logReads;
+    private final DrainableCounter logTruncations;
+    private final DrainableCounter rpcRequestsSent;
+    private final DrainableCounter quorumStateWrites;
+    private final DrainableCounter quorumStateReads;
 
     private RaftClientBenchmarkContext(RaftClientTestContext context, List<ReplicaKey> voters) {
         this.context = context;
         this.log = context.log;
         this.channel = context.channel;
         this.voters = List.copyOf(voters);
+        this.logFlushes = new DrainableCounter(log::flushCount);
+        this.logReads = new DrainableCounter(log::readCount);
+        this.logTruncations = new DrainableCounter(log::truncationCount);
+        this.rpcRequestsSent = new DrainableCounter(channel::requestsSent);
+        this.quorumStateWrites = new DrainableCounter(context::quorumStateWriteCount);
+        this.quorumStateReads = new DrainableCounter(context::quorumStateReadCount);
     }
 
     /**
@@ -150,10 +161,6 @@ public final class RaftClientBenchmarkContext {
         return log.endOffset().offset();
     }
 
-    public ReplicaKey localVoter() {
-        return voters.get(0);
-    }
-
     /**
      * The voters other than the local node, in voter-set order. May be empty (single-voter cluster).
      * Use these as the source of delivered requests, e.g. a FETCH from a follower on the leader.
@@ -169,35 +176,26 @@ public final class RaftClientBenchmarkContext {
      * before the measured region begins.
      */
     public void zeroCountersOnSetup() {
-        lastFlushCount = log.flushCount();
-        lastReadCount = log.readCount();
-        lastTruncationCount = log.truncationCount();
-        lastRequestsSent = channel.requestsSent();
-        lastQuorumWrites = context.quorumStateWriteCount();
-        lastQuorumReads = context.quorumStateReadCount();
+        logFlushes.reset();
+        logReads.reset();
+        logTruncations.reset();
+        rpcRequestsSent.reset();
+        quorumStateWrites.reset();
+        quorumStateReads.reset();
         channel.drainSendQueue();
         context.drainAllSentResponses();
     }
 
     public int getLogFlushesDelta() {
-        int current = log.flushCount();
-        int delta = current - lastFlushCount;
-        lastFlushCount = current;
-        return delta;
+        return logFlushes.delta();
     }
 
     public int getLogReadsDelta() {
-        int current = log.readCount();
-        int delta = current - lastReadCount;
-        lastReadCount = current;
-        return delta;
+        return logReads.delta();
     }
 
     public int getLogTruncationsDelta() {
-        int current = log.truncationCount();
-        int delta = current - lastTruncationCount;
-        lastTruncationCount = current;
-        return delta;
+        return logTruncations.delta();
     }
 
     /**
@@ -205,10 +203,7 @@ public final class RaftClientBenchmarkContext {
      * channel's cumulative counter, so it is unaffected by a test driver draining the send queue.
      */
     public int getRpcRequestsSentDelta() {
-        int current = channel.requestsSent();
-        int delta = current - lastRequestsSent;
-        lastRequestsSent = current;
-        return delta;
+        return rpcRequestsSent.delta();
     }
 
     /**
@@ -225,17 +220,11 @@ public final class RaftClientBenchmarkContext {
     }
 
     public int getQuorumStateWritesDelta() {
-        int current = context.quorumStateWriteCount();
-        int delta = current - lastQuorumWrites;
-        lastQuorumWrites = current;
-        return delta;
+        return quorumStateWrites.delta();
     }
 
     public int getQuorumStateReadsDelta() {
-        int current = context.quorumStateReadCount();
-        int delta = current - lastQuorumReads;
-        lastQuorumReads = current;
-        return delta;
+        return quorumStateReads.delta();
     }
 
     /**
@@ -252,5 +241,30 @@ public final class RaftClientBenchmarkContext {
                 "Unexpected outstanding responses at end of benchmark invocation: " + remaining);
         }
         return expected;
+    }
+
+    /**
+     * Tracks one cumulative mock counter as a delta against a baseline. {@link #reset()} snapshots the
+     * current value (so the next {@link #delta()} starts from zero), and {@link #delta()} returns the
+     * increase since the last reset/delta and advances the baseline.
+     */
+    private static final class DrainableCounter {
+        private final IntSupplier source;
+        private int baseline;
+
+        DrainableCounter(IntSupplier source) {
+            this.source = source;
+        }
+
+        void reset() {
+            baseline = source.getAsInt();
+        }
+
+        int delta() {
+            int current = source.getAsInt();
+            int delta = current - baseline;
+            baseline = current;
+            return delta;
+        }
     }
 }
