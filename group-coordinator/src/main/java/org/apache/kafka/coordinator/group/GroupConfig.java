@@ -304,7 +304,7 @@ public final class GroupConfig extends AbstractConfig {
             INT,
             GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT,
             atLeast(1),
-            MEDIUM,
+            LOW,
             GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DOC)
         .define(STREAMS_NUM_WARMUP_REPLICAS_CONFIG,
             INT,
