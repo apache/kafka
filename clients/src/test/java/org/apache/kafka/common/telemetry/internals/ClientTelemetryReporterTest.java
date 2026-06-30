@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.NetworkException;
@@ -52,6 +53,7 @@ import org.mockito.Mockito;
 import org.mockito.internal.stubbing.answers.CallsRealMethods;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
@@ -70,7 +72,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyByte;
 
 public class ClientTelemetryReporterTest {
 
@@ -360,7 +362,7 @@ public class ClientTelemetryReporterTest {
     }
 
     @Test
-    public void testCreateRequestPushCompressionException() {
+    public void testCreateRequestPushCompressionException() throws IOException {
         clientTelemetryReporter.configure(configs);
         clientTelemetryReporter.contextChange(metricsContext);
 
@@ -372,8 +374,9 @@ public class ClientTelemetryReporterTest {
             uuid, 1234, 20000, Collections.singletonList(CompressionType.GZIP), true, null);
         telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
 
-        try (MockedStatic<ClientTelemetryUtils> mockedCompress = Mockito.mockStatic(ClientTelemetryUtils.class, new CallsRealMethods())) {
-            mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), any())).thenThrow(new IOException());
+        Compression.Builder<? extends Compression> failingCompression = compressionFailingWithIOException();
+        try (MockedStatic<Compression> mockedCompression = Mockito.mockStatic(Compression.class, new CallsRealMethods())) {
+            mockedCompression.when(() -> Compression.of(CompressionType.GZIP)).thenReturn(failingCompression);
 
             Optional<AbstractRequest.Builder<?>> requestOptional = telemetrySender.createRequest();
             assertNotNull(requestOptional);
@@ -403,9 +406,9 @@ public class ClientTelemetryReporterTest {
             uuid, 1234, 20000, List.of(CompressionType.GZIP, CompressionType.LZ4, CompressionType.SNAPPY), true, null);
         telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
 
-        try (MockedStatic<ClientTelemetryUtils> mockedCompress = Mockito.mockStatic(ClientTelemetryUtils.class, new CallsRealMethods())) {
+        try (MockedStatic<Compression> mockedCompression = Mockito.mockStatic(Compression.class, new CallsRealMethods())) {
             // First request: GZIP fails with NoClassDefFoundError, should use NONE for this request
-            mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.GZIP))).thenThrow(new NoClassDefFoundError("GZIP not available"));
+            mockedCompression.when(() -> Compression.of(CompressionType.GZIP)).thenThrow(new NoClassDefFoundError("GZIP not available"));
 
             Optional<AbstractRequest.Builder<?>> requestOptional = telemetrySender.createRequest();
             assertNotNull(requestOptional);
@@ -422,7 +425,7 @@ public class ClientTelemetryReporterTest {
 
             // Second request: LZ4 is selected (since GZIP is now cached as unsupported), LZ4 fails, should use NONE
             // Note that some libraries eg. LZ4 return KafkaException with cause as NoClassDefFoundError
-            mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.LZ4))).thenThrow(new KafkaException(new NoClassDefFoundError("LZ4 not available")));
+            mockedCompression.when(() -> Compression.of(CompressionType.LZ4)).thenThrow(new KafkaException(new NoClassDefFoundError("LZ4 not available")));
 
             requestOptional = telemetrySender.createRequest();
             assertNotNull(requestOptional);
@@ -438,7 +441,7 @@ public class ClientTelemetryReporterTest {
             assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
 
             // Third request: SNAPPY is selected (since GZIP and LZ4 are now cached as unsupported), SNAPPY fails, should use NONE
-            mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.SNAPPY))).thenThrow(new NoClassDefFoundError("SNAPPY not available"));
+            mockedCompression.when(() -> Compression.of(CompressionType.SNAPPY)).thenThrow(new NoClassDefFoundError("SNAPPY not available"));
 
             requestOptional = telemetrySender.createRequest();
             assertNotNull(requestOptional);
@@ -480,10 +483,10 @@ public class ClientTelemetryReporterTest {
             uuid, 1234, 20000, List.of(CompressionType.ZSTD, CompressionType.LZ4), true, null);
         telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
 
-        try (MockedStatic<ClientTelemetryUtils> mockedCompress = Mockito.mockStatic(ClientTelemetryUtils.class, new CallsRealMethods())) {
-            
+        try (MockedStatic<Compression> mockedCompression = Mockito.mockStatic(Compression.class, new CallsRealMethods())) {
+
             // === Test 1: NoClassDefFoundError fallback (recoverable) ===
-            mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.ZSTD)))
+            mockedCompression.when(() -> Compression.of(CompressionType.ZSTD))
                     .thenThrow(new NoClassDefFoundError("com/github/luben/zstd/BufferPool"));
             
             assertEquals(ClientTelemetryState.PUSH_NEEDED, telemetrySender.state());
@@ -500,8 +503,8 @@ public class ClientTelemetryReporterTest {
             assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
             
             // === Test 2: OutOfMemoryError causes termination (non-recoverable Error) ===
-            mockedCompress.reset();
-            mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.LZ4)))
+            mockedCompression.reset();
+            mockedCompression.when(() -> Compression.of(CompressionType.LZ4))
                     .thenThrow(new OutOfMemoryError("Out of memory during compression"));
             
             assertEquals(ClientTelemetryState.PUSH_NEEDED, telemetrySender.state());
@@ -515,6 +518,21 @@ public class ClientTelemetryReporterTest {
             assertFalse(request3.isPresent()); // No request created
             assertEquals(ClientTelemetryState.TERMINATED, telemetrySender.state()); // State remains TERMINATED
         }
+    }
+
+    /**
+     * Builds a {@link Compression.Builder} whose stream raises an {@link IOException} while writing the
+     * payload, so that {@link ClientTelemetryUtils#compress} surfaces a recoverable compression failure.
+     */
+    @SuppressWarnings("unchecked")
+    private static Compression.Builder<? extends Compression> compressionFailingWithIOException() throws IOException {
+        OutputStream out = Mockito.mock(OutputStream.class);
+        Mockito.doThrow(new IOException()).when(out).close();
+        Compression compression = Mockito.mock(Compression.class);
+        Mockito.when(compression.wrapForOutput(any(), anyByte())).thenReturn(out);
+        Compression.Builder<? extends Compression> builder = Mockito.mock(Compression.Builder.class);
+        Mockito.doReturn(compression).when(builder).build();
+        return builder;
     }
 
     @Test

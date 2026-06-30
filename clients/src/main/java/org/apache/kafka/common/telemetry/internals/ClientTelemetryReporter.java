@@ -725,7 +725,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
             CompressionType compressionType = ClientTelemetryUtils.preferredCompressionType(localSubscription.acceptedCompressionTypes(), unsupportedCompressionTypes);
             ByteBuffer compressedPayload;
             try {
-                compressedPayload = ClientTelemetryUtils.compress(payload.toByteArray(), compressionType);
+                compressedPayload = ClientTelemetryUtils.compress(payload, compressionType);
             } catch (Throwable e) {
                 // Distinguish between recoverable errors (NoClassDefFoundError for missing compression libs) 
                 // and fatal errors (OutOfMemoryError, etc.) that should terminate telemetry.

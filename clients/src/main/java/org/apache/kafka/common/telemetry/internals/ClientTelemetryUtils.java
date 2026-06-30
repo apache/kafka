@@ -206,11 +206,13 @@ public class ClientTelemetryUtils {
                 .orElse(CompressionType.NONE);
     }
 
-    public static ByteBuffer compress(byte[] serializedMetrics, CompressionType compressionType) throws IOException {
+    public static ByteBuffer compress(MetricsData metricsData, CompressionType compressionType) throws IOException {
         try (ByteBufferOutputStream compressedOut = new ByteBufferOutputStream(512)) {
             Compression compression = Compression.of(compressionType).build();
             try (OutputStream out = compression.wrapForOutput(compressedOut, RecordBatch.CURRENT_MAGIC_VALUE)) {
-                out.write(serializedMetrics);
+                // Serialize the metrics straight into the compression stream to avoid the intermediate
+                // byte[] copy that MetricsData#toByteArray would allocate.
+                metricsData.writeTo(out);
             }
             compressedOut.buffer().flip();
             return compressedOut.buffer();
@@ -237,7 +239,7 @@ public class ClientTelemetryUtils {
                     .build())
                 .build());
         }
-        return compress(builder.build().toByteArray(), compressionType);
+        return compress(builder.build(), compressionType);
     }
 
     public static ByteBuffer decompress(ByteBuffer metrics, CompressionType compressionType, int maxDecompressedBytes) {
