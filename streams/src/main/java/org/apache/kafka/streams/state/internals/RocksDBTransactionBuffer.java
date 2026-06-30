@@ -95,8 +95,10 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
     void stage(final ColumnFamilyHandle cf, final Bytes key, final byte[] value) {
         snapshotLock.writeLock().lock();
         try {
-            pendingWrites.put(key, Optional.ofNullable(value));
-            pendingWritesBytes += estimateKeySize(key) + (value != null ? value.length : 0);
+            if (cf == cfHandle) {
+                pendingWrites.put(key, Optional.ofNullable(value));
+                pendingWritesBytes += estimateKeySize(key) + (value != null ? value.length : 0);
+            }
             try {
                 if (value != null) {
                     writeBatch.put(cf, key.get(), value);
