@@ -1763,8 +1763,8 @@ public class GroupCoordinatorShardTest {
 
     @Test
     public void testCleanupGroupMetadataTombstonesWhenGroupAgreesToExpire() {
-        // Counterpart to the refuse test: when the group's shouldExpire(config) returns true
-        // after offset cleanup has run, the shard sweep proceeds to maybeDeleteGroup.
+        // When the group's shouldExpire(config) returns true after offset cleanup has run,
+        // the shard sweep proceeds to maybeDeleteGroup.
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         GroupCoordinatorConfig config = mock(GroupCoordinatorConfig.class);
@@ -1816,10 +1816,11 @@ public class GroupCoordinatorShardTest {
 
         when(groupMetadataManager.groupIds()).thenReturn(Set.of("group-id"));
         when(groupMetadataManager.group("group-id")).thenReturn(group);
-        // Offset cleanup runs uniformly; for share groups it has nothing to do and returns
-        // false so the sweep exits before consulting shouldExpire — the share group's metadata
-        // is never tombstoned via this path either way.
-        when(offsetMetadataManager.cleanupExpiredOffsets(eq("group-id"), any())).thenReturn(false);
+        // Offset cleanup runs uniformly; for share groups it has no committed offsets and no
+        // pending transactions, so cleanupExpiredOffsets returns true. The sweep then consults
+        // shouldExpire(config), which ShareGroup overrides to return false — the group-metadata
+        // tombstone is suppressed.
+        when(offsetMetadataManager.cleanupExpiredOffsets(eq("group-id"), any())).thenReturn(true);
 
         assertFalse(timer.contains(GROUP_EXPIRATION_KEY));
         CoordinatorResult<Void, CoordinatorRecord> result = coordinator.cleanupGroupMetadata();
