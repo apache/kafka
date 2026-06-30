@@ -22,6 +22,7 @@ import org.apache.kafka.storage.internals.log.LogReadResult;
 
 import java.util.LinkedHashMap;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Abstraction for reading records from log.
@@ -42,4 +43,35 @@ public interface LogReader {
         Set<TopicIdPartition> partitionsToFetch,
         LinkedHashMap<TopicIdPartition, Long> topicPartitionFetchOffsets,
         LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes);
+
+    /**
+     * Read records for the given partitions starting at the specified offsets, combining the local read
+     * and - when {@code readRemote} is true and the requested data has been tiered off the local log - the
+     * follow-up remote read into a single call.
+     *
+     * <p>This is the asynchronous, remote-aware counterpart to {@link #read}: it returns a single future
+     * holding one {@link LogReadResult} per requested partition. The future completes once every partition
+     * has resolved - partitions available locally (or whose local read failed) resolve immediately, while
+     * partitions whose data is in remote storage resolve later, once the remote read finishes on the remote
+     * storage reader pool, so the caller's thread is never blocked on remote IO. When {@code readRemote} is
+     * false, tiered offsets are simply omitted from the result rather than fetched.
+     *
+     * <p>Each per-partition {@link LogReadResult} is partial-data tolerant: the read never fails as a whole,
+     * allowing callers to use whatever records were retrieved (via {@link LogReadResult#info()}) and skip
+     * the rest based on {@link LogReadResult#error()}.
+     *
+     * @param fetchParams                The fetch parameters (isolation level, maxBytes, etc.)
+     * @param partitionsToFetch          The set of partitions to fetch
+     * @param topicPartitionFetchOffsets The fetch offset per partition
+     * @param partitionMaxBytes          The max bytes per partition
+     * @param readRemote                 Whether to follow tiered offsets to the remote tier; when false,
+     *                                   tiered offsets are skipped.
+     * @return A future of a map from partition to that partition's {@link LogReadResult}.
+     */
+    CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> readAsync(
+        FetchParams fetchParams,
+        Set<TopicIdPartition> partitionsToFetch,
+        LinkedHashMap<TopicIdPartition, Long> topicPartitionFetchOffsets,
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes,
+        boolean readRemote);
 }

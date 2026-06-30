@@ -42,10 +42,12 @@ import org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescription
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupTopologyDescriptionConverter;
 import org.apache.kafka.server.share.persister.NoOpStatePersister;
 import org.apache.kafka.server.util.timer.MockTimer;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -70,7 +72,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -104,12 +108,22 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         boolean startup,
         MockTimer timer
     ) {
+        return buildService(runtime, plugin, startup, timer, new GroupCoordinatorMetrics());
+    }
+
+    private static GroupCoordinatorService buildService(
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime,
+        Optional<StreamsGroupTopologyDescriptionPlugin> plugin,
+        boolean startup,
+        MockTimer timer,
+        GroupCoordinatorMetrics metrics
+    ) {
         MockTime time = timer.time();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
             GroupCoordinatorConfigTest.createGroupCoordinatorConfig(4096, 600000L, 24),
             runtime,
-            new GroupCoordinatorMetrics(),
+            metrics,
             createConfigManager(),
             new NoOpStatePersister(),
             timer,
@@ -1411,6 +1425,223 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         assertEquals(StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_NOT_REQUESTED,
             result.get(0).topologyDescriptionStatus());
         verify(plugin, never()).getTopology(anyString(), anyInt());
+    }
+
+    @Test
+    public void testUpdateSuccessRecordsSetSuccessSensor() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.setTopology(anyString(), anyInt(), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleReadOperation(eq("streams-group-topology-description-validate"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleWriteOperation(eq("streams-group-set-stored-topology-epoch"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+
+        GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
+
+        service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE), validUpdateRequest()
+        ).get(5, TimeUnit.SECONDS);
+
+        verify(metrics).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_SUCCESS_SENSOR_NAME);
+        verify(metrics, never()).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_ERROR_SENSOR_NAME);
+    }
+
+    @Test
+    public void testUpdatePermanentFailureRecordsSetErrorSensor() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.setTopology(anyString(), anyInt(), any()))
+            .thenReturn(CompletableFuture.failedFuture(
+                new StreamsTopologyDescriptionPermanentFailureException("too large")));
+        when(runtime.scheduleReadOperation(eq("streams-group-topology-description-validate"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleWriteOperation(eq("streams-group-set-failed-topology-epoch"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+
+        GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
+
+        service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE), validUpdateRequest()
+        ).get(5, TimeUnit.SECONDS);
+
+        verify(metrics).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_ERROR_SENSOR_NAME);
+        verify(metrics, never()).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_SUCCESS_SENSOR_NAME);
+    }
+
+    @Test
+    public void testUpdateTransientFailureRecordsSetErrorSensor() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.setTopology(anyString(), anyInt(), any()))
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("backend offline")));
+        when(runtime.scheduleReadOperation(eq("streams-group-topology-description-validate"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+
+        GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
+
+        service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE), validUpdateRequest()
+        ).get(5, TimeUnit.SECONDS);
+
+        // A transient failure is still a failed plugin.setTopology call: it folds into set-error,
+        // not a separate sensor.
+        verify(metrics).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_ERROR_SENSOR_NAME);
+        verify(metrics, never()).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_SUCCESS_SENSOR_NAME);
+    }
+
+    @Test
+    public void testDescribeAvailableRecordsGetSuccessSensor() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        StreamsGroupTopologyDescription pojo = new StreamsGroupTopologyDescription(
+            List.of(new StreamsGroupTopologyDescription.Subtopology("sub-0", List.of(
+                new StreamsGroupTopologyDescription.Source("src", Set.of("input"), Set.of())))),
+            List.of()
+        );
+        when(plugin.getTopology("foo", 5)).thenReturn(CompletableFuture.completedFuture(pojo));
+        when(runtime.scheduleReadOperation(eq("streams-group-describe"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(
+                new StreamsGroupDescribeResult(List.of(describedGroupWithTopology("foo", 5)), Map.of("foo", 5))));
+
+        GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
+
+        service.streamsGroupDescribe(
+            requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("foo"), true
+        ).get(5, TimeUnit.SECONDS);
+
+        verify(metrics).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_SUCCESS_SENSOR_NAME);
+        verify(metrics, never()).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_ERROR_SENSOR_NAME);
+    }
+
+    @Test
+    public void testDescribeNullReturnRecordsGetSuccessSensor() throws Exception {
+        // A getTopology returning null is a successful plugin call that found no data
+        // (surfaces as NOT_STORED) and must count as get-success, not get-error.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.getTopology("foo", 5)).thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleReadOperation(eq("streams-group-describe"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(
+                new StreamsGroupDescribeResult(List.of(describedGroupWithTopology("foo", 5)), Map.of("foo", 5))));
+
+        GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
+
+        service.streamsGroupDescribe(
+            requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("foo"), true
+        ).get(5, TimeUnit.SECONDS);
+
+        verify(metrics).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_SUCCESS_SENSOR_NAME);
+        verify(metrics, never()).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_ERROR_SENSOR_NAME);
+    }
+
+    @Test
+    public void testDescribeErrorRecordsGetErrorSensor() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.getTopology("foo", 5))
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("plugin offline")));
+        when(runtime.scheduleReadOperation(eq("streams-group-describe"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(
+                new StreamsGroupDescribeResult(List.of(describedGroupWithTopology("foo", 5)), Map.of("foo", 5))));
+
+        GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
+
+        service.streamsGroupDescribe(
+            requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("foo"), true
+        ).get(5, TimeUnit.SECONDS);
+
+        verify(metrics).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_ERROR_SENSOR_NAME);
+        verify(metrics, never()).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_SUCCESS_SENSOR_NAME);
+    }
+
+    @Test
+    public void testDescribeSynchronousThrowRecordsGetErrorSensor() throws Exception {
+        // A getTopology that throws synchronously violates the SPI contract and surfaces as
+        // ERROR; it must count as get-error.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.getTopology("foo", 5)).thenThrow(new RuntimeException("plugin blew up"));
+        when(runtime.scheduleReadOperation(eq("streams-group-describe"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(
+                new StreamsGroupDescribeResult(List.of(describedGroupWithTopology("foo", 5)), Map.of("foo", 5))));
+
+        GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
+
+        service.streamsGroupDescribe(
+            requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("foo"), true
+        ).get(5, TimeUnit.SECONDS);
+
+        verify(metrics).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_ERROR_SENSOR_NAME);
+        verify(metrics, never()).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_SUCCESS_SENSOR_NAME);
+    }
+
+    @Test
+    public void testDescribeNullFutureRecordsGetErrorSensor() throws Exception {
+        // A getTopology that returns a null future violates the SPI contract and surfaces as
+        // ERROR; it must count as get-error.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.getTopology("foo", 5)).thenReturn(null);
+        when(runtime.scheduleReadOperation(eq("streams-group-describe"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(
+                new StreamsGroupDescribeResult(List.of(describedGroupWithTopology("foo", 5)), Map.of("foo", 5))));
+
+        GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
+
+        service.streamsGroupDescribe(
+            requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("foo"), true
+        ).get(5, TimeUnit.SECONDS);
+
+        verify(metrics).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_ERROR_SENSOR_NAME);
+        verify(metrics, never()).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_SUCCESS_SENSOR_NAME);
+    }
+
+    @Test
+    public void testDescribeConversionErrorRecordsGetErrorSensor() throws Exception {
+        // The plugin returns a valid topology, but converting it to the wire response throws.
+        // That defensive catch in applyGetTopologyOutcome is otherwise unreachable (the Node type
+        // is sealed to Source/Processor/Sink, so a well-formed topology always converts), so we
+        // force toDescribeResponse to throw to exercise it. The outcome surfaces as ERROR to the
+        // client and must count as get-error, not get-success.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        StreamsGroupTopologyDescription pojo = new StreamsGroupTopologyDescription(
+            List.of(new StreamsGroupTopologyDescription.Subtopology("sub-0", List.of(
+                new StreamsGroupTopologyDescription.Source("src", Set.of("input"), Set.of())))),
+            List.of()
+        );
+        when(plugin.getTopology("foo", 5)).thenReturn(CompletableFuture.completedFuture(pojo));
+        when(runtime.scheduleReadOperation(eq("streams-group-describe"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(
+                new StreamsGroupDescribeResult(List.of(describedGroupWithTopology("foo", 5)), Map.of("foo", 5))));
+
+        GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
+
+        // CALLS_REAL_METHODS so only toDescribeResponse is overridden; any other converter call
+        // (none on this path) keeps its real behavior.
+        try (MockedStatic<StreamsGroupTopologyDescriptionConverter> converter =
+                 mockStatic(StreamsGroupTopologyDescriptionConverter.class, CALLS_REAL_METHODS)) {
+            converter.when(() -> StreamsGroupTopologyDescriptionConverter.toDescribeResponse(any()))
+                .thenThrow(new RuntimeException("conversion failed"));
+
+            service.streamsGroupDescribe(
+                requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("foo"), true
+            ).get(5, TimeUnit.SECONDS);
+        }
+
+        verify(metrics).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_ERROR_SENSOR_NAME);
+        verify(metrics, never()).recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_SUCCESS_SENSOR_NAME);
     }
 
     private static StreamsGroupDescribeResponseData.DescribedGroup describedGroupWithTopology(

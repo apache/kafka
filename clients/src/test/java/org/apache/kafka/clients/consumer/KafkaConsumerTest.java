@@ -1659,9 +1659,11 @@ public class KafkaConsumerTest {
         }
     }
 
+    // NOTE: the CONSUMER protocol path is tested separately in
+    // FetchRequestManagerTest.testFetchResponseWithUnexpectedPartitionIsIgnored.
     @ParameterizedTest
-    @EnumSource(GroupProtocol.class)
-    public void fetchResponseWithUnexpectedPartitionIsIgnored(GroupProtocol groupProtocol) {
+    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    public void testFetchResponseWithUnexpectedPartitionIsIgnored(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 

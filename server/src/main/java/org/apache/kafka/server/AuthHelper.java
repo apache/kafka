@@ -38,6 +38,7 @@ import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.authorizer.Authorizer;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -50,10 +51,10 @@ import java.util.stream.Collectors;
 
 public class AuthHelper {
 
-    private final Optional<Plugin<Authorizer>> authorizer;
+    private final Optional<Authorizer> authorizer;
 
     public AuthHelper(Optional<Plugin<Authorizer>> authorizer) {
-        this.authorizer = authorizer;
+        this.authorizer = authorizer.map(Plugin::get);
     }
 
     public boolean authorize(
@@ -72,7 +73,7 @@ public class AuthHelper {
         List<Action> actions = List.of(
             new Action(operation, resource, refCount, logIfAllowed, logIfDenied)
         );
-        return authorizer.get().get().authorize(requestContext, actions).get(0) == AuthorizationResult.ALLOWED;
+        return authorizer.get().authorize(requestContext, actions).get(0) == AuthorizationResult.ALLOWED;
     }
 
     public boolean authorize(
@@ -98,7 +99,7 @@ public class AuthHelper {
             List<Action> actions = supportedOps.stream()
                 .map(op -> new Action(op, resourcePattern, 1, false, false))
                 .toList();
-            List<AuthorizationResult> results = authorizer.get().get().authorize(request.context(), actions);
+            List<AuthorizationResult> results = authorizer.get().authorize(request.context(), actions);
             authorizedOps = new HashSet<>();
             // Authorizer.authorize returns one result per action in the same order, so the i-th
             // result corresponds to the i-th supported operation. Iterate up to the smaller size to
@@ -123,18 +124,21 @@ public class AuthHelper {
         AclOperation operation,
         ResourceType resourceType
     ) {
-        return authorizer.map(authorizerPlugin -> authorizerPlugin.get().authorizeByResourceType(requestContext, operation, resourceType) == AuthorizationResult.ALLOWED).orElse(true);
+        return authorizer.map(authorizerInstance -> authorizerInstance.authorizeByResourceType(requestContext, operation, resourceType) == AuthorizationResult.ALLOWED).orElse(true);
     }
 
     public <T> Set<String> filterByAuthorized(
         RequestContext requestContext,
         AclOperation operation,
         ResourceType resourceType,
-        Iterable<T> resources,
+        Collection<T> resources,
         boolean logIfAllowed,
         boolean logIfDenied,
         Function<T, String> resourceName
     ) {
+        if (resources.isEmpty()) {
+            return Set.of();
+        }
         if (authorizer.isEmpty()) {
             Set<String> result = new HashSet<>();
             for (T resource : resources) {
@@ -148,9 +152,6 @@ public class AuthHelper {
             String name = resourceName.apply(resource);
             resourceNameToCount.merge(name, 1, Integer::sum);
         }
-        if (resourceNameToCount.isEmpty()) {
-            return Set.of();
-        }
 
         List<String> names = new ArrayList<>(resourceNameToCount.keySet());
         List<Action> actions = names.stream()
@@ -162,7 +163,7 @@ public class AuthHelper {
                 logIfDenied
             ))
             .toList();
-        List<AuthorizationResult> results = authorizer.get().get().authorize(requestContext, actions);
+        List<AuthorizationResult> results = authorizer.get().authorize(requestContext, actions);
         Set<String> authorized = new HashSet<>();
         // Authorizer.authorize returns one result per action in the same order, so the i-th
         // result corresponds to the i-th resource name. Iterate up to the smaller size to
@@ -180,7 +181,7 @@ public class AuthHelper {
         RequestContext requestContext,
         AclOperation operation,
         ResourceType resourceType,
-        Iterable<T> resources,
+        Collection<T> resources,
         Function<T, String> resourceName
     ) {
         return filterByAuthorized(requestContext, operation, resourceType, resources, true, true, resourceName);
@@ -200,7 +201,7 @@ public class AuthHelper {
             return new PartitionResult<>(resources, List.of());
         }
         Set<String> authorizedResourceNames = filterByAuthorized(
-            requestContext, operation, resourceType, resources, true, true, resourceName
+            requestContext, operation, resourceType, resources, resourceName
         );
         List<T> authorized = new ArrayList<>();
         List<T> unauthorized = new ArrayList<>();

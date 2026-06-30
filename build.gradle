@@ -3065,22 +3065,19 @@ project(':streams:streams-scala') {
   spotless {
     scala {
       target '**/*.scala'
-      scalafmt("$versions.scalafmt").configFile('../../checkstyle/.scalafmt.conf').scalaMajorVersion(versions.baseScala)
+      // Skip scalafmt while Spotless is affected by https://github.com/diffplug/spotless/issues/2850.
       licenseHeaderFile '../../checkstyle/java.header', 'package'
     }
   }
 }
 
 project(':streams:integration-tests') {
-  apply plugin: 'scala'
-
   base {
     archivesName = "kafka-streams-integration-tests"
   }
 
   dependencies {
     implementation libs.slf4jApi
-    implementation libs.scalaLibrary
 
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':group-coordinator')
@@ -3089,7 +3086,6 @@ project(':streams:integration-tests') {
     testImplementation testFixtures(project(':server-common'))
     testImplementation project(':storage')
     testImplementation project(':streams').sourceSets.test.output
-    testImplementation project(':streams:streams-scala')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':tools')
     testImplementation project(':transaction-coordinator')
@@ -3102,26 +3098,6 @@ project(':streams:integration-tests') {
     testImplementation project(':streams:test-utils')
 
     testRuntimeOnly runtimeTestLibs
-  }
-
-  sourceSets {
-    // Set java/scala source folders in the `scala` block to enable joint compilation
-    main {
-      java {
-        srcDirs = []
-      }
-      scala {
-        srcDirs = []
-      }
-    }
-    test {
-      java {
-        srcDirs = []
-      }
-      scala {
-        srcDirs = ["src/test/java", "src/test/scala"]
-      }
-    }
   }
 }
 

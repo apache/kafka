@@ -47,10 +47,12 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.function.Consumer;
 
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
 
@@ -74,11 +76,13 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
 
     private final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> endTimeMap = new ConcurrentSkipListMap<>();
     private final Set<InMemorySessionStoreIterator> openIterators  = ConcurrentHashMap.newKeySet();
+    private final Set<TransactionalSessionIterator> openTransactionalIterators = ConcurrentHashMap.newKeySet();
 
     private volatile boolean open = false;
 
     private StateStoreContext stateStoreContext;
     private final Position position;
+    private InMemorySessionTransactionBuffer transactionBuffer;
 
     public InMemorySessionStore(
         final String name,
@@ -133,19 +137,43 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
                 root,
                 (RecordBatchingStateRestoreCallback) records -> {
                     synchronized (position) {
+                        long expiredRecords = 0;
                         for (final ConsumerRecord<byte[], byte[]> record : records) {
-                            put(SessionKeySchema.from(Bytes.wrap(record.key())), record.value());
+                            final Windowed<Bytes> sessionKey = SessionKeySchema.from(Bytes.wrap(record.key()));
+                            final long windowEndTimestamp = sessionKey.window().end();
+                            observedStreamTime = Math.max(observedStreamTime, windowEndTimestamp);
+                            if (windowEndTimestamp <= observedStreamTime - retentionPeriod) {
+                                expiredRecords++;
+                            } else {
+                                // Write directly to the committed map: restored records are already committed.
+                                putInternal(sessionKey, record.value());
+                            }
                             ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
                                 record,
                                 consistencyEnabled,
                                 position
                             );
                         }
+                        removeExpiredSegments();
+                        if (expiredRecords > 0) {
+                            if (expiredRecordSensor != null && context != null) {
+                                expiredRecordSensor.record(expiredRecords, context.currentSystemTimeMs());
+                            }
+                            LOG.warn("Skipping {} records for expired segments.", expiredRecords);
+                        }
                     }
                 }
             );
         }
         open = true;
+
+        final boolean transactional = StreamsConfig.InternalConfig.getBoolean(
+            stateStoreContext.appConfigs(),
+            StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG,
+            false);
+        if (transactional) {
+            this.transactionBuffer = new InMemorySessionTransactionBuffer(endTimeMap);
+        }
     }
 
     @Override
@@ -168,23 +196,38 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
                     expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
                 }
                 LOG.warn("Skipping record for expired segment.");
+            } else if (transactionBuffer != null) {
+                transactionBuffer.stage(sessionKey, aggregate);
             } else {
-                if (aggregate != null) {
-                    endTimeMap.computeIfAbsent(windowEndTimestamp, t -> new ConcurrentSkipListMap<>());
-                    final ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>> keyMap = endTimeMap.get(windowEndTimestamp);
-                    keyMap.computeIfAbsent(sessionKey.key(), t -> new ConcurrentSkipListMap<>());
-                    keyMap.get(sessionKey.key()).put(sessionKey.window().start(), aggregate);
-                } else {
-                    remove(sessionKey);
-                }
+                putInternal(sessionKey, aggregate);
             }
 
             StoreQueryUtils.updatePosition(position, stateStoreContext);
         }
     }
 
+    private void putInternal(final Windowed<Bytes> sessionKey, final byte[] aggregate) {
+        if (aggregate != null) {
+            final long windowEndTimestamp = sessionKey.window().end();
+            endTimeMap.computeIfAbsent(windowEndTimestamp, t -> new ConcurrentSkipListMap<>());
+            final ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>> keyMap = endTimeMap.get(windowEndTimestamp);
+            keyMap.computeIfAbsent(sessionKey.key(), t -> new ConcurrentSkipListMap<>());
+            keyMap.get(sessionKey.key()).put(sessionKey.window().start(), aggregate);
+        } else {
+            removeFromBase(sessionKey);
+        }
+    }
+
     @Override
     public void remove(final Windowed<Bytes> sessionKey) {
+        if (transactionBuffer != null) {
+            transactionBuffer.stage(sessionKey, null);
+            return;
+        }
+        removeFromBase(sessionKey);
+    }
+
+    private void removeFromBase(final Windowed<Bytes> sessionKey) {
         final ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>> keyMap = endTimeMap.get(sessionKey.window().end());
         if (keyMap == null) {
             return;
@@ -215,6 +258,13 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
 
         // Only need to search if the record hasn't expired yet
         if (sessionEndTime > observedStreamTime - retentionPeriod) {
+            if (transactionBuffer != null) {
+                final Optional<byte[]> staged = transactionBuffer.get(key, sessionStartTime, sessionEndTime);
+                if (staged != null) {
+                    return staged.orElse(null);
+                }
+            }
+
             final ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>> keyMap = endTimeMap.get(sessionEndTime);
             if (keyMap != null) {
                 final ConcurrentNavigableMap<Long, byte[]> startTimeMap = keyMap.get(key);
@@ -231,6 +281,12 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
                                                                   final long latestSessionEndTime) {
         removeExpiredSegments();
 
+        if (transactionBuffer != null) {
+            return newTransactionalSessionIterator(
+                null, null, Long.MAX_VALUE, earliestSessionEndTime, latestSessionEndTime, true
+            );
+        }
+
         final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> endTimSubMap
             = endTimeMap.subMap(earliestSessionEndTime, true, latestSessionEndTime, true);
 
@@ -244,6 +300,12 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
         Objects.requireNonNull(key, "key cannot be null");
 
         removeExpiredSegments();
+
+        if (transactionBuffer != null) {
+            return newTransactionalSessionIterator(
+                key, key, latestSessionStartTime, earliestSessionEndTime, Long.MAX_VALUE, true
+            );
+        }
 
         return registerNewIterator(key,
                                    key,
@@ -259,6 +321,12 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
         Objects.requireNonNull(key, "key cannot be null");
 
         removeExpiredSegments();
+
+        if (transactionBuffer != null) {
+            return newTransactionalSessionIterator(
+                key, key, latestSessionStartTime, earliestSessionEndTime, Long.MAX_VALUE, false
+            );
+        }
 
         return registerNewIterator(
             key,
@@ -281,6 +349,12 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
             return KeyValueIterators.emptyIterator();
         }
 
+        if (transactionBuffer != null) {
+            return newTransactionalSessionIterator(
+                keyFrom, keyTo, latestSessionStartTime, earliestSessionEndTime, Long.MAX_VALUE, true
+            );
+        }
+
         return registerNewIterator(keyFrom,
                                    keyTo,
                                    latestSessionStartTime,
@@ -300,6 +374,12 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
             return KeyValueIterators.emptyIterator();
         }
 
+        if (transactionBuffer != null) {
+            return newTransactionalSessionIterator(
+                keyFrom, keyTo, latestSessionStartTime, earliestSessionEndTime, Long.MAX_VALUE, false
+            );
+        }
+
         return registerNewIterator(
             keyFrom,
             keyTo,
@@ -316,6 +396,10 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
 
         removeExpiredSegments();
 
+        if (transactionBuffer != null) {
+            return newTransactionalSessionIterator(key, key, Long.MAX_VALUE, 0, Long.MAX_VALUE, true);
+        }
+
         return registerNewIterator(key, key, Long.MAX_VALUE, endTimeMap.entrySet().iterator(), true);
     }
 
@@ -326,6 +410,10 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
 
         removeExpiredSegments();
 
+        if (transactionBuffer != null) {
+            return newTransactionalSessionIterator(key, key, Long.MAX_VALUE, 0, Long.MAX_VALUE, false);
+        }
+
         return registerNewIterator(key, key, Long.MAX_VALUE, endTimeMap.descendingMap().entrySet().iterator(), false);
     }
 
@@ -333,12 +421,20 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo) {
         removeExpiredSegments();
 
+        if (transactionBuffer != null) {
+            return newTransactionalSessionIterator(keyFrom, keyTo, Long.MAX_VALUE, 0, Long.MAX_VALUE, true);
+        }
+
         return registerNewIterator(keyFrom, keyTo, Long.MAX_VALUE, endTimeMap.entrySet().iterator(), true);
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom, final Bytes keyTo) {
         removeExpiredSegments();
+
+        if (transactionBuffer != null) {
+            return newTransactionalSessionIterator(keyFrom, keyTo, Long.MAX_VALUE, 0, Long.MAX_VALUE, false);
+        }
 
         return registerNewIterator(
             keyFrom, keyTo, Long.MAX_VALUE, endTimeMap.descendingMap().entrySet().iterator(), false);
@@ -370,21 +466,40 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
     }
 
     @Override
+    public long approximateNumUncommittedBytes() {
+        if (transactionBuffer != null) {
+            return transactionBuffer.approximateNumUncommittedBytes();
+        }
+        return 0;
+    }
+
+    @Override
     public void commit(final Map<TopicPartition, Long> changelogOffsets) {
-        // do-nothing since it is in-memory
+        if (transactionBuffer != null) {
+            transactionBuffer.commit();
+        }
     }
 
     @Override
     public void close() {
-        if (openIterators.size() != 0) {
-            LOG.warn("Closing {} open iterators for store {}", openIterators.size(), name);
+        if (transactionBuffer != null) {
+            transactionBuffer.rollback();
+        }
+
+        final int openCount = openIterators.size() + openTransactionalIterators.size();
+        if (openCount != 0) {
+            LOG.warn("Closing {} open iterators for store {}", openCount, name);
             for (final InMemorySessionStoreIterator it : openIterators) {
+                it.close();
+            }
+            for (final TransactionalSessionIterator it : openTransactionalIterators) {
                 it.close();
             }
         }
 
         endTimeMap.clear();
         openIterators.clear();
+        openTransactionalIterators.clear();
         open = false;
     }
 
@@ -405,6 +520,22 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
         endTimeMap.headMap(minLiveTime, false).clear();
     }
 
+    private KeyValueIterator<Windowed<Bytes>, byte[]> newTransactionalSessionIterator(
+            final Bytes keyFrom,
+            final Bytes keyTo,
+            final long latestSessionStartTime,
+            final long earliestSessionEndTime,
+            final long latestSessionEndTime,
+            final boolean forward) {
+        final TransactionalSessionIterator iterator = new TransactionalSessionIterator(
+            transactionBuffer, keyFrom, keyTo, latestSessionStartTime,
+            earliestSessionEndTime, latestSessionEndTime,
+            observedStreamTime - retentionPeriod, forward, openTransactionalIterators::remove
+        );
+        openTransactionalIterators.add(iterator);
+        return iterator;
+    }
+
     private InMemorySessionStoreIterator registerNewIterator(final Bytes keyFrom,
                                                              final Bytes keyTo,
                                                              final long latestSessionStartTime,
@@ -423,11 +554,116 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
         return iterator;
     }
 
+    /**
+     * A session iterator backed by a transactional buffer's merge scan.
+     * Converts SessionEntryKey/byte[] pairs into Windowed<Bytes>/byte[] pairs,
+     * filtering by latestSessionStartTime.
+     */
+    private static class TransactionalSessionIterator implements KeyValueIterator<Windowed<Bytes>, byte[]> {
+        private final KeyValueIterator<InMemorySessionTransactionBuffer.SessionEntryKey, byte[]> delegate;
+        private final Bytes keyFrom;
+        private final Bytes keyTo;
+        private final long latestSessionStartTime;
+        private final long oldestRetainedEndTime;
+        private final Consumer<TransactionalSessionIterator> deregister;
+        private KeyValue<Windowed<Bytes>, byte[]> prefetched;
+        private boolean closed = false;
+
+        TransactionalSessionIterator(
+                final InMemorySessionTransactionBuffer buffer,
+                final Bytes keyFrom,
+                final Bytes keyTo,
+                final long latestSessionStartTime,
+                final long earliestSessionEndTime,
+                final long latestSessionEndTime,
+                final long oldestRetainedEndTime,
+                final boolean forward,
+                final Consumer<TransactionalSessionIterator> deregister) {
+            this.keyFrom = keyFrom;
+            this.keyTo = keyTo;
+            this.latestSessionStartTime = latestSessionStartTime;
+            this.oldestRetainedEndTime = oldestRetainedEndTime;
+            this.deregister = deregister;
+
+            // startTime sorts descending, so the lower bound carries the largest startTime and the
+            // upper bound the smallest. A null key leaves the key dimension open (see SessionEntryKey).
+            final InMemorySessionTransactionBuffer.SessionEntryKey from =
+                new InMemorySessionTransactionBuffer.SessionEntryKey(earliestSessionEndTime, keyFrom, Long.MAX_VALUE);
+            final InMemorySessionTransactionBuffer.SessionEntryKey to =
+                new InMemorySessionTransactionBuffer.SessionEntryKey(latestSessionEndTime, keyTo, 0);
+
+            this.delegate = buffer.range(from, to, forward, true);
+        }
+
+        @Override
+        public Windowed<Bytes> peekNextKey() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            return prefetched.key;
+        }
+
+        @Override
+        public boolean hasNext() {
+            if (closed) {
+                return false;
+            }
+            if (prefetched != null) {
+                return true;
+            }
+            prefetched = computeNext();
+            return prefetched != null;
+        }
+
+        @Override
+        public KeyValue<Windowed<Bytes>, byte[]> next() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            final KeyValue<Windowed<Bytes>, byte[]> result = prefetched;
+            prefetched = null;
+            return result;
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+            prefetched = null;
+            try {
+                delegate.close();
+            } finally {
+                deregister.accept(this);
+            }
+        }
+
+        private KeyValue<Windowed<Bytes>, byte[]> computeNext() {
+            while (delegate.hasNext()) {
+                final KeyValue<InMemorySessionTransactionBuffer.SessionEntryKey, byte[]> entry = delegate.next();
+                // The committed side is already pruned by removeExpiredSegments, but the staged side is
+                // not; drop expired entries here. The staged scan is also bounded only by endTime, so
+                // filter the key range and latestSessionStartTime too.
+                if (entry.key.endTime() > oldestRetainedEndTime
+                    && entry.key.startTime() <= latestSessionStartTime
+                    && keyInRange(entry.key.key())) {
+                    final SessionWindow sessionWindow = new SessionWindow(entry.key.startTime(), entry.key.endTime());
+                    final Windowed<Bytes> windowedKey = new Windowed<>(entry.key.key(), sessionWindow);
+                    return new KeyValue<>(windowedKey, entry.value);
+                }
+            }
+            return null;
+        }
+
+        private boolean keyInRange(final Bytes key) {
+            return (keyFrom == null || key.compareTo(keyFrom) >= 0)
+                && (keyTo == null || key.compareTo(keyTo) <= 0);
+        }
+    }
+
     interface ClosingCallback {
         void deregisterIterator(final InMemorySessionStoreIterator iterator);
     }
 
-    private static class InMemorySessionStoreIterator implements KeyValueIterator<Windowed<Bytes>, byte[]> {
+    static class InMemorySessionStoreIterator implements KeyValueIterator<Windowed<Bytes>, byte[]> {
 
         private final Iterator<Entry<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>>> endTimeIterator;
         private Iterator<Entry<Bytes, ConcurrentNavigableMap<Long, byte[]>>> keyIterator;

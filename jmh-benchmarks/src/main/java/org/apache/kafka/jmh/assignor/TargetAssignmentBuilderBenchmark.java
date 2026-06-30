@@ -31,6 +31,7 @@ import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
 import org.apache.kafka.coordinator.group.modern.TargetAssignmentBuilder;
 import org.apache.kafka.coordinator.group.modern.TopicIds;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
+import org.apache.kafka.coordinator.group.util.UpdatedMembersAndTargetAssignmentView;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -81,6 +82,8 @@ public class TargetAssignmentBuilderBenchmark {
 
     private PartitionAssignor partitionAssignor;
 
+    private UpdatedMembersAndTargetAssignmentView<ConsumerGroupMember, Assignment> updatedMembersAndTargetAssignment;
+
     private TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder targetAssignmentBuilder;
 
     /** The number of homogeneous subgroups to create for the heterogeneous subscription case. */
@@ -113,14 +116,16 @@ public class TargetAssignmentBuilderBenchmark {
             .setSubscribedTopicNames(allTopicNames)
             .build();
 
+        updatedMembersAndTargetAssignment = new UpdatedMembersAndTargetAssignmentView<>(members, Map.of(), existingTargetAssignment);
+        updatedMembersAndTargetAssignment.addOrUpdateMember(newMember.memberId(), newMember.instanceId(), newMember);
+
         targetAssignmentBuilder = new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(GROUP_ID, GROUP_EPOCH, partitionAssignor)
             .withTime(Time.SYSTEM)
-            .withMembers(members)
+            .withMembers(updatedMembersAndTargetAssignment.members())
             .withSubscriptionType(subscriptionType)
-            .withTargetAssignment(existingTargetAssignment)
+            .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
             .withInvertedTargetAssignment(invertedTargetAssignment)
-            .withMetadataImage(metadataImage)
-            .addOrUpdateMember(newMember.memberId(), newMember);
+            .withMetadataImage(metadataImage);
     }
 
     private void setupTopics() {
