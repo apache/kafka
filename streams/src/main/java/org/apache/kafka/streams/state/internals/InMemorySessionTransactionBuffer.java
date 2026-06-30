@@ -160,6 +160,39 @@ class InMemorySessionTransactionBuffer extends AbstractTransactionBuffer<InMemor
             timeRange = endTimeMap;
         }
 
+        final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> copy = deepCopy(timeRange);
+        return baseIterator(forward ? copy : copy.descendingMap(), from, to, forward);
+    }
+
+    /**
+     * Committed-only point read for a single session, bypassing the staging layer. Non-owner (IQ)
+     * reads take the snapshot read-lock so the read reflects a single committed state rather than a
+     * commit in progress.
+     */
+    byte[] getCommitted(final Bytes key, final long startTime, final long endTime) {
+        if (Thread.currentThread() == ownerThread) {
+            return baseGet(key, startTime, endTime);
+        }
+        snapshotLock.readLock().lock();
+        try {
+            return baseGet(key, startTime, endTime);
+        } finally {
+            snapshotLock.readLock().unlock();
+        }
+    }
+
+    private byte[] baseGet(final Bytes key, final long startTime, final long endTime) {
+        final ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>> keyMap = endTimeMap.get(endTime);
+        if (keyMap == null) {
+            return null;
+        }
+        final ConcurrentNavigableMap<Long, byte[]> startTimeMap = keyMap.get(key);
+        return startTimeMap == null ? null : startTimeMap.get(startTime);
+    }
+
+    /** Deep-copies a bounded end-time range into a private map so iterators are isolated from later mutation. */
+    private static ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> deepCopy(
+            final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> timeRange) {
         final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> copy = new ConcurrentSkipListMap<>();
         for (final Map.Entry<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> endTimeEntry : timeRange.entrySet()) {
             final ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>> keyCopy = new ConcurrentSkipListMap<>();
@@ -168,8 +201,7 @@ class InMemorySessionTransactionBuffer extends AbstractTransactionBuffer<InMemor
             }
             copy.put(endTimeEntry.getKey(), keyCopy);
         }
-
-        return baseIterator(forward ? copy : copy.descendingMap(), from, to, forward);
+        return copy;
     }
 
     /**
