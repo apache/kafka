@@ -542,6 +542,19 @@ org.apache.kafka.server.requests.ProduceRequestTest:
 - testZSTDProduceRequest
 org.apache.kafka.server.share.CachedSharePartitionTest:
 - testCachedSharePartitionEqualsAndHashCode
+org.apache.kafka.server.share.dlq.ShareGroupDLQRecordFetcherTest:
+- testAsyncReadResumeCompletesEmptyWhenProcessingThrows
+- testAsyncReadResumeWithNoProgressCompletesEmpty
+- testAsyncReadResumesLoopWhenPending
+- testFetchAllRecordsInSingleRead
+- testFetchCompletesEmptyWhenReadAsyncThrows
+- testFetchRecordsAcrossMultipleReads
+- testMissingPartitionResultYieldsNoRecords
+- testNoProgressYieldsNoRecords
+- testReadErrorMidRangeReturnsRecordsReadSoFar
+- testReadErrorYieldsNoRecords
+- testRecordsBeyondEndOffsetIgnored
+- testSingleOffsetFetch
 org.apache.kafka.server.share.dlq.ShareGroupDLQStateManagerTest:
 - testCoalesceProduceRequestsKeepsDifferentDlqTopicsSeparate
 - testCoalesceProduceRequestsMergesPartitionsForSameDlqTopic
@@ -555,10 +568,16 @@ org.apache.kafka.server.share.dlq.ShareGroupDLQStateManagerTest:
 - testConstructorRejectsNullShareGroupMetrics
 - testConstructorRejectsNullTime
 - testConstructorRejectsNullTimer
+- testDLQRecordCopyDisabledSkipsFetch
 - testDLQRecordCopyEnabled
+- testDLQRecordCopyEnabledButInvalidConfigSkipsFetch
+- testDLQRecordCopyEnabledFetchesOnceAcrossProduceRetries
 - testDLQRecordCopyEnabledWithErrorOnLogRead
+- testDLQRecordCopyEnabledWithMixedLocalAndRemoteFetch
 - testDLQRecordCopyEnabledWithMultipleLogReaderIterations
 - testDLQRecordCopyEnabledWithPartialLogReaderRecords
+- testDLQRecordCopyEnabledWithRemoteFetch
+- testDLQRecordCopyEnabledWithRemoteFetchFailureSkipsRecords
 - testDlqAfterStopFailsWithIllegalState
 - testDlqBeforeStartFailsWithIllegalState
 - testDlqCreateTopicFatalErrorFailsFuture

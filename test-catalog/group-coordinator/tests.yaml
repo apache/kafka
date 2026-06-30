@@ -223,6 +223,7 @@ org.apache.kafka.coordinator.group.GroupCoordinatorServiceTest:
 - testStreamsGroupDescribeCoordinatorNotActive
 - testStreamsGroupDescribeInvalidGroupId
 - testStreamsGroupHeartbeat
+- testStreamsGroupHeartbeatAcceptsTaskOffsetsAndWarmupTasks
 - testStreamsGroupHeartbeatFailsForUnsupportedFeatures
 - testStreamsGroupHeartbeatWhenNotStarted
 - testStreamsGroupHeartbeatWithException
@@ -250,12 +251,18 @@ org.apache.kafka.coordinator.group.GroupCoordinatorServiceTopologyDescriptionTes
 - testDeleteGroupsSkipsPluginCallWhenNoStoredTopology
 - testDeleteGroupsWithoutPluginSkipsPluginCall
 - testDescribeAttachesAvailableWhenPluginReturnsTopology
+- testDescribeAvailableRecordsGetSuccessSensor
+- testDescribeConversionErrorRecordsGetErrorSensor
+- testDescribeErrorRecordsGetErrorSensor
 - testDescribeFiltersNonEligibleGroupsToNotStored
 - testDescribeLeavesErroredGroupsAlone
 - testDescribeMarksErrorWhenPluginFails
 - testDescribeMarksErrorWhenPluginThrowsSynchronously
 - testDescribeMarksNotStoredWhenPluginReturnsNullDescription
+- testDescribeNullFutureRecordsGetErrorSensor
+- testDescribeNullReturnRecordsGetSuccessSensor
 - testDescribeSetsNotStoredWhenNoPluginConfigured
+- testDescribeSynchronousThrowRecordsGetErrorSensor
 - testDescribeWithIncludeFlagDisabledLeavesStatusDefault
 - testHeartbeatArmSuppressReSolicitCycle
 - testHeartbeatDecorationFailurePreservesCommittedResponse
@@ -272,6 +279,7 @@ org.apache.kafka.coordinator.group.GroupCoordinatorServiceTopologyDescriptionTes
 - testUpdateBackoffArmedWhenStoredEpochWriteFailsAfterPluginSuccess
 - testUpdateGroupDisappearsBetweenPluginSuccessAndWriteDropsBackoffEntry
 - testUpdatePermanentFailurePersistsFailedEpoch
+- testUpdatePermanentFailureRecordsSetErrorSensor
 - testUpdatePluginFutureWithNullCauseIsTreatedAsTransient
 - testUpdatePluginReturnsNullFutureIsTreatedAsPermanentFailure
 - testUpdatePostPluginWriteRoutingFailureDoesNotArmBackoff
@@ -281,6 +289,8 @@ org.apache.kafka.coordinator.group.GroupCoordinatorServiceTopologyDescriptionTes
 - testUpdateRejectsEmptyMemberId
 - testUpdateReturnsUnsupportedVersionWhenNoPlugin
 - testUpdateSuccessPersistsStoredEpoch
+- testUpdateSuccessRecordsSetSuccessSensor
+- testUpdateTransientFailureRecordsSetErrorSensor
 - testUpdateTransientFailureWritesNoRecord
 org.apache.kafka.coordinator.group.GroupCoordinatorShardTest:
 - testCleanupGroupMetadataDefersStreamsGroupWithStoredTopologyEpoch
@@ -722,6 +732,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testStreamsGroupHeartbeatPartialResponseWhenNothingChanges
 - testStreamsGroupHeartbeatResponseVersion0
 - testStreamsGroupHeartbeatResponseVersion1
+- testStreamsGroupHeartbeatStoresTaskOffsetsWithoutPersisting
 - testStreamsGroupHeartbeatWithEmptyClassicGroup
 - testStreamsGroupHeartbeatWithNonEmptyClassicGroup
 - testStreamsGroupMemberCanRejoinWithEpochZero
@@ -1103,6 +1114,7 @@ org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsTest:
 - aggregateShards
 - testGlobalSensors
 - testMetricNames
+- testStreamsGroupTopologyDescriptionSetAndGetSensors
 org.apache.kafka.coordinator.group.modern.AssignmentTest:
 - testAttributes
 - testEquals
@@ -1300,6 +1312,11 @@ org.apache.kafka.coordinator.group.streams.CurrentAssignmentBuilderTest:
 - testUnrevokedTasksToStable
 - testUnrevokedTasksToUnreleasedTasks
 - testUnrevokedTasksToUnrevokedTasks
+org.apache.kafka.coordinator.group.streams.MemberTaskOffsetsTest:
+- shouldConvertHeartbeatRequestTaskOffsets
+- shouldRetainBothMapsWhenBothListsAreNull
+- shouldUpdateTaskEndOffsetsAndRetainTaskOffsetsWhenOffsetsNull
+- shouldUpdateTaskOffsetsAndRetainTaskEndOffsetsWhenEndOffsetsNull
 org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpersTest:
 - testConvertToStreamsGroupTopologyRecordNullTopology
 - testNewStreamsGroupCurrentAssignmentRecord
@@ -1391,12 +1408,14 @@ org.apache.kafka.coordinator.group.streams.StreamsGroupTest:
 - testNoStaticMember
 - testOffsetExpirationCondition
 - testRemoveMember
+- testRemoveMemberClearsTaskOffsets
 - testRemoveMemberRemovesCacheEntry
 - testRemoveStaticMember
 - testRemoveTaskProcessIds
 - testSetConfiguredTopologyClearsCache
 - testShutdownRequestedMethods
 - testTopologyDescriptionPluginEpochs
+- testUpdateAndRetrieveTaskOffsets
 - testUpdateMember
 - testUpdateMemberInvalidatesCache
 - testUpdatingMemberUpdatesProcessId
@@ -1449,6 +1468,7 @@ org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilderTest:
 - testAssignmentSwapped
 - testBuildEmptyAssignmentWhenTopologyNotReady
 - testCreateAssignmentMemberSpec
+- testCreateAssignmentMemberSpecPopulatesTaskOffsets
 - testEmpty
 - testPartialAssignmentUpdate
 org.apache.kafka.coordinator.group.streams.TasksTupleTest:
