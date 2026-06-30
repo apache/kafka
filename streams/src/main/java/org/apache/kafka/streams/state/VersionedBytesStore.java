@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.utils.Bytes;
 
 /**
@@ -38,4 +39,14 @@ public interface VersionedBytesStore extends KeyValueStore<Bytes, byte[]>, Times
      * The analog of {@link VersionedKeyValueStore#delete(Object, long)}.
      */
     byte[] delete(Bytes key, long timestamp);
+
+    /**
+     * Return a read-only view of this store bound to the given {@link IsolationLevel}.
+     * Covariantly narrows {@link KeyValueStore#readOnly(IsolationLevel)} so callers retain
+     * access to the versioned read methods ({@link #get(Bytes, long)} and friends).
+     */
+    @Override
+    default VersionedBytesStore readOnly(final IsolationLevel isolationLevel) {
+        return this;
+    }
 }

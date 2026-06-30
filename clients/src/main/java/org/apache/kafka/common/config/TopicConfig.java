@@ -107,20 +107,22 @@ public class TopicConfig {
             "(i.e. retention.ms/bytes).";
 
     public static final String REMOTE_COPY_LAG_MS_CONFIG = "remote.copy.lag.ms";
-    public static final String REMOTE_COPY_LAG_MS_DOC = "Controls how long to delay uploading segments to remote storage. " +
-            "When set to 0, immediate upload without any delay check. " +
-            "When set to a positive value (ms), a segment can't become eligible for upload until the time since the latest record in the segment reaches the value. " +
-            "The value should not exceed the real local retention ms except the latter is retained indefinitely (-1). " +
-            "When set to -1, resolves to the real local retention ms as maximum delay. " +
-            "For how the real local retention time is computed, see <code>local.retention.ms</code>.";
+    public static final String REMOTE_COPY_LAG_MS_DOC = "Controls one of the two upload eligibility checks (time and size) for copying segments to remote storage. " +
+            "A non-active segment is upload-eligible when either this time-based check or <code>remote.copy.lag.bytes</code> is satisfied. " +
+            "When set to 0, uploads are immediately eligible regardless of lag checks. " +
+            "When set to a positive value (ms), the segment is time-eligible once elapsed time since its latest record reaches this value. " +
+            "When set to -1, this value is derived from effective local retention time (<code>local.retention.ms</code>). " +
+            "If that effective local retention time is unlimited (-1), this time-based check is not applied. " +
+            "A positive value should not exceed effective local retention time unless local retention is unlimited (-1).";
 
     public static final String REMOTE_COPY_LAG_BYTES_CONFIG = "remote.copy.lag.bytes";
-    public static final String REMOTE_COPY_LAG_BYTES_DOC = "Controls size-based delay for uploading segments to remote storage. " +
-            "When set to 0, immediate upload without any delay check. " +
-            "When set to a positive value (bytes), a segment can't become eligible for upload until the total bytes of log data after the segment reach the value. " +
-            "The value should not exceed the real local retention bytes except the latter is retained indefinitely (-1). " +
-            "When set to -1, resolves to the real local retention bytes as maximum delay. " +
-            "For how the real local retention size is computed, see <code>local.retention.bytes</code>.";
+    public static final String REMOTE_COPY_LAG_BYTES_DOC = "Controls one of the two upload eligibility checks (time and size) for copying segments to remote storage. " +
+            "A non-active segment is upload-eligible when either this size-based check or <code>remote.copy.lag.ms</code> is satisfied. " +
+            "When set to 0, uploads are immediately eligible regardless of lag checks. " +
+            "When set to a positive value (bytes), the segment is size-eligible once bytes of newer local log data after that segment reaches this value. " +
+            "When set to -1, this value is derived from effective local retention size (<code>local.retention.bytes</code>). " +
+            "If that effective local retention size is unlimited (-1), this size-based check is not applied. " +
+            "A positive value should not exceed effective local retention size unless local retention is unlimited (-1).";
 
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = "remote.log.delete.on.disable";
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_DOC = "Determines whether tiered data for a topic should be " +

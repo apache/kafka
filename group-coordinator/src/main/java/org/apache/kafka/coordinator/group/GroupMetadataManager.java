@@ -65,6 +65,7 @@ import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.Endpoint;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.KeyValue;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.TaskIds;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.TaskOffset;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.Topology;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData.Status;
@@ -2078,6 +2079,8 @@ public class GroupMetadataManager {
         List<TaskIds> ownedActiveTasks,
         List<TaskIds> ownedStandbyTasks,
         List<TaskIds> ownedWarmupTasks,
+        List<TaskOffset> taskOffsets,
+        List<TaskOffset> taskEndOffsets,
         String processId,
         Endpoint userEndpoint,
         List<KeyValue> clientTags,
@@ -2127,6 +2130,14 @@ public class GroupMetadataManager {
                 isJoining,
                 records
             );
+        }
+
+        // Store the latest task changelog offsets/end-offsets reported by the member. These are transient telemetry
+        // (used by the assignor to estimate task lag) and are not persisted. Task offsets and end-offsets are reported
+        // independently: a null list means "unchanged since the last heartbeat", so we retain the previously reported
+        // value for whichever of the two is null and only update when at least one is reported.
+        if (taskOffsets != null || taskEndOffsets != null) {
+            group.updateTaskOffsets(memberId, group.taskOffsets(memberId).update(taskOffsets, taskEndOffsets));
         }
 
         // 1. Create or update the member.
@@ -4354,7 +4365,8 @@ public class GroupMetadataManager {
                 .withMembers(updatedMembersAndTargetAssignment.members())
                 .withTopology(configuredTopology)
                 .withMetadataImage(metadataImage)
-                .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment());
+                .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
+                .withTaskOffsets(group.taskOffsets());
 
             long startTimeMs = time.milliseconds();
             org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
@@ -5405,6 +5417,8 @@ public class GroupMetadataManager {
                 request.activeTasks(),
                 request.standbyTasks(),
                 request.warmupTasks(),
+                request.taskOffsets(),
+                request.taskEndOffsets(),
                 request.processId(),
                 request.userEndpoint(),
                 request.clientTags(),
