@@ -1173,12 +1173,10 @@ public class KafkaAdminClient extends AdminClient {
         private final List<Call> newCalls = new LinkedList<>();
 
         /**
-         * Set when the bootstrap DNS resolution permanently fails. Once non-null, any further
-         * call submitted via {@link #enqueue} is failed immediately with this exception so the
-         * error surfaces on every API call, not just the ones that were in-flight at the time
-         * of the failure.
+         * True once a permanent bootstrap failure has been observed and {@link #failAllPendingCalls}
+         * was invoked for it. Used to make sure we only fail in-flight calls once.
          */
-        private volatile BootstrapResolutionException bootstrapException = null;
+        private boolean bootstrapFailureHandled = false;
 
         /**
          * Maps node ID strings to their readiness deadlines.  A node will appear in this
@@ -1600,11 +1598,14 @@ public class KafkaAdminClient extends AdminClient {
                 // Wait for network responses.
                 log.trace("Entering KafkaClient#poll(timeout={})", pollTimeout);
                 List<ClientResponse> responses;
-                try {
-                    responses = client.poll(Math.max(0L, pollTimeout), now);
-                } catch (BootstrapResolutionException e) {
-                    bootstrapException = e;
-                    failAllPendingCalls(e, now);
+                responses = client.poll(Math.max(0L, pollTimeout), now);
+
+                // If bootstrap permanently failed during the poll above, fail any calls that were
+                // in flight at that moment. Calls submitted afterwards are handled by enqueue().
+                BootstrapResolutionException bootstrapEx = metadataManager.bootstrapFatalException();
+                if (bootstrapEx != null && !bootstrapFailureHandled) {
+                    bootstrapFailureHandled = true;
+                    failAllPendingCalls(bootstrapEx, now);
                     break;
                 }
                 log.trace("KafkaClient#poll retrieved {} response(s)", responses.size());
@@ -1658,16 +1659,17 @@ public class KafkaAdminClient extends AdminClient {
                     Math.min(requestTimeoutMs, call.deadlineMs - now));
             }
             boolean accepted = false;
+            BootstrapResolutionException bootstrapEx = metadataManager.bootstrapFatalException();
             synchronized (this) {
-                if (bootstrapException == null && !closing) {
+                if (bootstrapEx == null && !closing) {
                     newCalls.add(call);
                     accepted = true;
                 }
             }
             if (accepted) {
                 client.wakeup(); // wake the thread if it is in poll()
-            } else if (bootstrapException != null) {
-                call.fail(time.milliseconds(), bootstrapException);
+            } else if (bootstrapEx != null) {
+                call.fail(time.milliseconds(), bootstrapEx);
             } else {
                 log.debug("The AdminClient thread has exited. Timing out {}.", call);
                 call.handleTimeoutFailure(time.milliseconds(),

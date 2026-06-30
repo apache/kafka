@@ -1351,16 +1351,18 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
-     * Check if bootstrap timeout has expired and throw exception if so.
+     * Record a permanent bootstrap failure on the metadata if the timeout has expired.
+     * The error is not thrown here; callers observe it through their metadata layer
+     * (e.g. {@link Metadata#maybeThrowFatalException()} for Producer/Consumer, or
+     * {@code AdminMetadataManager#bootstrapFatalException()} for AdminClient).
      */
     private void checkBootstrapTimeout() {
-        if (bootstrapTimer.isExpired()) {
+        if (bootstrapTimer.isExpired() && bootstrapException == null) {
             cancelBootstrapResolution();
             bootstrapException = new BootstrapResolutionException("Failed to resolve bootstrap servers after " +
                 bootstrapConfiguration.bootstrapResolveTimeoutMs + "ms. " +
                 "Please check your bootstrap.servers configuration and DNS settings.");
             metadataUpdater.bootstrapFailed(bootstrapException);
-            throw bootstrapException;
         }
     }
 

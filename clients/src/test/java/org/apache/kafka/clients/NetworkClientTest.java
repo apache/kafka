@@ -20,7 +20,6 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.RebootstrapRequiredException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -1701,32 +1700,6 @@ public class NetworkClientTest {
         }, "Bootstrap should complete");
 
         assertTrue(metadataUpdater.isBootstrapped());
-    }
-
-    @Test
-    public void testEnsureBootstrappedTimeoutThrowsException() {
-        Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
-        // Use invalid addresses that cannot be resolved (using RFC 6761 reserved .invalid TLD)
-        List<String> invalidAddresses = List.of("unresolvable.invalid:9092");
-        NetworkClient.BootstrapConfiguration config = NetworkClient.BootstrapConfiguration.enabled(
-                invalidAddresses,
-                ClientDnsLookup.USE_ALL_DNS_IPS,
-                100, // Short timeout
-                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS);
-        NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
-                reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
-                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
-                time, false, new ApiVersions(), new LogContext(),
-                MetadataRecoveryStrategy.NONE, config, false);
-
-        // First poll to initialize bootstrap timer
-        client.poll(10, time.milliseconds());
-
-        // Advance time past bootstrap timeout
-        time.sleep(150);
-
-        // Should throw BootstrapResolutionException on next poll
-        assertThrows(BootstrapResolutionException.class, () -> client.poll(1000, time.milliseconds()));
     }
 
     @Test

@@ -23,6 +23,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
@@ -103,6 +104,14 @@ public class AdminMetadataManager {
     private ApiException fatalException = null;
 
     /**
+     * If this is non-null, bootstrap DNS resolution permanently failed. Unlike
+     * {@link #fatalException}, this is never cleared so all subsequent API calls see it.
+     * Volatile because it is written by the I/O thread (via the network client) and read by
+     * both the I/O thread and the app thread (via {@link KafkaAdminClient#enqueue}).
+     */
+    private volatile BootstrapResolutionException bootstrapFatalException = null;
+
+    /**
      * The cluster with which the metadata was bootstrapped.
      */
     private Cluster bootstrapCluster;
@@ -147,6 +156,13 @@ public class AdminMetadataManager {
         @Override
         public void rebootstrap(long now) {
             AdminMetadataManager.this.rebootstrap(now);
+        }
+
+        @Override
+        public void bootstrapFailed(org.apache.kafka.common.KafkaException exception) {
+            if (exception instanceof BootstrapResolutionException) {
+                AdminMetadataManager.this.recordBootstrapFatalException((BootstrapResolutionException) exception);
+            }
         }
 
         @Override
@@ -197,6 +213,14 @@ public class AdminMetadataManager {
 
     public boolean isBootstrapped() {
         return bootstrapCluster != null;
+    }
+
+    public BootstrapResolutionException bootstrapFatalException() {
+        return bootstrapFatalException;
+    }
+
+    void recordBootstrapFatalException(BootstrapResolutionException exception) {
+        this.bootstrapFatalException = exception;
     }
 
     public boolean isReady() {

@@ -30,7 +30,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.FencedLeaderEpochException;
 import org.apache.kafka.common.errors.InvalidMetadataException;
@@ -309,16 +308,6 @@ public class Sender implements Runnable {
      *
      */
     void runOnce() {
-        try {
-            runOnceInternal();
-        } catch (BootstrapResolutionException e) {
-            // The bootstrap fatal error is already recorded on the metadata at the NetworkClient
-            // layer, so app-thread API calls will see it. Swallow here to avoid spamming the
-            // "Uncaught error" log entry every iteration of the I/O loop.
-        }
-    }
-
-    private void runOnceInternal() {
         if (transactionManager != null) {
             try {
                 transactionManager.maybeResolveSequences();

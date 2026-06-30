@@ -159,21 +159,13 @@ public class NetworkClientDelegate implements AutoCloseable {
      * @param onClose       True when the network thread is closing.
      */
     public void poll(final long timeoutMs, final long currentTimeMs, boolean onClose) {
-        try {
-            trySend(currentTimeMs);
-        } catch (BootstrapResolutionException e) {
-            // already recorded as bootstrapFatalError on the metadata at the NetworkClient layer
-        }
+        trySend(currentTimeMs);
 
         long pollTimeoutMs = timeoutMs;
         if (!unsentRequests.isEmpty()) {
             pollTimeoutMs = Math.min(retryBackoffMs, pollTimeoutMs);
         }
-        try {
-            this.client.poll(pollTimeoutMs, currentTimeMs);
-        } catch (BootstrapResolutionException e) {
-            // already recorded as bootstrapFatalError on the metadata at the NetworkClient layer
-        }
+        this.client.poll(pollTimeoutMs, currentTimeMs);
         maybePropagateMetadataError();
         checkDisconnects(currentTimeMs, onClose);
         asyncConsumerMetrics.recordUnsentRequestsQueueSize(unsentRequests.size(), currentTimeMs);

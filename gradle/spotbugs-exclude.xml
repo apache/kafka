@@ -710,4 +710,15 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Bug pattern="SE_COMPARATOR_SHOULD_BE_SERIALIZABLE"/>
     </Match>
 
+    <Match>
+        <!-- AdminMetadataManager's lastMetadataFetchAttemptMs and lastMetadataUpdateMs are only
+             written from the AdminClient I/O thread, so non-atomic 64-bit writes are safe. -->
+        <Class name="org.apache.kafka.clients.admin.internals.AdminMetadataManager"/>
+        <Or>
+            <Field name="lastMetadataFetchAttemptMs"/>
+            <Field name="lastMetadataUpdateMs"/>
+        </Or>
+        <Bug pattern="AT_NONATOMIC_64BIT_PRIMITIVE"/>
+    </Match>
+
 </FindBugsFilter>
