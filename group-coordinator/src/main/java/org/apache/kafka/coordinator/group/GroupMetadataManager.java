@@ -2262,6 +2262,7 @@ public class GroupMetadataManager {
         UpdateTargetAssignmentResult<TasksTuple> updateTargetAssignmentResult = maybeUpdateStreamsTargetAssignment(
             group,
             groupEpoch,
+            Optional.of(member),
             Optional.of(updatedMember),
             updatedConfiguredTopology,
             metadataImage,
@@ -4163,7 +4164,7 @@ public class GroupMetadataManager {
                     group.staticMembers(),
                     group.targetAssignment()
                 );
-            updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), updatedMember.instanceId(), updatedMember);
+            updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), member.instanceId(), updatedMember.instanceId(), updatedMember);
 
             TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder assignmentResultBuilder =
                 new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(group.groupId(), groupEpoch, consumerGroupAssignors.get(preferredServerAssignor))
@@ -4246,7 +4247,7 @@ public class GroupMetadataManager {
                     Map.of(),
                     group.targetAssignment()
                 );
-            updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), updatedMember.instanceId(), updatedMember);
+            updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), null, null, updatedMember);
 
             TargetAssignmentBuilder.ShareTargetAssignmentBuilder assignmentResultBuilder =
                 new TargetAssignmentBuilder.ShareTargetAssignmentBuilder(group.groupId(), groupEpoch, shareGroupAssignor)
@@ -4292,6 +4293,7 @@ public class GroupMetadataManager {
      *
      * @param group                The StreamsGroup.
      * @param groupEpoch           The group epoch.
+     * @param member               The existing member (optional).
      * @param updatedMember        The updated member (optional).
      * @param metadataImage        The metadata image.
      * @param records              The list to accumulate any new records.
@@ -4301,6 +4303,7 @@ public class GroupMetadataManager {
     private UpdateTargetAssignmentResult<TasksTuple> maybeUpdateStreamsTargetAssignment(
         StreamsGroup group,
         int groupEpoch,
+        Optional<StreamsGroupMember> member,
         Optional<StreamsGroupMember> updatedMember,
         ConfiguredTopology configuredTopology,
         CoordinatorMetadataImage metadataImage,
@@ -4350,9 +4353,10 @@ public class GroupMetadataManager {
                     group.staticMembers(),
                     group.targetAssignment()
                 );
-            updatedMember.ifPresent(member ->
-                updatedMembersAndTargetAssignment.addOrUpdateMember(member.memberId(), member.instanceId().orElse(null), member)
-            );
+            updatedMember.ifPresent(updated -> {
+                String previousInstanceId = member.flatMap(StreamsGroupMember::instanceId).orElse(null);
+                updatedMembersAndTargetAssignment.addOrUpdateMember(updated.memberId(), previousInstanceId, updated.instanceId().orElse(null), updated);
+            });
 
             org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder assignmentResultBuilder =
                 new org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder(
@@ -4385,7 +4389,7 @@ public class GroupMetadataManager {
 
             return new UpdateTargetAssignmentResult<>(
                 groupEpoch,
-                updatedMember.map(member -> assignmentResult.targetAssignment().get(member.memberId()))
+                updatedMember.map(updated -> assignmentResult.targetAssignment().get(updated.memberId()))
                     .orElse(TasksTuple.EMPTY)
             );
         } catch (TaskAssignorException ex) {
@@ -4427,6 +4431,7 @@ public class GroupMetadataManager {
             maybeUpdateStreamsTargetAssignment(
                 group,
                 group.groupEpoch(),
+                Optional.empty(),
                 Optional.empty(),
                 group.configuredTopology().get(),
                 metadataImage,

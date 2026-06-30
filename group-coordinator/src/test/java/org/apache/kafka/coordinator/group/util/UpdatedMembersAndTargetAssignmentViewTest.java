@@ -48,7 +48,7 @@ public class UpdatedMembersAndTargetAssignmentViewTest {
     public void testAddMember() {
         UpdatedMembersAndTargetAssignmentView<String, String> view = createView();
 
-        view.addOrUpdateMember("member-3", null, "Member3");
+        view.addOrUpdateMember("member-3", null, null, "Member3");
 
         assertEquals(Map.of(
             "member-1", "Member1",
@@ -68,7 +68,7 @@ public class UpdatedMembersAndTargetAssignmentViewTest {
     public void testAddStaticMember() {
         UpdatedMembersAndTargetAssignmentView<String, String> view = createView();
 
-        view.addOrUpdateMember("member-3", "instance-id-2", "Member3");
+        view.addOrUpdateMember("member-3", null, "instance-id-2", "Member3");
 
         assertEquals(Map.of(
             "member-1", "Member1",
@@ -89,7 +89,7 @@ public class UpdatedMembersAndTargetAssignmentViewTest {
     public void testReplaceMember() {
         UpdatedMembersAndTargetAssignmentView<String, String> view = createView();
 
-        view.addOrUpdateMember("member-1", null, "Member1-updated");
+        view.addOrUpdateMember("member-1", null, null, "Member1-updated");
 
         assertEquals(Map.of(
             "member-1", "Member1-updated",
@@ -108,7 +108,7 @@ public class UpdatedMembersAndTargetAssignmentViewTest {
     public void testReplaceStaticMemberWithSameMemberId() {
         UpdatedMembersAndTargetAssignmentView<String, String> view = createView();
 
-        view.addOrUpdateMember("member-2", "instance-id", "Member2-updated");
+        view.addOrUpdateMember("member-2", "instance-id", "instance-id", "Member2-updated");
 
         assertEquals(Map.of(
             "member-1", "Member1",
@@ -127,7 +127,7 @@ public class UpdatedMembersAndTargetAssignmentViewTest {
     public void testReplaceStaticMemberWithDifferentMemberId() {
         UpdatedMembersAndTargetAssignmentView<String, String> view = createView();
 
-        view.addOrUpdateMember("member-3", "instance-id", "Member3");
+        view.addOrUpdateMember("member-3", null, "instance-id", "Member3");
 
         assertEquals(Map.of(
             "member-1", "Member1",
@@ -154,6 +154,44 @@ public class UpdatedMembersAndTargetAssignmentViewTest {
         assertEquals(Map.of(
             "member-1", "Assignment-member-1",
             "member-3", "Assignment-member-2"
+        ), view.targetAssignment());
+    }
+
+    @Test
+    public void testReplaceStaticMemberWithNullInstanceId() {
+        // This operation is currently not possible, since a heartbeat with a null instance id will
+        // keep any existing instance id.
+        UpdatedMembersAndTargetAssignmentView<String, String> view = createView();
+
+        view.addOrUpdateMember("member-2", "instance-id", null, "Member2-updated");
+
+        assertEquals(Map.of(
+            "member-1", "Member1",
+            "member-2", "Member2-updated"
+        ), view.members());
+        assertEquals(Map.of(), view.staticMembers());
+        assertEquals(Map.of(
+            "member-1", "Assignment-member-1",
+            "member-2", "Assignment-member-2"
+        ), view.targetAssignment());
+    }
+
+    @Test
+    public void testReplaceStaticMemberWithDifferentInstanceId() {
+        UpdatedMembersAndTargetAssignmentView<String, String> view = createView();
+
+        view.addOrUpdateMember("member-2", "instance-id", "instance-id-2", "Member2-updated");
+
+        assertEquals(Map.of(
+            "member-1", "Member1",
+            "member-2", "Member2-updated"
+        ), view.members());
+        assertEquals(Map.of(
+            "instance-id-2", "member-2"
+        ), view.staticMembers());
+        assertEquals(Map.of(
+            "member-1", "Assignment-member-1",
+            "member-2", "Assignment-member-2"
         ), view.targetAssignment());
     }
 

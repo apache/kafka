@@ -117,7 +117,7 @@ public class TargetAssignmentBuilderBenchmark {
             .build();
 
         updatedMembersAndTargetAssignment = new UpdatedMembersAndTargetAssignmentView<>(members, Map.of(), existingTargetAssignment);
-        updatedMembersAndTargetAssignment.addOrUpdateMember(newMember.memberId(), newMember.instanceId(), newMember);
+        updatedMembersAndTargetAssignment.addOrUpdateMember(newMember.memberId(), null, newMember.instanceId(), newMember);
 
         targetAssignmentBuilder = new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(GROUP_ID, GROUP_EPOCH, partitionAssignor)
             .withTime(Time.SYSTEM)

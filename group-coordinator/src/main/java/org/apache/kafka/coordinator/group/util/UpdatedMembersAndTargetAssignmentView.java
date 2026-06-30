@@ -85,12 +85,28 @@ public class UpdatedMembersAndTargetAssignmentView<M, A> {
      * member for the same instance id, the previous static member's target assignment is moved to
      * the new member and the previous static member is removed from the view.
      *
-     * @param memberId   The member id.
-     * @param instanceId The instance id of the member, or {@code null} if the member is not static.
-     * @param member     The member to add or update.
+     * @param memberId           The member id.
+     * @param previousInstanceId The instance id the member had before the update, or {@code null}
+     *                           if the member was not static.
+     * @param instanceId         The instance id of the member, or {@code null} if the member is not
+     *                           static.
+     * @param member             The member to add or update.
      */
-    public void addOrUpdateMember(String memberId, String instanceId, M member) {
+    public void addOrUpdateMember(
+        String memberId,
+        String previousInstanceId,
+        String instanceId,
+        M member
+    ) {
         members.put(memberId, member);
+
+        // Remove the old static member mapping when the instance id has changed.
+        // We don't remove the mapping when the instance id has not changed, otherwise we won't
+        // detect static member replacement correctly below.
+        if (previousInstanceId != null && !previousInstanceId.equals(instanceId)) {
+            staticMembers.remove(previousInstanceId);
+        }
+
         if (instanceId != null) {
             String previousMemberId = staticMembers.put(instanceId, memberId);
             if (previousMemberId != null && !memberId.equals(previousMemberId)) {
