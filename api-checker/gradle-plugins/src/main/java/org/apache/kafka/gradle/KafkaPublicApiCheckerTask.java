@@ -34,7 +34,7 @@ import org.gradle.api.tasks.OutputFile;
 import org.gradle.api.tasks.PathSensitive;
 import org.gradle.api.tasks.PathSensitivity;
 import org.gradle.api.tasks.TaskAction;
-import org.gradle.work.DisableCachingByDefault;
+import org.gradle.api.tasks.CacheableTask;
 
 import java.io.File;
 import java.io.IOException;
@@ -43,8 +43,13 @@ import java.util.List;
 
 /**
  * Gradle task for checking public API consistency in Kafka codebase.
+ *
+ * <p>Cacheable: the inputs (project jars, reference jars, javadoc jar) and the single output
+ * report file are all declared, and the scan is a pure function of those inputs. Applied to
+ * every subproject so unchanged modules become cache hits rather than re-running the bytecode
+ * scan on every {@code docsJar}.
  */
-@DisableCachingByDefault(because = "Reports are tiny; caching the bytecode scan adds little and complicates Hadoop-style audience-inheritance debugging")
+@CacheableTask
 public class KafkaPublicApiCheckerTask extends DefaultTask {
 
     private final Property<Boolean> enabled = getProject().getObjects().property(Boolean.class);

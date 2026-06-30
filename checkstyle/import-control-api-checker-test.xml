@@ -18,15 +18,18 @@
  limitations under the License.
 -->
 
-<!-- Production import policy for the api-checker included build's main sources — Gradle/Maven
-     plugins and the ASM-based scanner only. junit/mockito are intentionally absent: those
-     belong only in the test source sets (see import-control-api-checker-test.xml), so a stray
-     test-dep leaking into a main-source file fails checkstyle here. -->
+<!-- Test-scope import policy for the api-checker included build. Same allowlist as the main
+     scope plus the test frameworks (junit, mockito, gradle's testkit). Wired in via the
+     checkstyleTest task's configProperties in api-checker/build.gradle. -->
 <import-control pkg="org.apache.kafka">
     <allow pkg="java"/>
+    <allow pkg="javax"/>
     <allow pkg="org.apache.kafka"/>
     <allow pkg="org.gradle"/>
     <allow pkg="org.objectweb.asm"/>
     <allow pkg="org.slf4j"/>
     <allow pkg="org.apache.maven"/>
+    <allow pkg="org.junit"/>
+    <allow pkg="org.mockito"/>
+    <allow pkg="org.w3c.dom"/>
 </import-control>

@@ -33,9 +33,30 @@ def kafkaVersion = providers.gradleProperty('kafkaPluginsVersion')
         .orElse(providers.provider { rootGradleProps.getProperty('version') })
         .orElse('1.0.0-SNAPSHOT')
 
+// Single source of truth for every dependency version used in the api-checker build.
+// Cross-referenced against the root Kafka build's gradle/dependencies.gradle for the deps
+// that exist on both sides (junit, slf4j, mockito); when bumping those in the root catalog,
+// bump them here too. ASM and the Maven plugin family are unique to this included build.
+//
+// ASM versions cap the JDK class-file major they can parse. 9.6 covers up to Java 21
+// (class-file 65). If Kafka starts compiling against a newer JDK whose major exceeds what
+// this ASM release knows about, the scanner will throw
+// `IllegalArgumentException: Unsupported class file major version N` on encountering a fresh
+// bytecode file. Bump in lockstep with the project's max-supported compile JDK.
+ext.apiCheckerVersions = [
+        asm: '9.6',
+        slf4j: '2.0.16',
+        junit: '5.9.2',
+        junitPlatform: '1.9.2',
+        mockito: '5.3.1',
+        mavenApi: '3.9.4',
+        mavenPluginAnnotations: '3.9.0',
+]
+
 allprojects {
     group = 'org.apache.kafka'
     version = kafkaVersion.get()
+    ext.apiCheckerVersions = rootProject.apiCheckerVersions
 
     repositories {
         gradlePluginPortal()
@@ -66,6 +87,12 @@ subprojects {
         configDirectory = file("$rootDir/../checkstyle")
         configProperties = [importControlFile: 'import-control-api-checker.xml']
     }
+    // Tests legitimately need junit/mockito; main sources don't. Swap the import-control
+    // file for every test-flavoured Checkstyle task so a stray junit/mockito import in a
+    // main file still fails checkstyle.
+    tasks.matching { it.name == 'checkstyleTest' || it.name == 'checkstyleTestFixtures' }.configureEach {
+        configProperties = [importControlFile: 'import-control-api-checker-test.xml']
+    }
 
     publishing {
         repositories {
@@ -77,6 +104,33 @@ subprojects {
                 credentials {
                     username = project.hasProperty('mavenUsername') ? project.mavenUsername : ''
                     password = project.hasProperty('mavenPassword') ? project.mavenPassword : ''
+                }
+            }
+        }
+
+        // Apply Apache-Kafka POM defaults (url, license, developer, scm) to every publication
+        // in this subproject — each MavenPublication block only needs to set its own name,
+        // description, and packaging.
+        publications.withType(MavenPublication).configureEach {
+            pom {
+                url = 'https://kafka.apache.org'
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'apache-kafka'
+                        name = 'Apache Kafka Team'
+                        email = 'dev@kafka.apache.org'
+                    }
+                }
+                scm {
+                    connection = 'scm:git:https://github.com/apache/kafka.git'
+                    developerConnection = 'scm:git:https://github.com/apache/kafka.git'
+                    url = 'https://github.com/apache/kafka'
                 }
             }
         }

@@ -19,19 +19,20 @@
 // Maven runtime dependencies (maven-plugin-api, maven-core, …) stay off the Gradle plugin's
 // classpath, and so the published Gradle jar no longer carries Maven mojo classes.
 
-// Single source of truth for the Maven dependency versions. The version block below and the
-// hand-maintained plugin.xml descriptor both read these via processResources templating, so
-// the two can never drift.
-def mavenApiVersion = '3.9.4'
-def mavenPluginAnnotationsVersion = '3.9.0'
-
+// The Maven dependency versions come from the shared ext.apiCheckerVersions block in
+// ../build.gradle. The plugin.xml descriptor templating below reads the same values, so the
+// runtime dep declarations and the descriptor can never drift.
 dependencies {
     api project(':core')
 
-    implementation "org.apache.maven:maven-plugin-api:${mavenApiVersion}"
-    implementation "org.apache.maven:maven-core:${mavenApiVersion}"
-    implementation "org.apache.maven:maven-artifact:${mavenApiVersion}"
-    implementation "org.apache.maven.plugin-tools:maven-plugin-annotations:${mavenPluginAnnotationsVersion}"
+    implementation "org.apache.maven:maven-plugin-api:${apiCheckerVersions.mavenApi}"
+    implementation "org.apache.maven:maven-core:${apiCheckerVersions.mavenApi}"
+    implementation "org.apache.maven:maven-artifact:${apiCheckerVersions.mavenApi}"
+    implementation "org.apache.maven.plugin-tools:maven-plugin-annotations:${apiCheckerVersions.mavenPluginAnnotations}"
+
+    testImplementation "org.junit.jupiter:junit-jupiter:${apiCheckerVersions.junit}"
+    testImplementation "org.junit.jupiter:junit-jupiter-engine:${apiCheckerVersions.junit}"
+    testImplementation "org.junit.platform:junit-platform-launcher:${apiCheckerVersions.junitPlatform}"
 }
 
 // Template plugin.xml at packaging time so its <version> and the Maven dep versions resolve
@@ -42,8 +43,8 @@ processResources {
     filesMatching('META-INF/maven/plugin.xml') {
         filter(org.apache.tools.ant.filters.ReplaceTokens, tokens: [
             version: project.version.toString(),
-            mavenApiVersion: mavenApiVersion,
-            mavenPluginAnnotationsVersion: mavenPluginAnnotationsVersion,
+            mavenApiVersion: apiCheckerVersions.mavenApi,
+            mavenPluginAnnotationsVersion: apiCheckerVersions.mavenPluginAnnotations,
         ])
     }
 }
@@ -53,30 +54,11 @@ publishing {
         mavenPlugin(MavenPublication) {
             artifactId = 'kafka-internal-api-checker-maven-plugin'
             from components.java
-
+            // url, license, developers, scm come from the shared block in ../build.gradle.
             pom {
                 name = 'Apache Kafka Internal API Checker Maven Plugin'
                 description = 'Maven plugin that flags references to non-@Public Kafka classes in a downstream project'
-                url = 'https://kafka.apache.org'
                 packaging = 'maven-plugin'
-                licenses {
-                    license {
-                        name = 'The Apache License, Version 2.0'
-                        url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
-                    }
-                }
-                developers {
-                    developer {
-                        id = 'apache-kafka'
-                        name = 'Apache Kafka Team'
-                        email = 'dev@kafka.apache.org'
-                    }
-                }
-                scm {
-                    connection = 'scm:git:https://github.com/apache/kafka.git'
-                    developerConnection = 'scm:git:https://github.com/apache/kafka.git'
-                    url = 'https://github.com/apache/kafka'
-                }
             }
         }
     }

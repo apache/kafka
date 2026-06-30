@@ -33,7 +33,7 @@ import org.gradle.api.tasks.OutputFile;
 import org.gradle.api.tasks.PathSensitive;
 import org.gradle.api.tasks.PathSensitivity;
 import org.gradle.api.tasks.TaskAction;
-import org.gradle.work.DisableCachingByDefault;
+import org.gradle.api.tasks.CacheableTask;
 
 import java.io.File;
 import java.io.IOException;
@@ -47,7 +47,7 @@ import java.util.List;
  * works uniformly for Java, Scala, Kotlin and any other JVM-language consumer. The task
  * therefore runs after the project's {@code classes} task.
  */
-@DisableCachingByDefault(because = "Reports are tiny; caching the bytecode scan adds little")
+@CacheableTask
 public class KafkaInternalApiCheckerTask extends DefaultTask {
 
     private final Property<Boolean> enabled = getProject().getObjects().property(Boolean.class);

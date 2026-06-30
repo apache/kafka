@@ -24,24 +24,18 @@ apply plugin: 'java-test-fixtures'
 
 dependencies {
     // ASM is the entire production dependency footprint. No Gradle, no Maven.
-    //
-    // ASM versions cap the JDK class-file major version they can parse. 9.6 covers up to
-    // Java 21 (class-file 65). If Kafka starts compiling against a newer JDK whose major
-    // exceeds what this ASM release knows about, the scanner will throw
-    // `IllegalArgumentException: Unsupported class file major version N` on encountering
-    // a fresh bytecode file. Bump in lockstep with the project's max-supported compile JDK.
-    api 'org.ow2.asm:asm:9.6'
-    api 'org.slf4j:slf4j-api:2.0.16'
+    api "org.ow2.asm:asm:${apiCheckerVersions.asm}"
+    api "org.slf4j:slf4j-api:${apiCheckerVersions.slf4j}"
 
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.9.2'
-    testImplementation 'org.junit.jupiter:junit-jupiter-engine:5.9.2'
-    testImplementation 'org.junit.platform:junit-platform-launcher:1.9.2'
+    testImplementation "org.junit.jupiter:junit-jupiter:${apiCheckerVersions.junit}"
+    testImplementation "org.junit.jupiter:junit-jupiter-engine:${apiCheckerVersions.junit}"
+    testImplementation "org.junit.platform:junit-platform-launcher:${apiCheckerVersions.junitPlatform}"
 
     // ASM-based class-file builders used by every checker test in the included build.
     // Exposed as test-fixtures so the gradle-plugins module's tests can pull them in via
     // `testImplementation(testFixtures(project(':core')))` without us re-publishing them
     // as a separate "tests" classifier artifact.
-    testFixturesImplementation 'org.ow2.asm:asm:9.6'
+    testFixturesImplementation "org.ow2.asm:asm:${apiCheckerVersions.asm}"
 }
 
 publishing {
@@ -49,30 +43,10 @@ publishing {
         coreJar(MavenPublication) {
             artifactId = 'kafka-api-checker-core'
             from components.java
-
+            // url, license, developers, scm come from the shared block in ../build.gradle.
             pom {
                 name = 'Apache Kafka API Checker Core'
                 description = 'Bytecode scanner and reporter shared by the KIP-1265 Gradle and Maven plugins'
-                url = 'https://kafka.apache.org'
-
-                licenses {
-                    license {
-                        name = 'The Apache License, Version 2.0'
-                        url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
-                    }
-                }
-                developers {
-                    developer {
-                        id = 'apache-kafka'
-                        name = 'Apache Kafka Team'
-                        email = 'dev@kafka.apache.org'
-                    }
-                }
-                scm {
-                    connection = 'scm:git:https://github.com/apache/kafka.git'
-                    developerConnection = 'scm:git:https://github.com/apache/kafka.git'
-                    url = 'https://github.com/apache/kafka'
-                }
             }
         }
     }
