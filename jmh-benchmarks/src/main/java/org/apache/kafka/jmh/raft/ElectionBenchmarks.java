@@ -49,11 +49,11 @@ import java.util.concurrent.TimeUnit;
 public class ElectionBenchmarks {
 
     /**
-     * Starting state: the local node is Unattached in a {@code voterCount}-node quorum. A fresh
+     * Starting state: the local node is Unattached in a {@code voterCount}-node cluster. A fresh
      * context is built per invocation because driving the election to completion consumes it.
      */
     @State(Scope.Thread)
-    public static class UnattachedQuorum {
+    public static class UnattachedWithMultipleVoters {
         @Param({"3", "5"})
         public int voterCount;
 
@@ -70,9 +70,9 @@ public class ElectionBenchmarks {
 
     /** A multi-voter quorum elects the local node as leader. */
     @Benchmark
-    public void electLeader(UnattachedQuorum state, KRaftBenchmarkingCounters counters) throws Exception {
+    public void electLeader(UnattachedWithMultipleVoters state, KRaftBenchmarkingCounters counters) throws Exception {
         state.context.unattachedToLeader();
 
-        counters.drainFrom(state.benchmark, Optional.empty(), Optional.empty());
+        counters.collectDeltasAndDrainRPCs(state.benchmark, Optional.empty(), Optional.empty());
     }
 }

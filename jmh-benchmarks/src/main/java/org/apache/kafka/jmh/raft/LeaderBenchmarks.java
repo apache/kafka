@@ -82,6 +82,6 @@ public class LeaderBenchmarks {
                 state.epoch, state.benchmark.remoteVoters().get(0), state.endOffset, state.epoch, 0));
         state.context.pollUntilResponse();
 
-        counters.drainFrom(state.benchmark, Optional.empty(), Optional.of(ApiKeys.FETCH));
+        counters.collectDeltasAndDrainRPCs(state.benchmark, Optional.empty(), Optional.of(ApiKeys.FETCH));
     }
 }

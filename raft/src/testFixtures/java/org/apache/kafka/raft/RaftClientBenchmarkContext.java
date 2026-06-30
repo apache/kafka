@@ -21,28 +21,34 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.raft.RaftClientTestContext.RaftProtocol;
 import org.apache.kafka.server.common.KRaftVersion;
 
-import java.util.HashMap;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public final class RaftClientBenchmarkContext {
-    // Standardized JMH iteration counts, shared by all raft benchmarks so every benchmark of a given
-    // mode is configured identically. SingleShotTime measures a single operation per iteration, so it
-    // needs many iterations to build a stable distribution; AverageTime averages many operations
-    // within each timed iteration, so it needs fewer.
+    // Standardized JMH iteration counts, shared by all raft benchmarks so every benchmark of a given mode is configured identically
+
+    //  SingleShotTime measures a single operation per iteration, so it needs many iterations to build a stable distribution
     public static final int SINGLE_SHOT_WARMUP_ITERATIONS = 50;
     public static final int SINGLE_SHOT_MEASUREMENT_ITERATIONS = 30;
     public static final int SINGLE_SHOT_FORKS = 5;
+
+    // AverageTime averages many operations within each timed iteration, so it needs fewer.
     public static final int AVERAGE_TIME_WARMUP_ITERATIONS = 5;
     public static final int AVERAGE_TIME_MEASUREMENT_ITERATIONS = 10;
     public static final int AVERAGE_TIME_FORKS = 3;
 
-    public static final KRaftVersion DEFAULT_KRAFT_VERSION = KRaftVersion.KRAFT_VERSION_1;
-    public static final RaftProtocol DEFAULT_RAFT_PROTOCOL = RaftProtocol.KIP_1186_PROTOCOL;
+    // Default to the newest version of each (the highest-ordinal enum constant). Enum natural order
+    // is ordinal order, so this picks the last-declared constant; relies on the constants being
+    // declared oldest-to-newest, which avoids updating these when a new version is added.
+    public static final KRaftVersion DEFAULT_KRAFT_VERSION =
+        Arrays.stream(KRaftVersion.values()).max(Comparator.naturalOrder()).orElseThrow();
+    public static final RaftProtocol DEFAULT_RAFT_PROTOCOL =
+        Arrays.stream(RaftProtocol.values()).max(Comparator.naturalOrder()).orElseThrow();
 
     private final RaftClientTestContext context;
     private final MockLog log;
@@ -53,7 +59,6 @@ public final class RaftClientBenchmarkContext {
     private int lastReadCount;
     private int lastTruncationCount;
     private int lastRequestsSent;
-    private Map<Short, Integer> lastRequestsSentByApiKey = new HashMap<>();
     private int lastQuorumWrites;
     private int lastQuorumReads;
 
@@ -65,10 +70,10 @@ public final class RaftClientBenchmarkContext {
     }
 
     /**
-     * Builds an unattached node in a {@code voterCount}-node quorum (the local node is not yet the
-     * leader). Use {@link #unattachedToLeader()} as the measured operation to drive a full
-     * Unattached &rarr; Leader election. A single-voter quorum is rejected because such a node elects
-     * itself at initialization, before any measured poll.
+     * Builds a local, unattached node in a {@code voterCount}-node cluster (the local node is not yet
+     * the leader). Use {@link RaftClientTestContext#unattachedToLeader()} on {@link #testContext()} as
+     * the measured operation to drive a full Unattached &rarr; Leader election. A single-voter cluster
+     * is rejected because such a node elects itself at initialization, before any measured poll.
      */
     public static RaftClientBenchmarkContext unattached(int voterCount) throws Exception {
         return unattached(voterCount, DEFAULT_KRAFT_VERSION, DEFAULT_RAFT_PROTOCOL);
@@ -117,7 +122,8 @@ public final class RaftClientBenchmarkContext {
     }
 
     /**
-     * Builds an unattached node in a quorum of {@code voterKeys} (first entry is the local node)
+     * Initializes a local, unattached node in a cluster of {@code voterKeys} (first entry is the local
+     * node).
      */
     private static RaftClientTestContext buildContext(
         List<ReplicaKey> voterKeys,
@@ -149,7 +155,7 @@ public final class RaftClientBenchmarkContext {
     }
 
     /**
-     * The voters other than the local node, in voter-set order. May be empty (single-voter quorum).
+     * The voters other than the local node, in voter-set order. May be empty (single-voter cluster).
      * Use these as the source of delivered requests, e.g. a FETCH from a follower on the leader.
      */
     public List<ReplicaKey> remoteVoters() {
@@ -167,27 +173,27 @@ public final class RaftClientBenchmarkContext {
         lastReadCount = log.readCount();
         lastTruncationCount = log.truncationCount();
         lastRequestsSent = channel.requestsSent();
-        lastRequestsSentByApiKey = new HashMap<>(channel.requestsSentByApiKey());
         lastQuorumWrites = context.quorumStateWriteCount();
         lastQuorumReads = context.quorumStateReadCount();
+        channel.drainSendQueue();
         context.drainAllSentResponses();
     }
 
-    public int drainLogFlushes() {
+    public int getLogFlushesDelta() {
         int current = log.flushCount();
         int delta = current - lastFlushCount;
         lastFlushCount = current;
         return delta;
     }
 
-    public int drainLogReads() {
+    public int getLogReadsDelta() {
         int current = log.readCount();
         int delta = current - lastReadCount;
         lastReadCount = current;
         return delta;
     }
 
-    public int drainLogTruncations() {
+    public int getLogTruncationsDelta() {
         int current = log.truncationCount();
         int delta = current - lastTruncationCount;
         lastTruncationCount = current;
@@ -195,31 +201,37 @@ public final class RaftClientBenchmarkContext {
     }
 
     /**
-     * Number of requests sent since the last drain. If {@code apiKey} is present, only requests of
-     * that API key are counted; otherwise all requests are counted.
+     * Total number of requests (all API keys) the client has sent since the last call. Uses the
+     * channel's cumulative counter, so it is unaffected by a test driver draining the send queue.
      */
-    public int drainRpcRequestsSent(Optional<ApiKeys> apiKey) {
-        if (apiKey.isEmpty()) {
-            int current = channel.requestsSent();
-            int delta = current - lastRequestsSent;
-            lastRequestsSent = current;
-            return delta;
-        }
-        short id = apiKey.get().id;
-        int current = channel.requestsSent(apiKey.get());
-        int delta = current - lastRequestsSentByApiKey.getOrDefault(id, 0);
-        lastRequestsSentByApiKey.put(id, current);
+    public int getRpcRequestsSentDelta() {
+        int current = channel.requestsSent();
+        int delta = current - lastRequestsSent;
+        lastRequestsSent = current;
         return delta;
     }
 
-    public int drainQuorumStateWrites() {
+    /**
+     * Drains the requests the benchmark expects to be in-flight at the end of the invocation (the
+     * given {@code expectedRequest} API key, if any) and asserts the send queue is then empty. A
+     * non-empty queue means the client sent more requests than the benchmark accounts for.
+     */
+    public void drainExpectedRequestsAndAssertEmpty(Optional<ApiKeys> expectedRequest) {
+        expectedRequest.ifPresent(apiKey -> channel.drainSentRequests(Optional.of(apiKey)));
+        if (channel.hasSentRequests()) {
+            throw new IllegalStateException(
+                "Unexpected outstanding requests at end of benchmark invocation: " + channel.drainSendQueue());
+        }
+    }
+
+    public int getQuorumStateWritesDelta() {
         int current = context.quorumStateWriteCount();
         int delta = current - lastQuorumWrites;
         lastQuorumWrites = current;
         return delta;
     }
 
-    public int drainQuorumStateReads() {
+    public int getQuorumStateReadsDelta() {
         int current = context.quorumStateReadCount();
         int delta = current - lastQuorumReads;
         lastQuorumReads = current;
@@ -227,13 +239,18 @@ public final class RaftClientBenchmarkContext {
     }
 
     /**
-     * Number of responses sent since the last drain. If {@code apiKey} is present, only responses of
-     * that API key are counted; otherwise all responses are counted.
+     * Drains the responses the benchmark expects to be in-flight at the end of the invocation (the
+     * given {@code apiKey}, if any), counts them, then asserts no other responses remain. Returns the
+     * number of expected responses drained (0 if none are expected). A leftover response means the
+     * client sent more than the benchmark accounts for.
      */
-    public int drainRpcResponsesSent(Optional<ApiKeys> apiKey) {
-        if (apiKey.isEmpty()) {
-            return context.drainAllSentResponses();
+    public int maybeDrainSentRpcResponses(Optional<ApiKeys> apiKey) {
+        int expected = apiKey.map(key -> context.drainSentResponses(key).size()).orElse(0);
+        int remaining = context.drainAllSentResponses();
+        if (remaining > 0) {
+            throw new IllegalStateException(
+                "Unexpected outstanding responses at end of benchmark invocation: " + remaining);
         }
-        return context.drainSentResponses(apiKey.get()).size();
+        return expected;
     }
 }

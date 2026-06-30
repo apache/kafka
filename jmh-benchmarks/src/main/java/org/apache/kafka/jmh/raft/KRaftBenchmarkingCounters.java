@@ -37,7 +37,7 @@ import java.util.Optional;
  * {@code @OperationsPerInvocation}.) JMH reports the timing score in {@code ns/op}, and these work
  * counters are reported {@code PerOp} to match.
  *
- * <p>Each benchmark calls {@link #drainFrom} every invocation to accumulate the work deltas drained
+ * <p>Each benchmark calls {@link #collectDeltasAndDrainRPCs} every invocation to accumulate the work deltas drained
  * from {@link RaftClientBenchmarkContext}. The raw totals are private accumulators; what we report
  * are the per-operation values from the {@code *PerOp()} methods (the quantity of interest), plus
  * {@link #operations}.
@@ -59,6 +59,8 @@ import java.util.Optional;
 @State(Scope.Thread)
 @AuxCounters(AuxCounters.Type.EVENTS)
 public class KRaftBenchmarkingCounters {
+    // Private accumulators: not reported directly (we report the per-op values below). Being private,
+    // JMH does not touch them between iterations, so reset() must zero them.
     private long logFlushesTotal;
     private long logReadsTotal;
     private long logTruncationsTotal;
@@ -68,7 +70,9 @@ public class KRaftBenchmarkingCounters {
     private long quorumStateReadsTotal;
 
     // Reported: the number of operations (i.e. @Benchmark method invocations) measured in the
-    // iteration, and the divisor for the per-operation values below.
+    // iteration, and the divisor for the per-operation values below. Being a public @AuxCounters
+    // field, JMH zeroes it automatically at the start of every iteration (which is why, unlike the
+    // private totals above, it is not reset in reset()).
     public long operations;
 
     // The number of measurement data points JMH will SUM the per-op methods over, i.e.
@@ -96,21 +100,30 @@ public class KRaftBenchmarkingCounters {
 
     /**
      * Accumulates this invocation's work deltas drained from {@code context} into these counters.
-     * {@code expectedRequest}/{@code expectedResponse}, if present, restrict the RPC request/response
-     * counts to that API key (e.g. {@code FETCH}); empty counts all.
+     *
+     * <p>{@code expectedRequest}/{@code expectedResponse} declare the request/response API key the
+     * benchmark expects to still be in-flight at the end of the invocation. Those expected messages are
+     * drained, then the send queue / response list is asserted empty — anything left over is something
+     * the client sent that the benchmark didn't account for, which fails fast instead of silently
+     * inflating a count. An <b>empty</b> {@code Optional} therefore means "no outstanding
+     * requests/responses are expected at the end of the invocation," so any leftover fails assert.
+     *
+     * <p>The reported request count is always the total across all API keys (from the channel's
+     * cumulative counter); the reported response count is the number of expected responses drained.
      */
-    public void drainFrom(
+    public void collectDeltasAndDrainRPCs(
         RaftClientBenchmarkContext context,
         Optional<ApiKeys> expectedRequest,
         Optional<ApiKeys> expectedResponse
     ) {
-        logFlushesTotal += context.drainLogFlushes();
-        logReadsTotal += context.drainLogReads();
-        logTruncationsTotal += context.drainLogTruncations();
-        rpcRequestsSentTotal += context.drainRpcRequestsSent(expectedRequest);
-        rpcResponsesSentTotal += context.drainRpcResponsesSent(expectedResponse);
-        quorumStateWritesTotal += context.drainQuorumStateWrites();
-        quorumStateReadsTotal += context.drainQuorumStateReads();
+        logFlushesTotal += context.getLogFlushesDelta();
+        logReadsTotal += context.getLogReadsDelta();
+        logTruncationsTotal += context.getLogTruncationsDelta();
+        rpcRequestsSentTotal += context.getRpcRequestsSentDelta();
+        context.drainExpectedRequestsAndAssertEmpty(expectedRequest);
+        rpcResponsesSentTotal += context.maybeDrainSentRpcResponses(expectedResponse);
+        quorumStateWritesTotal += context.getQuorumStateWritesDelta();
+        quorumStateReadsTotal += context.getQuorumStateReadsDelta();
         operations += 1;
     }
 
