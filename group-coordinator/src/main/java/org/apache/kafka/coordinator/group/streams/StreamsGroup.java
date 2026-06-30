@@ -516,8 +516,7 @@ public class StreamsGroup implements Group {
      */
     private void updateStaticMember(StreamsGroupMember oldMember, StreamsGroupMember newMember) {
         if (oldMember != null && oldMember.instanceId() != null &&
-            oldMember.instanceId().isPresent() &&
-            !oldMember.instanceId().equals(newMember.instanceId())) {
+            oldMember.instanceId().isPresent()) {
             staticMembers.remove(oldMember.instanceId().get());
         }
         if (newMember.instanceId() != null && newMember.instanceId().isPresent()) {

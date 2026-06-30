@@ -338,8 +338,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      * @param newMember The new member state.
      */
     private void updateStaticMember(ConsumerGroupMember oldMember, ConsumerGroupMember newMember) {
-        if (oldMember != null && oldMember.instanceId() != null &&
-            !oldMember.instanceId().equals(newMember.instanceId())) {
+        if (oldMember != null && oldMember.instanceId() != null) {
             staticMembers.remove(oldMember.instanceId());
         }
         if (newMember.instanceId() != null) {
