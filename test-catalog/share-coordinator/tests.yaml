@@ -47,6 +47,7 @@ org.apache.kafka.coordinator.share.ShareCoordinatorServiceTest:
 - testOnMetadataUpdateSchedulesOperationsWhenTopicsDeleted
 - testOnMetadataUpdateSwallowsErrorsWhenTopicsDeleted
 - testPartitionFor
+- testPeriodicJobsDoNotDuplicateAfterDisableEnableWithInFlightJobs
 - testPeriodicJobsDoNotRunWhenShareGroupsDisabled
 - testReadFutureReturnsError
 - testReadStateSuccess
