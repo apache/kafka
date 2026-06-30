@@ -39,9 +39,8 @@ public class StreamsGroupHeartbeatRequest extends AbstractRequest {
         private final StreamsGroupHeartbeatRequestData data;
 
         public Builder(StreamsGroupHeartbeatRequestData data) {
-            // SIDE-BRANCH TWEAK (KAFKA-20629): allow v1 (unstable) so the broker can transmit
-            // TopologyDescriptionRequired. Revert this to super(ApiKeys.STREAMS_GROUP_HEARTBEAT)
-            // once the KIP-1331 RPCs are marked stable in their schemas.
+            // Allow v1 (unstable) so the broker can transmit TopologyDescriptionRequired.
+            // Revert this to super(ApiKeys.STREAMS_GROUP_HEARTBEAT) once the KIP-1331 RPCs are marked stable in their schemas.
             super(ApiKeys.STREAMS_GROUP_HEARTBEAT, true);
             this.data = data;
         }
