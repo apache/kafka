@@ -420,13 +420,21 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             } else {
                 // Surface the result as a ReadOnlyRecord (implemented by Record), keeping the headers.
                 // A null wrapper means the key is absent or tombstoned, which we surface as a null result.
-                final ReadOnlyRecord<K, V> record = valueTimestampHeaders == null
-                    ? null
-                    : new Record<>(
+                final ReadOnlyRecord<K, V> record;
+                if (valueTimestampHeaders == null) {
+                    record = null;
+                } else {
+                    final Record<K, V> headerRecord = new Record<>(
                         typedKeyQuery.key(),
                         valueTimestampHeaders.value(),
                         valueTimestampHeaders.timestamp(),
                         valueTimestampHeaders.headers());
+                    // An IQ result is a read-only snapshot, so its headers should be immutable too.
+                    // Record copies the headers into a RecordHeaders; mark it read-only so a caller
+                    // cannot mutate the returned Headers.
+                    ((RecordHeaders) headerRecord.headers()).setReadOnly();
+                    record = headerRecord;
+                }
                 final QueryResult<ReadOnlyRecord<K, V>> typedQueryResult =
                     InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, record);
                 result = (QueryResult<R>) typedQueryResult;

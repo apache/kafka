@@ -342,6 +342,9 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
             assertEquals(123L, record.timestamp());
             // Headers must round-trip on both the persistent path and the cache path.
             assertEquals(headers, record.headers());
+            // The IQ result is a read-only snapshot: its headers are immutable.
+            assertThrows(IllegalStateException.class, () -> record.headers().add("new", new byte[0]),
+                "IQ result headers should be read-only");
             assertNotNull(result.getPosition(), "Expected position to be set");
         } finally {
             store.close();
