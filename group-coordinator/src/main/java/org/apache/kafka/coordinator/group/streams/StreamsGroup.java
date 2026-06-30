@@ -31,6 +31,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
 import org.apache.kafka.coordinator.group.CommitPartitionValidator;
 import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.TargetAssignmentMetadata;
@@ -755,6 +756,24 @@ public class StreamsGroup implements Group {
      */
     public int storedDescriptionTopologyEpoch() {
         return storedDescriptionTopologyEpoch.get();
+    }
+
+    /**
+     * Defer tombstoning of an empty streams group while the broker-level topology-description
+     * cleanup cycle still has work to do for it: a plugin is configured and the persisted
+     * {@code StoredDescriptionTopologyEpoch} is not the {@code -1} default. The cycle drives
+     * {@code plugin.deleteTopology} and clears the stored epoch; the next sweep then proceeds
+     * with tombstoning. When no plugin is configured the gate never holds, so deferring
+     * indefinitely is not possible.
+     *
+     * <p>Per the {@link Group#shouldExpire(GroupCoordinatorConfig)} contract this only gates the
+     * group-metadata tombstone — committed offsets are still expired by the sweep regardless of
+     * what this returns, which is what feeds the topology-cleanup cycle's eligibility check.
+     */
+    @Override
+    public boolean shouldExpire(GroupCoordinatorConfig config) {
+        return !(config.isStreamsGroupTopologyDescriptionPluginConfigured()
+            && storedDescriptionTopologyEpoch() != -1);
     }
 
     /**

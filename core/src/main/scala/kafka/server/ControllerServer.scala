@@ -143,8 +143,7 @@ class ControllerServer(
 
       linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", time)
       if (linuxIoMetricsCollector.usable()) {
-        metricsGroup.newGauge("linux-disk-read-bytes", () => linuxIoMetricsCollector.readBytes())
-        metricsGroup.newGauge("linux-disk-write-bytes", () => linuxIoMetricsCollector.writeBytes())
+        linuxIoMetricsCollector.registerMetrics(metricsGroup)
       }
 
       authorizerPlugin = config.createNewAuthorizer(metrics, ProcessRole.ControllerRole.toString)

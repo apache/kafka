@@ -34,6 +34,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.CommitPartitionValidator;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.OffsetAndMetadata;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
@@ -1415,5 +1416,44 @@ public class StreamsGroupTest {
         // All cache entries should be cleared
         assertTrue(streamsGroup.cachedEndpointToPartitions("member-1").isEmpty());
         assertTrue(streamsGroup.cachedEndpointToPartitions("member-2").isEmpty());
+    }
+
+    @Test
+    public void testShouldExpireFalseWhenPluginConfiguredAndEpochStored() {
+        // Defer holds: a topology plugin is configured on this broker and the group has a
+        // non-default stored epoch — the natural-expiration sweep must wait for the broker-level
+        // topology-cleanup cycle to drive plugin.deleteTopology and clear the field before the
+        // group is tombstoned.
+        StreamsGroup streamsGroup = createStreamsGroup("group-id");
+        streamsGroup.setStoredDescriptionTopologyEpoch(4);
+        GroupCoordinatorConfig config = mock(GroupCoordinatorConfig.class);
+        when(config.isStreamsGroupTopologyDescriptionPluginConfigured()).thenReturn(true);
+
+        assertFalse(streamsGroup.shouldExpire(config));
+    }
+
+    @Test
+    public void testShouldExpireTrueWhenStoredEpochIsDefault() {
+        // storedDescriptionTopologyEpoch == -1: no plugin row exists for this group (either the
+        // topology cleanup cycle has already cleared it on a previous tick, or one was never
+        // pushed). The tombstone proceeds.
+        StreamsGroup streamsGroup = createStreamsGroup("group-id");
+        GroupCoordinatorConfig config = mock(GroupCoordinatorConfig.class);
+        when(config.isStreamsGroupTopologyDescriptionPluginConfigured()).thenReturn(true);
+
+        assertTrue(streamsGroup.shouldExpire(config));
+    }
+
+    @Test
+    public void testShouldExpireTrueWhenNoPluginConfigured() {
+        // No plugin configured on this broker: no topology cleanup cycle will ever run to clear
+        // the field, so blocking the tombstone would prevent natural expiration indefinitely.
+        // The stored epoch value is irrelevant in this branch.
+        StreamsGroup streamsGroup = createStreamsGroup("group-id");
+        streamsGroup.setStoredDescriptionTopologyEpoch(4);
+        GroupCoordinatorConfig config = mock(GroupCoordinatorConfig.class);
+        when(config.isStreamsGroupTopologyDescriptionPluginConfigured()).thenReturn(false);
+
+        assertTrue(streamsGroup.shouldExpire(config));
     }
 }

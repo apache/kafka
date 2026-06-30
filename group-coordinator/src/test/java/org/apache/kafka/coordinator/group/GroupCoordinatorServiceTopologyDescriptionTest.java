@@ -51,6 +51,7 @@ import org.mockito.MockedStatic;
 
 import java.time.Duration;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -963,6 +964,32 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
 
         verify(plugin, times(1)).deleteTopology("foo");
         verify(runtime, times(1)).scheduleWriteOperation(eq("clear-stored-topology-epoch"), eq(GROUP_TP), any());
+    }
+
+    @Test
+    public void testCleanupCycleBatchesClearWritesPerPartition() {
+        // Two eligible groups land on the same partition's eligibility read — they must trigger
+        // exactly one scheduleWriteOperation carrying both conditional clears, not one write per
+        // group.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.deleteTopology("foo")).thenReturn(CompletableFuture.completedFuture(null));
+        when(plugin.deleteTopology("bar")).thenReturn(CompletableFuture.completedFuture(null));
+        Map<String, Integer> eligible = new LinkedHashMap<>();
+        eligible.put("foo", 4);
+        eligible.put("bar", 9);
+        when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
+            .thenReturn(List.of(CompletableFuture.completedFuture(eligible)));
+        when(runtime.scheduleWriteOperation(eq("clear-stored-topology-epoch"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        service.runOneStreamsTopologyCleanupCycle();
+
+        verify(plugin, times(1)).deleteTopology("foo");
+        verify(plugin, times(1)).deleteTopology("bar");
+        // One write covers both groups; not two per-group writes.
+        verify(runtime, times(1)).scheduleWriteOperation(eq("clear-stored-topology-epoch"), any(), any());
     }
 
     @Test

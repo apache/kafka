@@ -862,7 +862,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         // follow-up writes. Skip the conditional clears so we do not
                         // schedule writes against a runtime that is being closed.
                         if (!isActive.get()) return CompletableFuture.completedFuture(null);
-                        List<CompletableFuture<Void>> clearFutures = new ArrayList<>(eligible.size());
+                        Map<String, Integer> toClear = new HashMap<>(eligible.size());
                         eligible.forEach((groupId, expectedStoredEpoch) -> {
                             if (failures.containsKey(groupId)) {
                                 // Plugin failed: leave both stored epoch and the push-path
@@ -879,9 +879,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
                             // this groupId. A member that re-creates the same id afterwards
                             // is a fresh lifecycle and will arm a fresh back-off chain.
                             streamsGroupTopologyDescriptionManager.clearBackoffGroup(groupId);
-                            clearFutures.add(clearStoredDescriptionTopologyEpochAsync(groupId, expectedStoredEpoch));
+                            toClear.put(groupId, expectedStoredEpoch);
                         });
-                        return CompletableFuture.allOf(clearFutures.toArray(new CompletableFuture<?>[0]));
+                        if (toClear.isEmpty()) return CompletableFuture.completedFuture(null);
+                        // All groups in `eligible` came from the same partition's read so they
+                        // hash to the same __consumer_offsets partition; one batched write covers
+                        // every clear on this shard.
+                        return clearStoredDescriptionTopologyEpochBatchAsync(toClear);
                     }));
                 return null;
             }));
@@ -924,22 +928,28 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * Conditional metadata write that clears {@code StoredDescriptionTopologyEpoch} for
-     * {@code groupId} only when the persisted value still equals {@code expectedStoredEpoch}.
-     * Mismatches and missing groups are silently ignored by the shard-side method. Runtime
-     * write failures (NOT_COORDINATOR etc.) are logged here and swallowed so a single failed
-     * write does not poison the cycle's allOf — the next cycle will retry naturally because
-     * the persisted storedEpoch is still non-default.
+     * Batched conditional metadata write that clears {@code StoredDescriptionTopologyEpoch}
+     * for every entry in {@code expectedStoredEpochByGroupId}, but only for the entries whose
+     * persisted value still equals the supplied epoch. Mismatches and missing groups are
+     * silently ignored by the shard-side method. All groups in the batch must hash to the same
+     * __consumer_offsets partition (the caller guarantees this — the eligibility scan is per
+     * partition). Runtime write failures (NOT_COORDINATOR etc.) are logged here and swallowed
+     * so a single failed write does not poison the cycle's allOf — the next cycle will retry
+     * naturally because the persisted storedEpoch is still non-default.
      */
-    private CompletableFuture<Void> clearStoredDescriptionTopologyEpochAsync(String groupId, int expectedStoredEpoch) {
-        return runtime.<Void>scheduleWriteOperation(
+    private CompletableFuture<Void> clearStoredDescriptionTopologyEpochBatchAsync(
+        Map<String, Integer> expectedStoredEpochByGroupId
+    ) {
+        if (expectedStoredEpochByGroupId.isEmpty()) return CompletableFuture.completedFuture(null);
+        TopicPartition tp = topicPartitionFor(expectedStoredEpochByGroupId.keySet().iterator().next());
+        return runtime.scheduleWriteOperation(
             "clear-stored-topology-epoch",
-            topicPartitionFor(groupId),
-            coordinator -> coordinator.clearStoredDescriptionTopologyEpoch(groupId, expectedStoredEpoch)
+            tp,
+            coordinator -> coordinator.clearStoredDescriptionTopologyEpochBatch(expectedStoredEpochByGroupId)
         ).handle((__, throwable) -> {
             if (throwable != null) {
-                log.warn("Failed to clear StoredDescriptionTopologyEpoch for group {}; the next cleanup cycle will retry.",
-                    groupId, throwable);
+                log.warn("Failed to clear StoredDescriptionTopologyEpoch for groups {} on partition {}; the next cleanup cycle will retry.",
+                    expectedStoredEpochByGroupId.keySet(), tp, throwable);
             }
             return null;
         });
