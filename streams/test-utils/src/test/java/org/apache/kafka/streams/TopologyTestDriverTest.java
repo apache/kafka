@@ -430,6 +430,15 @@ public abstract class TopologyTestDriverTest {
     }
 
     @Test
+    public void shouldThrowWhenConfigIsNull() {
+        final NullPointerException exception = assertThrows(
+                NullPointerException.class,
+                () -> new TopologyTestDriverBuilder(setupSingleProcessorTopology())
+                    .withConfig(null));
+        assertEquals("config cannot be null", exception.getMessage());
+    }
+
+    @Test
     public void shouldInitProcessor() {
         testDriver = new TopologyTestDriverBuilder(setupSingleProcessorTopology())
             .withConfig(config)

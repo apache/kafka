@@ -60,7 +60,7 @@ public class TopologyTestDriverBuilder {
      * @return this builder
      */
     public TopologyTestDriverBuilder withConfig(final Properties config) {
-        this.config = config;
+        this.config = Objects.requireNonNull(config, "config cannot be null");
         return this;
     }
 
