@@ -1343,11 +1343,9 @@ public class NetworkClient implements KafkaClient {
                 return;
         }
 
-        if (bootstrapTimer != null) {
-            bootstrapTimer.update(currentTimeMs);
-            checkBootstrapTimeout();
-        }
         maybeStartBootstrapResolution(currentTimeMs);
+        bootstrapTimer.update(currentTimeMs);
+        checkBootstrapTimeout();
     }
 
     /**
