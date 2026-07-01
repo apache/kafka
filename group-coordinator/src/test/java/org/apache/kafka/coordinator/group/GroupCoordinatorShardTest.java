@@ -54,6 +54,8 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer;
 import org.apache.kafka.coordinator.group.GroupCoordinatorShard.DeletedTopic;
+import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
+import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -115,11 +117,12 @@ import org.mockito.Mockito;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 import static org.apache.kafka.coordinator.common.runtime.TestUtil.requestContext;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorShard.DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS;
@@ -1551,7 +1554,7 @@ public class GroupCoordinatorShardTest {
         when(groupMetadataManager.groupIds(committedOffset)).thenReturn(Set.of(
             "missing", "not-streams", "non-empty", "default-stored", "unexpired-offsets", "eligible"));
 
-        // missing: maybeGroup returns null
+        // missing: maybeGroup() returns null -> null check skips
         when(groupMetadataManager.maybeGroup("missing", committedOffset)).thenReturn(null);
 
         // not-streams: type returns CONSUMER (anything != STREAMS)
@@ -1594,6 +1597,32 @@ public class GroupCoordinatorShardTest {
     }
 
     @Test
+    public void testListStreamsGroupsNeedingTopologyCleanupIncludesUncertainEpoch() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        GroupCoordinatorConfig config = mock(GroupCoordinatorConfig.class);
+        when(config.offsetsRetentionCheckIntervalMs()).thenReturn(60 * 60 * 1000L);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(), groupMetadataManager, offsetMetadataManager, new MockTime(),
+            new MockCoordinatorTimer<>(new MockTime()), config,
+            mock(CoordinatorMetrics.class), mock(CoordinatorMetricsShard.class));
+
+        long committedOffset = 1000L;
+        when(groupMetadataManager.groupIds(committedOffset)).thenReturn(Set.of("uncertain"));
+        StreamsGroup uncertain = mock(StreamsGroup.class);
+        when(uncertain.type()).thenReturn(Group.GroupType.STREAMS);
+        when(uncertain.isEmpty(committedOffset)).thenReturn(true);
+        when(uncertain.storedDescriptionTopologyEpoch(committedOffset))
+            .thenReturn(StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN);
+        when(groupMetadataManager.maybeGroup("uncertain", committedOffset)).thenReturn(uncertain);
+        when(offsetMetadataManager.groupHasNoOffsets(eq("uncertain"), anyLong())).thenReturn(true);
+
+        Map<String, Integer> result = coordinator.listStreamsGroupsNeedingTopologyCleanup(committedOffset);
+
+        assertEquals(Map.of("uncertain", StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN), result);
+    }
+
+    @Test
     public void testListStreamsGroupsNeedingTopologyCleanupSwallowsPerGroupError() {
         // A per-group failure (e.g. unexpected ClassCastException, NPE in a mocked path) must
         // not abort the whole scan: the cycle is periodic and an isolated bad group should be
@@ -1618,9 +1647,9 @@ public class GroupCoordinatorShardTest {
         long committedOffset = 0L;
         when(groupMetadataManager.groupIds(committedOffset)).thenReturn(Set.of("bad", "good"));
 
-        // bad: maybeGroup throws an unexpected RuntimeException mid-scan.
-        when(groupMetadataManager.maybeGroup("bad", committedOffset))
-            .thenThrow(new RuntimeException("synthetic scan failure"));
+        // bad: maybeGroup() throws an unexpected RuntimeException mid-scan.
+        doThrow(new RuntimeException("synthetic scan failure"))
+            .when(groupMetadataManager).maybeGroup("bad", committedOffset);
 
         // good: a fully eligible group.
         StreamsGroup good = mock(StreamsGroup.class);
@@ -1633,86 +1662,6 @@ public class GroupCoordinatorShardTest {
         Map<String, Integer> result = coordinator.listStreamsGroupsNeedingTopologyCleanup(committedOffset);
 
         assertEquals(Map.of("good", 3), result);
-    }
-
-    @Test
-    public void testClearStoredDescriptionTopologyEpochDelegatesToGroupMetadataManager() {
-        // The shard method is a pure delegation, but the cycle's correctness depends on the
-        // exact (groupId, expectedStoredEpoch) tuple flowing through unchanged and the GMM's
-        // CoordinatorResult being returned verbatim — the per-group conditional write reads
-        // its records to decide whether the clear actually persisted.
-        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
-        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        GroupCoordinatorConfig config = mock(GroupCoordinatorConfig.class);
-        when(config.offsetsRetentionCheckIntervalMs()).thenReturn(60 * 60 * 1000L);
-        MockTime mockTime = new MockTime();
-        MockCoordinatorTimer<CoordinatorRecord> timer = new MockCoordinatorTimer<>(mockTime);
-        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
-            new LogContext(),
-            groupMetadataManager,
-            offsetMetadataManager,
-            mockTime,
-            timer,
-            config,
-            mock(CoordinatorMetrics.class),
-            mock(CoordinatorMetricsShard.class)
-        );
-
-        CoordinatorResult<Void, CoordinatorRecord> expected = new CoordinatorResult<>(List.of());
-        when(groupMetadataManager.clearStoredDescriptionTopologyEpoch("group-id", 7)).thenReturn(expected);
-
-        assertSame(expected, coordinator.clearStoredDescriptionTopologyEpoch("group-id", 7));
-        verify(groupMetadataManager).clearStoredDescriptionTopologyEpoch("group-id", 7);
-    }
-
-    @Test
-    public void testClearStoredDescriptionTopologyEpochBatchConcatenatesGMMRecords() {
-        // The batch shard method must invoke the GMM's single-group clear once per entry and
-        // fold the resulting records into one CoordinatorResult. The cycle relies on this so a
-        // partition with N eligible groups produces one scheduleWriteOperation carrying N
-        // conditional clear records, not N separate writes.
-        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
-        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        GroupCoordinatorConfig config = mock(GroupCoordinatorConfig.class);
-        when(config.offsetsRetentionCheckIntervalMs()).thenReturn(60 * 60 * 1000L);
-        MockTime mockTime = new MockTime();
-        MockCoordinatorTimer<CoordinatorRecord> timer = new MockCoordinatorTimer<>(mockTime);
-        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
-            new LogContext(),
-            groupMetadataManager,
-            offsetMetadataManager,
-            mockTime,
-            timer,
-            config,
-            mock(CoordinatorMetrics.class),
-            mock(CoordinatorMetricsShard.class)
-        );
-
-        CoordinatorRecord recordA = mock(CoordinatorRecord.class);
-        CoordinatorRecord recordB = mock(CoordinatorRecord.class);
-        // "matched" group: GMM returns one record. "mismatched" group: GMM returns empty, so
-        // the batched result still contains only the matched group's record.
-        when(groupMetadataManager.clearStoredDescriptionTopologyEpoch("matched", 3))
-            .thenReturn(new CoordinatorResult<>(List.of(recordA)));
-        when(groupMetadataManager.clearStoredDescriptionTopologyEpoch("mismatched", 5))
-            .thenReturn(new CoordinatorResult<>(List.of()));
-        when(groupMetadataManager.clearStoredDescriptionTopologyEpoch("matched-2", 4))
-            .thenReturn(new CoordinatorResult<>(List.of(recordB)));
-
-        Map<String, Integer> input = new LinkedHashMap<>();
-        input.put("matched", 3);
-        input.put("mismatched", 5);
-        input.put("matched-2", 4);
-
-        CoordinatorResult<Void, CoordinatorRecord> result = coordinator.clearStoredDescriptionTopologyEpochBatch(input);
-
-        assertEquals(List.of(recordA, recordB), result.records());
-        // Non-atomic: the per-group conditional clears are independent, so the runtime is free
-        // to split them across multiple log batches if a single batch would exceed the limit.
-        assertFalse(result.isAtomic());
-        verify(groupMetadataManager).clearStoredDescriptionTopologyEpoch("matched", 3);
-        verify(groupMetadataManager).clearStoredDescriptionTopologyEpoch("mismatched", 5);
-        verify(groupMetadataManager).clearStoredDescriptionTopologyEpoch("matched-2", 4);
     }
 
     @Test
@@ -1834,6 +1783,106 @@ public class GroupCoordinatorShardTest {
         verify(groupMetadataManager, times(1)).groupIds();
         verify(offsetMetadataManager, times(1)).cleanupExpiredOffsets(eq("group-id"), any());
         verify(groupMetadataManager, times(0)).maybeDeleteGroup(eq("group-id"), any());
+    }
+
+    @Test
+    public void testCleanupGroupMetadataSkipsStreamsGroupWithStoredDescriptionTopologyEpoch() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        MockTime mockTime = new MockTime();
+        MockCoordinatorTimer<CoordinatorRecord> timer = new MockCoordinatorTimer<>(mockTime);
+        GroupCoordinatorConfig config = GroupCoordinatorConfigTest.createGroupCoordinatorConfig(
+            4096, 1000L, 1,
+            Map.of(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG, StubPlugin.class)
+        );
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            mockTime,
+            timer,
+            config,
+            mock(CoordinatorMetrics.class),
+            mock(CoordinatorMetricsShard.class)
+        );
+
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        StreamsGroup streamsGroup = new StreamsGroup(new LogContext(), snapshotRegistry, "streams-group");
+        streamsGroup.setStoredDescriptionTopologyEpoch(2);
+
+        when(groupMetadataManager.groupIds()).thenReturn(Set.of("streams-group"));
+        when(groupMetadataManager.group("streams-group")).thenReturn(streamsGroup);
+        when(offsetMetadataManager.cleanupExpiredOffsets(eq("streams-group"), any())).thenReturn(true);
+
+        coordinator.cleanupGroupMetadata();
+
+        // Skipped because the topology-cleanup phase hasn't cleared the field yet.
+        verify(groupMetadataManager, times(0)).maybeDeleteGroup(eq("streams-group"), any());
+    }
+
+    @Test
+    public void testCleanupGroupMetadataTombstonesStreamsGroupWithStoredEpochWhenNoPluginConfigured() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        MockTime mockTime = new MockTime();
+        MockCoordinatorTimer<CoordinatorRecord> timer = new MockCoordinatorTimer<>(mockTime);
+        GroupCoordinatorConfig config = GroupCoordinatorConfigTest.createGroupCoordinatorConfig(4096, 1000L, 1);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            mockTime,
+            timer,
+            config,
+            mock(CoordinatorMetrics.class),
+            mock(CoordinatorMetricsShard.class)
+        );
+
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        StreamsGroup streamsGroup = new StreamsGroup(new LogContext(), snapshotRegistry, "streams-group");
+        streamsGroup.setStoredDescriptionTopologyEpoch(2);
+
+        when(groupMetadataManager.groupIds()).thenReturn(Set.of("streams-group"));
+        when(groupMetadataManager.group("streams-group")).thenReturn(streamsGroup);
+        when(offsetMetadataManager.cleanupExpiredOffsets(eq("streams-group"), any())).thenReturn(true);
+
+        coordinator.cleanupGroupMetadata();
+
+        // No plugin configured: the service-side cleanup never runs, so the shard must
+        // tombstone the group directly rather than waiting for a non-existent timer to
+        // clear StoredDescriptionTopologyEpoch.
+        verify(groupMetadataManager, times(1)).maybeDeleteGroup(eq("streams-group"), any());
+    }
+
+    @Test
+    public void testCleanupGroupMetadataDeletesStreamsGroupWhenFlagCleared() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        MockTime mockTime = new MockTime();
+        MockCoordinatorTimer<CoordinatorRecord> timer = new MockCoordinatorTimer<>(mockTime);
+        GroupCoordinatorConfig config = GroupCoordinatorConfigTest.createGroupCoordinatorConfig(4096, 1000L, 1);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            mockTime,
+            timer,
+            config,
+            mock(CoordinatorMetrics.class),
+            mock(CoordinatorMetricsShard.class)
+        );
+
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        StreamsGroup streamsGroup = new StreamsGroup(new LogContext(), snapshotRegistry, "streams-group");
+        // StoredDescriptionTopologyEpoch already cleared (-1) — same eligibility as consumer/share groups.
+
+        when(groupMetadataManager.groupIds()).thenReturn(Set.of("streams-group"));
+        when(groupMetadataManager.group("streams-group")).thenReturn(streamsGroup);
+        when(offsetMetadataManager.cleanupExpiredOffsets(eq("streams-group"), any())).thenReturn(true);
+
+        coordinator.cleanupGroupMetadata();
+
+        verify(groupMetadataManager, times(1)).maybeDeleteGroup(eq("streams-group"), any());
     }
 
     @Test
@@ -2807,5 +2856,88 @@ public class GroupCoordinatorShardTest {
         }
 
         assertEquals(result, coordinator.fetchOffsets(request, Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testMarkUncertainEmitsRecordForStreamsGroupAndReturnsTrue() {
+        // The shard wrapper must delegate to the GMM and return its CoordinatorResult verbatim.
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        GroupCoordinatorConfig config = mock(GroupCoordinatorConfig.class);
+        when(config.offsetsRetentionCheckIntervalMs()).thenReturn(60 * 60 * 1000L);
+        MockTime mockTime = new MockTime();
+        MockCoordinatorTimer<CoordinatorRecord> timer = new MockCoordinatorTimer<>(mockTime);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            mockTime,
+            timer,
+            config,
+            mock(CoordinatorMetrics.class),
+            mock(CoordinatorMetricsShard.class)
+        );
+        CoordinatorResult<Boolean, CoordinatorRecord> gmmResult =
+            new CoordinatorResult<>(List.of(mock(CoordinatorRecord.class)), Boolean.TRUE);
+        when(groupMetadataManager.markStoredDescriptionTopologyEpochUncertain("g", true)).thenReturn(gmmResult);
+
+        CoordinatorResult<Boolean, CoordinatorRecord> r =
+            coordinator.markStoredDescriptionTopologyEpochUncertain("g", true);
+
+        assertSame(gmmResult, r);
+        verify(groupMetadataManager).markStoredDescriptionTopologyEpochUncertain("g", true);
+    }
+
+    @Test
+    public void testMarkUncertainBatchReturnsOnlyEligibleSubset() {
+        // The batch mark shard wrapper is a pure delegation: it returns the GMM's CoordinatorResult
+        // verbatim (the eligible subset and its records), which the cycle reads to decide which
+        // groups to delete.
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        GroupCoordinatorConfig config = mock(GroupCoordinatorConfig.class);
+        when(config.offsetsRetentionCheckIntervalMs()).thenReturn(60 * 60 * 1000L);
+        MockTime mockTime = new MockTime();
+        MockCoordinatorTimer<CoordinatorRecord> timer = new MockCoordinatorTimer<>(mockTime);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            mockTime,
+            timer,
+            config,
+            mock(CoordinatorMetrics.class),
+            mock(CoordinatorMetricsShard.class)
+        );
+        LinkedHashSet<String> groupIds = new LinkedHashSet<>(List.of("a", "b"));
+        CoordinatorResult<Set<String>, CoordinatorRecord> gmmResult =
+            new CoordinatorResult<>(List.of(mock(CoordinatorRecord.class)), Set.of("a"));
+        when(groupMetadataManager.markStoredDescriptionTopologyEpochUncertainBatch(groupIds))
+            .thenReturn(gmmResult);
+
+        CoordinatorResult<Set<String>, CoordinatorRecord> r =
+            coordinator.markStoredDescriptionTopologyEpochUncertainBatch(groupIds);
+
+        assertSame(gmmResult, r);
+        verify(groupMetadataManager).markStoredDescriptionTopologyEpochUncertainBatch(groupIds);
+    }
+
+    public static class StubPlugin implements StreamsGroupTopologyDescriptionPlugin {
+        @Override
+        public void configure(Map<String, ?> configs) { }
+        @Override
+        public CompletableFuture<Void> setTopology(String groupId, int topologyEpoch, StreamsGroupTopologyDescription description) {
+            return CompletableFuture.completedFuture(null);
+        }
+        @Override
+        public CompletableFuture<Void> deleteTopology(String groupId) {
+            return CompletableFuture.completedFuture(null);
+        }
+        @Override
+        public CompletableFuture<StreamsGroupTopologyDescription> getTopology(String groupId, int topologyEpoch) {
+            return CompletableFuture.completedFuture(null);
+        }
+        @Override
+        public void close() { }
     }
 }

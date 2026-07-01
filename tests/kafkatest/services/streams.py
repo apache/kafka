@@ -446,6 +446,37 @@ class StreamsBrokerCompatibilityService(StreamsTestBaseService):
         return cfg.render()
 
 
+class StreamsTopologyDescriptionPluginService(StreamsTestBaseService):
+    """ Long-running Streams app for the topology description plugin system test.
+
+        Runs filter-based topology against topology-description-source / -sink
+        until killed. Accepts an extra_properties dict to override or extend the
+        default streams properties (e.g., topology.description.push.enabled=false).
+    """
+
+    APPLICATION_ID = "kafka-streams-topology-description-plugin-system-test"
+
+    def __init__(self, test_context, kafka, extra_properties=None):
+        super(StreamsTopologyDescriptionPluginService, self).__init__(
+            test_context,
+            kafka,
+            "org.apache.kafka.streams.tests.TopologyDescriptionPluginSystemTest",
+            "")
+        self.extra_properties = extra_properties or {}
+
+    def prop_file(self):
+        properties = {
+            streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+            streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
+            "replication.factor": 1,
+            "session.timeout.ms": "10000",
+            "group.protocol": "streams",
+        }
+        properties.update(self.extra_properties)
+        cfg = KafkaConfig(**properties)
+        return cfg.render()
+
+
 class StreamsBrokerDownResilienceService(StreamsTestBaseService):
     def __init__(self, test_context, kafka, group_protocol="classic", extra_configs=None):
         super(StreamsBrokerDownResilienceService, self).__init__(test_context,

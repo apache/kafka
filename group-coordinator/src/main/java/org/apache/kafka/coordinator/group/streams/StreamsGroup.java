@@ -76,6 +76,15 @@ public class StreamsGroup implements Group {
      */
     private static final String PROTOCOL_TYPE = "streams";
 
+    /** Stored topology epoch meaning the plugin definitely holds no topology for this group. */
+    public static final int STORED_TOPOLOGY_EPOCH_NONE = -1;
+    /**
+     * Stored topology epoch meaning the plugin may or may not hold a topology: written durably
+     * before any plugin-disturbing operation. Treated like {@link #STORED_TOPOLOGY_EPOCH_NONE}
+     * for the "solicit a push" decision and like a real (>= 0) epoch for "delete-eligible".
+     */
+    public static final int STORED_TOPOLOGY_EPOCH_UNCERTAIN = -2;
+
     public enum StreamsGroupState {
         EMPTY("Empty"),
         NOT_READY("NotReady"),
@@ -159,8 +168,11 @@ public class StreamsGroup implements Group {
     private final TimelineInteger validatedTopologyEpoch;
 
     /**
-     * The topology epoch most recently accepted by the topology description plugin (KIP-1331). -1 if none stored.
-     * Drives the heartbeat-side decision to set TopologyDescriptionRequired=true.
+     * The broker's record of which topology the group's plugin entry holds (KIP-1331): a real epoch
+     * ({@code >= 0}) when the plugin definitely holds that topology, {@link #STORED_TOPOLOGY_EPOCH_NONE}
+     * when it definitely holds nothing, or {@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN} when a barrier was
+     * written before a plugin operation that may not have completed. Drives the heartbeat-side decision
+     * to set TopologyDescriptionRequired=true and the eligibility for plugin deletion.
      */
     private final TimelineInteger storedDescriptionTopologyEpoch;
 
@@ -268,7 +280,7 @@ public class StreamsGroup implements Group {
         // group.validatedTopologyEpoch()` comparison reads 0 here vs. -1 after replay.
         this.validatedTopologyEpoch.set(-1);
         this.storedDescriptionTopologyEpoch = new TimelineInteger(snapshotRegistry);
-        this.storedDescriptionTopologyEpoch.set(-1);
+        this.storedDescriptionTopologyEpoch.set(STORED_TOPOLOGY_EPOCH_NONE);
         this.failedDescriptionTopologyEpoch = new TimelineInteger(snapshotRegistry);
         this.failedDescriptionTopologyEpoch.set(-1);
         this.metadataHash = new TimelineLong(snapshotRegistry);
@@ -752,7 +764,8 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * @return The topology epoch most recently successfully stored by the topology description plugin, or -1 if none.
+     * @return The stored topology epoch: a real epoch ({@code >= 0}), {@link #STORED_TOPOLOGY_EPOCH_NONE},
+     *         or {@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN}.
      */
     public int storedDescriptionTopologyEpoch() {
         return storedDescriptionTopologyEpoch.get();
@@ -778,8 +791,8 @@ public class StreamsGroup implements Group {
 
     /**
      * @param committedOffset A committed offset corresponding to the desired snapshot.
-     * @return The topology epoch most recently successfully stored by the topology description plugin at the given
-     *         committed offset, or -1 if none.
+     * @return The stored topology epoch at the given committed offset: a real epoch ({@code >= 0}),
+     *         {@link #STORED_TOPOLOGY_EPOCH_NONE}, or {@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN}.
      */
     public int storedDescriptionTopologyEpoch(long committedOffset) {
         return storedDescriptionTopologyEpoch.get(committedOffset);

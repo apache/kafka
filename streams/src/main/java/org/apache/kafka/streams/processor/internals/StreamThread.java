@@ -43,6 +43,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
@@ -84,12 +85,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
@@ -732,6 +735,67 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
 
         return streamsRebalanceData;
+    }
+
+    private static final byte NODE_TYPE_SOURCE = 1;
+    private static final byte NODE_TYPE_PROCESSOR = 2;
+    private static final byte NODE_TYPE_SINK = 3;
+
+    private static StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription convertTopologyDescription(
+            final TopologyDescription topoDesc) {
+        final List<StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionSubtopology> subtopologies =
+            new ArrayList<>();
+
+        for (final TopologyDescription.Subtopology st : topoDesc.subtopologies()) {
+            final List<StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode> nodes =
+                new ArrayList<>();
+            for (final TopologyDescription.Node node : st.nodes()) {
+                nodes.add(convertNode(node));
+            }
+            subtopologies.add(new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionSubtopology()
+                .setSubtopologyId(String.valueOf(st.id()))
+                .setNodes(nodes));
+        }
+
+        final List<StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionGlobalStore> globalStores =
+            new ArrayList<>();
+        for (final TopologyDescription.GlobalStore gs : topoDesc.globalStores()) {
+            globalStores.add(new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionGlobalStore()
+                .setSource(convertNode(gs.source()))
+                .setProcessor(convertNode(gs.processor())));
+        }
+
+        return new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription()
+            .setSubtopologies(subtopologies)
+            .setGlobalStores(globalStores);
+    }
+
+    private static StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode convertNode(
+            final TopologyDescription.Node node) {
+        final StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode result =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode()
+                .setName(node.name());
+
+        if (node instanceof TopologyDescription.Source) {
+            result.setNodeType(NODE_TYPE_SOURCE);
+            result.setSourceTopics(new ArrayList<>(((TopologyDescription.Source) node).topicSet()));
+        } else if (node instanceof TopologyDescription.Processor) {
+            result.setNodeType(NODE_TYPE_PROCESSOR);
+            result.setStores(new ArrayList<>(((TopologyDescription.Processor) node).stores()));
+        } else if (node instanceof TopologyDescription.Sink) {
+            result.setNodeType(NODE_TYPE_SINK);
+            result.setSinkTopic(((TopologyDescription.Sink) node).topic());
+        } else {
+            throw new IllegalStateException("Unsupported TopologyDescription.Node subtype: "
+                + node.getClass().getName());
+        }
+
+        // Only successors are sent over the wire — predecessors are reconstructed on the read side.
+        result.setSuccessors(node.successors().stream()
+            .map(TopologyDescription.Node::name)
+            .collect(Collectors.toList()));
+
+        return result;
     }
 
     private static Map<String, StreamsRebalanceData.Subtopology> initBrokerTopology(final StreamsConfig config,

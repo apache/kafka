@@ -56,6 +56,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 
+import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -737,6 +738,69 @@ public class StreamsGroupCommandTest {
         assertEquals(validStates, Arrays.stream(exceptionMessage[1].split(","))
             .map(String::trim)
             .collect(Collectors.toSet()));
+    }
+
+    @Test
+    public void testDescribeTopologyExitsZeroWhenAvailable() throws Exception {
+        runDescribeTopology(StreamsGroupTopologyDescriptionStatus.AVAILABLE,
+            "Topologies:", true);
+    }
+
+    @Test
+    public void testDescribeTopologyExitsOneWhenNotStored() throws Exception {
+        runDescribeTopology(StreamsGroupTopologyDescriptionStatus.NOT_STORED,
+            "No topology description has been recorded for group", false);
+    }
+
+    @Test
+    public void testDescribeTopologyExitsOneWhenError() throws Exception {
+        runDescribeTopology(StreamsGroupTopologyDescriptionStatus.ERROR,
+            "The broker failed to retrieve the topology description for group", false);
+    }
+
+    @Test
+    public void testDescribeTopologyExitsOneWhenNotRequested() throws Exception {
+        runDescribeTopology(StreamsGroupTopologyDescriptionStatus.NOT_REQUESTED,
+            "Topology description was not requested for group", false);
+    }
+
+    private void runDescribeTopology(StreamsGroupTopologyDescriptionStatus status,
+                                     String expectedSnippet,
+                                     boolean expectedOk) throws Exception {
+        String groupId = "g";
+        Optional<org.apache.kafka.clients.admin.StreamsGroupTopologyDescription> td =
+            status == StreamsGroupTopologyDescriptionStatus.AVAILABLE
+                ? Optional.of(new org.apache.kafka.clients.admin.StreamsGroupTopologyDescription(List.of(), List.of()))
+                : Optional.empty();
+        StreamsGroupDescription desc = new StreamsGroupDescription(
+            groupId, 0, 0, 0,
+            List.of(new StreamsGroupSubtopologyDescription("0", List.of(), List.of(), Map.of(), Map.of())),
+            List.of(),
+            GroupState.STABLE,
+            new Node(0, "host", 0),
+            Set.of(),
+            td,
+            status);
+        DescribeStreamsGroupsResult result = mock(DescribeStreamsGroupsResult.class);
+        when(result.all()).thenReturn(KafkaFuture.completedFuture(Map.of(groupId, desc)));
+        when(ADMIN_CLIENT.describeStreamsGroups(anyCollection(), any(DescribeStreamsGroupsOptions.class)))
+            .thenReturn(result);
+
+        StreamsGroupCommandOptions opts = new StreamsGroupCommandOptions(new String[]{
+            "--bootstrap-server", BOOTSTRAP_SERVERS, "--describe", "--topology", "--group", groupId});
+        StreamsGroupCommand.StreamsGroupService service = new StreamsGroupCommand.StreamsGroupService(opts, ADMIN_CLIENT);
+
+        ByteArrayOutputStream captured = new ByteArrayOutputStream();
+        java.io.PrintStream saved = System.out;
+        System.setOut(new java.io.PrintStream(captured));
+        try {
+            assertEquals(expectedOk, service.describeGroups());
+        } finally {
+            System.setOut(saved);
+            service.close();
+        }
+        assertTrue(captured.toString().contains(expectedSnippet),
+            "expected output to contain '" + expectedSnippet + "', got: " + captured);
     }
 
     private DescribeStreamsGroupsResult describeStreamsResult(String groupId, GroupState groupState) {

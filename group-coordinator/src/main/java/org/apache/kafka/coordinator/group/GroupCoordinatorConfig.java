@@ -577,6 +577,7 @@ public class GroupCoordinatorConfig {
     private final int streamsGroupNumWarmupReplicas;
     private final int streamsGroupMaxWarmupReplicas;
     private final long streamsGroupAcceptableRecoveryLag;
+    private final Class<?> streamsGroupTopologyDescriptionPluginClass;
 
     private final AbstractConfig config;
 
@@ -647,6 +648,7 @@ public class GroupCoordinatorConfig {
         this.streamsGroupNumWarmupReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG);
         this.streamsGroupMaxWarmupReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG);
         this.streamsGroupAcceptableRecoveryLag = config.getLong(GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_CONFIG);
+        this.streamsGroupTopologyDescriptionPluginClass = config.getClass(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG);
         this.config = config;
 
         checkConstraints();
@@ -1409,5 +1411,12 @@ public class GroupCoordinatorConfig {
      */
     public long streamsGroupAcceptableRecoveryLag() {
         return streamsGroupAcceptableRecoveryLag;
+    }
+
+    /**
+     * The class of the topology description plugin, or {@code null} if no plugin is configured.
+     */
+    public Class<?> streamsGroupTopologyDescriptionPluginClass() {
+        return streamsGroupTopologyDescriptionPluginClass;
     }
 }

@@ -894,7 +894,8 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
       .setTopologyEpoch(0)
       .setTopologyDescription(new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription())
   ).build(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE.latestVersion)
-  
+
+
   private def sendRequests(requestKeyToRequest: mutable.Map[ApiKeys, AbstractRequest], topicExists: Boolean = true,
                            topicNames: Map[Uuid, String] = getTopicNames()) = {
     for ((key, request) <- requestKeyToRequest) {

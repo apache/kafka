@@ -340,7 +340,6 @@ public class DescribeStreamsGroupsHandler extends AdminApiHandler.Batched<Coordi
         return new StreamsGroupMemberDescription.Endpoint(endpoint.host(), endpoint.port());
     }
 
-
     private void handleError(
             CoordinatorKey groupId,
             StreamsGroupDescribeResponseData.DescribedGroup describedGroup,

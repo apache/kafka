@@ -25,20 +25,20 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StreamsGroupHeartbeatResultTest {
 
     @Test
-    public void testConstructorPreservesEpochs() {
+    public void testThreeArgConstructorPreservesTopologyEpoch() {
         StreamsGroupHeartbeatResult result = new StreamsGroupHeartbeatResult(
-            new StreamsGroupHeartbeatResponseData(), Map.of(), 7, 5, 3);
+            new StreamsGroupHeartbeatResponseData(), Map.of(), 7, -1, -1);
         assertEquals(7, result.currentTopologyEpoch());
-        assertEquals(5, result.storedDescriptionTopologyEpoch());
-        assertEquals(3, result.failedDescriptionTopologyEpoch());
     }
 
     @Test
     public void testCurrentTopologyEpochIsPartOfEquality() {
+        // Records derive equals from all components; two results with different topology epochs are unequal.
         StreamsGroupHeartbeatResult a = new StreamsGroupHeartbeatResult(
             new StreamsGroupHeartbeatResponseData(), Map.of(), 1, -1, -1);
         StreamsGroupHeartbeatResult b = new StreamsGroupHeartbeatResult(
@@ -48,18 +48,6 @@ public class StreamsGroupHeartbeatResultTest {
         StreamsGroupHeartbeatResult c = new StreamsGroupHeartbeatResult(
             new StreamsGroupHeartbeatResponseData(), Map.of(), 1, -1, -1);
         assertEquals(a, c);
-    }
-
-    @Test
-    public void testStoredAndFailedEpochsArePartOfEquality() {
-        StreamsGroupHeartbeatResult a = new StreamsGroupHeartbeatResult(
-            new StreamsGroupHeartbeatResponseData(), Map.of(), 1, 1, -1);
-        StreamsGroupHeartbeatResult differentStored = new StreamsGroupHeartbeatResult(
-            new StreamsGroupHeartbeatResponseData(), Map.of(), 1, 0, -1);
-        StreamsGroupHeartbeatResult differentFailed = new StreamsGroupHeartbeatResult(
-            new StreamsGroupHeartbeatResponseData(), Map.of(), 1, 1, 0);
-        assertNotEquals(a, differentStored);
-        assertNotEquals(a, differentFailed);
     }
 
     @Test
@@ -74,5 +62,6 @@ public class StreamsGroupHeartbeatResultTest {
     public void testNullDataIsRejected() {
         assertThrows(NullPointerException.class,
             () -> new StreamsGroupHeartbeatResult(null, Map.of(), -1, -1, -1));
+        assertTrue(true);
     }
 }

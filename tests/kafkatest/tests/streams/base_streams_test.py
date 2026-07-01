@@ -42,7 +42,8 @@ class BaseStreamsTest(Test):
             use_streams_groups=True,
             server_prop_overrides=[
                 [ "group.streams.min.session.timeout.ms", "10000" ], # Need to up the lower bound
-                [ "group.streams.session.timeout.ms", "10000" ] # As in classic groups, set this to 10s
+                [ "group.streams.session.timeout.ms", "10000" ], # As in classic groups, set this to 10s
+                [ "group.streams.topology.description.plugin.class", "org.apache.kafka.server.streams.InMemoryTopologyDescriptionPlugin" ]
             ]
         )
 

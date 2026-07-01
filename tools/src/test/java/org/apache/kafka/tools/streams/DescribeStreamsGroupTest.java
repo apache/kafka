@@ -16,7 +16,12 @@
  */
 package org.apache.kafka.tools.streams;
 
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.DescribeStreamsGroupsOptions;
+import org.apache.kafka.clients.admin.StreamsGroupDescription;
+import org.apache.kafka.clients.admin.StreamsGroupTopologyDescription;
+import org.apache.kafka.clients.admin.StreamsGroupTopologyDescriptionStatus;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.internals.Exit;
@@ -53,6 +58,7 @@ import joptsimple.OptionException;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -244,6 +250,47 @@ public class DescribeStreamsGroupTest {
         } finally {
             streams2.close();
             streams2.cleanUp();
+        }
+    }
+
+    @Test
+    public void testDescribeStreamsGroupWithTopologyOption() throws InterruptedException {
+        final AtomicReference<String> out = new AtomicReference<>("");
+        TestUtils.waitForCondition(() -> {
+            String output = ToolsTestUtils.grabConsoleOutput(
+                () -> assertEquals(0, StreamsGroupCommand.execute(
+                    new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--topology", "--group", APP_ID})));
+            out.set(output);
+            return output.contains("Topologies:") && output.contains(INPUT_TOPIC);
+        }, () -> "Expected topology output containing 'Topologies:' and '" + INPUT_TOPIC + "', got:\n" + out.get());
+    }
+
+    @Test
+    public void testDescribeStreamsGroupTopologyViaAdminApi() throws Exception {
+        try (Admin admin = Admin.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers))) {
+            final AtomicReference<StreamsGroupDescription> ref = new AtomicReference<>();
+            TestUtils.waitForCondition(() -> {
+                Map<String, StreamsGroupDescription> result = admin.describeStreamsGroups(
+                    List.of(APP_ID),
+                    new DescribeStreamsGroupsOptions().includeTopologyDescription(true)
+                ).all().get();
+                StreamsGroupDescription desc = result.get(APP_ID);
+                ref.set(desc);
+                return desc != null
+                    && desc.topologyDescriptionStatus() == StreamsGroupTopologyDescriptionStatus.AVAILABLE;
+            }, () -> "Expected topology description AVAILABLE for " + APP_ID + ", got: " + ref.get());
+
+            StreamsGroupDescription desc = ref.get();
+            assertTrue(desc.topologyDescription().isPresent());
+            StreamsGroupTopologyDescription topology = desc.topologyDescription().get();
+            assertFalse(topology.subtopologies().isEmpty());
+            boolean hasInputTopicSource = topology.subtopologies().stream()
+                .flatMap(sub -> sub.nodes().stream())
+                .filter(node -> node instanceof StreamsGroupTopologyDescription.Source)
+                .map(node -> (StreamsGroupTopologyDescription.Source) node)
+                .anyMatch(source -> source.topics().contains(INPUT_TOPIC));
+            assertTrue(hasInputTopicSource,
+                "No Source node with topic " + INPUT_TOPIC + " found in topology description");
         }
     }
 

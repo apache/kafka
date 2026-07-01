@@ -11103,52 +11103,50 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testClearStoredDescriptionTopologyEpochClearsWhenEpochMatches() {
-        // the cleanup cycle echoes the storedEpoch it observed at scan time into
-        // the conditional clear. When the persisted value still matches, the write emits a
-        // metadata record setting StoredDescriptionTopologyEpoch back to -1 while preserving
-        // the other tagged fields (FailedDescriptionTopologyEpoch in particular).
-        String groupId = "streams-group";
+    public void testFinalizeAfterDeleteClearsUncertainToNone() {
+        // The plugin.deleteTopology completed and stored is still UNCERTAIN: no push raced, the
+        // plugin is empty, so the smart finalize clears stored to NONE while preserving the
+        // other tagged fields (FailedDescriptionTopologyEpoch in particular).
+        String groupId = "s";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            groupId, 1, 0L, -1, Map.of(), 7, 3));
+            groupId, 3, 0L, -1, Map.of(), StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1));
 
-        CoordinatorResult<Void, CoordinatorRecord> result =
-            context.groupMetadataManager.clearStoredDescriptionTopologyEpoch(groupId, 7);
+        CoordinatorResult<Void, CoordinatorRecord> r =
+            context.groupMetadataManager.finalizeStoredDescriptionTopologyEpochAfterDelete(groupId);
 
-        assertEquals(1, result.records().size());
-        // Apply the record and verify storedEpoch is cleared and failedEpoch preserved.
-        context.replay(result.records().get(0));
-        StreamsGroup group = context.groupMetadataManager.getStreamsGroupOrThrow(groupId);
-        assertEquals(-1, group.storedDescriptionTopologyEpoch());
-        assertEquals(3, group.failedDescriptionTopologyEpoch());
+        StreamsGroupMetadataValue v = (StreamsGroupMetadataValue) r.records().get(0).value().message();
+        assertEquals(StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE, v.storedDescriptionTopologyEpoch());
     }
 
     @Test
-    public void testClearStoredDescriptionTopologyEpochNoOpsWhenEpochMismatches() {
-        // A concurrent setTopology has advanced storedEpoch between the cycle's scan and this
-        // write. The clear must be a no-op to preserve the newer push instead of silently
-        // undoing it.
-        String groupId = "streams-group";
+    public void testFinalizeAfterDeleteForcesUncertainWhenEpochRacedPush() {
+        // A push advanced stored to 9 while our plugin.deleteTopology was in flight. The plugin op
+        // order is unknown, so 9 may be orphaned over an empty plugin -> force UNCERTAIN to re-solicit.
+        String groupId = "s";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            groupId, 1, 0L, -1, Map.of(), 9, -1));
+            groupId, 3, 0L, -1, Map.of(), 9, -1));
 
-        CoordinatorResult<Void, CoordinatorRecord> result =
-            context.groupMetadataManager.clearStoredDescriptionTopologyEpoch(groupId, 7);
+        CoordinatorResult<Void, CoordinatorRecord> r =
+            context.groupMetadataManager.finalizeStoredDescriptionTopologyEpochAfterDelete(groupId);
 
-        assertEquals(List.of(), result.records());
+        StreamsGroupMetadataValue v = (StreamsGroupMetadataValue) r.records().get(0).value().message();
+        assertEquals(StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, v.storedDescriptionTopologyEpoch());
     }
 
     @Test
-    public void testClearStoredDescriptionTopologyEpochNoOpsForMissingGroup() {
-        // Missing groups must not throw — the next cycle will simply not see them again.
+    public void testFinalizeAfterDeleteNoOpWhenAlreadyNone() {
+        // Stored already NONE (e.g. a concurrent path cleared it): the smart finalize is a no-op.
+        String groupId = "s";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            groupId, 3, 0L, -1, Map.of(), StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE, -1));
 
-        CoordinatorResult<Void, CoordinatorRecord> result =
-            context.groupMetadataManager.clearStoredDescriptionTopologyEpoch("missing-group", 7);
+        CoordinatorResult<Void, CoordinatorRecord> r =
+            context.groupMetadataManager.finalizeStoredDescriptionTopologyEpochAfterDelete(groupId);
 
-        assertEquals(List.of(), result.records());
+        assertEquals(List.of(), r.records());
     }
 
     @Test
@@ -11171,6 +11169,110 @@ public class GroupMetadataManagerTest {
             groupId, 2, 0L, -1, Map.of(), -1, -1));
         assertEquals(-1, group.storedDescriptionTopologyEpoch());
         assertEquals(-1, group.failedDescriptionTopologyEpoch());
+    }
+
+    @Test
+    public void testMarkUncertainSkipsNonStreamsGroup() {
+        // A missing or non-streams group must return false without emitting any record —
+        // there is nothing in the plugin for it.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+
+        CoordinatorResult<Boolean, CoordinatorRecord> r =
+            context.groupMetadataManager.markStoredDescriptionTopologyEpochUncertain("c", false);
+
+        assertEquals(List.of(), r.records());
+        assertFalse(r.response());
+    }
+
+    @Test
+    public void testMarkUncertainSkipsNoneWhenMarkWhenNoneFalse() {
+        // A streams group with stored == NONE and markWhenNone=false must return false without
+        // emitting a record — a delete caller uses this to skip the plugin op when the plugin
+        // entry is definitely absent.
+        String groupId = "streams-group";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            groupId, 1, 0L, -1, Map.of(), StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE, -1));
+
+        CoordinatorResult<Boolean, CoordinatorRecord> r =
+            context.groupMetadataManager.markStoredDescriptionTopologyEpochUncertain(groupId, false);
+
+        assertEquals(List.of(), r.records());
+        assertFalse(r.response());
+    }
+
+    @Test
+    public void testMarkUncertainMarksNoneWhenMarkWhenNoneTrue() {
+        // A push caller passes markWhenNone=true so the UNCERTAIN barrier is written even when
+        // stored == NONE: the push is about to put data in the plugin, so we need the barrier.
+        String groupId = "streams-group";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            groupId, 3, 0L, -1, Map.of(), StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE, -1));
+
+        CoordinatorResult<Boolean, CoordinatorRecord> r =
+            context.groupMetadataManager.markStoredDescriptionTopologyEpochUncertain(groupId, true);
+
+        assertEquals(1, r.records().size());
+        assertTrue(r.response());
+        StreamsGroupMetadataValue v = (StreamsGroupMetadataValue) r.records().get(0).value().message();
+        assertEquals(StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, v.storedDescriptionTopologyEpoch());
+    }
+
+    @Test
+    public void testMarkUncertainIdempotentWhenAlreadyUncertain() {
+        // If the group is already UNCERTAIN, no additional record is emitted, but the caller
+        // still gets true — the plugin op is still required.
+        String groupId = "streams-group";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            groupId, 1, 0L, -1, Map.of(), StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1));
+
+        CoordinatorResult<Boolean, CoordinatorRecord> r =
+            context.groupMetadataManager.markStoredDescriptionTopologyEpochUncertain(groupId, false);
+
+        assertEquals(List.of(), r.records());
+        assertTrue(r.response());
+    }
+
+    @Test
+    public void testMarkUncertainMarksStoredEpochAndReturnsTrue() {
+        // When stored == 5 (a real pushed epoch), the method must emit one record setting
+        // stored to UNCERTAIN (-2) and return true.
+        String groupId = "streams-group";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            groupId, 3, 0L, -1, Map.of(), 5, -1));
+
+        CoordinatorResult<Boolean, CoordinatorRecord> r =
+            context.groupMetadataManager.markStoredDescriptionTopologyEpochUncertain(groupId, false);
+
+        assertTrue(r.response());
+        assertEquals(1, r.records().size());
+        StreamsGroupMetadataValue v = (StreamsGroupMetadataValue) r.records().get(0).value().message();
+        assertEquals(StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, v.storedDescriptionTopologyEpoch());
+    }
+
+    @Test
+    public void testMarkUncertainBatchReturnsOnlyEligibleSubset() {
+        // The batch mark folds the per-group mark with markWhenNone=false and returns only the
+        // subset that was actually marked UNCERTAIN. A streams group at a real epoch is marked and
+        // contributes a record; a group at NONE (nothing in the plugin) and a missing/non-streams
+        // group both drop out so the cycle does not delete them.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            "a", 3, 0L, -1, Map.of(), 5, -1));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            "b", 1, 0L, -1, Map.of(), StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE, -1));
+
+        CoordinatorResult<Set<String>, CoordinatorRecord> r =
+            context.groupMetadataManager.markStoredDescriptionTopologyEpochUncertainBatch(
+                new LinkedHashSet<>(List.of("a", "b", "missing")));
+
+        assertEquals(Set.of("a"), r.response());
+        assertEquals(1, r.records().size());
+        StreamsGroupMetadataValue v = (StreamsGroupMetadataValue) r.records().get(0).value().message();
+        assertEquals(StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, v.storedDescriptionTopologyEpoch());
     }
 
     @Test
@@ -22263,6 +22365,62 @@ public class GroupMetadataManagerTest {
 
         GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(request);
         assertEquals(Errors.INCONSISTENT_GROUP_PROTOCOL.code(), joinResult.joinFuture.get().errorCode());
+    }
+
+    @Test
+    public void testClassicGroupJoinDetectsEmptyStreamsGroupWithStoredTopology() {
+        // classicGroupJoin must signal topology cleanup when an empty streams group has a stored
+        // description topology epoch set (i.e. the plugin may still hold topology data). The caller
+        // is expected to run the plugin cleanup before re-invoking with topologyCleanupHandled=true.
+        String groupId = "streams-group-id";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, 10))
+            .build();
+        // Set storedDescriptionTopologyEpoch to UNCERTAIN (not NONE) so the predicate fires.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            groupId, 10, 0L, -1, Map.of(), StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1));
+
+        JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId(groupId)
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withDefaultProtocolTypeAndProtocols()
+            .build();
+
+        GroupMetadataManagerTestContext.JoinResult result =
+            context.sendClassicGroupJoin(request, false, false, false);
+
+        // Detection fired: needsTopologyCleanup is true, no coordinator records emitted, and
+        // responseFuture is left untouched (the join is not completed — cleanup must happen first).
+        assertTrue(result.needsTopologyCleanup);
+        assertEquals(List.of(), result.records);
+        assertFalse(result.joinFuture.isDone());
+    }
+
+    @Test
+    public void testClassicGroupJoinDoesNotDetectWhenTopologyCleanupHandled() {
+        // When topologyCleanupHandled=true the detection predicate is suppressed, so classicGroupJoin
+        // must proceed with the conversion even when storedDescriptionTopologyEpoch is set. This is
+        // the re-invocation path after the caller has already run the plugin cleanup.
+        String groupId = "streams-group-id";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, 10))
+            .build();
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            groupId, 10, 0L, -1, Map.of(), StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1));
+
+        JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId(groupId)
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withDefaultProtocolTypeAndProtocols()
+            .build();
+
+        // topologyCleanupHandled=true suppresses detection; the join proceeds to conversion.
+        GroupMetadataManagerTestContext.JoinResult result =
+            context.sendClassicGroupJoin(request, false, false, true);
+
+        // No cleanup signal: needsTopologyCleanup is false and conversion records were emitted.
+        assertFalse(result.needsTopologyCleanup);
+        assertFalse(result.records.isEmpty());
     }
 
     @Test

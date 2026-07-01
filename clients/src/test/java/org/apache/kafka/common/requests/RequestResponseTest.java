@@ -4131,6 +4131,10 @@ public class RequestResponseTest {
 
     @Test
     public void testStreamsGroupDescribeRequestV0RejectsIncludeTopologyDescription() {
+        // The IncludeTopologyDescription field was added at v1 and is not ignorable; an admin
+        // client setting it to true against a v=0 broker must throw at the codec rather than
+        // silently downgrading. Otherwise the caller would see TopologyDescription=null /
+        // Status=NOT_REQUESTED and falsely believe they didn't ask for the description.
         StreamsGroupDescribeRequestData data = new StreamsGroupDescribeRequestData()
             .setGroupIds(List.of("g1"))
             .setIncludeTopologyDescription(true);
@@ -4140,6 +4144,11 @@ public class RequestResponseTest {
 
     @Test
     public void testStreamsGroupDescribeResponseV0RejectsTopologyDescriptionFields() {
+        // TopologyDescription and TopologyDescriptionStatus are at v1+ and not ignorable.
+        // In normal flow the broker only sets them in response to IncludeTopologyDescription=true,
+        // which requires a v=1 request. This test pins the defensive guarantee that any code path
+        // that accidentally sets these on a v=0 response fails loud at the codec rather than
+        // silently dropping.
         StreamsGroupDescribeResponseData data = new StreamsGroupDescribeResponseData()
             .setGroups(List.of(new StreamsGroupDescribeResponseData.DescribedGroup()
                 .setGroupId("g1")
