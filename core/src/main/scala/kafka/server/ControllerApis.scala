@@ -24,7 +24,7 @@ import java.util.Map.Entry
 import java.util.concurrent.CompletableFuture
 import java.util.function.Consumer
 import kafka.network.RequestChannel
-import kafka.server.QuotaFactory.QuotaManagers
+import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
 import kafka.server.logger.RuntimeLoggerManager
 import kafka.utils.Logging
 import org.apache.kafka.clients.admin.{AlterConfigOp, EndpointType}

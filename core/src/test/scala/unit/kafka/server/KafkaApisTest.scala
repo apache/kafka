@@ -21,7 +21,7 @@ import com.yammer.metrics.core.{Histogram, Meter}
 import kafka.cluster.Partition
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.network.RequestChannel
-import kafka.server.QuotaFactory.QuotaManagers
+import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
 import kafka.server.share.SharePartitionManager
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
