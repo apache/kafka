@@ -156,8 +156,8 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
                 final byte[] valueWithTimestamp = convertToTimestampedFormat(plainValue);
                 result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(result, valueWithTimestamp);
             } else if (query instanceof RangeQuery || query instanceof TimestampedRangeQuery) {
-                final KeyValueToTimestampedKeyValueAdapterIterator wrappedRocksDBRangeIterator = new KeyValueToTimestampedKeyValueAdapterIterator((RocksDbIterator) result.getResult());
-                result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(result, wrappedRocksDBRangeIterator);
+                final KeyValueToTimestampedKeyValueAdapterIterator wrappedRangeIterator = new KeyValueToTimestampedKeyValueAdapterIterator((ManagedKeyValueIterator<Bytes, byte[]>) result.getResult());
+                result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(result, wrappedRangeIterator);
             } else {
                 throw new IllegalArgumentException("Unsupported query type: " + query.getClass());
             }
@@ -218,35 +218,35 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
 
     private static class KeyValueToTimestampedKeyValueAdapterIterator implements ManagedKeyValueIterator<Bytes, byte[]> {
 
-        private final RocksDbIterator rocksDbIterator;
+        private final ManagedKeyValueIterator<Bytes, byte[]> delegate;
 
-        public KeyValueToTimestampedKeyValueAdapterIterator(final RocksDbIterator rocksDbIterator) {
-            this.rocksDbIterator = rocksDbIterator;
+        public KeyValueToTimestampedKeyValueAdapterIterator(final ManagedKeyValueIterator<Bytes, byte[]> delegate) {
+            this.delegate = delegate;
         }
 
         @Override
         public void close() {
-            rocksDbIterator.close();
+            delegate.close();
         }
 
         @Override
         public Bytes peekNextKey() {
-            return rocksDbIterator.peekNextKey();
+            return delegate.peekNextKey();
         }
 
         @Override
         public void onClose(final Runnable closeCallback) {
-            rocksDbIterator.onClose(closeCallback);
+            delegate.onClose(closeCallback);
         }
 
         @Override
         public boolean hasNext() {
-            return rocksDbIterator.hasNext();
+            return delegate.hasNext();
         }
 
         @Override
         public KeyValue<Bytes, byte[]> next() {
-            final KeyValue<Bytes, byte[]> next = rocksDbIterator.next();
+            final KeyValue<Bytes, byte[]> next = delegate.next();
             if (next == null) {
                 return null;
             }

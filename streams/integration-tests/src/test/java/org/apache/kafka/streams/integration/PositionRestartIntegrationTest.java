@@ -250,6 +250,17 @@ public class PositionRestartIntegrationTest {
         }
     }
 
+    // Persistent stores that we additionally exercise with transactional state stores
+    // (KIP-892). Transactional state stores are only supported for persistent stores, so
+    // we pick one representative persistent store per store type (key-value, window,
+    // session) to keep the matrix sparse rather than multiplying every combination.
+    private static final Set<StoresToTest> TRANSACTIONAL_STORES = Set.of(
+        StoresToTest.ROCKS_KV,
+        StoresToTest.TIME_ROCKS_KV,
+        StoresToTest.ROCKS_WINDOW,
+        StoresToTest.ROCKS_SESSION
+    );
+
     public static Stream<Arguments> data() {
         LOG.info("Generating test cases according to random seed: {}", SEED);
         final List<Arguments> values = new ArrayList<>();
@@ -260,12 +271,26 @@ public class PositionRestartIntegrationTest {
                     // survive restarts, since those are by definition not durable.
                     if (logEnabled || toTest.supplier().get().persistent()) {
                         for (final String kind : Arrays.asList("DSL", "PAPI")) {
-                            values.add(Arguments.of(cacheEnabled, logEnabled, toTest, kind));
+                            // Non-transactional case (existing coverage, works under both
+                            // at-least-once and exactly-once, but here at-least-once).
+                            values.add(Arguments.of(cacheEnabled, logEnabled, toTest, kind, false));
                         }
                     }
                 }
             }
         }
+
+        // Add a sparse set of transactional-state-store cases (KIP-892). Transactional
+        // state stores require exactly-once-v2 and only apply to persistent stores. To
+        // avoid multiplying the whole matrix we add a single representative combination
+        // (caching disabled, logging enabled) per representative persistent store and
+        // both DSL and PAPI. This exercises the transactional Position-across-restart path.
+        for (final StoresToTest toTest : TRANSACTIONAL_STORES) {
+            for (final String kind : Arrays.asList("DSL", "PAPI")) {
+                values.add(Arguments.of(false, true, toTest, kind, true));
+            }
+        }
+
         return values.stream();
     }
 
@@ -361,8 +386,8 @@ public class PositionRestartIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void verifyStore(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind) {
-        final Properties streamsConfig = streamsConfiguration(cache, log, storeToTest.name(), kind);
+    public void verifyStore(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind, final boolean transactional) {
+        final Properties streamsConfig = streamsConfiguration(cache, log, storeToTest.name(), kind, transactional);
         final StreamsBuilder streamsBuilder = getStreamBuilder(cache, log, storeToTest, kind);
         kafkaStreams = IntegrationTestUtils.getStartedStreams(streamsConfig, streamsBuilder, true);
 
@@ -649,10 +674,11 @@ public class PositionRestartIntegrationTest {
     private static Properties streamsConfiguration(final boolean cache,
                                             final boolean log,
                                             final String supplier,
-                                            final String kind) {
+                                            final String kind,
+                                            final boolean transactional) {
         final String safeTestName =
             PositionRestartIntegrationTest.class.getName() + "-" + cache + "-" + log + "-"
-                + supplier + "-" + kind;
+                + supplier + "-" + kind + "-" + transactional;
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
@@ -668,6 +694,11 @@ public class PositionRestartIntegrationTest {
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         config.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         config.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
+        if (transactional) {
+            // Transactional state stores (KIP-892) are only supported under exactly-once-v2.
+            config.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
+            config.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        }
         return config;
     }
 }

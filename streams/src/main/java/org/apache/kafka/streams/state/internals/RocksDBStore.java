@@ -916,8 +916,14 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
         try {
             synchronized (position) {
+                if (isTransactional) {
+                    // Merge the buffer's pending position deltas into the committed position and stage
+                    // the committed position into the same write batch as the staged data and changelog
+                    // offsets, so it is flushed atomically by the commitStagedWrites triggered below.
+                    dbAccessor.mergeUncommittedPositionInto(position);
+                    cfAccessor.commit(dbAccessor, position);
+                }
                 cfAccessor.commit(dbAccessor, changelogOffsets);
-                dbAccessor.mergeUncommittedPositionInto(position);
             }
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error while executing commit from store " + name, e);
