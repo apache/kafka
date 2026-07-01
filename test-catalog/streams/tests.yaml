@@ -4510,6 +4510,7 @@ org.apache.kafka.streams.state.internals.DualColumnFamilyAccessorTest:
 - shouldCreateRangeIterator
 - shouldDeleteFromBothColumnFamiliesWhenValueIsNull
 - shouldDeleteRangeFromBothColumnFamilies
+- shouldDetectStaleOpenMarkerFromPriorNonTransactionalCrash
 - shouldGetFromOldColumnFamilyWithReadOptionsAndConvert
 - shouldGetOnlyFromOldColumnFamilyAndConvertWithoutMigration
 - shouldGetOnlyReturnNullWhenNotFound
@@ -4519,6 +4520,8 @@ org.apache.kafka.streams.state.internals.DualColumnFamilyAccessorTest:
 - shouldIgnoreExceptionAfterUncleanClose
 - shouldMergeEntriesFromBothColumnFamiliesInForwardOrder
 - shouldMergeEntriesFromBothColumnFamiliesInReverseOrder
+- shouldNotWriteClosedMarkerForTransactionalStore
+- shouldNotWriteOpenMarkerForTransactionalStore
 - shouldOpenClean
 - shouldPreferNewFormatValueWhenSameKeyExistsInBothColumnFamilies
 - shouldPrepareBatchWithMultipleEntries
