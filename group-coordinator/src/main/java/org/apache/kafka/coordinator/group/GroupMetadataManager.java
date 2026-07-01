@@ -3140,14 +3140,15 @@ public class GroupMetadataManager {
         // time, present in neither map) use -1 so that the group's share.auto.offset.reset strategy
         // applies. This is read before the records above are replayed, so a brand-new topic is
         // correctly absent here.
-        ShareGroupStatePartitionMetadataInfo info = shareGroupStatePartitionMetadata.get(groupId);
-        Set<Uuid> alreadyKnownTopics = new HashSet<>();
-        if (info != null) {
+        Set<Uuid> alreadyKnownTopics = null;
+        if (shareGroupStatePartitionMetadata.containsKey(groupId)) {
+            ShareGroupStatePartitionMetadataInfo info = shareGroupStatePartitionMetadata.get(groupId);
+            alreadyKnownTopics = new HashSet<>();
             alreadyKnownTopics.addAll(info.initializedTopics().keySet());
             alreadyKnownTopics.addAll(info.initializingTopics().keySet());
         }
 
-        return Optional.of(buildInitializeShareGroupStateRequest(groupId, groupEpoch, topicPartitionChangeMap, alreadyKnownTopics));
+        return Optional.of(buildInitializeShareGroupStateRequest(groupId, groupEpoch, topicPartitionChangeMap, alreadyKnownTopics != null ? alreadyKnownTopics : Set.of()));
     }
 
     private InitializeShareGroupStateParameters buildInitializeShareGroupStateRequest(
