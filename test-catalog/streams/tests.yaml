@@ -4688,6 +4688,10 @@ org.apache.kafka.streams.state.internals.InMemoryKeyValueStoreTest:
 - iteratorPeekNextKeyShouldSkipDeletedElements
 - iteratorShouldThrowIllegalStateExceptionIfAlreadyClosed
 - prefixScanShouldNotThrowConcurrentModificationException
+- readOnlyCommittedScanShouldNotRaceConcurrentCommit
+- readOnlyCommittedShouldHideStagedWritesFromTransactionBuffer
+- readOnlyCommittedShouldNotSeeStagedDelete
+- readOnlyPrefixScanShouldRespectIsolationLevel
 - shouldDeleteFromStore
 - shouldDeleteIfSerializedValueIsNull
 - shouldMatchPositionAfterPut
@@ -4768,6 +4772,9 @@ org.apache.kafka.streams.state.internals.InMemoryLRUCacheStoreTest:
 - testRestoreWithDefaultSerdes
 - testSize
 org.apache.kafka.streams.state.internals.InMemorySessionStoreTest:
+- readOnlyCommittedFindSessionsShouldNotRaceConcurrentCommit
+- readOnlyCommittedShouldHideStagedSessions
+- readOnlyFindSessionsShouldRespectIsolationLevel
 - shouldBackwardFetchAllSessionsWithSameRecordKey
 - shouldBackwardFetchAllSessionsWithinKeyRange
 - shouldBackwardFetchAndIterateOverExactBinaryKeys
@@ -4890,6 +4897,10 @@ org.apache.kafka.streams.state.internals.InMemoryTransactionalWindowStoreTest:
 - testValueIteratorPeek
 - testWindowIteratorPeek
 org.apache.kafka.streams.state.internals.InMemoryWindowStoreTest:
+- readOnlyAllShouldRespectIsolationLevel
+- readOnlyCommittedFetchAllShouldNotRaceConcurrentCommit
+- readOnlyCommittedShouldHideStagedFetchValue
+- readOnlyFetchRangeShouldRespectIsolationLevel
 - shouldBackwardFetchAllInTimeRange
 - shouldCloseOpenIteratorsWhenStoreIsClosedAndNotThrowInvalidStateStoreExceptionOnHasNext
 - shouldCountNumEntries
