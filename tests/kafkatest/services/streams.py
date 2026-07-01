@@ -26,6 +26,7 @@ from kafkatest.services.monitor.jmx import JmxMixin
 from .kafka.util import get_log4j_config_param, get_log4j_config_for_tools
 
 STATE_DIR = "state.dir"
+INMEMORY_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS = "org.apache.kafka.server.streams.InMemoryTopologyDescriptionPlugin"
 
 class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
     """Base class for Streams Test services providing some common settings and functionality"""
@@ -763,9 +764,6 @@ class CooperativeRebalanceUpgradeService(StreamsTestBaseService):
 
         cfg = KafkaConfig(**properties)
         return cfg.render()
-
-
-INMEMORY_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS = "org.apache.kafka.server.streams.InMemoryTopologyDescriptionPlugin"
 
 
 class StreamsTopologyDescriptionPluginService(StreamsTestBaseService):
