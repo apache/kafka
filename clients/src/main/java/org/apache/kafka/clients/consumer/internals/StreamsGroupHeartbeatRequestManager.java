@@ -197,7 +197,6 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                         lastSentFields.taskEndOffsets = taskEndOffsetSum;
                         lastTaskOffsetIntervalTs = now;
                     }
-
                 }
             }
             data.setShutdownApplication(streamsRebalanceData.shutdownRequested());
