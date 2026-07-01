@@ -1008,6 +1008,54 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
+    public void shouldNotRegisterStatisticsBasedMetricsWhenUserProvidesStatistics() {
+        // KAFKA-10397: when the user supplies their own Statistics object via RocksDBConfigSetter,
+        // Streams must not read it (that would reset the user's counters), so the statistics-based
+        // metrics can never be recorded. They must therefore not be exposed at all, even at
+        // metrics.recording.level=DEBUG. The property-based gauges, which read the RocksDB instance
+        // directly, must still be exposed.
+        final TaskId taskId = new TaskId(0, 0);
+
+        final Metrics metrics = new Metrics(new MetricConfig().recordLevel(RecordingLevel.DEBUG));
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(metrics, "test-application", time);
+
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBConfigSetterWithUserProvidedStatistics.class);
+
+        context = mock(InternalMockProcessorContext.class);
+        when(context.metrics()).thenReturn(streamsMetrics);
+        when(context.taskId()).thenReturn(taskId);
+        when(context.appConfigs()).thenReturn(new StreamsConfig(props).originals());
+        when(context.stateDir()).thenReturn(dir);
+        final MonotonicProcessorRecordContext processorRecordContext = new MonotonicProcessorRecordContext("test", 0);
+        when(context.recordMetadata()).thenReturn(Optional.of(processorRecordContext));
+
+        rocksDBStore.init(context, rocksDBStore);
+        rocksDBStore.put(Bytes.wrap("hello".getBytes()), "world".getBytes());
+
+        streamsMetrics.rocksDBMetricsRecordingTrigger().run();
+
+        // A statistics-based metric must NOT be registered ...
+        final Metric bytesWrittenTotal = metrics.metric(new MetricName(
+            "bytes-written-total",
+            StreamsMetricsImpl.STATE_STORE_LEVEL_GROUP,
+            "description is not verified",
+            streamsMetrics.storeLevelTagMap(taskId.toString(), METRICS_SCOPE, DB_NAME)
+        ));
+        assertNull(bytesWrittenTotal);
+
+        // ... but a property-based gauge must still be registered.
+        final Metric numberOfEntriesActiveMemTable = metrics.metric(new MetricName(
+            "num-entries-active-mem-table",
+            StreamsMetricsImpl.STATE_STORE_LEVEL_GROUP,
+            "description is not verified",
+            streamsMetrics.storeLevelTagMap(taskId.toString(), METRICS_SCOPE, DB_NAME)
+        ));
+        assertThat(numberOfEntriesActiveMemTable, notNullValue());
+    }
+
+    @Test
     public void shouldVerifyThatMetricsRecordedFromPropertiesGetMeasurementsFromRocksDB() {
         final TaskId taskId = new TaskId(0, 0);
 
