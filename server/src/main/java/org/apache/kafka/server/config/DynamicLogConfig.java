@@ -65,7 +65,7 @@ public class DynamicLogConfig implements BrokerReconfigurable {
         validateCordonedLogDirs(newConfig);
     }
 
-    private void validateLogLocalRetentionMs(AbstractKafkaConfig config) {
+    private static void validateLogLocalRetentionMs(AbstractKafkaConfig config) {
         long logRetentionMs = config.logRetentionTimeMillis();
         long logLocalRetentionMs = config.getLong(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP);
         if (logRetentionMs != LogConfig.NO_RETENTION_LIMIT && logLocalRetentionMs != LogConfig.DEFAULT_LOCAL_RETENTION_MS) {
@@ -80,7 +80,7 @@ public class DynamicLogConfig implements BrokerReconfigurable {
         }
     }
 
-    private void validateLogLocalRetentionBytes(AbstractKafkaConfig config) {
+    private static void validateLogLocalRetentionBytes(AbstractKafkaConfig config) {
         long logRetentionBytes = config.logRetentionBytes();
         long logLocalRetentionBytes = config.getLong(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP);
         if (logRetentionBytes > LogConfig.NO_RETENTION_LIMIT && logLocalRetentionBytes != LogConfig.DEFAULT_LOCAL_RETENTION_BYTES) {
@@ -95,7 +95,7 @@ public class DynamicLogConfig implements BrokerReconfigurable {
         }
     }
 
-    private void validateLogRemoteCopyLagMs(AbstractKafkaConfig config) {
+    private static void validateLogRemoteCopyLagMs(AbstractKafkaConfig config) {
         long logRetentionMs = config.logRetentionTimeMillis();
         long logLocalRetentionMs = config.getLong(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP);
         long effectiveLocalRetentionMs = logLocalRetentionMs == LogConfig.DEFAULT_LOCAL_RETENTION_MS ? logRetentionMs : logLocalRetentionMs;
@@ -107,7 +107,7 @@ public class DynamicLogConfig implements BrokerReconfigurable {
         }
     }
 
-    private void validateLogRemoteCopyLagBytes(AbstractKafkaConfig config) {
+    private static void validateLogRemoteCopyLagBytes(AbstractKafkaConfig config) {
         long logRetentionBytes = config.logRetentionBytes();
         long logLocalRetentionBytes = config.getLong(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP);
         long effectiveLocalRetentionBytes = logLocalRetentionBytes == LogConfig.DEFAULT_LOCAL_RETENTION_BYTES ? logRetentionBytes : logLocalRetentionBytes;
