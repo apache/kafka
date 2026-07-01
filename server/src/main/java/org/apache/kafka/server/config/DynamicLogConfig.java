@@ -155,7 +155,7 @@ public class DynamicLogConfig implements BrokerReconfigurable {
         logManager.updateCordonedLogDirs(Set.copyOf(newConfig.cordonedLogDirs()));
         directoryEventHandler.handleCordoned(newConfig.cordonedLogDirs().stream()
             .flatMap(dir -> logManager.directoryId(dir).stream())
-            .collect(Collectors.toSet()));
+            .collect(Collectors.toUnmodifiableSet()));
     }
 
     @Override
