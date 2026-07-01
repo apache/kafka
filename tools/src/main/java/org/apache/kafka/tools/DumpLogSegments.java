@@ -730,8 +730,14 @@ public class DumpLogSegments {
             JsonNode json = org.apache.kafka.coordinator.transaction.generated.CoordinatorRecordJsonConverters
                 .writeRecordValueAsJson(message, version);
             if (message instanceof TransactionLogValue) {
-                ((ObjectNode) json).put("transactionStatus",
-                    TransactionState.fromId(((TransactionLogValue) message).transactionStatus()).stateName());
+                byte statusId = ((TransactionLogValue) message).transactionStatus();
+                String statusName;
+                try {
+                    statusName = TransactionState.fromId(statusId).stateName();
+                } catch (IllegalStateException e) {
+                    statusName = String.valueOf(statusId);
+                }
+                ((ObjectNode) json).put("transactionStatus", statusName);
             }
             return json;
         }
