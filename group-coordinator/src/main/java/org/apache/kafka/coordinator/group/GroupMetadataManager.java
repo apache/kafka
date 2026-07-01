@@ -2259,9 +2259,8 @@ public class GroupMetadataManager {
         TasksTuple refinedTarget = refine(
             updatedMember,
             updateTargetAssignmentResult.targetAssignment,
-            group.targetAssignment(),
             group.taskOffsets(),
-            config.streamsGroupNumWarmupReplicas(),
+            streamsGroupNumWarmupReplicas(group.groupId()),
             streamsGroupAcceptableRecoveryLag(group.groupId())
         );
 
@@ -4340,9 +4339,23 @@ public class GroupMetadataManager {
             return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), Map.of());
         }
 
+        // Apply the unwritten membership change (e.g. the relabelling of a replacing static member) to the
+        // target assignment, so both the assignor and the refiner see a consistent view. The relabelling
+        // record is only queued during this heartbeat and not yet replayed into the in-memory assignment.
+        UpdatedMembersAndTargetAssignmentView<StreamsGroupMember, TasksTuple> updatedMembersAndTargetAssignment =
+            new UpdatedMembersAndTargetAssignmentView<>(
+                group.members(),
+                group.staticMembers(),
+                group.targetAssignment(),
+                m -> m.instanceId().orElse(null)
+            );
+        updatedMember.ifPresent(member ->
+            updatedMembersAndTargetAssignment.addOrUpdateMember(member.memberId(), member)
+        );
+
         if (group.assignmentEpoch() >= groupEpoch) {
             // The assignment is up to date.
-            return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), targetAssignmentWithStaticRelabelling(group, updatedMember));
+            return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), updatedMembersAndTargetAssignment.targetAssignment());
         }
 
         boolean canComputeNextTargetAssignment = canComputeNextTargetAssignment(
@@ -4357,22 +4370,11 @@ public class GroupMetadataManager {
                     .setStatusDetail("Assignment delayed due to the configured assignment interval.")
             ));
 
-            return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), targetAssignmentWithStaticRelabelling(group, updatedMember));
+            return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), updatedMembersAndTargetAssignment.targetAssignment());
         }
 
         TaskAssignor assignor = streamsGroupAssignor(group.groupId());
         try {
-            UpdatedMembersAndTargetAssignmentView<StreamsGroupMember, TasksTuple> updatedMembersAndTargetAssignment =
-                new UpdatedMembersAndTargetAssignmentView<>(
-                    group.members(),
-                    group.staticMembers(),
-                    group.targetAssignment(),
-                    m -> m.instanceId().orElse(null)
-                );
-            updatedMember.ifPresent(member ->
-                updatedMembersAndTargetAssignment.addOrUpdateMember(member.memberId(), member)
-            );
-
             org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder assignmentResultBuilder =
                 new org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder(
                     group.groupId(),
@@ -4430,8 +4432,6 @@ public class GroupMetadataManager {
      *        The member to produce the refined (intermediate) assignment for.
      * @param targetAssignment
      *        All members' target assignments (group context).
-     * @param currentAssignment
-     *        The group's current (committed) target assignment, per member (group context).
      * @param taskOffsets
      *        The latest per-member changelog offsets/end-offsets reported via heartbeats (group context).
      * @param numWarmupReplicas
@@ -4444,44 +4444,11 @@ public class GroupMetadataManager {
     private static TasksTuple refine(
         final StreamsGroupMember member,
         final Map<String, TasksTuple> targetAssignment,
-        final Map<String, TasksTuple> currentAssignment,
         final Map<String, MemberTaskOffsets> taskOffsets,
         final int numWarmupReplicas,
         final long acceptableRecoveryLag
     ) {
         return targetAssignment.getOrDefault(member.memberId(), TasksTuple.EMPTY);
-    }
-
-    /**
-     * Returns the group's persisted target assignment, with the relabelling of a replacing static
-     * member applied for the refiner.
-     * <p>
-     * When a static member rejoins with a new member id, the record that relabels its target
-     * assignment from the old to the new member id is queued during the heartbeat but not replayed
-     * into the in-memory assignment until afterwards. The persisted map therefore still keys the
-     * assignment under the old member id at this point. We mirror the pending relabelling in the
-     * view the refiner consumes — move the assignment to the new member id and drop the stale old
-     * entry — using the same relabelling-aware lookup as {@link StreamsGroup#targetAssignment(String, Optional)}.
-     */
-    private static Map<String, TasksTuple> targetAssignmentWithStaticRelabelling(
-        StreamsGroup group,
-        Optional<StreamsGroupMember> updatedMember
-    ) {
-        Map<String, TasksTuple> targetAssignment = group.targetAssignment();
-        if (updatedMember.isEmpty() || updatedMember.get().instanceId().isEmpty()) {
-            return targetAssignment;
-        }
-
-        StreamsGroupMember member = updatedMember.get();
-        StreamsGroupMember previousMember = group.staticMember(member.instanceId().get());
-        if (previousMember == null || previousMember.memberId().equals(member.memberId())) {
-            return targetAssignment;
-        }
-
-        Map<String, TasksTuple> relabelled = new HashMap<>(targetAssignment);
-        relabelled.remove(previousMember.memberId());
-        relabelled.put(member.memberId(), group.targetAssignment(member.memberId(), member.instanceId()));
-        return relabelled;
     }
 
     /**
@@ -9587,6 +9554,15 @@ public class GroupMetadataManager {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
         return groupConfig.flatMap(GroupConfig::streamsAcceptableRecoveryLag)
             .orElse(config.streamsGroupAcceptableRecoveryLag());
+    }
+
+    /**
+     * Get the number of warmup replicas of the provided streams group.
+     */
+    private int streamsGroupNumWarmupReplicas(String groupId) {
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.flatMap(GroupConfig::streamsNumWarmupReplicas)
+            .orElse(config.streamsGroupNumWarmupReplicas());
     }
 
     /**
