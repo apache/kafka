@@ -1647,5 +1647,7 @@ org.apache.kafka.coordinator.group.util.UpdatedMembersAndTargetAssignmentViewTes
 - testRemoveMember
 - testRemoveStaticMember
 - testReplaceMember
+- testReplaceStaticMemberWithDifferentInstanceId
 - testReplaceStaticMemberWithDifferentMemberId
+- testReplaceStaticMemberWithNullInstanceId
 - testReplaceStaticMemberWithSameMemberId

@@ -99,6 +99,7 @@ org.apache.kafka.streams.TopologyTestDriverAtLeastOnceTest:
 - shouldThrowIfPersistentBuiltInStoreIsAccessedWithUntypedMethod
 - shouldThrowNoSuchElementExceptionForUnusedOutputTopicWithDynamicRouting
 - shouldThrowPatternNotValidForTopicNameException
+- shouldThrowWhenConfigIsNull
 - shouldUpdateStoreForNewKey
 - shouldUseSinkSpecificSerializers
 - shouldUseSourceSpecificDeserializers
@@ -143,6 +144,7 @@ org.apache.kafka.streams.TopologyTestDriverEosTest:
 - shouldThrowIfPersistentBuiltInStoreIsAccessedWithUntypedMethod
 - shouldThrowNoSuchElementExceptionForUnusedOutputTopicWithDynamicRouting
 - shouldThrowPatternNotValidForTopicNameException
+- shouldThrowWhenConfigIsNull
 - shouldUpdateStoreForNewKey
 - shouldUseSinkSpecificSerializers
 - shouldUseSourceSpecificDeserializers
