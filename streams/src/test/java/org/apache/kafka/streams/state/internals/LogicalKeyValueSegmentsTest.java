@@ -30,11 +30,12 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 
-public class LogicalKeyValueSegmentsTest extends AbstractSegmentsTest<LogicalKeyValueSegments> {
+public class LogicalKeyValueSegmentsTest extends AbstractRocksDBSegmentsTest<LogicalKeyValueSegments> {
 
     private static final long SEGMENT_INTERVAL = 100L;
     private static final long RETENTION_PERIOD = 4 * SEGMENT_INTERVAL;
@@ -55,31 +56,46 @@ public class LogicalKeyValueSegmentsTest extends AbstractSegmentsTest<LogicalKey
     }
 
     @Test
-    public void shouldGetSegmentIdsFromTimestamp() {
-        assertEquals(0, segments.segmentId(0));
-        assertEquals(1, segments.segmentId(SEGMENT_INTERVAL));
-        assertEquals(2, segments.segmentId(2 * SEGMENT_INTERVAL));
-        assertEquals(3, segments.segmentId(3 * SEGMENT_INTERVAL));
+    public void shouldCreateSegmentsOfCorrectType() {
+        final LogicalKeyValueSegment segment = segments.getOrCreateSegment(0, context);
+        assertEquals(LogicalKeyValueSegment.class, segment.getClass());
+        assertEquals(0L, segment.id());
+        assertEquals("logical-segments.0", segment.name());
     }
 
     @Test
-    public void shouldCreateSegments() {
-        final LogicalKeyValueSegment segment1 = segments.getOrCreateSegmentIfLive(0, context, 0L);
-        final LogicalKeyValueSegment segment2 = segments.getOrCreateSegmentIfLive(1, context, SEGMENT_INTERVAL);
-        final LogicalKeyValueSegment segment3 = segments.getOrCreateSegmentIfLive(2, context, 2 * SEGMENT_INTERVAL);
+    public void shouldNoOpOnOpenSegmentDB() {
+        // Logical segments are views on the shared physical store; openSegmentDB is a no-op.
+        final LogicalKeyValueSegment segment = mock(LogicalKeyValueSegment.class);
 
-        final File rocksdbDir = new File(new File(context.stateDir(), DB_FILE_DIR), STORE_NAME);
-        assertTrue(rocksdbDir.isDirectory());
+        segments.openSegmentDB(segment, context);
 
-        assertTrue(segment1.isOpen());
-        assertTrue(segment2.isOpen());
-        assertTrue(segment3.isOpen());
+        verifyNoInteractions(segment);
     }
 
     @Test
-    public void shouldNotCreateSegmentThatIsAlreadyExpired() {
-        final long streamTime = updateStreamTimeAndCreateSegment(7);
-        assertNull(segments.getOrCreateSegmentIfLive(0, context, streamTime));
+    public void shouldOpenExistingPhysicalStore() {
+        segments.getOrCreateSegment(0, context);
+        segments.getOrCreateSegment(1, context);
+        segments.getOrCreateSegment(2, context);
+        segments.close();
+
+        final LogicalKeyValueSegments newSegments = new LogicalKeyValueSegments(
+            STORE_NAME,
+            DB_FILE_DIR,
+            RETENTION_PERIOD,
+            SEGMENT_INTERVAL,
+            new RocksDBMetricsRecorder(METRICS_SCOPE, STORE_NAME)
+        );
+        newSegments.openExisting(context, -1L);
+
+        TestSegments.assertMetricExists("block-cache-capacity", STORE_NAME, METRICS_SCOPE, context);
+        TestSegments.assertMetricExists("num-immutable-mem-table", STORE_NAME, METRICS_SCOPE, context);
+
+        final LogicalKeyValueSegment segment = newSegments.getOrCreateSegment(0, context);
+        assertTrue(segment.isOpen());
+
+        newSegments.close();
     }
 
     @Test
@@ -135,16 +151,6 @@ public class LogicalKeyValueSegmentsTest extends AbstractSegmentsTest<LogicalKey
         assertEquals(reservedSegment, segments.getReservedSegment());
     }
 
-    @Test
-    public void shouldGetSegmentForTimestamp() {
-        final LogicalKeyValueSegment segment1 = segments.getOrCreateSegmentIfLive(0, context, 0L);
-        final LogicalKeyValueSegment segment2 = segments.getOrCreateSegmentIfLive(1, context, SEGMENT_INTERVAL);
-
-        assertEquals(segment1, segments.segmentForTimestamp(0L));
-        assertEquals(segment1, segments.segmentForTimestamp(SEGMENT_INTERVAL - 1));
-        assertEquals(segment2, segments.segmentForTimestamp(SEGMENT_INTERVAL));
-        assertEquals(segment2, segments.segmentForTimestamp(2 * SEGMENT_INTERVAL - 1));
-    }
 
     @Test
     public void shouldGetSegmentsWithinTimeRange() {
@@ -189,7 +195,6 @@ public class LogicalKeyValueSegmentsTest extends AbstractSegmentsTest<LogicalKey
         final LogicalKeyValueSegment segment = segments.getOrCreateSegmentIfLive(0, context, 0L);
         final LogicalKeyValueSegment reservedSegment = segments.createReservedSegment(-1, "reserved");
 
-        // add data and open some iterators to verify that they are properly closed later
         segment.put(new Bytes("k".getBytes()), "v".getBytes());
         reservedSegment.put(new Bytes("k".getBytes()), "v".getBytes());
         final KeyValueIterator<Bytes, byte[]> all1 = segment.all();
@@ -201,7 +206,6 @@ public class LogicalKeyValueSegmentsTest extends AbstractSegmentsTest<LogicalKey
 
         assertThat(segments.segmentForTimestamp(0), is(nullValue()));
         assertThat(segments.getReservedSegment(), is(nullValue()));
-        // verify iterators closed as well
         assertThrows(InvalidStateStoreException.class, all1::hasNext);
         assertThrows(InvalidStateStoreException.class, all2::hasNext);
     }

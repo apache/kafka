@@ -126,4 +126,11 @@ public class KeyValueSegmentTest {
         segment2.close();
         segment3.close();
     }
+
+    @Test
+    public void shouldGetCorrectSegmentString() {
+        final KeyValueSegment segment = new KeyValueSegment("testStore.0", "testStore", 0L, Position.emptyPosition(), metricsRecorder);
+        assertThat(segment.toString(), equalTo("KeyValueSegment(id=0, name=testStore.0)"));
+        segment.close();
+    }
 }

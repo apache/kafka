@@ -16,160 +16,71 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TimestampedSegmentsWithHeadersTest extends AbstractSegmentsTest<TimestampedSegmentsWithHeaders> {
+public class TimestampedSegmentsWithHeadersTest extends AbstractRocksDBSegmentsTest<TimestampedSegmentsWithHeaders> {
+
     private static final long SEGMENT_INTERVAL = 100L;
     private static final long RETENTION_PERIOD = 4 * SEGMENT_INTERVAL;
     private static final String METRICS_SCOPE = "test-state-id";
-    private final String storeName = "test";
+    private static final String STORE_NAME = "testStore";
 
     @Override
     TimestampedSegmentsWithHeaders getSegments() {
-        return new TimestampedSegmentsWithHeaders(storeName, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
-    }
-
-    @AfterEach
-    public void close() {
-        segments.close();
+        return new TimestampedSegmentsWithHeaders(STORE_NAME, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
     }
 
     @Test
-    public void shouldGetSegmentIdsFromTimestamp() {
-        assertEquals(0, segments.segmentId(0));
-        assertEquals(1, segments.segmentId(SEGMENT_INTERVAL));
-        assertEquals(2, segments.segmentId(2 * SEGMENT_INTERVAL));
-        assertEquals(3, segments.segmentId(3 * SEGMENT_INTERVAL));
+    public void shouldCreateSegmentsOfCorrectType() {
+        final TimestampedSegmentWithHeaders segment = segments.getOrCreateSegment(0, context);
+        assertNotNull(segment);
+        assertInstanceOf(TimestampedSegmentWithHeaders.class, segment);
+        assertEquals(0L, segment.id());
+        assertEquals("testStore.0", segment.name());
     }
 
     @Test
-    public void shouldGetSegmentNameFromId() {
-        assertEquals("test.0", segments.segmentName(0));
-        assertEquals("test." + SEGMENT_INTERVAL, segments.segmentName(1));
-        assertEquals("test." + 2 * SEGMENT_INTERVAL, segments.segmentName(2));
-    }
+    public void shouldOpenSegmentDB() {
+        final TimestampedSegmentWithHeaders segment = segments.createSegment(0, segments.segmentName(0));
+        assertFalse(segment.isOpen());
 
-    @Test
-    public void shouldCreateSegments() {
-        final TimestampedSegmentWithHeaders segment1 = segments.getOrCreateSegmentIfLive(0, context, -1L);
-        final TimestampedSegmentWithHeaders segment2 = segments.getOrCreateSegmentIfLive(1, context, -1L);
-        final TimestampedSegmentWithHeaders segment3 = segments.getOrCreateSegmentIfLive(2, context, -1L);
+        segments.openSegmentDB(segment, context);
+        assertTrue(segment.isOpen());
 
-        assertTrue(new File(context.stateDir(), "test/test.0").isDirectory());
-        assertTrue(new File(context.stateDir(), "test/test." + SEGMENT_INTERVAL).isDirectory());
-        assertTrue(new File(context.stateDir(), "test/test." + 2 * SEGMENT_INTERVAL).isDirectory());
-        assertTrue(segment1.isOpen());
-        assertTrue(segment2.isOpen());
-        assertTrue(segment3.isOpen());
-    }
-
-    @Test
-    public void shouldNotCreateSegmentThatIsAlreadyExpired() {
-        final long streamTime = updateStreamTimeAndCreateSegment(7);
-        assertNull(segments.getOrCreateSegmentIfLive(0, context, streamTime));
-        assertFalse(new File(context.stateDir(), "test/test.0").exists());
-    }
-
-    @Test
-    public void shouldCleanupSegmentsThatHaveExpired() {
-        final TimestampedSegmentWithHeaders segment1 = segments.getOrCreateSegmentIfLive(0, context, -1L);
-        final TimestampedSegmentWithHeaders segment2 = segments.getOrCreateSegmentIfLive(1, context, -1L);
-        final TimestampedSegmentWithHeaders segment3 = segments.getOrCreateSegmentIfLive(7, context, SEGMENT_INTERVAL * 7L);
-
-        assertFalse(segment1.isOpen());
-        assertFalse(segment2.isOpen());
-        assertTrue(segment3.isOpen());
-        assertFalse(new File(context.stateDir(), "test/test.0").exists());
-        assertFalse(new File(context.stateDir(), "test/test." + SEGMENT_INTERVAL).exists());
-        assertTrue(new File(context.stateDir(), "test/test." + 7 * SEGMENT_INTERVAL).exists());
-    }
-
-    @Test
-    public void shouldGetSegmentForTimestamp() {
-        final TimestampedSegmentWithHeaders segment = segments.getOrCreateSegmentIfLive(0, context, -1L);
-        segments.getOrCreateSegmentIfLive(1, context, -1L);
-        assertEquals(segment, segments.segmentForTimestamp(0L));
-    }
-
-    @Test
-    public void shouldGetCorrectSegmentString() {
-        final TimestampedSegmentWithHeaders segment = segments.getOrCreateSegmentIfLive(0, context, -1L);
-        assertEquals("TimestampedSegmentWithHeaders(id=0, name=test.0)", segment.toString());
-    }
-
-    @Test
-    public void shouldCloseAllOpenSegments() {
-        final TimestampedSegmentWithHeaders first = segments.getOrCreateSegmentIfLive(0, context, -1L);
-        final TimestampedSegmentWithHeaders second = segments.getOrCreateSegmentIfLive(1, context, -1L);
-        final TimestampedSegmentWithHeaders third = segments.getOrCreateSegmentIfLive(2, context, -1L);
-        segments.close();
-
-        assertFalse(first.isOpen());
-        assertFalse(second.isOpen());
-        assertFalse(third.isOpen());
+        segment.close();
     }
 
     @Test
     public void shouldOpenExistingSegments() {
-        segments = new TimestampedSegmentsWithHeaders("test", METRICS_SCOPE, 4, 1);
-        segments.openExisting(context, -1L);
-        segments.getOrCreateSegmentIfLive(0, context, -1L);
-        segments.getOrCreateSegmentIfLive(1, context, -1L);
-        segments.getOrCreateSegmentIfLive(2, context, -1L);
-        segments.getOrCreateSegmentIfLive(3, context, -1L);
-        segments.getOrCreateSegmentIfLive(4, context, -1L);
-        // close existing.
+        segments.getOrCreateSegment(0, context);
+        segments.getOrCreateSegment(1, context);
+        segments.getOrCreateSegment(2, context);
         segments.close();
 
-        segments = new TimestampedSegmentsWithHeaders("test", METRICS_SCOPE, 4, 1);
-        segments.openExisting(context, -1L);
+        final TimestampedSegmentsWithHeaders newSegments = new TimestampedSegmentsWithHeaders(STORE_NAME, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
+        newSegments.openExisting(context, -1L);
 
-        assertTrue(segments.segmentForTimestamp(0).isOpen());
-        assertTrue(segments.segmentForTimestamp(1).isOpen());
-        assertTrue(segments.segmentForTimestamp(2).isOpen());
-        assertTrue(segments.segmentForTimestamp(3).isOpen());
-        assertTrue(segments.segmentForTimestamp(4).isOpen());
-    }
+        TestSegments.assertMetricExists("block-cache-capacity", STORE_NAME, METRICS_SCOPE, context);
+        TestSegments.assertMetricExists("num-immutable-mem-table", STORE_NAME, METRICS_SCOPE, context);
 
-    @Test
-    public void shouldGetSegmentsWithinTimeRange() {
-        updateStreamTimeAndCreateSegment(0);
-        updateStreamTimeAndCreateSegment(1);
-        updateStreamTimeAndCreateSegment(2);
-        updateStreamTimeAndCreateSegment(3);
-        final long streamTime = updateStreamTimeAndCreateSegment(4);
-        segments.getOrCreateSegmentIfLive(0, context, streamTime);
-        segments.getOrCreateSegmentIfLive(1, context, streamTime);
-        segments.getOrCreateSegmentIfLive(2, context, streamTime);
-        segments.getOrCreateSegmentIfLive(3, context, streamTime);
-        segments.getOrCreateSegmentIfLive(4, context, streamTime);
+        final List<TimestampedSegmentWithHeaders> allSegments = newSegments.allSegments(true);
+        assertEquals(3, allSegments.size());
+        assertEquals(0L, allSegments.get(0).id());
+        assertEquals(1L, allSegments.get(1).id());
+        assertEquals(2L, allSegments.get(2).id());
 
-        final List<TimestampedSegmentWithHeaders> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL, true);
-        assertEquals(3, segments.size());
-        assertEquals(0, segments.get(0).id());
-        assertEquals(1, segments.get(1).id());
-        assertEquals(2, segments.get(2).id());
-    }
+        final TimestampedSegmentWithHeaders segment = newSegments.getOrCreateSegment(3, context);
+        assertNotNull(segment);
+        assertTrue(segment.isOpen());
 
-    @Test
-    public void shouldClearSegmentsOnClose() {
-        segments.getOrCreateSegmentIfLive(0, context, -1L);
-        segments.close();
-        assertNull(segments.segmentForTimestamp(0));
-    }
-
-    private long updateStreamTimeAndCreateSegment(final int segment) {
-        final long streamTime = SEGMENT_INTERVAL * segment;
-        segments.getOrCreateSegmentIfLive(segment, context, streamTime);
-        return streamTime;
+        newSegments.close();
     }
 }
