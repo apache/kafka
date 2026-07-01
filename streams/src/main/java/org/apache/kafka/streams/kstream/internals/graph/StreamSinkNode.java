@@ -18,8 +18,10 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.kstream.SessionWindowedSerializer;
+import org.apache.kafka.streams.kstream.TimeWindowedSerializer;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.ProducedInternal;
-import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
 import org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
@@ -58,8 +60,8 @@ public class StreamSinkNode<K, V> extends GraphNode {
         final String[] parentNames = parentNodeNames();
 
         final StreamPartitioner<? super K, ? super V> partitioner;
-        if (producedInternal.streamPartitioner() == null && keySerializer instanceof WindowedSerializer) {
-            partitioner = (StreamPartitioner<K, V>) new WindowedStreamPartitioner<K, V>((WindowedSerializer<K>) keySerializer);
+        if (producedInternal.streamPartitioner() == null && (keySerializer instanceof SessionWindowedSerializer || keySerializer instanceof TimeWindowedSerializer)) {
+            partitioner = (StreamPartitioner<K, V>) new WindowedStreamPartitioner<K, V>((Serializer<Windowed<K>>) keySerializer);
         } else {
             partitioner = producedInternal.streamPartitioner();
         }
