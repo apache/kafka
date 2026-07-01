@@ -103,7 +103,7 @@ public class KafkaConsumerMetrics extends AbstractConsumerMetricsManager {
     public void recordPollEnd(long pollEndMs) {
         long pollTimeMs = pollEndMs - pollStartMs;
         long pollCycleTimeMs = pollTimeMs + timeSinceLastPollMs;
-        double pollIdleRatio = pollCycleTimeMs == 0 ? 0.0 : pollTimeMs * 1.0 / pollCycleTimeMs;
+        double pollIdleRatio = pollCycleTimeMs == 0 ? 0.0 : (pollTimeMs * 1.0 / pollCycleTimeMs);
         this.pollIdleSensor.record(pollIdleRatio);
     }
 
