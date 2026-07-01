@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.clients.admin.AddRaftVoterOptions;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.QuorumInfo;
 import org.apache.kafka.clients.admin.RaftVoterEndpoint;
+import org.apache.kafka.clients.admin.RemoveRaftVoterOptions;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
@@ -457,8 +459,9 @@ public class MetadataQuorumCommand {
         Uuid directoryId = getMetadataDirectoryId(metadataDirectory);
         Set<RaftVoterEndpoint> endpoints = getControllerAdvertisedListeners(props);
         if (!dryRun) {
-            admin.addRaftVoter(controllerId, directoryId, endpoints).
-                all().get();
+            admin.addRaftVoter(controllerId, new AddRaftVoterOptions()
+                .setVoterDirectoryId(Optional.of(directoryId))
+                .setEndpoints(endpoints)).all().get();
         }
         StringBuilder output = new StringBuilder();
         if (dryRun) {
@@ -534,7 +537,8 @@ public class MetadataQuorumCommand {
                 throw new TerseException("Failed to parse --controller-directory-id: " + e.getMessage());
             }
             if (!dryRun) {
-                admin.removeRaftVoter(controllerId, directoryId).all().get();
+                admin.removeRaftVoter(controllerId, new RemoveRaftVoterOptions()
+                    .setVoterDirectoryId(Optional.of(directoryId))).all().get();
             }
             System.out.printf("%s KRaft controller %d with directory id %s%n",
                 dryRun ? "DRY RUN of removing" : "Removed",

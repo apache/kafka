@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Options for {@link Admin#addRaftVoter}.
@@ -35,6 +37,8 @@ import java.util.Optional;
 @InterfaceStability.Stable
 public class AddRaftVoterOptions extends AbstractOptions<AddRaftVoterOptions> {
     private Optional<String> clusterId = Optional.empty();
+    private Optional<Uuid> voterDirectoryId = Optional.empty();
+    private Set<RaftVoterEndpoint> endpoints = Set.of();
 
     public AddRaftVoterOptions setClusterId(Optional<String> clusterId) {
         this.clusterId = clusterId;
@@ -43,5 +47,23 @@ public class AddRaftVoterOptions extends AbstractOptions<AddRaftVoterOptions> {
 
     public Optional<String> clusterId() {
         return clusterId;
+    }
+
+    public AddRaftVoterOptions setVoterDirectoryId(Optional<Uuid> voterDirectoryId) {
+        this.voterDirectoryId = voterDirectoryId;
+        return this;
+    }
+
+    public Optional<Uuid> voterDirectoryId() {
+        return voterDirectoryId;
+    }
+
+    public AddRaftVoterOptions setEndpoints(Set<RaftVoterEndpoint> endpoints) {
+        this.endpoints = endpoints;
+        return this;
+    }
+
+    public Set<RaftVoterEndpoint> endpoints() {
+        return endpoints;
     }
 }

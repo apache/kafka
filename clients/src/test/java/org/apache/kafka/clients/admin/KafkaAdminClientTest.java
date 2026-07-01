@@ -11070,6 +11070,31 @@ public class KafkaAdminClientTest {
         assertEquals(elements.length, collection.size(), "There are unexpected extra elements in the collection.");
     }
 
+    @Test
+    public void testAddRaftVoterConvenienceRequestWithOptions() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, "dummy")) {
+            AtomicReference<AddRaftVoterRequestData> requestData = new AtomicReference<>();
+            env.kafkaClient().prepareResponse(
+                request -> {
+                    if (!(request instanceof AddRaftVoterRequest)) return false;
+                    requestData.set((AddRaftVoterRequestData) request.data());
+                    return true;
+                },
+                new AddRaftVoterResponse(new AddRaftVoterResponseData()));
+
+            AddRaftVoterOptions options = new AddRaftVoterOptions()
+                .setClusterId(Optional.of("_o_GnDGwQaWu4r-NMzmkTw"));
+
+            env.adminClient().addRaftVoter(1, options).all().get();
+
+            assertEquals("_o_GnDGwQaWu4r-NMzmkTw", requestData.get().clusterId());
+            assertEquals(1000, requestData.get().timeoutMs());
+            assertEquals(1, requestData.get().voterId());
+            assertEquals(Uuid.ZERO_UUID, requestData.get().voterDirectoryId());
+            assertTrue(requestData.get().listeners().isEmpty());
+        }
+    }
+
     @ParameterizedTest
     @CsvSource({ "false, false", "false, true", "true, false", "true, true" })
     public void testAddRaftVoterRequest(boolean fail, boolean sendClusterId) throws Exception {

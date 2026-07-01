@@ -317,11 +317,25 @@ public class ForwardingAdmin implements Admin {
     }
 
     @Override
+    public AddRaftVoterResult addRaftVoter(int voterId, AddRaftVoterOptions options) {
+        return delegate.addRaftVoter(voterId, options);
+    }
+
+    @Override
+    @SuppressWarnings("removal")
+    @Deprecated(since = "4.4", forRemoval = true)
     public AddRaftVoterResult addRaftVoter(int voterId, Uuid voterDirectoryId, Set<RaftVoterEndpoint> endpoints, AddRaftVoterOptions options) {
         return delegate.addRaftVoter(voterId, voterDirectoryId, endpoints, options);
     }
 
     @Override
+    public RemoveRaftVoterResult removeRaftVoter(int voterId, RemoveRaftVoterOptions options) {
+        return delegate.removeRaftVoter(voterId, options);
+    }
+
+    @Override
+    @SuppressWarnings("removal")
+    @Deprecated(since = "4.4", forRemoval = true)
     public RemoveRaftVoterResult removeRaftVoter(int voterId, Uuid voterDirectoryId, RemoveRaftVoterOptions options) {
         return delegate.removeRaftVoter(voterId, voterDirectoryId, options);
     }

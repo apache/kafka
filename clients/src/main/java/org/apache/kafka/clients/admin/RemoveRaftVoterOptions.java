@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.protocol.Errors;
 
@@ -35,6 +36,7 @@ import java.util.Optional;
 @InterfaceStability.Stable
 public class RemoveRaftVoterOptions extends AbstractOptions<RemoveRaftVoterOptions> {
     private Optional<String> clusterId = Optional.empty();
+    private Optional<Uuid> voterDirectoryId = Optional.empty();
 
     public RemoveRaftVoterOptions setClusterId(Optional<String> clusterId) {
         this.clusterId = clusterId;
@@ -43,5 +45,14 @@ public class RemoveRaftVoterOptions extends AbstractOptions<RemoveRaftVoterOptio
 
     public Optional<String> clusterId() {
         return clusterId;
+    }
+
+    public RemoveRaftVoterOptions setVoterDirectoryId(Optional<Uuid> voterDirectoryId) {
+        this.voterDirectoryId = voterDirectoryId;
+        return this;
+    }
+
+    public Optional<Uuid> voterDirectoryId() {
+        return voterDirectoryId;
     }
 }

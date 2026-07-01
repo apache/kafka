@@ -1438,11 +1438,25 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    public AddRaftVoterResult addRaftVoter(int voterId, AddRaftVoterOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    @SuppressWarnings("removal")
+    @Deprecated(since = "4.4", forRemoval = true)
     public AddRaftVoterResult addRaftVoter(int voterId, Uuid voterDirectoryId, Set<RaftVoterEndpoint> endpoints, AddRaftVoterOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
+    public RemoveRaftVoterResult removeRaftVoter(int voterId, RemoveRaftVoterOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    @SuppressWarnings("removal")
+    @Deprecated(since = "4.4", forRemoval = true)
     public RemoveRaftVoterResult removeRaftVoter(int voterId, Uuid voterDirectoryId, RemoveRaftVoterOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
