@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server.config;
 
-import org.apache.kafka.common.Reconfigurable;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.common.DirectoryEventHandler;
@@ -113,14 +112,6 @@ public class DynamicLogConfigTest {
         props.put(KRaftConfigs.NODE_ID_CONFIG, "1");
         props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER");
         props.putAll(overrides);
-        return new AbstractKafkaConfig(AbstractKafkaConfig.CONFIG_DEF, props, Map.of(), false) {
-            @Override
-            public void addReconfigurable(Reconfigurable reconfigurable) {
-            }
-
-            @Override
-            public void removeReconfigurable(Reconfigurable reconfigurable) {
-            }
-        };
+        return new AbstractKafkaConfig(AbstractKafkaConfig.CONFIG_DEF, props, Map.of(), false) { };
     }
 }
