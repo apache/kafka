@@ -119,16 +119,17 @@ public class DynamicLogConfig implements BrokerReconfigurable {
         }
     }
 
-    private void validateCordonedLogDirs(AbstractKafkaConfig config) {
+    private static void validateCordonedLogDirs(AbstractKafkaConfig config) {
         List<String> cordonedLogDirs = config.cordonedLogDirs();
         List<String> logDirs = config.logDirs();
-        for (String dir : cordonedLogDirs) {
-            if (!logDirs.contains(dir)) {
-                throw new ConfigException(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, cordonedLogDirs,
-                    "Invalid entry in " + ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG + ": " + dir + ". " +
-                        "All cordoned log dirs must be entries of " + ServerLogConfigs.LOG_DIRS_CONFIG + " or " +
-                        ServerLogConfigs.LOG_DIR_CONFIG + ".");
-            }
+        List<String> invalidDirs = cordonedLogDirs.stream()
+            .filter(dir -> !logDirs.contains(dir))
+            .toList();
+        if (!invalidDirs.isEmpty()) {
+            throw new ConfigException(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, cordonedLogDirs,
+                "Invalid entries in " + ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG + ": " + invalidDirs + ". " +
+                    "All cordoned log dirs must be entries of " + ServerLogConfigs.LOG_DIRS_CONFIG + " or " +
+                    ServerLogConfigs.LOG_DIR_CONFIG + ".");
         }
     }
 

@@ -85,6 +85,20 @@ public class DynamicLogConfigTest {
         );
     }
 
+    @Test
+    public void testValidateCordonedLogDirsReportsAllInvalidEntries() {
+        assertInvalidConfig(
+            Map.of(
+                ServerLogConfigs.LOG_DIRS_CONFIG, "/tmp/kafka-1,/tmp/kafka-2",
+                ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, "/tmp/bad-1,/tmp/bad-2"
+            ),
+            "Invalid value [/tmp/bad-1, /tmp/bad-2] for configuration " + ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG +
+                ": Invalid entries in " + ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG + ": [/tmp/bad-1, /tmp/bad-2]. " +
+                "All cordoned log dirs must be entries of " + ServerLogConfigs.LOG_DIRS_CONFIG + " or " +
+                ServerLogConfigs.LOG_DIR_CONFIG + "."
+        );
+    }
+
     private void assertInvalidConfig(Map<String, Object> overrides, String expectedMessage) {
         ConfigException exception = assertThrows(
             ConfigException.class,
