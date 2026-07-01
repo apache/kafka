@@ -264,8 +264,15 @@ public class ShareSessionHandler {
         if ((response.error() == Errors.SHARE_SESSION_NOT_FOUND) ||
                 (response.error() == Errors.INVALID_SHARE_SESSION_EPOCH) ||
                 (response.error() == Errors.SHARE_SESSION_LIMIT_REACHED)) {
-            log.info("Node {} was unable to process the ShareFetch request with {}: {}.",
-                    node, nextMetadata, response.error());
+            // These share-session errors are handled the same way: close the existing session (if any) and re-establish
+            // it by re-sending a full ShareFetch request. For SHARE_SESSION_NOT_FOUND / INVALID_SHARE_SESSION_EPOCH this
+            // recovers on the next request; for SHARE_SESSION_LIMIT_REACHED it succeeds once the broker's session cache
+            // has capacity.
+            if (log.isDebugEnabled()) {
+                log.debug("Node {} was unable to process the ShareFetch request with {}: {}. " +
+                        "Re-sending a full ShareFetch request, which closes the existing session on the broker and establishes a new one.",
+                        node, nextMetadata, response.error());
+            }
             nextMetadata = nextMetadata.nextCloseExistingAttemptNew();
             return false;
         }
@@ -296,8 +303,13 @@ public class ShareSessionHandler {
     public boolean handleResponse(ShareAcknowledgeResponse response, short version) {
         if ((response.error() == Errors.SHARE_SESSION_NOT_FOUND) ||
                 (response.error() == Errors.INVALID_SHARE_SESSION_EPOCH)) {
-            log.info("Node {} was unable to process the ShareAcknowledge request with {}: {}.",
-                    node, nextMetadata, response.error());
+            // These share-session errors are handled the same way: close the existing session (if any) and re-establish
+            // it by re-sending a full ShareAcknowledge request, which recovers on the next request.
+            if (log.isDebugEnabled()) {
+                log.debug("Node {} was unable to process the ShareAcknowledge request with {}: {}. " +
+                        "Re-sending a full ShareAcknowledge request, which closes the existing session on the broker and establishes a new one.",
+                        node, nextMetadata, response.error());
+            }
             nextMetadata = nextMetadata.nextCloseExistingAttemptNew();
             return false;
         }

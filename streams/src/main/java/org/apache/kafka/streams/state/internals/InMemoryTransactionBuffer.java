@@ -81,6 +81,27 @@ class InMemoryTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
         return new BaseMapIterator(forward ? copy : copy.descendingMap());
     }
 
+    /**
+     * Committed-only point read. Bypasses the staging layer and reads the base map directly.
+     * <p>
+     * The owner reads lock-free (it is the sole mutator and single-threaded). Non-owner (IQ) reads
+     * take the snapshot read-lock: {@code commit}/{@code rollback} mutate the non-thread-safe base
+     * {@link java.util.TreeMap} under the write-lock, so an unlocked read could traverse a
+     * mid-rebalance tree (wrong value/NPE) or observe a partially-applied commit. The read-lock also
+     * supplies the happens-before edge that makes committed writes visible.
+     */
+    byte[] getCommitted(final Bytes key) {
+        if (Thread.currentThread() == ownerThread) {
+            return baseMap.get(key);
+        }
+        snapshotLock.readLock().lock();
+        try {
+            return baseMap.get(key);
+        } finally {
+            snapshotLock.readLock().unlock();
+        }
+    }
+
     private NavigableMap<Bytes, byte[]> boundView(final Bytes from, final Bytes to, final boolean toInclusive) {
         if (from != null && to != null) {
             return baseMap.subMap(from, true, to, toInclusive);

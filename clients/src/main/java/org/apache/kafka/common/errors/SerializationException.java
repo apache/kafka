@@ -21,7 +21,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
- *  Any exception during serialization in the producer
+ * Any exception during serialization or deserialization.
  */
 @InterfaceAudience.Public
 public class SerializationException extends KafkaException {

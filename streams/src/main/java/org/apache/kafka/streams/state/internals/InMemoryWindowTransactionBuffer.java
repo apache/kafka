@@ -151,12 +151,40 @@ class InMemoryWindowTransactionBuffer extends AbstractTransactionBuffer<InMemory
             timeRange = segmentMap;
         }
 
+        final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> copy = deepCopy(timeRange);
+        return baseIterator(forward ? copy : copy.descendingMap(), from, to, forward);
+    }
+
+    /**
+     * Committed-only point read for a single window, bypassing the staging layer. Non-owner (IQ)
+     * reads take the snapshot read-lock so the read reflects a single committed state rather than a
+     * commit in progress.
+     */
+    byte[] getCommitted(final long timestamp, final Bytes key) {
+        if (Thread.currentThread() == ownerThread) {
+            return baseGet(timestamp, key);
+        }
+        snapshotLock.readLock().lock();
+        try {
+            return baseGet(timestamp, key);
+        } finally {
+            snapshotLock.readLock().unlock();
+        }
+    }
+
+    private byte[] baseGet(final long timestamp, final Bytes key) {
+        final ConcurrentNavigableMap<Bytes, byte[]> kvMap = segmentMap.get(timestamp);
+        return kvMap == null ? null : kvMap.get(key);
+    }
+
+    /** Deep-copies a bounded segment range into a private map so iterators are isolated from later mutation. */
+    private static ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> deepCopy(
+            final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> timeRange) {
         final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> copy = new ConcurrentSkipListMap<>();
         for (final Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>> segment : timeRange.entrySet()) {
             copy.put(segment.getKey(), new ConcurrentSkipListMap<>(segment.getValue()));
         }
-
-        return baseIterator(forward ? copy : copy.descendingMap(), from, to, forward);
+        return copy;
     }
 
     /**
