@@ -18,14 +18,31 @@ package org.apache.kafka.clients.admin;
 
 import java.util.Objects;
 
+/**
+ * A listing of a client metrics subscription resource in the cluster.
+ * <p>
+ * Each listing represents a named client metrics subscription that has been configured on the
+ * broker. The subscription name can be used to retrieve or modify the full subscription
+ * configuration via the {@link Admin} client.
+ * <p>
+ * This is the element type returned by {@link Admin#listClientMetricsResources()}.
+ *
+ * @deprecated Since 4.1. Use {@link Admin#listConfigResources()} instead.
+ */
 @Deprecated(since = "4.1")
 public class ClientMetricsResourceListing {
     private final String name;
 
+    /**
+     * @param name The client metrics resource name.
+     */
     public ClientMetricsResourceListing(String name) {
         this.name = name;
     }
 
+    /**
+     * The name of the client metrics subscription resource.
+     */
     public String name() {
         return name;
     }

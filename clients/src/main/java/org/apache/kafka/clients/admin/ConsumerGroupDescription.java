@@ -33,6 +33,14 @@ import java.util.stream.Collectors;
 
 /**
  * A detailed description of a single consumer group in the cluster.
+ * <p>
+ * This is the result type of {@link Admin#describeConsumerGroups(java.util.Collection)}.
+ * A consumer group can be either a {@link GroupType#CLASSIC classic} group or a
+ * {@link GroupType#CONSUMER consumer} group (introduced via KIP-848). The {@link #type()} method
+ * indicates which protocol the group is using, and certain fields (such as {@link #groupEpoch()}
+ * and {@link #targetAssignmentEpoch()}) are only meaningful for consumer-type groups.
+ *
+ * @see Admin#describeConsumerGroups(java.util.Collection)
  */
 public class ConsumerGroupDescription {
     private final String groupId;
@@ -100,6 +108,18 @@ public class ConsumerGroupDescription {
         this.targetAssignmentEpoch = Optional.empty();
     }
 
+    /**
+     * @param groupId                 The group id.
+     * @param isSimpleConsumerGroup   Whether the consumer group is simple.
+     * @param members                 The group members.
+     * @param partitionAssignor       The partition assignor.
+     * @param type                    The group type.
+     * @param groupState              The group state.
+     * @param coordinator             The group coordinator.
+     * @param authorizedOperations    The authorized operations.
+     * @param groupEpoch              The group epoch.
+     * @param targetAssignmentEpoch   The target assignment epoch.
+     */
     public ConsumerGroupDescription(String groupId,
                                     boolean isSimpleConsumerGroup,
                                     Collection<MemberDescription> members,
@@ -153,21 +173,25 @@ public class ConsumerGroupDescription {
     }
 
     /**
-     * If consumer group is simple or not.
+     * Whether this is a simple consumer group, i.e., a group that uses manual partition assignment
+     * and does not rely on the group coordinator for rebalancing.
      */
     public boolean isSimpleConsumerGroup() {
         return isSimpleConsumerGroup;
     }
 
     /**
-     * A list of the members of the consumer group.
+     * An immutable list of the members of the consumer group. Returns an empty collection if
+     * the group has no active members.
      */
     public Collection<MemberDescription> members() {
         return members;
     }
 
     /**
-     * The consumer group partition assignor.
+     * The consumer group partition assignor (e.g., {@code "range"}, {@code "roundrobin"},
+     * {@code "sticky"}). For {@link GroupType#CONSUMER consumer} groups, this reflects
+     * the server-side assignor used by the group coordinator.
      */
     public String partitionAssignor() {
         return partitionAssignor;

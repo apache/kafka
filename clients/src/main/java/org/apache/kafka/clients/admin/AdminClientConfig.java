@@ -39,7 +39,14 @@ import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 /**
- * The AdminClient configuration class, which also contains constants for configuration entry names.
+ * Configuration for the {@link Admin} client. This class defines all configuration properties
+ * accepted by the admin client and provides constants for their names.
+ * <p>
+ * At minimum, <em>either</em> {@link #BOOTSTRAP_SERVERS_CONFIG} must be set to connect to brokers, or
+ * {@link #BOOTSTRAP_CONTROLLERS_CONFIG} to connect directly to KRaft controllers for
+ * controller-only operations (e.g., {@link Admin#addRaftVoter}).
+ *
+ * @see Admin#create(java.util.Map)
  */
 public class AdminClientConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
@@ -107,41 +114,77 @@ public class AdminClientConfig extends AbstractConfig {
     public static final String REQUEST_TIMEOUT_MS_CONFIG = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
     private static final String REQUEST_TIMEOUT_MS_DOC = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC;
 
+    /**
+     * <code>client.id</code>
+     */
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
     private static final String CLIENT_ID_DOC = CommonClientConfigs.CLIENT_ID_DOC;
 
+    /**
+     * <code>metadata.max.age.ms</code>
+     */
     public static final String METADATA_MAX_AGE_CONFIG = CommonClientConfigs.METADATA_MAX_AGE_CONFIG;
     private static final String METADATA_MAX_AGE_DOC = CommonClientConfigs.METADATA_MAX_AGE_DOC;
 
+    /**
+     * <code>send.buffer.bytes</code>
+     */
     public static final String SEND_BUFFER_CONFIG = CommonClientConfigs.SEND_BUFFER_CONFIG;
     private static final String SEND_BUFFER_DOC = CommonClientConfigs.SEND_BUFFER_DOC;
 
+    /**
+     * <code>receive.buffer.bytes</code>
+     */
     public static final String RECEIVE_BUFFER_CONFIG = CommonClientConfigs.RECEIVE_BUFFER_CONFIG;
     private static final String RECEIVE_BUFFER_DOC = CommonClientConfigs.RECEIVE_BUFFER_DOC;
 
+    /**
+     * <code>metric.reporter</code>
+     */
     public static final String METRIC_REPORTER_CLASSES_CONFIG = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG;
     private static final String METRIC_REPORTER_CLASSES_DOC = CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC;
 
+    /**
+     * <code>metrics.num.samples</code>
+     */
     public static final String METRICS_NUM_SAMPLES_CONFIG = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG;
     private static final String METRICS_NUM_SAMPLES_DOC = CommonClientConfigs.METRICS_NUM_SAMPLES_DOC;
 
+    /**
+     * <code>metrics.sample.window.ms</code>
+     */
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
     private static final String METRICS_SAMPLE_WINDOW_MS_DOC = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC;
 
+    /**
+     * <code>metrics.recording.level</code>
+     */
     public static final String METRICS_RECORDING_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG;
 
+    /**
+     * <code>security.protocol</code>
+     */
     public static final String SECURITY_PROTOCOL_CONFIG = CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
     public static final String DEFAULT_SECURITY_PROTOCOL = CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL;
     private static final String SECURITY_PROTOCOL_DOC = CommonClientConfigs.SECURITY_PROTOCOL_DOC;
     private static final String METRICS_RECORDING_LEVEL_DOC = CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC;
 
+    /**
+     * <code>retries</code>
+     */
     public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
     public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG;
 
+    /**
+     * <code>metadata.recovery.strategy</code>
+     */
     public static final String METADATA_RECOVERY_STRATEGY_CONFIG = CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG;
     public static final String METADATA_RECOVERY_STRATEGY_DOC = CommonClientConfigs.METADATA_RECOVERY_STRATEGY_DOC;
     public static final String DEFAULT_METADATA_RECOVERY_STRATEGY = CommonClientConfigs.DEFAULT_METADATA_RECOVERY_STRATEGY;
 
+    /**
+     * <code>metadata.recovery.rebootstrap.trigger.ms</code>
+     */
     public static final String METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG = CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG;
     public static final String METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC = CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC;
     public static final long DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS = CommonClientConfigs.DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS;
@@ -308,6 +351,9 @@ public class AdminClientConfig extends AbstractConfig {
         return CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
     }
 
+    /**
+     * @param props The configuration properties.
+     */
     public AdminClientConfig(Map<?, ?> props) {
         this(props, false);
     }
@@ -316,14 +362,25 @@ public class AdminClientConfig extends AbstractConfig {
         super(CONFIG, props, doLog);
     }
 
+    /**
+     * Get the set of configuration names supported by this configuration class.
+     * @return The set of configuration names.
+     */
     public static Set<String> configNames() {
         return CONFIG.names();
     }
 
+    /**
+     * Get the ConfigDef for this configuration class.
+     * @return The ConfigDef for this configuration class.
+     */
     public static ConfigDef configDef() {
         return  new ConfigDef(CONFIG);
     }
 
+    /**
+     * Print the configuration options in HTML format for documentation purposes.
+     */
     public static void main(String[] args) {
         System.out.println(CONFIG.toHtml(4, config -> "adminclientconfigs_" + config));
     }

@@ -105,6 +105,10 @@ public class CreateTopicsResult {
         return futures.get(topic).thenApply(TopicMetadataAndConfig::replicationFactor);
     }
 
+    /**
+     * Encapsulates the topic metadata (topic ID, number of partitions, replication factor) and
+     * configuration returned from the broker after topic creation.
+     */
     public static class TopicMetadataAndConfig {
         private final ApiException exception;
         private final Uuid topicId;
@@ -112,6 +116,12 @@ public class CreateTopicsResult {
         private final int replicationFactor;
         private final Config config;
 
+        /**
+         * @param topicId           The topic ID.
+         * @param numPartitions     The number of partitions.
+         * @param replicationFactor The replication factor.
+         * @param config            The topic configuration.
+         */
         public TopicMetadataAndConfig(Uuid topicId, int numPartitions, int replicationFactor, Config config) {
             this.exception = null;
             this.topicId = topicId;
@@ -120,6 +130,11 @@ public class CreateTopicsResult {
             this.config = config;
         }
 
+        /**
+         * Create a failed instance with the provided exception.
+         *
+         * @param exception The exception that caused the topic creation failure.
+         */
         public TopicMetadataAndConfig(ApiException exception) {
             this.exception = exception;
             this.topicId = Uuid.ZERO_UUID;
@@ -127,22 +142,34 @@ public class CreateTopicsResult {
             this.replicationFactor = UNKNOWN;
             this.config = null;
         }
-        
+
+        /**
+         * The topic ID, or {@link Uuid#ZERO_UUID} if not supported by the broker.
+         */
         public Uuid topicId() {
             ensureSuccess();
             return topicId;
         }
 
+        /**
+         * The number of partitions of the topic.
+         */
         public int numPartitions() {
             ensureSuccess();
             return numPartitions;
         }
 
+        /**
+         * The replication factor of the topic.
+         */
         public int replicationFactor() {
             ensureSuccess();
             return replicationFactor;
         }
 
+        /**
+         * The topic configuration.
+         */
         public Config config() {
             ensureSuccess();
             return config;

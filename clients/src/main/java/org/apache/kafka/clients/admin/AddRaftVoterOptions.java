@@ -36,11 +36,21 @@ import java.util.Optional;
 public class AddRaftVoterOptions extends AbstractOptions<AddRaftVoterOptions> {
     private Optional<String> clusterId = Optional.empty();
 
+    /**
+     * Set the cluster id for this request.
+     *
+     * @param clusterId The cluster id for this request. If provided, the request will only succeed if the cluster
+     *                  id matches the id of the current cluster. If the cluster id does not match, the request will
+     *                  fail with {@link Errors#INCONSISTENT_CLUSTER_ID}. If not provided, the cluster id check is skipped.
+     */
     public AddRaftVoterOptions setClusterId(Optional<String> clusterId) {
         this.clusterId = clusterId;
         return this;
     }
 
+    /**
+     * Get the cluster id for this request.
+     */
     public Optional<String> clusterId() {
         return clusterId;
     }

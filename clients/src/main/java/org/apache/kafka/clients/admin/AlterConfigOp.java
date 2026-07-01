@@ -43,6 +43,9 @@ import java.util.stream.Collectors;
  */
 public class AlterConfigOp {
 
+    /**
+     * The type of alteration operation to be performed on the configuration entry.
+     */
     public enum OpType {
         /**
          * Set the value of the configuration entry.
@@ -76,10 +79,18 @@ public class AlterConfigOp {
             this.id = id;
         }
 
+        /**
+         * Returns the byte id associated with this operation type. This id is used for serialization
+         * and protocol communication.
+         */
         public byte id() {
             return id;
         }
 
+        /**
+         * Returns the {@code OpType} corresponding to the given byte id, or {@code null} if the
+         * id does not match any known operation type.
+         */
         public static OpType forId(final byte id) {
             return OP_TYPES.get(id);
         }
@@ -88,15 +99,28 @@ public class AlterConfigOp {
     private final ConfigEntry configEntry;
     private final OpType opType;
 
+    /**
+     * @param configEntry   The configuration entry to be altered. The name field must be non-null and non-empty.
+     *                      The value field may be null, depending on the operation type.
+     * @param operationType The type of alteration operation to be performed on the configuration entry.
+     */
     public AlterConfigOp(ConfigEntry configEntry, OpType operationType) {
         this.configEntry = configEntry;
         this.opType =  operationType;
     }
 
+    /**
+     * Returns the configuration entry associated with this alteration operation.
+     * The name field of the configuration entry must be non-null and non-empty.
+     * The value field may be null, depending on the operation type.
+     */
     public ConfigEntry configEntry() {
         return configEntry;
     }
 
+    /**
+     * Returns the type of alteration operation to be performed on the configuration entry.
+     */
     public OpType opType() {
         return opType;
     }

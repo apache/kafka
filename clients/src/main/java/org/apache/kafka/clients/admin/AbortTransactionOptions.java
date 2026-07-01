@@ -16,6 +16,14 @@
  */
 package org.apache.kafka.clients.admin;
 
+/**
+ * Options for {@link Admin#abortTransaction(AbortTransactionSpec, AbortTransactionOptions)}.
+ * <p>
+ * The only configurable option is the request timeout inherited from {@link AbstractOptions#timeoutMs(Integer)}.
+ *
+ * @see Admin#abortTransaction(AbortTransactionSpec)
+ * @see AbortTransactionSpec
+ */
 public class AbortTransactionOptions extends AbstractOptions<AbortTransactionOptions> {
 
     @Override
