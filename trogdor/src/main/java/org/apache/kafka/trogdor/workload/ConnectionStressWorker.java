@@ -179,7 +179,8 @@ public class ConnectionStressWorker implements TaskWorker {
                             false,
                             new ApiVersions(),
                             logContext,
-                            MetadataRecoveryStrategy.NONE)) {
+                            MetadataRecoveryStrategy.NONE,
+                            false)) {
                             NetworkClientUtils.awaitReady(client, targetNode, Time.SYSTEM, 500);
                         }
                     }

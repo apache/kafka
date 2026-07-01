@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
@@ -402,5 +403,94 @@ public class MeteredVersionedKeyValueStore<K, V>
     @Override
     public Position getPosition() {
         return internal.getPosition();
+    }
+
+    @Override
+    public VersionedKeyValueStore<K, V> readOnly(final IsolationLevel isolationLevel) {
+        return new ReadOnlyView(wrapped().readOnly(isolationLevel));
+    }
+
+    /**
+     * Read-only view that re-applies this store's serdes and get sensor on top of a configurable
+     * underlying {@link VersionedBytesStore}. Used so that IQ reads at a given isolation level
+     * preserve the Metered layer's metrics and (de)serialisation behaviour. Mutating operations
+     * throw; lifecycle methods that only report state delegate to the enclosing store.
+     */
+    private final class ReadOnlyView implements VersionedKeyValueStore<K, V> {
+
+        private final VersionedBytesStore underlying;
+
+        ReadOnlyView(final VersionedBytesStore underlying) {
+            this.underlying = underlying;
+        }
+
+        @Override
+        public VersionedRecord<V> get(final K key) {
+            Objects.requireNonNull(key, "key cannot be null");
+            try {
+                final ValueAndTimestamp<V> valueAndTimestamp = maybeMeasureLatency(
+                    () -> internal.deserializeValue(underlying.get(internal.serializeKey(key))),
+                    internal.time,
+                    internal.getSensor
+                );
+                return valueAndTimestamp == null
+                    ? null
+                    : new VersionedRecord<>(valueAndTimestamp.value(), valueAndTimestamp.timestamp());
+            } catch (final ProcessorStateException e) {
+                throw new ProcessorStateException(String.format(e.getMessage(), key), e);
+            }
+        }
+
+        @Override
+        public VersionedRecord<V> get(final K key, final long asOfTimestamp) {
+            Objects.requireNonNull(key, "key cannot be null");
+            try {
+                final ValueAndTimestamp<V> valueAndTimestamp = maybeMeasureLatency(
+                    () -> internal.deserializeValue(underlying.get(internal.serializeKey(key), asOfTimestamp)),
+                    internal.time,
+                    internal.getSensor
+                );
+                return valueAndTimestamp == null
+                    ? null
+                    : new VersionedRecord<>(valueAndTimestamp.value(), valueAndTimestamp.timestamp());
+            } catch (final ProcessorStateException e) {
+                throw new ProcessorStateException(String.format(e.getMessage(), key), e);
+            }
+        }
+
+        @Override
+        public long put(final K key, final V value, final long timestamp) {
+            throw new UnsupportedOperationException("put is not supported on a read-only view");
+        }
+
+        @Override
+        public VersionedRecord<V> delete(final K key, final long timestamp) {
+            throw new UnsupportedOperationException("delete is not supported on a read-only view");
+        }
+
+        @Override
+        public String name() {
+            return MeteredVersionedKeyValueStore.this.name();
+        }
+
+        @Override
+        public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+            throw new UnsupportedOperationException("init is not supported on a read-only view");
+        }
+
+        @Override
+        public void close() {
+            throw new UnsupportedOperationException("close is not supported on a read-only view");
+        }
+
+        @Override
+        public boolean persistent() {
+            return MeteredVersionedKeyValueStore.this.persistent();
+        }
+
+        @Override
+        public boolean isOpen() {
+            return MeteredVersionedKeyValueStore.this.isOpen();
+        }
     }
 }

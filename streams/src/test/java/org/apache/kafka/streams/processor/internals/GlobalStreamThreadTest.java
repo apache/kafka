@@ -132,6 +132,7 @@ public class GlobalStreamThreadTest {
             mockConsumer,
             new StateDirectory(config, time, true, false),
             0,
+            -1L,
             new StreamsMetricsImpl(new Metrics(), "test-client", time),
             time,
             "clientId",
@@ -169,6 +170,7 @@ public class GlobalStreamThreadTest {
             mockConsumer,
             new StateDirectory(config, time, true, false),
             0,
+            -1L,
             new StreamsMetricsImpl(new Metrics(), "test-client", time),
             time,
             "clientId",
@@ -186,6 +188,29 @@ public class GlobalStreamThreadTest {
         globalStreamThread.join();
         assertThat(globalStore.isOpen(), is(false));
         assertFalse(globalStreamThread.stillRunning());
+    }
+
+    @Test
+    public void shouldAllowResizingMaxUncommittedBytesBeforeStart() {
+        // Invoking the resize should be safe before the thread has started.
+        globalStreamThread.resizeMaxUncommittedBytes(4096L);
+    }
+
+    @Test
+    public void shouldAllowResizingMaxUncommittedBytesWhileRunning() throws Exception {
+        initializeConsumer();
+        startAndSwallowError();
+
+        TestUtils.waitForCondition(
+            () -> globalStreamThread.state() == RUNNING,
+            10 * 1000,
+            "Thread never started.");
+
+        globalStreamThread.resizeMaxUncommittedBytes(4096L);
+        assertTrue(globalStreamThread.stillRunning());
+
+        globalStreamThread.shutdown();
+        globalStreamThread.join();
     }
 
     @Test
@@ -418,6 +443,7 @@ public class GlobalStreamThreadTest {
                 consumer,
                 new StateDirectory(config, time, true, false),
                 0,
+                -1L,
                 new StreamsMetricsImpl(new Metrics(), "test-client", time),
                 time,
                 "clientId",

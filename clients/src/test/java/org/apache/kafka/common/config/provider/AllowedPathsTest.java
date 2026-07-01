@@ -50,11 +50,11 @@ class AllowedPathsTest {
     }
 
     @Test
-    public void testAllowedPath() {
+    public void testAllowedPath() throws IOException {
         allowedPaths = new AllowedPaths(String.join(",", dir, dir2));
 
         Path actual = allowedPaths.parseUntrustedPath(myFile);
-        assertEquals(myFile, actual.toString());
+        assertEquals(Paths.get(myFile).toRealPath(), actual);
     }
 
     @Test
@@ -82,12 +82,30 @@ class AllowedPathsTest {
     }
 
     @Test
-    public void testAllowedTraversal() {
+    public void testAllowedTraversal() throws IOException {
         allowedPaths = new AllowedPaths(String.join(",", dir, dir2));
 
         Path traversedPath = Paths.get(dir, "..", "dir2");
         Path actual = allowedPaths.parseUntrustedPath(traversedPath.toString());
-        assertEquals(traversedPath.normalize(), actual);
+        assertEquals(Paths.get(dir2).toRealPath(), actual);
+    }
+
+    @Test
+    public void testSymlinkOutsideAllowedDirRejected() throws IOException {
+        Path outsideFile = Files.createFile(Paths.get(dir2, "outsideFile"));
+        Path symlink = Files.createSymbolicLink(Paths.get(dir, "link"), outsideFile);
+
+        allowedPaths = new AllowedPaths(dir);
+        assertNull(allowedPaths.parseUntrustedPath(symlink.toString()));
+    }
+
+    @Test
+    public void testSymlinkInsideAllowedDirAllowed() throws IOException {
+        Path symlink = Files.createSymbolicLink(Paths.get(dir, "link"), Paths.get(myFile));
+
+        allowedPaths = new AllowedPaths(dir);
+        Path actual = allowedPaths.parseUntrustedPath(symlink.toString());
+        assertEquals(Paths.get(myFile).toRealPath(), actual);
     }
 
     @Test

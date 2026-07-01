@@ -1,6 +1,6 @@
 ---
 title: Streams Rebalance Protocol
-description:
+description: Kafka Streams rebalance protocol behavior, migration paths, and limitations.
 weight: 14
 tags: ['kafka', 'docs']
 aliases:
@@ -49,11 +49,11 @@ The following features are available in the current release:
 
 * **Offline Migration**: After shutting down all members and waiting for their `session.timeout.ms` to expire (or forcing an explicit group leave), a classic group can be converted to a streams group and a streams group can be converted to a classic group. The only broker-side group data that will be preserved are the committed offsets. Internal topics (changelog and repartition topics) will continue to exist as regular Kafka topics.
 
+* **Static Membership**: Streams applications can configure `group.instance.id` when using `group.protocol=streams`. Kafka Streams derives unique group instance IDs for its stream threads internally.
+
 # What's Not Supported in This Version
 
 The following features are not yet available and should be avoided when using the new protocol:
-
-* **Static Membership**: Setting a client `instance.id` will be rejected.
 
 * **Topology Updates**: If a topology is changed significantly (e.g., by adding new source topics or changing the number of subtopologies), a new streams group must be created.
 
@@ -254,4 +254,4 @@ Similarly, you can convert a streams group back to a classic group by following 
 
 **Warning:** Online migration (migrating while the application is running) is not available in this version. Plan for a maintenance window when migrating between protocols.
 
-**Warning:** Due to a critical broker-side bug in the offline migration code ([KAFKA-20254](https://issues.apache.org/jira/browse/KAFKA-20254)), we recommend against doing migrations from classic to streams groups in 4.2.0. Newly created streams groups are not impacted. The fix will be targeted for a future release.
+**Warning:** Due to a critical broker-side bug in the offline migration code ([KAFKA-20254](https://issues.apache.org/jira/browse/KAFKA-20254)), we recommend against doing migrations from classic to streams groups in 4.2.0. Newly created streams groups are not impacted. The fix is available in 4.2.1.

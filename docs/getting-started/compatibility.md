@@ -1,6 +1,6 @@
 ---
 title: Compatibility
-description: 
+description: Check Java, server, and client/broker compatibility matrices for planning Kafka upgrades.
 weight: 7
 tags: ['kafka', 'docs']
 aliases: 

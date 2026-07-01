@@ -1352,6 +1352,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
+    public long approximateNumUncommittedBytes() {
+        return stateMgr.approximateNumUncommittedBytes();
+    }
+
+    @Override
     public boolean commitNeeded() {
         // we need to do an extra check if the flag was false, that
         // if the consumer position has been updated; this is because

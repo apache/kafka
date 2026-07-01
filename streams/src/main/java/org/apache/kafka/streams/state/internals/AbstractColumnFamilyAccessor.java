@@ -46,10 +46,15 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
     private final byte[] openState = longSerde.serializer().serialize(null, 1L);
     private final byte[] closedState = longSerde.serializer().serialize(null, 0L);
     private final AtomicBoolean storeOpen;
+    // Status marker writes are skipped when true; the check on open still runs.
+    private final boolean isTransactional;
 
-    AbstractColumnFamilyAccessor(final ColumnFamilyHandle offsetColumnFamilyHandle, final AtomicBoolean storeOpen) {
+    AbstractColumnFamilyAccessor(final ColumnFamilyHandle offsetColumnFamilyHandle,
+                                  final AtomicBoolean storeOpen,
+                                  final boolean isTransactional) {
         this.offsetColumnFamilyHandle = offsetColumnFamilyHandle;
         this.storeOpen = storeOpen;
+        this.isTransactional = isTransactional;
     }
 
     @Override
@@ -81,8 +86,9 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
     public final Position open(final RocksDBStore.DBAccessor accessor, final boolean ignoreInvalidState) throws RocksDBException {
         final byte[] valueBytes = accessor.get(offsetColumnFamilyHandle, statusKey);
         if (ignoreInvalidState || (valueBytes == null || Arrays.equals(valueBytes, closedState))) {
-            // If the status key is not present, we initialize it to "OPEN"
-            accessor.put(offsetColumnFamilyHandle, statusKey, openState);
+            if (!isTransactional) {
+                accessor.put(offsetColumnFamilyHandle, statusKey, openState);
+            }
             storeOpen.set(true);
             final byte[] positionBytes = accessor.get(offsetColumnFamilyHandle, positionKey);
             if (positionBytes != null) {
@@ -99,11 +105,16 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
     public void close(final RocksDBStore.DBAccessor accessor) throws RocksDBException {
         // Only persist the closed state if the store was previously open.
         // After an unclean shutdown, RocksDB may still be running background recovery,
-        // causing accessor.put() to block.
-        if (storeOpen.compareAndSet(true, false)) {
-            accessor.put(offsetColumnFamilyHandle, statusKey, closedState);
+        // causing accessor.put() to block. The put can also throw if RocksDB is in a
+        // failed state (e.g. during an EOSv2 fencing cascade); the handle close must
+        // still happen, otherwise the native ColumnFamilyHandle leaks every cycle.
+        try {
+            if (storeOpen.compareAndSet(true, false) && !isTransactional) {
+                accessor.put(offsetColumnFamilyHandle, statusKey, closedState);
+            }
+        } finally {
+            offsetColumnFamilyHandle.close();
         }
-        offsetColumnFamilyHandle.close();
     }
 
     @Override
@@ -115,6 +126,16 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
         return null;
     }
 
+
+    @Override
+    public final ColumnFamilyHandle offsetsColumnFamily() {
+        return offsetColumnFamilyHandle;
+    }
+
+    // Visible for testing
+    ColumnFamilyHandle offsetColumnFamilyHandle() {
+        return offsetColumnFamilyHandle;
+    }
 
     private void wipeOffsets(final RocksDBStore.DBAccessor accessor) throws RocksDBException {
         try (final RocksIterator iter = accessor.newIterator(offsetColumnFamilyHandle)) {

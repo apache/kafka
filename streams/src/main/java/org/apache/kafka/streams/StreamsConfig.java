@@ -44,6 +44,7 @@ import org.apache.kafka.streams.errors.LogAndFailProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.ApplicationServerConfigValidator;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.kstream.SessionWindowedDeserializer;
@@ -808,6 +809,15 @@ public class StreamsConfig extends AbstractConfig {
     @Deprecated
     public static final String STATESTORE_CACHE_MAX_BYTES_DOC = "Maximum number of memory bytes to be used for statestore cache across all threads";
 
+    /** {@code statestore.uncommitted.max.bytes} */
+    public static final String STATESTORE_UNCOMMITTED_MAX_BYTES_CONFIG = "statestore.uncommitted.max.bytes";
+    private static final String STATESTORE_UNCOMMITTED_MAX_BYTES_DOC =
+        "The maximum number of uncommitted bytes across all transactional state stores on this " +
+        "application instance before an early commit is triggered, regardless of commit.interval.ms. " +
+        "The limit is divided equally across the configured number of stream threads, and the global state thread," +
+        "if the topology has any global stores. Set to -1 to disable. Default is 67108864 (64 MB).";
+    private static final long STATESTORE_UNCOMMITTED_MAX_BYTES_DEFAULT = 67_108_864L;
+
     /** {@code task.assignor.class} */
     @SuppressWarnings("WeakerAccess")
     public static final String TASK_ASSIGNOR_CLASS_CONFIG = "task.assignor.class";
@@ -902,6 +912,12 @@ public class StreamsConfig extends AbstractConfig {
             "Whether to use the configured <code>" + PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + "</code> during global store/KTable processing. " +
                     "Disabled by default. This config will be removed in Kafka Streams 5.0, where global exception handling will be enabled by default";
 
+    /** {@code topology.description.push.enabled} */
+    public static final String TOPOLOGY_DESCRIPTION_PUSH_ENABLED_CONFIG = "topology.description.push.enabled";
+    private static final String TOPOLOGY_DESCRIPTION_PUSH_ENABLED_DOC = "Controls whether the Kafka Streams client sends topology descriptions to the broker when requested. " +
+        "When set to false, the client will not prepare or push topology descriptions. " +
+        "Enabled by default.";
+
     static {
         CONFIG = new ConfigDef()
 
@@ -959,6 +975,12 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0),
                     Importance.MEDIUM,
                     STATESTORE_CACHE_MAX_BYTES_DOC)
+            .define(STATESTORE_UNCOMMITTED_MAX_BYTES_CONFIG,
+                    Type.LONG,
+                    STATESTORE_UNCOMMITTED_MAX_BYTES_DEFAULT,
+                    atLeast(-1),
+                    Importance.LOW,
+                    STATESTORE_UNCOMMITTED_MAX_BYTES_DOC)
             .define(CLIENT_ID_CONFIG,
                     Type.STRING,
                     "",
@@ -1099,6 +1121,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(APPLICATION_SERVER_CONFIG,
                     Type.STRING,
                     "",
+                    new ApplicationServerConfigValidator(),
                     Importance.LOW,
                     APPLICATION_SERVER_DOC)
             .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
@@ -1342,7 +1365,12 @@ public class StreamsConfig extends AbstractConfig {
                     Type.LONG,
                     null,
                     Importance.LOW,
-                    WINDOW_SIZE_MS_DOC);
+                    WINDOW_SIZE_MS_DOC)
+            .define(TOPOLOGY_DESCRIPTION_PUSH_ENABLED_CONFIG,
+                    Type.BOOLEAN,
+                    true,
+                    Importance.MEDIUM,
+                    TOPOLOGY_DESCRIPTION_PUSH_ENABLED_DOC);
     }
 
     // this is the list of configs for underlying clients
@@ -1600,12 +1628,6 @@ public class StreamsConfig extends AbstractConfig {
 
     private void verifyStreamsProtocolCompatibility(final boolean doLog) {
         if (doLog && isStreamsProtocolEnabled()) {
-            final Map<String, Object> mainConsumerConfigs = getMainConsumerConfigs("dummy", "dummy", -1);
-            final String instanceId = (String) mainConsumerConfigs.get(CommonClientConfigs.GROUP_INSTANCE_ID_CONFIG);
-            if (instanceId != null && !instanceId.isEmpty()) {
-                throw new ConfigException("Streams rebalance protocol does not support static membership. "
-                    + "Please set group.protocol=classic or remove group.instance.id from the configuration.");
-            }
             if (getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG) != 0) {
                 log.warn("Warmup replicas are not supported yet with the streams protocol and will be ignored. "
                     + "If you want to use warmup replicas, please set group.protocol=classic.");

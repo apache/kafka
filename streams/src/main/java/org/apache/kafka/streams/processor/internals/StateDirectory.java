@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -230,6 +231,7 @@ public class StateDirectory implements AutoCloseable {
         final List<TaskDirectory> nonEmptyTaskDirectories = listNonEmptyTaskDirectories();
         if (hasPersistentStores && !nonEmptyTaskDirectories.isEmpty()) {
             final boolean eosEnabled = StreamsConfigUtils.eosEnabled(config);
+            final boolean transactionalStateStoresEnabled = new TopologyConfig(config).transactionalStateStoresEnabled;
 
             // Initialize thread-specific resources needed to open stores in the state directory
             final String threadLogPrefix = String.format("[%s]", Thread.currentThread().getName());
@@ -271,7 +273,11 @@ public class StateDirectory implements AutoCloseable {
                     } finally {
                         // Make sure the state manager writes the local checkpoint file before closing the stores
                         // This will be replaced in the future when removing the checkpoint file dependency.
-                        temporaryStateManager.close();
+                        StateManagerUtil.closeStateManager(
+                            log, threadLogPrefix, true, eosEnabled,
+                            transactionalStateStoresEnabled,
+                            temporaryStateManager, this, Task.TaskType.ACTIVE
+                        );
                     }
                     tasksInLocalState.add(task);
                 }
@@ -302,6 +308,10 @@ public class StateDirectory implements AutoCloseable {
         return taskOffsetSums.entrySet().stream()
                 .filter(e -> tasks.contains(e.getKey()))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    public Map<TaskId, Long> taskOffsetSums() {
+        return Collections.unmodifiableMap(taskOffsetSums);
     }
 
     public void updateTaskOffsets(final TaskId taskId, final Map<TopicPartition, Long> changelogOffsets) {
@@ -577,10 +587,41 @@ public class StateDirectory implements AutoCloseable {
 
         try {
             if (hasPersistentStores && stateDir.exists() && !stateDir.delete()) {
-                log.warn(
-                    String.format("%s Failed to delete state store directory of %s for it is not empty",
-                        logPrefix(), stateDir.getAbsolutePath())
-                );
+                final File[] remainingFiles = stateDir.listFiles();
+                if (remainingFiles == null) {
+                    log.warn("{} Failed to delete state store directory {}. It is not a directory, or it is inaccessible.",
+                            logPrefix(), stateDir.getAbsolutePath());
+                    return;
+                }
+
+                boolean hasProcessOrLockFiles = false;
+                boolean hasUnexpectedFiles = false;
+
+                for (final File file : remainingFiles) {
+                    final String name = file.getName();
+                    if (PROCESS_FILE_NAME.equals(name) || LOCK_FILE_NAME.equals(name)) {
+                        hasProcessOrLockFiles = true;
+                    } else {
+                        hasUnexpectedFiles = true;
+                        break;
+                    }
+                }
+                
+                if (hasProcessOrLockFiles && !hasUnexpectedFiles) {
+                    // KAFKA-10716: The processId file is persisted in the state directory to keep the
+                    // processId stable across restarts. Removing it would cause a new processId to be
+                    // generated and may lead to unnecessary task movements during rebalances.
+                    log.debug(
+                            "{} State store directory {} was not deleted because it still contains expected metadata files ({} and/or {}).",
+                            logPrefix(), stateDir.getAbsolutePath(), PROCESS_FILE_NAME, LOCK_FILE_NAME
+                    );
+                } else {
+                    log.warn(
+                            "{} Failed to fully clean up state store directory {} because unexpected files remain.",
+                            logPrefix(),
+                            stateDir.getAbsolutePath()
+                    );
+                }
             }
         } catch (final SecurityException exception) {
             log.error(
