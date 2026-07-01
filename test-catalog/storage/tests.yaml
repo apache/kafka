@@ -229,6 +229,7 @@ org.apache.kafka.server.log.remote.storage.RemoteLogManagerTest:
 - testRetentionSizeInPercentMetricsTaskCancellation
 - testRetentionSizeInPercentMetricsWithNegativeRetention
 - testRetentionSizeInPercentMetricsWithZeroRetention
+- testSizeRetentionDoesNotOverDeleteOnFreshLeaderUntilHighestRemoteOffsetSeeded
 - testStopPartitionsWithDeletion
 - testStopPartitionsWithoutDeletion
 - testTierLagResetsToZeroOnBecomingFollower
