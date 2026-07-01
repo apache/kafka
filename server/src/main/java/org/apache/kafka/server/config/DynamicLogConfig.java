@@ -148,7 +148,7 @@ public class DynamicLogConfig implements BrokerReconfigurable {
 
     @Override
     public void reconfigure(AbstractKafkaConfig oldConfig, AbstractKafkaConfig newConfig) {
-        Map<String, Object> newBrokerDefaults = new HashMap<>(newConfig.extractLogConfigMap());
+        Map<String, Object> newBrokerDefaults = newConfig.extractLogConfigMap();
         logManager.reconfigureDefaultLogConfig(new LogConfig(newBrokerDefaults));
         updateLogsConfig(newBrokerDefaults);
 
