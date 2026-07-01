@@ -1,6 +1,6 @@
 ---
 title: Monitoring
-description: Monitoring
+description: Kafka metrics and JMX monitoring for brokers, clients, and components.
 weight: 7
 tags: ['kafka', 'docs']
 aliases: 

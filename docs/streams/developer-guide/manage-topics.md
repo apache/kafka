@@ -1,6 +1,6 @@
 ---
 title: Managing Streams Application Topics
-description: 
+description: Kafka Streams user and internal topic management and configuration.
 weight: 11
 tags: ['kafka', 'docs']
 aliases: 

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -24,14 +25,19 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.serialization.UUIDSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.StreamsTestUtils;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,7 +47,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -437,6 +447,172 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         assertThrows(IllegalStateException.class, iter::hasNext);
         assertThrows(IllegalStateException.class, iter::next);
         assertThrows(IllegalStateException.class, iter::peekNextKey);
+    }
+
+    @Test
+    public void readOnlyCommittedShouldHideStagedWritesFromTransactionBuffer() {
+        final InMemoryKeyValueStore txnStore = openTransactionalStore();
+        try {
+            final Bytes k1 = bytesKey("k1");
+            final Bytes k2 = bytesKey("k2");
+            txnStore.put(k1, bytesValue("v1"));
+            txnStore.commit(Map.of());
+
+            txnStore.put(k1, bytesValue("v1-staged"));
+            txnStore.put(k2, bytesValue("v2-staged"));
+
+            final ReadOnlyKeyValueStore<Bytes, byte[]> uncommitted = txnStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+            final ReadOnlyKeyValueStore<Bytes, byte[]> committed = txnStore.readOnly(IsolationLevel.READ_COMMITTED);
+
+            assertArrayEquals(bytesValue("v1-staged"), uncommitted.get(k1));
+            assertArrayEquals(bytesValue("v2-staged"), uncommitted.get(k2));
+            assertArrayEquals(bytesValue("v1"), committed.get(k1));
+            assertThat(committed.get(k2), nullValue());
+
+            try (KeyValueIterator<Bytes, byte[]> it = committed.all()) {
+                final List<String> keys = new ArrayList<>();
+                while (it.hasNext()) {
+                    keys.add(new String(it.next().key.get()));
+                }
+                assertEquals(List.of("k1"), keys);
+            }
+            try (KeyValueIterator<Bytes, byte[]> it = uncommitted.all()) {
+                final List<String> keys = new ArrayList<>();
+                while (it.hasNext()) {
+                    keys.add(new String(it.next().key.get()));
+                }
+                assertEquals(List.of("k1", "k2"), keys);
+            }
+        } finally {
+            txnStore.close();
+        }
+    }
+
+    @Test
+    public void readOnlyCommittedShouldNotSeeStagedDelete() {
+        final InMemoryKeyValueStore txnStore = openTransactionalStore();
+        try {
+            final Bytes k = bytesKey("k");
+            txnStore.put(k, bytesValue("v"));
+            txnStore.commit(Map.of());
+
+            txnStore.delete(k);
+
+            assertThat(txnStore.readOnly(IsolationLevel.READ_UNCOMMITTED).get(k), nullValue());
+            assertArrayEquals(bytesValue("v"), txnStore.readOnly(IsolationLevel.READ_COMMITTED).get(k));
+        } finally {
+            txnStore.close();
+        }
+    }
+
+    @Test
+    public void readOnlyPrefixScanShouldRespectIsolationLevel() {
+        final InMemoryKeyValueStore txnStore = openTransactionalStore();
+        try {
+            txnStore.put(bytesKey("p-1"), bytesValue("a"));
+            txnStore.commit(Map.of());
+            txnStore.put(bytesKey("p-2"), bytesValue("b"));
+            txnStore.put(bytesKey("q-1"), bytesValue("z"));
+
+            final List<String> uncommittedKeys = new ArrayList<>();
+            try (KeyValueIterator<Bytes, byte[]> it = txnStore.readOnly(IsolationLevel.READ_UNCOMMITTED)
+                    .prefixScan("p-", stringSerializer)) {
+                while (it.hasNext()) {
+                    uncommittedKeys.add(new String(it.next().key.get()));
+                }
+            }
+            final List<String> committedKeys = new ArrayList<>();
+            try (KeyValueIterator<Bytes, byte[]> it = txnStore.readOnly(IsolationLevel.READ_COMMITTED)
+                    .prefixScan("p-", stringSerializer)) {
+                while (it.hasNext()) {
+                    committedKeys.add(new String(it.next().key.get()));
+                }
+            }
+            assertEquals(List.of("p-1", "p-2"), uncommittedKeys);
+            assertEquals(List.of("p-1"), committedKeys);
+        } finally {
+            txnStore.close();
+        }
+    }
+
+    @Test
+    public void readOnlyCommittedScanShouldNotRaceConcurrentCommit() throws InterruptedException {
+        // A READ_COMMITTED scan from a non-owner (IQ) thread must observe a point-in-time snapshot
+        // of the committed base map, taken under the buffer's snapshot read-lock. Before the fix the
+        // view copied the live TreeMap under the store monitor, which does not exclude commit()'s
+        // write-lock-guarded flushToBase(), so a concurrent commit threw ConcurrentModificationException
+        // and/or exposed a half-applied commit. Each commit flips every key to a single generation, so
+        // a correct snapshot scan must see one uniform generation.
+        final InMemoryKeyValueStore txnStore = openTransactionalStore();
+        final int numKeys = 500;
+        final int rounds = 300;
+        final AtomicReference<Throwable> readerFailure = new AtomicReference<>();
+        final AtomicBoolean stop = new AtomicBoolean(false);
+
+        try {
+            for (int i = 0; i < numKeys; i++) {
+                txnStore.put(bytesKey("k" + i), bytesValue("gen0"));
+            }
+            txnStore.commit(Map.of()); // owner thread owns the buffer
+
+            final Thread reader = new Thread(() -> {
+                final ReadOnlyKeyValueStore<Bytes, byte[]> committed = txnStore.readOnly(IsolationLevel.READ_COMMITTED);
+                try {
+                    while (!stop.get()) {
+                        try (KeyValueIterator<Bytes, byte[]> it = committed.all()) {
+                            String generation = null;
+                            int count = 0;
+                            while (it.hasNext()) {
+                                final String value = new String(it.next().value);
+                                if (generation == null) {
+                                    generation = value;
+                                } else {
+                                    assertEquals(generation, value, "scan observed a partial commit");
+                                }
+                                count++;
+                            }
+                            // a committed snapshot is always the full, uniform key set
+                            assertEquals(numKeys, count, "scan observed a partial commit");
+                        }
+                    }
+                } catch (final Throwable t) {
+                    readerFailure.set(t);
+                }
+            }, "iq-reader");
+            reader.start();
+
+            for (int round = 1; round <= rounds && readerFailure.get() == null; round++) {
+                final String generation = "gen" + round;
+                for (int i = 0; i < numKeys; i++) {
+                    txnStore.put(bytesKey("k" + i), bytesValue(generation));
+                }
+                txnStore.commit(Map.of());
+            }
+            stop.set(true);
+            reader.join(TimeUnit.SECONDS.toMillis(30));
+
+            if (readerFailure.get() != null) {
+                throw new AssertionError("READ_COMMITTED scan raced a concurrent commit", readerFailure.get());
+            }
+        } finally {
+            stop.set(true);
+            txnStore.close();
+        }
+    }
+
+    private InMemoryKeyValueStore openTransactionalStore() {
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        props.setProperty(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, "true");
+        final InternalMockProcessorContext<Bytes, byte[]> ctx = new InternalMockProcessorContext<>(
+            TestUtils.tempDirectory(),
+            new Serdes.BytesSerde(),
+            new Serdes.ByteArraySerde(),
+            new StreamsConfig(props)
+        );
+        final InMemoryKeyValueStore store = new InMemoryKeyValueStore("txn-in-memory-store");
+        store.init(ctx, store);
+        return store;
     }
 
     private byte[] bytesValue(final String value) {

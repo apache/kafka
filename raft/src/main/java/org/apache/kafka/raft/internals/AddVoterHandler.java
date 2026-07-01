@@ -38,6 +38,7 @@ import org.slf4j.Logger;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 /**
  * This type implements the protocol for adding a voter to a KRaft partition.
@@ -83,15 +84,16 @@ public final class AddVoterHandler {
         this.logger = logContext.logger(AddVoterHandler.class);
     }
 
-    public CompletableFuture<AddRaftVoterResponseData> handleAddVoterRequest(
+    public CompletionStage<AddRaftVoterResponseData> handleAddVoterRequest(
         LeaderState<?> leaderState,
         ReplicaKey voterKey,
         Endpoints voterEndpoints,
         boolean ackWhenCommitted,
         long currentTimeMs
     ) {
+        var changeVoterState = leaderState.changeVoterState();
         // Check if there are any pending voter change requests
-        if (leaderState.isOperationPending(currentTimeMs)) {
+        if (changeVoterState.isOperationPending(currentTimeMs)) {
             return CompletableFuture.completedFuture(
                 RaftUtil.addVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
@@ -188,7 +190,7 @@ public final class AddVoterHandler {
             ackWhenCommitted,
             time.timer(timeout.getAsLong())
         );
-        leaderState.resetAddVoterHandlerState(
+        changeVoterState.resetAddVoterHandlerState(
             Errors.UNKNOWN_SERVER_ERROR,
             null,
             Optional.of(state)
@@ -204,7 +206,8 @@ public final class AddVoterHandler {
         Optional<ApiVersionsResponseData.SupportedFeatureKey> supportedKraftVersions,
         long currentTimeMs
     ) {
-        Optional<AddVoterHandlerState> handlerState = leaderState.addVoterHandlerState();
+        var changeVoterState = leaderState.changeVoterState();
+        var handlerState = changeVoterState.addVoterHandlerState();
         if (handlerState.isEmpty()) {
             // There are no pending add operation just ignore the api response
             return true;
@@ -232,7 +235,7 @@ public final class AddVoterHandler {
                 error
             );
 
-            leaderState.resetAddVoterHandlerState(
+            changeVoterState.resetAddVoterHandlerState(
                 Errors.REQUEST_TIMED_OUT,
                 String.format(
                     "Aborted add voter operation for since API_VERSIONS returned an error %s",
@@ -255,7 +258,7 @@ public final class AddVoterHandler {
                 supportedKraftVersions
             );
 
-            leaderState.resetAddVoterHandlerState(
+            changeVoterState.resetAddVoterHandlerState(
                 Errors.INVALID_REQUEST,
                 String.format(
                     "Aborted add voter operation for %s since the %s range %s doesn't " +
@@ -288,7 +291,7 @@ public final class AddVoterHandler {
                 leaderState.getReplicaState(current.voterKey())
             );
 
-            leaderState.resetAddVoterHandlerState(
+            changeVoterState.resetAddVoterHandlerState(
                 Errors.REQUEST_TIMED_OUT,
                 String.format(
                     "Aborted add voter operation for %s since it is lagging behind",
@@ -331,17 +334,20 @@ public final class AddVoterHandler {
         return true;
     }
 
-    public void highWatermarkUpdated(LeaderState<?> leaderState) {
-        leaderState.addVoterHandlerState().ifPresent(current ->
-            leaderState.highWatermark().ifPresent(highWatermark ->
+    public void highWatermarkUpdated(LeaderState<?> leaderState, long highWatermark) {
+        var changeVoterState = leaderState.changeVoterState();
+
+        changeVoterState
+            .addVoterHandlerState()
+            .ifPresent(current ->
                 current.lastOffset().ifPresent(lastOffset -> {
-                    if (highWatermark.offset() > lastOffset) {
+                    if (highWatermark > lastOffset) {
                         // VotersRecord with the added voter was committed; complete the RPC
-                        leaderState.resetAddVoterHandlerState(Errors.NONE, null, Optional.empty());
+                        changeVoterState
+                            .resetAddVoterHandlerState(Errors.NONE, null, Optional.empty());
                     }
                 })
-            )
-        );
+            );
     }
 
     private ApiVersionsRequestData buildApiVersionsRequest() {

@@ -2074,6 +2074,7 @@ public class KafkaProducerTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testSendOffsetsToTransactionNegotiatesV6WhenMetadataKnowsTopicId() {
         var topic = "topic";
         var topicId = Uuid.randomUuid();
@@ -2148,6 +2149,7 @@ public class KafkaProducerTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testSendOffsetsToTransactionTriggersMetadataRefreshThenNegotiatesV6() {
         var topic = "topic";
         var topicId = Uuid.randomUuid();
