@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals.metrics;
 
-import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
@@ -25,12 +24,15 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.rocksdb.Cache;
 import org.rocksdb.RocksDB;
 import org.rocksdb.Statistics;
 
 import java.math.BigInteger;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -254,20 +256,82 @@ public class RocksDBMetricsRecorderGaugesTest {
                                final String propertyName,
                                final long expectedValue) {
 
-        final Map<MetricName, ? extends Metric> metrics = streamsMetrics.metrics();
+        final KafkaMetric metric = getMetric(streamsMetrics, propertyName);
+
+        assertThat(metric, notNullValue());
+        assertThat(metric.metricValue(), is(BigInteger.valueOf(expectedValue)));
+    }
+
+    private KafkaMetric getMetric(final StreamsMetricsImpl streamsMetrics, final String propertyName) {
         final Map<String, String> tagMap = mkMap(
             mkEntry(THREAD_ID_TAG, Thread.currentThread().getName()),
             mkEntry(TASK_ID_TAG, TASK_ID.toString()),
             mkEntry(METRICS_SCOPE + "-" + STORE_ID_TAG, STORE_NAME)
         );
-        final KafkaMetric metric = (KafkaMetric) metrics.get(new MetricName(
+        return (KafkaMetric) streamsMetrics.metrics().get(new MetricName(
             propertyName,
             STATE_STORE_LEVEL_GROUP,
             "description is ignored",
             tagMap
         ));
+    }
 
+    /**
+     * A gauge read and value-provider removal must be mutually exclusive: {@code RocksDBStore.close()}
+     * calls {@code removeValueProviders(...)} and then frees the native RocksDB, so removal must not
+     * return while a gauge is still reading, or it would free a handle the gauge is dereferencing.
+     */
+    @Test
+    @Timeout(30)
+    public void shouldNotRemoveValueProvidersWhileGaugeIsReadingThem() throws Exception {
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(new Metrics(), "test-client", new MockTime());
+        final RocksDBMetricsRecorder recorder = new RocksDBMetricsRecorder(METRICS_SCOPE, STORE_NAME);
+        recorder.init(streamsMetrics, TASK_ID);
+        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
+
+        final CountDownLatch gaugeReadInProgress = new CountDownLatch(1);
+        final CountDownLatch allowGaugeReadToComplete = new CountDownLatch(1);
+        when(dbToAdd1.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + ESTIMATED_NUMBER_OF_KEYS))
+            .thenAnswer(invocation -> {
+                gaugeReadInProgress.countDown();
+                allowGaugeReadToComplete.await(10, TimeUnit.SECONDS);
+                return 5L;
+            });
+
+        final KafkaMetric metric = getMetric(streamsMetrics, ESTIMATED_NUMBER_OF_KEYS);
         assertThat(metric, notNullValue());
-        assertThat(metric.metricValue(), is(BigInteger.valueOf(expectedValue)));
+
+        // Evaluate the gauge on a separate thread; it blocks inside getAggregatedLongProperty
+        // while holding the recorder's value-providers lock.
+        final Thread gaugeReader = new Thread(metric::metricValue, "gauge-reader");
+        gaugeReader.start();
+        assertThat("gauge read did not start", gaugeReadInProgress.await(10, TimeUnit.SECONDS), is(true));
+
+        // While the gauge read is in progress, removeValueProviders() (called by
+        // RocksDBStore.close() before it frees the native db) must not be able to proceed.
+        final CountDownLatch removeReturned = new CountDownLatch(1);
+        final Thread storeCloser = new Thread(() -> {
+            recorder.removeValueProviders(SEGMENT_STORE_NAME_1);
+            removeReturned.countDown();
+        }, "store-closer");
+        storeCloser.start();
+
+        assertThat(
+            "removeValueProviders() returned while a gauge read was in progress - the use-after-free window is open",
+            removeReturned.await(500, TimeUnit.MILLISECONDS),
+            is(false)
+        );
+
+        // Once the gauge read completes, removeValueProviders() must be able to proceed.
+        allowGaugeReadToComplete.countDown();
+        assertThat(
+            "removeValueProviders() did not proceed after the gauge read finished",
+            removeReturned.await(10, TimeUnit.SECONDS),
+            is(true)
+        );
+
+        gaugeReader.join(TimeUnit.SECONDS.toMillis(10));
+        storeCloser.join(TimeUnit.SECONDS.toMillis(10));
     }
 }

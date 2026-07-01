@@ -107,6 +107,10 @@ public class RocksDBMetricsRecorder {
     private Sensor numberOfFileErrorsSensor;
 
     private final Map<String, DbAndCacheAndStatistics> storeToValueProviders = new ConcurrentHashMap<>();
+    // Guards value-provider reads against removeValueProviders(), which runs just before
+    // RocksDBStore.close() frees the native RocksDB/Statistics, so a read never dereferences
+    // a freed handle.
+    private final Object valueProvidersLock = new Object();
     private final String metricsScope;
     private final String storeName;
     private TaskId taskId;
@@ -157,17 +161,19 @@ public class RocksDBMetricsRecorder {
                                   final RocksDB db,
                                   final Cache cache,
                                   final Statistics statistics) {
-        if (storeToValueProviders.isEmpty()) {
-            logger.debug("Adding metrics recorder of task {} to metrics recording trigger", taskId);
-            streamsMetrics.rocksDBMetricsRecordingTrigger().addMetricsRecorder(this);
-        } else if (storeToValueProviders.containsKey(segmentName)) {
-            throw new IllegalStateException("Value providers for store " + segmentName + " of task " + taskId +
-                " has been already added. This is a bug in Kafka Streams. " +
-                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues");
+        synchronized (valueProvidersLock) {
+            if (storeToValueProviders.isEmpty()) {
+                logger.debug("Adding metrics recorder of task {} to metrics recording trigger", taskId);
+                streamsMetrics.rocksDBMetricsRecordingTrigger().addMetricsRecorder(this);
+            } else if (storeToValueProviders.containsKey(segmentName)) {
+                throw new IllegalStateException("Value providers for store " + segmentName + " of task " + taskId +
+                    " has been already added. This is a bug in Kafka Streams. " +
+                    "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues");
+            }
+            verifyDbAndCacheAndStatistics(segmentName, db, cache, statistics);
+            logger.debug("Adding value providers for store {} of task {}", segmentName, taskId);
+            storeToValueProviders.put(segmentName, new DbAndCacheAndStatistics(db, cache, statistics));
         }
-        verifyDbAndCacheAndStatistics(segmentName, db, cache, statistics);
-        logger.debug("Adding value providers for store {} of task {}", segmentName, taskId);
-        storeToValueProviders.put(segmentName, new DbAndCacheAndStatistics(db, cache, statistics));
     }
 
     private void verifyDbAndCacheAndStatistics(final String segmentName,
@@ -350,15 +356,18 @@ public class RocksDBMetricsRecorder {
     private Gauge<BigInteger> gaugeToComputeSumOfProperties(final String propertyName) {
         return (metricsConfig, now) -> {
             BigInteger result = BigInteger.valueOf(0);
-            for (final DbAndCacheAndStatistics valueProvider : storeToValueProviders.values()) {
-                try {
-                    // values of RocksDB properties are of type unsigned long in C++, i.e., in Java we need to use
-                    // BigInteger and construct the object from the byte representation of the value
-                    result = result.add(new BigInteger(1, longToBytes(
-                        valueProvider.db.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)
-                    )));
-                } catch (final RocksDBException e) {
-                    throw new ProcessorStateException("Error recording RocksDB metric " + propertyName, e);
+            // Acquiring the lock so the store's native RocksDB cannot be freed mid-read.
+            synchronized (valueProvidersLock) {
+                for (final DbAndCacheAndStatistics valueProvider : storeToValueProviders.values()) {
+                    try {
+                        // values of RocksDB properties are of type unsigned long in C++, i.e., in Java we need to use
+                        // BigInteger and construct the object from the byte representation of the value
+                        result = result.add(new BigInteger(1, longToBytes(
+                            valueProvider.db.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)
+                        )));
+                    } catch (final RocksDBException e) {
+                        throw new ProcessorStateException("Error recording RocksDB metric " + propertyName, e);
+                    }
                 }
             }
             return result;
@@ -368,24 +377,27 @@ public class RocksDBMetricsRecorder {
     private Gauge<BigInteger> gaugeToComputeBlockCacheMetrics(final String propertyName) {
         return (metricsConfig, now) -> {
             BigInteger result = BigInteger.valueOf(0);
-            for (final DbAndCacheAndStatistics valueProvider : storeToValueProviders.values()) {
-                try {
-                    if (singleCache) {
-                        // values of RocksDB properties are of type unsigned long in C++, i.e., in Java we need to use
-                        // BigInteger and construct the object from the byte representation of the value
-                        result = new BigInteger(1, longToBytes(
-                            valueProvider.db.getLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)
-                        ));
-                        break;
-                    } else {
-                        // values of RocksDB properties are of type unsigned long in C++, i.e., in Java we need to use
-                        // BigInteger and construct the object from the byte representation of the value
-                        result = result.add(new BigInteger(1, longToBytes(
-                            valueProvider.db.getLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)
-                        )));
+            // Acquiring the lock so the store's native RocksDB cannot be freed mid-read.
+            synchronized (valueProvidersLock) {
+                for (final DbAndCacheAndStatistics valueProvider : storeToValueProviders.values()) {
+                    try {
+                        if (singleCache) {
+                            // values of RocksDB properties are of type unsigned long in C++, i.e., in Java we need to use
+                            // BigInteger and construct the object from the byte representation of the value
+                            result = new BigInteger(1, longToBytes(
+                                valueProvider.db.getLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)
+                            ));
+                            break;
+                        } else {
+                            // values of RocksDB properties are of type unsigned long in C++, i.e., in Java we need to use
+                            // BigInteger and construct the object from the byte representation of the value
+                            result = result.add(new BigInteger(1, longToBytes(
+                                valueProvider.db.getLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)
+                            )));
+                        }
+                    } catch (final RocksDBException e) {
+                        throw new ProcessorStateException("Error recording RocksDB metric " + propertyName, e);
                     }
-                } catch (final RocksDBException e) {
-                    throw new ProcessorStateException("Error recording RocksDB metric " + propertyName, e);
                 }
             }
             return result;
@@ -399,20 +411,24 @@ public class RocksDBMetricsRecorder {
     }
 
     public void removeValueProviders(final String segmentName) {
-        logger.debug("Removing value providers for store {} of task {}", segmentName, taskId);
-        final DbAndCacheAndStatistics removedValueProviders = storeToValueProviders.remove(segmentName);
-        if (removedValueProviders == null) {
-            throw new IllegalStateException("No value providers for store \"" + segmentName + "\" of task " + taskId +
-                " could be found. This is a bug in Kafka Streams. " +
-                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues");
-        }
-        if (storeToValueProviders.isEmpty()) {
-            logger.debug(
-                "Removing metrics recorder for store {} of task {} from metrics recording trigger",
-                storeName,
-                taskId
-            );
-            streamsMetrics.rocksDBMetricsRecordingTrigger().removeMetricsRecorder(this);
+        // Acquiring the lock so any in-flight read finishes before the caller (RocksDBStore.close())
+        // frees the native handles, and no later read sees the removed segment.
+        synchronized (valueProvidersLock) {
+            logger.debug("Removing value providers for store {} of task {}", segmentName, taskId);
+            final DbAndCacheAndStatistics removedValueProviders = storeToValueProviders.remove(segmentName);
+            if (removedValueProviders == null) {
+                throw new IllegalStateException("No value providers for store \"" + segmentName + "\" of task " + taskId +
+                    " could be found. This is a bug in Kafka Streams. " +
+                    "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues");
+            }
+            if (storeToValueProviders.isEmpty()) {
+                logger.debug(
+                    "Removing metrics recorder for store {} of task {} from metrics recording trigger",
+                    storeName,
+                    taskId
+                );
+                streamsMetrics.rocksDBMetricsRecordingTrigger().removeMetricsRecorder(this);
+            }
         }
     }
 
@@ -443,37 +459,40 @@ public class RocksDBMetricsRecorder {
         double compactionTimeMin = Double.MAX_VALUE;
         double compactionTimeMax = 0.0;
         boolean shouldRecord = true;
-        for (final DbAndCacheAndStatistics valueProviders : storeToValueProviders.values()) {
-            if (valueProviders.statistics == null) {
-                shouldRecord = false;
-                break;
+        // Acquiring the lock so the store's native Statistics cannot be freed mid-read.
+        synchronized (valueProvidersLock) {
+            for (final DbAndCacheAndStatistics valueProviders : storeToValueProviders.values()) {
+                if (valueProviders.statistics == null) {
+                    shouldRecord = false;
+                    break;
+                }
+                bytesWrittenToDatabase += valueProviders.statistics.getAndResetTickerCount(TickerType.BYTES_WRITTEN);
+                bytesReadFromDatabase += valueProviders.statistics.getAndResetTickerCount(TickerType.BYTES_READ);
+                memtableBytesFlushed += valueProviders.statistics.getAndResetTickerCount(TickerType.FLUSH_WRITE_BYTES);
+                memtableHits += valueProviders.statistics.getAndResetTickerCount(TickerType.MEMTABLE_HIT);
+                memtableMisses += valueProviders.statistics.getAndResetTickerCount(TickerType.MEMTABLE_MISS);
+                blockCacheDataHits += valueProviders.statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_DATA_HIT);
+                blockCacheDataMisses += valueProviders.statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_DATA_MISS);
+                blockCacheIndexHits += valueProviders.statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_INDEX_HIT);
+                blockCacheIndexMisses += valueProviders.statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_INDEX_MISS);
+                blockCacheFilterHits += valueProviders.statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_FILTER_HIT);
+                blockCacheFilterMisses += valueProviders.statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_FILTER_MISS);
+                writeStallDuration += valueProviders.statistics.getAndResetTickerCount(TickerType.STALL_MICROS);
+                bytesWrittenDuringCompaction += valueProviders.statistics.getAndResetTickerCount(TickerType.COMPACT_WRITE_BYTES);
+                bytesReadDuringCompaction += valueProviders.statistics.getAndResetTickerCount(TickerType.COMPACT_READ_BYTES);
+                numberOfOpenFiles = -1;
+                numberOfFileErrors += valueProviders.statistics.getAndResetTickerCount(TickerType.NO_FILE_ERRORS);
+                final HistogramData memtableFlushTimeData = valueProviders.statistics.getHistogramData(HistogramType.FLUSH_TIME);
+                memtableFlushTimeSum += memtableFlushTimeData.getSum();
+                memtableFlushTimeCount += memtableFlushTimeData.getCount();
+                memtableFlushTimeMin = Double.min(memtableFlushTimeMin, memtableFlushTimeData.getMin());
+                memtableFlushTimeMax = Double.max(memtableFlushTimeMax, memtableFlushTimeData.getMax());
+                final HistogramData compactionTimeData = valueProviders.statistics.getHistogramData(HistogramType.COMPACTION_TIME);
+                compactionTimeSum += compactionTimeData.getSum();
+                compactionTimeCount += compactionTimeData.getCount();
+                compactionTimeMin = Double.min(compactionTimeMin, compactionTimeData.getMin());
+                compactionTimeMax = Double.max(compactionTimeMax, compactionTimeData.getMax());
             }
-            bytesWrittenToDatabase += valueProviders.statistics.getAndResetTickerCount(TickerType.BYTES_WRITTEN);
-            bytesReadFromDatabase += valueProviders.statistics.getAndResetTickerCount(TickerType.BYTES_READ);
-            memtableBytesFlushed += valueProviders.statistics.getAndResetTickerCount(TickerType.FLUSH_WRITE_BYTES);
-            memtableHits += valueProviders.statistics.getAndResetTickerCount(TickerType.MEMTABLE_HIT);
-            memtableMisses += valueProviders.statistics.getAndResetTickerCount(TickerType.MEMTABLE_MISS);
-            blockCacheDataHits += valueProviders.statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_DATA_HIT);
-            blockCacheDataMisses += valueProviders.statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_DATA_MISS);
-            blockCacheIndexHits += valueProviders.statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_INDEX_HIT);
-            blockCacheIndexMisses += valueProviders.statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_INDEX_MISS);
-            blockCacheFilterHits += valueProviders.statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_FILTER_HIT);
-            blockCacheFilterMisses += valueProviders.statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_FILTER_MISS);
-            writeStallDuration += valueProviders.statistics.getAndResetTickerCount(TickerType.STALL_MICROS);
-            bytesWrittenDuringCompaction += valueProviders.statistics.getAndResetTickerCount(TickerType.COMPACT_WRITE_BYTES);
-            bytesReadDuringCompaction += valueProviders.statistics.getAndResetTickerCount(TickerType.COMPACT_READ_BYTES);
-            numberOfOpenFiles = -1;
-            numberOfFileErrors += valueProviders.statistics.getAndResetTickerCount(TickerType.NO_FILE_ERRORS);
-            final HistogramData memtableFlushTimeData = valueProviders.statistics.getHistogramData(HistogramType.FLUSH_TIME);
-            memtableFlushTimeSum += memtableFlushTimeData.getSum();
-            memtableFlushTimeCount += memtableFlushTimeData.getCount();
-            memtableFlushTimeMin = Double.min(memtableFlushTimeMin, memtableFlushTimeData.getMin());
-            memtableFlushTimeMax = Double.max(memtableFlushTimeMax, memtableFlushTimeData.getMax());
-            final HistogramData compactionTimeData = valueProviders.statistics.getHistogramData(HistogramType.COMPACTION_TIME);
-            compactionTimeSum += compactionTimeData.getSum();
-            compactionTimeCount += compactionTimeData.getCount();
-            compactionTimeMin = Double.min(compactionTimeMin, compactionTimeData.getMin());
-            compactionTimeMax = Double.max(compactionTimeMax, compactionTimeData.getMax());
         }
         if (shouldRecord) {
             bytesWrittenToDatabaseSensor.record(bytesWrittenToDatabase, now);
