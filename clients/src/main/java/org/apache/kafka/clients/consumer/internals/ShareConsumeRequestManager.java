@@ -1189,9 +1189,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     }
 
     private List<TopicPartition> partitionsToFetch() {
-        List<TopicPartition> fetchablePartitions = subscriptions.fetchablePartitions(tp -> true);
-        System.out.println("FETCHABLE PARTITIONS: " + fetchablePartitions);
-        return fetchablePartitions;
+        return subscriptions.fetchablePartitions(tp -> true);
     }
 
     public ShareSessionHandler sessionHandler(int node) {
