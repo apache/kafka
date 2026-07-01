@@ -3133,18 +3133,41 @@ public class GroupMetadataManager {
         }
 
         addInitializingTopicsRecords(groupId, records, topicPartitionChangeMap);
-        return Optional.of(buildInitializeShareGroupStateRequest(groupId, groupEpoch, topicPartitionChangeMap));
+
+        // Topics already known to the group (already initialized or already initializing) whose
+        // newly added partitions are now being initialized must start at offset 0 to avoid losing
+        // records produced before initialization completes. Brand-new topics (seen for the first
+        // time, present in neither map) use -1 so that the group's share.auto.offset.reset strategy
+        // applies. This is read before the records above are replayed, so a brand-new topic is
+        // correctly absent here.
+        ShareGroupStatePartitionMetadataInfo info = shareGroupStatePartitionMetadata.get(groupId);
+        Set<Uuid> alreadyKnownTopics = new HashSet<>();
+        if (info != null) {
+            alreadyKnownTopics.addAll(info.initializedTopics().keySet());
+            alreadyKnownTopics.addAll(info.initializingTopics().keySet());
+        }
+
+        return Optional.of(buildInitializeShareGroupStateRequest(groupId, groupEpoch, topicPartitionChangeMap, alreadyKnownTopics));
     }
 
-    private InitializeShareGroupStateParameters buildInitializeShareGroupStateRequest(String groupId, int groupEpoch, Map<Uuid, InitMapValue> topicPartitions) {
+    private InitializeShareGroupStateParameters buildInitializeShareGroupStateRequest(
+        String groupId,
+        int groupEpoch,
+        Map<Uuid, InitMapValue> topicPartitions,
+        Set<Uuid> alreadyKnownTopics
+    ) {
         return new InitializeShareGroupStateParameters.Builder().setGroupTopicPartitionData(
             new GroupTopicPartitionData<>(groupId, topicPartitions.entrySet().stream()
-                .map(entry -> new TopicData<>(
-                    entry.getKey(),
-                    entry.getValue().partitions().stream()
-                        .map(partitionId -> PartitionFactory.newPartitionStateData(partitionId, groupEpoch, -1))
-                        .toList())
-                ).toList()
+                .map(entry -> {
+                    // New partitions of an already-known topic start at 0; brand-new topics use -1
+                    // so that the group's share.auto.offset.reset strategy applies.
+                    long startOffset = alreadyKnownTopics.contains(entry.getKey()) ? 0L : PartitionFactory.UNINITIALIZED_START_OFFSET;
+                    return new TopicData<>(
+                        entry.getKey(),
+                        entry.getValue().partitions().stream()
+                            .map(partitionId -> PartitionFactory.newPartitionStateData(partitionId, groupEpoch, startOffset))
+                            .toList());
+                }).toList()
             )).build();
     }
 
