@@ -554,8 +554,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         currentResult.whenComplete((res, error) -> {
             boolean inflightRemoved = pendingRequests.inflightOffsetFetches.remove(fetchRequest);
             if (!inflightRemoved) {
-                log.warn("A duplicated, inflight, request was identified, but unable to find it in the " +
-                    "outbound buffer: {}", fetchRequest);
+                // Requests deduplicated onto another pending request are never added to the
+                // buffers, so there is nothing to remove for them here.
+                log.debug("Completed request not found in the in-flight buffer (it was " +
+                    "deduplicated and chained onto an existing request): {}", fetchRequest);
             }
 
             // Group-level error
@@ -1223,9 +1225,14 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     " anymore.", responseError);
                 future.completeExceptionally(exception);
             } else if (responseError == Errors.STALE_MEMBER_EPOCH) {
-                log.error("OffsetFetch failed with {} and the consumer is not part " +
-                    "of the group anymore (it probably left the group, got fenced" +
-                    " or failed). The request cannot be retried and will fail.", responseError);
+                if (memberInfo.memberEpoch.isPresent()) {
+                    log.debug("OffsetFetch failed with {}. The member has a newer epoch, so the " +
+                        "request will be retried with it.", responseError);
+                } else {
+                    log.error("OffsetFetch failed with {} and the consumer is not part " +
+                        "of the group anymore (it probably left the group, got fenced" +
+                        " or failed). The request cannot be retried and will fail.", responseError);
+                }
                 future.completeExceptionally(exception);
             } else if (responseError == Errors.NOT_COORDINATOR || responseError == Errors.COORDINATOR_NOT_AVAILABLE) {
                 // Re-discover the coordinator and retry
@@ -1395,17 +1402,21 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         /**
-         * <p>Adding an offset fetch request to the outgoing buffer.  If the same request was made, we chain the future
-         * to the existing one.
+         * <p>Adding an offset fetch request to the outgoing buffer.  If the same request was made and has not
+         * completed yet, we chain the future to the existing one.
          *
          * <p>If the request is new, it invokes a callback to remove itself from the {@code inflightOffsetFetches}
          * upon completion.
          */
         private CompletableFuture<OffsetFetchResult> addOffsetFetchRequest(final OffsetFetchRequestState request) {
+            // A request that already completed cannot deliver a result anymore, but may still appear in the
+            // buffers while its completion callbacks run (removal from the buffer is itself one of those
+            // callbacks). Chaining onto it would complete the new request immediately with the stale outcome
+            // instead of sending it (e.g. re-failing the retry of a STALE_MEMBER_EPOCH error in a tight loop).
             Optional<OffsetFetchRequestState> dupe =
-                    unsentOffsetFetches.stream().filter(r -> r.sameRequest(request)).findAny();
+                    unsentOffsetFetches.stream().filter(r -> r.sameRequest(request) && !r.future.isDone()).findAny();
             Optional<OffsetFetchRequestState> inflight =
-                    inflightOffsetFetches.stream().filter(r -> r.sameRequest(request)).findAny();
+                    inflightOffsetFetches.stream().filter(r -> r.sameRequest(request) && !r.future.isDone()).findAny();
 
             if (dupe.isPresent() || inflight.isPresent()) {
                 log.debug("Duplicated unsent offset fetch request found for partitions: {}", request.requestedPartitions);
