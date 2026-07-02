@@ -174,7 +174,7 @@ public class ShareGroupDLQRecordFetcher {
             }
         } catch (Exception e) {
             log.warn("Unexpected error processing records for {}. Skipping record copy.", param, e);
-            result.complete(Map.of());
+            result.complete(Map.copyOf(recordMap));
         }
     }
 
