@@ -142,7 +142,7 @@ public class ProducerBatch {
     /**
      * Return this batch's buffer memory to the pool. The default single-buffer batch returns
      * the pooled buffer at its initial capacity; {@link ChunkedProducerBatch} overrides this
-     * to return all of its chunks.
+     * to return its remaining chunks (fully-unused chunks are released earlier, at close).
      */
     protected void deallocateBuffer(BufferPool pool) {
         pool.deallocate(buffer(), initialCapacity());

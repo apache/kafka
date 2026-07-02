@@ -146,9 +146,6 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
         if (flattenedBuffer != null && !dirty) {
             return flattenedBuffer;
         }
-        // TODO: KAFKA-20687. This flatten runs at batch close, when the chunk set is final.
-        //  Today all chunks (used and unused) are returned to the pool only when the batch
-        //  completes (via deallocate(pool)). Consider releasing the fully-unused chunks early, here.
         int totalSize = 0;
         for (ByteBuffer chunk : chunks) {
             totalSize += chunk.position();
@@ -162,13 +159,28 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
             chunk.position(chunkPos);
         }
         dirty = false;
-        // The bytes are now copied into flattenedBuffer, but we intentionally do not release the
-        //  chunks until batch completion, so the in-flight data stays reserved against the
-        //  buffer.memory budget (the pool's available memory reflects it), consistent with the
-        //  "full" strategy. Releasing here would return that memory to the pool while the bytes are
-        //  still in flight in the heap copy, letting the pool admit more than buffer.memory intends.
-        //  This flattening is an initial approach and will be removed with KAFKA-20580.
+        releaseUnusedChunks();
         return flattenedBuffer;
+    }
+
+    /**
+     * Release the fully-unused chunks (nothing written) back to the pool, now rather than at batch
+     * completion. Called at batch close, when the chunk set is final.
+     * <p>
+     * The data-bearing chunks are intentionally kept until batch completion: they are what keeps
+     * the batch's in-flight data reserved against the buffer.memory budget, so releasing them at
+     * close would let the pool admit more data than buffer.memory intends while the batch is still
+     * in flight.
+     */
+    private void releaseUnusedChunks() {
+        List<ByteBuffer> unused = chunks.subList(currentChunkIndex + 1, chunks.size());
+        if (pool != null) {
+            for (ByteBuffer chunk : unused)
+                pool.deallocate(chunk);
+        }
+        // Remove the released chunks from `chunks`, so they are
+        // not deallocated again on batch completion.
+        unused.clear();
     }
 
     /**
