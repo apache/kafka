@@ -1645,7 +1645,7 @@ public class AsyncKafkaConsumerTest {
             // Tests if we get an event for an assignment, that we invoke our listener.
             Arguments.of(Collections.singletonList(ON_PARTITIONS_ASSIGNED), empty, empty, empty, 0, 1, 0, empty),
 
-            // Tests that we invoke our listener even if it encounters an exception.
+            // Tests if we get an event for an assignment, that we invoke our listener.
             Arguments.of(Collections.singletonList(ON_PARTITIONS_LOST), empty, empty, empty, 0, 0, 1, empty),
 
             // Tests that we invoke our listener even if it encounters an exception.

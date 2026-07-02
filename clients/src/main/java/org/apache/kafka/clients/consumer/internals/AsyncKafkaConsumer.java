@@ -239,7 +239,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             applyNewAssignment(event);
 
-            if (subscriptions.rebalanceListener().isEmpty()) {
+            if (!subscriptions.hasRebalanceListener()) {
                 event.future().complete(null);
             } else {
                 invokeRebalanceCallbackAndNotifyBackgroundThread(ON_PARTITIONS_ASSIGNED, event.addedPartitions(), event.future());

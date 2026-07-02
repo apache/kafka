@@ -1277,7 +1277,7 @@ public abstract class ConsumerCoordinatorTest {
     public void testForceMetadataRefreshForPatternSubscriptionDuringRebalance() {
         // Set up a non-leader consumer with pattern subscription and a cluster containing one topic matching the
         // pattern.
-        subscriptions.setRebalanceListener(rebalanceListener);
+        subscriptions.setRebalanceListener(rebalanceListener, rebalanceConsumer);
         subscriptions.subscribe(Pattern.compile(".*"));
         client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, singletonMap(topic1, 1)));
         coordinator.maybeUpdateSubscriptionMetadata();

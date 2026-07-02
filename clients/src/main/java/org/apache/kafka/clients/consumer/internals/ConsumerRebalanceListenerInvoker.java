@@ -55,12 +55,10 @@ public class ConsumerRebalanceListenerInvoker {
     public Exception invokePartitionsAssigned(final SortedSet<TopicPartition> assignedPartitions) {
         log.info("Adding newly assigned partitions: {}", assignedPartitions);
 
-        Optional<InternalRebalanceListener> listener = subscriptions.rebalanceListener();
-
-        if (listener.isPresent()) {
+        if (subscriptions.hasRebalanceListener()) {
             try {
                 final long startMs = time.milliseconds();
-                listener.get().onPartitionsAssigned(assignedPartitions);
+                subscriptions.onPartitionsAssigned(assignedPartitions);
                 metricsManager.recordPartitionsAssignedLatency(time.milliseconds() - startMs);
             } catch (WakeupException | InterruptException e) {
                 throw e;
@@ -84,12 +82,10 @@ public class ConsumerRebalanceListenerInvoker {
         if (!revokePausedPartitions.isEmpty())
             log.info("The pause flag in partitions {} will be removed due to revocation.", revokePausedPartitions);
 
-        Optional<InternalRebalanceListener> listener = subscriptions.rebalanceListener();
-
-        if (listener.isPresent()) {
+        if (subscriptions.hasRebalanceListener()) {
             try {
                 final long startMs = time.milliseconds();
-                listener.get().onPartitionsRevoked(revokedPartitions);
+                subscriptions.onPartitionsRevoked(revokedPartitions);
                 metricsManager.recordPartitionsRevokedLatency(time.milliseconds() - startMs);
             } catch (WakeupException | InterruptException e) {
                 throw e;
@@ -113,12 +109,10 @@ public class ConsumerRebalanceListenerInvoker {
         if (!lostPausedPartitions.isEmpty())
             log.info("The pause flag in partitions {} will be removed due to partition lost.", lostPartitions);
 
-        Optional<InternalRebalanceListener> listener = subscriptions.rebalanceListener();
-
-        if (listener.isPresent()) {
+        if (subscriptions.hasRebalanceListener()) {
             try {
                 final long startMs = time.milliseconds();
-                listener.get().onPartitionsLost(lostPartitions);
+                subscriptions.onPartitionsLost(lostPartitions);
                 metricsManager.recordPartitionsLostLatency(time.milliseconds() - startMs);
             } catch (WakeupException | InterruptException e) {
                 throw e;

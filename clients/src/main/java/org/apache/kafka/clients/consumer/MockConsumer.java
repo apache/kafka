@@ -142,10 +142,10 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
         // rebalance callbacks
         if (!removed.isEmpty()) {
-            subscriptions.rebalanceListener().ifPresent(crl -> crl.onPartitionsRevoked(removed));
+            subscriptions.onPartitionsRevoked(removed);
         }
         subscriptions.assignFromSubscribed(newAssignment);
-        subscriptions.rebalanceListener().ifPresent(crl -> crl.onPartitionsAssigned(added));
+        subscriptions.onPartitionsAssigned(added);
     }
 
     /**
@@ -169,7 +169,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         if (!notAssigned.isEmpty())
             throw new IllegalStateException("Cannot lose partitions that are not currently assigned: " + notAssigned);
         lost.forEach(records::remove);
-        this.subscriptions.rebalanceListener().ifPresent(crl -> crl.onPartitionsLost(lost));
+        this.subscriptions.onPartitionsLost(lost);
         Set<TopicPartition> remaining = currentAssignment.stream()
             .filter(tp -> !lost.contains(tp))
             .collect(Collectors.toSet());
