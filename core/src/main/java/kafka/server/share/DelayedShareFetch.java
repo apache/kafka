@@ -26,6 +26,7 @@ import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
@@ -695,11 +696,19 @@ public class DelayedShareFetch extends DelayedOperation {
             topicIdPartition,
             logReadResult.info().fetchOffsetMetadata
         ));
+        // The byte caps in the remote storage fetch info were computed by dividing the request budget
+        // across all acquired partitions, but the non-remote partitions have since been released without
+        // consuming any of it. Re-distribute the request budget across the remote fetch partitions only,
+        // so the remote reads can use the share freed up by the released partitions.
+        LinkedHashMap<TopicIdPartition, Integer> resizedMaxBytesMap = partitionMaxBytesStrategy.maxBytes(
+            shareFetch.fetchParams().maxBytes, remoteStorageFetchInfoMap.keySet(), remoteStorageFetchInfoMap.size());
 
         List<RemoteFetch> remoteFetches = new ArrayList<>();
         for (Map.Entry<TopicIdPartition, LogReadResult> entry : remoteStorageFetchInfoMap.entrySet()) {
             TopicIdPartition remoteFetchTopicIdPartition = entry.getKey();
-            RemoteStorageFetchInfo remoteStorageFetchInfo = entry.getValue().info().delayedRemoteStorageFetch.get();
+            RemoteStorageFetchInfo remoteStorageFetchInfo = maybeResizeRemoteStorageFetchInfo(
+                entry.getValue().info().delayedRemoteStorageFetch.get(),
+                resizedMaxBytesMap.get(remoteFetchTopicIdPartition));
 
             Future<Void> remoteFetchTask;
             CompletableFuture<RemoteLogReadResult> remoteFetchResult = new CompletableFuture<>();
@@ -721,6 +730,35 @@ public class DelayedShareFetch extends DelayedOperation {
             remoteFetches.add(new RemoteFetch(remoteFetchTopicIdPartition, entry.getValue(), remoteFetchTask, remoteFetchResult, remoteStorageFetchInfo));
         }
         pendingRemoteFetchesOpt = Optional.of(new PendingRemoteFetches(remoteFetches, fetchOffsetMetadataMap));
+    }
+
+    /**
+     * Returns a copy of the remote storage fetch info with its byte caps raised to newFetchMaxBytes.
+     * The remote read is capped by the minimum of fetchMaxBytes and the partition-level maxBytes,
+     * hence both are replaced. The caps are never lowered so that a re-distribution can only grant
+     * the remote read more budget than the local read that surfaced it.
+     */
+    private static RemoteStorageFetchInfo maybeResizeRemoteStorageFetchInfo(
+        RemoteStorageFetchInfo remoteStorageFetchInfo,
+        int newFetchMaxBytes
+    ) {
+        if (newFetchMaxBytes <= remoteStorageFetchInfo.fetchMaxBytes()) {
+            return remoteStorageFetchInfo;
+        }
+        FetchRequest.PartitionData partitionData = remoteStorageFetchInfo.fetchInfo();
+        return new RemoteStorageFetchInfo(
+            newFetchMaxBytes,
+            remoteStorageFetchInfo.minOneMessage(),
+            remoteStorageFetchInfo.topicIdPartition(),
+            new FetchRequest.PartitionData(
+                partitionData.topicId,
+                partitionData.fetchOffset,
+                partitionData.logStartOffset,
+                Math.max(partitionData.maxBytes, newFetchMaxBytes),
+                partitionData.currentLeaderEpoch,
+                partitionData.lastFetchedEpoch),
+            remoteStorageFetchInfo.fetchIsolation()
+        );
     }
 
     /**
