@@ -51,48 +51,59 @@ public class SinglePointMetric implements MetricKeyable {
         return metricBuilder;
     }
 
+    // Visible for testing
     boolean hasSum() {
         return metricBuilder.hasSum();
     }
 
+    // Visible for testing
     boolean hasGauge() {
         return metricBuilder.hasGauge();
     }
 
+    // Visible for testing
     boolean isMonotonic() {
         return metricBuilder.getSum().getIsMonotonic();
     }
 
+    // Visible for testing
     boolean isDeltaTemporality() {
         return metricBuilder.getSum().getAggregationTemporality() == AggregationTemporality.AGGREGATION_TEMPORALITY_DELTA;
     }
 
+    // Visible for testing
     int dataPointsCount() {
         return metricBuilder.hasSum()
             ? metricBuilder.getSum().getDataPointsCount()
             : metricBuilder.getGauge().getDataPointsCount();
     }
 
+    // Visible for testing
     long timeUnixNano() {
         return dataPoint().getTimeUnixNano();
     }
 
+    // Visible for testing
     long startTimeUnixNano() {
         return dataPoint().getStartTimeUnixNano();
     }
 
+    // Visible for testing
     double doubleValue() {
         return dataPoint().getAsDouble();
     }
 
+    // Visible for testing
     long longValue() {
         return dataPoint().getAsInt();
     }
 
+    // Visible for testing
     int attributesCount() {
         return dataPoint().getAttributesCount();
     }
 
+    // Visible for testing
     Map<String, String> attributes() {
         Map<String, String> attributes = new LinkedHashMap<>();
         for (KeyValue attribute : dataPoint().getAttributesList()) {
