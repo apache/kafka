@@ -122,12 +122,6 @@ public class ReplicaManagerLogReader implements LogReader {
         LinkedHashMap<TopicIdPartition, CompletableFuture<LogReadResult>> futures = new LinkedHashMap<>();
         for (TopicIdPartition topicIdPartition : partitionsToFetch) {
             LogReadResult logReadResult = localReadResults.get(topicIdPartition);
-            if (logReadResult == null) {
-                // Just skip
-                log.debug("Log read result for partition {} is null", topicIdPartition);
-                continue;
-            }
-
             FetchDataInfo localFetchDataInfo = logReadResult.info();
             Errors error = logReadResult.error();
             Optional<RemoteStorageFetchInfo> remoteStorageFetchInfo = localFetchDataInfo.delayedRemoteStorageFetch;
@@ -148,11 +142,6 @@ public class ReplicaManagerLogReader implements LogReader {
                     log.warn("Unable to read partition {} from remote storage.", topicIdPartition, cause);
                     // Sending an error here to caller is not useful so skipping. Above log should suffice.
                     return withInfoAndError(logReadResult, localFetchDataInfo, Errors.NONE);
-                }
-                // Defensive code - remoteFetchDataInfo in current impl is never null.
-                if (remoteFetchDataInfo == null) {
-                    // We want to return successful local read results so no skipping.
-                    return withInfoAndError(logReadResult, localFetchDataInfo, Errors.UNKNOWN_SERVER_ERROR);
                 }
                 return withInfoAndError(logReadResult, remoteFetchDataInfo, Errors.NONE);
             }));
