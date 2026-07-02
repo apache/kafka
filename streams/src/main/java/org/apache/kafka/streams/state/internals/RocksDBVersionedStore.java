@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
@@ -183,11 +184,15 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     @Override
     public VersionedRecord<byte[]> get(final Bytes key) {
+        return get(key, IsolationLevel.READ_UNCOMMITTED);
+    }
+
+    private VersionedRecord<byte[]> get(final Bytes key, final IsolationLevel level) {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
 
         // latest value (if present) is guaranteed to be in the latest value store
-        final byte[] rawLatestValueAndTimestamp = latestValueStore.get(key);
+        final byte[] rawLatestValueAndTimestamp = latestValueStore(level).get(key);
         if (rawLatestValueAndTimestamp != null) {
             return new VersionedRecord<>(
                 LatestValueFormatter.value(rawLatestValueAndTimestamp),
@@ -200,14 +205,20 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     @Override
     public VersionedRecord<byte[]> get(final Bytes key, final long asOfTimestamp) {
+        return get(key, asOfTimestamp, IsolationLevel.READ_UNCOMMITTED);
+    }
+
+    private VersionedRecord<byte[]> get(final Bytes key, final long asOfTimestamp, final IsolationLevel level) {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
+
+        final LogicalKeyValueSegment latestView = latestValueStore(level);
 
         if (asOfTimestamp < observedStreamTime - historyRetention) {
             // history retention exceeded. we still check the latest value store in case the
             // latest record version satisfies the timestamp bound, in which case it should
             // still be returned (i.e., the latest record version per key never expires).
-            final byte[] rawLatestValueAndTimestamp = latestValueStore.get(key);
+            final byte[] rawLatestValueAndTimestamp = latestView.get(key);
             if (rawLatestValueAndTimestamp != null) {
                 final long latestTimestamp = LatestValueFormatter.timestamp(rawLatestValueAndTimestamp);
                 if (latestTimestamp <= asOfTimestamp) {
@@ -227,7 +238,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         }
 
         // first check the latest value store
-        final byte[] rawLatestValueAndTimestamp = latestValueStore.get(key);
+        final byte[] rawLatestValueAndTimestamp = latestView.get(key);
         if (rawLatestValueAndTimestamp != null) {
             final long latestTimestamp = LatestValueFormatter.timestamp(rawLatestValueAndTimestamp);
             if (latestTimestamp <= asOfTimestamp) {
@@ -236,8 +247,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         }
 
         // check segment stores
-        final List<LogicalKeyValueSegment> segments = segmentStores.segments(asOfTimestamp, Long.MAX_VALUE, false);
-        for (final LogicalKeyValueSegment segment : segments) {
+        for (final LogicalKeyValueSegment segment : viewSegments(segmentStores.segments(asOfTimestamp, Long.MAX_VALUE, false), level)) {
             final byte[] rawSegmentValue = segment.get(key);
             if (rawSegmentValue != null) {
                 final long nextTs = RocksDBVersionedStoreSegmentValueFormatter.nextTimestamp(rawSegmentValue);
@@ -272,28 +282,120 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         return null;
     }
 
-    @SuppressWarnings("unchecked")
     VersionedRecordIterator<byte[]> get(final Bytes key, final long fromTimestamp, final long toTimestamp, final ResultOrder order) {
+        return get(key, fromTimestamp, toTimestamp, order, IsolationLevel.READ_UNCOMMITTED);
+    }
+
+    VersionedRecordIterator<byte[]> get(final Bytes key, final long fromTimestamp, final long toTimestamp,
+                                        final ResultOrder order, final IsolationLevel level) {
         validateStoreOpen();
+
+        final LogicalKeyValueSegment latestView = latestValueStore(level);
 
         if (toTimestamp < observedStreamTime - historyRetention) {
             // history retention exceeded. we still check the latest value store in case the
             // latest record version satisfies the timestamp bound, in which case it should
             // still be returned (i.e., the latest record version per key never expires).
-            return new LogicalSegmentIterator(Collections.singletonList(latestValueStore).listIterator(), key, fromTimestamp, toTimestamp, order);
+            return new LogicalSegmentIterator(Collections.singletonList(latestView).listIterator(), key, fromTimestamp, toTimestamp, order);
         } else {
             final List<LogicalKeyValueSegment> segments = new ArrayList<>();
             // add segment stores
             // consider the search lower bound as -INF (LONG.MIN_VALUE) to find the record that has been inserted before the {@code fromTimestamp}
             // but is still valid in query specified time interval.
             if (order.equals(ResultOrder.ASCENDING)) {
-                segments.addAll(segmentStores.segments(Long.MIN_VALUE, toTimestamp, true));
-                segments.add(latestValueStore);
+                segments.addAll(viewSegments(segmentStores.segments(Long.MIN_VALUE, toTimestamp, true), level));
+                segments.add(latestView);
             } else {
-                segments.add(latestValueStore);
-                segments.addAll(segmentStores.segments(Long.MIN_VALUE, toTimestamp, false));
+                segments.add(latestView);
+                segments.addAll(viewSegments(segmentStores.segments(Long.MIN_VALUE, toTimestamp, false), level));
             }
             return new LogicalSegmentIterator(segments.listIterator(), key, fromTimestamp, toTimestamp, order);
+        }
+    }
+
+    private LogicalKeyValueSegment latestValueStore(final IsolationLevel level) {
+        return level == IsolationLevel.READ_UNCOMMITTED ? latestValueStore : latestValueStore.readOnly(level);
+    }
+
+    private static List<LogicalKeyValueSegment> viewSegments(final List<LogicalKeyValueSegment> segments,
+                                                             final IsolationLevel level) {
+        if (level == IsolationLevel.READ_UNCOMMITTED) {
+            return segments;
+        }
+        final List<LogicalKeyValueSegment> views = new ArrayList<>(segments.size());
+        for (final LogicalKeyValueSegment segment : segments) {
+            views.add(segment.readOnly(level));
+        }
+        return views;
+    }
+
+    @Override
+    public VersionedKeyValueStore<Bytes, byte[]> readOnly(final IsolationLevel isolationLevel) {
+        Objects.requireNonNull(isolationLevel, "isolationLevel cannot be null");
+        if (isolationLevel == IsolationLevel.READ_UNCOMMITTED) {
+            return this;
+        }
+        return new ReadOnlyView(isolationLevel);
+    }
+
+    /**
+     * Read-only view of this store bound to an isolation level. Read methods delegate to
+     * the private {@code get(...)} helpers passing the level; write methods and other
+     * lifecycle operations throw or are no-ops, since the view is only used by IQ.
+     */
+    private final class ReadOnlyView implements VersionedKeyValueStore<Bytes, byte[]> {
+
+        private final IsolationLevel level;
+
+        ReadOnlyView(final IsolationLevel level) {
+            this.level = level;
+        }
+
+        @Override
+        public VersionedRecord<byte[]> get(final Bytes key) {
+            return RocksDBVersionedStore.this.get(key, level);
+        }
+
+        @Override
+        public VersionedRecord<byte[]> get(final Bytes key, final long asOfTimestamp) {
+            return RocksDBVersionedStore.this.get(key, asOfTimestamp, level);
+        }
+
+        @Override
+        public long put(final Bytes key, final byte[] value, final long timestamp) {
+            throw new UnsupportedOperationException("put not supported on a read-only view");
+        }
+
+        @Override
+        public VersionedRecord<byte[]> delete(final Bytes key, final long timestamp) {
+            throw new UnsupportedOperationException("delete not supported on a read-only view");
+        }
+
+        @Override
+        public String name() {
+            return RocksDBVersionedStore.this.name();
+        }
+
+        @Override
+        public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+            throw new UnsupportedOperationException("init not supported on a read-only view");
+        }
+
+        @SuppressWarnings("deprecation")
+        @Override
+        public void flush() { }
+
+        @Override
+        public void close() { }
+
+        @Override
+        public boolean persistent() {
+            return RocksDBVersionedStore.this.persistent();
+        }
+
+        @Override
+        public boolean isOpen() {
+            return RocksDBVersionedStore.this.isOpen();
         }
     }
 

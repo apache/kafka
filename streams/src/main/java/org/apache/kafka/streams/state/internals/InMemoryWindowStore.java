@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
@@ -38,6 +39,7 @@ import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
@@ -45,6 +47,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
+import java.time.Instant;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -221,6 +224,10 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
 
     @Override
     public byte[] fetch(final Bytes key, final long windowStartTimestamp) {
+        return fetch(key, windowStartTimestamp, IsolationLevel.READ_UNCOMMITTED);
+    }
+
+    private byte[] fetch(final Bytes key, final long windowStartTimestamp, final IsolationLevel isolationLevel) {
         Objects.requireNonNull(key, "key cannot be null");
 
         removeExpiredSegments();
@@ -230,10 +237,15 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
         }
 
         if (transactionBuffer != null) {
-            final Optional<byte[]> staged = transactionBuffer.get(windowStartTimestamp, key);
-            if (staged != null) {
-                return staged.orElse(null);
+            if (isolationLevel == IsolationLevel.READ_UNCOMMITTED) {
+                final Optional<byte[]> staged = transactionBuffer.get(windowStartTimestamp, key);
+                if (staged != null) {
+                    return staged.orElse(null);
+                }
             }
+            // Committed read of the base map, taken under the buffer's snapshot read-lock so it
+            // cannot race a concurrent commit.
+            return transactionBuffer.getCommitted(windowStartTimestamp, key);
         }
 
         final ConcurrentNavigableMap<Bytes, byte[]> kvMap = segmentMap.get(windowStartTimestamp);
@@ -255,6 +267,11 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
     }
 
     WindowStoreIterator<byte[]> fetch(final Bytes key, final long timeFrom, final long timeTo, final boolean forward) {
+        return fetch(key, timeFrom, timeTo, forward, IsolationLevel.READ_UNCOMMITTED);
+    }
+
+    private WindowStoreIterator<byte[]> fetch(final Bytes key, final long timeFrom, final long timeTo,
+                                              final boolean forward, final IsolationLevel isolationLevel) {
         Objects.requireNonNull(key, "key cannot be null");
 
         removeExpiredSegments();
@@ -270,7 +287,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
             final Bytes keyFrom = retainDuplicates ? wrapForDups(key, 0) : key;
             final Bytes keyTo = retainDuplicates ? wrapForDups(key, Integer.MAX_VALUE) : key;
             return registerTransactional(new TransactionalWindowStoreIterator(
-                transactionBuffer, keyFrom, keyTo, minTime, timeTo, forward, retainDuplicates,
+                transactionBuffer, keyFrom, keyTo, minTime, timeTo, forward, retainDuplicates, isolationLevel,
                 openTransactionalIterators::remove
             ));
         }
@@ -278,15 +295,13 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
         if (forward) {
             return registerNewWindowStoreIterator(
                 key,
-                segmentMap.subMap(minTime, true, timeTo, true)
-                    .entrySet().iterator(),
+                segmentMap.subMap(minTime, true, timeTo, true).entrySet().iterator(),
                 true
             );
         } else {
             return registerNewWindowStoreIterator(
                 key,
-                segmentMap.subMap(minTime, true, timeTo, true)
-                    .descendingMap().entrySet().iterator(),
+                segmentMap.subMap(minTime, true, timeTo, true).descendingMap().entrySet().iterator(),
                 false
             );
         }
@@ -313,6 +328,15 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
                                                     final long timeFrom,
                                                     final long timeTo,
                                                     final boolean forward) {
+        return fetch(from, to, timeFrom, timeTo, forward, IsolationLevel.READ_UNCOMMITTED);
+    }
+
+    private KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from,
+                                                            final Bytes to,
+                                                            final long timeFrom,
+                                                            final long timeTo,
+                                                            final boolean forward,
+                                                            final IsolationLevel isolationLevel) {
         removeExpiredSegments();
 
         if (from != null && to != null && from.compareTo(to) > 0) {
@@ -334,7 +358,8 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
             final Bytes keyFrom = (retainDuplicates && from != null) ? wrapForDups(from, 0) : from;
             final Bytes keyTo = (retainDuplicates && to != null) ? wrapForDups(to, Integer.MAX_VALUE) : to;
             return registerTransactional(new TransactionalWindowedKeyValueIterator(
-                transactionBuffer, keyFrom, keyTo, minTime, timeTo, forward, retainDuplicates, windowSize, openTransactionalIterators::remove
+                transactionBuffer, keyFrom, keyTo, minTime, timeTo, forward, retainDuplicates, windowSize, isolationLevel,
+                openTransactionalIterators::remove
             ));
         }
 
@@ -342,16 +367,14 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
             return registerNewWindowedKeyValueIterator(
                 from,
                 to,
-                segmentMap.subMap(minTime, true, timeTo, true)
-                    .entrySet().iterator(),
+                segmentMap.subMap(minTime, true, timeTo, true).entrySet().iterator(),
                 true
             );
         } else {
             return registerNewWindowedKeyValueIterator(
                 from,
                 to,
-                segmentMap.subMap(minTime, true, timeTo, true)
-                    .descendingMap().entrySet().iterator(),
+                segmentMap.subMap(minTime, true, timeTo, true).descendingMap().entrySet().iterator(),
                 false
             );
         }
@@ -368,6 +391,12 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
     }
 
     KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo, final boolean forward) {
+        return fetchAll(timeFrom, timeTo, forward, IsolationLevel.READ_UNCOMMITTED);
+    }
+
+    private KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo,
+                                                               final boolean forward,
+                                                               final IsolationLevel isolationLevel) {
         removeExpiredSegments();
 
         // add one b/c records expire exactly retentionPeriod ms after created
@@ -379,7 +408,8 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
 
         if (transactionBuffer != null) {
             return registerTransactional(new TransactionalWindowedKeyValueIterator(
-                transactionBuffer, null, null, minTime, timeTo, forward, retainDuplicates, windowSize, openTransactionalIterators::remove
+                transactionBuffer, null, null, minTime, timeTo, forward, retainDuplicates, windowSize, isolationLevel,
+                openTransactionalIterators::remove
             ));
         }
 
@@ -387,16 +417,14 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
             return registerNewWindowedKeyValueIterator(
                 null,
                 null,
-                segmentMap.subMap(minTime, true, timeTo, true)
-                    .entrySet().iterator(),
+                segmentMap.subMap(minTime, true, timeTo, true).entrySet().iterator(),
                 true
             );
         } else {
             return registerNewWindowedKeyValueIterator(
                 null,
                 null,
-                segmentMap.subMap(minTime, true, timeTo, true)
-                    .descendingMap().entrySet().iterator(),
+                segmentMap.subMap(minTime, true, timeTo, true).descendingMap().entrySet().iterator(),
                 false
             );
         }
@@ -404,42 +432,31 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
-        removeExpiredSegments();
-
-        final long minTime = observedStreamTime - retentionPeriod;
-
-        if (transactionBuffer != null) {
-            return registerTransactional(new TransactionalWindowedKeyValueIterator(
-                transactionBuffer, null, null, minTime + 1, Long.MAX_VALUE, true, retainDuplicates, windowSize, openTransactionalIterators::remove
-            ));
-        }
-
-        return registerNewWindowedKeyValueIterator(
-            null,
-            null,
-            segmentMap.tailMap(minTime, false).entrySet().iterator(),
-            true
-        );
+        return all(true, IsolationLevel.READ_UNCOMMITTED);
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardAll() {
+        return all(false, IsolationLevel.READ_UNCOMMITTED);
+    }
+
+    private KeyValueIterator<Windowed<Bytes>, byte[]> all(final boolean forward,
+                                                          final IsolationLevel isolationLevel) {
         removeExpiredSegments();
 
         final long minTime = observedStreamTime - retentionPeriod;
 
         if (transactionBuffer != null) {
             return registerTransactional(new TransactionalWindowedKeyValueIterator(
-                transactionBuffer, null, null, minTime + 1, Long.MAX_VALUE, false, retainDuplicates, windowSize, openTransactionalIterators::remove
+                transactionBuffer, null, null, minTime + 1, Long.MAX_VALUE, forward, retainDuplicates, windowSize, isolationLevel,
+                openTransactionalIterators::remove
             ));
         }
 
-        return registerNewWindowedKeyValueIterator(
-            null,
-            null,
-            segmentMap.tailMap(minTime, false).descendingMap().entrySet().iterator(),
-            false
-        );
+        final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> segIter = forward
+            ? segmentMap.tailMap(minTime, false).entrySet().iterator()
+            : segmentMap.tailMap(minTime, false).descendingMap().entrySet().iterator();
+        return registerNewWindowedKeyValueIterator(null, null, segIter, forward);
     }
 
     @Override
@@ -465,6 +482,75 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
             position,
             internalProcessorContext
         );
+    }
+
+    @Override
+    public ReadOnlyWindowStore<Bytes, byte[]> readOnly(final IsolationLevel isolationLevel) {
+        Objects.requireNonNull(isolationLevel, "isolationLevel cannot be null");
+        return new ReadOnlyView(isolationLevel);
+    }
+
+    /**
+     * Read-only view of this store. For a transactional store the {@code isolationLevel} is passed
+     * down to the transactional read path (which excludes the staging layer under READ_COMMITTED), so
+     * both isolation levels share the one path and the read is snapshotted under the buffer's
+     * read-lock — an interactive query cannot race a concurrent commit. For a non-transactional store
+     * reads hit {@code segmentMap} directly.
+     */
+    private final class ReadOnlyView implements ReadOnlyWindowStore<Bytes, byte[]> {
+
+        private final IsolationLevel isolationLevel;
+
+        ReadOnlyView(final IsolationLevel isolationLevel) {
+            this.isolationLevel = isolationLevel;
+        }
+
+        @Override
+        public byte[] fetch(final Bytes key, final long time) {
+            return InMemoryWindowStore.this.fetch(key, time, isolationLevel);
+        }
+
+        @Override
+        public WindowStoreIterator<byte[]> fetch(final Bytes key, final Instant timeFrom, final Instant timeTo) {
+            return InMemoryWindowStore.this.fetch(key, timeFrom.toEpochMilli(), timeTo.toEpochMilli(), true, isolationLevel);
+        }
+
+        @Override
+        public WindowStoreIterator<byte[]> backwardFetch(final Bytes key, final Instant timeFrom, final Instant timeTo) {
+            return InMemoryWindowStore.this.fetch(key, timeFrom.toEpochMilli(), timeTo.toEpochMilli(), false, isolationLevel);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo,
+                                                               final Instant timeFrom, final Instant timeTo) {
+            return InMemoryWindowStore.this.fetch(keyFrom, keyTo, timeFrom.toEpochMilli(), timeTo.toEpochMilli(), true, isolationLevel);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom, final Bytes keyTo,
+                                                                        final Instant timeFrom, final Instant timeTo) {
+            return InMemoryWindowStore.this.fetch(keyFrom, keyTo, timeFrom.toEpochMilli(), timeTo.toEpochMilli(), false, isolationLevel);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final Instant timeFrom, final Instant timeTo) {
+            return InMemoryWindowStore.this.fetchAll(timeFrom.toEpochMilli(), timeTo.toEpochMilli(), true, isolationLevel);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final Instant timeFrom, final Instant timeTo) {
+            return InMemoryWindowStore.this.fetchAll(timeFrom.toEpochMilli(), timeTo.toEpochMilli(), false, isolationLevel);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
+            return InMemoryWindowStore.this.all(true, isolationLevel);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardAll() {
+            return InMemoryWindowStore.this.all(false, isolationLevel);
+        }
     }
 
     @Override
@@ -624,6 +710,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
                 final long timeTo,
                 final boolean forward,
                 final boolean retainDuplicates,
+                final IsolationLevel isolationLevel,
                 final Consumer<KeyValueIterator<?, ?>> deregister) {
             this.retainDuplicates = retainDuplicates;
             this.deregister = deregister;
@@ -634,7 +721,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
             final InMemoryWindowTransactionBuffer.WindowEntryKey to =
                 new InMemoryWindowTransactionBuffer.WindowEntryKey(timeTo, keyTo);
 
-            this.delegate = buffer.range(from, to, forward, true);
+            this.delegate = buffer.range(from, to, forward, true, isolationLevel);
         }
 
         @Override
@@ -712,6 +799,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
                 final boolean forward,
                 final boolean retainDuplicates,
                 final long windowSize,
+                final IsolationLevel isolationLevel,
                 final Consumer<KeyValueIterator<?, ?>> deregister) {
             this.retainDuplicates = retainDuplicates;
             this.windowSize = windowSize;
@@ -723,7 +811,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
             final InMemoryWindowTransactionBuffer.WindowEntryKey to =
                 new InMemoryWindowTransactionBuffer.WindowEntryKey(timeTo, keyTo);
 
-            this.delegate = buffer.range(from, to, forward, true);
+            this.delegate = buffer.range(from, to, forward, true, isolationLevel);
         }
 
         @Override
