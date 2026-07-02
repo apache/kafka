@@ -116,7 +116,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     }
 
     private void ensureChunkCapacity(int needed) {
-        if (currentChunk.remaining() < needed) {
+        while (currentChunk.remaining() < needed) {
             advanceToNextChunk();
         }
     }
