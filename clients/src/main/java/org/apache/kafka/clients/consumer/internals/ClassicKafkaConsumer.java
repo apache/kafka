@@ -294,6 +294,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     // visible for testing
+    @SuppressWarnings("deprecation")
     ClassicKafkaConsumer(LogContext logContext,
                          Time time,
                          ConsumerConfig config,

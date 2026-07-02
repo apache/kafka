@@ -518,6 +518,7 @@ public class KafkaAdminClient extends AdminClient {
         return createInternal(config, timeoutProcessorFactory, null);
     }
 
+    @SuppressWarnings("deprecation")
     static KafkaAdminClient createInternal(
         AdminClientConfig config,
         TimeoutProcessorFactory timeoutProcessorFactory,
@@ -575,6 +576,7 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     // Visible for tests
+    @SuppressWarnings("deprecation")
     static KafkaAdminClient createInternal(AdminClientConfig config,
                                            AdminMetadataManager metadataManager,
                                            KafkaClient client,

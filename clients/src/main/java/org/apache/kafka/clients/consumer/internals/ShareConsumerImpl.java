@@ -359,6 +359,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     }
 
     // Visible for testing
+    @SuppressWarnings("deprecation")
     ShareConsumerImpl(final LogContext logContext,
                       final String clientId,
                       final String groupId,

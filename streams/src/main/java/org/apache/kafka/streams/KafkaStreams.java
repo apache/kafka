@@ -847,7 +847,9 @@ public class KafkaStreams implements AutoCloseable {
      * @param props          properties for {@link StreamsConfig}
      * @param time           {@code Time} implementation; cannot be null
      * @throws StreamsException if any fatal error occurs
+     * @deprecated This constructor is intended for internal use only and will be made package-private in version 5.0.
      */
+    @Deprecated(since = "4.4")
     public KafkaStreams(final Topology topology,
                         final Properties props,
                         final Time time) {
@@ -866,7 +868,9 @@ public class KafkaStreams implements AutoCloseable {
      *                       for the new {@code KafkaStreams} instance
      * @param time           {@code Time} implementation; cannot be null
      * @throws StreamsException if any fatal error occurs
+     * @deprecated This constructor is intended for internal use only and will be made package-private in version 5.0.
      */
+    @Deprecated(since = "4.4")
     public KafkaStreams(final Topology topology,
                         final Properties props,
                         final KafkaClientSupplier clientSupplier,
@@ -917,7 +921,9 @@ public class KafkaStreams implements AutoCloseable {
      * @param applicationConfigs         configs for Kafka Streams
      * @param time           {@code Time} implementation; cannot be null
      * @throws StreamsException if any fatal error occurs
+     * @deprecated This constructor is intended for internal use only and will be made package-private in version 5.0.
      */
+    @Deprecated(since = "4.4")
     public KafkaStreams(final Topology topology,
                         final StreamsConfig applicationConfigs,
                         final Time time) {
@@ -1097,6 +1103,7 @@ public class KafkaStreams implements AutoCloseable {
         return streamThread;
     }
 
+    @SuppressWarnings("deprecation")
     private static Metrics createMetrics(final StreamsConfig config, final Time time, final String clientId) {
         final MetricConfig metricConfig = new MetricConfig()
             .samples(config.getInt(StreamsConfig.METRICS_NUM_SAMPLES_CONFIG))
