@@ -161,7 +161,9 @@ import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
  * props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
  * props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
  * Topology topology = ...
- * TopologyTestDriver driver = new TopologyTestDriver(topology, props);
+ * TopologyTestDriver driver = new TopologyTestDriverBuilder(topology)
+ *     .withConfig(props)
+ *     .build();
  * }</pre>
  *
  * <p> Note that the {@code TopologyTestDriver} processes input records synchronously.
@@ -265,45 +267,53 @@ public class TopologyTestDriver implements Closeable {
     };
 
     /**
-     * Create a new test diver instance.
+     * Create a new test driver instance.
      * Default test properties are used to initialize the driver instance
      *
      * @param topology the topology to be tested
+     * @deprecated Since 4.4. Use {@link TopologyTestDriverBuilder} instead.
      */
+    @Deprecated(since = "4.4")
     public TopologyTestDriver(final Topology topology) {
         this(topology, new Properties());
     }
 
     /**
-     * Create a new test diver instance.
+     * Create a new test driver instance.
      * Initialized the internally mocked wall-clock time with {@link System#currentTimeMillis() current system time}.
      *
      * @param topology the topology to be tested
      * @param config   the configuration for the topology
+     * @deprecated Since 4.4. Use {@link TopologyTestDriverBuilder} instead.
      */
+    @Deprecated(since = "4.4")
     public TopologyTestDriver(final Topology topology,
                               final Properties config) {
         this(topology, config, null);
     }
 
     /**
-     * Create a new test diver instance.
+     * Create a new test driver instance.
      *
      * @param topology the topology to be tested
      * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
+     * @deprecated Since 4.4. Use {@link TopologyTestDriverBuilder} instead.
      */
+    @Deprecated(since = "4.4")
     public TopologyTestDriver(final Topology topology,
                               final Instant initialWallClockTimeMs) {
         this(topology, new Properties(), initialWallClockTimeMs);
     }
 
     /**
-     * Create a new test diver instance.
+     * Create a new test driver instance.
      *
      * @param topology               the topology to be tested
      * @param config                 the configuration for the topology
      * @param initialWallClockTime   the initial value of internally mocked wall-clock time
+     * @deprecated Since 4.4. Use {@link TopologyTestDriverBuilder} instead.
      */
+    @Deprecated(since = "4.4")
     public TopologyTestDriver(final Topology topology,
                               final Properties config,
                               final Instant initialWallClockTime) {
@@ -314,15 +324,16 @@ public class TopologyTestDriver implements Closeable {
     }
 
     /**
-     * Create a new test diver instance.
+     * Create a new test driver instance. Package-private core constructor shared by the (deprecated)
+     * public constructors and by {@link TopologyTestDriverBuilder}, which is the blessed entry point.
      *
      * @param builder builder for the topology to be tested
      * @param config the configuration for the topology
      * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
      */
-    private TopologyTestDriver(final InternalTopologyBuilder builder,
-                               final Properties config,
-                               final long initialWallClockTimeMs) {
+    TopologyTestDriver(final InternalTopologyBuilder builder,
+                       final Properties config,
+                       final long initialWallClockTimeMs) {
         final Properties configCopy = new Properties();
         configCopy.putAll(config);
         configCopy.putIfAbsent(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-bootstrap-host:0");
@@ -450,7 +461,7 @@ public class TopologyTestDriver implements Closeable {
 
             @SuppressWarnings("deprecation")
             final boolean globalEnabled = streamsConfig.getBoolean(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG);
-            final ProcessingExceptionHandler processingExceptionHandler = 
+            final ProcessingExceptionHandler processingExceptionHandler =
                 globalEnabled ? streamsConfig.processingExceptionHandler() : null;
 
             globalStateTask = new GlobalStateUpdateTask(
@@ -837,7 +848,8 @@ public class TopologyTestDriver implements Closeable {
         }
         final K key = keyDeserializer.deserialize(record.topic(), record.headers(), record.key());
         final V value = valueDeserializer.deserialize(record.topic(), record.headers(), record.value());
-        return new TestRecord<>(key, value, record.headers(), record.timestamp());
+        final int outputPartition = -1;
+        return new TestRecord<>(key, value, record.headers(), Instant.ofEpochMilli(record.timestamp()), outputPartition);
     }
 
     <K, V> void pipeRecord(final String topic,

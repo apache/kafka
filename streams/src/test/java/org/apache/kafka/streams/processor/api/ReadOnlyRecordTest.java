@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class ReadOnlyRecordTest {
 
@@ -39,11 +40,6 @@ public class ReadOnlyRecordTest {
 
         // The assignment itself proves Record is a ReadOnlyRecord (source/binary compatible change).
         final ReadOnlyRecord<String, String> readOnly = record;
-
-        assertEquals(record.key(), readOnly.key());
-        assertEquals(record.value(), readOnly.value());
-        assertEquals(record.timestamp(), readOnly.timestamp());
-        assertEquals(record.headers(), readOnly.headers());
 
         assertEquals("key", readOnly.key());
         assertEquals("value", readOnly.value());
@@ -60,8 +56,8 @@ public class ReadOnlyRecordTest {
     @Test
     public void readOnlyAccessorsShouldTolerateNullKeyAndValue() {
         final ReadOnlyRecord<String, String> readOnly = new Record<>(null, null, 0L);
-        assertEquals(null, readOnly.key());
-        assertEquals(null, readOnly.value());
+        assertNull(readOnly.key());
+        assertNull(readOnly.value());
         assertEquals(0L, readOnly.timestamp());
         assertEquals(new RecordHeaders(), readOnly.headers());
     }

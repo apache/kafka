@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.api;
 
+import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.common.header.Headers;
 
 /**
@@ -24,13 +25,13 @@ import org.apache.kafka.common.header.Headers;
  * <p>This is the shared read surface of a record: the processing-layer {@link Record} extends it with
  * transform-and-forward builders ({@code withKey}/{@code withValue}/{@code withTimestamp}/{@code withHeaders}),
  * while an Interactive Query (IQv2) result is exactly this read-only snapshot and exposes nothing more.
- * It is the result type returned by the headers-aware IQv2 query types (e.g.
- * {@code TimestampedKeyWithHeadersQuery}), which surface the record headers
+ * It is the result type returned by the headers-aware IQv2 query types, which surface the record headers
  * persisted by header-aware state stores.
  *
  * @param <K> The type of the key
  * @param <V> The type of the value
  */
+@Evolving
 public interface ReadOnlyRecord<K, V> {
 
     /**
@@ -50,6 +51,12 @@ public interface ReadOnlyRecord<K, V> {
 
     /**
      * The headers of the record. Never null.
+     *
+     * <p>The returned {@link Headers} is part of a read-only view and must not be mutated by
+     * callers.
      */
+    // TODO (KIP-1356 follow-up): once the IQv2 query types land, records served as IQv2
+    // results from a state store will have their headers frozen via RecordHeaders.setReadOnly(),
+    // so that any attempt to mutate them throws IllegalStateException.
     Headers headers();
 }
