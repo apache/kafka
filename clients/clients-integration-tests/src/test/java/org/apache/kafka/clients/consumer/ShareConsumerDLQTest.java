@@ -384,14 +384,15 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
         // must read the tiered offsets back from remote storage.
         rejectRecords(groupId, sourceTopic, recordCount * 2);
 
+        // Record copy is enabled, so every DLQ record must carry the original key/value. For the tiered offsets
+        // (no longer present locally) that is only possible if the DLQ fetcher pulled them from remote storage.
+        verifyDlqTopicRecords(dlqTopic, groupId, sourceTopic, 0, expectedSourceOffsets(recordCount * 2), true);
+
         // Make sure not all offsets from second produce are tiered.
         waitForCondition(() -> earliestLocalOffset(sourceTopic, 0) < recordCount * 2 - 1,
             30_000L, 500L,
             () -> "Offsets from second produce were tiered");
 
-        // Record copy is enabled, so every DLQ record must carry the original key/value. For the tiered offsets
-        // (no longer present locally) that is only possible if the DLQ fetcher pulled them from remote storage.
-        verifyDlqTopicRecords(dlqTopic, groupId, sourceTopic, 0, expectedSourceOffsets(recordCount * 2), true);
         verifyDlqMetrics(groupId, recordCount * 2);
     }
 
