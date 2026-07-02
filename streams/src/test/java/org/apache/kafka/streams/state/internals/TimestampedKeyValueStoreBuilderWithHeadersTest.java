@@ -510,6 +510,63 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         }
     }
 
+    @Test
+    public void shouldCollectExecutionInfoForTimestampedKeyWithHeadersQueryWhenRequested() {
+        // The typed query, run through the metered handler with execution info enabled, must carry both
+        // the wrapped store's entry and the metered handler's entry -- on the success path and on the
+        // negative-timestamp failure path (which builds a fresh failure result).
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(StoreType.NATIVE, false);
+        try {
+            store.put("ok", ValueTimestampHeaders.make("v", 123L, headersWith("h", "x")));
+            store.put("bad", ValueTimestampHeaders.make("v", -1L, headersWith("h", "x")));
+
+            final QueryResult<ReadOnlyRecord<String, String>> ok =
+                store.query(TimestampedKeyWithHeadersQuery.withKey("ok"), PositionBound.unbounded(), new QueryConfig(true));
+            final QueryResult<ReadOnlyRecord<String, String>> bad =
+                store.query(TimestampedKeyWithHeadersQuery.withKey("bad"), PositionBound.unbounded(), new QueryConfig(true));
+
+            assertTrue(ok.isSuccess());
+            assertFalse(bad.isSuccess());
+            assertEquals(FailureReason.STORE_EXCEPTION, bad.getFailureReason());
+
+            final String okInfo = String.join("\n", ok.getExecutionInfo());
+            final String badInfo = String.join("\n", bad.getExecutionInfo());
+            assertTrue(
+                okInfo.contains(RocksDBTimestampedStoreWithHeaders.class.getName())
+                    && okInfo.contains(MeteredTimestampedKeyValueStoreWithHeaders.class.getName()),
+                "success execution info missing an entry: " + okInfo);
+            assertTrue(
+                badInfo.contains(RocksDBTimestampedStoreWithHeaders.class.getName())
+                    && badInfo.contains(MeteredTimestampedKeyValueStoreWithHeaders.class.getName()),
+                "failure execution info missing an entry (wrapped-store entry must be preserved): " + badInfo);
+        } finally {
+            store.close();
+        }
+    }
+
+    @Test
+    public void shouldNotCollectExecutionInfoForTimestampedKeyWithHeadersQueryWhenNotRequested() {
+        // With execution info disabled, neither the success path nor the negative-timestamp failure path
+        // may collect any (the failure path must not copy execution info unconditionally).
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(StoreType.NATIVE, false);
+        try {
+            store.put("ok", ValueTimestampHeaders.make("v", 123L, headersWith("h", "x")));
+            store.put("bad", ValueTimestampHeaders.make("v", -1L, headersWith("h", "x")));
+
+            final QueryResult<ReadOnlyRecord<String, String>> ok =
+                store.query(TimestampedKeyWithHeadersQuery.withKey("ok"), PositionBound.unbounded(), new QueryConfig(false));
+            final QueryResult<ReadOnlyRecord<String, String>> bad =
+                store.query(TimestampedKeyWithHeadersQuery.withKey("bad"), PositionBound.unbounded(), new QueryConfig(false));
+
+            assertTrue(ok.isSuccess());
+            assertFalse(bad.isSuccess());
+            assertTrue(ok.getExecutionInfo().isEmpty(), "Expected no execution info on success: " + ok.getExecutionInfo());
+            assertTrue(bad.getExecutionInfo().isEmpty(), "Expected no execution info on failure: " + bad.getExecutionInfo());
+        } finally {
+            store.close();
+        }
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void shouldReturnIdenticalResultsForNativeAndAdapterBuiltStores(final boolean cachingEnabled) {

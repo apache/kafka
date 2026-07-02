@@ -415,6 +415,9 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
                     FailureReason.STORE_EXCEPTION,
                     "Stored record for the queried key has a negative timestamp ("
                         + valueTimestampHeaders.timestamp() + "); cannot construct a ReadOnlyRecord.");
+                // Preserve the wrapped store's execution info (empty unless collectExecutionInfo is set),
+                // matching the success path and the raw-failure path below.
+                rawResult.getExecutionInfo().forEach(failure::addExecutionInfo);
                 failure.setPosition(rawResult.getPosition());
                 result = (QueryResult<R>) failure;
             } else {
