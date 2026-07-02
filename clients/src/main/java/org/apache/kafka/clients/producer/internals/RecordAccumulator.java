@@ -324,7 +324,7 @@ public class RecordAccumulator {
                         continue;
 
                     RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
-                    if (appendResult != null) {
+                    if (appendResult.appended()) {
                         // If queue has incomplete batches we disable switch (see comments in updatePartitionInfo).
                         boolean enableSwitch = allBatchesFull(dq);
                         topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, appendResult.appendedBytes, cluster, enableSwitch);
@@ -398,7 +398,7 @@ public class RecordAccumulator {
         assert partition != RecordMetadata.UNKNOWN_PARTITION;
 
         RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
-        if (appendResult != null) {
+        if (!appendResult.needsNewBatch) {
             // Propagate without creating a new batch: either another thread already made us a batch
             // (success), or — incremental strategy — a concurrent appender created an extendable open batch
             // (needsBufferExtension), so the caller releases its pre-allocated buffer and retries via
@@ -437,10 +437,10 @@ public class RecordAccumulator {
      /**
      *  Try to append to a ProducerBatch.
      *
-     *  If it is full, we return null and a new batch is created. We also close the batch for record appends to free up
-     *  resources like compression buffers. The batch will be fully closed (ie. the record batch headers will be written
-     *  and memory records built) in one of the following cases (whichever comes first): right before send,
-     *  if it is expired, or when the producer is closed.
+     *  If it is full (or absent), we return {@link RecordAppendResult#NEEDS_NEW_BATCH} and a new batch is created.
+     *  We also close the batch for record appends to free up resources like compression buffers. The batch will be
+     *  fully closed (ie. the record batch headers will be written and memory records built) in one of the following
+     *  cases (whichever comes first): right before send, if it is expired, or when the producer is closed.
      */
     protected RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers,
                                          Callback callback, Deque<ProducerBatch> deque, long nowMs) {
@@ -457,7 +457,7 @@ public class RecordAccumulator {
                 return new RecordAppendResult(future, deque.size() > 1 || last.isFull(), false, appendedBytes);
             }
         }
-        return null;
+        return RecordAppendResult.NEEDS_NEW_BATCH;
     }
 
     private boolean isMuted(TopicPartition tp) {
@@ -1266,7 +1266,10 @@ public class RecordAccumulator {
     }
 
     /*
-     * Metadata about a record just appended to the record accumulator
+     * Result of an attempt to append a record to the accumulator. Exactly one of three states:
+     * the record was appended ({@link RecordAppendResult#appended()}, {@code future} is set), the
+     * open batch needs more chunk capacity first ({@code needsBufferExtension}), or a new batch
+     * must be created for the record ({@code needsNewBatch}).
      */
     public static final class RecordAppendResult {
         public final FutureRecordMetadata future;
@@ -1280,13 +1283,22 @@ public class RecordAccumulator {
          */
         public final boolean needsBufferExtension;
         public final int extensionBytesNeeded;
+        /**
+         * Signal that the record was not appended because there is no open batch that can take it
+         * (the batch is full, closed, or absent). The caller must create a new batch for the
+         * record. When {@code true}, {@code future} is null.
+         */
+        public final boolean needsNewBatch;
         public final int appendedBytes;
+
+        /** The shared signal-only result for {@link #needsNewBatch}; carries no per-append state. */
+        static final RecordAppendResult NEEDS_NEW_BATCH = new RecordAppendResult(null, false, false, false, 0, true, 0);
 
         public RecordAppendResult(FutureRecordMetadata future,
                                   boolean batchIsFull,
                                   boolean newBatchCreated,
                                   int appendedBytes) {
-            this(future, batchIsFull, newBatchCreated, false, 0, appendedBytes);
+            this(future, batchIsFull, newBatchCreated, false, 0, false, appendedBytes);
         }
 
         private RecordAppendResult(FutureRecordMetadata future,
@@ -1294,18 +1306,28 @@ public class RecordAccumulator {
                                    boolean newBatchCreated,
                                    boolean needsBufferExtension,
                                    int extensionBytesNeeded,
+                                   boolean needsNewBatch,
                                    int appendedBytes) {
             this.future = future;
             this.batchIsFull = batchIsFull;
             this.newBatchCreated = newBatchCreated;
             this.needsBufferExtension = needsBufferExtension;
             this.extensionBytesNeeded = extensionBytesNeeded;
+            this.needsNewBatch = needsNewBatch;
             this.appendedBytes = appendedBytes;
         }
 
         /** A signal-only result indicating the caller must allocate more chunk capacity. */
         static RecordAppendResult needsExtension(int extensionBytesNeeded) {
-            return new RecordAppendResult(null, false, false, true, extensionBytesNeeded, 0);
+            return new RecordAppendResult(null, false, false, true, extensionBytesNeeded, false, 0);
+        }
+
+        /**
+         * @return {@code true} if the record was appended to the open batch ({@link #future} is then non-null),
+         * {@code false} if it wasn't ({@link #needsBufferExtension} and {@link #needsNewBatch} results).
+         */
+        public boolean appended() {
+            return !needsBufferExtension && !needsNewBatch;
         }
     }
 

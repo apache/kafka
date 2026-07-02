@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
@@ -45,15 +46,13 @@ public class ChunkedProducerBatch extends ProducerBatch {
 
     /**
      * Bytes of chunk capacity this batch needs before {@code tryAppend} could accept the given
-     * record. Returns 0 when no extension is needed: the batch is empty (first record), it is at
-     * its batch-size limit, or the attached chunk capacity already has room. Positive when the
-     * record is within the batch-size limit but the attached chunks lack capacity — the accumulator
-     * then allocates exactly the missing bytes (rounded up to whole chunks) and attaches them via
-     * {@link #addBuffers} before retrying.
+     * record. Returns 0 when no extension is needed: the batch is at its batch-size limit, or the
+     * attached chunk capacity already has room (always the case for an empty batch, whose stream
+     * is pre-sized for the first record). Positive when the record is within the batch-size limit
+     * but the attached chunks lack capacity — the accumulator then allocates exactly the missing
+     * bytes (rounded up to whole chunks) and attaches them via {@link #addBuffers} before retrying.
      */
     int extensionBytesNeeded(long timestamp, byte[] key, byte[] value, Header[] headers) {
-        if (recordCount == 0)
-            return 0;
         if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers))
             return 0;
         // Size against the batch's projected total output after this record (header counted once,
@@ -63,6 +62,21 @@ public class ChunkedProducerBatch extends ProducerBatch {
         ByteBufferOutputStream stream = recordsBuilder.bufferStream();
         int totalAttachedCapacity = stream.position() + stream.remaining();
         return Math.max(0, target - totalAttachedCapacity);
+    }
+
+    /**
+     * Appends the record after asserting there's capacity for it.
+     * At this point it's expected that the allocated chunks have
+     * capacity for the record because the accumulator never routes an
+     * append here without ensuring chunk capacity first: the first-record path pre-sizes the
+     * stream for the record and the mid-batch path attaches extension chunks before retrying.
+     */
+    @Override
+    public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, Callback callback, long now) {
+        assert extensionBytesNeeded(timestamp, key, value, headers) == 0 :
+                "Unexpected append to a chunked batch whose chunks lack capacity for the record; " +
+                        "the accumulator should have attached extension chunks first";
+        return super.tryAppend(timestamp, key, value, headers, callback, now);
     }
 
     /**

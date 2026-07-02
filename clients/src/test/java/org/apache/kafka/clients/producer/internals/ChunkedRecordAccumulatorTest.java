@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.MetadataSnapshot;
+import org.apache.kafka.clients.producer.BufferExhaustedException;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -24,6 +25,7 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
@@ -346,6 +348,82 @@ public class ChunkedRecordAccumulatorTest {
 
     private Deque<ProducerBatch> batchesFor(RecordAccumulator accum, TopicPartition tp) {
         return accum.getDeque(tp);
+    }
+
+    /**
+     * When the pool is exhausted during a mid-batch extension, the append must not busy-loop
+     * retrying the non-blocking acquire: after a single failed extension acquire
+     * (maxTimeToBlockMs = 0), the open batch is closed and the very next pool call is the
+     * blocking new-batch acquire (maxTimeToBlockMs > 0), where the record lands in a new batch.
+     */
+    @Test
+    public void testExhaustedExtensionFallsBackToBlockingNewBatchPath() throws Exception {
+        int chunkSize = 256;
+        List<Long> allocTimeouts = new ArrayList<>();
+        AtomicInteger closeForAppendsCalls = new AtomicInteger();
+        List<Integer> closeCallsAtAlloc = new ArrayList<>();
+
+        ChunkedBufferPool pool = new ChunkedBufferPool(16L * chunkSize, chunkSize, metrics, time, "producer-metrics") {
+            @Override
+            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
+                allocTimeouts.add(maxTimeToBlockMs);
+                closeCallsAtAlloc.add(closeForAppendsCalls.get());
+                // Simulate an exhausted pool for the non-blocking extension acquire only.
+                if (maxTimeToBlockMs == 0L)
+                    throw new BufferExhaustedException("injected: pool exhausted");
+                return super.allocateChunks(totalSize, maxTimeToBlockMs);
+            }
+        };
+        ChunkedRecordAccumulator accum = new ChunkedRecordAccumulator(logContext, 8192, Compression.NONE,
+                /* lingerMs */ 0, /* retryBackoffMs */ 0L, /* retryBackoffMaxMs */ 0L,
+                /* deliveryTimeoutMs */ 3200, metrics, "producer-metrics", time,
+                /* transactionManager */ null, pool) {
+            @Override
+            protected ProducerBatch createProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long nowMs) {
+                // Count closeForRecordAppends calls on the batches this accumulator creates.
+                return new ChunkedProducerBatch(tp, recordsBuilder, nowMs) {
+                    @Override
+                    public void closeForRecordAppends() {
+                        closeForAppendsCalls.incrementAndGet();
+                        super.closeForRecordAppends();
+                    }
+                };
+            }
+        };
+        try {
+            // First record establishes an open batch (blocking first-record acquire).
+            accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+
+            // Second record overflows the batch's chunk so it needs extension; the injected
+            // exhaustion fails the non-blocking acquire, the batch is closed, and the record
+            // must go straight to the blocking new-batch path.
+            RecordAccumulator.RecordAppendResult result = accum.append(topic, partition1, 0L, key,
+                    new byte[100], Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), cluster);
+
+            // Validate the expected call sequence: blocking (first batch), non-blocking (failed extension), blocking (new batch).
+            assertEquals(List.of(maxBlockTimeMs, 0L, maxBlockTimeMs), allocTimeouts,
+                    "expected a single failed extension acquire followed directly by the blocking new-batch acquire");
+            assertEquals(0, closeCallsAtAlloc.get(0), "no close before the first-record acquire");
+            assertEquals(0, closeCallsAtAlloc.get(1), "no close before the extension acquire");
+            assertTrue(closeCallsAtAlloc.get(2) >= 1,
+                    "the failed extension must close the batch before the blocking new-batch acquire");
+            assertTrue(result.newBatchCreated, "record must land in a new batch");
+
+            Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+            assertEquals(2, dq.size(), "closed batch + new batch expected");
+            assertNotNull(dq.peekFirst());
+            assertNotNull(dq.peekLast());
+            // The original batch is far below its writeLimit, so isFull() can only be true via
+            // the closed append stream — i.e., it was closed for appends on the failed extension.
+            assertTrue(dq.peekFirst().isFull(), "original batch must be closed for appends");
+            assertNotNull(dq.peekFirst());
+            assertEquals(1, dq.peekFirst().recordCount);
+            assertNotNull(dq.peekLast());
+            assertEquals(1, dq.peekLast().recordCount);
+        } finally {
+            accum.close();
+        }
     }
 
     /**
