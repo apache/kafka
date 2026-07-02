@@ -333,6 +333,68 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
         verifyDlqMetrics(groupId, recordCount);
     }
 
+    @ClusterTest(
+        serverProperties = {
+            @ClusterConfigProperty(key = "remote.log.storage.system.enable", value = "true"),
+            @ClusterConfigProperty(key = "remote.log.storage.manager.class.name",
+                value = "org.apache.kafka.server.log.remote.storage.LocalTieredStorage"),
+            @ClusterConfigProperty(key = "remote.log.manager.task.interval.ms", value = "500"),
+            @ClusterConfigProperty(key = "remote.log.metadata.manager.listener.name", value = "EXTERNAL"),
+            @ClusterConfigProperty(key = "rlmm.config.remote.log.metadata.topic.replication.factor", value = "1"),
+            @ClusterConfigProperty(key = "rlmm.config.remote.log.metadata.topic.num.partitions", value = "1"),
+            @ClusterConfigProperty(key = "log.retention.check.interval.ms", value = "500"),
+            @ClusterConfigProperty(key = "log.initial.task.delay.ms", value = "100"),
+            @ClusterConfigProperty(key = "group.share.min.heartbeat.interval.ms", value = "1500"),
+            @ClusterConfigProperty(key = "group.share.heartbeat.interval.ms", value = "1500")
+        }
+    )
+    public void testDlqCopiesRecordsReadFromRemoteAndLocalStorage() throws Exception {
+        String groupId = "dlq-remote-and-local-group";
+        // The broker's default share-group DLQ topic prefix is "dlq.", so the topic name must start with it.
+        String dlqTopic = "dlq.remote-and-local-topic";
+        String sourceTopic = "dlq-remote-and-local-source";
+        int recordCount = 5;
+
+        alterShareAutoOffsetReset(groupId, "earliest");
+        createDlqTopic(dlqTopic);
+        alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, dlqTopic);
+        // Record copy enabled: the DLQ fetcher must read the original records back to copy their key/value.
+        alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, "true");
+
+        // Tiered source topic: one segment per record, 45s total retention and 5s local retention so inactive
+        // segments are offloaded to remote storage and then deleted locally shortly after, while the remote
+        // segments comfortably survive the rest of the test.
+        createRemoteStorageSourceTopic(sourceTopic, 45_000L, 10_000L);
+
+        produceTo(sourceTopic, 0, recordCount);
+
+        // Wait until the early offsets have been offloaded to remote storage AND removed locally - i.e. the
+        // earliest *local* offset has advanced past them, so reading those offsets must now hit remote storage.
+        // The last record stays in the active (never-offloaded) segment, so the earliest local offset should
+        // reach recordCount - 1. A generous timeout (well inside the 45s remote retention) absorbs remote-log
+        // metadata-manager startup; it normally resolves a few seconds after the 5s local retention elapses.
+        waitForCondition(() -> earliestLocalOffset(sourceTopic, 0) >= recordCount - 1,
+            30_000L, 500L,
+            () -> "Source records were not tiered to remote storage and removed locally in time");
+
+        // Produce some more which stay in local.
+        produceTo(sourceTopic, 0, recordCount);
+
+        // Reject every record. Both the share fetch (to deliver them) and the DLQ record fetcher (to copy them)
+        // must read the tiered offsets back from remote storage.
+        rejectRecords(groupId, sourceTopic, recordCount * 2);
+
+        // Make sure not all offsets from second produce are tiered.
+        waitForCondition(() -> earliestLocalOffset(sourceTopic, 0) < recordCount * 2 - 1,
+            30_000L, 500L,
+            () -> "Offsets from second produce were tiered");
+
+        // Record copy is enabled, so every DLQ record must carry the original key/value. For the tiered offsets
+        // (no longer present locally) that is only possible if the DLQ fetcher pulled them from remote storage.
+        verifyDlqTopicRecords(dlqTopic, groupId, sourceTopic, 0, expectedSourceOffsets(recordCount * 2), true);
+        verifyDlqMetrics(groupId, recordCount * 2);
+    }
+
     /**
      * Rejects records from a multi-partition source topic and verifies they are routed to the correct DLQ
      * partition. The destination partition is {@code sourcePartition % numDlqPartitions}; with a DLQ topic that
