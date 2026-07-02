@@ -146,12 +146,15 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
         if (flattenedBuffer != null && !dirty) {
             return flattenedBuffer;
         }
+        // Written bytes only live in chunks up to currentChunk; later chunks are untouched.
+        int lastDataChunk = Math.min(currentChunkIndex, chunks.size() - 1);
         int totalSize = 0;
-        for (ByteBuffer chunk : chunks) {
-            totalSize += chunk.position();
+        for (int i = 0; i <= lastDataChunk; i++) {
+            totalSize += chunks.get(i).position();
         }
         flattenedBuffer = ByteBuffer.allocate(totalSize);
-        for (ByteBuffer chunk : chunks) {
+        for (int i = 0; i <= lastDataChunk; i++) {
+            ByteBuffer chunk = chunks.get(i);
             int chunkPos = chunk.position();
             chunk.flip();
             flattenedBuffer.put(chunk);
@@ -188,9 +191,11 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
      */
     @Override
     public int position() {
+        // Written bytes only live in chunks up to currentChunk; later chunks are untouched.
+        int lastDataChunk = Math.min(currentChunkIndex, chunks.size() - 1);
         int total = 0;
-        for (ByteBuffer chunk : chunks) {
-            total += chunk.position();
+        for (int i = 0; i <= lastDataChunk; i++) {
+            total += chunks.get(i).position();
         }
         return total;
     }
