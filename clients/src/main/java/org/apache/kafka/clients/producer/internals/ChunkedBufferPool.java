@@ -82,8 +82,8 @@ public class ChunkedBufferPool extends BufferPool {
                     pooled.add(free.pollFirst());
                 long remainingBytes = memoryRequired - (long) pooled.size() * chunkSize;
                 if (remainingBytes > 0) {
-                    // remainingBytes <= memoryRequired <= totalMemory (validated above), so the int cast is safe.
-                    freeUp((int) remainingBytes);
+                    // remainingBytes > 0 means the free list was fully drained into `pooled`, so the
+                    // remainder comes entirely from non-pooled memory (sufficient per the check above).
                     this.nonPooledAvailableMemory -= remainingBytes;
                 }
             } else {
