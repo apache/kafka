@@ -196,7 +196,11 @@ public class CommonClientConfigs {
                                                           + "For consumers using a non-null <code>group.instance.id</code> which reach this timeout, partitions will not be immediately reassigned. "
                                                           + "Instead, the consumer will stop sending heartbeats and partitions will be reassigned "
                                                           + "after expiration of the session timeout (defined by the client config <code>session.timeout.ms</code> if using the Classic rebalance protocol, or by the broker config <code>group.consumer.session.timeout.ms</code> if using the Consumer protocol). "
-                                                          + "This mirrors the behavior of a static consumer which has shutdown.";
+                                                          + "This mirrors the behavior of a static consumer which has shutdown. "
+                                                          + "In the Classic consumer, <code>connections.max.idle.ms</code> should be set to a value greater than or equal to this timeout "
+                                                          + "to avoid closing the connection to the group coordinator during an ongoing rebalance. "
+                                                          + "This is particularly important in large groups, where a rebalance may take longer to complete "
+                                                          + "while the coordinator waits for all members to rejoin.";
 
     public static final String REBALANCE_TIMEOUT_MS_CONFIG = "rebalance.timeout.ms";
     public static final String REBALANCE_TIMEOUT_MS_DOC = "The maximum allowed time for each worker to join the group "
