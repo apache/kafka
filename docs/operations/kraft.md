@@ -1,6 +1,6 @@
 ---
 title: KRaft
-description: KRaft
+description: Kafka KRaft configuration, upgrades, provisioning, and quorum management.
 weight: 8
 tags: ['kafka', 'docs']
 aliases: 

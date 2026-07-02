@@ -323,7 +323,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
 class StreamsSmokeTestBaseService(StreamsTestBaseService):
     """Base class for Streams Smoke Test services providing some common settings and functionality"""
 
-    def __init__(self, test_context, kafka, command, processing_guarantee = 'at_least_once', group_protocol = 'classic', num_threads = 3, replication_factor = 3):
+    def __init__(self, test_context, kafka, command, processing_guarantee = 'at_least_once', group_protocol = 'classic', num_threads = 3, replication_factor = 3, transactional = False):
         super(StreamsSmokeTestBaseService, self).__init__(test_context,
                                                           kafka,
                                                           "org.apache.kafka.streams.tests.StreamsSmokeTest",
@@ -334,6 +334,7 @@ class StreamsSmokeTestBaseService(StreamsTestBaseService):
         self.KAFKA_STREAMS_VERSION = ""
         self.UPGRADE_FROM = None
         self.REPLICATION_FACTOR = replication_factor
+        self.TRANSACTIONAL = transactional
 
     def set_version(self, kafka_streams_version):
         self.KAFKA_STREAMS_VERSION = kafka_streams_version
@@ -359,6 +360,9 @@ class StreamsSmokeTestBaseService(StreamsTestBaseService):
 
         if self.UPGRADE_FROM is not None:
             properties['upgrade.from'] = self.UPGRADE_FROM
+
+        if self.TRANSACTIONAL:
+            properties['enable.transactional.statestores'] = "true"
 
         cfg = KafkaConfig(**properties)
         return cfg.render()
@@ -414,8 +418,8 @@ class StreamsSmokeTestDriverService(StreamsSmokeTestBaseService):
         return cmd
 
 class StreamsSmokeTestJobRunnerService(StreamsSmokeTestBaseService):
-    def __init__(self, test_context, kafka, processing_guarantee, group_protocol = 'classic', num_threads = 3, replication_factor = 3):
-        super(StreamsSmokeTestJobRunnerService, self).__init__(test_context, kafka, "process", processing_guarantee, group_protocol, num_threads, replication_factor)
+    def __init__(self, test_context, kafka, processing_guarantee, group_protocol = 'classic', num_threads = 3, replication_factor = 3, transactional = False):
+        super(StreamsSmokeTestJobRunnerService, self).__init__(test_context, kafka, "process", processing_guarantee, group_protocol, num_threads, replication_factor, transactional)
 
 class StreamsSmokeTestShutdownDeadlockService(StreamsSmokeTestBaseService):
     def __init__(self, test_context, kafka):
@@ -443,11 +447,33 @@ class StreamsBrokerCompatibilityService(StreamsTestBaseService):
 
 
 class StreamsBrokerDownResilienceService(StreamsTestBaseService):
-    def __init__(self, test_context, kafka, configs):
+    def __init__(self, test_context, kafka, group_protocol="classic", extra_configs=None):
         super(StreamsBrokerDownResilienceService, self).__init__(test_context,
                                                                  kafka,
                                                                  "org.apache.kafka.streams.tests.StreamsBrokerDownResilienceTest",
-                                                                 configs)
+                                                                 "")
+        self.GROUP_PROTOCOL = group_protocol
+        self.EXTRA_CONFIGS = extra_configs or {}
+
+    def prop_file(self):
+        properties = {streams_property.STATE_DIR: self.state_dir,
+                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
+                      streams_property.GROUP_PROTOCOL: self.GROUP_PROTOCOL,
+                      # Required configs for broker down resilience
+                      # Consumer max.poll.interval > min(max.block.ms, ((retries + 1) * request.timeout)
+                      "consumer.max.poll.interval.ms": 50000,
+                      "producer.retries": 2,
+                      "producer.request.timeout.ms": 15000,
+                      "producer.max.block.ms": 30000,
+                      "acceptable.recovery.lag": "9223372036854775807", # enable a one-shot assignment
+                      "session.timeout.ms": "10000" # set back to 10s for tests. See KIP-735
+                      }
+
+        # Merge any extra configs
+        properties.update(self.EXTRA_CONFIGS)
+
+        cfg = KafkaConfig(**properties)
+        return cfg.render()
 
     def start_cmd(self, node):
         args = self.args.copy()
@@ -461,8 +487,7 @@ class StreamsBrokerDownResilienceService(StreamsTestBaseService):
 
         cmd = "( export KAFKA_LOG4J_OPTS=\"%(log4j_param)s%(log4j)s\"; " \
               "INCLUDE_TEST_JARS=true %(kafka_run_class)s %(streams_class_name)s " \
-              " %(config_file)s %(user_test_args1)s %(user_test_args2)s %(user_test_args3)s" \
-              " %(user_test_args4)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
+              " %(config_file)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
 
         self.logger.info("Executing: " + cmd)
 
@@ -632,24 +657,31 @@ class StreamsNamedRepartitionTopicService(StreamsTestBaseService):
 
 
 class StaticMemberTestService(StreamsTestBaseService):
-    def __init__(self, test_context, kafka, group_instance_id, num_threads):
+    def __init__(self, test_context, kafka, group_instance_id, num_threads, group_protocol="classic",
+                 persistent_process_id_store_enabled=False):
         super(StaticMemberTestService, self).__init__(test_context,
                                                       kafka,
                                                       "org.apache.kafka.streams.tests.StaticMemberTestClient",
                                                       "")
         self.INPUT_TOPIC = None
         self.GROUP_INSTANCE_ID = group_instance_id
+        self.GROUP_PROTOCOL = group_protocol
         self.NUM_THREADS = num_threads
+        self.PERSISTENT_PROCESS_ID_STORE_ENABLED = persistent_process_id_store_enabled
+
     def prop_file(self):
         properties = {streams_property.STATE_DIR: self.state_dir,
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
                       streams_property.NUM_THREADS: self.NUM_THREADS,
+                      streams_property.GROUP_PROTOCOL: self.GROUP_PROTOCOL,
                       consumer_property.GROUP_INSTANCE_ID: self.GROUP_INSTANCE_ID,
                       consumer_property.SESSION_TIMEOUT_MS: 60000, # set longer session timeout for static member test
                       'input.topic': self.INPUT_TOPIC,
                       "acceptable.recovery.lag": "9223372036854775807" # enable a one-shot assignment
                       }
 
+        if self.PERSISTENT_PROCESS_ID_STORE_ENABLED:
+            properties["persistent.process.id.store.enabled"] = "true"
 
         cfg = KafkaConfig(**properties)
         return cfg.render()

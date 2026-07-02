@@ -17,6 +17,7 @@
 package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 
 import java.util.Objects;
@@ -27,6 +28,7 @@ import java.util.Optional;
  * state of the remote log segment by using {@link RemoteLogMetadataManager#updateRemoteLogSegmentMetadata(RemoteLogSegmentMetadataUpdate)}.
  * This also includes the timestamp of this event.
  */
+@InterfaceAudience.Public
 public class RemoteLogSegmentMetadataUpdate extends RemoteLogMetadata {
 
     /**

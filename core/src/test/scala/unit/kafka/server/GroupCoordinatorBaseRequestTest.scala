@@ -39,7 +39,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 
 import java.net.Socket
 import java.util
-import java.util.{Comparator, Properties}
+import java.util.Comparator
 import java.util.stream.Collectors
 import scala.collection.Seq
 import scala.collection.mutable.ListBuffer
@@ -78,7 +78,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
         replicationFactor = brokers().head.config.getShort(TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG).toInt,
         brokers = brokers(),
         controllers = controllerServers(),
-        topicConfig = new Properties()
+        topicConfig = util.Map.of()
       )
     } finally {
       admin.close()
@@ -127,7 +127,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     topic: String,
     numPartitions: Int = 1,
     replicationFactor: Int = 1,
-    topicConfig: Properties = new Properties
+    topicConfig: util.Map[String, String] = util.Map.of()
   ): Map[TopicIdPartition, Int] = {
     val admin = cluster.admin()
     try {

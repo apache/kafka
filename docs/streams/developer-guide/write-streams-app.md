@@ -1,6 +1,6 @@
 ---
 title: Writing a Streams Application
-description: 
+description: Guide to writing Kafka Streams applications with the DSL and Processor API.
 weight: 1
 tags: ['kafka', 'docs']
 aliases: 

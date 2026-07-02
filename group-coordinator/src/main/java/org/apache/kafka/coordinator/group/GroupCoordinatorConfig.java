@@ -234,7 +234,10 @@ public class GroupCoordinatorConfig {
         ConsumerGroupMigrationPolicy.BIDIRECTIONAL + ": both upgrade from classic group to consumer group and downgrade from consumer group to classic group are enabled, " +
         ConsumerGroupMigrationPolicy.UPGRADE + ": only upgrade from classic group to consumer group is enabled, " +
         ConsumerGroupMigrationPolicy.DOWNGRADE + ": only downgrade from consumer group to classic group is enabled, " +
-        ConsumerGroupMigrationPolicy.DISABLED + ": neither upgrade nor downgrade is enabled.";
+        ConsumerGroupMigrationPolicy.DISABLED + ": neither upgrade nor downgrade is enabled. " +
+        "In this mode a member using the classic protocol is not allowed to join or rejoin a non-empty consumer group; " +
+        "if a group is already mixed (for example because this policy was changed), its classic-protocol members are " +
+        "rejected when they next attempt to rejoin.";
 
     public static final String CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG = "group.consumer.assignment.interval.ms";
     public static final String CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_DOC = "The interval between assignment updates for a consumer group.";
@@ -913,6 +916,15 @@ public class GroupCoordinatorConfig {
             STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
             StreamsGroupTopologyDescriptionPlugin.class,
             overrides);
+    }
+
+    /**
+     * Whether a topology-description plugin class is set on this broker. Checked from per-shard
+     * paths (the {@code cleanupGroupMetadata} gate) that cannot reach the broker-level manager
+     * holding the plugin reference. Does not instantiate the plugin; just inspects the config.
+     */
+    public boolean isStreamsGroupTopologyDescriptionPluginConfigured() {
+        return config.getClass(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG) != null;
     }
 
     /**

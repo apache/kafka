@@ -183,7 +183,7 @@ public class ConsumerRecordsTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("removal")
     public void testNextOffsetsLogsErrorPeriodicallyWhenConstructedWithDeprecatedConstructor() {
         TopicPartition tp = new TopicPartition("topic", 0);
         Map<TopicPartition, List<ConsumerRecord<Integer, String>>> records =

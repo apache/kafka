@@ -33,6 +33,7 @@ import org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManager;
 import org.apache.kafka.clients.consumer.internals.ShareHeartbeatRequestManager;
 import org.apache.kafka.clients.consumer.internals.ShareMembershipManager;
 import org.apache.kafka.clients.consumer.internals.StreamsGroupHeartbeatRequestManager;
+import org.apache.kafka.clients.consumer.internals.StreamsGroupTopologyDescriptionRequestManager;
 import org.apache.kafka.clients.consumer.internals.StreamsMembershipManager;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.clients.consumer.internals.TopicMetadataRequestManager;
@@ -95,6 +96,7 @@ public class ApplicationEventProcessorTest {
     private SubscriptionState subscriptionState = mock(SubscriptionState.class);
     private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
     private final StreamsGroupHeartbeatRequestManager streamsGroupHeartbeatRequestManager = mock(StreamsGroupHeartbeatRequestManager.class);
+    private final StreamsGroupTopologyDescriptionRequestManager streamsGroupTopologyDescriptionRequestManager = mock(StreamsGroupTopologyDescriptionRequestManager.class);
     private final StreamsMembershipManager streamsMembershipManager = mock(StreamsMembershipManager.class);
     private final ShareHeartbeatRequestManager shareHeartbeatRequestManager = mock(ShareHeartbeatRequestManager.class);
     private final ShareMembershipManager shareMembershipManager = mock(ShareMembershipManager.class);
@@ -110,6 +112,7 @@ public class ApplicationEventProcessorTest {
                 withGroupId ? Optional.of(commitRequestManager) : Optional.empty(),
                 withGroupId ? Optional.of(heartbeatRequestManager) : Optional.empty(),
                 withGroupId ? Optional.of(membershipManager) : Optional.empty(),
+                Optional.empty(),
                 Optional.empty(),
                 Optional.empty()
         );
@@ -132,6 +135,7 @@ public class ApplicationEventProcessorTest {
             withGroupId ? Optional.of(heartbeatRequestManager) : Optional.empty(),
             Optional.empty(),
             withGroupId ? Optional.of(streamsGroupHeartbeatRequestManager) : Optional.empty(),
+            withGroupId ? Optional.of(streamsGroupTopologyDescriptionRequestManager) : Optional.empty(),
             withGroupId ? Optional.of(streamsMembershipManager) : Optional.empty()
         );
         processor = new ApplicationEventProcessor(

@@ -445,7 +445,6 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
                 if (membershipManager().state() == MemberState.UNSUBSCRIBED) {
                     logger.info("{} received GROUP_ID_NOT_FOUND for group {} while unsubscribed. ",
                             heartbeatRequestName(), membershipManager().groupId());
-                    membershipManager().onHeartbeatRequestSkipped();
                 } else {
                     // Else, this is a fatal error, we should throw it and transition to fatal state.
                     logger.error("{} failed due to unexpected error {}: {}", heartbeatRequestName(), error, errorMessage);

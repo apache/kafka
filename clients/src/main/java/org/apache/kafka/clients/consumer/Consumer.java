@@ -21,6 +21,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.metrics.KafkaMetric;
 
 import java.io.Closeable;
@@ -36,6 +37,7 @@ import java.util.regex.Pattern;
  * @see KafkaConsumer
  * @see MockConsumer
  */
+@InterfaceAudience.Public
 public interface Consumer<K, V> extends Closeable {
 
     /**

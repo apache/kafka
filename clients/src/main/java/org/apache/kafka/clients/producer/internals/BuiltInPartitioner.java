@@ -53,6 +53,9 @@ public class BuiltInPartitioner {
      *
      * @param topic The topic
      * @param stickyBatchSize How much to produce to partition before switch
+     * @param rackAware Whether the partitioner is rack-aware,
+     *                  i.e. prioritizes partitions whose leaders are in the same rack as the producer
+     * @param rack The rack of the producer (needed for the rack-aware mode)
      */
     public BuiltInPartitioner(LogContext logContext, String topic, int stickyBatchSize, boolean rackAware, String rack) {
         this.log = logContext.logger(BuiltInPartitioner.class);
@@ -334,8 +337,19 @@ public class BuiltInPartitioner {
         // Invert and fold the queue size, so that they become separator values in the CFT.
         invertAndFoldQueueSizeArray(queueSizes, maxSizePlus1, length);
 
-        log.trace("Partition load stats for topic {}: CFT={}, IDs={}, length={}",
-                topic, queueSizes, partitionIds, length);
+        if (log.isTraceEnabled()) {
+            if (rackAware) {
+                assert partitionLoadStatsInThisRack != null;
+                log.trace(
+                    "Partition load stats for topic {}: CFT={}, IDs={}, length={}; in producer rack: CFT={}, IDs={}, length={}",
+                    topic,
+                    queueSizes, partitionIds, length,
+                    partitionLoadStatsInThisRack.cumulativeFrequencyTable, partitionLoadStatsInThisRack.partitionIds, partitionLoadStatsInThisRack.length);
+            } else {
+                log.trace("Partition load stats for topic {}: CFT={}, IDs={}, length={}",
+                    topic, queueSizes, partitionIds, length);
+            }
+        }
         partitionLoadStatsHolder = new PartitionLoadStatsHolder(
             new PartitionLoadStats(queueSizes, partitionIds, length),
             partitionLoadStatsInThisRack

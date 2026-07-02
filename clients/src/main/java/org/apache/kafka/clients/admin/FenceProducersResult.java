@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 
 import java.util.Collection;
@@ -28,6 +29,7 @@ import java.util.stream.Collectors;
 /**
  * The result of the {@link Admin#fenceProducers(Collection)} call.
  */
+@InterfaceAudience.Public
 public class FenceProducersResult {
 
     private final Map<CoordinatorKey, KafkaFuture<ProducerIdAndEpoch>> futures;

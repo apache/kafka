@@ -24,6 +24,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.utils.internals.LogContext;
 
@@ -44,6 +45,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_
  * A mock of the {@link ShareConsumer} interface you can use for testing code that uses Kafka. This class is <i> not
  * thread-safe </i>.
  */
+@InterfaceAudience.Public
 public class MockShareConsumer<K, V> implements ShareConsumer<K, V> {
 
     private final SubscriptionState subscriptions;
