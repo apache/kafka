@@ -25,7 +25,6 @@ import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
-import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
 
