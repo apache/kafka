@@ -146,8 +146,10 @@ public class ReplicaManagerLogReader implements LogReader {
                     Throwable cause = exception instanceof CompletionException && exception.getCause() != null
                         ? exception.getCause() : exception;
                     log.warn("Unable to read partition {} from remote storage.", topicIdPartition, cause);
-                    return withInfoAndError(logReadResult, localFetchDataInfo, Errors.forException(cause));
+                    // Sending an error here to caller is not useful so skipping. Above log should suffice.
+                    return withInfoAndError(logReadResult, localFetchDataInfo, Errors.NONE);
                 }
+                // Defensive code - remoteFetchDataInfo in current impl is never null.
                 if (remoteFetchDataInfo == null) {
                     // We want to return successful local read results so no skipping.
                     return withInfoAndError(logReadResult, localFetchDataInfo, Errors.UNKNOWN_SERVER_ERROR);
@@ -194,13 +196,13 @@ public class ReplicaManagerLogReader implements LogReader {
      */
     // Visibility for testing
     CompletableFuture<FetchDataInfo> readRemote(RemoteStorageFetchInfo remoteStorageFetchInfo) {
-        CompletableFuture<FetchDataInfo> future = new CompletableFuture<>();
+        CompletableFuture<FetchDataInfo> remoteFuture = new CompletableFuture<>();
 
         Optional<RemoteLogManager> remoteLogManager = OptionConverters.toJava(replicaManager.remoteLogManager());
         if (remoteLogManager.isEmpty()) {
-            future.completeExceptionally(new IllegalStateException(
+            remoteFuture.completeExceptionally(new IllegalStateException(
                 "Cannot read " + remoteStorageFetchInfo + " from remote storage as remote log manager is not configured."));
-            return future;
+            return remoteFuture;
         }
 
         try {
@@ -208,18 +210,18 @@ public class ReplicaManagerLogReader implements LogReader {
             // future on that pool's thread, so the caller's thread is never blocked on remote IO.
             remoteLogManager.get().asyncRead(remoteStorageFetchInfo, result -> {
                 if (result.error().isPresent()) {
-                    future.completeExceptionally(result.error().get());
+                    remoteFuture.completeExceptionally(result.error().get());
                 } else if (result.fetchDataInfo().isPresent()) {
-                    future.complete(result.fetchDataInfo().get());
+                    remoteFuture.complete(result.fetchDataInfo().get());
                 } else {
-                    future.completeExceptionally(new IllegalStateException(
+                    remoteFuture.completeExceptionally(new IllegalStateException(
                         "Remote read for " + remoteStorageFetchInfo + " returned neither data nor error."));
                 }
             });
         } catch (Exception e) {
             // e.g. RejectedExecutionException if the reader pool is shutting down.
             log.warn("Unable to schedule remote read for {}.", remoteStorageFetchInfo, e);
-            future.completeExceptionally(e);
+            remoteFuture.completeExceptionally(e);
         }
 
         // Bound the wait on the remote read so a stalled remote tier cannot pin the read (and the
@@ -227,21 +229,25 @@ public class ReplicaManagerLogReader implements LogReader {
         // DelayedShareFetch does for its remote fetch - rather than CompletableFuture#orTimeout. On
         // expiry the future completes exceptionally with a TimeoutException, which the caller treats
         // as a (skippable) read error.
-        if (!future.isDone()) {
+        if (!remoteFuture.isDone()) {
             long timeoutMs = remoteFetchMaxWaitMs();
             TimerTask timeoutTask = new TimerTask(timeoutMs) {
                 @Override
                 public void run() {
-                    future.completeExceptionally(new TimeoutException(
+                    remoteFuture.completeExceptionally(new TimeoutException(
                         "Remote read for " + remoteStorageFetchInfo + " did not complete within " + timeoutMs + " ms."));
                 }
             };
             // Cancel the timer task once the read completes (either outcome) so it does not linger in the wheel.
-            future.whenComplete((info, exception) -> timeoutTask.cancel());
+            remoteFuture.whenComplete((info, exception) -> timeoutTask.cancel());
+
+            // ReplicaManager has a dedicated timer for consumption by the share fetch
+            // code, and it is exposed addShareFetchTimerRequest. The same is also used
+            // in DelayedShareFetch. Hence, re-using it.
             replicaManager.addShareFetchTimerRequest(timeoutTask);
         }
 
-        return future;
+        return remoteFuture;
     }
 
     /**

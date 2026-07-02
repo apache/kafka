@@ -382,7 +382,7 @@ public class ReplicaManagerLogReaderTest {
     }
 
     @Test
-    public void testReadAsyncReturnsErrorWhenRemoteReadFails() throws Exception {
+    public void testReadAsyncReturnsNoneErrorWhenRemoteReadFailsButLocalSucceeds() throws Exception {
         ReplicaManager replicaManager = mockReplicaManager();
         RemoteLogManager remoteLogManager = mock(RemoteLogManager.class);
         when(replicaManager.remoteLogManager()).thenReturn(Option.apply(remoteLogManager));
@@ -405,7 +405,7 @@ public class ReplicaManagerLogReaderTest {
         LogReadResult logReadResult = result.get(TOPIC_ID_PARTITION);
         // Partial-data tolerant: the read completes (does not throw) with the local info and the error.
         assertSame(tieredData, logReadResult.info());
-        assertEquals(Errors.UNKNOWN_SERVER_ERROR, logReadResult.error());
+        assertEquals(Errors.NONE, logReadResult.error());
     }
 
     @Test
