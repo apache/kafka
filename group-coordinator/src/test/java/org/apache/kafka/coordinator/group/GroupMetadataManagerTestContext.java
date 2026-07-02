@@ -54,8 +54,10 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorOperationResult;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorStep;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorExecutor;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
@@ -693,15 +695,30 @@ public class GroupMetadataManagerTestContext {
             false
         );
 
-        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = groupMetadataManager.consumerGroupHeartbeat(
+        CoordinatorOperationResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> r = groupMetadataManager.consumerGroupHeartbeat(
             context,
             request
         );
 
+        // Mirror the coordinator runtime: replay and collect each step's records before
+        // moving on to the next one, then flatten the chain into a single CoordinatorResult
+        // so existing assertions (record content/order, response, state) keep working
+        // unchanged.
+        List<CoordinatorRecord> allRecords = new ArrayList<>();
+        while (r instanceof CoordinatorStep<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> step) {
+            allRecords.addAll(step.records());
+            step.records().forEach(this::replay);
+            r = step.next().generateRecordsAndResult();
+        }
+
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result =
+            (CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord>) r;
+        allRecords.addAll(result.records());
         if (result.replayRecords()) {
             result.records().forEach(this::replay);
         }
-        return result;
+
+        return new CoordinatorResult<>(allRecords, result.response());
     }
 
     public CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> shareGroupHeartbeat(

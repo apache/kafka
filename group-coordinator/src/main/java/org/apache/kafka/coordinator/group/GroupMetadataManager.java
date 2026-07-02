@@ -84,8 +84,10 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorExecutor;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataDelta;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorOperationResult;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorStep;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
@@ -2452,61 +2454,48 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Handles a regular heartbeat from a consumer group member. It mainly consists of
-     * three parts:
-     * 1) The member is created or updated. The group epoch is bumped if the member
-     *    has been created or updated.
-     * 2) The target assignment for the consumer group is updated if the group epoch
-     *    is larger than the current target assignment epoch.
-     * 3) The member's assignment is reconciled with the target assignment.
+     * Step 1 of the regular consumer group heartbeat chain: validates the request,
+     * creates or updates the member, and maybe bumps the group epoch.
      *
-     * @param context               The request context.
-     * @param groupId               The group id from the request.
-     * @param memberId              The member id from the request.
-     * @param memberEpoch           The member epoch from the request.
-     * @param instanceId            The instance id from the request or null.
-     * @param rackId                The rack id from the request or null.
-     * @param rebalanceTimeoutMs    The rebalance timeout from the request or -1.
-     * @param subscribedTopicNames  The list of subscribed topic names from the request
-     *                              or null.
-     * @param subscribedTopicRegex  The regular expression based subscription from the request
-     *                              or null.
-     * @param assignorName          The assignor name from the request or null.
-     * @param ownedTopicPartitions  The list of owned partitions from the request or null.
+     * All business validation happens here, before any record is generated, plus the
+     * member-state fence normally applied by {@code CurrentAssignmentBuilder} (relocated
+     * here since it depends only on state known up front, and step 3 - where the builder
+     * runs - is a later durability unit; the builder keeps its own check as defense in
+     * depth). The group epoch record, when needed, is emitted atomically with the member
+     * subscription record in this same step, which is why the metadata hash is still
+     * computed with the what-if helpers ({@code computeSubscribedTopicNames},
+     * {@code computeSubscribedRegularExpressions}) against the pre-replay member pair,
+     * inside {@link #updateSubscriptionMetadata}: that record pair must not be allowed to
+     * separate across a replay boundary (see the design's per-step consistency rule).
      *
-     * @return A Result containing the ConsumerGroupHeartbeat response and
-     *         a list of records to update the state machine.
+     * @param context The request context.
+     * @param request The actual ConsumerGroupHeartbeat request.
+     *
+     * @return The head of the chain leading to the ConsumerGroupHeartbeat response.
      */
-    private CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> consumerGroupHeartbeat(
+    private CoordinatorOperationResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> consumerGroupHeartbeatUpdateMember(
         AuthorizableRequestContext context,
-        String groupId,
-        String memberId,
-        int memberEpoch,
-        String instanceId,
-        String rackId,
-        int rebalanceTimeoutMs,
-        List<String> subscribedTopicNames,
-        String subscribedTopicRegex,
-        String assignorName,
-        List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions
+        ConsumerGroupHeartbeatRequestData request
     ) throws ApiException {
         final long currentTimeMs = time.milliseconds();
         final List<CoordinatorRecord> records = new ArrayList<>();
+        final String groupId = request.groupId();
+        final String instanceId = request.instanceId();
+        final boolean createIfNotExists = request.memberEpoch() == 0;
 
         // Get or create the consumer group.
-        boolean createIfNotExists = memberEpoch == 0;
         final ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, createIfNotExists, records);
-        throwIfConsumerGroupIsFull(group, memberId, instanceId);
+        throwIfConsumerGroupIsFull(group, request.memberId(), instanceId);
 
         // Get or create the member.
-        if (memberId.isEmpty()) memberId = Uuid.randomUuid().toString();
+        final String memberId = request.memberId().isEmpty() ? Uuid.randomUuid().toString() : request.memberId();
         final ConsumerGroupMember member;
         if (instanceId == null) {
             member = getOrMaybeSubscribeDynamicConsumerGroupMember(
                 group,
                 memberId,
-                memberEpoch,
-                ownedTopicPartitions,
+                request.memberEpoch(),
+                request.topicPartitions(),
                 createIfNotExists,
                 false
             );
@@ -2514,14 +2503,19 @@ public class GroupMetadataManager {
             member = getOrMaybeSubscribeStaticConsumerGroupMember(
                 group,
                 memberId,
-                memberEpoch,
+                request.memberEpoch(),
                 instanceId,
-                ownedTopicPartitions,
+                request.topicPartitions(),
                 createIfNotExists,
                 false,
                 records
             );
         }
+
+        // Relocated from CurrentAssignmentBuilder: members in UNKNOWN state are fenced
+        // here, before any business exception could otherwise be thrown after a record
+        // has already been generated in a later step.
+        throwIfMemberStateIsUnknown(member, request.topicPartitions());
 
         // 1. Create or update the member. If the member is new or has changed, a ConsumerGroupMemberMetadataValue
         // record is written to the __consumer_offsets partition to persist the change. If the subscriptions have
@@ -2530,11 +2524,11 @@ public class GroupMetadataManager {
         // changed, and persisted by writing a ConsumerGroupMetadataValue record to the partition.
         ConsumerGroupMember updatedMember = new ConsumerGroupMember.Builder(member)
             .maybeUpdateInstanceId(Optional.ofNullable(instanceId))
-            .maybeUpdateRackId(Optional.ofNullable(rackId))
-            .maybeUpdateRebalanceTimeoutMs(ofSentinel(rebalanceTimeoutMs))
-            .maybeUpdateServerAssignorName(Optional.ofNullable(assignorName))
-            .maybeUpdateSubscribedTopicNames(Optional.ofNullable(subscribedTopicNames))
-            .maybeUpdateSubscribedTopicRegex(Optional.ofNullable(subscribedTopicRegex))
+            .maybeUpdateRackId(Optional.ofNullable(request.rackId()))
+            .maybeUpdateRebalanceTimeoutMs(ofSentinel(request.rebalanceTimeoutMs()))
+            .maybeUpdateServerAssignorName(Optional.ofNullable(request.serverAssignor()))
+            .maybeUpdateSubscribedTopicNames(Optional.ofNullable(request.subscribedTopicNames()))
+            .maybeUpdateSubscribedTopicRegex(Optional.ofNullable(request.subscribedTopicRegex()))
             .setClientId(context.clientId())
             .setClientHost(context.clientAddress().toString())
             .setClassicMemberMetadata(null)
@@ -2559,9 +2553,6 @@ public class GroupMetadataManager {
             updatedMember
         );
 
-        int groupEpoch = group.groupEpoch();
-        SubscriptionType subscriptionType = group.subscriptionType();
-
         boolean bumpGroupEpoch =
             // Bumping the group epoch signals that the target assignment should be updated. We bump
             // the group epoch when the member has changed its subscribed topic names or the member
@@ -2578,39 +2569,126 @@ public class GroupMetadataManager {
             // The subscription metadata is updated in two cases:
             // 1) The member has updated its subscriptions;
             // 2) The refresh deadline has been reached.
-            UpdateSubscriptionMetadataResult result = updateSubscriptionMetadata(
+            updateSubscriptionMetadata(
                 group,
                 bumpGroupEpoch,
                 member,
                 updatedMember,
                 records
             );
-
-            groupEpoch = result.groupEpoch;
-            subscriptionType = result.subscriptionType;
         }
 
-        // 2. Update the target assignment if the group epoch is larger than the target assignment epoch. The delta between
-        // the existing and the new target assignment is persisted to the partition.
-        UpdateTargetAssignmentResult<Assignment> updateTargetAssignmentResult = maybeUpdateTargetAssignment(
-            group,
-            groupEpoch,
-            member,
-            updatedMember,
-            subscriptionType,
-            records
+        return new CoordinatorStep<>(
+            records,
+            () -> maybeUpdateConsumerGroupTargetAssignment(request, memberId)
         );
+    }
+
+    /**
+     * Step 2 of the regular consumer group heartbeat chain: maybe update the target
+     * assignment.
+     *
+     * Runs after step 1's records have been replayed: {@code group.members()} already
+     * contains the updated member (with any static replacement applied), so no overlay
+     * of the not-yet-applied member is needed. The preferred server assignor is likewise
+     * read fresh from {@code group.preferredServerAssignor()} instead of being
+     * recomputed against the old/new member pair.
+     *
+     * @param request  The actual ConsumerGroupHeartbeat request.
+     * @param memberId The member id (possibly generated in step 1).
+     *
+     * @return The next step of the chain.
+     */
+    private CoordinatorOperationResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> maybeUpdateConsumerGroupTargetAssignment(
+        ConsumerGroupHeartbeatRequestData request,
+        String memberId
+    ) {
+        final List<CoordinatorRecord> records = new ArrayList<>();
+        final ConsumerGroup group = consumerGroup(request.groupId());
+        final int groupEpoch = group.groupEpoch();
+
+        if (group.assignmentEpoch() < groupEpoch && canComputeNextTargetAssignment(
+            group.assignmentTimestamp(),
+            consumerGroupAssignmentIntervalMs(group.groupId()),
+            time.milliseconds()
+        )) {
+            String preferredServerAssignor = group.preferredServerAssignor().orElse(defaultConsumerGroupAssignor.name());
+            try {
+                TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder assignmentResultBuilder =
+                    new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(group.groupId(), groupEpoch, consumerGroupAssignors.get(preferredServerAssignor))
+                        .withTime(time)
+                        .withMembers(group.members())
+                        .withSubscriptionType(group.subscriptionType())
+                        .withTargetAssignment(group.targetAssignment())
+                        .withInvertedTargetAssignment(group.invertedTargetAssignment())
+                        .withMetadataImage(metadataImage)
+                        .withResolvedRegularExpressions(group.resolvedRegularExpressions());
+
+                long startTimeMs = time.milliseconds();
+                TargetAssignmentBuilder.TargetAssignmentResult assignmentResult = assignmentResultBuilder.build();
+                long assignorTimeMs = time.milliseconds() - startTimeMs;
+
+                if (log.isDebugEnabled()) {
+                    log.debug("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms: {}.",
+                        group.groupId(), groupEpoch, preferredServerAssignor, assignorTimeMs, assignmentResult.targetAssignment());
+                } else {
+                    log.info("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms.",
+                        group.groupId(), groupEpoch, preferredServerAssignor, assignorTimeMs);
+                }
+
+                records.addAll(assignmentResult.records());
+            } catch (PartitionAssignorException ex) {
+                // A PartitionAssignorException surfaces as UnknownServerException, exactly as
+                // today. Step 1's committed member/epoch prefix is the normal "assignment
+                // lagging" state and converges on the next heartbeat.
+                String msg = String.format("Failed to compute a new target assignment for epoch %d: %s",
+                    groupEpoch, ex.getMessage());
+                log.error("[GroupId {}] {}.", group.groupId(), msg, ex);
+                throw new UnknownServerException(msg, ex);
+            }
+        }
+
+        return new CoordinatorStep<>(
+            records,
+            () -> consumerGroupHeartbeatReconcile(request, memberId)
+        );
+    }
+
+    /**
+     * Step 3 (terminal) of the regular consumer group heartbeat chain: reconcile the
+     * member and build the response.
+     *
+     * This step owns all mutation of the member's current assignment: the member's
+     * assignedPartitions are untouched since the event started (steps 1 and 2 never
+     * touch them), so diffing the freshly-fetched {@code member} against the reconciled
+     * {@code updatedMember} below is equivalent to today's whole-event diff.
+     *
+     * @param request  The actual ConsumerGroupHeartbeat request.
+     * @param memberId The member id (possibly generated in step 1).
+     *
+     * @return A result containing the ConsumerGroupHeartbeat response and a list of
+     *         records to update the state machine.
+     */
+    private CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> consumerGroupHeartbeatReconcile(
+        ConsumerGroupHeartbeatRequestData request,
+        String memberId
+    ) {
+        final List<CoordinatorRecord> records = new ArrayList<>();
+        final String groupId = request.groupId();
+        final ConsumerGroup group = consumerGroup(groupId);
+        final ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
 
         // 3. Reconcile the member's assignment with the target assignment if the member is not
-        // fully reconciled yet.
-        updatedMember = maybeReconcile(
+        // fully reconciled yet. The subscription-consistency trigger is a state fact computed
+        // inside maybeReconcile; no diff is carried across the chain.
+        ConsumerGroupMember updatedMember = maybeReconcile(
             groupId,
-            updatedMember,
+            member,
             group::currentPartitionEpoch,
-            updateTargetAssignmentResult.targetAssignmentEpoch(),
-            updateTargetAssignmentResult.targetAssignment(),
+            group.assignmentEpoch(),
+            group.targetAssignment(memberId, member.instanceId()),
             group.resolvedRegularExpressions(),
-            ownedTopicPartitions,
+            request.topicPartitions(),
             records
         );
 
@@ -2628,12 +2706,37 @@ public class GroupMetadataManager {
         //    (rebalanceTimeoutMs, (subscribedTopicNames or subscribedTopicRegex) and ownedTopicPartitions)
         //    to detect a full request as those must be set in a full request.
         // 2. The member's assignment has been updated.
-        boolean isFullRequest = rebalanceTimeoutMs != -1 && (subscribedTopicNames != null || subscribedTopicRegex != null) && ownedTopicPartitions != null;
-        if (memberEpoch == 0 || isFullRequest || ConsumerGroupMember.hasAssignedPartitionsChanged(member, updatedMember)) {
+        boolean isFullRequest = request.rebalanceTimeoutMs() != -1
+            && (request.subscribedTopicNames() != null || request.subscribedTopicRegex() != null)
+            && request.topicPartitions() != null;
+        if (request.memberEpoch() == 0 || isFullRequest || ConsumerGroupMember.hasAssignedPartitionsChanged(member, updatedMember)) {
             response.setAssignment(ConsumerGroupHeartbeatResponse.createAssignment(updatedMember.assignedPartitions()));
         }
 
         return new CoordinatorResult<>(records, response);
+    }
+
+    /**
+     * Fences a consumer group member that is in the UNKNOWN state. This mirrors the
+     * check {@code CurrentAssignmentBuilder} applies when reconciling a member in that
+     * state, relocated here (step 1 of the heartbeat chain) so the fence fires before
+     * any record is generated, since the member's state and the request's owned
+     * partitions are both already known at this point.
+     *
+     * @param member               The member to check.
+     * @param ownedTopicPartitions The list of partitions owned by the member, as
+     *                             reported in the request; may be null.
+     * @throws FencedMemberEpochException if the member is in the UNKNOWN state and
+     *                                    still owns partitions (or reported none).
+     */
+    private void throwIfMemberStateIsUnknown(
+        ConsumerGroupMember member,
+        List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions
+    ) {
+        if (member.state() == MemberState.UNKNOWN && (ownedTopicPartitions == null || !ownedTopicPartitions.isEmpty())) {
+            throw new FencedMemberEpochException("The consumer group member is in a unknown state. "
+                + "The member must abandon all its partitions and rejoin.");
+        }
     }
 
     /**
@@ -5375,7 +5478,7 @@ public class GroupMetadataManager {
      * @return A Result containing the ConsumerGroupHeartbeat response and
      *         a list of records to update the state machine.
      */
-    public CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> consumerGroupHeartbeat(
+    public CoordinatorOperationResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> consumerGroupHeartbeat(
         AuthorizableRequestContext context,
         ConsumerGroupHeartbeatRequestData request
     ) throws ApiException {
@@ -5389,20 +5492,9 @@ public class GroupMetadataManager {
                 request.memberEpoch()
             );
         } else {
-            // Otherwise, it is a regular heartbeat.
-            return consumerGroupHeartbeat(
-                context,
-                request.groupId(),
-                request.memberId(),
-                request.memberEpoch(),
-                request.instanceId(),
-                request.rackId(),
-                request.rebalanceTimeoutMs(),
-                request.subscribedTopicNames(),
-                request.subscribedTopicRegex(),
-                request.serverAssignor(),
-                request.topicPartitions()
-            );
+            // Otherwise, it is a regular heartbeat. It is decomposed into a chain of
+            // three steps, each observing the state committed by the previous one.
+            return consumerGroupHeartbeatUpdateMember(context, request);
         }
     }
 
