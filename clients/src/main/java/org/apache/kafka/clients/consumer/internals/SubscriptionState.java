@@ -1084,7 +1084,7 @@ public class SubscriptionState {
     /** Invoke {@link RebalanceListener#onPartitionsLost(Collection, RebalanceConsumer)} on the given partitions.*/
     public void onPartitionsLost(Collection<TopicPartition> partitions) {
         rebalanceListener().ifPresent(rl -> invokeRebalanceListener(partitions, rl::onPartitionsLost));
-    }π
+    }
 
     private void invokeRebalanceListener(
             Collection<TopicPartition> partitions,
