@@ -24,7 +24,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.internals.LogContext;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.ReadOnlyRecord;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
@@ -39,7 +38,6 @@ import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.query.TimestampedKeyQuery;
 import org.apache.kafka.streams.query.TimestampedKeyWithHeadersQuery;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
-import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -451,25 +449,17 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"NATIVE", "ADAPTER", "IN_MEMORY"})
-    public void shouldHandleRangeQuery(final StoreType storeType) {
-        // Caching disabled: an IQv2 RangeQuery forwards straight to the store (it does not merge the
-        // record cache), so the write is served from the persistent store.
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(storeType, false);
+    @ValueSource(booleans = {true, false})
+    public void shouldReturnUnknownQueryTypeForRangeQueryOnHeadersStore(final boolean cachingEnabled) {
+        // KIP-1356 (point query only): the native header store enables KeyQuery but not RangeQuery, so a
+        // RangeQuery reports UNKNOWN_QUERY_TYPE (caching on or off). RangeQuery support on the native
+        // build is deferred to the range follow-up.
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(StoreType.NATIVE, cachingEnabled);
         try {
-            store.put("k", ValueTimestampHeaders.make("v", 123L, headersWith("h", "x")));
-
-            final QueryResult<KeyValueIterator<String, String>> result =
+            final QueryResult<?> result =
                 store.query(RangeQuery.withNoBounds(), PositionBound.unbounded(), new QueryConfig(false));
-
-            assertTrue(result.isSuccess(), "Expected RangeQuery to succeed");
-            try (KeyValueIterator<String, String> iterator = result.getResult()) {
-                assertTrue(iterator.hasNext(), "Expected the stored key in the range result");
-                final KeyValue<String, String> keyValue = iterator.next();
-                assertEquals("k", keyValue.key);
-                assertEquals("v", keyValue.value);
-                assertFalse(iterator.hasNext());
-            }
+            assertFalse(result.isSuccess(), "Expected RangeQuery to be unsupported on the native header store");
+            assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, result.getFailureReason());
             assertNotNull(result.getPosition(), "Expected position to be set");
         } finally {
             store.close();

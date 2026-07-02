@@ -1030,30 +1030,23 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
     }
 
     @Test
-    public void shouldHandleRangeQuery() {
+    public void shouldReturnUnknownQueryTypeForRangeQuery() {
         // Initialize the store
         rocksDBStore.init(context, rocksDBStore);
 
-        // Store raw (serialized ValueTimestampHeaders) bytes for a key.
-        final Bytes key = new Bytes("test-key".getBytes());
-        final byte[] storedBytes = "headers+timestamp+value".getBytes();
-        rocksDBStore.put(key, storedBytes);
-
-        // KIP-1356: removing the query() override lets the native store serve RangeQuery (previously
-        // UNKNOWN_QUERY_TYPE), matching the adapter build path. The raw stored bytes are returned;
-        // the metered store performs the header-aware deserialization.
+        // KIP-1356 (point query only): this store enables KeyQuery but leaves RangeQuery (and every
+        // other non-KeyQuery type) as UNKNOWN_QUERY_TYPE, unchanged from before. RangeQuery support on
+        // the native header store is deferred to the range KIP-1356 follow-up.
         final RangeQuery<Bytes, byte[]> query = RangeQuery.withNoBounds();
         final QueryResult<KeyValueIterator<Bytes, byte[]>> result =
                 rocksDBStore.query(query, PositionBound.unbounded(), new QueryConfig(false));
 
-        assertTrue(result.isSuccess(), "Expected RangeQuery to succeed");
-        try (KeyValueIterator<Bytes, byte[]> iterator = result.getResult()) {
-            assertTrue(iterator.hasNext(), "Expected the stored key in the range result");
-            final KeyValue<Bytes, byte[]> keyValue = iterator.next();
-            assertEquals(key, keyValue.key);
-            assertArrayEquals(storedBytes, keyValue.value, "Expected the raw stored bytes to be returned");
-            assertFalse(iterator.hasNext());
-        }
+        assertFalse(result.isSuccess(), "Expected RangeQuery to be unsupported");
+        assertEquals(
+            FailureReason.UNKNOWN_QUERY_TYPE,
+            result.getFailureReason(),
+            "Expected UNKNOWN_QUERY_TYPE failure reason"
+        );
         assertNotNull(result.getPosition(), "Expected position to be set");
     }
 
