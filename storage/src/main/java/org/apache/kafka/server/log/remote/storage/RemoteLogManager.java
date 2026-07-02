@@ -1220,6 +1220,20 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             brokerTopicStats.recordRemoteDeleteLagBytes(topic, partition, sizeOfDeletableSegmentsBytes);
         }
 
+        // On a freshly-elected leader, highestOffsetInRemoteStorage is unseeded (-1) until RLMCopyTask /
+        // RLMFollowerTask seed it; RLMExpirationTask does not. If size-based retention runs while it is -1,
+        // UnifiedLog.onlyLocalLogSegmentsSize() (filter baseOffset >= highestOffsetInRemoteStorage()) returns
+        // the whole local log -- including segments already copied to remote -- which buildRetentionSizeData
+        // then double-counts against the remote size, over-deleting in-retention data from both tiers.
+        private void maybeSeedHighestOffsetInRemoteStorage(UnifiedLog log) throws RemoteStorageException {
+            if (log.highestOffsetInRemoteStorage() == -1) {
+                OffsetAndEpoch highestRemoteOffsetAndEpoch = findHighestRemoteOffset(topicIdPartition, log);
+                if (highestRemoteOffsetAndEpoch.offset() >= 0) {
+                    log.updateHighestOffsetInRemoteStorage(highestRemoteOffsetAndEpoch.offset());
+                }
+            }
+        }
+
         /** Cleanup expired and dangling remote log segments. */
         void cleanupExpiredRemoteLogSegments() throws RemoteStorageException, ExecutionException, InterruptedException {
             if (isCancelled()) {
@@ -1264,6 +1278,10 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             LeaderEpochFileCache leaderEpochCache = log.leaderEpochCache();
             // Build the leader epoch map by filtering the epochs that do not have any records.
             NavigableMap<Integer, Long> epochWithOffsets = buildFilteredLeaderEpochMap(leaderEpochCache.epochWithOffsets());
+
+            // Seed highestOffsetInRemoteStorage before size-retention to avoid the fresh-leader double-count
+            // (no-op once RLMCopyTask/RLMFollowerTask have seeded it).
+            maybeSeedHighestOffsetInRemoteStorage(log);
 
             long logStartOffset = log.logStartOffset();
             long logEndOffset = log.logEndOffset();
