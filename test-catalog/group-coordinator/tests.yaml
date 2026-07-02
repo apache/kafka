@@ -646,6 +646,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testShareGroupDynamicConfigs
 - testShareGroupEvaluatedConfigs
 - testShareGroupHeartbeatDoesNotBumpGroupEpochDuringAssignmentDelay
+- testShareGroupHeartbeatInitializeMixedNewAndExpandedTopics
 - testShareGroupHeartbeatInitializeOnPartitionUpdate
 - testShareGroupHeartbeatOnConsumerGroup
 - testShareGroupHeartbeatOnStreamsGroup

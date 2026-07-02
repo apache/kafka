@@ -410,6 +410,7 @@ org.apache.kafka.clients.consumer.ShareConsumerRenewTest:
 - testRenewAcknowledgementOnPoll
 org.apache.kafka.clients.consumer.ShareConsumerTest:
 - testAcquisitionLockTimeoutOnConsumer
+- testAddedPartitionsOfKnownTopicStartAtOffsetZero
 - testCommitSyncFailsForDeletedTopic
 - testComplexShareConsumer
 - testConfiguredExplicitAcknowledgeCommitSuccess

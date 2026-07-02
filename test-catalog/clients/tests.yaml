@@ -927,6 +927,7 @@ org.apache.kafka.clients.consumer.KafkaConsumerTest:
 - testPauseFlagPreservedForRetainedPartitionOnManualAssignmentChange
 - testPollAuthenticationFailure
 - testPollIdleRatio
+- testPollIdleRatioZero
 - testPollReturnsRecords
 - testPollSendsRequestToJoin
 - testPollThrowsInterruptExceptionIfInterrupted
@@ -974,6 +975,7 @@ org.apache.kafka.clients.consumer.KafkaConsumerTest:
 org.apache.kafka.clients.consumer.KafkaShareConsumerMetricsTest:
 - testClosingConsumerUnregistersConsumerMetrics
 - testPollIdleRatio
+- testPollIdleRatioZero
 - testPollTimeMetrics
 - testRegisteringCustomMetricsDoesntAffectConsumerMetrics
 - testRegisteringCustomMetricsWithSameNameDoesntAffectConsumerMetrics
