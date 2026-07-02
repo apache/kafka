@@ -1072,25 +1072,19 @@ public class SubscriptionState {
     }
 
     /** Invoke {@link RebalanceListener#onPartitionsAssigned(Collection, RebalanceConsumer)} on the given partitions.*/
-    public synchronized void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-        var rebalanceListener = rebalanceListener().orElseThrow(
-                () -> new IllegalStateException("No listener has been registered, cannot invoke onPartitionsAssigned"));
-        invokeRebalanceListener(partitions, rebalanceListener::onPartitionsAssigned);
+    public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+        rebalanceListener().ifPresent(rl -> invokeRebalanceListener(partitions, rl::onPartitionsAssigned));
     }
 
     /** Invoke {@link RebalanceListener#onPartitionsRevoked(Collection, RebalanceConsumer)} on the given partitions.*/
-    public synchronized void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-        var rebalanceListener = rebalanceListener().orElseThrow(
-                () -> new IllegalStateException("No listener has been registered, cannot invoke onPartitionsRevoked"));
-        invokeRebalanceListener(partitions, rebalanceListener::onPartitionsRevoked);
+    public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+        rebalanceListener().ifPresent(rl -> invokeRebalanceListener(partitions, rl::onPartitionsRevoked));
     }
 
     /** Invoke {@link RebalanceListener#onPartitionsLost(Collection, RebalanceConsumer)} on the given partitions.*/
-    public synchronized void onPartitionsLost(Collection<TopicPartition> partitions) {
-        var rebalanceListener = rebalanceListener().orElseThrow(
-                () -> new IllegalStateException("No listener has been registered, cannot invoke onPartitionsLost"));
-        invokeRebalanceListener(partitions, rebalanceListener::onPartitionsLost);
-    }
+    public void onPartitionsLost(Collection<TopicPartition> partitions) {
+        rebalanceListener().ifPresent(rl -> invokeRebalanceListener(partitions, rl::onPartitionsLost));
+    }π
 
     private void invokeRebalanceListener(
             Collection<TopicPartition> partitions,
