@@ -413,7 +413,8 @@ public class ProducerConfig extends AbstractConfig {
                                         Importance.MEDIUM,
                                         CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
                                 .define(BUFFER_MEMORY_CONFIG, Type.LONG, 32 * 1024 * 1024L, atLeast(0L), Importance.HIGH, BUFFER_MEMORY_DOC)
-                                .define(BUFFER_MEMORY_ALLOCATION_STRATEGY_CONFIG,
+                                // Internal until the incremental strategy is fully implemented
+                                .defineInternal(BUFFER_MEMORY_ALLOCATION_STRATEGY_CONFIG,
                                         Type.STRING,
                                         BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL,
                                         ConfigDef.CaseInsensitiveValidString
