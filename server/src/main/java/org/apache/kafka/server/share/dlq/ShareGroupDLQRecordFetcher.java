@@ -173,7 +173,7 @@ public class ShareGroupDLQRecordFetcher {
                 runFrom(advanced);  // resume the loop
             }
         } catch (Exception e) {
-            log.warn("Unexpected error processing records for {}. Skipping record copy.", param, e);
+            log.warn("Unexpected error processing records for {}. Returning records fetched so far.", param, e);
             complete();
         }
     }
