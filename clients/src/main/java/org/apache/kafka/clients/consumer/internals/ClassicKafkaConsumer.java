@@ -615,7 +615,11 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     @Override
     public void setRebalanceListener(RebalanceListener callback) {
         acquireAndEnsureOpen();
-        subscriptions.setRebalanceListener(callback, this);
+        try {
+            subscriptions.setRebalanceListener(callback, this);
+        } finally {
+            release();
+        }
     }
 
     @Override
