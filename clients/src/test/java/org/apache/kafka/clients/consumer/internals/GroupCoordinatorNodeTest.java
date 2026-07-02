@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.Node;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
