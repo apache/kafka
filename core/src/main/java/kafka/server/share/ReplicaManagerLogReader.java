@@ -140,8 +140,8 @@ public class ReplicaManagerLogReader implements LogReader {
                     Throwable cause = exception instanceof CompletionException && exception.getCause() != null
                         ? exception.getCause() : exception;
                     log.warn("Unable to read partition {} from remote storage.", topicIdPartition, cause);
-                    // Sending an error here to caller is not useful so skipping. Above log should suffice.
-                    return withInfoAndError(logReadResult, localFetchDataInfo, Errors.NONE);
+                    // Sending an error here to caller is not useful so not setting it in the result. Above log should suffice.
+                    return logReadResult;
                 }
                 return withInfoAndError(logReadResult, remoteFetchDataInfo, Errors.NONE);
             }));
