@@ -28,6 +28,7 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.internals.Exit;
+import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -37,6 +38,8 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.test.TestUtils;
+
+import org.junit.jupiter.api.Test;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -48,6 +51,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -100,16 +104,19 @@ public class ResetStreamsGroupOffsetTest {
         streamsConfig.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
-        streamsConfig.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+        streamsConfig.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
         streamsConfig.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        // Use a unique state directory per instance. TestUtils.randomString uses a fixed seed, so app ids are
+        // identical across parallel test JVMs; without this, concurrent forks would share the default
+        // ${java.io.tmpdir}/kafka-streams/<application.id> directory and fail to acquire the state lock.
         streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         return streamsConfig;
     }
 
-    @ClusterTest
-    public void testResetWithUnrecognizedOption(ClusterInstance cluster) {
-        String[] args = new String[]{"--unrecognized-option", "--bootstrap-server", cluster.bootstrapServers(), "--reset-offsets", "--all-groups", "--all-input-topics", "--to-offset", "5"};
+    @Test
+    public void testResetWithUnrecognizedOption() {
+        String[] args = new String[]{"--unrecognized-option", "--bootstrap-server", "localhost:9092", "--reset-offsets", "--all-groups", "--all-input-topics", "--to-offset", "5"};
         assertThrows(OptionException.class, () -> getStreamsGroupService(args));
     }
 
@@ -691,7 +698,7 @@ public class ResetStreamsGroupOffsetTest {
             data.add(new KeyValueTimestamp<>(v + "0" + topic, v + "0", System.currentTimeMillis()));
         }
 
-        StreamsGroupCommandTestUtils.produceSynchronously(cluster.bootstrapServers(), topic, Optional.of(0), data);
+        StreamsGroupCommandTestUtils.produce(cluster, topic, Optional.of(0), data);
 
         // partition 1
         data = new ArrayList<>(numOfMessages);
@@ -699,6 +706,6 @@ public class ResetStreamsGroupOffsetTest {
             data.add(new KeyValueTimestamp<>(v + "1" + topic, v + "1", System.currentTimeMillis()));
         }
 
-        StreamsGroupCommandTestUtils.produceSynchronously(cluster.bootstrapServers(), topic, Optional.of(1), data);
+        StreamsGroupCommandTestUtils.produce(cluster, topic, Optional.of(1), data);
     }
 }

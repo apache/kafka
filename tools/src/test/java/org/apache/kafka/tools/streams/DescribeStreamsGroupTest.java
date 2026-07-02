@@ -25,6 +25,7 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.internals.Exit;
+import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -33,6 +34,8 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -77,20 +80,14 @@ public class DescribeStreamsGroupTest {
     private static final String INPUT_TOPIC_2 = "customInputTopic2";
     private static final String OUTPUT_TOPIC_2 = "customOutputTopic2";
 
-    private final ClusterInstance cluster;
-
-    DescribeStreamsGroupTest(ClusterInstance cluster) {
-        this.cluster = cluster;
-    }
-
-    @ClusterTest
+    @Test
     public void testDescribeWithUnrecognizedOption() {
-        String[] args = new String[]{"--unrecognized-option", "--bootstrap-server", cluster.bootstrapServers(), "--describe", "--group", APP_ID};
+        String[] args = new String[]{"--unrecognized-option", "--bootstrap-server", "localhost:9092", "--describe", "--group", APP_ID};
         assertThrows(OptionException.class, () -> getStreamsGroupService(args));
     }
 
     @ClusterTest
-    public void testDescribeWithoutGroupOption() {
+    public void testDescribeWithoutGroupOption(ClusterInstance cluster) {
         final String[] args = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--describe"};
         AtomicBoolean exited = new AtomicBoolean(false);
         Exit.setExitProcedure(((statusCode, message) -> {
@@ -106,7 +103,7 @@ public class DescribeStreamsGroupTest {
     }
 
     @ClusterTest
-    public void testDescribeStreamsGroup() throws Exception {
+    public void testDescribeStreamsGroup(ClusterInstance cluster) throws Exception {
         final List<String> expectedHeader = List.of("GROUP", "TOPIC", "PARTITION", "OFFSET-LAG");
         final Set<List<String>> expectedRows = Set.of(
             List.of(APP_ID, INPUT_TOPIC, "0", "0"),
@@ -115,7 +112,7 @@ public class DescribeStreamsGroupTest {
             List.of(APP_ID, "streams-group-command-test-KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition", "1", "0"));
 
         cluster.createTopic(INPUT_TOPIC, 2, (short) 1);
-        try (KafkaStreams ignored = startStreamsApp(APP_ID, INPUT_TOPIC, OUTPUT_TOPIC)) {
+        try (KafkaStreams ignored = startStreamsApp(cluster, APP_ID, INPUT_TOPIC, OUTPUT_TOPIC)) {
             validateDescribeOutput(
                 List.of("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--group", APP_ID), expectedHeader, expectedRows, List.of());
             // --describe --offsets has the same output as --describe
@@ -125,7 +122,7 @@ public class DescribeStreamsGroupTest {
     }
 
     @ClusterTest
-    public void testDescribeStreamsGroupWithVerboseOption() throws Exception {
+    public void testDescribeStreamsGroupWithVerboseOption(ClusterInstance cluster) throws Exception {
         final List<String> expectedHeader = List.of("GROUP", "TOPIC", "PARTITION", "CURRENT-OFFSET", "LEADER-EPOCH", "LOG-END-OFFSET", "OFFSET-LAG");
         final Set<List<String>> expectedRows = Set.of(
             List.of(APP_ID, INPUT_TOPIC, "0", "-", "-", "0", "0"),
@@ -134,7 +131,7 @@ public class DescribeStreamsGroupTest {
             List.of(APP_ID, "streams-group-command-test-KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition", "1", "-", "-", "0", "0"));
 
         cluster.createTopic(INPUT_TOPIC, 2, (short) 1);
-        try (KafkaStreams ignored = startStreamsApp(APP_ID, INPUT_TOPIC, OUTPUT_TOPIC)) {
+        try (KafkaStreams ignored = startStreamsApp(cluster, APP_ID, INPUT_TOPIC, OUTPUT_TOPIC)) {
             validateDescribeOutput(
                 List.of("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--verbose", "--group", APP_ID), expectedHeader, expectedRows, List.of());
             // --describe --offsets has the same output as --describe
@@ -146,21 +143,21 @@ public class DescribeStreamsGroupTest {
     }
 
     @ClusterTest
-    public void testDescribeStreamsGroupWithStateOption() throws Exception {
+    public void testDescribeStreamsGroupWithStateOption(ClusterInstance cluster) throws Exception {
         final List<String> expectedHeader = List.of("GROUP", "COORDINATOR", "(ID)", "STATE", "#MEMBERS");
         final Set<List<String>> expectedRows = Set.of(List.of(APP_ID, "", "", "Stable", "2"));
         // The coordinator is not deterministic, so we don't care about it.
         final List<Integer> dontCares = List.of(1, 2);
 
         cluster.createTopic(INPUT_TOPIC, 2, (short) 1);
-        try (KafkaStreams ignored = startStreamsApp(APP_ID, INPUT_TOPIC, OUTPUT_TOPIC)) {
+        try (KafkaStreams ignored = startStreamsApp(cluster, APP_ID, INPUT_TOPIC, OUTPUT_TOPIC)) {
             validateDescribeOutput(
                 List.of("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--state", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
         }
     }
 
     @ClusterTest
-    public void testDescribeStreamsGroupWithStateAndVerboseOptions() throws Exception {
+    public void testDescribeStreamsGroupWithStateAndVerboseOptions(ClusterInstance cluster) throws Exception {
         final List<String> expectedHeader = List.of("GROUP", "COORDINATOR", "(ID)", "STATE", "GROUP-EPOCH", "TARGET-ASSIGNMENT-EPOCH", "#MEMBERS");
         final Set<List<String>> expectedRows = Set.of(List.of(APP_ID, "", "", "Stable", "", "", "2"));
         // The coordinator is not deterministic, so we don't care about it.
@@ -168,7 +165,7 @@ public class DescribeStreamsGroupTest {
         final List<Integer> dontCares = List.of(1, 2, 4, 5);
 
         cluster.createTopic(INPUT_TOPIC, 2, (short) 1);
-        try (KafkaStreams ignored = startStreamsApp(APP_ID, INPUT_TOPIC, OUTPUT_TOPIC)) {
+        try (KafkaStreams ignored = startStreamsApp(cluster, APP_ID, INPUT_TOPIC, OUTPUT_TOPIC)) {
             validateDescribeOutput(
                 List.of("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--state", "--verbose", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
             validateDescribeOutput(
@@ -177,7 +174,7 @@ public class DescribeStreamsGroupTest {
     }
 
     @ClusterTest
-    public void testDescribeStreamsGroupWithMembersOption() throws Exception {
+    public void testDescribeStreamsGroupWithMembersOption(ClusterInstance cluster) throws Exception {
         final List<String> expectedHeader = List.of("GROUP", "MEMBER", "PROCESS", "CLIENT-ID", "ASSIGNMENTS");
         final Set<List<String>> expectedRows = Set.of(
             List.of(APP_ID, "", "", "", "ACTIVE:", "0:[1];", "1:[1];"),
@@ -186,14 +183,14 @@ public class DescribeStreamsGroupTest {
         final List<Integer> dontCares = List.of(1, 2, 3);
 
         cluster.createTopic(INPUT_TOPIC, 2, (short) 1);
-        try (KafkaStreams ignored = startStreamsApp(APP_ID, INPUT_TOPIC, OUTPUT_TOPIC)) {
+        try (KafkaStreams ignored = startStreamsApp(cluster, APP_ID, INPUT_TOPIC, OUTPUT_TOPIC)) {
             validateDescribeOutput(
                 List.of("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--members", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
         }
     }
 
     @ClusterTest
-    public void testDescribeStreamsGroupWithMembersAndVerboseOptions() throws Exception {
+    public void testDescribeStreamsGroupWithMembersAndVerboseOptions(ClusterInstance cluster) throws Exception {
         final List<String> expectedHeader = List.of("GROUP", "TARGET-ASSIGNMENT-EPOCH", "TOPOLOGY-EPOCH", "MEMBER", "MEMBER-PROTOCOL", "MEMBER-EPOCH", "PROCESS", "CLIENT-ID", "ASSIGNMENTS");
         final Set<List<String>> expectedRows = Set.of(
             List.of(APP_ID, "", "0", "", "streams", "", "", "", "ACTIVE:", "0:[1];", "1:[1];", "TARGET-ACTIVE:", "0:[1];", "1:[1];"),
@@ -203,7 +200,7 @@ public class DescribeStreamsGroupTest {
         final List<Integer> dontCares = List.of(1, 3, 5, 6, 7);
 
         cluster.createTopic(INPUT_TOPIC, 2, (short) 1);
-        try (KafkaStreams ignored = startStreamsApp(APP_ID, INPUT_TOPIC, OUTPUT_TOPIC)) {
+        try (KafkaStreams ignored = startStreamsApp(cluster, APP_ID, INPUT_TOPIC, OUTPUT_TOPIC)) {
             validateDescribeOutput(
                 List.of("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--members", "--verbose", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
             validateDescribeOutput(
@@ -212,11 +209,11 @@ public class DescribeStreamsGroupTest {
     }
 
     @ClusterTest
-    public void testDescribeMultipleStreamsGroupWithMembersAndVerboseOptions() throws Exception {
+    public void testDescribeMultipleStreamsGroupWithMembersAndVerboseOptions(ClusterInstance cluster) throws Exception {
         cluster.createTopic(INPUT_TOPIC, 2, (short) 1);
         cluster.createTopic(INPUT_TOPIC_2, 1, (short) 1);
-        try (KafkaStreams ignored = startStreamsApp(APP_ID, INPUT_TOPIC, OUTPUT_TOPIC);
-             KafkaStreams ignored2 = startStreamsApp(APP_ID_2, INPUT_TOPIC_2, OUTPUT_TOPIC_2)) {
+        try (KafkaStreams ignored = startStreamsApp(cluster, APP_ID, INPUT_TOPIC, OUTPUT_TOPIC);
+             KafkaStreams ignored2 = startStreamsApp(cluster, APP_ID_2, INPUT_TOPIC_2, OUTPUT_TOPIC_2)) {
             final List<String> expectedHeader = List.of("GROUP", "TARGET-ASSIGNMENT-EPOCH", "TOPOLOGY-EPOCH", "MEMBER", "MEMBER-PROTOCOL", "MEMBER-EPOCH", "PROCESS", "CLIENT-ID", "ASSIGNMENTS");
             final Set<List<String>> expectedRows1 = Set.of(
                 List.of(APP_ID, "", "0", "", "streams", "", "", "", "ACTIVE:", "0:[1];", "1:[1];", "TARGET-ACTIVE:", "0:[1];", "1:[1];"),
@@ -245,7 +242,7 @@ public class DescribeStreamsGroupTest {
     }
 
     @ClusterTest
-    public void testDescribeNonExistingStreamsGroup() {
+    public void testDescribeNonExistingStreamsGroup(ClusterInstance cluster) {
         final String nonExistingGroup = "non-existing-group";
         final String errorMessage = String.format(
             "Error: Executing streams group command failed due to org.apache.kafka.common.errors.GroupIdNotFoundException: Group %s not found.",
@@ -257,8 +254,8 @@ public class DescribeStreamsGroupTest {
             List.of("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--verbose", "--members", "--group", nonExistingGroup), errorMessage);
     }
 
-    private KafkaStreams startStreamsApp(String appId, String inputTopic, String outputTopic) throws InterruptedException {
-        KafkaStreams streams = new KafkaStreams(topology(inputTopic, outputTopic), streamsProp(appId));
+    private KafkaStreams startStreamsApp(ClusterInstance cluster, String appId, String inputTopic, String outputTopic) throws InterruptedException {
+        KafkaStreams streams = new KafkaStreams(topology(inputTopic, outputTopic), streamsProp(cluster, appId));
         StreamsGroupCommandTestUtils.startApplicationAndWaitUntilRunning(streams);
         return streams;
     }
@@ -273,7 +270,7 @@ public class DescribeStreamsGroupTest {
         return builder.build();
     }
 
-    private Properties streamsProp(String appId) {
+    private Properties streamsProp(ClusterInstance cluster, String appId) {
         Properties streamsProp = new Properties();
         streamsProp.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsProp.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
@@ -282,7 +279,7 @@ public class DescribeStreamsGroupTest {
         streamsProp.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         streamsProp.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
-        streamsProp.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+        streamsProp.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
         return streamsProp;
     }
 

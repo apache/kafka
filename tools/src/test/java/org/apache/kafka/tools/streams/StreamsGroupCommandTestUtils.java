@@ -16,21 +16,23 @@
  */
 package org.apache.kafka.tools.streams;
 
-import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.test.TestUtils;
 
-import java.util.ArrayList;
+import org.junit.jupiter.api.Assertions;
+
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
 public final class StreamsGroupCommandTestUtils {
@@ -54,23 +56,19 @@ public final class StreamsGroupCommandTestUtils {
             "Streams application did not reach the RUNNING state.");
     }
 
-    public static void produceSynchronously(final String bootstrapServers,
-                                            final String topic,
-                                            final Optional<Integer> partition,
-                                            final List<KeyValueTimestamp<String, String>> toProduce) {
-        Properties producerConfig = TestUtils.producerConfig(bootstrapServers, StringSerializer.class, StringSerializer.class);
-        try (Producer<String, String> producer = new KafkaProducer<>(producerConfig)) {
-            List<Future<RecordMetadata>> futures = new ArrayList<>();
-            for (KeyValueTimestamp<String, String> record : toProduce) {
-                futures.add(producer.send(
-                    new ProducerRecord<>(topic, partition.orElse(null), record.timestamp(), record.key(), record.value(), null)));
-            }
+    public static void produce(final ClusterInstance cluster,
+                               final String topic,
+                               final Optional<Integer> partition,
+                               final List<KeyValueTimestamp<String, String>> toProduce) {
+        try (Producer<String, String> producer = cluster.producer(Map.of(
+                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()))) {
+            List<Future<RecordMetadata>> futures = toProduce.stream()
+                .map(record -> producer.send(new ProducerRecord<>(
+                    topic, partition.orElse(null), record.timestamp(), record.key(), record.value())))
+                .toList();
             producer.flush();
-            for (Future<RecordMetadata> future : futures) {
-                future.get();
-            }
-        } catch (InterruptedException | ExecutionException e) {
-            throw new RuntimeException(e);
+            futures.forEach(future -> Assertions.assertDoesNotThrow(() -> future.get()));
         }
     }
 }

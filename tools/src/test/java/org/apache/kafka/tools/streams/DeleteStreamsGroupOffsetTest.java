@@ -28,6 +28,7 @@ import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.streams.CloseOptions;
+import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -91,8 +92,11 @@ public class DeleteStreamsGroupOffsetTest {
         configs.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         configs.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         configs.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
-        configs.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+        configs.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
         configs.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        // Use a unique state directory per instance. TestUtils.randomString uses a fixed seed, so app ids are
+        // identical across parallel test JVMs. Without this, concurrent forks would share the default
+        // ${java.io.tmpdir}/kafka-streams/<application.id> directory and fail to acquire the state lock.
         configs.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         configs.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         return configs;
@@ -392,7 +396,7 @@ public class DeleteStreamsGroupOffsetTest {
             data.add(new KeyValueTimestamp<>(v + "0" + topic, v + "0", System.currentTimeMillis()));
         }
 
-        StreamsGroupCommandTestUtils.produceSynchronously(cluster.bootstrapServers(), topic, Optional.empty(), data);
+        StreamsGroupCommandTestUtils.produce(cluster, topic, Optional.empty(), data);
     }
 
     private StreamsGroupCommand.StreamsGroupService getStreamsGroupService(ClusterInstance cluster, String[] args) {

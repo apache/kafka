@@ -32,6 +32,7 @@ import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.streams.CloseOptions;
+import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -43,6 +44,8 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
+
+import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -99,9 +102,9 @@ public class DeleteStreamsGroupTest {
     private static final String APP_ID_PREFIX = "delete-group-test-";
     private static final int RECORD_TOTAL = 10;
 
-    @ClusterTest
-    public void testDeleteWithUnrecognizedOption(ClusterInstance cluster) {
-        final String[] args = new String[]{"--unrecognized-option", "--bootstrap-server", cluster.bootstrapServers(), "--delete", "--all-groups"};
+    @Test
+    public void testDeleteWithUnrecognizedOption() {
+        final String[] args = new String[]{"--unrecognized-option", "--bootstrap-server", "localhost:9092", "--delete", "--all-groups"};
         assertThrows(OptionException.class, () -> getStreamsGroupService(args));
     }
 
@@ -431,8 +434,11 @@ public class DeleteStreamsGroupTest {
         streamsConfig.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
-        streamsConfig.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+        streamsConfig.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
         streamsConfig.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        // Use a unique state directory per instance. TestUtils.randomString uses a fixed seed, so app ids are
+        // identical across parallel test JVMs; without this, concurrent forks would share the default
+        // ${java.io.tmpdir}/kafka-streams/<application.id> directory and fail to acquire the state lock.
         streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         return streamsConfig;
@@ -521,7 +527,7 @@ public class DeleteStreamsGroupTest {
             data.add(new KeyValueTimestamp<>(v + "0" + topic, v + "0", System.currentTimeMillis()));
         }
 
-        StreamsGroupCommandTestUtils.produceSynchronously(cluster.bootstrapServers(), topic, Optional.empty(), data);
+        StreamsGroupCommandTestUtils.produce(cluster, topic, Optional.empty(), data);
     }
 
     private static StreamsBuilder builder(String inputTopic, String outputTopic) {

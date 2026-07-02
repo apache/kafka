@@ -27,6 +27,7 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -37,6 +38,7 @@ import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
 
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.HashSet;
@@ -74,16 +76,16 @@ public class ListStreamsGroupTest {
     private static final String INPUT_TOPIC = "customInputTopic";
     private static final String OUTPUT_TOPIC = "customOutputTopic";
 
-    private final ClusterInstance cluster;
-
-    ListStreamsGroupTest(ClusterInstance cluster) {
-        this.cluster = cluster;
+    @Test
+    public void testListWithUnrecognizedNewOption() {
+        String[] cgcArgs = new String[]{"--new-option", "--bootstrap-server", "localhost:9092", "--list"};
+        Assertions.assertThrows(OptionException.class, () -> getStreamsGroupService(cgcArgs));
     }
 
     @ClusterTest
-    public void testListStreamsGroupWithoutFilters() throws Exception {
+    public void testListStreamsGroupWithoutFilters(ClusterInstance cluster) throws Exception {
         cluster.createTopic(INPUT_TOPIC, 2, (short) 1);
-        try (KafkaStreams ignored = startStreamsApp();
+        try (KafkaStreams ignored = startStreamsApp(cluster);
              StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list"})) {
             Set<String> expectedGroups = Set.of(APP_ID);
 
@@ -96,15 +98,9 @@ public class ListStreamsGroupTest {
     }
 
     @ClusterTest
-    public void testListWithUnrecognizedNewOption() {
-        String[] cgcArgs = new String[]{"--new-option", "--bootstrap-server", cluster.bootstrapServers(), "--list"};
-        Assertions.assertThrows(OptionException.class, () -> getStreamsGroupService(cgcArgs));
-    }
-
-    @ClusterTest
-    public void testListStreamsGroupWithStates() throws Exception {
+    public void testListStreamsGroupWithStates(ClusterInstance cluster) throws Exception {
         cluster.createTopic(INPUT_TOPIC, 2, (short) 1);
-        try (KafkaStreams ignored = startStreamsApp();
+        try (KafkaStreams ignored = startStreamsApp(cluster);
              StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list", "--state"})) {
             Set<GroupListing> expectedListing = Set.of(
                 new GroupListing(
@@ -124,43 +120,38 @@ public class ListStreamsGroupTest {
     }
 
     @ClusterTest
-    public void testListStreamsGroupWithSpecifiedStates() throws Exception {
+    public void testListStreamsGroupWithSpecifiedStates(ClusterInstance cluster) throws Exception {
         cluster.createTopic(INPUT_TOPIC, 2, (short) 1);
-        try (KafkaStreams ignored = startStreamsApp()) {
-            try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list", "--state", "stable"})) {
-                Set<GroupListing> expectedListing = Set.of(
-                    new GroupListing(
-                        APP_ID,
-                        Optional.of(GroupType.STREAMS),
-                        "streams",
-                        Optional.of(GroupState.STABLE))
-                );
+        try (KafkaStreams ignored = startStreamsApp(cluster);
+             StreamsGroupCommand.StreamsGroupService stableService = getStreamsGroupService(new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list", "--state", "stable"});
+             StreamsGroupCommand.StreamsGroupService rebalanceService = getStreamsGroupService(new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list", "--state", "PreparingRebalance"})) {
+            Set<GroupListing> expectedStableListing = Set.of(
+                new GroupListing(
+                    APP_ID,
+                    Optional.of(GroupType.STREAMS),
+                    "streams",
+                    Optional.of(GroupState.STABLE))
+            );
 
-                final AtomicReference<Set<GroupListing>> foundListing = new AtomicReference<>();
+            final AtomicReference<Set<GroupListing>> foundStableListing = new AtomicReference<>();
+            TestUtils.waitForCondition(() -> {
+                foundStableListing.set(new HashSet<>(stableService.listStreamsGroupsInStates(Set.of())));
+                return Objects.equals(expectedStableListing, foundStableListing.get());
+            }, () -> "Expected --list to show streams groups " + expectedStableListing + ", but found " + foundStableListing.get() + ".");
 
-                TestUtils.waitForCondition(() -> {
-                    foundListing.set(new HashSet<>(service.listStreamsGroupsInStates(Set.of())));
-                    return Objects.equals(expectedListing, foundListing.get());
-                }, () -> "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
-            }
-
-            try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list", "--state", "PreparingRebalance"})) {
-                Set<GroupListing> expectedListing = Set.of();
-
-                final AtomicReference<Set<GroupListing>> foundListing = new AtomicReference<>();
-
-                TestUtils.waitForCondition(() -> {
-                    foundListing.set(new HashSet<>(service.listStreamsGroupsInStates(Set.of(GroupState.PREPARING_REBALANCE))));
-                    return Objects.equals(expectedListing, foundListing.get());
-                }, () -> "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
-            }
+            Set<GroupListing> expectedRebalanceListing = Set.of();
+            final AtomicReference<Set<GroupListing>> foundRebalanceListing = new AtomicReference<>();
+            TestUtils.waitForCondition(() -> {
+                foundRebalanceListing.set(new HashSet<>(rebalanceService.listStreamsGroupsInStates(Set.of(GroupState.PREPARING_REBALANCE))));
+                return Objects.equals(expectedRebalanceListing, foundRebalanceListing.get());
+            }, () -> "Expected --list to show streams groups " + expectedRebalanceListing + ", but found " + foundRebalanceListing.get() + ".");
         }
     }
 
     @ClusterTest
-    public void testListStreamsGroupOutput() throws Exception {
+    public void testListStreamsGroupOutput(ClusterInstance cluster) throws Exception {
         cluster.createTopic(INPUT_TOPIC, 2, (short) 1);
-        try (KafkaStreams ignored = startStreamsApp()) {
+        try (KafkaStreams ignored = startStreamsApp(cluster)) {
             validateListOutput(
                 List.of("--bootstrap-server", cluster.bootstrapServers(), "--list"),
                 List.of(),
@@ -188,8 +179,8 @@ public class ListStreamsGroupTest {
         }
     }
 
-    private KafkaStreams startStreamsApp() throws InterruptedException {
-        KafkaStreams streams = new KafkaStreams(topology(), streamsProp());
+    private KafkaStreams startStreamsApp(ClusterInstance cluster) throws InterruptedException {
+        KafkaStreams streams = new KafkaStreams(topology(), streamsProp(cluster));
         StreamsGroupCommandTestUtils.startApplicationAndWaitUntilRunning(streams);
         return streams;
     }
@@ -204,7 +195,7 @@ public class ListStreamsGroupTest {
         return builder.build();
     }
 
-    private Properties streamsProp() {
+    private Properties streamsProp(ClusterInstance cluster) {
         Properties streamsProp = new Properties();
         streamsProp.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsProp.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
@@ -213,7 +204,7 @@ public class ListStreamsGroupTest {
         streamsProp.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID);
         streamsProp.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
-        streamsProp.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+        streamsProp.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
         return streamsProp;
     }
 
