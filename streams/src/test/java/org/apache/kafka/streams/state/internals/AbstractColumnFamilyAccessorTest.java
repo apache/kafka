@@ -61,6 +61,8 @@ abstract class AbstractColumnFamilyAccessorTest {
     protected AbstractColumnFamilyAccessor accessor;
 
     abstract AbstractColumnFamilyAccessor createColumnFamilyAccessor();
+
+    abstract AbstractColumnFamilyAccessor createTransactionalColumnFamilyAccessor();
     private final LongSerializer offsetSerializer = new LongSerializer();
     private final StringSerializer keySerializer = new StringSerializer();
     private final byte[] openValue = toBytes(1L);
@@ -170,10 +172,41 @@ abstract class AbstractColumnFamilyAccessorTest {
         verify(dbAccessor, never()).put(any(), any(), any());
     }
 
+    @Test
+    public void shouldNotWriteOpenMarkerForTransactionalStore() throws RocksDBException {
+        dbAccessor = new InMemoryRocksDBAccessor(mock(RocksDB.class));
+        final AbstractColumnFamilyAccessor txnAccessor = createTransactionalColumnFamilyAccessor();
+        txnAccessor.open(dbAccessor, false);
+        assertNull(dbAccessor.get(offsetsCF, toBytes("status")));
+    }
+
+    @Test
+    public void shouldNotWriteClosedMarkerForTransactionalStore() throws RocksDBException {
+        dbAccessor = new InMemoryRocksDBAccessor(mock(RocksDB.class));
+        final AbstractColumnFamilyAccessor txnAccessor = createTransactionalColumnFamilyAccessor();
+        txnAccessor.open(dbAccessor, false);
+        txnAccessor.close(dbAccessor);
+        assertNull(dbAccessor.get(offsetsCF, toBytes("status")));
+    }
+
+    @Test
+    public void shouldDetectStaleOpenMarkerFromPriorNonTransactionalCrash() throws RocksDBException {
+        dbAccessor = new InMemoryRocksDBAccessor(mock(RocksDB.class));
+        // Simulate a prior non-transactional crash: OPEN marker left on disk
+        dbAccessor.put(offsetsCF, toBytes("status"), openValue);
+
+        final AbstractColumnFamilyAccessor txnAccessor = createTransactionalColumnFamilyAccessor();
+        final ProcessorStateException thrown = assertThrowsExactly(
+                ProcessorStateException.class, () -> txnAccessor.open(dbAccessor, false));
+        assertEquals("Invalid state during store open. Expected state to be either empty or closed", thrown.getMessage());
+        // Marker is unchanged — transactional accessor never writes status
+        assertArrayEquals(openValue, dbAccessor.get(offsetsCF, toBytes("status")));
+    }
+
     private byte[] toBytes(final String s) {
         return keySerializer.serialize("", s);
     }
-    
+
     private byte[] toBytes(final long l) {
         return offsetSerializer.serialize("", l);
     }

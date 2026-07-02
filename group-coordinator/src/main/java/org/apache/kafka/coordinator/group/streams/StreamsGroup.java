@@ -504,7 +504,7 @@ public class StreamsGroup implements Group {
         }
         StreamsGroupMember oldMember = members.put(newMember.memberId(), newMember);
         maybeUpdateTaskProcessId(oldMember, newMember);
-        updateStaticMember(newMember);
+        updateStaticMember(oldMember, newMember);
         maybeUpdateGroupState();
         endpointToPartitionsCache.remove(newMember.memberId());
     }
@@ -512,9 +512,14 @@ public class StreamsGroup implements Group {
     /**
      * Updates the member ID stored against the instance ID if the member is a static member.
      *
+     * @param oldMember The old member state.
      * @param newMember The new member state.
      */
-    private void updateStaticMember(StreamsGroupMember newMember) {
+    private void updateStaticMember(StreamsGroupMember oldMember, StreamsGroupMember newMember) {
+        if (oldMember != null && oldMember.instanceId() != null &&
+            oldMember.instanceId().isPresent()) {
+            staticMembers.remove(oldMember.instanceId().get());
+        }
         if (newMember.instanceId() != null && newMember.instanceId().isPresent()) {
             staticMembers.put(newMember.instanceId().get(), newMember.memberId());
         }
