@@ -2559,9 +2559,6 @@ public class GroupMetadataManager {
             updatedMember
         );
 
-        // The subscription has changed when either the subscribed topic names or subscribed topic
-        // regex has changed.
-        boolean hasSubscriptionChanged = subscribedTopicNamesChanged || updateRegularExpressionStatus.regexUpdated();
         int groupEpoch = group.groupEpoch();
         SubscriptionType subscriptionType = group.subscriptionType();
 
@@ -2613,8 +2610,6 @@ public class GroupMetadataManager {
             updateTargetAssignmentResult.targetAssignmentEpoch(),
             updateTargetAssignmentResult.targetAssignment(),
             group.resolvedRegularExpressions(),
-            // Force consistency with the subscription when the subscription has changed.
-            hasSubscriptionChanged,
             ownedTopicPartitions,
             records
         );
@@ -2785,7 +2780,6 @@ public class GroupMetadataManager {
                     group.assignmentEpoch(),
                     group.targetAssignment(updatedMember.memberId(), updatedMember.instanceId()),
                     group.resolvedRegularExpressions(),
-                    bumpGroupEpoch,
                     toTopicPartitions(subscription.ownedPartitions(), metadataImage),
                     records
                 );
@@ -2824,8 +2818,6 @@ public class GroupMetadataManager {
                 updateTargetAssignmentResult.targetAssignmentEpoch(),
                 updateTargetAssignmentResult.targetAssignment(),
                 group.resolvedRegularExpressions(),
-                // Force consistency with the subscription when the subscription has changed.
-                bumpGroupEpoch,
                 toTopicPartitions(subscription.ownedPartitions(), metadataImage),
                 records
             );
@@ -3849,7 +3841,6 @@ public class GroupMetadataManager {
      * @param targetAssignmentEpoch      The target assignment epoch.
      * @param targetAssignment           The target assignment.
      * @param resolvedRegularExpressions The resolved regular expressions.
-     * @param hasSubscriptionChanged     Whether the member has changed its subscription on the current heartbeat.
      * @param ownedTopicPartitions       The list of partitions owned by the member. This
      *                                   is reported in the ConsumerGroupHeartbeat API and
      *                                   it could be null if not provided.
@@ -3864,18 +3855,26 @@ public class GroupMetadataManager {
         int targetAssignmentEpoch,
         Assignment targetAssignment,
         Map<String, ResolvedRegularExpression> resolvedRegularExpressions,
-        boolean hasSubscriptionChanged,
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions,
         List<CoordinatorRecord> records
     ) {
-        if (!hasSubscriptionChanged && member.isReconciledTo(targetAssignmentEpoch)) {
+        // The assignment-subscription consistency is a state fact: it does not depend on
+        // what changed during this event, so it can be recomputed here instead of being
+        // carried as a diff-triggered flag from the caller.
+        boolean enforceSubscriptionConsistency = !CurrentAssignmentBuilder.assignmentIsSubscriptionConsistent(
+            member,
+            resolvedRegularExpressions,
+            metadataImage
+        );
+
+        if (!enforceSubscriptionConsistency && member.isReconciledTo(targetAssignmentEpoch)) {
             return member;
         }
 
         ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
             .withTargetAssignment(targetAssignmentEpoch, targetAssignment)
-            .withHasSubscriptionChanged(hasSubscriptionChanged)
+            .withEnforceSubscriptionConsistency(enforceSubscriptionConsistency)
             .withResolvedRegularExpressions(resolvedRegularExpressions)
             .withCurrentPartitionEpoch(currentPartitionEpoch)
             .withOwnedTopicPartitions(ownedTopicPartitions)

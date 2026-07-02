@@ -24777,9 +24777,10 @@ public class GroupMetadataManagerTest {
             // The member subscription is updated.
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember1),
             // The previous regex is deleted.
-            GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionTombstone(groupId, "foo*"),
-            // The previous member epoch is updated.
-            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember1)
+            GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionTombstone(groupId, "foo*")
+            // No current-assignment record this time: the member owns no partitions, so its
+            // (empty) assignment is trivially consistent with the new, unresolved regex, and
+            // reconciliation is a no-op.
         );
 
         assertRecordsEquals(expectedRecords, result.records());
