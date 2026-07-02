@@ -2203,6 +2203,10 @@ public class AsyncKafkaConsumerTest {
         verify(applicationEventHandler, never()).add(ArgumentMatchers.isA(SyncCommitEvent.class));
         verify(applicationEventHandler, never()).add(ArgumentMatchers.isA(AsyncCommitEvent.class));
         verify(applicationEventHandler, never()).add(ArgumentMatchers.isA(CommitOnCloseEvent.class));
+
+        // Auto-commit is enabled, so close() will send a commit-on-close event and wait for it to
+        // complete. Mock the handler to complete the commit event so close() does not hang.
+        completeCommitSyncApplicationEventSuccessfully();
     }
 
     private static Stream<CompletableBackgroundEvent<?>> assignmentEventsSource() {
