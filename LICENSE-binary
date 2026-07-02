@@ -216,7 +216,7 @@ License Version 2.0:
 - jackson-core-2.21.4
 - jackson-databind-2.21.4
 - jackson-dataformat-csv-2.21.4
-- jackson-dataformat-yaml-2.21.24
+- jackson-dataformat-yaml-2.21.4
 - jackson-datatype-jdk8-2.21.4
 - jackson-jakarta-rs-base-2.21.4
 - jackson-jakarta-rs-json-provider-2.21.4
