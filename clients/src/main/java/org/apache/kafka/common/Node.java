@@ -31,47 +31,29 @@ public class Node {
     private final int port;
     private final String rack;
     private final boolean isFenced;
-    private final boolean isCoordinator;
 
     // Cache hashCode as it is called in performance sensitive parts of the code (e.g. RecordAccumulator.ready)
     private Integer hash;
 
     public Node(int id, String host, int port) {
-        this(id, host, port, null, false, false);
+        this(id, host, port, null, false);
     }
 
     public Node(int id, String host, int port, String rack) {
-        this(id, host, port, rack, false, false);
+        this(id, host, port, rack, false);
     }
 
     public Node(int id, String host, int port, String rack, boolean isFenced) {
-        this(id, host, port, rack, isFenced, false);
+        this(id, host, port, rack, isFenced, Integer.toString(id));
     }
 
-    public Node(int id, String host, int port, String rack, boolean isFenced, boolean isCoordinator) {
+    protected Node(int id, String host, int port, String rack, boolean isFenced, String idString) {
         this.id = id;
-        // The contract here is that the node's id can be extracted from the node's idString by parsing as
-        // an integer. We want coordinator and non-coordinator nodes with the same id to have different
-        // idString values which parse to the same numeric id value. The Kafka network code depends upon having
-        // separate coordinator connections to brokers, and uses idString to differentiate.
-        //
-        // There are three cases:
-        // * Negative node ID - used for bootstrap, will not be a coordinator, idString will be a negative integer string
-        // * Non-negative node ID, not coordinator - idString will be a non-negative integer string with no sign
-        // * Non-negative node ID, coordinator - idString will be a non-negative integer string, with a leading '+'
-        if (isCoordinator) {
-            if (id < 0) {
-                throw new IllegalArgumentException("Node id for coordinator node cannot be negative");
-            }
-            this.idString = "+" + id;
-        } else {
-            this.idString = Integer.toString(id);
-        }
+        this.idString = idString;
         this.host = host;
         this.port = port;
         this.rack = rack;
         this.isFenced = isFenced;
-        this.isCoordinator = isCoordinator;
     }
 
     public static Node noNode() {
@@ -96,7 +78,8 @@ public class Node {
 
     /**
      * String representation of the node id.
-     * Typically the integer id is used to serialize over the wire, the string representation is used as an identifier with NetworkClient code
+     * Typically, the integer id is used to serialize over the wire, the string representation is used as an
+     * identifier with NetworkClient code
      */
     public String idString() {
         return idString;
@@ -140,13 +123,6 @@ public class Node {
         return isFenced;
     }
 
-    /**
-     * Returns whether this node is a coordinator.
-     */
-    public boolean isCoordinator() {
-        return isCoordinator;
-    }
-
     @Override
     public int hashCode() {
         Integer h = this.hash;
@@ -156,7 +132,6 @@ public class Node {
             result = 31 * result + port;
             result = 31 * result + ((rack == null) ? 0 : rack.hashCode());
             result = 31 * result + Objects.hashCode(isFenced);
-            result = 31 * result + Objects.hashCode(isCoordinator);
             this.hash = result;
             return result;
         } else {
@@ -175,12 +150,11 @@ public class Node {
             port == other.port &&
             Objects.equals(host, other.host) &&
             Objects.equals(rack, other.rack) &&
-            isFenced == other.isFenced &&
-            isCoordinator == other.isCoordinator;
+            Objects.equals(isFenced, other.isFenced);
     }
 
     @Override
     public String toString() {
-        return host + ":" + port + " (id: " + idString + " rack: " + rack + " isFenced: " + isFenced + " isCoordinator: " + isCoordinator + ")";
+        return host + ":" + port + " (id: " + idString + " rack: " + rack + " isFenced: " + isFenced + ")";
     }
 }

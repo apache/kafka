@@ -185,13 +185,10 @@ public class CoordinatorRequestManager implements RequestManager {
         final long currentTimeMs,
         final FindCoordinatorResponseData.Coordinator coordinator
     ) {
-        this.coordinator = new Node(
+        this.coordinator = new GroupCoordinatorNode(
                 coordinator.nodeId(),
                 coordinator.host(),
-                coordinator.port(),
-                null,
-                false,
-                true);
+                coordinator.port());
         log.info("Discovered group coordinator {}", coordinator);
         coordinatorRequestState.onSuccessfulAttempt(currentTimeMs);
     }

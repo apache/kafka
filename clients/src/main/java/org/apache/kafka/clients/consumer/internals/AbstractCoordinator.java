@@ -934,13 +934,10 @@ public abstract class AbstractCoordinator implements Closeable {
             Errors error = Errors.forCode(coordinatorData.errorCode());
             if (error == Errors.NONE) {
                 synchronized (AbstractCoordinator.this) {
-                    AbstractCoordinator.this.coordinator = new Node(
+                    AbstractCoordinator.this.coordinator = new GroupCoordinatorNode(
                             coordinatorData.nodeId(),
                             coordinatorData.host(),
-                            coordinatorData.port(),
-                            null,
-                            false,
-                            true);
+                            coordinatorData.port());
                     log.info("Discovered group coordinator {}", coordinator);
                     client.tryConnect(coordinator);
                     heartbeat.resetSessionTimeout();

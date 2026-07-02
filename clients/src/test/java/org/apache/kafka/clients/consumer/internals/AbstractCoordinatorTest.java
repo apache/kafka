@@ -154,7 +154,7 @@ public class AbstractCoordinatorTest {
 
         mockClient.updateMetadata(RequestTestUtils.metadataUpdateWith(1, emptyMap()));
         this.node = metadata.fetch().nodes().get(0);
-        this.coordinatorNode = new Node(node.id(), node.host(), node.port(), null, false, true);
+        this.coordinatorNode = new GroupCoordinatorNode(node.id(), node.host(), node.port());
 
         GroupRebalanceConfig rebalanceConfig = new GroupRebalanceConfig(SESSION_TIMEOUT_MS,
                                                                         rebalanceTimeoutMs,
