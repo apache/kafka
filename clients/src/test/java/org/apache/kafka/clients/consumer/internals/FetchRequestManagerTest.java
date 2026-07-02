@@ -1761,6 +1761,37 @@ public class FetchRequestManagerTest {
     }
 
     @Test
+    public void testFetchResponseWithUnexpectedPartitionIsIgnored() {
+        buildFetcher();
+
+        // Only tp0 is assigned and seeked; tp1 is not part of this fetch session.
+        // When the response includes an unexpected partition (tp1), FetchSessionHandler
+        // rejects the entire response, so tp0 records are also not returned.
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        assertEquals(1, sendFetches());
+
+        Map<TopicIdPartition, FetchResponseData.PartitionData> partitions = new LinkedHashMap<>();
+        partitions.put(tidp0, new FetchResponseData.PartitionData()
+                .setPartitionIndex(tp0.partition())
+                .setHighWatermark(100L)
+                .setLogStartOffset(0)
+                .setRecords(records));
+        partitions.put(tidp1, new FetchResponseData.PartitionData()
+                .setPartitionIndex(tp1.partition())
+                .setHighWatermark(100L)
+                .setLogStartOffset(0)
+                .setRecords(records));
+        client.prepareResponse(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions), List.of()));
+        networkClientDelegate.poll(time.timer(0));
+
+        assertEquals(0, client.inFlightRequestCount());
+        assertFalse(fetcher.hasCompletedFetches());
+        assertTrue(fetchRecords().isEmpty());
+    }
+
+    @Test
     public void testCompletedFetchRemoval() {
         // Ensure the removal of completed fetches that cause an Exception if and only if they contain empty records.
         buildFetcher(AutoOffsetResetStrategy.NONE, new ByteArrayDeserializer(),

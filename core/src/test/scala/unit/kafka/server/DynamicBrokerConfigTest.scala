@@ -771,6 +771,32 @@ class DynamicBrokerConfigTest {
   }
 
   @Test
+  def testDynamicLogRemoteCopyLagConfig(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, port = 8181)
+    val config = KafkaConfig(props)
+    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]), mock(classOf[DirectoryEventHandler]))
+    config.dynamicConfig.initialize(None)
+    config.dynamicConfig.addBrokerReconfigurable(dynamicLogConfig)
+    assertEquals(RemoteLogManagerConfig.DEFAULT_LOG_REMOTE_COPY_LAG_MS, config.remoteLogManagerConfig.logRemoteCopyLagMs)
+    assertEquals(RemoteLogManagerConfig.DEFAULT_LOG_REMOTE_COPY_LAG_BYTES, config.remoteLogManagerConfig.logRemoteCopyLagBytes)
+
+    // update default config
+    val newProps = new Properties()
+    newProps.put(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_MS_PROP, "100")
+    newProps.put(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_BYTES_PROP, "200")
+    config.dynamicConfig.validate(newProps, perBrokerConfig = false)
+    config.dynamicConfig.updateDefaultConfig(newProps)
+    assertEquals(100L, config.remoteLogManagerConfig.logRemoteCopyLagMs())
+    assertEquals(200L, config.remoteLogManagerConfig.logRemoteCopyLagBytes())
+
+    // update per broker config
+    config.dynamicConfig.validate(newProps, perBrokerConfig = true)
+    newProps.put(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_BYTES_PROP, "300")
+    config.dynamicConfig.updateBrokerConfig(0, newProps)
+    assertEquals(300L, config.remoteLogManagerConfig.logRemoteCopyLagBytes())
+  }
+
+  @Test
   def testDynamicLogRemoteCopyLagThrowsOnIncorrectConfig(): Unit = {
     // log remote copy lag ms cannot exceed effective log local retention ms
     verifyIncorrectLogRemoteCopyLagProps(

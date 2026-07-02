@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
+
 import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.TreeMap;
@@ -124,14 +126,22 @@ abstract class AbstractTransactionBuffer<K extends Comparable<K>> implements Tra
 
     @Override
     public ManagedKeyValueIterator<K, byte[]> all(final boolean forward) {
+        return all(forward, IsolationLevel.READ_UNCOMMITTED);
+    }
+
+    /**
+     * As {@link #all(boolean)}, but under {@link IsolationLevel#READ_COMMITTED} the staging layer is
+     * excluded and only the committed base store is iterated.
+     */
+    ManagedKeyValueIterator<K, byte[]> all(final boolean forward, final IsolationLevel isolationLevel) {
         if (Thread.currentThread() == ownerThread) {
             // Eager copy of the staging layer (lock-free for the sole mutator) so a later owner
             // stage cannot invalidate this iterator; the base store is iterated live.
-            final NavigableMap<K, Optional<byte[]>> stagingSnapshot = new TreeMap<>(pendingWrites);
+            final NavigableMap<K, Optional<byte[]>> stagingSnapshot = stagingSnapshot(null, null, true, isolationLevel);
             final ManagedKeyValueIterator<K, byte[]> baseIter = newBaseIterator(null, null, forward, true);
             return new StagedMergeIterator<>(stagingSnapshot, baseIter, forward);
         }
-        return snapshotScan(null, null, forward, true);
+        return snapshotScan(null, null, forward, true, isolationLevel);
     }
 
     /**
@@ -139,12 +149,21 @@ abstract class AbstractTransactionBuffer<K extends Comparable<K>> implements Tra
      */
     @Override
     public ManagedKeyValueIterator<K, byte[]> range(final K from, final K to, final boolean forward, final boolean toInclusive) {
+        return range(from, to, forward, toInclusive, IsolationLevel.READ_UNCOMMITTED);
+    }
+
+    /**
+     * As {@link #range(Object, Object, boolean, boolean)}, but under {@link IsolationLevel#READ_COMMITTED}
+     * the staging layer is excluded and only the committed base store is iterated.
+     */
+    ManagedKeyValueIterator<K, byte[]> range(final K from, final K to, final boolean forward, final boolean toInclusive,
+                                             final IsolationLevel isolationLevel) {
         if (Thread.currentThread() == ownerThread) {
-            final NavigableMap<K, Optional<byte[]>> stagingSnapshot = new TreeMap<>(boundStaging(from, to, toInclusive));
+            final NavigableMap<K, Optional<byte[]>> stagingSnapshot = stagingSnapshot(from, to, toInclusive, isolationLevel);
             final ManagedKeyValueIterator<K, byte[]> baseIter = newBaseIterator(from, to, forward, toInclusive);
             return new StagedMergeIterator<>(stagingSnapshot, baseIter, forward);
         }
-        return snapshotScan(from, to, forward, toInclusive);
+        return snapshotScan(from, to, forward, toInclusive, isolationLevel);
     }
 
     @Override
@@ -195,14 +214,37 @@ abstract class AbstractTransactionBuffer<K extends Comparable<K>> implements Tra
      */
     ManagedKeyValueIterator<K, byte[]> snapshotScan(final K from, final K to,
                                                     final boolean forward, final boolean toInclusive) {
+        return snapshotScan(from, to, forward, toInclusive, IsolationLevel.READ_UNCOMMITTED);
+    }
+
+    /**
+     * As {@link #snapshotScan(Object, Object, boolean, boolean)}, but under
+     * {@link IsolationLevel#READ_COMMITTED} only the committed base store is snapshotted, excluding the
+     * staging layer.
+     */
+    ManagedKeyValueIterator<K, byte[]> snapshotScan(final K from, final K to,
+                                                    final boolean forward, final boolean toInclusive,
+                                                    final IsolationLevel isolationLevel) {
         snapshotLock.readLock().lock();
         try {
-            final NavigableMap<K, Optional<byte[]>> stagingSnapshot = new TreeMap<>(boundStaging(from, to, toInclusive));
+            final NavigableMap<K, Optional<byte[]>> stagingSnapshot = stagingSnapshot(from, to, toInclusive, isolationLevel);
             final ManagedKeyValueIterator<K, byte[]> baseIter = newBaseSnapshotIterator(from, to, forward, toInclusive);
             return new StagedMergeIterator<>(stagingSnapshot, baseIter, forward);
         } finally {
             snapshotLock.readLock().unlock();
         }
+    }
+
+    /**
+     * An eager copy of the bounded staging range, so a later owner {@code stage} cannot invalidate an
+     * open iterator. Under {@link IsolationLevel#READ_COMMITTED} the copy is empty, which makes the
+     * {@link StagedMergeIterator} degenerate to a committed-only (base) view.
+     */
+    private NavigableMap<K, Optional<byte[]>> stagingSnapshot(final K from, final K to, final boolean toInclusive,
+                                                              final IsolationLevel isolationLevel) {
+        return isolationLevel == IsolationLevel.READ_UNCOMMITTED
+            ? new TreeMap<>(boundStaging(from, to, toInclusive))
+            : new TreeMap<>();
     }
 
     /**

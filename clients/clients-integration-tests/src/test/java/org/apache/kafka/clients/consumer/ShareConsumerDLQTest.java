@@ -63,7 +63,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
         @ClusterConfigProperty(key = "share.coordinator.state.topic.min.isr", value = "1"),
         @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
-        @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1")
+        @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
+        @ClusterConfigProperty(key = "group.share.min.heartbeat.interval.ms", value = "1500"),
+        @ClusterConfigProperty(key = "group.share.heartbeat.interval.ms", value = "1500")
     }
 )
 public class ShareConsumerDLQTest extends ShareConsumerTestBase {

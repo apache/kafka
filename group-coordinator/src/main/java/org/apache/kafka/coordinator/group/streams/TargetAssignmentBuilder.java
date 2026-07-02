@@ -92,6 +92,12 @@ public class TargetAssignmentBuilder {
     private ConfiguredTopology topology;
 
     /**
+     * The latest per-task changelog offsets reported by each member, keyed by member ID. Transient (not persisted);
+     * fed to the assignor so it can estimate task lag.
+     */
+    private Map<String, MemberTaskOffsets> taskOffsets = Map.of();
+
+    /**
      * Constructs the object.
      *
      * @param groupId    The group ID.
@@ -112,7 +118,8 @@ public class TargetAssignmentBuilder {
 
     static AssignmentMemberSpec createAssignmentMemberSpec(
         StreamsGroupMember member,
-        TasksTuple targetAssignment
+        TasksTuple targetAssignment,
+        MemberTaskOffsets taskOffsets
     ) {
         return new AssignmentMemberSpec(
             member.instanceId(),
@@ -122,8 +129,8 @@ public class TargetAssignmentBuilder {
             targetAssignment.warmupTasks(),
             member.processId(),
             member.clientTags(),
-            Map.of(),
-            Map.of()
+            taskOffsets.taskOffsets(),
+            taskOffsets.taskEndOffsets()
         );
     }
 
@@ -148,6 +155,19 @@ public class TargetAssignmentBuilder {
         Map<String, StreamsGroupMember> members
     ) {
         this.members = members;
+        return this;
+    }
+
+    /**
+     * Adds the latest per-task changelog offsets reported by each member.
+     *
+     * @param taskOffsets The reported task offsets/end-offsets keyed by member ID.
+     * @return This object.
+     */
+    public TargetAssignmentBuilder withTaskOffsets(
+        Map<String, MemberTaskOffsets> taskOffsets
+    ) {
+        this.taskOffsets = taskOffsets;
         return this;
     }
 
@@ -202,7 +222,8 @@ public class TargetAssignmentBuilder {
         // Prepare the member spec for all members.
         members.forEach((memberId, member) -> memberSpecs.put(memberId, createAssignmentMemberSpec(
             member,
-            targetAssignment.getOrDefault(memberId, org.apache.kafka.coordinator.group.streams.TasksTuple.EMPTY)
+            targetAssignment.getOrDefault(memberId, org.apache.kafka.coordinator.group.streams.TasksTuple.EMPTY),
+            taskOffsets.getOrDefault(memberId, MemberTaskOffsets.EMPTY)
         )));
 
         // Compute the assignment.

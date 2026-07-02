@@ -65,6 +65,7 @@ import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.Endpoint;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.KeyValue;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.TaskIds;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.TaskOffset;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.Topology;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData.Status;
@@ -2078,6 +2079,8 @@ public class GroupMetadataManager {
         List<TaskIds> ownedActiveTasks,
         List<TaskIds> ownedStandbyTasks,
         List<TaskIds> ownedWarmupTasks,
+        List<TaskOffset> taskOffsets,
+        List<TaskOffset> taskEndOffsets,
         String processId,
         Endpoint userEndpoint,
         List<KeyValue> clientTags,
@@ -2127,6 +2130,14 @@ public class GroupMetadataManager {
                 isJoining,
                 records
             );
+        }
+
+        // Store the latest task changelog offsets/end-offsets reported by the member. These are transient telemetry
+        // (used by the assignor to estimate task lag) and are not persisted. Task offsets and end-offsets are reported
+        // independently: a null list means "unchanged since the last heartbeat", so we retain the previously reported
+        // value for whichever of the two is null and only update when at least one is reported.
+        if (taskOffsets != null || taskEndOffsets != null) {
+            group.updateTaskOffsets(memberId, group.taskOffsets(memberId).update(taskOffsets, taskEndOffsets));
         }
 
         // 1. Create or update the member.
@@ -3122,18 +3133,42 @@ public class GroupMetadataManager {
         }
 
         addInitializingTopicsRecords(groupId, records, topicPartitionChangeMap);
-        return Optional.of(buildInitializeShareGroupStateRequest(groupId, groupEpoch, topicPartitionChangeMap));
+
+        // Topics already known to the group (already initialized or already initializing) whose
+        // newly added partitions are now being initialized must start at offset 0 to avoid losing
+        // records produced before initialization completes. Brand-new topics (seen for the first
+        // time, present in neither map) use -1 so that the group's share.auto.offset.reset strategy
+        // applies. This is read before the records above are replayed, so a brand-new topic is
+        // correctly absent here.
+        Set<Uuid> alreadyKnownTopics = null;
+        if (shareGroupStatePartitionMetadata.containsKey(groupId)) {
+            ShareGroupStatePartitionMetadataInfo info = shareGroupStatePartitionMetadata.get(groupId);
+            alreadyKnownTopics = new HashSet<>();
+            alreadyKnownTopics.addAll(info.initializedTopics().keySet());
+            alreadyKnownTopics.addAll(info.initializingTopics().keySet());
+        }
+
+        return Optional.of(buildInitializeShareGroupStateRequest(groupId, groupEpoch, topicPartitionChangeMap, alreadyKnownTopics != null ? alreadyKnownTopics : Set.of()));
     }
 
-    private InitializeShareGroupStateParameters buildInitializeShareGroupStateRequest(String groupId, int groupEpoch, Map<Uuid, InitMapValue> topicPartitions) {
+    private InitializeShareGroupStateParameters buildInitializeShareGroupStateRequest(
+        String groupId,
+        int groupEpoch,
+        Map<Uuid, InitMapValue> topicPartitions,
+        Set<Uuid> alreadyKnownTopics
+    ) {
         return new InitializeShareGroupStateParameters.Builder().setGroupTopicPartitionData(
             new GroupTopicPartitionData<>(groupId, topicPartitions.entrySet().stream()
-                .map(entry -> new TopicData<>(
-                    entry.getKey(),
-                    entry.getValue().partitions().stream()
-                        .map(partitionId -> PartitionFactory.newPartitionStateData(partitionId, groupEpoch, -1))
-                        .toList())
-                ).toList()
+                .map(entry -> {
+                    // New partitions of an already-known topic start at 0; brand-new topics use -1
+                    // so that the group's share.auto.offset.reset strategy applies.
+                    long startOffset = alreadyKnownTopics.contains(entry.getKey()) ? 0L : PartitionFactory.UNINITIALIZED_START_OFFSET;
+                    return new TopicData<>(
+                        entry.getKey(),
+                        entry.getValue().partitions().stream()
+                            .map(partitionId -> PartitionFactory.newPartitionStateData(partitionId, groupEpoch, startOffset))
+                            .toList());
+                }).toList()
             )).build();
     }
 
@@ -4150,9 +4185,10 @@ public class GroupMetadataManager {
                 new UpdatedMembersAndTargetAssignmentView<>(
                     group.members(),
                     group.staticMembers(),
-                    group.targetAssignment()
+                    group.targetAssignment(),
+                    ConsumerGroupMember::instanceId
                 );
-            updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), updatedMember.instanceId(), updatedMember);
+            updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), updatedMember);
 
             TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder assignmentResultBuilder =
                 new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(group.groupId(), groupEpoch, consumerGroupAssignors.get(preferredServerAssignor))
@@ -4233,9 +4269,10 @@ public class GroupMetadataManager {
                 new UpdatedMembersAndTargetAssignmentView<>(
                     group.members(),
                     Map.of(),
-                    group.targetAssignment()
+                    group.targetAssignment(),
+                    ShareGroupMember::instanceId
                 );
-            updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), updatedMember.instanceId(), updatedMember);
+            updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), updatedMember);
 
             TargetAssignmentBuilder.ShareTargetAssignmentBuilder assignmentResultBuilder =
                 new TargetAssignmentBuilder.ShareTargetAssignmentBuilder(group.groupId(), groupEpoch, shareGroupAssignor)
@@ -4337,10 +4374,11 @@ public class GroupMetadataManager {
                 new UpdatedMembersAndTargetAssignmentView<>(
                     group.members(),
                     group.staticMembers(),
-                    group.targetAssignment()
+                    group.targetAssignment(),
+                    m -> m.instanceId().orElse(null)
                 );
             updatedMember.ifPresent(member ->
-                updatedMembersAndTargetAssignment.addOrUpdateMember(member.memberId(), member.instanceId().orElse(null), member)
+                updatedMembersAndTargetAssignment.addOrUpdateMember(member.memberId(), member)
             );
 
             org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder assignmentResultBuilder =
@@ -4354,7 +4392,8 @@ public class GroupMetadataManager {
                 .withMembers(updatedMembersAndTargetAssignment.members())
                 .withTopology(configuredTopology)
                 .withMetadataImage(metadataImage)
-                .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment());
+                .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
+                .withTaskOffsets(group.taskOffsets());
 
             long startTimeMs = time.milliseconds();
             org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
@@ -5405,6 +5444,8 @@ public class GroupMetadataManager {
                 request.activeTasks(),
                 request.standbyTasks(),
                 request.warmupTasks(),
+                request.taskOffsets(),
+                request.taskEndOffsets(),
                 request.processId(),
                 request.userEndpoint(),
                 request.clientTags(),
