@@ -41,7 +41,10 @@ import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.ResultOrder;
 import org.apache.kafka.streams.query.TimestampedKeyWithHeadersQuery;
+import org.apache.kafka.streams.query.TimestampedRangeWithHeadersQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
@@ -300,6 +303,25 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
 
         final KafkaMetric metric = metric("range-rate");
         assertTrue((Double) metric.metricValue() > 0);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    public void shouldPropagateBoundsAndDescendingOrderForTimestampedRangeWithHeadersQuery() {
+        setUp();
+        final ArgumentCaptor<RangeQuery> captor = ArgumentCaptor.forClass(RangeQuery.class);
+        when(inner.query(captor.capture(), any(), any())).thenReturn(
+            QueryResult.forResult(new KeyValueIteratorStub<>(List.<KeyValue<Bytes, byte[]>>of().iterator())));
+        init();
+
+        final TimestampedRangeWithHeadersQuery<String, String> query =
+            TimestampedRangeWithHeadersQuery.<String, String>withLowerBound("a").withDescendingKeys();
+        metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        final RangeQuery<?, ?> rawQuery = captor.getValue();
+        assertEquals(ResultOrder.DESCENDING, rawQuery.resultOrder());
+        assertTrue(rawQuery.getLowerBound().isPresent());
+        assertFalse(rawQuery.getUpperBound().isPresent());
     }
 
     @Test

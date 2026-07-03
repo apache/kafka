@@ -1030,23 +1030,30 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
     }
 
     @Test
-    public void shouldReturnUnknownQueryTypeForRangeQuery() {
+    public void shouldHandleRangeQuery() {
         // Initialize the store
         rocksDBStore.init(context, rocksDBStore);
 
-        // KIP-1356 (point query only): this store enables KeyQuery but leaves RangeQuery (and every
-        // other non-KeyQuery type) as UNKNOWN_QUERY_TYPE, unchanged from before. RangeQuery support on
-        // the native header store is deferred to the range KIP-1356 follow-up.
+        // Store raw (serialized ValueTimestampHeaders) bytes for a key.
+        final Bytes key = new Bytes("test-key".getBytes());
+        final byte[] storedBytes = "headers+timestamp+value".getBytes();
+        rocksDBStore.put(key, storedBytes);
+
+        // KIP-1356: the range follow-up enables RangeQuery on the native header store via the inherited
+        // RocksDBStore handling (returning the raw stored header-format bytes; the metered store does
+        // the header-aware deserialization), matching the adapter build path.
         final RangeQuery<Bytes, byte[]> query = RangeQuery.withNoBounds();
         final QueryResult<KeyValueIterator<Bytes, byte[]>> result =
                 rocksDBStore.query(query, PositionBound.unbounded(), new QueryConfig(false));
 
-        assertFalse(result.isSuccess(), "Expected RangeQuery to be unsupported");
-        assertEquals(
-            FailureReason.UNKNOWN_QUERY_TYPE,
-            result.getFailureReason(),
-            "Expected UNKNOWN_QUERY_TYPE failure reason"
-        );
+        assertTrue(result.isSuccess(), "Expected RangeQuery to succeed");
+        try (KeyValueIterator<Bytes, byte[]> iterator = result.getResult()) {
+            assertTrue(iterator.hasNext(), "Expected the stored key in the range result");
+            final KeyValue<Bytes, byte[]> keyValue = iterator.next();
+            assertEquals(key, keyValue.key);
+            assertArrayEquals(storedBytes, keyValue.value, "Expected the raw stored bytes to be returned");
+            assertFalse(iterator.hasNext());
+        }
         assertNotNull(result.getPosition(), "Expected position to be set");
     }
 
