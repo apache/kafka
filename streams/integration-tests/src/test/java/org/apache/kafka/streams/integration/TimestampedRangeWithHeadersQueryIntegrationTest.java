@@ -19,7 +19,6 @@ package org.apache.kafka.streams.integration;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -37,6 +36,8 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ReadOnlyRecord;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.StateQueryRequest;
 import org.apache.kafka.streams.query.StateQueryResult;
@@ -82,6 +83,11 @@ public class TimestampedRangeWithHeadersQueryIntegrationTest {
     private String inputStream;
     private String outputStream;
     private long baseTimestamp;
+    // Accumulated position of the produced input records, so queries can require freshness via
+    // PositionBound.at(inputPosition) -- matching the IQv2StoreIntegrationTest convention rather than
+    // relying on output-topic consumption as the readiness signal.
+    private Position inputPosition;
+    private long nextInputOffset;
 
     private KafkaStreams kafkaStreams;
 
@@ -119,6 +125,8 @@ public class TimestampedRangeWithHeadersQueryIntegrationTest {
         CLUSTER.createTopic(inputStream, 1, 1);
         CLUSTER.createTopic(outputStream, 1, 1);
         baseTimestamp = CLUSTER.time.milliseconds();
+        inputPosition = Position.emptyPosition();
+        nextInputOffset = 0L;
     }
 
     @AfterEach
@@ -138,7 +146,7 @@ public class TimestampedRangeWithHeadersQueryIntegrationTest {
                     Stores.persistentTimestampedKeyValueStoreWithHeaders(STORE_NAME),
                     Serdes.Integer(),
                     Serdes.String()
-                )
+                ).withCachingDisabled()
             )
             .stream(inputStream, Consumed.with(Serdes.Integer(), Serdes.String()))
             .process(HeadersStoreWriterProcessor::new, STORE_NAME)
@@ -148,13 +156,10 @@ public class TimestampedRangeWithHeadersQueryIntegrationTest {
         kafkaStreams.start();
 
         // Write: keys 1,2 (HEADERS1), key 3 (empty headers), key 4 (then tombstone it).
-        int produced = 0;
-        produced += produceWithHeaders(baseTimestamp, HEADERS1, KeyValue.pair(1, "one"), KeyValue.pair(2, "two"));
-        produced += produceWithHeaders(baseTimestamp + 1, EMPTY_HEADERS, KeyValue.pair(3, "three"));
-        produced += produceWithHeaders(baseTimestamp + 2, HEADERS2, KeyValue.pair(4, "four"));
-        produced += produceWithHeaders(baseTimestamp + 3, EMPTY_HEADERS, KeyValue.pair(4, null)); // tombstone
-
-        awaitProcessed(produced);
+        produceWithHeaders(baseTimestamp, HEADERS1, KeyValue.pair(1, "one"), KeyValue.pair(2, "two"));
+        produceWithHeaders(baseTimestamp + 1, EMPTY_HEADERS, KeyValue.pair(3, "three"));
+        produceWithHeaders(baseTimestamp + 2, HEADERS2, KeyValue.pair(4, "four"));
+        produceWithHeaders(baseTimestamp + 3, EMPTY_HEADERS, KeyValue.pair(4, null)); // tombstone
 
         // Full scan, ascending: keys 1, 2, 3 (key 4 tombstoned and omitted).
         final List<ReadOnlyRecord<Integer, String>> ascending = runQuery(TimestampedRangeWithHeadersQuery.withNoBounds());
@@ -194,7 +199,7 @@ public class TimestampedRangeWithHeadersQueryIntegrationTest {
                     Stores.persistentTimestampedKeyValueStore(STORE_NAME),
                     Serdes.Integer(),
                     Serdes.String()
-                )
+                ).withCachingDisabled()
             )
             .stream(inputStream, Consumed.with(Serdes.Integer(), Serdes.String()))
             .process(NonHeadersStoreWriterProcessor::new, STORE_NAME)
@@ -203,11 +208,11 @@ public class TimestampedRangeWithHeadersQueryIntegrationTest {
         kafkaStreams = new KafkaStreams(streamsBuilder.build(), props("app-"));
         kafkaStreams.start();
 
-        final int produced = produceWithHeaders(baseTimestamp, EMPTY_HEADERS, KeyValue.pair(1, "one"));
-        awaitProcessed(produced);
+        produceWithHeaders(baseTimestamp, EMPTY_HEADERS, KeyValue.pair(1, "one"));
 
         final StateQueryRequest<ReadOnlyRecordIterator<Integer, String>> request =
-            inStore(STORE_NAME).withQuery(TimestampedRangeWithHeadersQuery.withNoBounds());
+            inStore(STORE_NAME).withQuery(TimestampedRangeWithHeadersQuery.<Integer, String>withNoBounds())
+                .withPositionBound(PositionBound.at(inputPosition));
         final StateQueryResult<ReadOnlyRecordIterator<Integer, String>> result =
             IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
 
@@ -232,7 +237,7 @@ public class TimestampedRangeWithHeadersQueryIntegrationTest {
                     Stores.persistentKeyValueStore(STORE_NAME),
                     Serdes.Integer(),
                     Serdes.String()
-                )
+                ).withCachingDisabled()
             )
             .stream(inputStream, Consumed.with(Serdes.Integer(), Serdes.String()))
             .process(HeadersStoreWriterProcessor::new, STORE_NAME)
@@ -241,11 +246,11 @@ public class TimestampedRangeWithHeadersQueryIntegrationTest {
         kafkaStreams = new KafkaStreams(streamsBuilder.build(), props("app-"));
         kafkaStreams.start();
 
-        final int produced = produceWithHeaders(baseTimestamp, HEADERS1, KeyValue.pair(1, "one"), KeyValue.pair(2, "two"));
-        awaitProcessed(produced);
+        produceWithHeaders(baseTimestamp, HEADERS1, KeyValue.pair(1, "one"), KeyValue.pair(2, "two"));
 
         final StateQueryRequest<ReadOnlyRecordIterator<Integer, String>> request =
-            inStore(STORE_NAME).withQuery(TimestampedRangeWithHeadersQuery.withNoBounds());
+            inStore(STORE_NAME).withQuery(TimestampedRangeWithHeadersQuery.<Integer, String>withNoBounds())
+                .withPositionBound(PositionBound.at(inputPosition));
         final StateQueryResult<ReadOnlyRecordIterator<Integer, String>> result =
             IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
 
@@ -257,7 +262,8 @@ public class TimestampedRangeWithHeadersQueryIntegrationTest {
     }
 
     private List<ReadOnlyRecord<Integer, String>> runQuery(final TimestampedRangeWithHeadersQuery<Integer, String> query) {
-        final StateQueryRequest<ReadOnlyRecordIterator<Integer, String>> request = inStore(STORE_NAME).withQuery(query);
+        final StateQueryRequest<ReadOnlyRecordIterator<Integer, String>> request =
+            inStore(STORE_NAME).withQuery(query).withPositionBound(PositionBound.at(inputPosition));
         final StateQueryResult<ReadOnlyRecordIterator<Integer, String>> result =
             IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
         final List<ReadOnlyRecord<Integer, String>> records = new ArrayList<>();
@@ -286,13 +292,6 @@ public class TimestampedRangeWithHeadersQueryIntegrationTest {
         }
     }
 
-    private void awaitProcessed(final int count) throws Exception {
-        IntegrationTestUtils.waitUntilMinRecordsReceived(
-            TestUtils.consumerConfig(CLUSTER.bootstrapServers(), IntegerDeserializer.class, IntegerDeserializer.class),
-            outputStream,
-            count);
-    }
-
     private Properties props(final String prefix) {
         final String safeTestName = safeUniqueTestName(testInfo);
         final Properties streamsConfiguration = new Properties();
@@ -306,9 +305,9 @@ public class TimestampedRangeWithHeadersQueryIntegrationTest {
 
     @SuppressWarnings("varargs")
     @SafeVarargs
-    private final int produceWithHeaders(final long timestamp,
-                                         final Headers headers,
-                                         final KeyValue<Integer, String>... keyValues) {
+    private final void produceWithHeaders(final long timestamp,
+                                          final Headers headers,
+                                          final KeyValue<Integer, String>... keyValues) {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             inputStream,
             Arrays.asList(keyValues),
@@ -316,7 +315,10 @@ public class TimestampedRangeWithHeadersQueryIntegrationTest {
             headers,
             timestamp,
             false);
-        return keyValues.length;
+        // Single-partition input topic with contiguous offsets starting at 0: advance to the latest
+        // produced offset so PositionBound.at(inputPosition) requires the store to have read this far.
+        nextInputOffset += keyValues.length;
+        inputPosition.withComponent(inputStream, 0, nextInputOffset - 1);
     }
 
     /**
