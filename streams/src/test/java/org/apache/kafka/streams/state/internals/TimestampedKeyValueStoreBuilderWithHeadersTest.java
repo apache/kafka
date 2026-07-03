@@ -500,9 +500,9 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
             store.put("bad", ValueTimestampHeaders.make("v", -1L, headersWith("h", "x")));
 
             final QueryResult<ReadOnlyRecord<String, String>> ok =
-                    store.query(TimestampedKeyWithHeadersQuery.withKey("ok"), PositionBound.unbounded(), new QueryConfig(true));
+                store.query(TimestampedKeyWithHeadersQuery.withKey("ok"), PositionBound.unbounded(), new QueryConfig(true));
             final QueryResult<ReadOnlyRecord<String, String>> bad =
-                    store.query(TimestampedKeyWithHeadersQuery.withKey("bad"), PositionBound.unbounded(), new QueryConfig(true));
+                store.query(TimestampedKeyWithHeadersQuery.withKey("bad"), PositionBound.unbounded(), new QueryConfig(true));
 
             assertTrue(ok.isSuccess());
             assertFalse(bad.isSuccess());
@@ -511,13 +511,13 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
             final String okInfo = String.join("\n", ok.getExecutionInfo());
             final String badInfo = String.join("\n", bad.getExecutionInfo());
             assertTrue(
-                    okInfo.contains(RocksDBTimestampedStoreWithHeaders.class.getName())
-                            && okInfo.contains(MeteredTimestampedKeyValueStoreWithHeaders.class.getName()),
-                    "success execution info missing an entry: " + okInfo);
+                okInfo.contains(RocksDBTimestampedStoreWithHeaders.class.getName())
+                    && okInfo.contains(MeteredTimestampedKeyValueStoreWithHeaders.class.getName()),
+                "success execution info missing an entry: " + okInfo);
             assertTrue(
-                    badInfo.contains(RocksDBTimestampedStoreWithHeaders.class.getName())
-                            && badInfo.contains(MeteredTimestampedKeyValueStoreWithHeaders.class.getName()),
-                    "failure execution info missing an entry (wrapped-store entry must be preserved): " + badInfo);
+                badInfo.contains(RocksDBTimestampedStoreWithHeaders.class.getName())
+                    && badInfo.contains(MeteredTimestampedKeyValueStoreWithHeaders.class.getName()),
+                "failure execution info missing an entry (wrapped-store entry must be preserved): " + badInfo);
         } finally {
             store.close();
         }
@@ -533,9 +533,9 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
             store.put("bad", ValueTimestampHeaders.make("v", -1L, headersWith("h", "x")));
 
             final QueryResult<ReadOnlyRecord<String, String>> ok =
-                    store.query(TimestampedKeyWithHeadersQuery.withKey("ok"), PositionBound.unbounded(), new QueryConfig(false));
+                store.query(TimestampedKeyWithHeadersQuery.withKey("ok"), PositionBound.unbounded(), new QueryConfig(false));
             final QueryResult<ReadOnlyRecord<String, String>> bad =
-                    store.query(TimestampedKeyWithHeadersQuery.withKey("bad"), PositionBound.unbounded(), new QueryConfig(false));
+                store.query(TimestampedKeyWithHeadersQuery.withKey("bad"), PositionBound.unbounded(), new QueryConfig(false));
 
             assertTrue(ok.isSuccess());
             assertFalse(bad.isSuccess());
@@ -559,13 +559,13 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
             adapterStore.put("k", value);
 
             assertEquals(
-                    nativeStore.query(KeyQuery.withKey("k"), PositionBound.unbounded(), new QueryConfig(false)).getResult(),
-                    adapterStore.query(KeyQuery.withKey("k"), PositionBound.unbounded(), new QueryConfig(false)).getResult(),
-                    "KeyQuery results should be identical across native and adapter build paths");
+                nativeStore.query(KeyQuery.withKey("k"), PositionBound.unbounded(), new QueryConfig(false)).getResult(),
+                adapterStore.query(KeyQuery.withKey("k"), PositionBound.unbounded(), new QueryConfig(false)).getResult(),
+                "KeyQuery results should be identical across native and adapter build paths");
             assertEquals(
-                    nativeStore.query(TimestampedKeyQuery.withKey("k"), PositionBound.unbounded(), new QueryConfig(false)).getResult(),
-                    adapterStore.query(TimestampedKeyQuery.withKey("k"), PositionBound.unbounded(), new QueryConfig(false)).getResult(),
-                    "TimestampedKeyQuery results should be identical across native and adapter build paths");
+                nativeStore.query(TimestampedKeyQuery.withKey("k"), PositionBound.unbounded(), new QueryConfig(false)).getResult(),
+                adapterStore.query(TimestampedKeyQuery.withKey("k"), PositionBound.unbounded(), new QueryConfig(false)).getResult(),
+                "TimestampedKeyQuery results should be identical across native and adapter build paths");
         } finally {
             nativeStore.close();
             adapterStore.close();

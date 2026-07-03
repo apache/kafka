@@ -324,6 +324,25 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
         assertFalse(rawQuery.getUpperBound().isPresent());
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    public void shouldPropagateBoundsAndAscendingOrderForTimestampedRangeWithHeadersQuery() {
+        setUp();
+        final ArgumentCaptor<RangeQuery> captor = ArgumentCaptor.forClass(RangeQuery.class);
+        when(inner.query(captor.capture(), any(), any())).thenReturn(
+            QueryResult.forResult(new KeyValueIteratorStub<>(List.<KeyValue<Bytes, byte[]>>of().iterator())));
+        init();
+
+        final TimestampedRangeWithHeadersQuery<String, String> query =
+            TimestampedRangeWithHeadersQuery.<String, String>withUpperBound("z").withAscendingKeys();
+        metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        final RangeQuery<?, ?> rawQuery = captor.getValue();
+        assertEquals(ResultOrder.ASCENDING, rawQuery.resultOrder());
+        assertFalse(rawQuery.getLowerBound().isPresent());
+        assertTrue(rawQuery.getUpperBound().isPresent());
+    }
+
     @Test
     public void shouldGetAllFromInnerStoreAndRecordAllMetric() {
         setUp();
