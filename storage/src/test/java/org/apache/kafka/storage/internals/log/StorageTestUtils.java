@@ -38,7 +38,8 @@ import java.util.concurrent.TimeUnit;
 public class StorageTestUtils {
 
     /**
-     * Creates a minimal {@link Properties} suitable for constructing a {@code KafkaConfig}
+     * Creates a minimal {@link Properties} suitable for constructing an
+     * {@link org.apache.kafka.server.config.AbstractKafkaConfig AbstractKafkaConfig}
      * in tests that require a valid broker configuration but do not need full integration setup.
      */
     public static Properties createDummyBrokerConfig() {
