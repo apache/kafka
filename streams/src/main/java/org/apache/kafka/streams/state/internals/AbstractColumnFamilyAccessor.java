@@ -58,8 +58,12 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
     }
 
     @Override
-    public final void commit(final RocksDBStore.DBAccessor accessor, final Map<TopicPartition, Long> changelogOffsets) throws RocksDBException {
+    public final void commit(final RocksDBStore.DBAccessor accessor,
+                             final Position position,
+                             final Map<TopicPartition, Long> changelogOffsets) throws RocksDBException {
         if (changelogOffsets.isEmpty()) {
+            // No changelog: wipe any stale changelog-offset keys left from a prior
+            // logging configuration, then write the current position below.
             wipeOffsets(accessor);
         } else {
             for (final Map.Entry<TopicPartition, Long> entry : changelogOffsets.entrySet()) {
@@ -74,12 +78,15 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
                 }
             }
         }
+        // Merge committed and uncommitted positions into a temporary copy so that if
+        // commitStagedWrites() throws, the in-memory position remains consistent with the
+        // last successful commit. Position is written after wipeOffsets so the key is not
+        // deleted by the wipe. The in-memory position is updated only on success.
+        final Position merged = position.copy();
+        accessor.mergeUncommittedPositionInto(merged);
+        accessor.put(offsetColumnFamilyHandle, positionKey, PositionSerde.serialize(merged).array());
         accessor.commitStagedWrites();
-    }
-
-    @Override
-    public final void commit(final RocksDBStore.DBAccessor accessor, final Position storePosition) throws RocksDBException {
-        accessor.put(offsetColumnFamilyHandle, positionKey, PositionSerde.serialize(storePosition).array());
+        position.merge(merged);
     }
 
     @Override

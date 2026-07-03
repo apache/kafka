@@ -119,7 +119,7 @@ abstract class AbstractColumnFamilyAccessorTest {
         final TopicPartition tp0 = new TopicPartition("testTopic", 0);
         final TopicPartition tp1 = new TopicPartition("testTopic", 1);
         final Map<TopicPartition, Long> changelogOffsets = Map.of(tp0, 10L, tp1, 20L);
-        accessor.commit(dbAccessor, changelogOffsets);
+        accessor.commit(dbAccessor, Position.emptyPosition(), changelogOffsets);
         assertEquals(10L, accessor.getCommittedOffset(dbAccessor, tp0));
         assertEquals(20L, accessor.getCommittedOffset(dbAccessor, tp1));
     }
@@ -131,14 +131,14 @@ abstract class AbstractColumnFamilyAccessorTest {
         final TopicPartition tp0 = new TopicPartition(topic, 0);
         final TopicPartition tp1 = new TopicPartition(topic, 1);
         final Position positionToStore = Position.fromMap(mkMap(mkEntry(topic, mkMap(mkEntry(tp0.partition(), 10L), mkEntry(tp1.partition(), 20L)))));
-        accessor.commit(dbAccessor, positionToStore);
+        accessor.commit(dbAccessor, positionToStore, Map.of(tp0, 0L));
         assertEquals(positionToStore, PositionSerde.deserialize(ByteBuffer.wrap(dbAccessor.get(offsetsCF, toBytes("position")))));
     }
 
     @Test
     public void shouldCommitStagedWritesWhenCommittingOffsets() throws RocksDBException {
         final TopicPartition tp0 = new TopicPartition("testTopic", 0);
-        accessor.commit(dbAccessor, Map.of(tp0, 10L));
+        accessor.commit(dbAccessor, Position.emptyPosition(), Map.of(tp0, 10L));
         verify(dbAccessor).commitStagedWrites();
     }
 
@@ -147,10 +147,10 @@ abstract class AbstractColumnFamilyAccessorTest {
         dbAccessor = new InMemoryRocksDBAccessor(mock(RocksDB.class));
         final TopicPartition tp0 = new TopicPartition("testTopic", 0);
         final TopicPartition tp1 = new TopicPartition("testTopic", 1);
-        accessor.commit(dbAccessor, Map.of(tp0, 10L, tp1, 20L));
+        accessor.commit(dbAccessor, Position.emptyPosition(), Map.of(tp0, 10L, tp1, 20L));
         assertEquals(10L, accessor.getCommittedOffset(dbAccessor, tp0));
         assertEquals(20L, accessor.getCommittedOffset(dbAccessor, tp1));
-        accessor.commit(dbAccessor, Map.of());
+        accessor.commit(dbAccessor, Position.emptyPosition(), Map.of());
         assertNull(accessor.getCommittedOffset(dbAccessor, tp0));
         assertNull(accessor.getCommittedOffset(dbAccessor, tp1));
     }
