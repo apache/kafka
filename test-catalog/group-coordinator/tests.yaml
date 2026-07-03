@@ -731,9 +731,11 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testStreamsGroupEpochShouldNotIncreaseWithAcceptableRecoveryLagConfigChange
 - testStreamsGroupEvaluatedConfigs
 - testStreamsGroupHeartbeatAlwaysSetsStatus
+- testStreamsGroupHeartbeatDoesNotStoreTaskOffsetsWhenOwnedTasksAreInvalid
 - testStreamsGroupHeartbeatOnConsumerGroup
 - testStreamsGroupHeartbeatOnShareGroup
 - testStreamsGroupHeartbeatPartialResponseWhenNothingChanges
+- testStreamsGroupHeartbeatRejectsDuplicateTaskOffsets
 - testStreamsGroupHeartbeatResponseVersion0
 - testStreamsGroupHeartbeatResponseVersion1
 - testStreamsGroupHeartbeatStoresTaskOffsetsWithoutPersisting
@@ -1315,6 +1317,7 @@ org.apache.kafka.coordinator.group.streams.CurrentAssignmentBuilderTest:
 - testUnrevokedTasksToUnrevokedTasks
 org.apache.kafka.coordinator.group.streams.MemberTaskOffsetsTest:
 - shouldConvertHeartbeatRequestTaskOffsets
+- shouldRejectDuplicateTaskEntries
 - shouldRetainBothMapsWhenBothListsAreNull
 - shouldUpdateTaskEndOffsetsAndRetainTaskOffsetsWhenOffsetsNull
 - shouldUpdateTaskOffsetsAndRetainTaskEndOffsetsWhenEndOffsetsNull

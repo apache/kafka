@@ -2352,6 +2352,7 @@ org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManagerTest:
 - testShareAcknowledgeInvalidResponse
 - testShareFetchAndCloseMultipleNodes
 - testShareFetchInvalidResponse
+- testShareFetchRemovesUnassignedPartitionFromSession
 - testShareFetchWithRenewAcknowledgement
 - testShareFetchWithSubscriptionChange
 - testShareFetchWithSubscriptionChangeMultipleNodes
