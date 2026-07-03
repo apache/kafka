@@ -16,14 +16,12 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-// TODO: Remove Scala KafkaConfig dependency once KAFKA-15853 migrates KafkaConfig to Java
-import kafka.server.KafkaConfig;
-
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.server.config.AbstractKafkaConfig;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 
@@ -55,7 +53,7 @@ public class LogConfigTest {
         kafkaProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "2592000000"); // 30 days
         kafkaProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "4294967296"); // 4 GB
 
-        Map<String, Object> logProps = KafkaConfig.fromProps(kafkaProps).extractLogConfigMap();
+        Map<String, Object> logProps = createAbstractKafkaConfig(kafkaProps).extractLogConfigMap();
         assertEquals(2 * millisInHour, logProps.get(TopicConfig.SEGMENT_MS_CONFIG));
         assertEquals(2 * millisInHour, logProps.get(TopicConfig.SEGMENT_JITTER_MS_CONFIG));
         assertEquals(40 * millisInDay, logProps.get(TopicConfig.RETENTION_MS_CONFIG));
@@ -178,7 +176,7 @@ public class LogConfigTest {
         kafkaProps.put("unknown.broker.password.config", "aaaaa");
         kafkaProps.put(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG, "50");
         kafkaProps.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, "somekeypassword");
-        KafkaConfig kafkaConfig = KafkaConfig.fromProps(kafkaProps);
+        AbstractKafkaConfig kafkaConfig = createAbstractKafkaConfig(kafkaProps);
         Properties topicOverrides = new Properties();
         // Only set as a topic config
         topicOverrides.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2");
@@ -203,14 +201,18 @@ public class LogConfigTest {
         }
     }
 
-    private KafkaConfig createKafkaConfig(boolean remoteStorageEnabled, Properties extra) {
+    private static AbstractKafkaConfig createAbstractKafkaConfig(Properties props) {
+        return new AbstractKafkaConfig(AbstractKafkaConfig.CONFIG_DEF, props, Map.of(), false) { };
+    }
+
+    private AbstractKafkaConfig createKafkaConfig(boolean remoteStorageEnabled, Properties extra) {
         Properties props = StorageTestUtils.createDummyBrokerConfig();
         props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, String.valueOf(remoteStorageEnabled));
         props.putAll(extra);
-        return KafkaConfig.fromProps(props);
+        return createAbstractKafkaConfig(props);
     }
 
-    private KafkaConfig createKafkaConfig(boolean remoteStorageEnabled) {
+    private AbstractKafkaConfig createKafkaConfig(boolean remoteStorageEnabled) {
         return createKafkaConfig(remoteStorageEnabled, new Properties());
     }
 
@@ -286,7 +288,7 @@ public class LogConfigTest {
                                                      int localRetentionBytes,
                                                      int retentionBytes,
                                                      long retentionMs) {
-        KafkaConfig kafkaConfig = createKafkaConfig(true);
+        AbstractKafkaConfig kafkaConfig = createKafkaConfig(true);
 
         HashMap<String, String> props = new HashMap<>();
         props.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true");
@@ -302,7 +304,7 @@ public class LogConfigTest {
 
     @Test
     public void testEnableRemoteLogStorageCleanupPolicy() {
-        KafkaConfig kafkaConfig = createKafkaConfig(true);
+        AbstractKafkaConfig kafkaConfig = createKafkaConfig(true);
         HashMap<String, String> logProps = new HashMap<>();
 
         logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
@@ -334,7 +336,7 @@ public class LogConfigTest {
     @ParameterizedTest(name = "testEnableRemoteLogStorage with sysRemoteStorageEnabled: {0}")
     @ValueSource(booleans = {true, false})
     public void testEnableRemoteLogStorage(boolean sysRemoteStorageEnabled) {
-        KafkaConfig kafkaConfig = createKafkaConfig(sysRemoteStorageEnabled);
+        AbstractKafkaConfig kafkaConfig = createKafkaConfig(sysRemoteStorageEnabled);
 
         Map<String, String> logProps = Map.of(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true");
         if (sysRemoteStorageEnabled) {
@@ -351,7 +353,7 @@ public class LogConfigTest {
     @ParameterizedTest(name = "testDisableRemoteLogStorage with wasRemoteStorageEnabled: {0}")
     @ValueSource(booleans = {true, false})
     public void testDisableRemoteLogStorage(boolean wasRemoteStorageEnabled) {
-        KafkaConfig kafkaConfig = createKafkaConfig(true);
+        AbstractKafkaConfig kafkaConfig = createKafkaConfig(true);
 
         HashMap<String, String> logProps = new HashMap<>();
         logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false");
@@ -383,7 +385,7 @@ public class LogConfigTest {
         Properties extra = new Properties();
         extra.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "1000");
         extra.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "900");
-        KafkaConfig kafkaConfig = createKafkaConfig(sysRemoteStorageEnabled, extra);
+        AbstractKafkaConfig kafkaConfig = createKafkaConfig(sysRemoteStorageEnabled, extra);
 
         // Topic local log retention time inherited from Broker is greater than the topic's complete log retention time
         HashMap<String, String> logProps = new HashMap<>();
@@ -406,7 +408,7 @@ public class LogConfigTest {
         Properties extra = new Properties();
         extra.put(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG, "1024");
         extra.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "512");
-        KafkaConfig kafkaConfig = createKafkaConfig(sysRemoteStorageEnabled, extra);
+        AbstractKafkaConfig kafkaConfig = createKafkaConfig(sysRemoteStorageEnabled, extra);
 
         // Topic local retention size inherited from Broker is greater than the topic's complete log retention size
         Map<String, String> logProps = Map.of(
@@ -430,7 +432,7 @@ public class LogConfigTest {
         Properties extra = new Properties();
         extra.put(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG, "1024");
         extra.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "2048");
-        KafkaConfig kafkaConfig = createKafkaConfig(sysRemoteStorageEnabled, extra);
+        AbstractKafkaConfig kafkaConfig = createKafkaConfig(sysRemoteStorageEnabled, extra);
 
         if (sysRemoteStorageEnabled) {
             ConfigException message = assertThrows(ConfigException.class,
@@ -510,7 +512,7 @@ public class LogConfigTest {
     }
 
     private void validateTopicLogConfig(Map<String, String> props) {
-        KafkaConfig kafkaConfig = createKafkaConfig(true);
+        AbstractKafkaConfig kafkaConfig = createKafkaConfig(true);
         LogConfig.validate(Map.of(), props, kafkaConfig.extractLogConfigMap(),
                 new RemoteLogManagerConfig(kafkaConfig).isRemoteStorageSystemEnabled());
     }
