@@ -1771,7 +1771,12 @@ public class FetchRequestManagerTest {
         subscriptions.seek(tp0, 0);
 
         assertEquals(1, sendFetches());
+        networkClientDelegate.poll(time.timer(0));
+        assertEquals(1, client.inFlightRequestCount());
+        assertFalse(fetcher.hasCompletedFetches());
 
+        // Respond to the in-flight request with a response that includes an unexpected
+        // partition (tp1) that is not part of the fetch session.
         Map<TopicIdPartition, FetchResponseData.PartitionData> partitions = new LinkedHashMap<>();
         partitions.put(tidp0, new FetchResponseData.PartitionData()
                 .setPartitionIndex(tp0.partition())
@@ -1783,9 +1788,12 @@ public class FetchRequestManagerTest {
                 .setHighWatermark(100L)
                 .setLogStartOffset(0)
                 .setRecords(records));
-        client.prepareResponse(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions), List.of()));
+        client.respond(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions), List.of()));
         networkClientDelegate.poll(time.timer(0));
 
+        // The in-flight request has completed, but FetchSessionHandler rejected the whole
+        // response because of the unexpected partition (tp1), so nothing is buffered or
+        // returned to the consumer.
         assertEquals(0, client.inFlightRequestCount());
         assertFalse(fetcher.hasCompletedFetches());
         assertTrue(fetchRecords().isEmpty());

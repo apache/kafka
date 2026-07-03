@@ -19,6 +19,8 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import java.util.Map;
@@ -34,6 +36,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 class InMemorySessionTransactionBuffer extends AbstractTransactionBuffer<InMemorySessionTransactionBuffer.SessionEntryKey> {
 
     private final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> endTimeMap;
+    private Position pendingPosition = Position.emptyPosition();
 
     InMemorySessionTransactionBuffer(
             final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> endTimeMap) {
@@ -226,6 +229,34 @@ class InMemorySessionTransactionBuffer extends AbstractTransactionBuffer<InMemor
                 forward));
     }
 
+    void updatePosition(final StateStoreContext stateStoreContext) {
+        snapshotLock.writeLock().lock();
+        try {
+            StoreQueryUtils.updatePosition(pendingPosition, stateStoreContext);
+        } finally {
+            snapshotLock.writeLock().unlock();
+        }
+    }
+
+    Position pendingPosition() {
+        snapshotLock.readLock().lock();
+        try {
+            return pendingPosition.copy();
+        } finally {
+            snapshotLock.readLock().unlock();
+        }
+    }
+
+    void mergePendingPositionInto(final Position committed) {
+        snapshotLock.writeLock().lock();
+        try {
+            committed.merge(pendingPosition);
+            pendingPosition = Position.emptyPosition();
+        } finally {
+            snapshotLock.writeLock().unlock();
+        }
+    }
+
     @Override
     void flushToBase() {
         for (final Map.Entry<SessionEntryKey, Optional<byte[]>> entry : pendingWrites.entrySet()) {
@@ -256,7 +287,7 @@ class InMemorySessionTransactionBuffer extends AbstractTransactionBuffer<InMemor
 
     @Override
     void discardPendingBatch() {
-        // no-op — no backend batch to discard
+        pendingPosition = Position.emptyPosition();
     }
 
     /**
