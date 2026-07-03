@@ -345,7 +345,15 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
 
     private void onResponse(final R response, final long currentTimeMs) {
         if (errorForResponse(response) == Errors.NONE) {
-            heartbeatRequestState.updateHeartbeatIntervalMs(heartbeatIntervalForResponse(response));
+            long previousHeartbeatIntervalMs = heartbeatRequestState.heartbeatIntervalMs();
+            long heartbeatIntervalMs = heartbeatIntervalForResponse(response);
+            // The heartbeat interval is a group config owned by the broker, so log it when it changes to give
+            // visibility into the value the coordinator is applying (it is not derivable from client config).
+            if (heartbeatIntervalMs != previousHeartbeatIntervalMs) {
+                logger.info("{} received heartbeat interval {}ms from the group coordinator (was {}ms)",
+                    heartbeatRequestName(), heartbeatIntervalMs, previousHeartbeatIntervalMs);
+            }
+            heartbeatRequestState.updateHeartbeatIntervalMs(heartbeatIntervalMs);
             heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
             membershipManager().onHeartbeatSuccess(response);
             return;

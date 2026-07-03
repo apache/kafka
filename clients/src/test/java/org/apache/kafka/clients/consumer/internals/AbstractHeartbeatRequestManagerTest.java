@@ -21,9 +21,11 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -78,6 +80,9 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
 
     protected abstract ClientResponse createHeartbeatResponse(
         NetworkClientDelegate.UnsentRequest request, Errors error);
+
+    protected abstract ClientResponse createHeartbeatResponse(
+        NetworkClientDelegate.UnsentRequest request, Errors error, int heartbeatIntervalMs);
 
     @Test
     public void testTimerNotDue() {
@@ -166,6 +171,43 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
 
         inflightReq.handler().onComplete(createHeartbeatResponse(inflightReq, Errors.NONE));
         assertNextHeartbeatTiming(DEFAULT_HEARTBEAT_INTERVAL_MS - partOfInterval);
+    }
+
+    @Test
+    public void testLogsHeartbeatIntervalReceivedFromCoordinatorOnlyWhenChanged() {
+        try (LogCaptureAppender logAppender =
+                 LogCaptureAppender.createAndRegister(heartbeatRequestManager.getClass())) {
+            logAppender.setClassLogger(heartbeatRequestManager.getClass(), Level.INFO);
+
+            int changedIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS + 500;
+
+            // A successful heartbeat whose interval differs from the current one is applied and logged.
+            time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+            NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+            assertEquals(1, result.unsentRequests.size());
+            result.unsentRequests.get(0).handler().onComplete(
+                createHeartbeatResponse(result.unsentRequests.get(0), Errors.NONE, changedIntervalMs));
+
+            assertEquals(changedIntervalMs, heartbeatRequestState.heartbeatIntervalMs());
+            assertEquals(1, countHeartbeatIntervalLogs(logAppender),
+                "The heartbeat interval received from the coordinator should be logged when it changes.");
+
+            // A subsequent heartbeat carrying the same interval must not be logged again.
+            time.sleep(changedIntervalMs);
+            result = heartbeatRequestManager.poll(time.milliseconds());
+            assertEquals(1, result.unsentRequests.size());
+            result.unsentRequests.get(0).handler().onComplete(
+                createHeartbeatResponse(result.unsentRequests.get(0), Errors.NONE, changedIntervalMs));
+
+            assertEquals(1, countHeartbeatIntervalLogs(logAppender),
+                "An unchanged heartbeat interval must not be logged again.");
+        }
+    }
+
+    private static long countHeartbeatIntervalLogs(final LogCaptureAppender logAppender) {
+        return logAppender.getMessages().stream()
+            .filter(message -> message.contains("received heartbeat interval"))
+            .count();
     }
 
     /**
