@@ -160,7 +160,6 @@ import static org.apache.kafka.coordinator.common.runtime.CoordinatorOperationEx
 import static org.apache.kafka.coordinator.group.Utils.throwIfEmptyString;
 import static org.apache.kafka.coordinator.group.Utils.throwIfNotEmptyCollection;
 import static org.apache.kafka.coordinator.group.Utils.throwIfNotNull;
-import static org.apache.kafka.coordinator.group.Utils.throwIfNotNullOrEmpty;
 import static org.apache.kafka.coordinator.group.Utils.throwIfNull;
 
 /**
@@ -428,7 +427,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         this.streamsGroupTopologyDescriptionManager = new StreamsGroupTopologyDescriptionManager(
             logContext,
             streamsGroupTopologyDescriptionPlugin,
-            time
+            time,
+            groupCoordinatorMetrics
         );
     }
 
@@ -617,7 +617,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private static void throwIfStreamsGroupHeartbeatRequestIsUsingUnsupportedFeatures(
         StreamsGroupHeartbeatRequestData request
     ) throws InvalidRequestException {
-        throwIfNotNullOrEmpty(request.warmupTasks(), "WarmupTasks are not supported yet.");
         if (request.topology() != null) {
             for (StreamsGroupHeartbeatRequestData.Subtopology subtopology : request.topology().subtopologies()) {
                 throwIfNotEmptyCollection(subtopology.sourceTopicRegex(), "Regular expressions for source topics are not supported yet.");
@@ -745,29 +744,32 @@ public class GroupCoordinatorService implements GroupCoordinator {
             .thenApply(__ -> StreamsGroupTopologyDescriptionConverter.fromRequest(request.topologyDescription()))
             .thenCompose(description -> streamsGroupTopologyDescriptionManager.invokeSetTopology(
                 groupId, pushedEpoch, description))
-            .thenCompose(pluginOutcome -> switch (pluginOutcome.kind()) {
-                case SUCCESS -> runtime.scheduleWriteOperation(
-                    "streams-group-set-stored-topology-epoch",
-                    tp,
-                    coordinator -> coordinator.setStoredDescriptionTopologyEpoch(groupId, pushedEpoch)
-                ).handle((unused, throwable) -> streamsGroupTopologyDescriptionManager.completeEpochWrite(
-                    groupId, pushedEpoch, throwable,
-                    new StreamsGroupTopologyDescriptionUpdateResponseData()));
-                case PERMANENT -> runtime.scheduleWriteOperation(
-                    "streams-group-set-failed-topology-epoch",
-                    tp,
-                    coordinator -> coordinator.setFailedDescriptionTopologyEpoch(groupId, pushedEpoch)
-                ).handle((unused, throwable) -> streamsGroupTopologyDescriptionManager.completeEpochWrite(
-                    groupId, pushedEpoch, throwable,
-                    new StreamsGroupTopologyDescriptionUpdateResponseData()
-                        .setErrorCode(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED.code())
-                        .setErrorMessage(pluginOutcome.message())));
-                case TRANSIENT -> {
-                    streamsGroupTopologyDescriptionManager.armBackoff(groupId, pushedEpoch);
-                    yield CompletableFuture.completedFuture(new StreamsGroupTopologyDescriptionUpdateResponseData()
-                        .setErrorCode(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED.code())
-                        .setErrorMessage(pluginOutcome.message()));
-                }
+            .thenCompose(pluginOutcome -> {
+                recordPluginSetOutcome(pluginOutcome.kind());
+                return switch (pluginOutcome.kind()) {
+                    case SUCCESS -> runtime.scheduleWriteOperation(
+                        "streams-group-set-stored-topology-epoch",
+                        tp,
+                        coordinator -> coordinator.setStoredDescriptionTopologyEpoch(groupId, pushedEpoch)
+                    ).handle((unused, throwable) -> streamsGroupTopologyDescriptionManager.completeEpochWrite(
+                        groupId, pushedEpoch, throwable,
+                        new StreamsGroupTopologyDescriptionUpdateResponseData()));
+                    case PERMANENT -> runtime.scheduleWriteOperation(
+                        "streams-group-set-failed-topology-epoch",
+                        tp,
+                        coordinator -> coordinator.setFailedDescriptionTopologyEpoch(groupId, pushedEpoch)
+                    ).handle((unused, throwable) -> streamsGroupTopologyDescriptionManager.completeEpochWrite(
+                        groupId, pushedEpoch, throwable,
+                        new StreamsGroupTopologyDescriptionUpdateResponseData()
+                            .setErrorCode(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED.code())
+                            .setErrorMessage(pluginOutcome.message())));
+                    case TRANSIENT -> {
+                        streamsGroupTopologyDescriptionManager.armBackoff(groupId, pushedEpoch);
+                        yield CompletableFuture.completedFuture(new StreamsGroupTopologyDescriptionUpdateResponseData()
+                            .setErrorCode(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED.code())
+                            .setErrorMessage(pluginOutcome.message()));
+                    }
+                };
             })
             .exceptionally(exception -> handleOperationException(
                 "streams-group-topology-description-update",
@@ -860,7 +862,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         // follow-up writes. Skip the conditional clears so we do not
                         // schedule writes against a runtime that is being closed.
                         if (!isActive.get()) return CompletableFuture.completedFuture(null);
-                        List<CompletableFuture<Void>> clearFutures = new ArrayList<>(eligible.size());
+                        Map<String, Integer> toClear = new HashMap<>(eligible.size());
                         eligible.forEach((groupId, expectedStoredEpoch) -> {
                             if (failures.containsKey(groupId)) {
                                 // Plugin failed: leave both stored epoch and the push-path
@@ -877,9 +879,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
                             // this groupId. A member that re-creates the same id afterwards
                             // is a fresh lifecycle and will arm a fresh back-off chain.
                             streamsGroupTopologyDescriptionManager.clearBackoffGroup(groupId);
-                            clearFutures.add(clearStoredDescriptionTopologyEpochAsync(groupId, expectedStoredEpoch));
+                            toClear.put(groupId, expectedStoredEpoch);
                         });
-                        return CompletableFuture.allOf(clearFutures.toArray(new CompletableFuture<?>[0]));
+                        if (toClear.isEmpty()) return CompletableFuture.completedFuture(null);
+                        // All groups in `eligible` came from the same partition's read so they
+                        // hash to the same __consumer_offsets partition; one batched write covers
+                        // every clear on this shard.
+                        return clearStoredDescriptionTopologyEpochBatchAsync(toClear);
                     }));
                 return null;
             }));
@@ -909,22 +915,41 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * Conditional metadata write that clears {@code StoredDescriptionTopologyEpoch} for
-     * {@code groupId} only when the persisted value still equals {@code expectedStoredEpoch}.
-     * Mismatches and missing groups are silently ignored by the shard-side method. Runtime
-     * write failures (NOT_COORDINATOR etc.) are logged here and swallowed so a single failed
-     * write does not poison the cycle's allOf — the next cycle will retry naturally because
-     * the persisted storedEpoch is still non-default.
+     * Record the outcome of a single {@code plugin.setTopology} call against the
+     * {@code set-success} / {@code set-error} sensors. A {@code SUCCESS} outcome increments
+     * the success sensor; every failure outcome ({@code PERMANENT} or {@code TRANSIENT},
+     * regardless of the underlying exception type) increments the error sensor.
      */
-    private CompletableFuture<Void> clearStoredDescriptionTopologyEpochAsync(String groupId, int expectedStoredEpoch) {
-        return runtime.<Void>scheduleWriteOperation(
+    private void recordPluginSetOutcome(StreamsGroupTopologyDescriptionManager.PluginOutcome.Kind kind) {
+        String sensorName = kind == StreamsGroupTopologyDescriptionManager.PluginOutcome.Kind.SUCCESS
+            ? GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_SUCCESS_SENSOR_NAME
+            : GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_ERROR_SENSOR_NAME;
+        groupCoordinatorMetrics.recordSensor(sensorName);
+    }
+
+    /**
+     * Batched conditional metadata write that clears {@code StoredDescriptionTopologyEpoch}
+     * for every entry in {@code expectedStoredEpochByGroupId}, but only for the entries whose
+     * persisted value still equals the supplied epoch. Mismatches and missing groups are
+     * silently ignored by the shard-side method. All groups in the batch must hash to the same
+     * __consumer_offsets partition (the caller guarantees this — the eligibility scan is per
+     * partition). Runtime write failures (NOT_COORDINATOR etc.) are logged here and swallowed
+     * so a single failed write does not poison the cycle's allOf — the next cycle will retry
+     * naturally because the persisted storedEpoch is still non-default.
+     */
+    private CompletableFuture<Void> clearStoredDescriptionTopologyEpochBatchAsync(
+        Map<String, Integer> expectedStoredEpochByGroupId
+    ) {
+        if (expectedStoredEpochByGroupId.isEmpty()) return CompletableFuture.completedFuture(null);
+        TopicPartition tp = topicPartitionFor(expectedStoredEpochByGroupId.keySet().iterator().next());
+        return runtime.scheduleWriteOperation(
             "clear-stored-topology-epoch",
-            topicPartitionFor(groupId),
-            coordinator -> coordinator.clearStoredDescriptionTopologyEpoch(groupId, expectedStoredEpoch)
+            tp,
+            coordinator -> coordinator.clearStoredDescriptionTopologyEpochBatch(expectedStoredEpochByGroupId)
         ).handle((__, throwable) -> {
             if (throwable != null) {
-                log.warn("Failed to clear StoredDescriptionTopologyEpoch for group {}; the next cleanup cycle will retry.",
-                    groupId, throwable);
+                log.warn("Failed to clear StoredDescriptionTopologyEpoch for groups {} on partition {}; the next cleanup cycle will retry.",
+                    expectedStoredEpochByGroupId.keySet(), tp, throwable);
             }
             return null;
         });

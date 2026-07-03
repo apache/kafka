@@ -14,25 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.image.publisher;
 
-package kafka.server.metadata
+import org.apache.kafka.image.MetadataDelta;
+import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.loader.LoaderManifest;
+import org.apache.kafka.metadata.KRaftMetadataCache;
 
-import org.apache.kafka.image.{MetadataDelta, MetadataImage}
-import org.apache.kafka.image.loader.LoaderManifest
-import org.apache.kafka.image.publisher.MetadataPublisher
-import org.apache.kafka.metadata.KRaftMetadataCache
+public class KRaftMetadataCachePublisher implements MetadataPublisher {
 
-class KRaftMetadataCachePublisher(
-  val metadataCache: KRaftMetadataCache
-) extends MetadataPublisher {
-  override def name(): String = "KRaftMetadataCachePublisher"
+    private final KRaftMetadataCache metadataCache;
 
-  override def onMetadataUpdate(
-    delta: MetadataDelta,
-    newImage: MetadataImage,
-    manifest: LoaderManifest
-  ): Unit = {
-    metadataCache.setImage(newImage)
-  }
+    public KRaftMetadataCachePublisher(KRaftMetadataCache metadataCache) {
+        this.metadataCache = metadataCache;
+    }
+
+    @Override
+    public String name() {
+        return "KRaftMetadataCachePublisher";
+    }
+
+    @Override
+    public void onMetadataUpdate(
+        MetadataDelta delta,
+        MetadataImage newImage,
+        LoaderManifest manifest
+    ) {
+        metadataCache.setImage(newImage);
+    }
 }
-

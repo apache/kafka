@@ -14,9 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.config;
-
-import org.apache.kafka.common.config.AbstractConfig;
+package org.apache.kafka.server.config;
 
 import java.util.Set;
 
@@ -29,8 +27,8 @@ import java.util.Set;
  * The reconfiguration process follows three steps:
  * <ol>
  *   <li>Determining which configurations can be dynamically updated via {@link #reconfigurableConfigs()}</li>
- *   <li>Validating the new configuration before applying it via {@link #validateReconfiguration(AbstractConfig)}</li>
- *   <li>Applying the new configuration via {@link #reconfigure(AbstractConfig, AbstractConfig)}</li>
+ *   <li>Validating the new configuration before applying it via {@link #validateReconfiguration(AbstractKafkaConfig)}</li>
+ *   <li>Applying the new configuration via {@link #reconfigure(AbstractKafkaConfig, AbstractKafkaConfig)}</li>
  * </ol>
  */
 public interface BrokerReconfigurable {
@@ -53,7 +51,7 @@ public interface BrokerReconfigurable {
      *
      * @param newConfig the new configuration to validate
      */
-    void validateReconfiguration(AbstractConfig newConfig);
+    void validateReconfiguration(AbstractKafkaConfig newConfig);
 
     /**
      * Applies the new configuration.
@@ -63,5 +61,5 @@ public interface BrokerReconfigurable {
      * @param oldConfig the previous configuration
      * @param newConfig the new configuration to apply
      */
-    void reconfigure(AbstractConfig oldConfig, AbstractConfig newConfig);
+    void reconfigure(AbstractKafkaConfig oldConfig, AbstractKafkaConfig newConfig);
 }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.TopologyException;
 
@@ -32,6 +33,7 @@ import java.util.Objects;
  * @param <V> value type
  * @see KStream#print(Printed)
  */
+@InterfaceAudience.Public
 public class Printed<K, V> implements NamedOperation<Printed<K, V>> {
     protected final OutputStream outputStream;
     protected String label;
