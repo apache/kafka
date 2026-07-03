@@ -43,8 +43,8 @@ public class ChunkedBufferPool extends BufferPool {
      * {@link BufferPool#allocate}: satisfied immediately if memory is available, else blocks up to
      * {@code maxTimeToBlockMs} for the whole request (FIFO on {@link #waiters}).
      * The reservation is tracked as bytes against {@link #nonPooledAvailableMemory} plus chunks polled
-     * from {@link #free}. Any failure refunds the whole reservation and signals
-     * the next waiter before the exception propagates, so no partial holds are visible during the wait.
+     * from {@link #free}. Any failure refunds the whole reservation and signals the next waiter
+     * before the exception propagates, so a failed request leaves nothing reserved.
      *
      * @param totalSize        minimum total bytes of capacity required across the returned chunks
      * @param maxTimeToBlockMs maximum time in milliseconds to block waiting for memory
@@ -92,10 +92,11 @@ public class ChunkedBufferPool extends BufferPool {
                 // A single Condition is added to the waiter's list to ensure FIFO fairness at the request level.
                 //
                 // `accumulated` tracks bytes drawn from nonPooledAvailableMemory only (pool chunks
-                // already taken live in `pooled`), and is always a whole-chunk multiple. Matches
-                // BufferPool.allocate's semantics: on failure, `accumulated` is exactly the amount
-                // to refund; on success it is reset to 0.
+                // already taken live in `pooled`), and is always a whole-chunk multiple. If the wait
+                // does not complete (timeout / close / interrupt), the finally refunds the whole
+                // reservation: `accumulated` back to non-pooled memory, `pooled` back to the free chunks list.
                 long accumulated = 0;
+                boolean allocationCompleted = false;
                 Condition moreMemory = lock.newCondition();
                 try {
                     long remainingTimeToBlockNs = TimeUnit.MILLISECONDS.toNanos(maxTimeToBlockMs);
@@ -125,7 +126,7 @@ public class ChunkedBufferPool extends BufferPool {
 
                         remainingTimeToBlockNs -= timeNs;
 
-                        // Reuse pooled chunks first, preferring them over raw reservations: if a
+                        // Reuse free-list chunks first, preferring them over raw reservations: if a
                         // taken chunk covers a slot already reserved as raw bytes in an earlier
                         // iteration, hand that raw reservation back to the pool.
                         while (pooled.size() < numChunks && !free.isEmpty()) {
@@ -143,21 +144,18 @@ public class ChunkedBufferPool extends BufferPool {
                             accumulated += chunkSize;
                         }
                     }
-                    // Clear the rollback tracker.
-                    accumulated = 0;
+                    allocationCompleted = true;
                 } finally {
-                    // On failure (timeout / close / interrupt), refund the non-pool bytes taken.
-                    // Pool chunks already in `pooled` are returned to `free` separately by the
-                    // outer catch.
-                    this.nonPooledAvailableMemory += accumulated;
+                    if (!allocationCompleted) {
+                        // Refund all that was reserved (pooled chunks and non-pooled bytes)
+                        this.nonPooledAvailableMemory += accumulated;
+                        for (ByteBuffer chunk : pooled)
+                            free.addFirst(chunk);
+                        pooled.clear();
+                    }
                     waiters.remove(moreMemory);
                 }
             }
-        } catch (RuntimeException | InterruptedException e) {
-            // Any chunks taken from the pool must be returned.
-            for (ByteBuffer chunk : pooled)
-                free.addFirst(chunk);
-            throw e;
         } finally {
             try {
                 signalNextWaiterIfMemoryAvailable();
