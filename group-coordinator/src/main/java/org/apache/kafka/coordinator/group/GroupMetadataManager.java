@@ -2116,14 +2116,6 @@ public class GroupMetadataManager {
             );
         }
 
-        // Store the latest task changelog offsets/end-offsets reported by the member. These are transient telemetry
-        // (used by the assignor to estimate task lag) and are not persisted. Task offsets and end-offsets are reported
-        // independently: a null list means "unchanged since the last heartbeat", so we retain the previously reported
-        // value for whichever of the two is null and only update when at least one is reported.
-        if (taskOffsets != null || taskEndOffsets != null) {
-            group.updateTaskOffsets(memberId, group.taskOffsets(memberId).update(taskOffsets, taskEndOffsets));
-        }
-
         // 1. Create or update the member.
         StreamsGroupMember.Builder updatedMemberBuilder = new StreamsGroupMember.Builder(member)
             .maybeUpdateInstanceId(Optional.ofNullable(instanceId))
@@ -2194,6 +2186,18 @@ public class GroupMetadataManager {
             throwIfRequestContainsInvalidTasks(subtopologySortedMap, ownedStandbyTasks);
             throwIfRequestContainsInvalidTasks(subtopologySortedMap, ownedWarmupTasks);
         }
+
+        // Store the latest task changelog offsets/end-offsets reported by the member. These are transient telemetry
+        // (used by the assignor to estimate task lag) and are not persisted. Task offsets and end-offsets are reported
+        // independently: a null list means "unchanged since the last heartbeat", so we retain the previously reported
+        // value for whichever of the two is null and only update when at least one is reported.
+        // This must run after the task validation above: it mutates a non-timeline map that the coordinator runtime
+        // does not roll back, so updating it before validation could leave an orphaned entry for a member whose
+        // (joining) heartbeat is then rejected.
+        if (taskOffsets != null || taskEndOffsets != null) {
+            group.updateTaskOffsets(memberId, group.taskOffsets(memberId).update(taskOffsets, taskEndOffsets));
+        }
+
         // We validated a topology that was not validated before, so bump the group epoch as we may have to reassign tasks.
         if (validatedTopologyEpoch != group.validatedTopologyEpoch()) {
             bumpGroupEpoch = true;
