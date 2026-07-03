@@ -42,8 +42,6 @@ import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -51,9 +49,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -158,77 +154,116 @@ public class ChunkedRecordAccumulatorTest {
     }
 
     /**
-     * Two concurrent appenders race to extend the same open batch, each sizing its extension
-     * against the same remaining capacity off-lock; once one attaches its chunks, the other's is
-     * short. Verifies the second-lock re-check makes the short appender re-check rather than write
-     * past the stream's capacity, which would fail.
+     * Pool that adds one append right after a chunk allocation returns, mocking a concurrent
+     * appender racing the same batch.
      */
-    @Test
-    public void testConcurrentExtensionRaceDoesNotOverflowChunkedStream() throws Exception {
-        final int chunkSize = 256;
-        final int recordValueSize = 350;  // sized so gap ≈ chunkSize → minimal rounding cushion
-
-        final AtomicBoolean armed = new AtomicBoolean(false);
-        final CountDownLatch aHoldsChunks = new CountDownLatch(1);
-        final CountDownLatch bDoneAttaching = new CountDownLatch(1);
-
-        ChunkedBufferPool pool = new ChunkedBufferPool(64L * chunkSize, chunkSize, metrics, time, "producer-metrics") {
+    private ChunkedBufferPool poolMockingConcurrentChunkAllocation(int chunkSize, long totalMemory,
+                                                                   AtomicReference<ChunkedRecordAccumulator> injectAppendOnce,
+                                                                   byte[] injectedValue) {
+        return new ChunkedBufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics") {
             @Override
             public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
-                boolean blockThisCall = armed.compareAndSet(true, false);
                 List<ByteBuffer> chunks = super.allocateChunks(totalSize, maxTimeToBlockMs);
-                if (blockThisCall) {
-                    aHoldsChunks.countDown();
-                    if (!bDoneAttaching.await(10, TimeUnit.SECONDS)) {
-                        throw new InterruptedException("test timeout waiting for B");
-                    }
+                ChunkedRecordAccumulator toInject = injectAppendOnce.getAndSet(null);
+                if (toInject != null) {
+                    toInject.append(topic, partition1, 0L, key, injectedValue, Record.EMPTY_HEADERS, null,
+                            maxBlockTimeMs, time.milliseconds(), cluster);
                 }
                 return chunks;
             }
         };
+    }
+
+    /**
+     * Two concurrent appenders race to extend the same open batch, each sizing its extension
+     * against the same remaining capacity off-lock. Whichever attaches and appends first consumes
+     * that capacity, leaving the other appender's extension too small for its record. Verifies
+     * that the post-attach {@code tryAppend} — which attempts the write based on the batch's
+     * actual capacity — makes that appender extend again and land its record in the same batch,
+     * rather than write past the stream's chunk capacity (which would surface here as an
+     * {@link IllegalStateException} thrown by the append).
+     */
+    @Test
+    public void testConcurrentExtensionRaceLoserExtendsAgain() throws Exception {
+        final int chunkSize = 256;
+        final byte[] value = new byte[350];  // needs 2 chunks
+        final AtomicReference<ChunkedRecordAccumulator> injectAppendOnce = new AtomicReference<>();
+
+        ChunkedBufferPool pool = poolMockingConcurrentChunkAllocation(chunkSize, 64L * chunkSize, injectAppendOnce, value);
         ChunkedRecordAccumulator accum = new ChunkedRecordAccumulator(logContext, 8192, Compression.NONE,
                 /* lingerMs */ 0, /* retryBackoffMs */ 0L, /* retryBackoffMaxMs */ 0L,
                 /* deliveryTimeoutMs */ 3200, metrics, "producer-metrics", time,
                 /* transactionManager */ null, pool);
         try {
-            // Warmup: tiny first record establishes an open batch with a known remainingInStream.
+            // Tiny first record opens the batch, both racing records extend.
             accum.append(topic, partition1, 0L, key, new byte[1], Record.EMPTY_HEADERS, null,
                     maxBlockTimeMs, time.milliseconds(), cluster);
 
-            // Arm the race: the next allocateChunks call (A's) will block until B has appended.
-            armed.set(true);
-
-            AtomicReference<Throwable> aError = new AtomicReference<>();
-            Thread tA = new Thread(() -> {
-                try {
-                    accum.append(topic, partition1, 0L, key, new byte[recordValueSize],
-                            Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), cluster);
-                } catch (Throwable t) {
-                    aError.set(t);
-                }
-            }, "test-appender-A");
-            tA.start();
-
-            // Wait for A to be parked inside allocateChunks holding its (pre-attach) chunks.
-            assertTrue(aHoldsChunks.await(10, TimeUnit.SECONDS), "A did not reach allocateChunks");
-
-            // B runs on this thread. Its allocateChunks is the second call — armed=false now,
-            // so it proceeds without blocking. B reads the same R as A (A hasn't attached yet),
-            // attaches its own chunks, appends its record. Now the open batch's remaining has shrunk
-            // by B's actual record size, but A's still-off-lock allocation didn't know that.
-            accum.append(topic, partition1, 0L, key, new byte[recordValueSize], Record.EMPTY_HEADERS, null,
+            // This append sizes its gap, then the injected append wins the race while the gap
+            // chunks are held off-lock, shrinking the remaining capacity the gap was sized
+            // against. Even with the over-allocation, this append shouldn't write past the stream's
+            // chunk capacity.
+            injectAppendOnce.set(accum);
+            accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null,
                     maxBlockTimeMs, time.milliseconds(), cluster);
 
-            // Release A. Without the fix in the second-lock block, A's tryAppendToExisting
-            // will overflow the chunked stream and throw IllegalStateException.
-            bDoneAttaching.countDown();
-            tA.join(10_000);
-            assertFalse(tA.isAlive(), "Thread A did not complete in time");
-
-            assertNull(aError.get(),
-                    "Thread A failed: " + (aError.get() == null ? "" : aError.get().toString()));
+            Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+            assertEquals(1, dq.size(), "Expecting a single batch");
+            assertNotNull(dq.peekFirst());
+            assertEquals(3, dq.peekFirst().recordCount, "Expecting 3 records in the batch: the initial one plus the 2 racing ones.");
         } finally {
-            // Drain any state regardless of outcome.
+            accum.close();
+        }
+    }
+
+    /**
+     * Concurrent extensions can over-reserve: each appender sizes its own gap against the same
+     * remaining capacity, so a batch can end up with more chunk capacity than its batch-size limit
+     * admits. The limit must still be enforced on append: a record that no longer fits after the
+     * race winner's append rolls to a new batch even though the over-reserved chunks could
+     * physically hold it, and the unused surplus returns to the pool when the batch closes.
+     */
+    @Test
+    public void testConcurrentExtensionRaceLoserStartsNewBatch() throws Exception {
+        final int chunkSize = 256;
+        final int batchSize = 1024;
+        // Sized so each record fits the batch-size limit individually, but not both together.
+        final byte[] value = new byte[500];
+        final AtomicReference<ChunkedRecordAccumulator> injectAppendOnce = new AtomicReference<>();
+
+        ChunkedBufferPool pool = poolMockingConcurrentChunkAllocation(chunkSize, 64L * chunkSize, injectAppendOnce, value);
+        ChunkedRecordAccumulator accum = new ChunkedRecordAccumulator(logContext, batchSize, Compression.NONE,
+                /* lingerMs */ 0, /* retryBackoffMs */ 0L, /* retryBackoffMaxMs */ 0L,
+                /* deliveryTimeoutMs */ 3200, metrics, "producer-metrics", time,
+                /* transactionManager */ null, pool);
+        try {
+            // Open the batch with a tiny record; both racing records will extend it.
+            accum.append(topic, partition1, 0L, key, new byte[1], Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+
+            // This append sizes its gap, then the injected append wins the race while the gap
+            // chunks are held off-lock. The retry finds the batch over its batch-size limit, so
+            // the record must roll to a new batch despite the attached (over-reserved) capacity.
+            injectAppendOnce.set(accum);
+            accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+
+            Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+            assertEquals(2, dq.size(), "The losing record must roll to a new batch, not exceed batch.size");
+            ProducerBatch first = dq.peekFirst();
+            ProducerBatch second = dq.peekLast();
+            assertNotNull(first);
+            assertNotNull(second);
+            assertEquals(2, first.recordCount, "First batch should have the initial record plus the race winner");
+            assertEquals(1, second.recordCount, "Second batch should have the loser record");
+
+            // The loser's extension chunks were attached but never used (the over-reservation);
+            // closing the first batch returns that unused surplus to the pool.
+            long beforeClose = pool.availableMemory();
+            first.close();
+            assertTrue(pool.availableMemory() > beforeClose,
+                    "The over-reserved unused chunks should return to the pool at close");
+        } finally {
             accum.close();
         }
     }

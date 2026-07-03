@@ -82,6 +82,10 @@ public class ChunkedProducerBatch extends ProducerBatch {
     /**
      * Attach pre-allocated chunks to this batch's stream so the next {@code tryAppend} can
      * spill into them. Ownership of the chunks transfers to the stream.
+     * <p>
+     * Concurrent appenders may over-attach (each sizes its own gap against the same remaining
+     * capacity), attaching more than the batch-size limit can use; chunks left fully unused are
+     * returned to the pool when the batch closes.
      */
     void addBuffers(List<ByteBuffer> chunks) {
         stream().addBuffers(chunks);
