@@ -120,9 +120,9 @@ public class ResetStreamsGroupOffsetTest {
         assertThrows(OptionException.class, () -> getStreamsGroupService(args));
     }
 
-    @ClusterTest
-    public void testResetOffsetsWithoutGroupOption(ClusterInstance cluster) {
-        final String[] args = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--reset-offsets", "--dry-run", "--to-offset", "5"};
+    @Test
+    public void testResetOffsetsWithoutGroupOption() {
+        final String[] args = new String[]{"--bootstrap-server", "localhost:9092", "--reset-offsets", "--dry-run", "--to-offset", "5"};
         AtomicBoolean exited = new AtomicBoolean(false);
         Exit.setExitProcedure(((statusCode, message) -> {
             assertNotEquals(0, statusCode);
@@ -136,9 +136,9 @@ public class ResetStreamsGroupOffsetTest {
         }
     }
 
-    @ClusterTest
-    public void testResetOffsetsWithoutDryRunOrExecuteOption(ClusterInstance cluster) {
-        final String[] args = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--reset-offsets", "--all-groups", "--all-input-topics", "--to-offset", "5"};
+    @Test
+    public void testResetOffsetsWithoutDryRunOrExecuteOption() {
+        final String[] args = new String[]{"--bootstrap-server", "localhost:9092", "--reset-offsets", "--all-groups", "--all-input-topics", "--to-offset", "5"};
         AtomicBoolean exited = new AtomicBoolean(false);
         Exit.setExitProcedure(((statusCode, message) -> {
             assertNotEquals(0, statusCode);
@@ -152,9 +152,9 @@ public class ResetStreamsGroupOffsetTest {
         }
     }
 
-    @ClusterTest
-    public void testResetOffsetsWithDeleteInternalTopicsOption(ClusterInstance cluster) {
-        final String[] args = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--reset-offsets", "--dry-run", "--all-groups", "--all-input-topics", "--to-offset", "5", "--delete-all-internal-topics"};
+    @Test
+    public void testResetOffsetsWithDeleteInternalTopicsOption() {
+        final String[] args = new String[]{"--bootstrap-server", "localhost:9092", "--reset-offsets", "--dry-run", "--all-groups", "--all-input-topics", "--to-offset", "5", "--delete-all-internal-topics"};
         AtomicBoolean exited = new AtomicBoolean(false);
         Exit.setExitProcedure(((statusCode, message) -> {
             assertNotEquals(0, statusCode);

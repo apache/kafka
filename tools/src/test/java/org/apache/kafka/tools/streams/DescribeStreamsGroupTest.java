@@ -86,9 +86,9 @@ public class DescribeStreamsGroupTest {
         assertThrows(OptionException.class, () -> getStreamsGroupService(args));
     }
 
-    @ClusterTest
-    public void testDescribeWithoutGroupOption(ClusterInstance cluster) {
-        final String[] args = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--describe"};
+    @Test
+    public void testDescribeWithoutGroupOption() {
+        final String[] args = new String[]{"--bootstrap-server", "localhost:9092", "--describe"};
         AtomicBoolean exited = new AtomicBoolean(false);
         Exit.setExitProcedure(((statusCode, message) -> {
             assertNotEquals(0, statusCode);

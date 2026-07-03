@@ -108,9 +108,9 @@ public class DeleteStreamsGroupTest {
         assertThrows(OptionException.class, () -> getStreamsGroupService(args));
     }
 
-    @ClusterTest
-    public void testDeleteWithoutGroupOption(ClusterInstance cluster) {
-        final String[] args = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete"};
+    @Test
+    public void testDeleteWithoutGroupOption() {
+        final String[] args = new String[]{"--bootstrap-server", "localhost:9092", "--delete"};
         AtomicBoolean exited = new AtomicBoolean(false);
         Exit.setExitProcedure(((statusCode, message) -> {
             assertNotEquals(0, statusCode);
@@ -124,9 +124,9 @@ public class DeleteStreamsGroupTest {
         }
     }
 
-    @ClusterTest
-    public void testDeleteWithDeleteInternalTopicOption(ClusterInstance cluster) {
-        final String[] args = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--all-groups", "--delete-internal-topic", "foo"};
+    @Test
+    public void testDeleteWithDeleteInternalTopicOption() {
+        final String[] args = new String[]{"--bootstrap-server", "localhost:9092", "--delete", "--all-groups", "--delete-internal-topic", "foo"};
         AtomicBoolean exited = new AtomicBoolean(false);
         Exit.setExitProcedure(((statusCode, message) -> {
             assertNotEquals(0, statusCode);
