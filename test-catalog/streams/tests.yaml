@@ -4710,6 +4710,7 @@ org.apache.kafka.streams.state.internals.InMemoryKeyValueStoreTest:
 - shouldPutAll
 - shouldPutReverseAll
 - shouldRemoveKeysWithNullValues
+- shouldReportUncommittedPositionForTransactionalStore
 - shouldReturnKeysWithGivenPrefix
 - shouldReturnKeysWithGivenPrefixExcludingNextKeyLargestKey
 - shouldReturnNoKeys

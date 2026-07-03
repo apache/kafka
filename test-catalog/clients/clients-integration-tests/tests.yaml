@@ -355,6 +355,8 @@ org.apache.kafka.clients.consumer.ShareConsumerCallbackTest:
 - testAcknowledgementCommitCallbackThrowsException
 - testAcknowledgementSentOnSubscriptionChange
 org.apache.kafka.clients.consumer.ShareConsumerDLQTest:
+- testDlqCopiesRecordsReadFromRemoteAndLocalStorage
+- testDlqCopiesRecordsReadFromRemoteStorage
 - testDlqNotTriggeredWhenGatedOff
 - testDlqRecordsRoutedToCorrectDlqPartition
 - testDlqStopsAfterDisablingForGroup
