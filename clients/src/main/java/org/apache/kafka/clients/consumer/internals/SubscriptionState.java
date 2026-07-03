@@ -1066,6 +1066,11 @@ public class SubscriptionState {
         return Optional.ofNullable(rebalanceListener.get());
     }
 
+    private synchronized Consumer<?, ?> rebalanceConsumerOrThrow() {
+        return Optional.ofNullable(rebalanceConsumer.get())
+                .orElseThrow(() -> new IllegalStateException("Rebalance consumer has not been initialized"));
+    }
+
     /** @return true if a {@link RebalanceListener} has been registered with this subscription. */
     public synchronized boolean hasRebalanceListener() {
         return rebalanceListener.get() != null;
@@ -1089,11 +1094,7 @@ public class SubscriptionState {
     private void invokeRebalanceListener(
             Collection<TopicPartition> partitions,
             java.util.function.BiConsumer<Collection<TopicPartition>, RebalanceConsumer> callback) {
-        if (rebalanceConsumer.get() == null) {
-            throw new IllegalStateException("Rebalance consumer has not been initialized");
-        }
-
-        var consumer = rebalanceConsumer.get();
+        var consumer = rebalanceConsumerOrThrow();
         try (var view = new DelegatingRebalanceConsumer(consumer)) {
             callback.accept(partitions, view);
         }
