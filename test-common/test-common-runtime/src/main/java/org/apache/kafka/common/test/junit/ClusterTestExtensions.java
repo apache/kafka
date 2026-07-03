@@ -190,7 +190,9 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             }
             List<Thread> threads = detectThreadLeak.newThreads();
             assertTrue(threads.isEmpty(), "Thread leak detected: " +
-                threads.stream().map(Thread::getName).collect(Collectors.joining(", ")));
+                    threads.stream().map(t -> {
+                        return t.getThreadGroup().getName() + "/" + t.getName();
+                    }).collect(Collectors.joining(", ")));
         }
     }
 
