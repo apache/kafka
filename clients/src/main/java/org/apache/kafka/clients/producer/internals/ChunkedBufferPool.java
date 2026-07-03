@@ -132,7 +132,9 @@ public class ChunkedBufferPool extends BufferPool {
                         }
                         long stillNeeded = memoryRequired - (long) pooled.size() * chunkSize - accumulated;
                         if (stillNeeded > 0) {
-                            freeUp((int) stillNeeded);
+                            // stillNeeded can exceed Integer.MAX_VALUE (memoryRequired rounds totalSize
+                            // up to whole chunks)
+                            freeUp((int) Math.min(stillNeeded, Integer.MAX_VALUE));
                             long got = Math.min(stillNeeded, this.nonPooledAvailableMemory);
                             this.nonPooledAvailableMemory -= got;
                             accumulated += got;
