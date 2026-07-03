@@ -117,6 +117,7 @@ object StorageTool extends Logging {
       setClusterId(namespace.getString("cluster_id")).
       setUnstableFeatureVersionsEnabled(config.unstableFeatureVersionsEnabled).
       setIgnoreFormatted(namespace.getBoolean("ignore_formatted")).
+      setZkRollbackCompatible(namespace.getBoolean("zk_rollback_compatible")).
       setControllerListenerName(config.controllerListenerNames.head).
       setMetadataLogDirectory(config.metadataLogDir)
     Option(namespace.getString("release_version")) match {
@@ -205,6 +206,10 @@ object StorageTool extends Logging {
               |'SCRAM-SHA-256=[name=alice,password=alice-secret]'
               |'SCRAM-SHA-512=[name=alice,iterations=8192,salt="N3E=",saltedpassword="YCE="]'""".stripMargin)
     formatParser.addArgument("--ignore-formatted", "-g").
+      action(storeTrue())
+    formatParser.addArgument("--zk-rollback-compatible").
+      help("Format the node so that it remains compatible with rolling back an in-progress " +
+        "KRaft migration to ZooKeeper mode.").
       action(storeTrue())
     formatParser.addArgument("--release-version", "-r").
       action(store()).
