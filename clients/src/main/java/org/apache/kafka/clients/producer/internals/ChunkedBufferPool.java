@@ -92,8 +92,9 @@ public class ChunkedBufferPool extends BufferPool {
                 // A single Condition is added to the waiter's list to ensure FIFO fairness at the request level.
                 //
                 // `accumulated` tracks bytes drawn from nonPooledAvailableMemory only (pool chunks
-                // already taken live in `pooled`). Matches BufferPool.allocate's semantics: on
-                // failure, `accumulated` is exactly the amount to refund; on success it is reset to 0.
+                // already taken live in `pooled`), and is always a whole-chunk multiple. Matches
+                // BufferPool.allocate's semantics: on failure, `accumulated` is exactly the amount
+                // to refund; on success it is reset to 0.
                 long accumulated = 0;
                 Condition moreMemory = lock.newCondition();
                 try {
@@ -124,20 +125,22 @@ public class ChunkedBufferPool extends BufferPool {
 
                         remainingTimeToBlockNs -= timeNs;
 
-                        // Take pool chunks first, then reserve non-pool bytes for the remainder.
-                        while (pooled.size() < numChunks
-                                && (long) (pooled.size() + 1) * chunkSize + accumulated <= memoryRequired
-                                && !free.isEmpty()) {
+                        // Reuse pooled chunks first, preferring them over raw reservations: if a
+                        // taken chunk covers a slot already reserved as raw bytes in an earlier
+                        // iteration, hand that raw reservation back to the pool.
+                        while (pooled.size() < numChunks && !free.isEmpty()) {
                             pooled.add(free.pollFirst());
+                            if (accumulated >= chunkSize) { // accumulated is always chunk-aligned
+                                accumulated -= chunkSize;
+                                this.nonPooledAvailableMemory += chunkSize;
+                            }
                         }
-                        long stillNeeded = memoryRequired - (long) pooled.size() * chunkSize - accumulated;
-                        if (stillNeeded > 0) {
-                            // stillNeeded can exceed Integer.MAX_VALUE (memoryRequired rounds totalSize
-                            // up to whole chunks)
-                            freeUp((int) Math.min(stillNeeded, Integer.MAX_VALUE));
-                            long got = Math.min(stillNeeded, this.nonPooledAvailableMemory);
-                            this.nonPooledAvailableMemory -= got;
-                            accumulated += got;
+                        // Reserve non-pooled memory for the still-uncovered chunks, in whole chunks
+                        // (the buffers themselves are allocated after the lock is released).
+                        while (pooled.size() + (int) (accumulated / chunkSize) < numChunks
+                                && this.nonPooledAvailableMemory >= chunkSize) {
+                            this.nonPooledAvailableMemory -= chunkSize;
+                            accumulated += chunkSize;
                         }
                     }
                     // Clear the rollback tracker.
