@@ -367,7 +367,7 @@ public class SubscriptionState {
      * tests or membership management.
      * @param listener the listener; must not be null
      */
-    public void setRebalanceListener(RebalanceListener listener) {
+    public synchronized void setRebalanceListener(RebalanceListener listener) {
         Objects.requireNonNull(listener, "Listener must not be null when setting a rebalance listener");
         this.rebalanceListener.set(listener);
     }
@@ -377,7 +377,7 @@ public class SubscriptionState {
      * @param listener the listener
      * @param consumer the consumer instance to orchestrate callbacks in {@link RebalanceConsumer}. must not be null
      */
-    public void setRebalanceListener(RebalanceListener listener, Consumer<?, ?> consumer) {
+    public synchronized void setRebalanceListener(RebalanceListener listener, Consumer<?, ?> consumer) {
         if (listener != null) {
             Objects.requireNonNull(consumer, "Consumer must not be null when a listener is provided");
             this.rebalanceListener.set(listener);
@@ -1062,15 +1062,6 @@ public class SubscriptionState {
         assignment.moveToEnd(tp);
     }
 
-    private synchronized Optional<RebalanceListener> rebalanceListener() {
-        return Optional.ofNullable(rebalanceListener.get());
-    }
-
-    private synchronized Consumer<?, ?> rebalanceConsumerOrThrow() {
-        return Optional.ofNullable(rebalanceConsumer.get())
-                .orElseThrow(() -> new IllegalStateException("Rebalance consumer has not been initialized"));
-    }
-
     /** @return true if a {@link RebalanceListener} has been registered with this subscription. */
     public synchronized boolean hasRebalanceListener() {
         return rebalanceListener.get() != null;
@@ -1078,26 +1069,48 @@ public class SubscriptionState {
 
     /** Invoke {@link RebalanceListener#onPartitionsAssigned(Collection, RebalanceConsumer)} on the given partitions.*/
     public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-        rebalanceListener().ifPresent(rl -> invokeRebalanceListener(partitions, rl::onPartitionsAssigned));
+        dispatch(partitions, RebalanceListener::onPartitionsAssigned);
     }
 
     /** Invoke {@link RebalanceListener#onPartitionsRevoked(Collection, RebalanceConsumer)} on the given partitions.*/
     public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-        rebalanceListener().ifPresent(rl -> invokeRebalanceListener(partitions, rl::onPartitionsRevoked));
+        dispatch(partitions, RebalanceListener::onPartitionsRevoked);
     }
 
     /** Invoke {@link RebalanceListener#onPartitionsLost(Collection, RebalanceConsumer)} on the given partitions.*/
     public void onPartitionsLost(Collection<TopicPartition> partitions) {
-        rebalanceListener().ifPresent(rl -> invokeRebalanceListener(partitions, rl::onPartitionsLost));
+        dispatch(partitions, RebalanceListener::onPartitionsLost);
     }
+
+    private void dispatch(
+            Collection<TopicPartition> partitions,
+            TriConsumer<RebalanceListener, Collection<TopicPartition>, RebalanceConsumer> method) {
+        RebalanceListener rl;
+        Consumer<?, ?> rc;
+        synchronized (this) {
+            rl = rebalanceListener.get();
+            rc = rebalanceConsumer.get();
+        }
+        if (rl == null)
+            return;
+        if (rc == null)
+            throw new IllegalStateException("Rebalance consumer has not been initialized");
+        invokeRebalanceListener(partitions, rc, (parts, view) -> method.accept(rl, parts, view));
+    }
+
 
     private void invokeRebalanceListener(
             Collection<TopicPartition> partitions,
+            Consumer<?, ?> rebalanceConsumer,
             java.util.function.BiConsumer<Collection<TopicPartition>, RebalanceConsumer> callback) {
-        var consumer = rebalanceConsumerOrThrow();
-        try (var view = new DelegatingRebalanceConsumer(consumer)) {
+        try (var view = new DelegatingRebalanceConsumer(rebalanceConsumer)) {
             callback.accept(partitions, view);
         }
+    }
+
+    @FunctionalInterface
+    private interface TriConsumer<A, B, C> {
+        void accept(A a, B b, C c);
     }
 
     private static class TopicPartitionState {
