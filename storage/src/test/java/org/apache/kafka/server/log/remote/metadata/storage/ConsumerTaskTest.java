@@ -72,7 +72,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 public class ConsumerTaskTest {
 
@@ -115,8 +114,6 @@ public class ConsumerTaskTest {
     @Test
     public void testCloseBeforeAssignmentDoesNotPollConsumer() {
         final Consumer<byte[], byte[]> mockConsumer = mock(Consumer.class);
-        when(mockConsumer.poll(any(Duration.class)))
-            .thenThrow(new AssertionError("poll() should not be called when ConsumerTask is closed before any partition assignment"));
         final ConsumerTask task = new ConsumerTask(handler, partitioner, mockConsumer, 10L, 300_000L, Time.SYSTEM);
 
         task.close();
