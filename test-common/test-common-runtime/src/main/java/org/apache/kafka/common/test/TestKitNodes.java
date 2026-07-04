@@ -162,7 +162,6 @@ public class TestKitNodes {
             if (numDisksPerBroker <= 0) {
                 throw new IllegalArgumentException("Invalid value for numDisksPerBroker");
             }
-            // TODO: remove this assertion after https://issues.apache.org/jira/browse/KAFKA-16680 is finished
             var supportedProtocols = List.of(
                     SecurityProtocol.PLAINTEXT,
                     SecurityProtocol.SASL_PLAINTEXT,
