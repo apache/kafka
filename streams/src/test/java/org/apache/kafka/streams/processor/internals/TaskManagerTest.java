@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
@@ -78,6 +79,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -1948,6 +1950,44 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldReturnEmptyTaskOffsetSumSnapshotBeforeRefresh() {
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+
+        assertThat(taskManager.taskOffsetSumSnapshot(), is(Collections.emptyMap()));
+    }
+
+    @Test
+    public void shouldPublishTaskOffsetSumSnapshotFromStateDirectoryExcludingRunningActiveTasks() {
+        final StreamTask runningActiveTask = statefulTask(taskId00, taskId00ChangelogPartitions).inState(State.RUNNING).build();
+        final StreamTask restoringActiveTask = statefulTask(taskId01, taskId01ChangelogPartitions).inState(State.RESTORING).build();
+        final StandbyTask standbyTask = standbyTask(taskId02, taskId02ChangelogPartitions).inState(State.RUNNING).build();
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+        // running-active tasks are owned by the stream thread; restoring-active and standby tasks live in the state updater
+        when(tasks.allInitializedTasksPerId()).thenReturn(mkMap(mkEntry(taskId00, runningActiveTask)));
+        when(stateUpdater.tasks()).thenReturn(Set.of(restoringActiveTask, standbyTask));
+        // StateDirectory holds sums for every stateful task with state on disk, including a dormant task (taskId03)
+        // that is not currently assigned (not in allTasks()).
+        when(stateDirectory.taskOffsetSums()).thenReturn(mkMap(
+            mkEntry(taskId00, 10L),
+            mkEntry(taskId01, 20L),
+            mkEntry(taskId02, 30L),
+            mkEntry(taskId03, 40L)
+        ));
+
+        taskManager.maybeUpdateTaskOffsetSumSnapshot();
+
+        // running-active taskId00 is omitted; restoring-active, standby, and dormant tasks are reported with their sums
+        assertThat(taskManager.taskOffsetSumSnapshot(), is(mkMap(
+            mkEntry(new StreamsRebalanceData.TaskId("0", 1), 20L),
+            mkEntry(new StreamsRebalanceData.TaskId("0", 2), 30L),
+            mkEntry(new StreamsRebalanceData.TaskId("0", 3), 40L)
+        )));
+    }
+
+    @Test
     public void shouldSkipUnknownOffsetsWhenComputingOffsetSum() {
         final StreamTask restoringStatefulTask = statefulTask(taskId01, taskId01ChangelogPartitions)
             .inState(State.RESTORING).build();
@@ -2991,6 +3031,55 @@ public class TaskManagerTest {
         verify(task00).prepareCommit(true);
         verify(task00).postCommit(true);
         verify(task00).suspend();
+    }
+
+    @Test
+    public void shouldSuspendRevokedTasksWhenPrepareCommitThrows() {
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RUNNING)
+            .build();
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.allInitializedTasks()).thenReturn(Set.of(task00));
+
+        when(task00.commitNeeded()).thenReturn(true);
+        when(task00.prepareCommit(true)).thenThrow(new TaskMigratedException("task migrated"));
+
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+
+        final StreamsException thrown = assertThrows(StreamsException.class,
+            () -> taskManager.handleRevocation(taskId00Partitions));
+
+        assertInstanceOf(TaskMigratedException.class, thrown);
+        assertEquals(Optional.of(taskId00), thrown.taskId());
+
+        verify(task00).suspend();
+        verify(task00, never()).postCommit(anyBoolean());
+    }
+
+    @Test
+    public void shouldAttachSuppressedExceptionWhenPrepareCommitAndSuspendBothFailDuringRevocation() {
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RUNNING)
+            .build();
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.allInitializedTasks()).thenReturn(Set.of(task00));
+
+        when(task00.commitNeeded()).thenReturn(true);
+        when(task00.prepareCommit(true)).thenThrow(new TaskMigratedException("task migrated"));
+        doThrow(new RuntimeException("suspend failed")).when(task00).suspend();
+
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+
+        final StreamsException thrown = assertThrows(StreamsException.class,
+            () -> taskManager.handleRevocation(taskId00Partitions));
+
+        assertInstanceOf(TaskMigratedException.class, thrown);
+        assertEquals(1, thrown.getSuppressed().length);
+        assertInstanceOf(StreamsException.class, thrown.getSuppressed()[0]);
     }
 
     @Test

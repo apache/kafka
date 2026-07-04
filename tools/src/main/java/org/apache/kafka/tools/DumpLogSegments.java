@@ -53,8 +53,10 @@ import org.apache.kafka.coordinator.common.runtime.Deserializer;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde;
 import org.apache.kafka.coordinator.share.ShareCoordinatorRecordSerde;
 import org.apache.kafka.coordinator.transaction.TransactionCoordinatorRecordSerde;
+import org.apache.kafka.coordinator.transaction.TransactionState;
+import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
 import org.apache.kafka.metadata.MetadataRecordSerde;
-import org.apache.kafka.metadata.bootstrap.BootstrapDirectory;
+import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde;
 import org.apache.kafka.server.util.CommandDefaultOptions;
@@ -365,7 +367,7 @@ public class DumpLogSegments {
             long startOffset = Long.parseLong(file.getName().split("\\.")[0]);
             System.out.println("Log starting offset: " + startOffset);
         } else if (file.getName().endsWith(Snapshots.SUFFIX)) {
-            if (file.getName().equals(BootstrapDirectory.BINARY_BOOTSTRAP_FILENAME)) {
+            if (file.getName().equals(BootstrapMetadata.BINARY_BOOTSTRAP_FILENAME)) {
                 System.out.println("KRaft bootstrap snapshot");
             } else {
                 Optional<SnapshotPath> pathOpt = Snapshots.parse(file.toPath());
@@ -725,8 +727,19 @@ public class DumpLogSegments {
 
         @Override
         protected JsonNode valueAsJson(ApiMessage message, short version) {
-            return org.apache.kafka.coordinator.transaction.generated.CoordinatorRecordJsonConverters
+            JsonNode json = org.apache.kafka.coordinator.transaction.generated.CoordinatorRecordJsonConverters
                 .writeRecordValueAsJson(message, version);
+            if (message instanceof TransactionLogValue) {
+                byte statusId = ((TransactionLogValue) message).transactionStatus();
+                String statusName;
+                try {
+                    statusName = TransactionState.fromId(statusId).stateName();
+                } catch (IllegalStateException e) {
+                    statusName = String.valueOf(statusId);
+                }
+                ((ObjectNode) json).put("transactionStatus", statusName);
+            }
+            return json;
         }
     }
 

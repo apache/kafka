@@ -85,10 +85,10 @@ public class PushTelemetryRequest extends AbstractRequest {
         return OTLP_CONTENT_TYPE;
     }
 
-    public ByteBuffer metricsData() {
+    public ByteBuffer metricsData(int maxDecompressedBytes) {
         CompressionType cType = CompressionType.forId(this.data.compressionType());
         return (cType == CompressionType.NONE) ?
-            this.data.metrics() : ClientTelemetryUtils.decompress(this.data.metrics(), cType);
+            this.data.metrics() : ClientTelemetryUtils.decompress(this.data.metrics(), cType, maxDecompressedBytes);
     }
 
     public static PushTelemetryRequest parse(Readable readable, short version) {

@@ -19,8 +19,6 @@ package kafka.server.builders;
 
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
-import kafka.server.AutoTopicCreationManager;
-import kafka.server.ForwardingManager;
 import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
 import kafka.server.QuotaFactory.QuotaManagers;
@@ -37,8 +35,10 @@ import org.apache.kafka.metadata.ConfigRepository;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.security.DelegationTokenManager;
 import org.apache.kafka.server.ApiVersionManager;
+import org.apache.kafka.server.AutoTopicCreationManager;
 import org.apache.kafka.server.ClientMetricsManager;
 import org.apache.kafka.server.FetchManager;
+import org.apache.kafka.server.ForwardingManager;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 

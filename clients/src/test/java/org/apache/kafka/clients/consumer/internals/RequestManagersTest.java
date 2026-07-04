@@ -39,7 +39,7 @@ import static org.mockito.Mockito.mock;
 public class RequestManagersTest {
 
     @Test
-    public void testMemberStateListenerRegistered() {
+    public void testConsumerGroupRequestManagersAndListenersWired() {
 
         final MemberStateListener listener = (memberEpoch, memberId) -> { };
 
@@ -77,6 +77,7 @@ public class RequestManagersTest {
         assertTrue(requestManagers.consumerMembershipManager.isPresent());
         assertTrue(requestManagers.streamsMembershipManager.isEmpty());
         assertTrue(requestManagers.streamsGroupHeartbeatRequestManager.isEmpty());
+        assertTrue(requestManagers.streamsGroupTopologyDescriptionRequestManager.isEmpty());
 
         assertEquals(2, requestManagers.consumerMembershipManager.get().stateListeners().size());
         assertTrue(requestManagers.consumerMembershipManager.get().stateListeners().stream()
@@ -85,7 +86,7 @@ public class RequestManagersTest {
     }
 
     @Test
-    public void testStreamMemberStateListenerRegistered() {
+    public void testStreamsGroupRequestManagersAndListenersWired() {
 
         final MemberStateListener listener = (memberEpoch, memberId) -> { };
 
@@ -117,11 +118,14 @@ public class RequestManagersTest {
             new Metrics(),
             mock(OffsetCommitCallbackInvoker.class),
             listener,
-            Optional.of(new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of())),
+            Optional.of(new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of, Map::of)),
             new PositionsValidator(logContext, time, subscriptions, metadata)
         ).get();
         assertTrue(requestManagers.streamsMembershipManager.isPresent());
         assertTrue(requestManagers.streamsGroupHeartbeatRequestManager.isPresent());
+        assertTrue(requestManagers.streamsGroupTopologyDescriptionRequestManager.isPresent());
+        assertTrue(requestManagers.entries().stream()
+            .anyMatch(rm -> rm instanceof StreamsGroupTopologyDescriptionRequestManager));
         assertTrue(requestManagers.consumerMembershipManager.isEmpty());
 
         assertEquals(2, requestManagers.streamsMembershipManager.get().stateListeners().size());

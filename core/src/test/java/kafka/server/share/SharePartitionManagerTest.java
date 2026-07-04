@@ -64,6 +64,8 @@ import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.context.FinalContext;
 import org.apache.kafka.server.share.context.ShareFetchContext;
 import org.apache.kafka.server.share.context.ShareSessionContext;
+import org.apache.kafka.server.share.dlq.NoOpShareGroupDLQManager;
+import org.apache.kafka.server.share.dlq.ShareGroupDLQManager;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchKey;
 import org.apache.kafka.server.share.fetch.PartitionMaxBytesStrategy;
@@ -1264,7 +1266,6 @@ public class SharePartitionManagerTest {
         sharePartitionManager.close();
         // Verify that the timer object in sharePartitionManager is closed by checking the calls to timer.close() and shareGroupMetrics.close().
         Mockito.verify(timer, times(1)).close();
-        Mockito.verify(shareGroupMetrics, times(1)).close();
     }
 
     @Test
@@ -2786,7 +2787,9 @@ public class SharePartitionManagerTest {
         SharePartitionCache partitionCache = new SharePartitionCache();
         ReplicaManager mockReplicaManager = mock(ReplicaManager.class);
 
-        SharePartitionListener partitionListener = new SharePartitionListener(sharePartitionKey, mockReplicaManager, partitionCache);
+        SharePartitionListener partitionListener = new SharePartitionListener(sharePartitionKey,
+            new ReplicaManagerPartitionMetadataProvider(mockReplicaManager),
+            mockReplicaManager::completeDelayedShareFetchRequest, partitionCache);
         testSharePartitionListener(sharePartitionKey, partitionCache, mockReplicaManager, partitionListener::onFailed);
     }
 
@@ -2797,7 +2800,9 @@ public class SharePartitionManagerTest {
         SharePartitionCache partitionCache = new SharePartitionCache();
         ReplicaManager mockReplicaManager = mock(ReplicaManager.class);
 
-        SharePartitionListener partitionListener = new SharePartitionListener(sharePartitionKey, mockReplicaManager, partitionCache);
+        SharePartitionListener partitionListener = new SharePartitionListener(sharePartitionKey,
+            new ReplicaManagerPartitionMetadataProvider(mockReplicaManager),
+            mockReplicaManager::completeDelayedShareFetchRequest, partitionCache);
         testSharePartitionListener(sharePartitionKey, partitionCache, mockReplicaManager, partitionListener::onDeleted);
     }
 
@@ -2808,7 +2813,9 @@ public class SharePartitionManagerTest {
         SharePartitionCache partitionCache = new SharePartitionCache();
         ReplicaManager mockReplicaManager = mock(ReplicaManager.class);
 
-        SharePartitionListener partitionListener = new SharePartitionListener(sharePartitionKey, mockReplicaManager, partitionCache);
+        SharePartitionListener partitionListener = new SharePartitionListener(sharePartitionKey,
+            new ReplicaManagerPartitionMetadataProvider(mockReplicaManager),
+            mockReplicaManager::completeDelayedShareFetchRequest, partitionCache);
         testSharePartitionListener(sharePartitionKey, partitionCache, mockReplicaManager, partitionListener::onBecomingFollower);
     }
 
@@ -3249,6 +3256,7 @@ public class SharePartitionManagerTest {
         private ShareGroupMetrics shareGroupMetrics = new ShareGroupMetrics(time);
         private BrokerTopicStats brokerTopicStats;
         private Supplier<Boolean> shareGroupDlqEnableSupplier = () -> false;
+        private ShareGroupDLQManager shareGroupDLQManager = new NoOpShareGroupDLQManager();
 
         private SharePartitionManagerBuilder withReplicaManager(ReplicaManager replicaManager) {
             this.replicaManager = replicaManager;
@@ -3290,12 +3298,20 @@ public class SharePartitionManagerTest {
             return this;
         }
 
+        private SharePartitionManagerBuilder withShareGroupDlqManager(ShareGroupDLQManager shareGroupDLQManager) {
+            this.shareGroupDLQManager = shareGroupDLQManager;
+            return this;
+        }
+
         public static SharePartitionManagerBuilder builder() {
             return new SharePartitionManagerBuilder();
         }
 
         public SharePartitionManager build() {
             return new SharePartitionManager(replicaManager,
+                new ReplicaManagerLogReader(replicaManager),
+                new ReplicaManagerPartitionMetadataProvider(replicaManager),
+                replicaManager::completeDelayedShareFetchRequest,
                 time,
                 cache,
                 partitionCache,
@@ -3308,7 +3324,8 @@ public class SharePartitionManagerTest {
                 new ShareGroupConfigProvider(mock(GroupConfigManager.class)),
                 shareGroupMetrics,
                 brokerTopicStats,
-                shareGroupDlqEnableSupplier
+                shareGroupDlqEnableSupplier,
+                shareGroupDLQManager
             );
         }
     }

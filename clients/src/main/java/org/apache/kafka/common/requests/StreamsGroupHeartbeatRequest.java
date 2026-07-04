@@ -45,6 +45,11 @@ public class StreamsGroupHeartbeatRequest extends AbstractRequest {
 
         @Override
         public StreamsGroupHeartbeatRequest build(short version) {
+            if (version == 0) {
+                // TaskOffsets/TaskEndOffsets are only supported by brokers supporting v1+ request versions
+                data.setTaskOffsets(null);
+                data.setTaskEndOffsets(null);
+            }
             return new StreamsGroupHeartbeatRequest(data, version);
         }
 

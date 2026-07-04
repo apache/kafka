@@ -31,12 +31,17 @@ public class TopicConfig {
     public static final String SEGMENT_BYTES_CONFIG = "segment.bytes";
     public static final String SEGMENT_BYTES_DOC = "This configuration controls the segment file size for " +
         "the log. Retention and cleaning is always done a file at a time so a larger segment size means " +
-        "fewer files but less granular control over retention.";
+        "fewer files but less granular control over retention. " +
+        "The active segment is rolled once it reaches this size.";
 
     public static final String SEGMENT_MS_CONFIG = "segment.ms";
     public static final String SEGMENT_MS_DOC = "This configuration controls the period of time after " +
         "which Kafka will force the log to roll even if the segment file isn't full to ensure that retention " +
-        "can delete or compact old data.";
+        "can delete or compact old data. " +
+        "This forces active segment rolling by time, even if the active segment has not reached " +
+        "<code>segment.bytes</code>. For compacted topics, <code>max.compaction.lag.ms</code> can trigger " +
+        "active segment rolling sooner: the effective time-based roll threshold is the smaller of " +
+        "<code>segment.ms</code> and <code>max.compaction.lag.ms</code>.";
 
     public static final String SEGMENT_JITTER_MS_CONFIG = "segment.jitter.ms";
     public static final String SEGMENT_JITTER_MS_DOC = "The maximum random jitter subtracted from the scheduled " +
@@ -101,6 +106,24 @@ public class TopicConfig {
             "(i.e. local.retention.ms/bytes) becomes irrelevant, and all data expiration follows the topic-wide retention configuration" +
             "(i.e. retention.ms/bytes).";
 
+    public static final String REMOTE_COPY_LAG_MS_CONFIG = "remote.copy.lag.ms";
+    public static final String REMOTE_COPY_LAG_MS_DOC = "Controls one of the two upload eligibility checks (time and size) for copying segments to remote storage. " +
+            "A non-active segment is upload-eligible when either this time-based check or <code>remote.copy.lag.bytes</code> is satisfied. " +
+            "When set to 0, uploads are immediately eligible regardless of lag checks. " +
+            "When set to a positive value (ms), the segment is time-eligible once elapsed time since its latest record reaches this value. " +
+            "When set to -1, this value is derived from effective local retention time (<code>local.retention.ms</code>). " +
+            "If that effective local retention time is unlimited (-1), this time-based check is not applied. " +
+            "A positive value should not exceed effective local retention time unless local retention is unlimited (-1).";
+
+    public static final String REMOTE_COPY_LAG_BYTES_CONFIG = "remote.copy.lag.bytes";
+    public static final String REMOTE_COPY_LAG_BYTES_DOC = "Controls one of the two upload eligibility checks (time and size) for copying segments to remote storage. " +
+            "A non-active segment is upload-eligible when either this size-based check or <code>remote.copy.lag.ms</code> is satisfied. " +
+            "When set to 0, uploads are immediately eligible regardless of lag checks. " +
+            "When set to a positive value (bytes), the segment is size-eligible once bytes of newer local log data after that segment reaches this value. " +
+            "When set to -1, this value is derived from effective local retention size (<code>local.retention.bytes</code>). " +
+            "If that effective local retention size is unlimited (-1), this size-based check is not applied. " +
+            "A positive value should not exceed effective local retention size unless local retention is unlimited (-1).";
+
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = "remote.log.delete.on.disable";
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_DOC = "Determines whether tiered data for a topic should be " +
             "deleted after tiered storage is disabled on a topic. This configuration should be enabled when trying to " +
@@ -135,7 +158,13 @@ public class TopicConfig {
 
     public static final String MAX_COMPACTION_LAG_MS_CONFIG = "max.compaction.lag.ms";
     public static final String MAX_COMPACTION_LAG_MS_DOC = "The maximum time a message will remain " +
-        "ineligible for compaction in the log. Only applicable for logs that are being compacted.";
+        "ineligible for compaction in the log. Only applicable for logs that are being compacted. " +
+        "Because the active segment is never compacted, for compacted topics this value also drives " +
+        "active segment rolling: the effective time-based roll threshold is the smaller of " +
+        "<code>segment.ms</code> and <code>max.compaction.lag.ms</code>. Active segment rolling moves " +
+        "records out of the active segment, after which <code>max.compaction.lag.ms</code> makes them " +
+        "eligible for compaction even if <code>min.cleanable.dirty.ratio</code> is not met. See " +
+        "<a href=\"https://kafka.apache.org/documentation/#compaction\">log compaction</a>.";
 
     public static final String MIN_CLEANABLE_DIRTY_RATIO_CONFIG = "min.cleanable.dirty.ratio";
     public static final String MIN_CLEANABLE_DIRTY_RATIO_DOC = "This configuration controls how frequently " +

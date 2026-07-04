@@ -34,8 +34,8 @@
     { "name": "ClientSoftwareVersion", "type": "string", "versions": "3+",
       "ignorable": true, "about": "The version of the client." },
     { "name": "ClusterId", "type": "string", "versions": "5+", "nullableVersions": "5+", "default": "null",
-      "ignorable": true, "about": "The cluster ID the client intends to connect to, if known." },
+      "ignorable": true, "about": "The cluster ID the client intends to connect to. Provide both ClusterId and NodeId, if known." },
     { "name": "NodeId", "type": "int32", "versions": "5+", "default": -1,
-      "ignorable": true, "about": "The node ID the client intends to connect to, if known." }
+      "ignorable": true, "about": "The node ID the client intends to connect to. Provide both ClusterId and NodeId, if known." }
   ]
 }

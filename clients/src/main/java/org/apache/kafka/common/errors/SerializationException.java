@@ -19,7 +19,7 @@ package org.apache.kafka.common.errors;
 import org.apache.kafka.common.KafkaException;
 
 /**
- *  Any exception during serialization in the producer
+ * Any exception during serialization or deserialization.
  */
 public class SerializationException extends KafkaException {
 
