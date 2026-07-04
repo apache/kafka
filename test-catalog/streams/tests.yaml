@@ -4806,6 +4806,7 @@ org.apache.kafka.streams.state.internals.InMemorySessionStoreTest:
 - shouldRemove
 - shouldRemoveExpired
 - shouldRemoveOnNullAggValue
+- shouldReportUncommittedPositionForTransactionalStore
 - shouldRestore
 - shouldReturnNullOnSessionNotFound
 - shouldReturnSameResultsForSingleKeyFindSessionsAndEqualKeyRangeFindSessions
@@ -4922,6 +4923,7 @@ org.apache.kafka.streams.state.internals.InMemoryWindowStoreTest:
 - shouldNotThrowConcurrentModificationException
 - shouldNotThrowExceptionWhenFetchRangeIsExpired
 - shouldNotThrowInvalidRangeExceptionWithNegativeFromKey
+- shouldReportUncommittedPositionForTransactionalStore
 - shouldRestore
 - shouldReturnNullOnWindowNotFound
 - shouldReturnSameResultsForSingleKeyFetchAndEqualKeyRangeFetch
