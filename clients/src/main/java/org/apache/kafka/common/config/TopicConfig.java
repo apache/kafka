@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common.config;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * <p>Keys that can be used to configure a topic. These keys are useful when creating or reconfiguring a
  * topic using the AdminClient.
@@ -27,6 +29,7 @@ package org.apache.kafka.common.config;
  */
 // This is a public API, so we should not remove or alter keys without a discussion and a deprecation period.
 // Eventually this should replace LogConfig.scala.
+@InterfaceAudience.Public
 public class TopicConfig {
     public static final String SEGMENT_BYTES_CONFIG = "segment.bytes";
     public static final String SEGMENT_BYTES_DOC = "This configuration controls the segment file size for " +

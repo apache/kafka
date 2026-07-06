@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
@@ -36,6 +38,7 @@ import java.util.Properties;
  *     .build();
  * }</pre>
  */
+@InterfaceAudience.Public
 public class TopologyTestDriverBuilder {
 
     private final Topology topology;

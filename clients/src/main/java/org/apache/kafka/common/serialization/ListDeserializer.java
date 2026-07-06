@@ -18,6 +18,7 @@ package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
@@ -39,6 +40,7 @@ import java.util.Map;
 
 import static org.apache.kafka.common.serialization.Serdes.ListSerde.SerializationStrategy;
 
+@InterfaceAudience.Public
 public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
 
     final Logger log = LoggerFactory.getLogger(ListDeserializer.class);

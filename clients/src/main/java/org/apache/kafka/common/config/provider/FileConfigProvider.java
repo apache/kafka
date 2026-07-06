@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.config.provider;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.internals.AllowedPaths;
@@ -38,6 +39,7 @@ import java.util.Set;
  * An implementation of {@link ConfigProvider} that represents a Properties file.
  * All property keys and values are stored as cleartext.
  */
+@InterfaceAudience.Public
 public class FileConfigProvider implements ConfigProvider {
 
     private static final Logger log = LoggerFactory.getLogger(FileConfigProvider.class);
