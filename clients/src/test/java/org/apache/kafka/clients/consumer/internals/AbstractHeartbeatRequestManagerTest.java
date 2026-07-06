@@ -206,7 +206,7 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
 
     private static long countHeartbeatIntervalLogs(final LogCaptureAppender logAppender) {
         return logAppender.getMessages().stream()
-            .filter(message -> message.contains("Received heartbeat interval"))
+            .filter(message -> message.contains("received heartbeat interval"))
             .count();
     }
 
