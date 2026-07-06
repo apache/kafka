@@ -166,12 +166,13 @@ public class ShareSessionHandler {
         Map<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgementBatches = new HashMap<>();
         if (!nextAcknowledgements.isEmpty()) {
             for (Map.Entry<TopicIdPartition, Acknowledgements> partitionsAcks : nextAcknowledgements.entrySet()) {
+                TopicIdPartition tip = partitionsAcks.getKey();
                 List<AcknowledgementBatch> partitionAckBatches = partitionsAcks.getValue().getAcknowledgementBatches();
                 for (AcknowledgementBatch ackBatch : partitionAckBatches) {
                     if (ackBatch.acknowledgeTypes().contains(AcknowledgeType.RENEW.id)) {
                         hasRenewAcknowledgements = true;
                     }
-                    acknowledgementBatches.computeIfAbsent(partitionsAcks.getKey(), k -> new ArrayList<>()).add(ackBatch.toShareFetchRequest());
+                    acknowledgementBatches.computeIfAbsent(tip, k -> new ArrayList<>()).add(ackBatch.toShareFetchRequest());
                 }
             }
         }
@@ -184,11 +185,10 @@ public class ShareSessionHandler {
         }
 
         if (log.isDebugEnabled()) {
-            log.debug("Build ShareFetch {} for node {}. Added {}, removed {}, replaced {} out of {}",
+            log.debug("Build ShareFetch {} for node {}. Added {}, removed {} out of {}",
                 nextMetadata, node,
                 topicIdPartitionsToLogString(added),
                 topicIdPartitionsToLogString(removed),
-                topicIdPartitionsToLogString(replaced),
                 topicIdPartitionsToLogString(sessionPartitions.values()));
         }
 
