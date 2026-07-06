@@ -2346,7 +2346,7 @@ public class AsyncKafkaConsumerTest {
             new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
                 .setMemberId("")
                 .setMemberEpoch(0));
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        Node coordinator = new GroupCoordinatorNode(node.id(), node.host(), node.port());
         client.prepareResponseFrom(result, coordinator);
 
         SubscriptionState subscriptionState = mock(SubscriptionState.class);
