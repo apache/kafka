@@ -22,9 +22,8 @@ import org.apache.kafka.streams.processor.api.ReadOnlyRecord;
 import java.io.Closeable;
 import java.util.Iterator;
 
-
 /**
- * Iterator interface of {@link ReadOnlyRecord ReadOnlyRecord<K, V>}.
+ * Iterator interface of {@link ReadOnlyRecord}.
  * <p>
  * This is the result type of the headers-aware range/window/session IQv2 query types: it yields
  * {@link ReadOnlyRecord} elements directly, so each element carries its own key, value, timestamp,
