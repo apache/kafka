@@ -178,6 +178,7 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
         try (LogCaptureAppender logAppender =
                  LogCaptureAppender.createAndRegister(heartbeatRequestManager.getClass())) {
             logAppender.setClassLogger(heartbeatRequestManager.getClass(), Level.INFO);
+            when(membershipManager.memberId()).thenReturn(DEFAULT_MEMBER_ID);
 
             int changedIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS + 500;
 
@@ -191,6 +192,9 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
             assertEquals(changedIntervalMs, heartbeatRequestState.heartbeatIntervalMs());
             assertEquals(1, countHeartbeatIntervalLogs(logAppender),
                 "The heartbeat interval received from the coordinator should be logged when it changes.");
+            assertTrue(logAppender.getMessages().stream().anyMatch(message -> message.contains(
+                    "Member " + DEFAULT_MEMBER_ID + " received heartbeat interval " + changedIntervalMs + "ms")),
+                "The logged message should contain the member id and the received interval.");
 
             // A subsequent heartbeat carrying the same interval must not be logged again.
             time.sleep(changedIntervalMs);

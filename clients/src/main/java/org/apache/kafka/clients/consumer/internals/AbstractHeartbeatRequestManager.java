@@ -350,7 +350,7 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
             // The heartbeat interval is a group config owned by the broker, so log it when it changes to give
             // visibility into the value the coordinator is applying (it is not derivable from client config).
             if (heartbeatIntervalMs != previousHeartbeatIntervalMs) {
-                logger.info("Member {} received heartbeat interval {}ms from the group coordinator", membershipManager().memberId, heartbeatIntervalMs);
+                logger.info("Member {} received heartbeat interval {}ms from the group coordinator", membershipManager().memberId(), heartbeatIntervalMs);
             }
             heartbeatRequestState.updateHeartbeatIntervalMs(heartbeatIntervalMs);
             heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
