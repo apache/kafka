@@ -206,7 +206,9 @@ public class CommonClientConfigs {
     public static final String REBALANCE_TIMEOUT_MS_DOC = "The maximum allowed time for each worker to join the group "
                                                           + "once a rebalance has begun. This is basically a limit on the amount of time needed for all tasks to "
                                                           + "flush any pending data and commit offsets. If the timeout is exceeded, then the worker will be removed "
-                                                          + "from the group, which will cause offset commit failures.";
+                                                          + "from the group, which will cause offset commit failures. "
+                                                          + "<code>connections.max.idle.ms</code> should be set to a value greater than or equal to this timeout "
+                                                          + "to avoid closing the connection to the group coordinator during an ongoing rebalance.";
 
     public static final String SESSION_TIMEOUT_MS_CONFIG = "session.timeout.ms";
     public static final String SESSION_TIMEOUT_MS_DOC = "The timeout used to detect client failures when using "
