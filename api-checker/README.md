@@ -25,11 +25,27 @@ below cover building, testing, and publishing the plugins themselves.
 ## Test
 
 ```bash
-./gradlew :api-checker:core:test :api-checker:gradle-plugins:test
+./gradlew :api-checker:core:test :api-checker:gradle-plugins:test :api-checker:maven-plugin:test
 ```
 
-`:gradle-plugins:test` includes a Gradle TestKit end-to-end test that applies the
-`org.apache.kafka.internal-api-checker` plugin to a synthetic consumer project.
+- `:core:test` — unit tests for the scanner, validators, and reporter, plus the shared
+  `testFixtures` (`AsmClassFactory`, `TempJarBuilder`) they and the plugin tests use.
+- `:gradle-plugins:test` — includes a Gradle TestKit end-to-end test that applies the
+  `org.apache.kafka.internal-api-checker` plugin to a synthetic consumer project.
+- `:maven-plugin:test` — hosts `PluginXmlParityTest`, which locks the generated
+  `plugin.xml` Mojo descriptor against the fields on `KafkaInternalApiCheckerMojo` so
+  adding a parameter without exposing it (or vice versa) fails CI.
+
+### CI integration
+
+The root `check` task depends on `:api-checker:core:check`,
+`:api-checker:gradle-plugins:check`, and `:api-checker:maven-plugin:check` (wired in the
+top-level `build.gradle`). Since `.github/workflows/build.yml` runs `./gradlew check` on
+every PR, the composite build's checkstyle and unit tests — including
+`PluginXmlParityTest` — are exercised in the standard PR workflow.
+
+The producer-side checker itself is separately exercised via `docsJar`, which every
+module's `check` finalises against real annotated code and a real javadoc jar.
 
 ## Publish
 
@@ -84,7 +100,9 @@ api-checker/
 │   └── src/{main,test}/java/.../gradle/           # Plugin/Task/Extension × 2
 └── maven-plugin/
     ├── build.gradle          # Maven deps; templates plugin.xml at processResources
-    └── src/main/
-        ├── java/.../maven/KafkaInternalApiCheckerMojo.java
-        └── resources/META-INF/maven/plugin.xml
+    └── src/
+        ├── main/
+        │   ├── java/.../maven/KafkaInternalApiCheckerMojo.java
+        │   └── resources/META-INF/maven/plugin.xml
+        └── test/java/.../maven/PluginXmlParityTest.java   # locks plugin.xml ↔ Mojo fields
 ```

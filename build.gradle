@@ -4403,3 +4403,12 @@ def verifyLatestStableMetadataVersionTask = tasks.register('verifyLatestStableMe
 }
 
 check.dependsOn verifyLatestStableMetadataVersionTask
+
+// api-checker is a composite-included build (settings.gradle → pluginManagement { includeBuild
+// 'api-checker' }). Its own `check` tasks — checkstyle, unit tests, and the PluginXmlParityTest —
+// aren't reached by the root `check` aggregate by default, so hook them in explicitly. This is
+// what `./gradlew check` invokes in .github/workflows/build.yml, so wiring them here also picks
+// them up on every PR CI run.
+check.dependsOn gradle.includedBuild('api-checker').task(':core:check')
+check.dependsOn gradle.includedBuild('api-checker').task(':gradle-plugins:check')
+check.dependsOn gradle.includedBuild('api-checker').task(':maven-plugin:check')
