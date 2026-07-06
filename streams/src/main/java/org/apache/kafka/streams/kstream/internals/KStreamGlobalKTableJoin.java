@@ -17,19 +17,19 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.kstream.ValueJoinerWithKeys;
+import org.apache.kafka.streams.kstream.ValueJoinerWithMappedAndStreamKey;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 
 class KStreamGlobalKTableJoin<StreamKey, StreamValue, TableKey, TableValue, VOut> implements ProcessorSupplier<StreamKey, StreamValue, StreamKey, VOut> {
 
     private final KTableValueGetterSupplier<TableKey, TableValue> valueGetterSupplier;
-    private final ValueJoinerWithKeys<? super TableKey, ? super StreamKey, ? super StreamValue, ? super TableValue, ? extends VOut> joiner;
+    private final ValueJoinerWithMappedAndStreamKey<? super TableKey, ? super StreamKey, ? super StreamValue, ? super TableValue, ? extends VOut> joiner;
     private final KeyValueMapper<? super StreamKey, ? super StreamValue, ? extends TableKey> mapper;
     private final boolean leftJoin;
 
     KStreamGlobalKTableJoin(final KTableValueGetterSupplier<TableKey, TableValue> valueGetterSupplier,
-                            final ValueJoinerWithKeys<? super TableKey, ? super StreamKey, ? super StreamValue, ? super TableValue, ? extends VOut> joiner,
+                            final ValueJoinerWithMappedAndStreamKey<? super TableKey, ? super StreamKey, ? super StreamValue, ? super TableValue, ? extends VOut> joiner,
                             final KeyValueMapper<? super StreamKey, ? super StreamValue, ? extends TableKey> mapper,
                             final boolean leftJoin) {
         this.valueGetterSupplier = valueGetterSupplier;

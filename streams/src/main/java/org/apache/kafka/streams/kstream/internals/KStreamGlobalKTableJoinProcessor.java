@@ -18,7 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.kstream.ValueJoinerWithKeys;
+import org.apache.kafka.streams.kstream.ValueJoinerWithMappedAndStreamKey;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -39,13 +39,13 @@ class KStreamGlobalKTableJoinProcessor<StreamKey, StreamValue, TableKey, TableVa
 
     private final KTableValueGetter<TableKey, TableValue> valueGetter;
     private final KeyValueMapper<? super StreamKey, ? super StreamValue, ? extends TableKey> keyMapper;
-    private final ValueJoinerWithKeys<? super TableKey, ? super StreamKey, ? super StreamValue, ? super TableValue, ? extends VOut> joiner;
+    private final ValueJoinerWithMappedAndStreamKey<? super TableKey, ? super StreamKey, ? super StreamValue, ? super TableValue, ? extends VOut> joiner;
     private final boolean leftJoin;
     private Sensor droppedRecordsSensor;
 
     KStreamGlobalKTableJoinProcessor(final KTableValueGetter<TableKey, TableValue> valueGetter,
                                      final KeyValueMapper<? super StreamKey, ? super StreamValue, ? extends TableKey> keyMapper,
-                                     final ValueJoinerWithKeys<? super TableKey, ? super StreamKey, ? super StreamValue, ? super TableValue, ? extends VOut> joiner,
+                                     final ValueJoinerWithMappedAndStreamKey<? super TableKey, ? super StreamKey, ? super StreamValue, ? super TableValue, ? extends VOut> joiner,
                                      final boolean leftJoin) {
         this.valueGetter = valueGetter;
         this.keyMapper = keyMapper;
@@ -63,14 +63,14 @@ class KStreamGlobalKTableJoinProcessor<StreamKey, StreamValue, TableKey, TableVa
 
     @Override
     public void process(final Record<StreamKey, StreamValue> record) {
-        if (maybeDropRecord(record)) {
+        final TableKey mappedKey = keyMapper.apply(record.key(), record.value());
+        if (maybeDropRecord(record, mappedKey)) {
             return;
         }
-        doJoin(record);
+        doJoin(record, mappedKey);
     }
 
-    private void doJoin(final Record<StreamKey, StreamValue> record) {
-        final TableKey mappedKey = keyMapper.apply(record.key(), record.value());
+    private void doJoin(final Record<StreamKey, StreamValue> record, final TableKey mappedKey) {
         final TableValue value2 = getTableValue(record, mappedKey);
         if (leftJoin || value2 != null) {
             context().forward(record.withValue(joiner.apply(mappedKey, record.key(), record.value(), value2)));
@@ -85,8 +85,7 @@ class KStreamGlobalKTableJoinProcessor<StreamKey, StreamValue, TableKey, TableVa
         return getValueOrNull(valueTimestampHeaders);
     }
 
-    private boolean maybeDropRecord(final Record<StreamKey, StreamValue> record) {
-        final TableKey mappedKey = keyMapper.apply(record.key(), record.value());
+    private boolean maybeDropRecord(final Record<StreamKey, StreamValue> record, final TableKey mappedKey) {
         if (leftJoin && mappedKey == null && record.value() != null) {
             return false;
         }
