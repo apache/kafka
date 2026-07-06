@@ -28,6 +28,7 @@ import org.apache.kafka.streams.kstream.Produced;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.Properties;
 
 public class TopologyDescriptionPluginSystemTest {
@@ -59,7 +60,7 @@ public class TopologyDescriptionPluginSystemTest {
 
         final StreamsBuilder builder = new StreamsBuilder();
         builder.<String, String>stream(SOURCE_TOPIC, Consumed.with(Serdes.String(), Serdes.String()))
-            .mapValues(value -> value.toLowerCase())
+            .mapValues(value -> value.toLowerCase(Locale.ROOT))
             .groupByKey()
             .count()
             .toStream()
