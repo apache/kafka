@@ -17,12 +17,14 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -37,6 +39,8 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ReadOnlyRecord;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.StateQueryRequest;
 import org.apache.kafka.streams.query.StateQueryResult;
@@ -59,8 +63,11 @@ import org.junit.jupiter.api.TestInfo;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.Arrays;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
@@ -69,14 +76,14 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * End-to-end PoC test for KIP-1356 {@link TimestampedKeyWithHeadersQuery}.
+ * IQv2 integration tests for KIP-1271/KIP-1356 headers-aware state stores.
  *
- * <p>Builds a KIP-1271 {@code WithHeaders} store, writes records (with headers) into it through a
- * processor, then queries the store through IQv2 and asserts that the returned
- * {@link ReadOnlyRecord} carries the key, value, timestamp, and the exact headers written.
+ * <p>It builds a KIP-1271 {@code WithHeaders} store, writes records (with headers) into it through a processor,
+ * and queries it through IQv2. Currently covers {@link TimestampedKeyWithHeadersQuery}; the remaining KIP-1356 headers
+ * query types (range/window/session) are expected to extend this class as they land.
  */
 @Tag("integration")
-public class TimestampedKeyWithHeadersQueryIntegrationTest {
+public class IQv2HeadersStoreIntegrationTest {
 
     private static final String STORE_NAME = "headers-store";
 
@@ -90,6 +97,7 @@ public class TimestampedKeyWithHeadersQueryIntegrationTest {
     private String outputStream;
     private long baseTimestamp;
     private long commitIntervalMs = 1000L;
+    private Position inputPosition;
     private KafkaStreams kafkaStreams;
     private TestInfo testInfo;
 
@@ -112,6 +120,7 @@ public class TimestampedKeyWithHeadersQueryIntegrationTest {
         CLUSTER.createTopic(inputStream);
         CLUSTER.createTopic(outputStream);
         baseTimestamp = CLUSTER.time.milliseconds();
+        inputPosition = Position.emptyPosition();
     }
 
     @AfterEach
@@ -133,12 +142,6 @@ public class TimestampedKeyWithHeadersQueryIntegrationTest {
             KeyValue.pair(2, "b0"));
         produceDataToTopicWithHeaders(inputStream, baseTimestamp + 2, HEADERS,
             KeyValue.pair(3, "c0"), KeyValue.pair(3, null));
-
-        // wait until all 4 input records have been processed (one output per input record)
-        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-            TestUtils.consumerConfig(CLUSTER.bootstrapServers(), IntegerDeserializer.class, StringDeserializer.class),
-            outputStream,
-            4);
 
         // key 1: key + value + timestamp + headers round-trip
         final ReadOnlyRecord<Integer, String> result1 = query(1);
@@ -171,13 +174,13 @@ public class TimestampedKeyWithHeadersQueryIntegrationTest {
         startStreams(true);
 
         produceDataToTopicWithHeaders(inputStream, baseTimestamp, HEADERS, KeyValue.pair(1, "a0"));
-        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-            TestUtils.consumerConfig(CLUSTER.bootstrapServers(), IntegerDeserializer.class, StringDeserializer.class),
-            outputStream,
-            1);
 
         // Read-your-writes: the not-yet-flushed record is visible (served from the cache), with headers.
         final ReadOnlyRecord<Integer, String> result = query(1);
+        // skipCache bypasses the cache and reads the persistent store directly. A null result positively
+        // proves nothing has been flushed, so the read above was genuinely cache-served (not an accidental
+        // store read) -- and it covers skipCache end-to-end.
+        assertNull(querySkipCache(1));
         assertEquals(Integer.valueOf(1), result.key());
         assertEquals("a0", result.value());
         assertEquals(baseTimestamp, result.timestamp());
@@ -202,13 +205,13 @@ public class TimestampedKeyWithHeadersQueryIntegrationTest {
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(kafkaStreams);
 
         produceDataToTopicWithHeaders(inputStream, baseTimestamp, HEADERS, KeyValue.pair(1, "a0"));
-        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-            TestUtils.consumerConfig(CLUSTER.bootstrapServers(), IntegerDeserializer.class, StringDeserializer.class),
-            outputStream,
-            1);
 
+        final StateQueryRequest<ReadOnlyRecord<Integer, String>> request =
+            inStore(STORE_NAME)
+                .withQuery(TimestampedKeyWithHeadersQuery.<Integer, String>withKey(1))
+                .withPositionBound(PositionBound.at(inputPosition));
         final StateQueryResult<ReadOnlyRecord<Integer, String>> result =
-            kafkaStreams.query(inStore(STORE_NAME).withQuery(TimestampedKeyWithHeadersQuery.<Integer, String>withKey(1)));
+            IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
 
         assertTrue(result.getOnlyPartitionResult().isFailure());
         assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, result.getOnlyPartitionResult().getFailureReason());
@@ -240,10 +243,27 @@ public class TimestampedKeyWithHeadersQueryIntegrationTest {
 
     private ReadOnlyRecord<Integer, String> query(final int key) {
         final StateQueryRequest<ReadOnlyRecord<Integer, String>> request =
-            inStore(STORE_NAME).withQuery(TimestampedKeyWithHeadersQuery.<Integer, String>withKey(key));
-        final StateQueryResult<ReadOnlyRecord<Integer, String>> result = kafkaStreams.query(request);
+            inStore(STORE_NAME)
+                .withQuery(TimestampedKeyWithHeadersQuery.<Integer, String>withKey(key))
+                .withPositionBound(PositionBound.at(inputPosition));
+        // Retry until the store has caught up to the produced input position; freshness comes from the
+        // IQv2 position mechanism rather than from output-topic consumption.
+        final StateQueryResult<ReadOnlyRecord<Integer, String>> result =
+            IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
         // getOnlyPartitionResult() returns null when the single partition result is a successful
         // null (tombstoned / absent key), which we surface to the caller as a null lookup.
+        final QueryResult<ReadOnlyRecord<Integer, String>> onlyResult = result.getOnlyPartitionResult();
+        return onlyResult == null ? null : onlyResult.getResult();
+    }
+
+    private ReadOnlyRecord<Integer, String> querySkipCache(final int key) {
+        // skipCache forwards the query past the record cache to the persistent store. Use the default
+        // (unbounded) position bound on purpose: the persistent layer may legitimately be empty (nothing
+        // flushed), so bounding on the input position would never be satisfied.
+        final StateQueryRequest<ReadOnlyRecord<Integer, String>> request =
+            inStore(STORE_NAME).withQuery(
+                TimestampedKeyWithHeadersQuery.<Integer, String>withKey(key).skipCache());
+        final StateQueryResult<ReadOnlyRecord<Integer, String>> result = kafkaStreams.query(request);
         final QueryResult<ReadOnlyRecord<Integer, String>> onlyResult = result.getOnlyPartitionResult();
         return onlyResult == null ? null : onlyResult.getResult();
     }
@@ -265,13 +285,26 @@ public class TimestampedKeyWithHeadersQueryIntegrationTest {
                                                      final long timestamp,
                                                      final Headers headers,
                                                      final KeyValue<Integer, String>... keyValues) {
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-            topic,
-            Arrays.asList(keyValues),
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(), IntegerSerializer.class, StringSerializer.class),
-            headers,
-            timestamp,
-            false);
+        final Properties producerConfig =
+            TestUtils.producerConfig(CLUSTER.bootstrapServers(), IntegerSerializer.class, StringSerializer.class);
+        final List<Future<RecordMetadata>> futures = new LinkedList<>();
+        try (final Producer<Integer, String> producer = new KafkaProducer<>(producerConfig)) {
+            for (final KeyValue<Integer, String> keyValue : keyValues) {
+                futures.add(producer.send(
+                    new ProducerRecord<>(topic, null, timestamp, keyValue.key, keyValue.value, headers)));
+            }
+            producer.flush();
+            for (final Future<RecordMetadata> future : futures) {
+                try {
+                    final RecordMetadata metadata = future.get(60, TimeUnit.SECONDS);
+                    // Track the produced input Position so queries can bound on it (IQv2 freshness).
+                    inputPosition = inputPosition.withComponent(
+                        metadata.topic(), metadata.partition(), metadata.offset());
+                } catch (final Exception e) {
+                    throw new RuntimeException("Failed to produce test record to " + topic, e);
+                }
+            }
+        }
     }
 
     private static class HeadersStoreWriterProcessor implements Processor<Integer, String, Integer, String> {
