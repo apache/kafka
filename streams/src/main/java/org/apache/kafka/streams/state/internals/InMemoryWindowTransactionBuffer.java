@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.Position;
 
 import java.util.Map;
 import java.util.Objects;
@@ -32,6 +34,7 @@ class InMemoryWindowTransactionBuffer extends AbstractTransactionBuffer<InMemory
 
     private final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> segmentMap;
     private final boolean retainDuplicates;
+    private Position pendingPosition = Position.emptyPosition();
 
     InMemoryWindowTransactionBuffer(
             final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> segmentMap,
@@ -204,6 +207,34 @@ class InMemoryWindowTransactionBuffer extends AbstractTransactionBuffer<InMemory
             keyFrom, keyTo, timeRange.entrySet().iterator(), retainDuplicates, forward);
     }
 
+    void updatePosition(final StateStoreContext stateStoreContext) {
+        snapshotLock.writeLock().lock();
+        try {
+            StoreQueryUtils.updatePosition(pendingPosition, stateStoreContext);
+        } finally {
+            snapshotLock.writeLock().unlock();
+        }
+    }
+
+    Position pendingPosition() {
+        snapshotLock.readLock().lock();
+        try {
+            return pendingPosition.copy();
+        } finally {
+            snapshotLock.readLock().unlock();
+        }
+    }
+
+    void mergePendingPositionInto(final Position committed) {
+        snapshotLock.writeLock().lock();
+        try {
+            committed.merge(pendingPosition);
+            pendingPosition = Position.emptyPosition();
+        } finally {
+            snapshotLock.writeLock().unlock();
+        }
+    }
+
     @Override
     void flushToBase() {
         for (final Map.Entry<WindowEntryKey, Optional<byte[]>> entry : pendingWrites.entrySet()) {
@@ -225,7 +256,7 @@ class InMemoryWindowTransactionBuffer extends AbstractTransactionBuffer<InMemory
 
     @Override
     void discardPendingBatch() {
-        // no-op — no backend batch to discard
+        pendingPosition = Position.emptyPosition();
     }
 
 }

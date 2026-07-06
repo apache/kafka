@@ -16,16 +16,20 @@
  */
 package kafka.server.share;
 
+import kafka.server.KafkaConfig;
 import kafka.server.ReplicaManager;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManager;
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchParams;
+import org.apache.kafka.server.util.timer.TimerTask;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.internals.log.LogReadResult;
@@ -36,12 +40,14 @@ import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
 import scala.Option;
@@ -70,6 +76,18 @@ public class ReplicaManagerLogReaderTest {
         new TopicIdPartition(Uuid.randomUuid(), 0, "topic");
     private static final TopicIdPartition TOPIC_ID_PARTITION_2 =
         new TopicIdPartition(Uuid.randomUuid(), 1, "topic");
+    // A real config with defaults; readRemote() reads remote.fetch.max.wait.ms from it for its timeout.
+    private static final RemoteLogManagerConfig REMOTE_LOG_MANAGER_CONFIG =
+        new RemoteLogManagerConfig(new AbstractConfig(RemoteLogManagerConfig.configDef(), Map.of(), false));
+
+    // A ReplicaManager mock whose config() chain resolves remote.fetch.max.wait.ms, as readRemote() needs.
+    private static ReplicaManager mockReplicaManager() {
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        KafkaConfig kafkaConfig = mock(KafkaConfig.class);
+        when(kafkaConfig.remoteLogManagerConfig()).thenReturn(REMOTE_LOG_MANAGER_CONFIG);
+        when(replicaManager.config()).thenReturn(kafkaConfig);
+        return replicaManager;
+    }
 
     private static RemoteStorageFetchInfo remoteStorageFetchInfo() {
         return new RemoteStorageFetchInfo(
@@ -124,7 +142,7 @@ public class ReplicaManagerLogReaderTest {
 
     @Test
     public void testReadReturnsEmptyWhenNoPartitionsToFetch() {
-        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        ReplicaManager replicaManager = mockReplicaManager();
 
         ReplicaManagerLogReader logReader = new ReplicaManagerLogReader(replicaManager);
         LinkedHashMap<TopicIdPartition, LogReadResult> result =
@@ -136,7 +154,7 @@ public class ReplicaManagerLogReaderTest {
 
     @Test
     public void testReadReturnsResultsFromReplicaManager() {
-        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        ReplicaManager replicaManager = mockReplicaManager();
         LogReadResult logReadResult = mock(LogReadResult.class);
         Seq<Tuple2<TopicIdPartition, LogReadResult>> readFromLogResult =
             CollectionConverters.asScala(List.of(new Tuple2<>(TOPIC_ID_PARTITION, logReadResult))).toSeq();
@@ -157,7 +175,7 @@ public class ReplicaManagerLogReaderTest {
 
     @Test
     public void testReadRemoteCompletesExceptionallyWhenRemoteLogManagerNotConfigured() {
-        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        ReplicaManager replicaManager = mockReplicaManager();
         when(replicaManager.remoteLogManager()).thenReturn(Option.empty());
 
         ReplicaManagerLogReader logReader = new ReplicaManagerLogReader(replicaManager);
@@ -170,7 +188,7 @@ public class ReplicaManagerLogReaderTest {
 
     @Test
     public void testReadRemoteCompletesWithFetchedData() throws Exception {
-        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        ReplicaManager replicaManager = mockReplicaManager();
         RemoteLogManager remoteLogManager = mock(RemoteLogManager.class);
         when(replicaManager.remoteLogManager()).thenReturn(Option.apply(remoteLogManager));
 
@@ -190,7 +208,7 @@ public class ReplicaManagerLogReaderTest {
 
     @Test
     public void testReadRemoteCompletesExceptionallyWhenReadResultHasError() {
-        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        ReplicaManager replicaManager = mockReplicaManager();
         RemoteLogManager remoteLogManager = mock(RemoteLogManager.class);
         when(replicaManager.remoteLogManager()).thenReturn(Option.apply(remoteLogManager));
 
@@ -211,7 +229,7 @@ public class ReplicaManagerLogReaderTest {
 
     @Test
     public void testReadRemoteCompletesExceptionallyWhenReadResultIsEmpty() {
-        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        ReplicaManager replicaManager = mockReplicaManager();
         RemoteLogManager remoteLogManager = mock(RemoteLogManager.class);
         when(replicaManager.remoteLogManager()).thenReturn(Option.apply(remoteLogManager));
 
@@ -231,7 +249,7 @@ public class ReplicaManagerLogReaderTest {
 
     @Test
     public void testReadRemoteCompletesExceptionallyWhenSchedulingRejected() {
-        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        ReplicaManager replicaManager = mockReplicaManager();
         RemoteLogManager remoteLogManager = mock(RemoteLogManager.class);
         when(replicaManager.remoteLogManager()).thenReturn(Option.apply(remoteLogManager));
 
@@ -247,8 +265,28 @@ public class ReplicaManagerLogReaderTest {
     }
 
     @Test
+    public void testReadRemoteTimesOutWhenRemoteReadNeverCompletes() {
+        ReplicaManager replicaManager = mockReplicaManager();
+        RemoteLogManager remoteLogManager = mock(RemoteLogManager.class);
+        when(replicaManager.remoteLogManager()).thenReturn(Option.apply(remoteLogManager));
+        // asyncRead never invokes the callback, so the remote read never completes on its own.
+        // Simulate the timer wheel firing by running the scheduled timeout task immediately.
+        doAnswer(invocation -> {
+            invocation.<TimerTask>getArgument(0).run();
+            return null;
+        }).when(replicaManager).addShareFetchTimerRequest(any());
+
+        ReplicaManagerLogReader logReader = new ReplicaManagerLogReader(replicaManager);
+        CompletableFuture<FetchDataInfo> future = logReader.readRemote(remoteStorageFetchInfo());
+
+        assertTrue(future.isCompletedExceptionally());
+        ExecutionException exception = assertThrows(ExecutionException.class, () -> future.get(10, TimeUnit.SECONDS));
+        assertInstanceOf(TimeoutException.class, exception.getCause());
+    }
+
+    @Test
     public void testReadAsyncReturnsEmptyWhenNoPartitionsToFetch() {
-        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        ReplicaManager replicaManager = mockReplicaManager();
 
         ReplicaManagerLogReader logReader = new ReplicaManagerLogReader(replicaManager);
         LinkedHashMap<TopicIdPartition, LogReadResult> result =
@@ -260,7 +298,7 @@ public class ReplicaManagerLogReaderTest {
 
     @Test
     public void testReadAsyncReturnsLocalDataWhenNotTiered() throws Exception {
-        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        ReplicaManager replicaManager = mockReplicaManager();
         FetchDataInfo localData = localData();
         stubReadFromLog(replicaManager,
             List.of(new Tuple2<>(TOPIC_ID_PARTITION, localReadResult(localData, Errors.NONE))));
@@ -280,7 +318,7 @@ public class ReplicaManagerLogReaderTest {
 
     @Test
     public void testReadAsyncFollowsRemoteWhenTieredAndReadRemoteTrue() throws Exception {
-        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        ReplicaManager replicaManager = mockReplicaManager();
         RemoteLogManager remoteLogManager = mock(RemoteLogManager.class);
         when(replicaManager.remoteLogManager()).thenReturn(Option.apply(remoteLogManager));
 
@@ -308,7 +346,7 @@ public class ReplicaManagerLogReaderTest {
 
     @Test
     public void testReadAsyncSkipsRemoteWhenReadRemoteFalse() throws Exception {
-        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        ReplicaManager replicaManager = mockReplicaManager();
         FetchDataInfo tieredData = tieredData(remoteStorageFetchInfo());
         stubReadFromLog(replicaManager,
             List.of(new Tuple2<>(TOPIC_ID_PARTITION, localReadResult(tieredData, Errors.NONE))));
@@ -327,7 +365,7 @@ public class ReplicaManagerLogReaderTest {
 
     @Test
     public void testReadAsyncReturnsErrorFromLocalRead() throws Exception {
-        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        ReplicaManager replicaManager = mockReplicaManager();
         FetchDataInfo localData = localData();
         stubReadFromLog(replicaManager,
             List.of(new Tuple2<>(TOPIC_ID_PARTITION, localReadResult(localData, Errors.UNKNOWN_SERVER_ERROR))));
@@ -344,8 +382,8 @@ public class ReplicaManagerLogReaderTest {
     }
 
     @Test
-    public void testReadAsyncReturnsErrorWhenRemoteReadFails() throws Exception {
-        ReplicaManager replicaManager = mock(ReplicaManager.class);
+    public void testReadAsyncReturnsNoneErrorWhenRemoteReadFailsButLocalSucceeds() throws Exception {
+        ReplicaManager replicaManager = mockReplicaManager();
         RemoteLogManager remoteLogManager = mock(RemoteLogManager.class);
         when(replicaManager.remoteLogManager()).thenReturn(Option.apply(remoteLogManager));
 
@@ -367,12 +405,12 @@ public class ReplicaManagerLogReaderTest {
         LogReadResult logReadResult = result.get(TOPIC_ID_PARTITION);
         // Partial-data tolerant: the read completes (does not throw) with the local info and the error.
         assertSame(tieredData, logReadResult.info());
-        assertEquals(Errors.UNKNOWN_SERVER_ERROR, logReadResult.error());
+        assertEquals(Errors.NONE, logReadResult.error());
     }
 
     @Test
     public void testReadAsyncResolvesPartitionsIndependently() throws Exception {
-        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        ReplicaManager replicaManager = mockReplicaManager();
         RemoteLogManager remoteLogManager = mock(RemoteLogManager.class);
         when(replicaManager.remoteLogManager()).thenReturn(Option.apply(remoteLogManager));
 

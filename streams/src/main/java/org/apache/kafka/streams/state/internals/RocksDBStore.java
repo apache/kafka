@@ -186,7 +186,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         stateStoreContext.register(
             root,
             (RecordBatchingStateRestoreCallback) this::restoreBatch,
-                this::writePosition
+            this::writePosition
         );
         consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
             stateStoreContext.appConfigs(),
@@ -455,12 +455,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     }
 
     public final void writePosition() {
-        validateStoreOpen();
-        try {
-            cfAccessor.commit(dbAccessor, position);
-        } catch (final RocksDBException e) {
-            log.warn("Error while committing position for store {}", name, e);
-        }
+        // Position is now committed atomically inside commit(); this method is a no-op.
     }
 
     @Override
@@ -916,8 +911,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
         try {
             synchronized (position) {
-                cfAccessor.commit(dbAccessor, changelogOffsets);
-                dbAccessor.mergeUncommittedPositionInto(position);
+                cfAccessor.commit(dbAccessor, position, changelogOffsets);
             }
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error while executing commit from store " + name, e);
@@ -1366,9 +1360,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         long approximateNumEntries(final DBAccessor accessor) throws RocksDBException;
 
-        void commit(final DBAccessor accessor, final Map<TopicPartition, Long> changelogOffsets) throws RocksDBException;
-
-        void commit(final DBAccessor accessor, final Position storePosition) throws RocksDBException;
+        void commit(final DBAccessor accessor,
+                    final Position position,
+                    final Map<TopicPartition, Long> changelogOffsets) throws RocksDBException;
 
         void addToBatch(final byte[] key,
                         final byte[] value,
