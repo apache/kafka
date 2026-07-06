@@ -17,7 +17,6 @@
 
 package org.apache.kafka.network;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
@@ -56,6 +55,9 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.SecurityUtils;
 import org.apache.kafka.network.metrics.RequestChannelMetrics;
 import org.apache.kafka.server.EnvelopeUtils;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
