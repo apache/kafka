@@ -25,6 +25,7 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableV
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.SerializedJwt;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.VerificationKeyResolverFactory;
+import org.apache.kafka.common.utils.Utils;
 
 import org.jose4j.jwt.JwtClaims;
 import org.jose4j.jwt.MalformedClaimException;
@@ -37,6 +38,7 @@ import org.jose4j.jwt.consumer.JwtContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -100,6 +102,7 @@ public class BrokerJwtValidator implements JwtValidator {
     private static final Logger log = LoggerFactory.getLogger(BrokerJwtValidator.class);
 
     private final Optional<CloseableVerificationKeyResolver> verificationKeyResolverOpt;
+    private CloseableVerificationKeyResolver ownedVerificationKeyResolver;
 
     private JwtConsumer jwtConsumer;
 
@@ -154,9 +157,19 @@ public class BrokerJwtValidator implements JwtValidator {
                 SASL_OAUTHBEARER_EXPECTED_ISSUER, SASL_OAUTHBEARER_EXPECTED_ISSUER, SASL_OAUTHBEARER_ALLOW_UNVERIFIED_ISSUER));
         }
 
-        CloseableVerificationKeyResolver verificationKeyResolver = verificationKeyResolverOpt.orElseGet(
-            () -> VerificationKeyResolverFactory.get(configs, saslMechanism, jaasConfigEntries)
-        );
+        CloseableVerificationKeyResolver verificationKeyResolver;
+
+        if (verificationKeyResolverOpt.isPresent()) {
+            // The lifecycle of an injected resolver is managed by the code that supplied it.
+            verificationKeyResolver = verificationKeyResolverOpt.get();
+        } else {
+            // A resolver retrieved from the factory is owned by this validator, so it is configured here
+            // and released in close(). Otherwise its resources (e.g. the background JWKS refresh thread)
+            // would leak.
+            verificationKeyResolver = VerificationKeyResolverFactory.get(configs, saslMechanism, jaasConfigEntries);
+            ownedVerificationKeyResolver = verificationKeyResolver;
+            verificationKeyResolver.configure(configs, saslMechanism, jaasConfigEntries);
+        }
 
         final JwtConsumerBuilder jwtConsumerBuilder = new JwtConsumerBuilder();
 
@@ -192,6 +205,11 @@ public class BrokerJwtValidator implements JwtValidator {
             .build();
         this.scopeClaimName = scopeClaimName;
         this.subClaimName = subClaimName;
+    }
+
+    @Override
+    public void close() throws IOException {
+        Utils.closeQuietly(ownedVerificationKeyResolver, "JWT validator verification key resolver");
     }
 
     /**
