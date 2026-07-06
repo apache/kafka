@@ -50,8 +50,7 @@ public class LeaderBenchmarks {
 
     /**
      * Starting state: the local node is Leader with the high watermark at the log end and a caught-up
-     * follower ready to fetch. Built once per trial and reused across invocations, since handling a
-     * caught-up fetch does not mutate it.
+     * follower ready to fetch.
      */
     @State(Scope.Thread)
     public static class LeaderWithCaughtUpFollower {

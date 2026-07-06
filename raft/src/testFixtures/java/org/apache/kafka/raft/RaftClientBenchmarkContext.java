@@ -26,7 +26,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.function.IntSupplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -243,28 +242,4 @@ public final class RaftClientBenchmarkContext {
         return expected;
     }
 
-    /**
-     * Tracks one cumulative mock counter as a delta against a baseline. {@link #reset()} snapshots the
-     * current value (so the next {@link #delta()} starts from zero), and {@link #delta()} returns the
-     * increase since the last reset/delta and advances the baseline.
-     */
-    private static final class DrainableCounter {
-        private final IntSupplier source;
-        private int baseline;
-
-        DrainableCounter(IntSupplier source) {
-            this.source = source;
-        }
-
-        void reset() {
-            baseline = source.getAsInt();
-        }
-
-        int delta() {
-            int current = source.getAsInt();
-            int delta = current - baseline;
-            baseline = current;
-            return delta;
-        }
-    }
 }

@@ -37,20 +37,6 @@ import java.util.Optional;
  * {@code @OperationsPerInvocation}.) JMH reports the timing score in {@code ns/op}, and these work
  * counters are reported {@code PerOp} to match.
  *
- * <p>Each benchmark calls {@link #collectDeltasAndDrainRPCs} every invocation to accumulate the work deltas drained
- * from {@link RaftClientBenchmarkContext}. The raw totals are private accumulators; what we report
- * are the per-operation values from the {@code *PerOp()} methods (the quantity of interest), plus
- * {@link #operations}.
- *
- * <p>JMH aggregates {@code Type.EVENTS} secondary results with {@code SUM} across all measurement
- * data points i.e {@code forks x measurement iterations}. To make the <em>summary</em> row
- * report the true per-operation value rather than that value multiplied by the data-point count, each
- * method pre-divides by the data-point count obtained from {@link BenchmarkParams} in
- * {@link #captureRunShape}. The SUM then reconstitutes the exact per-operation value (e.g.
- * {@code logReadsPerOp = 1.0}) in the summary, for any {@code -f}/{@code -i} configuration. (The
- * per-iteration console values are correspondingly a small fraction of the per-op value; read the
- * summary row.)
- *
  * <p>The per-operation values are integer-exact and should be stable across a correct refactor of
  * {@code KafkaRaftClient}: a flush count moving from 1 to 2 per operation is a behavioral diff, not
  * measurement noise. The counters that are zero on a path (e.g. log flushes on a caught-up fetch)
@@ -75,11 +61,18 @@ public class KRaftBenchmarkingCounters {
     // private totals above, it is not reset in reset()).
     public long operations;
 
-    // The number of measurement data points JMH will SUM the per-op methods over, i.e.
-    // (forks x measurement iterations) for this run. Captured from BenchmarkParams so it tracks the
-    // actual run shape (including -f/-i overrides) rather than being hardcoded.
+    // The divisor for the per-op methods below: (forks x measurement iterations). Set once per fork
+    // by captureRunShape().
     private double measurementDataPoints = 1.0;
 
+    /**
+     * Captures the number of measurement data points — {@code forks x measurement iterations} — that
+     * JMH will SUM the {@code *PerOp()} methods over ({@code Type.EVENTS} secondary results are
+     * SUM-aggregated). Each per-op method pre-divides by this count so that the SUM reports the exact
+     * per-operation value (e.g. {@code logReadsPerOp = 1.0}) in the summary row. Reading it from
+     * {@link BenchmarkParams} tracks the actual run shape (including {@code -f}/{@code -i} overrides)
+     * rather than hardcoding the annotation values.
+     */
     @Setup(Level.Trial)
     public void captureRunShape(BenchmarkParams params) {
         // forks() is 0 when forking is disabled (in-process), which is still one set of iterations.
@@ -100,16 +93,11 @@ public class KRaftBenchmarkingCounters {
 
     /**
      * Accumulates this invocation's work deltas drained from {@code context} into these counters.
-     *
-     * <p>{@code expectedRequest}/{@code expectedResponse} declare the request/response API key the
-     * benchmark expects to still be in-flight at the end of the invocation. Those expected messages are
-     * drained, then the send queue / response list is asserted empty — anything left over is something
-     * the client sent that the benchmark didn't account for, which fails fast instead of silently
-     * inflating a count. An <b>empty</b> {@code Optional} therefore means "no outstanding
-     * requests/responses are expected at the end of the invocation," so any leftover fails assert.
-     *
-     * <p>The reported request count is always the total across all API keys (from the channel's
-     * cumulative counter); the reported response count is the number of expected responses drained.
+     * {@code expectedRequest}/{@code expectedResponse} declare the request/response API key the
+     * benchmark expects to still be in-flight at the end of the invocation; an empty {@code Optional}
+     * means none are expected, and any leftover fails fast. See
+     * {@link RaftClientBenchmarkContext#drainExpectedRequestsAndAssertEmpty} and
+     * {@link RaftClientBenchmarkContext#maybeDrainSentRpcResponses}.
      */
     public void collectDeltasAndDrainRPCs(
         RaftClientBenchmarkContext context,
