@@ -397,6 +397,8 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         // Forward a raw byte-level KeyQuery to the wrapped store, propagating skipCache so the caching
         // layer can honor it; the result bytes are the serialized ValueTimestampHeaders, which we
         // deserialize below to recover value, timestamp, and headers.
+        // The existing KeyQuery/TimestampedKeyQuery handlers do not yet propagate skipCache across the
+        // metered stores; that general fix is tracked in KAFKA-20776.
         KeyQuery<Bytes, byte[]> rawKeyQuery = KeyQuery.withKey(serializeKey(typedKeyQuery.key(), internalContext.headers()));
         if (typedKeyQuery.isSkipCache()) {
             rawKeyQuery = rawKeyQuery.skipCache();
