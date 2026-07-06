@@ -363,7 +363,9 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         //     (read-your-writes), since the cache holds the full serialized bytes.
         // The cache is the only thing preserving headers on this build. The caching-disabled run reads
         // through the same adapter a post-eviction cache miss would, so it covers the store-served
-        // (empty) outcome; the caching-enabled run covers the cache-served (headers) outcome.
+        // (empty) outcome; the caching-enabled run covers the cache-served (headers) outcome and then
+        // pins the flush-dependent flip on the same instance: after flushing the cache, a skipCache read
+        // (which goes to the store, bypassing the cache) returns empty headers.
         // value/timestamp round-trip either way.
         final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(StoreType.ADAPTER, cachingEnabled);
         try {
@@ -383,6 +385,22 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
             final Headers expectedHeaders = cachingEnabled ? headers : new RecordHeaders();
             assertEquals(expectedHeaders, record.headers());
             assertNotNull(result.getPosition(), "Expected position to be set");
+
+            if (cachingEnabled) {
+                // Same instance, flush-dependent flip: flush the record cache down through the
+                // (header-stripping) adapter to the persistent store, then read past the cache with
+                // skipCache. The persistent copy has no headers, so the same key now comes back empty
+                // (value/timestamp still round-trip; the timestamped adapter keeps the timestamp).
+                ((CachedStateStore<?, ?>) ((WrappedStateStore) store).wrapped()).flushCache();
+                final QueryResult<ReadOnlyRecord<String, String>> afterFlush = store.query(
+                    TimestampedKeyWithHeadersQuery.<String, String>withKey("k").skipCache(),
+                    PositionBound.unbounded(),
+                    new QueryConfig(false));
+                assertTrue(afterFlush.isSuccess(), "Expected skipCache read to succeed after flush");
+                assertEquals("v", afterFlush.getResult().value());
+                assertEquals(123L, afterFlush.getResult().timestamp());
+                assertEquals(new RecordHeaders(), afterFlush.getResult().headers());
+            }
         } finally {
             store.close();
         }
@@ -401,6 +419,8 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         //     with timestamp -1, which cannot be represented as a Record, so the query fails with
         //     STORE_EXCEPTION -- unlike the timestamped adapter (which keeps the timestamp and just
         //     returns empty headers), a plain store loses the timestamp too.
+        // The caching-enabled run also pins the flip on the same instance: after flushing the cache, a
+        // skipCache read goes to the store and fails with STORE_EXCEPTION.
         final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(StoreType.PLAIN_ADAPTER, cachingEnabled);
         try {
             final Headers headers = headersWith("h", "x");
@@ -416,6 +436,19 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
                 assertEquals("v", record.value());
                 assertEquals(123L, record.timestamp());
                 assertEquals(headers, record.headers());
+
+                // Same instance, flush-dependent flip: flush the cache down through the plain adapter
+                // (which keeps only the raw value) to the persistent store, then read past the cache with
+                // skipCache. The store read rebuilds a header record with timestamp -1, which cannot be a
+                // Record, so the same key now fails with STORE_EXCEPTION.
+                ((CachedStateStore<?, ?>) ((WrappedStateStore) store).wrapped()).flushCache();
+                final QueryResult<ReadOnlyRecord<String, String>> afterFlush = store.query(
+                    TimestampedKeyWithHeadersQuery.<String, String>withKey("k").skipCache(),
+                    PositionBound.unbounded(),
+                    new QueryConfig(false));
+                assertFalse(afterFlush.isSuccess(),
+                    "A skipCache read after flush hits the store (ts=-1) and must fail");
+                assertEquals(FailureReason.STORE_EXCEPTION, afterFlush.getFailureReason());
             } else {
                 assertFalse(result.isSuccess(),
                     "A store-served read on a plain build has ts=-1 and must fail, not return empty headers");
