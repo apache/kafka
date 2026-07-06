@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.query;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.streams.processor.api.ReadOnlyRecord;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
@@ -50,6 +51,7 @@ import java.util.Objects;
  * @param <V> Type of values
  */
 @Evolving
+@InterfaceAudience.Public
 public final class TimestampedKeyWithHeadersQuery<K, V> implements Query<ReadOnlyRecord<K, V>> {
 
     private final K key;
