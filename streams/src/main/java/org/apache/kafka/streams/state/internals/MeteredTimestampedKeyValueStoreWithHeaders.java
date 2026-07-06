@@ -677,6 +677,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             this.startNs = time.nanoseconds();
             this.startTimestampMs = time.milliseconds();
             this.returnPlainValue = returnPlainValue;
+            numOpenIterators.increment();
             openIterators.add(this);
         }
 
@@ -721,6 +722,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
                 final long duration = time.nanoseconds() - startNs;
                 sensor.record(duration);
                 iteratorDurationSensor.record(duration);
+                numOpenIterators.decrement();
                 openIterators.remove(this);
             }
         }
