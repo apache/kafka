@@ -167,9 +167,7 @@ public class ApplicationEventHandler implements Closeable {
      *
      * <p>Note: this is inherently racy — the thread could die between this check and the
      * subsequent {@code applicationEventQueue.add()}. That narrow window is acceptable because
-     * any subsequent call to {@code add()} will detect the dead thread immediately, and any
-     * orphaned events will be expired by the {@link CompletableEventReaper} during consumer
-     * {@link #close() close}.
+     * any subsequent call to {@code add()} will detect the dead thread immediately.
      *
      * @throws KafkaException if the background thread is not alive
      */
