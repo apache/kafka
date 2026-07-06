@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.streams.processor.api.ReadOnlyRecord;
 
@@ -36,6 +37,7 @@ import java.util.Iterator;
  * @param <K> Type of keys
  * @param <V> Type of values
  */
+@InterfaceAudience.Public
 @Evolving
 public interface ReadOnlyRecordIterator<K, V> extends Iterator<ReadOnlyRecord<K, V>>, Closeable {
 
