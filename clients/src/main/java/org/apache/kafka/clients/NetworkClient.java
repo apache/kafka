@@ -1138,10 +1138,7 @@ public class NetworkClient implements KafkaClient {
                 if (metadataRecoveryStrategy != MetadataRecoveryStrategy.NONE && metadataClusterCheckEnable) {
                     String clusterId = this.metadataUpdater.clusterId();
                     int nodeId = Integer.parseInt(node);
-                    // In order to allow separate connections to coordinators, the client uses large positive node ID values
-                    // (Integer.MAX_VALUE - nodeId) for these connections which do not match the target broker's actual node ID.
-                    // To avoid those, only check if the node ID is less than half of Integer.MAX_VALUE.
-                    if (clusterId != null && nodeId >= 0 && nodeId < Integer.MAX_VALUE / 2) {
+                    if (clusterId != null && nodeId >= 0) {
                         apiVersionRequestBuilder.setClusterId(clusterId);
                         apiVersionRequestBuilder.setNodeId(nodeId);
                     }
