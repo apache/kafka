@@ -168,11 +168,16 @@ class StreamsBrokerBounceTest(Test):
     def setup_system(self, start_processor=True, num_threads=3, group_protocol='classic'):
         # Setup phase
         use_streams_groups = True if group_protocol == 'streams' else False
-        topology_description_plugin_class = INMEMORY_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS if use_streams_groups else None
-        self.kafka = KafkaService(self.test_context, num_nodes=self.replication, zk=None, topics=self.topics, server_prop_overrides=[
+        server_prop_overrides = [
             ["offsets.topic.num.partitions", self.partitions],
             ["offsets.topic.replication.factor", self.replication]
-        ], use_streams_groups=use_streams_groups, streams_group_topology_description_plugin_class=topology_description_plugin_class)
+        ]
+        if use_streams_groups:
+            server_prop_overrides.append(
+                ["group.streams.topology.description.plugin.class", INMEMORY_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS])
+        self.kafka = KafkaService(self.test_context, num_nodes=self.replication, zk=None, topics=self.topics,
+                                  server_prop_overrides=server_prop_overrides,
+                                  use_streams_groups=use_streams_groups)
         self.kafka.start()
 
         # allow some time for topics to be created

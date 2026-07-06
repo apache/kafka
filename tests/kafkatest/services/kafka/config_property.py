@@ -83,8 +83,6 @@ SHARE_GROUP_ASSIGNMENT_INTERVAL_MS = "group.share.assignment.interval.ms"
 
 STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS = "group.streams.assignment.interval.ms"
 
-STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS = "group.streams.topology.description.plugin.class"
-
 UNSTABLE_API_VERSIONS_ENABLE = "unstable.api.versions.enable"
 UNSTABLE_FEATURE_VERSIONS_ENABLE = "unstable.feature.versions.enable"
 

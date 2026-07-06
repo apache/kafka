@@ -42,18 +42,20 @@ class StreamsTopologyDescriptionPluginTest(Test):
         }
 
     def setup_kafka(self, plugin_enabled):
-        plugin_class = INMEMORY_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS if plugin_enabled else None
+        server_prop_overrides = [
+            ["group.streams.min.session.timeout.ms", "10000"],
+            ["group.streams.session.timeout.ms", "10000"],
+        ]
+        if plugin_enabled:
+            server_prop_overrides.append(
+                ["group.streams.topology.description.plugin.class", INMEMORY_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS])
         self.kafka = KafkaService(
             self.test_context,
             num_nodes=1,
             zk=None,
             topics=self.topics,
             use_streams_groups=True,
-            streams_group_topology_description_plugin_class=plugin_class,
-            server_prop_overrides=[
-                ["group.streams.min.session.timeout.ms", "10000"],
-                ["group.streams.session.timeout.ms", "10000"],
-            ],
+            server_prop_overrides=server_prop_overrides,
         )
         self.kafka.start()
         self.kafka.run_features_command("upgrade", "streams.version", 1)
