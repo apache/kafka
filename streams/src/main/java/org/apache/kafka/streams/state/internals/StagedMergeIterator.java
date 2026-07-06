@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import java.util.Iterator;
@@ -77,7 +78,7 @@ class StagedMergeIterator<K extends Comparable<K>, V> implements ManagedKeyValue
     @Override
     public boolean hasNext() {
         if (closed) {
-            throw new IllegalStateException("Iterator has already been closed.");
+            throw new InvalidStateStoreException("Store iterator for this transaction buffer has already been closed.");
         }
         if (prefetched != null) {
             return true;
