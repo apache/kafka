@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements. See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License. You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<plugin>
+  <name>Apache Kafka Internal API Checker Maven Plugin</name>
+  <description>Maven plugin to check that external projects don't use internal Kafka APIs</description>
+  <groupId>org.apache.kafka</groupId>
+  <artifactId>kafka-internal-api-checker-maven-plugin</artifactId>
+  <version>@version@</version>
+  <goalPrefix>kafka-internal-api-checker</goalPrefix>
+  <isolatedRealm>false</isolatedRealm>
+  <inheritedByDefault>true</inheritedByDefault>
+
+  <mojos>
+    <mojo>
+      <goal>verify</goal>
+      <description>Checks source code for usage of internal Kafka APIs</description>
+      <requiresDirectInvocation>false</requiresDirectInvocation>
+      <requiresProject>true</requiresProject>
+      <requiresReports>false</requiresReports>
+      <aggregator>false</aggregator>
+      <requiresOnline>false</requiresOnline>
+      <inheritedByDefault>true</inheritedByDefault>
+      <phase>verify</phase>
+      <implementation>org.apache.kafka.maven.KafkaInternalApiCheckerMojo</implementation>
+      <language>java</language>
+      <instantiationStrategy>per-lookup</instantiationStrategy>
+      <executionStrategy>once-per-session</executionStrategy>
+      <threadSafe>true</threadSafe>
+      <requiresDependencyResolution>compile+runtime</requiresDependencyResolution>
+
+      <parameters>
+        <parameter>
+          <name>project</name>
+          <type>org.apache.maven.project.MavenProject</type>
+          <required>true</required>
+          <editable>false</editable>
+          <description>The Maven project</description>
+        </parameter>
+
+        <parameter>
+          <name>enabled</name>
+          <type>boolean</type>
+          <required>false</required>
+          <editable>true</editable>
+          <description>Enable/disable the internal API checker</description>
+        </parameter>
+
+        <parameter>
+          <name>failOnViolation</name>
+          <type>boolean</type>
+          <required>false</required>
+          <editable>true</editable>
+          <description>Fail build on violations</description>
+        </parameter>
+
+        <parameter>
+          <name>failOnNoKafkaDependency</name>
+          <type>boolean</type>
+          <required>false</required>
+          <editable>true</editable>
+          <description>Fail the build when no org.apache.kafka:* dependency is found on the classpath (default: false, which warns and skips)</description>
+        </parameter>
+
+        <parameter>
+          <name>classesDirectories</name>
+          <type>java.util.List</type>
+          <required>false</required>
+          <editable>true</editable>
+          <description>Compiled-class directories or jars to scan for internal API usage</description>
+        </parameter>
+
+        <parameter>
+          <name>reportFile</name>
+          <type>java.io.File</type>
+          <required>false</required>
+          <editable>true</editable>
+          <description>Report file location</description>
+        </parameter>
+      </parameters>
+
+      <configuration>
+        <project implementation="org.apache.maven.project.MavenProject" default-value="${project}" />
+        <enabled implementation="boolean" default-value="true">${kafka.internal-api-checker.enabled}</enabled>
+        <failOnViolation implementation="boolean" default-value="true">${kafka.internal-api-checker.failOnViolation}</failOnViolation>
+        <failOnNoKafkaDependency implementation="boolean" default-value="false">${kafka.internal-api-checker.failOnNoKafkaDependency}</failOnNoKafkaDependency>
+        <classesDirectories implementation="java.util.List" />
+        <reportFile implementation="java.io.File" default-value="${project.build.directory}/reports/kafka-internal-api-usage.txt" />
+      </configuration>
+    </mojo>
+  </mojos>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.apache.maven</groupId>
+      <artifactId>maven-plugin-api</artifactId>
+      <type>jar</type>
+      <version>@mavenApiVersion@</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.maven</groupId>
+      <artifactId>maven-core</artifactId>
+      <type>jar</type>
+      <version>@mavenApiVersion@</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.maven</groupId>
+      <artifactId>maven-artifact</artifactId>
+      <type>jar</type>
+      <version>@mavenApiVersion@</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.maven.plugin-tools</groupId>
+      <artifactId>maven-plugin-annotations</artifactId>
+      <type>jar</type>
+      <version>@mavenPluginAnnotationsVersion@</version>
+    </dependency>
+  </dependencies>
+</plugin>

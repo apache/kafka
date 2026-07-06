@@ -37,12 +37,10 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.Record;
-import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
-import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.Time;
@@ -50,13 +48,10 @@ import org.apache.kafka.common.utils.internals.ExponentialBackoffManager;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.share.LogReader;
 import org.apache.kafka.server.share.metrics.ShareGroupMetrics;
-import org.apache.kafka.server.storage.log.FetchIsolation;
-import org.apache.kafka.server.storage.log.FetchParams;
 import org.apache.kafka.server.util.InterBrokerSendThread;
 import org.apache.kafka.server.util.RequestAndCompletionHandler;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
-import org.apache.kafka.storage.internals.log.LogReadResult;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -190,7 +185,27 @@ public class ShareGroupDLQStateManager {
         }
         CompletableFuture<Void> future = new CompletableFuture<>();
         ProduceRequestHandler requestHandler = new ProduceRequestHandler(param, future, requestBackoffMs, requestBackoffMaxMs, maxRequestAttempts);
-        enqueue(requestHandler);
+
+        // Validate the DLQ configuration up front, synchronously on the calling thread, so a
+        // misconfigured DLQ fails fast, and we never read source records for one. enqueue() also
+        // re-validates so that retries re-check the (dynamic) config.
+        Optional<Throwable> validationError = requestHandler.validateDlqTopic();
+        if (validationError.isPresent()) {
+            future.completeExceptionally(validationError.get());
+            return future;
+        }
+
+        // Resolve the source records once, here - on the calling thread for local offsets and, for
+        // tiered offsets, asynchronously on the remote-storage reader pool - and enqueue only once
+        // resolution finishes. This keeps both the local and remote reads off the single sender
+        // thread, and the memoized result is reused on every (re)send so retries never re-fetch.
+        // Records are only read when copy is enabled for the group and the DLQ is correctly
+        // configured (validated above); otherwise we enqueue immediately.
+        if (cacheHelper.isShareGroupDlqCopyRecordEnabled(param.groupId())) {
+            requestHandler.resolveRecords().whenComplete((ignored, ignoredError) -> enqueue(requestHandler));
+        } else {
+            enqueue(requestHandler);
+        }
         return future;
     }
 
@@ -221,9 +236,6 @@ public class ShareGroupDLQStateManager {
      * @param handler The handler instance to add to the node map.
      */
     private void addRequestToNodeMap(Node node, ProduceRequestHandler handler) {
-        if (!handler.isBatchable()) {
-            return;
-        }
         synchronized (nodeMapLock) {
             nodeRPCMap.computeIfAbsent(node, k -> new LinkedList<>())
                 .add(handler);
@@ -238,9 +250,18 @@ public class ShareGroupDLQStateManager {
         private static final Logger LOG = LoggerFactory.getLogger(ShareGroupDLQStateManager.ProduceRequestHandler.class);
         private final ExponentialBackoffManager createTopicsBackoff;
         private final ExponentialBackoffManager produceRequestBackoff;
-        private Node dlqPartitionLeaderNode;
-        private int dlqDestinationPartition;
-        private ShareGroupDLQMetadataCacheHelper.TopicPartitionData dlqTopicPartitionData;
+        // These DLQ topic fields are written by populateDLQTopicData() and read while building the
+        // produce request - both on the sender thread (from dlqTopicExists()/handleCreateTopicsResponse()).
+        // Kept volatile defensively.
+        private volatile Node dlqPartitionLeaderNode;
+        private volatile int dlqDestinationPartition;
+        private volatile ShareGroupDLQMetadataCacheHelper.TopicPartitionData dlqTopicPartitionData;
+        // The original source records, resolved once before this handler is enqueued (see resolveRecords()).
+        // Volatile because resolution runs off the sender thread - on the calling thread for local offsets
+        // and, for tiered offsets, on the remote-storage reader pool - while this value is read on the
+        // sender thread when the produce request is built. Memoized: set once and reused for every (re)send,
+        // so retries never re-fetch.
+        private volatile Map<Long, Record> resolvedRecordData = Map.of();
 
         public static final String HEADER_DLQ_ERRORS_TOPIC = "__dlq.errors.topic";
         public static final String HEADER_DLQ_ERRORS_PARTITION = "__dlq.errors.partition";
@@ -296,19 +317,6 @@ public class ShareGroupDLQStateManager {
             return "ProduceRequestHandler";
         }
 
-        /**
-         * This method helps determine if the handler could
-         * participate in batching (added to nodeMap). This will
-         * be helpful if the RPCs which cannot be batched are included in
-         * this class as well.
-         *
-         * @return Boolean indicating whether this handler can be coalesced with others
-         * to reduce number of RPCs sent.
-         */
-        boolean isBatchable() {
-            return true;
-        }
-
         public void requestErrorResponse(Throwable exception) {
             this.result.completeExceptionally(exception);
         }
@@ -335,10 +343,6 @@ public class ShareGroupDLQStateManager {
 
             return new CreateTopicsRequest.Builder(new CreateTopicsRequestData()
                 .setTopics(topicCollection));
-        }
-
-        public AbstractRequest.Builder<? extends AbstractRequest> requestBuilder() {
-            throw new RuntimeException("Produce requests are batchable, hence individual requests not needed.");
         }
 
         public void populateDLQTopicData() throws ConfigException {
@@ -372,7 +376,9 @@ public class ShareGroupDLQStateManager {
         }
 
         public ProduceRequestData.TopicProduceData topicProduceData() {
-            Map<Long, Record> originalRecordData = maybeFetchRecordData();
+            // Records have already been resolved (including any remote storage reads) before this
+            // handler was added to the node map, so no blocking fetch happens on the sender thread here.
+            Map<Long, Record> originalRecordData = resolvedRecordData;
 
             List<SimpleRecord> simpleRecords = new ArrayList<>();
             for (long i = param.firstOffset(); i <= param.lastOffset(); i++) {
@@ -451,6 +457,7 @@ public class ShareGroupDLQStateManager {
                 } catch (ConfigException e) {
                     return false;
                 }
+                // Source records were already resolved before enqueue; just add to the node map.
                 addRequestToNodeMap(dlqPartitionLeaderNode, this);
             }
             return isDlqTopicPresent;
@@ -545,11 +552,8 @@ public class ShareGroupDLQStateManager {
                             try {
                                 populateDLQTopicData();
                                 createTopicsBackoff.resetAttempts();
-                                if (this.isBatchable()) {
-                                    addRequestToNodeMap(this.dlqPartitionLeaderNode, this);
-                                } else {
-                                    enqueue(this);
-                                }
+                                // Source records were already resolved before enqueue; just add to the node map.
+                                addRequestToNodeMap(this.dlqPartitionLeaderNode, this);
                             } catch (ConfigException e) {
                                 LOG.error("Error enqueueing after DLQ create topic response {}.", this, e);
                                 if (!createTopicsBackoff.canAttempt()) {
@@ -690,78 +694,37 @@ public class ShareGroupDLQStateManager {
             }
         }
 
-        private Map<Long, Record> maybeFetchRecordData() {
+        /**
+         * Resolves the original source records for this handler once, before it is enqueued - reading
+         * from the local log on the calling thread and, for any offsets tiered to remote storage,
+         * asynchronously on the remote-storage reader pool. The result is memoized in
+         * {@link #resolvedRecordData} and reused for every (re)send, so the single sender thread never
+         * reads the log (neither local nor remote) and retries do not re-fetch.
+         *
+         * <p>A failed fetch is non-fatal: {@link #resolvedRecordData} stays empty and the DLQ record is
+         * produced with headers only (no key/value), mirroring how individually unavailable offsets are skipped.
+         *
+         * @return A future that always completes normally, once resolution has finished.
+         */
+        CompletableFuture<Void> resolveRecords() {
+            CompletableFuture<Void> resolved = new CompletableFuture<>();
+            maybeFetchRecordData().whenComplete((records, exception) -> {
+                if (exception != null || records == null) {
+                    LOG.warn("Unable to fetch original record data for handler {}. DLQ records will be produced with headers only.", this, exception);
+                    this.resolvedRecordData = Map.of();
+                } else {
+                    this.resolvedRecordData = records;
+                }
+                resolved.complete(null);
+            });
+            return resolved;
+        }
+
+        private CompletableFuture<Map<Long, Record>> maybeFetchRecordData() {
             if (!cacheHelper.isShareGroupDlqCopyRecordEnabled(param.groupId())) {
-                return Map.of();
+                return CompletableFuture.completedFuture(Map.of());
             }
-            long startTime = time.hiResClockMs();
-            TopicIdPartition tp = param.topicIdPartition();
-
-            FetchParams fetchParams = new FetchParams(
-                FetchRequest.CONSUMER_REPLICA_ID,           // -1, reading as a consumer
-                -1,                                         // replicaEpoch
-                0L,                                         // maxWaitMs - don't block
-                1,                                          // minBytes
-                DLQ_MAX_FETCH_BYTES,                        // maxBytes
-                FetchIsolation.HIGH_WATERMARK,              // committed only
-                Optional.empty()                            // clientMetadata
-            );
-
-            long nextOffset = param.firstOffset();
-            long endOffset = param.lastOffset();
-            int recordCount = (int) (param.lastOffset() - param.firstOffset() + 1);
-
-            Map<Long, Record> recordMap = new HashMap<>(recordCount);
-            LinkedHashMap<TopicIdPartition, Long> offsets = new LinkedHashMap<>();
-            LinkedHashMap<TopicIdPartition, Integer> maxBytesMap = new LinkedHashMap<>();
-            maxBytesMap.put(tp, DLQ_MAX_FETCH_BYTES);
-
-            // We are fetching data for one TopicIdPartition only. Hence, there
-            // is no need to keep recreating the maxBytes map, and we can re-use a
-            // single copy. In similar vein, we needn't clear the offsets map
-            // either and just update the value corresponding to the TopicIdPartition
-            // key in offsets map within the while loop.
-            while (nextOffset <= endOffset) {
-                long readFrom = nextOffset; // offset requested for this iteration
-                offsets.put(tp, readFrom);
-
-                LinkedHashMap<TopicIdPartition, LogReadResult> result =
-                    logReader.read(fetchParams, Set.of(tp), offsets, maxBytesMap);
-
-                LogReadResult res = result.get(param.topicIdPartition());
-                if (res == null || res.error().code() != Errors.NONE.code()) {
-                    log.warn("Unable to fetch actual record at offset {} for handler {}.", readFrom, this);
-                    return Map.of();
-                }
-
-                res.info().delayedRemoteStorageFetch.ifPresent(data -> log.info(
-                    "Some offset data in is in remote storage. Skipping it."));
-
-                for (RecordBatch batch : res.info().records.batches()) {
-                    for (Record record : batch) {
-                        // A fetch can return a batch whose base offset is below the requested
-                        // offset, so skip any record at or before the read position to avoid
-                        // re-processing and dragging nextOffset backwards.
-                        if (record.offset() < readFrom) continue;
-                        if (record.offset() > param.lastOffset()) {
-                            log.trace("Preempted log fetch took {} ms for {} records starting at {} for {}", time.hiResClockMs() - startTime,
-                                recordCount, param.firstOffset(), this);
-                            return Map.copyOf(recordMap);
-                        }
-                        recordMap.put(record.offset(), record);
-                        nextOffset = Math.max(nextOffset, record.offset() + 1); // never moves backwards
-                    }
-                }
-
-                // If the read position did not advance this iteration we have made no progress
-                // (reached HWM/LEO or only stale records were returned). Bail out to guarantee
-                // termination rather than re-fetching the same offset forever.
-                if (nextOffset <= readFrom) break;
-            }
-            log.trace("Full log fetch took {} ms for {} records starting at {} for {}", time.hiResClockMs() - startTime,
-                recordCount, param.firstOffset(), this);
-            log.info("Total offsets fetched: {}, Records found: {}", recordCount, recordMap.size());
-            return Map.copyOf(recordMap);
+            return new ShareGroupDLQRecordFetcher(logReader, time, param, DLQ_MAX_FETCH_BYTES).fetch();
         }
     }
 
@@ -806,16 +769,9 @@ public class ShareGroupDLQStateManager {
                         log.error("Unable to create topic request for handler {}.", handler, exp);
                         handler.requestErrorResponse(Errors.INVALID_CONFIG.exception());
                     }
-                } else {
-                    if (!handler.isBatchable()) {
-                        requests.add(new RequestAndCompletionHandler(
-                            time.milliseconds(),
-                            handler.dlqPartitionLeaderNode(),
-                            handler.requestBuilder(),
-                            handler
-                        ));
-                    }
                 }
+                // When the DLQ topic already exists, the handler is added to the node map for produce
+                // coalescing (asynchronously, once its records are resolved), so nothing more to do here.
             }
 
             // {

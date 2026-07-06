@@ -20,9 +20,6 @@
   "name": "StreamsGroupHeartbeatRequest",
   // Version 1 is the same as version 0; bumped together with StreamsGroupHeartbeatResponse v1,
   // which adds TopologyDescriptionRequired (KIP-1331). Required so the response v1 is negotiated.
-  // Marked unstable until the broker topology-description manager lands (KIP-1331); flip to false
-  // before release.
-  "latestVersionUnstable": true,
   "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [

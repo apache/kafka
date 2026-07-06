@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.query;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
@@ -24,6 +25,7 @@ import java.time.Instant;
 import java.util.Optional;
 
 @Evolving
+@InterfaceAudience.Public
 public class WindowKeyQuery<K, V> implements Query<WindowStoreIterator<V>> {
 
     private final K key;
