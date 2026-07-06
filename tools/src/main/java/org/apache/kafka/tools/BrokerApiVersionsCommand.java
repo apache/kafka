@@ -151,7 +151,6 @@ public class BrokerApiVersionsCommand {
                 .define(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, ConfigDef.Type.LONG, CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MS, ConfigDef.Importance.MEDIUM, CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC)
                 .define(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG, ConfigDef.Type.LONG, CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS, ConfigDef.Importance.MEDIUM, CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC)
                 .define(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG, ConfigDef.Type.LONG, DEFAULT_RETRY_BACKOFF_MS, ConfigDef.Importance.MEDIUM, CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
-                .define(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, ConfigDef.Type.LONG, CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS, ConfigDef.Importance.HIGH, CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC)
                 .withClientSslSupport()
                 .withClientSaslSupport();
 
@@ -183,11 +182,6 @@ public class BrokerApiVersionsCommand {
                     "admin",
                     ClientUtils.createChannelBuilder(config, time, logContext),
                     logContext);
-            NetworkClient.BootstrapConfiguration bootstrapConfiguration = NetworkClient.BootstrapConfiguration.enabled(
-                config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
-                ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
-                config.getLong(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG),
-                config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG));
             NetworkClient networkClient = new NetworkClient(
                     selector,
                     metadata,
@@ -205,7 +199,7 @@ public class BrokerApiVersionsCommand {
                     new ApiVersions(),
                     logContext,
                     MetadataRecoveryStrategy.NONE,
-                    bootstrapConfiguration,
+                    NetworkClient.BootstrapConfiguration.DISABLED,
                     false);
             ConsumerNetworkClient highLevelClient = new ConsumerNetworkClient(
                     logContext,

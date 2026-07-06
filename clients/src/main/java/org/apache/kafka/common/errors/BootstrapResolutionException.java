@@ -17,6 +17,7 @@
 package org.apache.kafka.common.errors;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Indicates that the {@link org.apache.kafka.clients.NetworkClient} was unable to resolve a DNS address within
@@ -24,6 +25,7 @@ import org.apache.kafka.common.KafkaException;
  *
  * @see org.apache.kafka.clients.CommonClientConfigs
  */
+@InterfaceAudience.Public
 public class BootstrapResolutionException extends KafkaException {
     public BootstrapResolutionException(String message) {
         super(message);
