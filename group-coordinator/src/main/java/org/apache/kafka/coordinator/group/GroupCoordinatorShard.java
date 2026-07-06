@@ -21,6 +21,8 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
+import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.message.AlterShareGroupOffsetsRequestData;
@@ -49,7 +51,6 @@ import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
-import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
@@ -119,6 +120,8 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
+import org.apache.kafka.coordinator.group.streams.StreamsGroup;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.Authorizer;
@@ -130,6 +133,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -900,14 +904,160 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      *
      * @param groupIds      The IDs of the groups to describe.
      *
-     * @return A list containing the StreamsGroupDescribeResponseData.DescribedGroup.
+     * @return A {@link StreamsGroupDescribeResult} containing the described groups and per-group
+     *         stored description topology epoch (KIP-1331).
      *
      */
-    public List<StreamsGroupDescribeResponseData.DescribedGroup> streamsGroupDescribe(
+    public StreamsGroupDescribeResult streamsGroupDescribe(
         List<String> groupIds,
         long committedOffset
     ) {
         return groupMetadataManager.streamsGroupDescribe(groupIds, committedOffset);
+    }
+
+    /**
+     * Validates that a streams group exists, that the given member is a current member of
+     * it, and that {@code pushedEpoch} matches the group's current topology epoch. The
+     * lookup runs at {@code committedOffset} so an uncommitted fence/leave does not cause
+     * a still-live member to appear unknown (or vice versa). Must be scheduled on the
+     * coordinator runtime like any other read.
+     *
+     * @param groupId          The group ID.
+     * @param memberId         The member ID.
+     * @param pushedEpoch      The topology epoch carried by the push request.
+     * @param committedOffset  A committed offset corresponding to the desired snapshot.
+     * @throws GroupIdNotFoundException if the group does not exist.
+     * @throws UnknownMemberIdException if the member is not in the group.
+     * @throws InvalidRequestException  if {@code pushedEpoch} does not match the group's
+     *                                  current topology epoch.
+     */
+    public void validateStreamsGroupTopologyDescriptionUpdate(
+        String groupId,
+        String memberId,
+        int pushedEpoch,
+        long committedOffset
+    ) {
+        groupMetadataManager.validateStreamsGroupTopologyDescriptionUpdate(
+            groupId, memberId, pushedEpoch, committedOffset);
+    }
+
+    /**
+     * Advance {@code StoredDescriptionTopologyEpoch} after a successful plugin {@code setTopology}.
+     *
+     * @param groupId      The streams group id.
+     * @param pushedEpoch  The topology epoch on the push that just completed.
+     * @return A coordinator result carrying the metadata record.
+     * @throws GroupIdNotFoundException if the streams group no longer exists.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> setStoredDescriptionTopologyEpoch(
+        String groupId,
+        int pushedEpoch
+    ) {
+        return groupMetadataManager.setStoredDescriptionTopologyEpoch(groupId, pushedEpoch);
+    }
+
+    /**
+     * Advance {@code FailedDescriptionTopologyEpoch} after a permanent plugin failure.
+     *
+     * @param groupId      The streams group id.
+     * @param pushedEpoch  The topology epoch on the push that just completed.
+     * @return A coordinator result carrying the metadata record.
+     * @throws GroupIdNotFoundException if the streams group no longer exists.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> setFailedDescriptionTopologyEpoch(
+        String groupId,
+        int pushedEpoch
+    ) {
+        return groupMetadataManager.setFailedDescriptionTopologyEpoch(groupId, pushedEpoch);
+    }
+
+    /**
+     * Return the subset of {@code groupIds} that are streams groups with a stored topology
+     * description. Used during {@code DeleteGroups} to identify which groups need a
+     * {@code plugin.deleteTopology} call before being tombstoned.
+     */
+    public Set<String> streamsGroupsWithStoredTopologyDescription(
+        Collection<String> groupIds,
+        long committedOffset
+    ) {
+        return groupMetadataManager.streamsGroupsWithStoredTopologyDescription(groupIds, committedOffset);
+    }
+
+    /**
+     * Return the streams groups on this shard eligible for plugin-side topology cleanup: empty
+     * (no live members), no committed offsets and no pending transactional offsets, and a
+     * {@code StoredDescriptionTopologyEpoch != -1}. Keyed by group id, valued by the
+     * {@code StoredDescriptionTopologyEpoch} observed at {@code committedOffset} — the cleanup
+     * cycle echoes that epoch back to {@link #clearStoredDescriptionTopologyEpoch} so a
+     * concurrent {@code setTopology} that has since advanced the field cannot be silently undone
+     * by a stale plugin delete.
+     *
+     * <p>This sweep relies on the regular offset-expiration cycle to have already tombstoned
+     * expired offsets, so the eligibility check itself only asks "does this group still have any
+     * offsets at all?" — see {@link OffsetMetadataManager#groupHasNoOffsets}. Three independent
+     * cycles thus compose cleanly: offset expiration, topology cleanup (here), and group
+     * tombstoning on the next sweep once the stored epoch is cleared.
+     *
+     * <p>Every state lookup goes through the snapshot at {@code committedOffset}: the iterated
+     * group-id set, the per-group resolution, the {@code EMPTY}-state check, the stored
+     * topology epoch, and the no-offsets check.
+     *
+     * <p>Non-streams and missing groups are silently skipped. Per-group errors are logged and
+     * the scan continues so one bad group cannot stall the cycle.
+     */
+    public Map<String, Integer> listStreamsGroupsNeedingTopologyCleanup(long committedOffset) {
+        Map<String, Integer> eligible = new HashMap<>();
+        for (String groupId : groupMetadataManager.groupIds(committedOffset)) {
+            try {
+                Group group = groupMetadataManager.maybeGroup(groupId, committedOffset);
+                if (group == null || group.type() != Group.GroupType.STREAMS) continue;
+                StreamsGroup streamsGroup = (StreamsGroup) group;
+                if (!streamsGroup.isEmpty(committedOffset)) continue;
+                int storedEpoch = streamsGroup.storedDescriptionTopologyEpoch(committedOffset);
+                if (storedEpoch == -1) continue;
+                if (!offsetMetadataManager.groupHasNoOffsets(groupId, committedOffset)) continue;
+                eligible.put(groupId, storedEpoch);
+            } catch (Throwable t) {
+                // One bad group must not abort the whole scan; the next cycle retries.
+                log.warn("Unexpected error scanning streams group {} for topology cleanup; skipping.", groupId, t);
+            }
+        }
+        return eligible;
+    }
+
+    /**
+     * Clear {@code StoredDescriptionTopologyEpoch} to {@code -1} for {@code groupId}, but only
+     * when the persisted value still equals {@code expectedStoredEpoch}. Called from the
+     * topology-description cleanup cycle so a concurrent {@code setTopology} that has advanced
+     * the field is preserved.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> clearStoredDescriptionTopologyEpoch(
+        String groupId,
+        int expectedStoredEpoch
+    ) {
+        return groupMetadataManager.clearStoredDescriptionTopologyEpoch(groupId, expectedStoredEpoch);
+    }
+
+    /**
+     * Batched form of {@link #clearStoredDescriptionTopologyEpoch}: emits one conditional clear
+     * record per entry in {@code expectedStoredEpochByGroupId} in a single
+     * {@link CoordinatorResult}, so the cycle issues one {@code scheduleWriteOperation} per
+     * shard instead of one per group. Groups whose stored epoch no longer matches yield no
+     * record (the GMM-level method returns an empty list for those), matching the single-group
+     * variant's silent skip.
+     *
+     * <p>The result is non-atomic ({@code isAtomic=false}): the conditional clear records are
+     * independent per group, so the runtime is free to split them across multiple log batches
+     * if a single batch would exceed the limit. Any per-record write failure is retried
+     * naturally on the next cycle because the persisted storedEpoch is still non-default.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> clearStoredDescriptionTopologyEpochBatch(
+        Map<String, Integer> expectedStoredEpochByGroupId
+    ) {
+        List<CoordinatorRecord> records = new ArrayList<>(expectedStoredEpochByGroupId.size());
+        expectedStoredEpochByGroupId.forEach((groupId, expectedStoredEpoch) ->
+            records.addAll(groupMetadataManager.clearStoredDescriptionTopologyEpoch(groupId, expectedStoredEpoch).records()));
+        return new CoordinatorResult<>(records, false);
     }
 
     /**
@@ -985,12 +1135,15 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         List<CoordinatorRecord> records = new ArrayList<>();
         groupMetadataManager.groupIds().forEach(groupId -> {
             Group group = groupMetadataManager.group(groupId);
-            if (group.shouldExpire()) {
-                boolean allOffsetsExpired = offsetMetadataManager.cleanupExpiredOffsets(groupId, records);
-                if (allOffsetsExpired) {
-                    groupMetadataManager.maybeDeleteGroup(groupId, records);
-                }
-            }
+            // Offset cleanup runs for every group regardless of whether shouldExpire(config)
+            // returns true — see Group.shouldExpire's javadoc — so a group whose metadata is
+            // pinned (e.g. a streams group with a pending topology-plugin clean-up) still has
+            // its expired committed offsets tombstoned, which is what feeds the topology
+            // cleanup cycle's "no offsets remaining" eligibility check.
+            boolean allOffsetsExpired = offsetMetadataManager.cleanupExpiredOffsets(groupId, records);
+            if (!allOffsetsExpired) return;
+            if (!group.shouldExpire(config)) return;
+            groupMetadataManager.maybeDeleteGroup(groupId, records);
         });
 
         if (!records.isEmpty()) {
@@ -1081,7 +1234,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     public void onLoaded(CoordinatorMetadataImage newImage) {
         CoordinatorMetadataDelta emptyDelta = newImage.emptyDelta();
         groupMetadataManager.onMetadataUpdate(emptyDelta, newImage);
-        offsetMetadataManager.onMetadataUpdate(emptyDelta, newImage);
         coordinatorMetrics.activateMetricsShard(metricsShard);
 
         groupMetadataManager.onLoaded();
@@ -1106,7 +1258,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     @Override
     public void onMetadataUpdate(CoordinatorMetadataDelta delta, CoordinatorMetadataImage newImage) {
         groupMetadataManager.onMetadataUpdate(delta, newImage);
-        offsetMetadataManager.onMetadataUpdate(delta, newImage);
     }
 
     private static OffsetCommitKey convertLegacyOffsetCommitKey(

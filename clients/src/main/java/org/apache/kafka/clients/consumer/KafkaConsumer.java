@@ -28,6 +28,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidRegularExpression;
 import org.apache.kafka.common.errors.WakeupException;
@@ -536,6 +537,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * the consumer threads can hash into these queues using the TopicPartition to ensure in-order consumption and simplify
  * commit.
  */
+@InterfaceAudience.Public
 public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private static final ConsumerDelegateCreator CREATOR = new ConsumerDelegateCreator();
@@ -1521,8 +1523,21 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * any records from these partitions until they have been resumed using {@link #resume(Collection)}.
      * Note that this method does not affect partition subscription. In particular, it does not cause a group
      * rebalance when automatic assignment is used.
+     * <p/>
+     * The pause state is preserved across a rebalance for partitions that remain assigned to this
+     * consumer, but it is lost for partitions that are revoked. Which partitions are revoked depends
+     * on the group protocol in use (see {@link ConsumerConfig#GROUP_PROTOCOL_CONFIG}):
+     * <ul>
+     * <li>Classic group protocol: the behavior depends on the assignor configured in
+     * {@link ConsumerConfig#PARTITION_ASSIGNMENT_STRATEGY_CONFIG}: eager assignors (e.g., {@link RangeAssignor},
+     * {@link RoundRobinAssignor}) revoke all partitions on every rebalance (pause state is
+     * not preserved); cooperative assignors (e.g., {@link CooperativeStickyAssignor}) only revoke the
+     * partitions that are reassigned to another consumer (pause state preserved for partitions that remain
+     * assigned)</li>
+     * <li>Consumer group protocol (KIP-848): only revokes partitions that are reassigned to another consumer
+     * (pause state preserved for partitions that remain assigned)</li>
+     * </ul>
      *
-     * Note: Rebalance will not preserve the pause/resume state.
      * @param partitions The partitions which should be paused
      * @throws IllegalStateException if any of the provided partitions are not currently assigned to this consumer
      */

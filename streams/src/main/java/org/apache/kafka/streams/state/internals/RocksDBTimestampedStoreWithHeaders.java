@@ -73,7 +73,7 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
                      final ColumnFamilyOptions columnFamilyOptions) {
         // Check if we're upgrading from RocksDBTimestampedStore or from plain RocksDBStore
         final List<byte[]> existingCFs;
-        try (final Options options = new Options(dbOptions, new ColumnFamilyOptions())) {
+        try (final Options options = new Options(dbOptions, columnFamilyOptions)) {
             existingCFs = RocksDB.listColumnFamilies(options, dbDir.getAbsolutePath());
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error listing column families for store " + name, e);
@@ -98,7 +98,7 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
             dbOptions,
             new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
             new ColumnFamilyDescriptor(TIMESTAMPED_VALUES_WITH_HEADERS_CF_NAME, columnFamilyOptions),
-            new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, createOffsetsCFOptions())
+            new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, offsetsCFOptions())
         );
 
         final ColumnFamilyHandle defaultCf = columnFamilies.get(0);
@@ -139,7 +139,7 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
             new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
             new ColumnFamilyDescriptor(LEGACY_TIMESTAMPED_CF_NAME, columnFamilyOptions),
             new ColumnFamilyDescriptor(TIMESTAMPED_VALUES_WITH_HEADERS_CF_NAME, columnFamilyOptions),
-            new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, createOffsetsCFOptions())
+            new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, offsetsCFOptions())
         );
 
         try {

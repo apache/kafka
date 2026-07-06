@@ -14,13 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Objects;
 
 /**
  * Information about a Kafka node
  */
+@InterfaceAudience.Public
 public class Node {
 
     private static final Node NO_NODE = new Node(-1, "", -1);

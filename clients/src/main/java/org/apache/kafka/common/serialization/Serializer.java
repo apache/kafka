@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.header.Headers;
 
 import java.io.Closeable;
@@ -33,6 +34,7 @@ import java.util.Map;
  *
  * @param <T> Type to be serialized from.
  */
+@InterfaceAudience.Public
 public interface Serializer<T> extends Closeable {
 
     /**

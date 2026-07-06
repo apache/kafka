@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.errors.StreamsException;
 
 /**
@@ -43,6 +44,7 @@ import org.apache.kafka.streams.errors.StreamsException;
  * @see WallclockTimestampExtractor
  */
 
+@InterfaceAudience.Public
 public class UsePartitionTimeOnInvalidTimestamp extends ExtractRecordMetadataTimestamp {
     /**
      * Returns the current stream-time as new timestamp for the record.

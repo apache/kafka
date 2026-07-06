@@ -167,7 +167,6 @@ public class OffsetMetadataManagerTest {
                     .withTime(time)
                     .withLogContext(logContext)
                     .withSnapshotRegistry(snapshotRegistry)
-                    .withMetadataImage(metadataImage)
                     .withGroupMetadataManager(groupMetadataManager)
                     .withGroupCoordinatorConfig(config)
                     .withGroupCoordinatorMetricsShard(metrics)
@@ -337,6 +336,13 @@ public class OffsetMetadataManagerTest {
 
             records.addAll(addedRecords);
             return isOffsetsEmptyForGroup;
+        }
+
+        public boolean groupHasNoOffsets(String groupId) {
+            // Existing branch tests don't drive snapshot semantics — they replay records
+            // directly, so reading at Long.MAX_VALUE is equivalent to "latest" and exercises
+            // the same predicates the snapshot-aware path runs.
+            return offsetMetadataManager.groupHasNoOffsets(groupId, Long.MAX_VALUE);
         }
 
         public List<OffsetFetchResponseData.OffsetFetchResponseTopics> fetchOffsets(
@@ -1641,8 +1647,9 @@ public class OffsetMetadataManagerTest {
         );
     }
 
-    @Test
-    public void testConsumerGroupTransactionalOffsetCommit() {
+    @ParameterizedTest
+    @MethodSource("uuids")
+    public void testConsumerGroupTransactionalOffsetCommit(Uuid topicId) {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create an empty group.
@@ -1658,7 +1665,7 @@ public class OffsetMetadataManagerTest {
             .build()
         );
 
-        verifyTransactionalOffsetCommit(context);
+        verifyTransactionalOffsetCommit(topicId, context);
     }
 
     @ParameterizedTest
@@ -1694,6 +1701,7 @@ public class OffsetMetadataManagerTest {
             .setMemberId("member")
             .setTopics(List.of(
                 new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
+                    .setTopicId(barTopicId)
                     .setName(barTopicName)
                     .setPartitions(List.of(
                         new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
@@ -1719,6 +1727,7 @@ public class OffsetMetadataManagerTest {
             new TxnOffsetCommitResponseData()
                 .setTopics(List.of(
                     new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
+                        .setTopicId(barTopicId)
                         .setName(barTopicName)
                         .setPartitions(List.of(
                             new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
@@ -1730,8 +1739,9 @@ public class OffsetMetadataManagerTest {
         );
     }
 
-    @Test
-    public void testStreamsGroupTransactionalOffsetCommit() {
+    @ParameterizedTest
+    @MethodSource("uuids")
+    public void testStreamsGroupTransactionalOffsetCommit(Uuid topicId) {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create an empty group.
@@ -1746,10 +1756,10 @@ public class OffsetMetadataManagerTest {
             .build()
         );
 
-        verifyTransactionalOffsetCommit(context);
+        verifyTransactionalOffsetCommit(topicId, context);
     }
 
-    private static void verifyTransactionalOffsetCommit(OffsetMetadataManagerTestContext context) {
+    private static void verifyTransactionalOffsetCommit(Uuid topicId, OffsetMetadataManagerTestContext context) {
         CoordinatorResult<TxnOffsetCommitResponseData, CoordinatorRecord> result = context.commitTransactionalOffset(
             new TxnOffsetCommitRequestData()
                 .setGroupId("foo")
@@ -1758,6 +1768,7 @@ public class OffsetMetadataManagerTest {
                 .setTopics(List.of(
                     new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
                         .setName("bar")
+                        .setTopicId(topicId)
                         .setPartitions(List.of(
                             new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
                                 .setPartitionIndex(0)
@@ -1773,6 +1784,7 @@ public class OffsetMetadataManagerTest {
                 .setTopics(List.of(
                     new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
                         .setName("bar")
+                        .setTopicId(topicId)
                         .setPartitions(List.of(
                             new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
                                 .setPartitionIndex(0)
@@ -1793,7 +1805,7 @@ public class OffsetMetadataManagerTest {
                     "metadata",
                     context.time.milliseconds(),
                     OptionalLong.empty(),
-                    Uuid.ZERO_UUID
+                    topicId
                 )
             )),
             result.records()
@@ -1892,43 +1904,6 @@ public class OffsetMetadataManagerTest {
         );
 
         verifyTransactionalOffsetCommitWithStaleMemberEpoch(context, version);
-    }
-
-    @Test
-    public void testConsumerGroupTransactionalOffsetCommitWithUnresolvedTopicId() {
-        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
-        Uuid topicId = Uuid.randomUuid();
-
-        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
-            "foo",
-            true
-        );
-
-        group.updateMember(new ConsumerGroupMember.Builder("member")
-            .setMemberEpoch(10)
-            .setPreviousMemberEpoch(10)
-            .setAssignedPartitions(mkAssignmentWithEpochs(
-                mkTopicAssignmentWithEpochs(topicId, 5, 0)))
-            .build()
-        );
-
-        // When topicId couldn't be resolved and fall back to ZERO_UUID, since NO_OP validator is not used,
-        // ILLEGAL_GENERATION is thrown.
-        assertThrows(IllegalGenerationException.class, () -> context.commitTransactionalOffset(
-            new TxnOffsetCommitRequestData()
-                .setGroupId("foo")
-                .setMemberId("member")
-                .setGenerationIdOrMemberEpoch(7)
-                .setTopics(List.of(
-                    new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
-                        .setName("bar")
-                        .setPartitions(List.of(
-                            new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
-                                .setPartitionIndex(0)
-                                .setCommittedOffset(100L)
-                        ))
-                ))
-        ));
     }
 
     @ParameterizedTest
@@ -3279,6 +3254,36 @@ public class OffsetMetadataManagerTest {
         records = new ArrayList<>();
         assertFalse(context.cleanupExpiredOffsets("group-id", records));
         assertEquals(List.of(), records);
+    }
+
+    @Test
+    public void testGroupHasNoOffsetsReturnsTrueWhenGroupAbsentAndNoOpenTxn() {
+        // Unknown group with no entry in offsetsByGroup and no open transactions: the
+        // topology-cleanup cycle is free to call plugin.deleteTopology and clear the stored
+        // epoch. Mirrors the post-state the offset-expiration cycle leaves behind once it has
+        // tombstoned the last committed offset for a group.
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        assertTrue(context.groupHasNoOffsets("unknown-group-id"));
+    }
+
+    @Test
+    public void testGroupHasNoOffsetsReturnsFalseWhenOpenTxnPending() {
+        // A pending transactional commit creates an openTransactions entry without populating
+        // the durable offsets map. Even though offsetsByGroup is null, the open txn could land
+        // a fresh offset on commit — the topology cycle must hold off.
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        context.commitOffset(42L, "group-id", "foo", 0, 100L, 0, context.time.milliseconds());
+        assertFalse(context.groupHasNoOffsets("group-id"));
+    }
+
+    @Test
+    public void testGroupHasNoOffsetsReturnsFalseWhenCommittedOffsetExists() {
+        // Group still has a durable committed offset: the offset-expiration cycle has not
+        // tombstoned it yet (either still inside the retention window or held by an active
+        // subscription), so the topology cycle is not eligible to fire.
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        context.commitOffset("group-id", "foo", 0, 100L, 0);
+        assertFalse(context.groupHasNoOffsets("group-id"));
     }
 
     private static OffsetFetchResponseData.OffsetFetchResponsePartitions mkOffsetPartitionResponse(

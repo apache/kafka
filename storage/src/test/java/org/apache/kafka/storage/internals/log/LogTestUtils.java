@@ -28,6 +28,7 @@ import org.apache.kafka.common.record.internal.EndTransactionMarker;
 import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.utils.Time;
@@ -38,20 +39,26 @@ import org.apache.kafka.server.common.RequestLocal;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.server.util.Scheduler;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
+import org.apache.kafka.test.TestUtils;
 
 import org.mockito.Mockito;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -59,6 +66,8 @@ import java.util.function.LongFunction;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 
@@ -228,6 +237,13 @@ public class LogTestUtils {
     public static MemoryRecords records(List<SimpleRecord> records,
                                         long producerId,
                                         short producerEpoch,
+                                        int sequence) {
+        return records(records, producerId, producerEpoch, sequence, 0L);
+    }
+
+    public static MemoryRecords records(List<SimpleRecord> records,
+                                        long producerId,
+                                        short producerEpoch,
                                         int sequence,
                                         long baseOffset) {
         return records(records, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE, producerId, producerEpoch, sequence, baseOffset, RecordBatch.NO_PARTITION_LEADER_EPOCH);
@@ -255,6 +271,117 @@ public class LogTestUtils {
             result.addAll(segment.txnIndex().allAbortedTxns());
         }
         return result;
+    }
+
+    public static List<Record> allRecords(UnifiedLog log) {
+        List<Record> result = new ArrayList<>();
+        for (LogSegment segment : log.logSegments()) {
+            for (Record record : segment.log().records()) {
+                result.add(record);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Extract all the keys from a log.
+     */
+    public static List<Long> keysInLog(UnifiedLog log) {
+        List<Long> keys = new ArrayList<>();
+        for (LogSegment segment : log.logSegments()) {
+            for (RecordBatch batch : segment.log().batches()) {
+                if (batch.isControlBatch()) {
+                    continue;
+                }
+                for (Record record : batch) {
+                    if (record.hasValue() && record.hasKey()) {
+                        keys.add(Long.parseLong(readString(record.key())));
+                    }
+                }
+            }
+        }
+        return keys;
+    }
+
+    /**
+     * Recover log file and check that after recovery, keys are as expected
+     * and all temporary files have been deleted.
+     */
+    public static UnifiedLog recoverAndCheck(
+        File logDir,
+        LogConfig config,
+        List<Long> expectedKeys,
+        BrokerTopicStats brokerTopicStats,
+        Time time,
+        Scheduler scheduler
+    ) throws IOException {
+        UnifiedLog recoveredLog = createLog(logDir, config, brokerTopicStats, scheduler, time);
+        time.sleep(config.fileDeleteDelayMs + 1);
+        for (File file : logDir.listFiles()) {
+            assertFalse(file.getName().endsWith(LogFileUtils.DELETED_FILE_SUFFIX), "Unexpected .deleted file after recovery");
+            assertFalse(file.getName().endsWith(UnifiedLog.CLEANED_FILE_SUFFIX), "Unexpected .cleaned file after recovery");
+            assertFalse(file.getName().endsWith(UnifiedLog.SWAP_FILE_SUFFIX), "Unexpected .swap file after recovery");
+        }
+        assertEquals(expectedKeys, keysInLog(recoveredLog));
+        assertFalse(hasOffsetOverflow(recoveredLog));
+        return recoveredLog;
+    }
+
+    public static UnifiedLog createLog(
+        File dir,
+        LogConfig config,
+        BrokerTopicStats brokerTopicStats,
+        Scheduler scheduler,
+        Time time,
+        long logStartOffset,
+        long recoveryPoint,
+        ProducerStateManagerConfig producerStateManagerConfig,
+        int producerIdExpirationCheckIntervalMs,
+        boolean lastShutdownClean,
+        Optional<Uuid> topicId,
+        ConcurrentMap<String, Integer> numRemainingSegments
+    ) throws IOException {
+        return UnifiedLog.create(
+            dir,
+            config,
+            logStartOffset,
+            recoveryPoint,
+            scheduler,
+            brokerTopicStats,
+            time,
+            5 * 60 * 1000,
+            producerStateManagerConfig,
+            producerIdExpirationCheckIntervalMs,
+            new LogDirFailureChannel(10),
+            lastShutdownClean,
+            topicId,
+            numRemainingSegments,
+            false,
+            LogOffsetsListener.NO_OP_OFFSETS_LISTENER
+        );
+    }
+
+    private static UnifiedLog createLog(
+        File dir,
+        LogConfig config,
+        BrokerTopicStats brokerTopicStats,
+        Scheduler scheduler,
+        Time time
+    ) throws IOException {
+        return createLog(
+            dir,
+            config,
+            brokerTopicStats,
+            scheduler,
+            time,
+            0L,
+            0L,
+            new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
+            TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+            false,
+            Optional.empty(),
+            new ConcurrentHashMap<>()
+        );
     }
 
     public static void deleteProducerSnapshotFiles(File logDir) {
@@ -378,6 +505,13 @@ public class LogTestUtils {
             assertDoesNotThrow(() -> log.appendAsLeader(records, 0));
             sequence.addAndGet(numRecords);
         };
+    }
+
+    public static void appendNonsenseToFile(File file, int size) throws IOException {
+        try (OutputStream outputStream = Files.newOutputStream(file.toPath(), StandardOpenOption.APPEND)) {
+            for (int i = 0; i < size; i++)
+                outputStream.write(TestUtils.RANDOM.nextInt(255));
+        }
     }
 
     public static LogManager createLogManager(List<File> logDirs,
@@ -529,11 +663,20 @@ public class LogTestUtils {
     public static class FakeOffsetMap implements OffsetMap {
 
         private final Map<String, Long> map = new HashMap<>();
+        private final int slots;
         private long latestOff = -1L;
+
+        public FakeOffsetMap() {
+            this(Integer.MAX_VALUE);
+        }
+
+        public FakeOffsetMap(int slots) {
+            this.slots = slots;
+        }
 
         @Override
         public int slots() {
-            return Integer.MAX_VALUE;
+            return slots;
         }
         
         @Override
@@ -566,5 +709,9 @@ public class LogTestUtils {
         public long latestOffset() {
             return latestOff;
         }
-    } 
+
+        public Map<String, Long> map() {
+            return map;
+        }
+    }
 }

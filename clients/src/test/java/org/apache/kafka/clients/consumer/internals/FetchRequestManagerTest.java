@@ -1761,6 +1761,45 @@ public class FetchRequestManagerTest {
     }
 
     @Test
+    public void testFetchResponseWithUnexpectedPartitionIsIgnored() {
+        buildFetcher();
+
+        // Only tp0 is assigned and seeked; tp1 is not part of this fetch session.
+        // When the response includes an unexpected partition (tp1), FetchSessionHandler
+        // rejects the entire response, so tp0 records are also not returned.
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        assertEquals(1, sendFetches());
+        networkClientDelegate.poll(time.timer(0));
+        assertEquals(1, client.inFlightRequestCount());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        // Respond to the in-flight request with a response that includes an unexpected
+        // partition (tp1) that is not part of the fetch session.
+        Map<TopicIdPartition, FetchResponseData.PartitionData> partitions = new LinkedHashMap<>();
+        partitions.put(tidp0, new FetchResponseData.PartitionData()
+                .setPartitionIndex(tp0.partition())
+                .setHighWatermark(100L)
+                .setLogStartOffset(0)
+                .setRecords(records));
+        partitions.put(tidp1, new FetchResponseData.PartitionData()
+                .setPartitionIndex(tp1.partition())
+                .setHighWatermark(100L)
+                .setLogStartOffset(0)
+                .setRecords(records));
+        client.respond(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions), List.of()));
+        networkClientDelegate.poll(time.timer(0));
+
+        // The in-flight request has completed, but FetchSessionHandler rejected the whole
+        // response because of the unexpected partition (tp1), so nothing is buffered or
+        // returned to the consumer.
+        assertEquals(0, client.inFlightRequestCount());
+        assertFalse(fetcher.hasCompletedFetches());
+        assertTrue(fetchRecords().isEmpty());
+    }
+
+    @Test
     public void testCompletedFetchRemoval() {
         // Ensure the removal of completed fetches that cause an Exception if and only if they contain empty records.
         buildFetcher(AutoOffsetResetStrategy.NONE, new ByteArrayDeserializer(),
@@ -1906,7 +1945,7 @@ public class FetchRequestManagerTest {
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 1000, 1000, 64 * 1024, 64 * 1024, 1000, 10 * 1000, 127 * 1000,
                 time, true, new ApiVersions(), metricsManager.throttleTimeSensor(), new LogContext(),
-                MetadataRecoveryStrategy.NONE);
+                MetadataRecoveryStrategy.NONE, false);
 
         ApiVersionsResponse apiVersionsResponse = TestUtils.defaultApiVersionsResponse(
                 400, ApiMessageType.ListenerType.BROKER);

@@ -26,10 +26,11 @@ import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.slf4j.Logger;
 
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 
-public class FollowerState implements EpochState {
+public final class FollowerState implements EpochState {
     private final Logger log;
 
     private final int fetchTimeoutMs;
@@ -89,6 +90,11 @@ public class FollowerState implements EpochState {
     @Override
     public int epoch() {
         return epoch;
+    }
+
+    @Override
+    public LeaderAndEpoch leaderAndEpoch() {
+        return new LeaderAndEpoch(OptionalInt.of(leaderId), epoch);
     }
 
     @Override
