@@ -994,7 +994,7 @@ public class NetworkClient implements KafkaClient {
         if (throttleTimeMs > 0 && response.shouldClientThrottle(apiVersion)) {
             inFlightRequests.incrementThrottleTime(nodeId, throttleTimeMs);
             connectionStates.throttle(nodeId, now + throttleTimeMs);
-            log.trace("Connection to node {} is throttled for {} ms until timestamp {}", nodeId, throttleTimeMs,
+            log.warn("Connection to node {} is throttled for {} ms until timestamp {}", nodeId, throttleTimeMs,
                       now + throttleTimeMs);
         }
     }
