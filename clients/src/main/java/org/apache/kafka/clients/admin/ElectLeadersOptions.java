@@ -18,6 +18,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.ElectionType;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Set;
 
@@ -26,5 +27,6 @@ import java.util.Set;
  *
  * The API of this class is evolving, see {@link Admin} for details.
  */
+@InterfaceAudience.Public
 public final class ElectLeadersOptions extends AbstractOptions<ElectLeadersOptions> {
 }
