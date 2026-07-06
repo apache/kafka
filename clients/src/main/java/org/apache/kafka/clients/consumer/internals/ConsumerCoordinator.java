@@ -1701,14 +1701,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         /**
-         * Returns true if the two snapshots expose the same racks for assignment purposes. A rack
-         * that is visible in one snapshot but not in the other is tolerated only when the replica
-         * it belongs to is unavailable in the other snapshot (same replica id, rack unknown), so
-         * a temporarily unavailable broker is not a rack change, while a replica that is added,
-         * removed or moved to a different rack still is.
+         * Returns true if the two snapshots expose the same set of racks for assignment purposes.
+         * Replica changes that leave the set of racks unchanged (e.g. a replica moved to a
+         * different broker on one of the same racks) are not considered a change. A rack that is
+         * present in one snapshot but missing from the other is tolerated only when the replica
+         * it belongs to is unavailable (same replica id, rack unknown rather than changed),
+         * so a temporarily unavailable broker is not a rack change, while
+         * a rack that is actually added or removed still is.
          */
         boolean equivalentTo(PartitionRackInfo other) {
-            return racksPresentOrReplicaUnavailable(other) && other.racksPresentOrReplicaUnavailable(this);
+            return racksAccountedForIn(other) && other.racksAccountedForIn(this);
         }
 
         /**
@@ -1716,7 +1718,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
          * {@code other}, or belongs to a replica that is unavailable in {@code other} (its rack
          * is unknown there, rather than changed).
          */
-        private boolean racksPresentOrReplicaUnavailable(PartitionRackInfo other) {
+        private boolean racksAccountedForIn(PartitionRackInfo other) {
             for (Map.Entry<Integer, String> replicaRack : knownRacks.entrySet()) {
                 if (!other.knownRacks.containsValue(replicaRack.getValue()) &&
                         !other.unknownReplicas.contains(replicaRack.getKey())) {
