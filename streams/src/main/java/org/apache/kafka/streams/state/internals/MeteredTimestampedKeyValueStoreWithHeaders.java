@@ -57,6 +57,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Function;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -458,6 +459,22 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         return result;
     }
 
+    private RangeQuery<Bytes, byte[]> rawRangeQuery(final Optional<K> lowerBound,
+                                                    final Optional<K> upperBound,
+                                                    final ResultOrder order) {
+        RangeQuery<Bytes, byte[]> rawRangeQuery = RangeQuery.withRange(
+            serializeKey(lowerBound.orElse(null), internalContext.headers()),
+            serializeKey(upperBound.orElse(null), internalContext.headers())
+        );
+        if (order.equals(ResultOrder.DESCENDING)) {
+            rawRangeQuery = rawRangeQuery.withDescendingKeys();
+        }
+        if (order.equals(ResultOrder.ASCENDING)) {
+            rawRangeQuery = rawRangeQuery.withAscendingKeys();
+        }
+        return rawRangeQuery;
+    }
+
     @SuppressWarnings("unchecked")
     private <R> QueryResult<R> runRangeQuery(
         final Query<R> query,
@@ -467,18 +484,8 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         final QueryResult<R> result;
         final RangeQuery<K, V> typedQuery = (RangeQuery<K, V>) query;
 
-        RangeQuery<Bytes, byte[]> rawRangeQuery;
-        final ResultOrder order = typedQuery.resultOrder();
-        rawRangeQuery = RangeQuery.withRange(
-            serializeKey(typedQuery.getLowerBound().orElse(null), internalContext.headers()),
-            serializeKey(typedQuery.getUpperBound().orElse(null), internalContext.headers())
-        );
-        if (order.equals(ResultOrder.DESCENDING)) {
-            rawRangeQuery = rawRangeQuery.withDescendingKeys();
-        }
-        if (order.equals(ResultOrder.ASCENDING)) {
-            rawRangeQuery = rawRangeQuery.withAscendingKeys();
-        }
+        final RangeQuery<Bytes, byte[]> rawRangeQuery =
+            rawRangeQuery(typedQuery.getLowerBound(), typedQuery.getUpperBound(), typedQuery.resultOrder());
 
         final QueryResult<KeyValueIterator<Bytes, byte[]>> rawResult = wrapped().query(rawRangeQuery, positionBound, config);
         if (rawResult.isSuccess()) {
@@ -512,18 +519,8 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         final QueryResult<R> result;
         final TimestampedRangeQuery<K, V> typedQuery = (TimestampedRangeQuery<K, V>) query;
 
-        RangeQuery<Bytes, byte[]> rawRangeQuery;
-        final ResultOrder order = typedQuery.resultOrder();
-        rawRangeQuery = RangeQuery.withRange(
-            serializeKey(typedQuery.lowerBound().orElse(null), internalContext.headers()),
-            serializeKey(typedQuery.upperBound().orElse(null), internalContext.headers())
-        );
-        if (order.equals(ResultOrder.DESCENDING)) {
-            rawRangeQuery = rawRangeQuery.withDescendingKeys();
-        }
-        if (order.equals(ResultOrder.ASCENDING)) {
-            rawRangeQuery = rawRangeQuery.withAscendingKeys();
-        }
+        final RangeQuery<Bytes, byte[]> rawRangeQuery =
+            rawRangeQuery(typedQuery.lowerBound(), typedQuery.upperBound(), typedQuery.resultOrder());
 
         final QueryResult<KeyValueIterator<Bytes, byte[]>> rawResult = wrapped().query(rawRangeQuery, positionBound, config);
         if (rawResult.isSuccess()) {
@@ -558,18 +555,8 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         final QueryResult<R> result;
         final TimestampedRangeWithHeadersQuery<K, V> typedQuery = (TimestampedRangeWithHeadersQuery<K, V>) query;
 
-        RangeQuery<Bytes, byte[]> rawRangeQuery;
-        final ResultOrder order = typedQuery.resultOrder();
-        rawRangeQuery = RangeQuery.withRange(
-            serializeKey(typedQuery.lowerBound().orElse(null), internalContext.headers()),
-            serializeKey(typedQuery.upperBound().orElse(null), internalContext.headers())
-        );
-        if (order.equals(ResultOrder.DESCENDING)) {
-            rawRangeQuery = rawRangeQuery.withDescendingKeys();
-        }
-        if (order.equals(ResultOrder.ASCENDING)) {
-            rawRangeQuery = rawRangeQuery.withAscendingKeys();
-        }
+        final RangeQuery<Bytes, byte[]> rawRangeQuery =
+            rawRangeQuery(typedQuery.lowerBound(), typedQuery.upperBound(), typedQuery.resultOrder());
 
         final QueryResult<KeyValueIterator<Bytes, byte[]>> rawResult = wrapped().query(rawRangeQuery, positionBound, config);
         if (rawResult.isSuccess()) {
