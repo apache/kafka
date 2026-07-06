@@ -30,6 +30,8 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_E
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 import static org.apache.kafka.test.TestUtils.tempFile;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 public class VerificationKeyResolverFactoryTest extends OAuthBearerTest {
 
@@ -43,7 +45,8 @@ public class VerificationKeyResolverFactoryTest extends OAuthBearerTest {
         String file = tempFile("{}").toURI().toString();
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, file);
         Map<String, ?> configs = Collections.singletonMap(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, file);
-        assertThrowsWithMessage(ConfigException.class, () -> VerificationKeyResolverFactory.create(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()), "The JSON JWKS content does not include the keys member");
+        CloseableVerificationKeyResolver verificationKeyResolver = VerificationKeyResolverFactory.create(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries());
+        assertThrowsWithMessage(ConfigException.class, () -> verificationKeyResolver.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()), "The JSON JWKS content does not include the keys member");
     }
 
     @Test
@@ -52,7 +55,25 @@ public class VerificationKeyResolverFactoryTest extends OAuthBearerTest {
         String file = new File("/tmp/this-directory-does-not-exist/foo.json").toURI().toString();
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, file);
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, file);
-        assertThrowsWithMessage(ConfigException.class, () -> VerificationKeyResolverFactory.create(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()), "that doesn't exist");
+        CloseableVerificationKeyResolver verificationKeyResolver = VerificationKeyResolverFactory.create(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries());
+        assertThrowsWithMessage(ConfigException.class, () -> verificationKeyResolver.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()), "that doesn't exist");
+    }
+
+    @Test
+    public void testGetSharesResolverUntilLastClose() throws Exception {
+        String file = tempFile("{\"keys\":[]}").toURI().toString();
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, file);
+        Map<String, ?> configs = Collections.singletonMap(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, file);
+
+        CloseableVerificationKeyResolver resolver = VerificationKeyResolverFactory.get(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries());
+        assertSame(resolver, VerificationKeyResolverFactory.get(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()));
+
+        resolver.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries());
+        resolver.close();
+
+        // Closing the last reference removes the cache entry, so the next get() creates a new resolver
+        // rather than returning the closed one.
+        assertNotSame(resolver, VerificationKeyResolverFactory.get(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()));
     }
 
     @Test
