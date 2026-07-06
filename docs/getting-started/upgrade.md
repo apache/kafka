@@ -43,6 +43,7 @@ type: docs
     `kafka.server:type=group-coordinator-metrics,name=classic-group-count,state={PreparingRebalance|CompletingRebalance|Stable|Dead|Empty}` instead of the `kafka.coordinator.group:type=GroupMetadataManager,name=NumGroups{PreparingRebalance|CompletingRebalance|Stable|Dead|Empty}` metrics.
     For further details, please refer to [KIP-1301](https://cwiki.apache.org/confluence/x/Z5U8G).
   * The broker-side OAUTHBEARER JWT validator now fails fast at startup when a JWKS endpoint (`sasl.oauthbearer.jwks.endpoint.url`) is configured but `sasl.oauthbearer.expected.audience` or `sasl.oauthbearer.expected.issuer` is not set. Brokers that previously started without these settings will now fail to start until they are configured. To intentionally accept tokens regardless of their audience or issuer, set the new `sasl.oauthbearer.allow.unverified.audience` or `sasl.oauthbearer.allow.unverified.issuer` configs (both default `false`) to `true`.
+  * The `kafka-cluster.sh` tool now provides an `api-versions` command to display the API versions supported by the brokers or controllers, and it accepts both `--bootstrap-server` and `--bootstrap-controller`. As a result, `kafka-broker-api-versions.sh` is deprecated and will be removed in the next major release; use `kafka-cluster.sh api-versions` instead. For further details, please refer to [KIP-1220](https://cwiki.apache.org/confluence/x/fYlAFg).
 
 ## Upgrading to 4.3.0
 

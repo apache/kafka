@@ -4594,9 +4594,9 @@ public class KafkaAdminClient extends AdminClient {
                     future.complete(createFeatureMetadata(apiVersionsResponse));
                     nodeApiVersionsFuture.complete(createNodeApiVersion(apiVersionsResponse));
                 } else {
-                    Exception excpetion = Errors.forCode(apiVersionsResponse.data().errorCode()).exception();
-                    future.completeExceptionally(excpetion);
-                    nodeApiVersionsFuture.completeExceptionally(excpetion);
+                    Exception exception = Errors.forCode(apiVersionsResponse.data().errorCode()).exception();
+                    future.completeExceptionally(exception);
+                    nodeApiVersionsFuture.completeExceptionally(exception);
                 }
             }
 

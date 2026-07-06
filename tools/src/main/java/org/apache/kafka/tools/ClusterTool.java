@@ -236,8 +236,11 @@ public class ClusterTool {
             try {
                 NodeApiVersions apiVersions = future.nodeApiVersions().get();
                 stream.print(broker + " -> " + apiVersions.toString(true) + "\n");
-            } catch (Exception e) {
-                stream.print(broker + " -> ERROR: " + e.getMessage() + "\n");
+            } catch (ExecutionException e) {
+                stream.print(broker + " -> ERROR: " + e.getCause() + "\n");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                stream.print(broker + " -> ERROR: " + e + "\n");
             }
         });
     }

@@ -58,7 +58,7 @@ public class DescribeFeaturesTest {
 
         try (Admin admin = clusterInstance.admin(Map.of(), true)) {
             var versions = ((InternalDescribeFeaturesResult) admin.describeFeatures()).nodeApiVersions().get();
-            versions.allSupportedApiVersions().forEach((key, versionv) -> {
+            versions.allSupportedApiVersions().forEach((key, version) -> {
                 var apiKey = Objects.requireNonNull(all.get(key.id));
                 assertTrue(apiKey.inScope(ApiMessageType.ListenerType.CONTROLLER));
             });
