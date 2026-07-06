@@ -489,6 +489,40 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         }
     }
 
+    @ParameterizedTest
+    @CsvSource({"NATIVE", "ADAPTER", "IN_MEMORY"})
+    public void shouldReturnEmptyPositionInitially(final StoreType storeType) {
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(storeType, false);
+        try {
+            final Position position = ((WrappedStateStore) store).wrapped().getPosition();
+            assertNotNull(position, "Expected non-null position");
+            assertTrue(position.isEmpty(), "Expected position to be empty initially");
+        } finally {
+            store.close();
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"NATIVE", "ADAPTER"})
+    public void shouldCollectExecutionInfoWhenRequested(final StoreType storeType) {
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(storeType, false);
+        try {
+            final StateStore wrapped = ((WrappedStateStore) store).wrapped();
+            final QueryResult<byte[]> result = wrapped.query(
+                KeyQuery.withKey(new Bytes("k".getBytes())), PositionBound.unbounded(), new QueryConfig(true));
+
+            final String executionInfo = String.join("\n", result.getExecutionInfo());
+            assertFalse(executionInfo.isEmpty(), "Expected execution info to be collected");
+            assertTrue(executionInfo.contains("Handled in"), "Expected execution info to contain handling information");
+            final String expectedClass = storeType == StoreType.NATIVE
+                ? RocksDBTimestampedStoreWithHeaders.class.getName()
+                : TimestampedToHeadersStoreAdapter.class.getName();
+            assertTrue(executionInfo.contains(expectedClass), "Expected execution info to mention " + expectedClass);
+        } finally {
+            store.close();
+        }
+    }
+
     @Test
     public void shouldCollectExecutionInfoForTimestampedKeyWithHeadersQueryWhenRequested() {
         // The typed query, run through the metered handler with execution info enabled, must carry both
@@ -771,39 +805,5 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
             }
         }
         return out;
-    }
-
-    @ParameterizedTest
-    @CsvSource({"NATIVE", "ADAPTER", "IN_MEMORY"})
-    public void shouldReturnEmptyPositionInitially(final StoreType storeType) {
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(storeType, false);
-        try {
-            final Position position = ((WrappedStateStore) store).wrapped().getPosition();
-            assertNotNull(position, "Expected non-null position");
-            assertTrue(position.isEmpty(), "Expected position to be empty initially");
-        } finally {
-            store.close();
-        }
-    }
-
-    @ParameterizedTest
-    @CsvSource({"NATIVE", "ADAPTER"})
-    public void shouldCollectExecutionInfoWhenRequested(final StoreType storeType) {
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(storeType, false);
-        try {
-            final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-            final QueryResult<byte[]> result = wrapped.query(
-                    KeyQuery.withKey(new Bytes("k".getBytes())), PositionBound.unbounded(), new QueryConfig(true));
-
-            final String executionInfo = String.join("\n", result.getExecutionInfo());
-            assertFalse(executionInfo.isEmpty(), "Expected execution info to be collected");
-            assertTrue(executionInfo.contains("Handled in"), "Expected execution info to contain handling information");
-            final String expectedClass = storeType == StoreType.NATIVE
-                    ? RocksDBTimestampedStoreWithHeaders.class.getName()
-                    : TimestampedToHeadersStoreAdapter.class.getName();
-            assertTrue(executionInfo.contains(expectedClass), "Expected execution info to mention " + expectedClass);
-        } finally {
-            store.close();
-        }
     }
 }
