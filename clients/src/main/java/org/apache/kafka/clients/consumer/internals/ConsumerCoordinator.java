@@ -75,7 +75,6 @@ import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1619,7 +1618,29 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         boolean matches(MetadataSnapshot other) {
-            return version == other.version || partitionsPerTopic.equals(other.partitionsPerTopic);
+            if (version == other.version)
+                return true;
+
+            // A rebalance is only needed if the metadata changed in a way that could change the
+            // assignment: a subscribed topic was added or removed, a topic's partition count
+            // changed, or the racks of a partition's replicas changed. But rack differences that are
+            // only due to a replica broker being temporarily unavailable (host and rack become unknown)
+            // are tolerated, so that a broker bounce does not trigger unnecessary rebalances.
+            // See PartitionRackInfo#equivalentTo.
+            if (partitionsPerTopic.size() != other.partitionsPerTopic.size())
+                return false;
+
+            for (Map.Entry<String, List<PartitionRackInfo>> entry : partitionsPerTopic.entrySet()) {
+                List<PartitionRackInfo> partitionRacks = entry.getValue();
+                List<PartitionRackInfo> otherPartitionRacks = other.partitionsPerTopic.get(entry.getKey());
+                if (otherPartitionRacks == null || otherPartitionRacks.size() != partitionRacks.size())
+                    return false;
+                for (int i = 0; i < partitionRacks.size(); i++) {
+                    if (!partitionRacks.get(i).equivalentTo(otherPartitionRacks.get(i)))
+                        return false;
+                }
+            }
+            return true;
         }
 
         @Override
@@ -1656,36 +1677,59 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private static class PartitionRackInfo {
-        private final Set<String> racks;
+        // Racks of the available replicas, keyed by replica id. Replicas on brokers without a
+        // configured rack are not tracked, since they cannot affect rack-aware assignment.
+        private final Map<Integer, String> knownRacks;
+        // Ids of the replicas whose broker is not in the current live-broker list (they resolve
+        // to an empty node), so their rack is unknown. Tracked by id so that a broker that is
+        // temporarily unavailable is not mistaken for a rack change.
+        private final Set<Integer> unknownReplicas;
 
         PartitionRackInfo(Optional<String> clientRack, PartitionInfo partition) {
+            Map<Integer, String> knownRacks = new HashMap<>();
+            Set<Integer> unknownReplicas = new HashSet<>();
             if (clientRack.isPresent() && partition.replicas() != null) {
-                racks = Arrays.stream(partition.replicas()).map(Node::rack).collect(Collectors.toSet());
-            } else {
-                racks = Collections.emptySet();
+                for (Node replica : partition.replicas()) {
+                    if (replica.isEmpty())
+                        unknownReplicas.add(replica.id());
+                    else if (replica.rack() != null)
+                        knownRacks.put(replica.id(), replica.rack());
+                }
             }
+            this.knownRacks = knownRacks;
+            this.unknownReplicas = unknownReplicas;
         }
 
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) {
-                return true;
-            }
-            if (!(o instanceof PartitionRackInfo)) {
-                return false;
-            }
-            PartitionRackInfo rackInfo = (PartitionRackInfo) o;
-            return Objects.equals(racks, rackInfo.racks);
+        /**
+         * Returns true if the two snapshots expose the same racks for assignment purposes. A rack
+         * that is visible in one snapshot but not in the other is tolerated only when the replica
+         * it belongs to is unavailable in the other snapshot (same replica id, rack unknown), so
+         * a temporarily unavailable broker is not a rack change, while a replica that is added,
+         * removed or moved to a different rack still is.
+         */
+        boolean equivalentTo(PartitionRackInfo other) {
+            return racksPresentOrReplicaUnavailable(other) && other.racksPresentOrReplicaUnavailable(this);
         }
 
-        @Override
-        public int hashCode() {
-            return Objects.hash(racks);
+        /**
+         * Returns true if every rack known in this PartitionRackInfo snapshot is either still present in
+         * {@code other}, or belongs to a replica that is unavailable in {@code other} (its rack
+         * is unknown there, rather than changed).
+         */
+        private boolean racksPresentOrReplicaUnavailable(PartitionRackInfo other) {
+            for (Map.Entry<Integer, String> replicaRack : knownRacks.entrySet()) {
+                if (!other.knownRacks.containsValue(replicaRack.getValue()) &&
+                        !other.unknownReplicas.contains(replicaRack.getKey())) {
+                    return false;
+                }
+            }
+            return true;
         }
 
         @Override
         public String toString() {
-            return racks.isEmpty() ? "NO_RACKS" : "racks=" + racks;
+            String racks = knownRacks.isEmpty() ? "NO_RACKS" : "racks=" + knownRacks;
+            return unknownReplicas.isEmpty() ? racks : racks + ", unknownReplicas=" + unknownReplicas;
         }
     }
 
