@@ -43,6 +43,9 @@ import java.util.Set;
 import java.util.function.Predicate;
 
 import io.opentelemetry.proto.metrics.v1.MetricsData;
+import io.opentelemetry.proto.metrics.v1.ResourceMetrics;
+import io.opentelemetry.proto.metrics.v1.ScopeMetrics;
+import io.opentelemetry.proto.resource.v1.Resource;
 
 public class ClientTelemetryUtils {
 
@@ -214,6 +217,29 @@ public class ClientTelemetryUtils {
         }
     }
 
+    /**
+     * Assembles and compresses a {@code MetricsData} payload for the given metrics. The io.opentelemetry
+     * types are relocated in the shaded clients jar, so keeping this assembly in main code lets test code
+     * build and compress a payload without referencing io.opentelemetry directly. The layout mirrors the
+     * payload produced by {@link ClientTelemetryReporter} (one resource metric per single point metric).
+     *
+     * @param metrics the metrics to assemble into a {@code MetricsData} payload
+     * @param compressionType the compression to apply
+     * @return the compressed {@code MetricsData} payload
+     */
+    public static ByteBuffer compressMetrics(List<SinglePointMetric> metrics, CompressionType compressionType) throws IOException {
+        MetricsData.Builder builder = MetricsData.newBuilder();
+        for (SinglePointMetric metric : metrics) {
+            builder.addResourceMetrics(ResourceMetrics.newBuilder()
+                .setResource(Resource.newBuilder().build())
+                .addScopeMetrics(ScopeMetrics.newBuilder()
+                    .addMetrics(metric.builder())
+                    .build())
+                .build());
+        }
+        return compress(builder.build(), compressionType);
+    }
+
     public static ByteBuffer decompress(ByteBuffer metrics, CompressionType compressionType, int maxDecompressedBytes) {
         Compression compression = Compression.of(compressionType).build();
         try (InputStream in = compression.wrapForInput(metrics, RecordBatch.CURRENT_MAGIC_VALUE, BufferSupplier.create());
@@ -232,14 +258,6 @@ public class ClientTelemetryUtils {
             return out.buffer();
         } catch (IOException e) {
             throw new KafkaException("Failed to decompress metrics data", e);
-        }
-    }
-
-    public static MetricsData deserializeMetricsData(ByteBuffer serializedMetricsData) {
-        try {
-            return MetricsData.parseFrom(serializedMetricsData);
-        } catch (IOException e) {
-            throw new KafkaException("Unable to parse MetricsData payload", e);
         }
     }
 

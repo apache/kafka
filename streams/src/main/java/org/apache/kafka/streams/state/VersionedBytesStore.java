@@ -17,12 +17,14 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.utils.Bytes;
 
 /**
  * A representation of a versioned key-value store as a {@link KeyValueStore} of type &lt;Bytes, byte[]&gt;.
  * See {@link VersionedBytesStoreSupplier} for more.
  */
+@InterfaceAudience.Public
 public interface VersionedBytesStore extends KeyValueStore<Bytes, byte[]>, TimestampedBytesStore {
 
     /**

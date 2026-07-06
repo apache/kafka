@@ -123,6 +123,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     DBAccessor dbAccessor;
     ColumnFamilyAccessor cfAccessor;
     protected final AtomicBoolean open = new AtomicBoolean(false);
+    // package-private: read by DualColumnFamilyAccessor
+    boolean isTransactional;
 
     // the following option objects will be created in openDB and closed in the close() method
     private RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter userSpecifiedOptions;
@@ -184,7 +186,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         stateStoreContext.register(
             root,
             (RecordBatchingStateRestoreCallback) this::restoreBatch,
-                this::writePosition
+            this::writePosition
         );
         consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
             stateStoreContext.appConfigs(),
@@ -256,6 +258,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             throw new ProcessorStateException(fatal);
         }
 
+        isTransactional = StreamsConfig.InternalConfig.getBoolean(configs, StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, false);
+
         // Setup statistics before the database is opened, otherwise the statistics are not updated
         // with the measurements from Rocks DB
         setupStatistics(configs, dbOptions);
@@ -285,9 +289,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             throw e;
         }
 
-        final boolean transactional = StreamsConfig.InternalConfig.getBoolean(
-            configs, StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, false);
-        if (transactional) {
+        if (isTransactional) {
             dbAccessor = new TransactionalDBAccessor(dbAccessor, db, cfAccessor.dataColumnFamily(), cfAccessor.offsetsColumnFamily(), wOptions, name);
         }
 
@@ -453,12 +455,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     }
 
     public final void writePosition() {
-        validateStoreOpen();
-        try {
-            cfAccessor.commit(dbAccessor, position);
-        } catch (final RocksDBException e) {
-            log.warn("Error while committing position for store {}", name, e);
-        }
+        // Position is now committed atomically inside commit(); this method is a no-op.
     }
 
     @Override
@@ -914,8 +911,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
         try {
             synchronized (position) {
-                cfAccessor.commit(dbAccessor, changelogOffsets);
-                dbAccessor.mergeUncommittedPositionInto(position);
+                cfAccessor.commit(dbAccessor, position, changelogOffsets);
             }
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error while executing commit from store " + name, e);
@@ -1364,9 +1360,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         long approximateNumEntries(final DBAccessor accessor) throws RocksDBException;
 
-        void commit(final DBAccessor accessor, final Map<TopicPartition, Long> changelogOffsets) throws RocksDBException;
-
-        void commit(final DBAccessor accessor, final Position storePosition) throws RocksDBException;
+        void commit(final DBAccessor accessor,
+                    final Position position,
+                    final Map<TopicPartition, Long> changelogOffsets) throws RocksDBException;
 
         void addToBatch(final byte[] key,
                         final byte[] value,
@@ -1408,7 +1404,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         private final ColumnFamilyHandle columnFamily;
 
         SingleColumnFamilyAccessor(final ColumnFamilyHandle offsetsColumnFamily, final ColumnFamilyHandle columnFamily) {
-            super(offsetsColumnFamily, open);
+            super(offsetsColumnFamily, open, isTransactional);
             this.columnFamily = columnFamily;
         }
 

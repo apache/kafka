@@ -1167,6 +1167,53 @@ class StreamsGroupHeartbeatRequestManagerTest {
     }
 
     @Test
+    public void testTaskOffsetIntervalNotAdvancedWhenNothingSent() {
+        // Entering the offset-send block via a non-interval trigger (here an assignment change)
+        // while the offsets are unchanged must NOT advance the task-offset-interval timer, because
+        // nothing was actually sent. If it did, the next interval-triggered resend of *changed*
+        // offsets would be withheld until a full interval after the spurious bump instead of a full
+        // interval after the last actual send.
+        final StreamsRebalanceData.TaskId task = new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 0);
+        final AtomicReference<Map<StreamsRebalanceData.TaskId, Long>> offsets =
+            new AtomicReference<>(Map.of(task, 100L));
+        final StreamsRebalanceData rebalanceData = newRebalanceDataWithStandbyOffsets(
+            task,
+            offsets,
+            new AtomicReference<>(Map.of(task, 200L))
+        );
+
+        final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState =
+            new StreamsGroupHeartbeatRequestManager.HeartbeatState(rebalanceData, membershipManager, 1234, time);
+        when(membershipManager.state()).thenReturn(MemberState.STABLE);
+
+        // T=0: first build sends the offsets (assignment-changed trigger); the interval timer starts at 0.
+        final StreamsGroupHeartbeatRequestData first = heartbeatState.buildRequestData();
+        assertEquals(100L, first.taskOffsets().get(0).offset());
+
+        // T=500 (mid-interval): a new assignment change re-enters the send block, but the offsets are
+        // unchanged, so nothing is sent. The interval timer must stay at 0 (not advance to 500).
+        time.sleep(500);
+        rebalanceData.setReconciledAssignment(new StreamsRebalanceData.Assignment(
+            Set.of(task), // moved from standby to active so the assignment differs -> assignmentChanged
+            Set.of(),
+            Set.of(),     // no warmups, so hasAtLeastOneHotWarmupTask cannot be a trigger later
+            true
+        ));
+        final StreamsGroupHeartbeatRequestData second = heartbeatState.buildRequestData();
+        assertNull(second.taskOffsets());
+
+        // T=1000: the offset changed and exactly one interval has elapsed since the last actual send
+        // (T=0). With the timer correctly still at 0, the interval trigger fires and the new offset is
+        // sent. With the bug (timer advanced to 500 at T=500), the interval would not be considered
+        // elapsed until T=1500 and the changed offset would be withheld.
+        time.sleep(500);
+        offsets.set(Map.of(task, 150L));
+        final StreamsGroupHeartbeatRequestData third = heartbeatState.buildRequestData();
+        assertNotNull(third.taskOffsets());
+        assertEquals(150L, third.taskOffsets().get(0).offset());
+    }
+
+    @Test
     public void testTaskOffsetsAndEndOffsetsReportedIndependently() {
         // A null field means "unchanged", and the two fields are independent: one may be sent
         // while the other stays null.

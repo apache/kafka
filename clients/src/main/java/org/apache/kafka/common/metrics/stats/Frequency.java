@@ -14,14 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.metrics.stats;
 
-
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Definition of a frequency metric used in a {@link Frequencies} compound statistic.
  */
+@InterfaceAudience.Public
 public class Frequency {
 
     private final MetricName name;

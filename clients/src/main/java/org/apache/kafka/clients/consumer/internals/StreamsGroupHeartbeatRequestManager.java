@@ -179,23 +179,24 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 final Map<StreamsRebalanceData.TaskId, Long> taskOffsetSum = streamsRebalanceData.taskOffsetSum();
                 final Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSum = streamsRebalanceData.taskEndOffsetSum();
 
+                final long now = time.milliseconds();
                 if (assignmentChanged
-                    || taskOffsetIntervalPassed()
+                    || taskOffsetIntervalPassed(now)
                     || hasAtLeastOneHotWarmupTask(reconciledAssignment.warmupTasks(), taskOffsetSum, taskEndOffsetSum)
                 ) {
                     // Task offsets and end-offsets are reported independently. A null field means "unchanged since the
                     // last heartbeat", so we send each one only when its value actually changed and leave it null
-                    // otherwise. reset() clears the snapshot on any error/disconnect, forcing a full resend afterwards.
+                    // otherwise. reset() clears the snapshot on any error/disconnect, forcing a full resend afterward.
                     if (!taskOffsetSum.equals(lastSentFields.taskOffsets)) {
                         data.setTaskOffsets(convertToList(taskOffsetSum));
                         lastSentFields.taskOffsets = taskOffsetSum;
+                        lastTaskOffsetIntervalTs = now;
                     }
                     if (!taskEndOffsetSum.equals(lastSentFields.taskEndOffsets)) {
                         data.setTaskEndOffsets(convertToList(taskEndOffsetSum));
                         lastSentFields.taskEndOffsets = taskEndOffsetSum;
+                        lastTaskOffsetIntervalTs = now;
                     }
-
-                    lastTaskOffsetIntervalTs = time.milliseconds();
                 }
             }
             data.setShutdownApplication(streamsRebalanceData.shutdownRequested());
@@ -211,8 +212,8 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 .collect(Collectors.toList());
         }
 
-        private boolean taskOffsetIntervalPassed() {
-            return lastTaskOffsetIntervalTs + streamsRebalanceData.taskOffsetIntervalMs() <= time.milliseconds();
+        private boolean taskOffsetIntervalPassed(final long now) {
+            return lastTaskOffsetIntervalTs + streamsRebalanceData.taskOffsetIntervalMs() <= now;
         }
 
         private boolean hasAtLeastOneHotWarmupTask(

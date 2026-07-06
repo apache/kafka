@@ -14,10 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.io.Closeable;
 import java.util.Iterator;
@@ -52,6 +54,7 @@ import java.util.concurrent.CompletableFuture;
  * The following tags are automatically added to all metrics registered: <code>config</code> set to
  * <code>remote.log.metadata.manager.class.name</code>, and <code>class</code> set to the RemoteLogMetadataManager class name.
  */
+@InterfaceAudience.Public
 public interface RemoteLogMetadataManager extends Configurable, Closeable {
 
     /**

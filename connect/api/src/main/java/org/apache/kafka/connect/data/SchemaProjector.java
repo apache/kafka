@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.data;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.errors.SchemaProjectorException;
 
@@ -35,6 +36,7 @@ import java.util.Set;
  * </p>
  */
 
+@InterfaceAudience.Public
 public class SchemaProjector {
 
     private static final Set<AbstractMap.SimpleImmutableEntry<Type, Type>> PROMOTABLE = new HashSet<>();
