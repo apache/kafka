@@ -1186,6 +1186,7 @@ org.apache.kafka.clients.consumer.internals.AcknowledgementsTest:
 - testSingleStateSingleGap
 - testSingleStateSingleRecord
 org.apache.kafka.clients.consumer.internals.ApplicationEventHandlerTest:
+- testAddThrowsWhenBackgroundThreadDead
 - testDelayInInitializeResources
 - testFailOnInitializeResources
 - testInterruptInInitializeResources
@@ -1546,6 +1547,7 @@ org.apache.kafka.clients.consumer.internals.ConsumerNetworkThreadTest:
 - testMaximumTimeToWait
 - testNetworkClientDelegateAndRequestManagersInitializeResourcesError
 - testNetworkClientDelegateInitializeResourcesError
+- testProcessEventFailureCompletesFutureExceptionally
 - testRequestManagersInitializeResourcesError
 - testRequestsTransferFromManagersToClientOnThreadRun
 - testRunOnceInvokesReaper
@@ -2118,6 +2120,9 @@ org.apache.kafka.clients.consumer.internals.FetcherTest:
 - testUpdatePositionWithLastRecordMissingFromBatch
 - testWhenFetchResponseReturnsALeaderShipChangeErrorAndNewLeaderInformation
 - testWhenFetchResponseReturnsALeaderShipChangeErrorButNoNewLeaderInformation
+org.apache.kafka.clients.consumer.internals.GroupCoordinatorNodeTest:
+- testIdString
+- testValidation
 org.apache.kafka.clients.consumer.internals.HeartbeatRequestStateTest:
 - testCanSendRequestAndTimeToNextHeartbeatMs
 - testOnFailedAttempt

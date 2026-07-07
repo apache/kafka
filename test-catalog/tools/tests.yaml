@@ -759,7 +759,7 @@ org.apache.kafka.tools.consumer.ShareGroupMessageFormatterTest:
 - testMessageFormatter
 org.apache.kafka.tools.consumer.TransactionLogMessageFormatterTest:
 - testMessageFormatter
-org.apache.kafka.tools.consumer.group.AuthorizerIntegrationTest:
+org.apache.kafka.tools.consumer.group.ConsumerGroupCommandAuthorizationTest:
 - testDescribeGroupCliWithGroupDescribe
 org.apache.kafka.tools.consumer.group.ConsumerGroupCommandTest:
 - testValidateRegexCommandWithInvalidRegex

@@ -199,11 +199,21 @@ org.apache.kafka.connect.transforms.TimestampRouterTest:
 - defaultConfiguration
 - testTimestampRouterVersionRetrievedFromAppInfoParser
 org.apache.kafka.connect.transforms.ValueToKeyTest:
+- nonExistentNestedFieldWithSchemaV2
 - nonExistingField
 - schemaless
+- schemalessBacktickedFieldNameV2
+- schemalessNestedFieldNotFoundV2
+- schemalessNestedFieldV2
+- schemalessNestedStructToKeyV2
 - testReplaceNullWithDefaultConfig
 - testValueToKeyVersionRetrievedFromAppInfoParser
+- v1BackwardCompatibilityDottedFieldName
 - withSchema
+- withSchemaBacktickedFieldNameV2
+- withSchemaMultipleNestedFieldsV2
+- withSchemaNestedFieldV2
+- withSchemaNestedStructToKeyV2
 org.apache.kafka.connect.transforms.field.FieldPathNotationTest:
 - shouldBuildV1WithDotsAndBacktickPair
 - shouldBuildV2AndEscapeBackticks

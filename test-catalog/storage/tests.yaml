@@ -27,6 +27,7 @@ org.apache.kafka.server.log.remote.metadata.storage.ConsumerTaskTest:
 - testAddAssignmentsForPartitions
 - testCanProcessRecord
 - testCanReprocessSkippedRecords
+- testCloseBeforeAssignmentDoesNotPollConsumer
 - testCloseOnNoAssignment
 - testConcurrentAccess
 - testConcurrentPartitionAssignments
