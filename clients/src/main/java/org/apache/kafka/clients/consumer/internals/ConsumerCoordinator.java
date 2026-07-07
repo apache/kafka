@@ -1624,7 +1624,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             // A rebalance is only needed if the metadata changed in a way that could change the
             // assignment: a subscribed topic was added or removed, a topic's partition count
             // changed, or the racks of a partition's replicas changed. But rack differences that are
-            // only due to a replica broker being temporarily unavailable (host and rack become unknown)
+            // only due to a replica broker being temporarily offline (host and rack become unknown)
             // are tolerated, so that a broker bounce does not trigger unnecessary rebalances.
             // See PartitionRackInfo#equivalentTo.
             if (partitionsPerTopic.size() != other.partitionsPerTopic.size())
@@ -1677,27 +1677,27 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private static class PartitionRackInfo {
-        // Racks of the available replicas, keyed by replica id. Replicas on brokers without a
+        // Racks of the online replicas, keyed by replica id. Replicas on brokers without a
         // configured rack are not tracked, since they cannot affect rack-aware assignment.
-        private final Map<Integer, String> knownRacks;
-        // Ids of the replicas whose broker is not in the current live-broker list (they resolve
-        // to an empty node), so their rack is unknown. Tracked by id so that a broker that is
-        // temporarily unavailable is not mistaken for a rack change.
-        private final Set<Integer> unknownReplicas;
+        private final Map<Integer, String> onlineRacks;
+        // Ids of the offline replicas, whose broker is not in the current live-broker list (they
+        // resolve to an empty node), so their rack is unknown. Tracked by id so that a broker
+        // that is temporarily offline is not mistaken for a rack change.
+        private final Set<Integer> offlineReplicas;
 
         PartitionRackInfo(Optional<String> clientRack, PartitionInfo partition) {
-            Map<Integer, String> knownRacks = new HashMap<>();
-            Set<Integer> unknownReplicas = new HashSet<>();
+            Map<Integer, String> onlineRacks = new HashMap<>();
+            Set<Integer> offlineReplicas = new HashSet<>();
             if (clientRack.isPresent() && partition.replicas() != null) {
                 for (Node replica : partition.replicas()) {
                     if (replica.isEmpty())
-                        unknownReplicas.add(replica.id());
+                        offlineReplicas.add(replica.id());
                     else if (replica.rack() != null)
-                        knownRacks.put(replica.id(), replica.rack());
+                        onlineRacks.put(replica.id(), replica.rack());
                 }
             }
-            this.knownRacks = knownRacks;
-            this.unknownReplicas = unknownReplicas;
+            this.onlineRacks = onlineRacks;
+            this.offlineReplicas = offlineReplicas;
         }
 
         /**
@@ -1705,8 +1705,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
          * Replica changes that leave the set of racks unchanged (e.g. a replica moved to a
          * different broker on one of the same racks) are not considered a change. A rack that is
          * present in one snapshot but missing from the other is tolerated only when the replica
-         * it belongs to is unavailable (same replica id, rack unknown rather than changed),
-         * so a temporarily unavailable broker is not a rack change, while
+         * it belongs to is offline (same replica id, rack unknown rather than changed),
+         * so a temporarily offline broker is not a rack change, while
          * a rack that is actually added or removed still is.
          */
         boolean equivalentTo(PartitionRackInfo other) {
@@ -1714,14 +1714,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         /**
-         * Returns true if every rack known in this PartitionRackInfo snapshot is either still present in
-         * {@code other}, or belongs to a replica that is unavailable in {@code other} (its rack
-         * is unknown there, rather than changed).
+         * Returns true if every online rack in this PartitionRackInfo snapshot is either still
+         * present in {@code other}, or belongs to a replica that is offline in {@code other}
+         * (its rack is unknown there, rather than changed).
          */
         private boolean racksAccountedForIn(PartitionRackInfo other) {
-            for (Map.Entry<Integer, String> replicaRack : knownRacks.entrySet()) {
-                if (!other.knownRacks.containsValue(replicaRack.getValue()) &&
-                        !other.unknownReplicas.contains(replicaRack.getKey())) {
+            for (Map.Entry<Integer, String> replicaRack : onlineRacks.entrySet()) {
+                if (!other.onlineRacks.containsValue(replicaRack.getValue()) &&
+                        !other.offlineReplicas.contains(replicaRack.getKey())) {
                     return false;
                 }
             }
@@ -1730,8 +1730,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         @Override
         public String toString() {
-            String racks = knownRacks.isEmpty() ? "NO_RACKS" : "racks=" + knownRacks;
-            return unknownReplicas.isEmpty() ? racks : racks + ", unknownReplicas=" + unknownReplicas;
+            String racks = onlineRacks.isEmpty() ? "NO_RACKS" : "racks=" + onlineRacks;
+            return offlineReplicas.isEmpty() ? racks : racks + ", offlineReplicas=" + offlineReplicas;
         }
     }
 
