@@ -248,6 +248,23 @@ public class DescribeStreamsGroupTest {
     }
 
     @Test
+    public void testDescribeStreamsGroupWithTopologyOption() throws Exception {
+        final List<String> args = List.of("--bootstrap-server", bootstrapServers, "--describe", "--topology", "--group", APP_ID);
+        final AtomicReference<String> out = new AtomicReference<>("");
+        // The streams client pushes the topology description when the broker solicits it on
+        // a heartbeat, so retry until the broker-side plugin has it stored. Until then the
+        // command reports that no description is stored and exits non-zero, so the exit code
+        // is not asserted inside the retry loop.
+        TestUtils.waitForCondition(() -> {
+            String output = ToolsTestUtils.grabConsoleOutput(() -> StreamsGroupCommand.execute(args.toArray(new String[0])));
+            out.set(output);
+            return output.contains("Topologies:") && output.contains(INPUT_TOPIC);
+        }, () -> String.format("Expected the topology description with source topic %s, but found:%n%s", INPUT_TOPIC, out.get()));
+
+        assertTrue(out.get().contains("Sub-topology: 0"), "Expected a sub-topology in the output, but found:\n" + out.get());
+    }
+
+    @Test
     public void testDescribeNonExistingStreamsGroup() {
         final String nonExistingGroup = "non-existing-group";
         final String errorMessage = String.format(
