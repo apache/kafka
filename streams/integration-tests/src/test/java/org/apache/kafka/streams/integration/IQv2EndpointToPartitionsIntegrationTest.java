@@ -110,6 +110,7 @@ public class IQv2EndpointToPartitionsIntegrationTest {
             streamOneProperties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks1");
             streamOneProperties.put(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks1");
             streamOneProperties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:2020");
+            streamOneProperties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
             streamOneProperties.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocolConfig);
             if (usingStandbyReplicas) {
                 streamOneProperties.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas);
