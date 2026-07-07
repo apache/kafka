@@ -403,6 +403,12 @@ public class EmbeddedKafkaCluster {
     private void addDefaultBrokerPropsIfAbsent(final Properties brokerConfig) {
         brokerConfig.putIfAbsent(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, 2 * 1024 * 1024L);
         brokerConfig.putIfAbsent(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG, InMemoryTopologyDescriptionPlugin.class.getName());
+        // An explicitly empty value opts out of the plugin default and runs the broker with
+        // the plugin-less production default: the config's default is null, but a Properties
+        // cannot carry null and an empty class name would fail config parsing, so remove it.
+        if ("".equals(brokerConfig.get(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG))) {
+            brokerConfig.remove(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG);
+        }
         brokerConfig.putIfAbsent(GroupCoordinatorConfig.STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, "100");
         brokerConfig.putIfAbsent(GroupCoordinatorConfig.STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, "100");
         brokerConfig.putIfAbsent(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, "0");
