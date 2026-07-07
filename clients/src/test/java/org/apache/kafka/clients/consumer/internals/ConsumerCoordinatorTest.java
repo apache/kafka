@@ -1547,18 +1547,18 @@ public abstract class ConsumerCoordinatorTest {
 
     @Test
     public void testRackAwareConsumerNoRebalanceWhenReplicaBounced() {
-        // A broker hosting a replica is bounced: it first drops out of the live-broker list
-        // (replica 1 remains in the partition replicas, with an unknown rack) and then comes
-        // back on the same replica. Neither transition is a rack change, so no rebalance is
-        // expected at any point.
-        List<String> racks = Arrays.asList("rack-a", "rack-b", "rack-c");
+        // A broker hosting a replica is bounced: it first goes offline (drops out of the
+        // live-broker list, while replica 1 remains in the partition replicas with an unknown
+        // rack) and then comes back online on the same replica. Neither transition is a rack
+        // change, so no rebalance is expected at any point.
+        List<String> racks = List.of("rack-a", "rack-b", "rack-c");
         RackAwareAssignor assignor = new RackAwareAssignor(protocol);
         createRackAwareCoordinator("rack-a", assignor);
 
-        Map<String, List<List<Integer>>> replicas = Collections.singletonMap(topic1,
-                Arrays.asList(Arrays.asList(0, 1), Arrays.asList(1, 2), Arrays.asList(2, 0)));
-        MetadataResponse allBrokersUp = rackAwareMetadata(6, racks, Collections.emptySet(), replicas);
-        MetadataResponse broker1Down = rackAwareMetadata(6, racks, Collections.singleton(1), replicas);
+        Map<String, List<List<Integer>>> replicas = Map.of(topic1,
+                List.of(List.of(0, 1), List.of(1, 2), List.of(2, 0)));
+        MetadataResponse allBrokersUp = rackAwareMetadata(6, racks, Set.of(), replicas);
+        MetadataResponse broker1Down = rackAwareMetadata(6, racks, Set.of(1), replicas);
 
         subscribeAndJoinAsLeader(Optional.of("rack-a"), assignor, allBrokersUp);
 
@@ -1574,42 +1574,42 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testRackAwareConsumerRebalanceWithReplicaReassignedToUnavailableBroker() {
+    public void testRackAwareConsumerRebalanceWithReplicaReassignedToOfflineBroker() {
         // Partition 0 is reassigned from broker 0 (rack-a) to broker 6, which is not in the
-        // live-broker list. This is a replica change, not just an unavailable broker, so a
+        // live-broker list. This is a replica change, not just an offline broker, so a
         // rebalance is expected even though broker 6's rack is unknown.
         verifyRackAwareConsumerRebalance(
-                Arrays.asList(Arrays.asList(0, 1), Arrays.asList(1, 2), Arrays.asList(2, 0)),
-                Arrays.asList(Arrays.asList(6, 1), Arrays.asList(1, 2), Arrays.asList(2, 0)),
+                List.of(List.of(0, 1), List.of(1, 2), List.of(2, 0)),
+                List.of(List.of(6, 1), List.of(1, 2), List.of(2, 0)),
                 true, true);
     }
 
     @Test
-    public void testRackAwareConsumerRebalanceWithNewRackWhileBrokerUnavailable() {
-        // The assignment was taken while broker 1 was down. A replica on a new rack (broker 5,
-        // rack-c) is added later: the unavailable broker must not mask that real rack change.
+    public void testRackAwareConsumerRebalanceWithNewRackWhileBrokerOffline() {
+        // The assignment was taken while broker 1 was offline. A replica on a new rack (broker 5,
+        // rack-c) is added later: the offline broker must not mask that real rack change.
         verifyRackAwareConsumerRebalance(
-                Arrays.asList(Arrays.asList(0, 1), Arrays.asList(1, 2), Arrays.asList(2, 0)),
-                Arrays.asList(Arrays.asList(0, 1, 5), Arrays.asList(1, 2), Arrays.asList(2, 0)),
-                Collections.singleton(1), Collections.emptySet(),
+                List.of(List.of(0, 1), List.of(1, 2), List.of(2, 0)),
+                List.of(List.of(0, 1, 5), List.of(1, 2), List.of(2, 0)),
+                Set.of(1), Set.of(),
                 true, true);
     }
 
     @Test
-    public void testRackAwareConsumerRebalanceWhenLiveReplicaLosesRack() {
-        // Broker 1 stays in the live-broker list but loses its rack config. Unlike an
-        // unavailable broker, its rack really disappeared from the replicas of partitions 0
+    public void testRackAwareConsumerRebalanceWhenOnlineReplicaLosesRack() {
+        // Broker 1 stays online (in the live-broker list) but loses its rack config. Unlike an
+        // offline broker, its rack really disappeared from the replicas of partitions 0
         // and 1, so a rebalance is expected.
         RackAwareAssignor assignor = new RackAwareAssignor(protocol);
         createRackAwareCoordinator("rack-a", assignor);
-        Map<String, List<List<Integer>>> replicas = Collections.singletonMap(topic1,
-                Arrays.asList(Arrays.asList(0, 1), Arrays.asList(1, 2), Arrays.asList(2, 0)));
+        Map<String, List<List<Integer>>> replicas = Map.of(topic1,
+                List.of(List.of(0, 1), List.of(1, 2), List.of(2, 0)));
         MetadataResponse response1 = rackAwareMetadata(
-                Arrays.asList("rack-a", "rack-b", "rack-c", "rack-a", "rack-b", "rack-c"),
-                Collections.emptySet(), replicas);
+                List.of("rack-a", "rack-b", "rack-c", "rack-a", "rack-b", "rack-c"),
+                Set.of(), replicas);
         MetadataResponse response2 = rackAwareMetadata(
                 Arrays.asList("rack-a", null, "rack-c", "rack-a", "rack-b", "rack-c"),
-                Collections.emptySet(), replicas);
+                Set.of(), replicas);
         verifyRebalanceWithMetadataChange(Optional.of("rack-a"), assignor, response1, response2, true);
     }
 
@@ -1620,14 +1620,14 @@ public abstract class ConsumerCoordinatorTest {
         // rebalance is expected.
         RackAwareAssignor assignor = new RackAwareAssignor(protocol);
         createRackAwareCoordinator("rack-a", assignor);
-        Map<String, List<List<Integer>>> replicas = Collections.singletonMap(topic1,
-                Arrays.asList(Arrays.asList(0, 3), Arrays.asList(1, 2), Arrays.asList(2, 0)));
+        Map<String, List<List<Integer>>> replicas = Map.of(topic1,
+                List.of(List.of(0, 3), List.of(1, 2), List.of(2, 0)));
         MetadataResponse response1 = rackAwareMetadata(
-                Arrays.asList("rack-a", "rack-b", "rack-c", "rack-a", "rack-b", "rack-c"),
-                Collections.emptySet(), replicas);
+                List.of("rack-a", "rack-b", "rack-c", "rack-a", "rack-b", "rack-c"),
+                Set.of(), replicas);
         MetadataResponse response2 = rackAwareMetadata(
                 Arrays.asList("rack-a", "rack-b", "rack-c", null, "rack-b", "rack-c"),
-                Collections.emptySet(), replicas);
+                Set.of(), replicas);
         verifyRebalanceWithMetadataChange(Optional.of("rack-a"), assignor, response1, response2, false);
     }
 
@@ -1636,7 +1636,7 @@ public abstract class ConsumerCoordinatorTest {
                                                   boolean rackAwareConsumer,
                                                   boolean expectRebalance) {
         verifyRackAwareConsumerRebalance(partitionReplicas1, partitionReplicas2,
-                Collections.emptySet(), Collections.emptySet(), rackAwareConsumer, expectRebalance);
+                Set.of(), Set.of(), rackAwareConsumer, expectRebalance);
     }
 
     private void verifyRackAwareConsumerRebalance(List<List<Integer>> partitionReplicas1,
@@ -4225,12 +4225,6 @@ public abstract class ConsumerCoordinatorTest {
         coordinator = new ConsumerCoordinator(rebalanceConfig, new LogContext(), consumerClient,
                 Collections.singletonList(assignor), metadata, subscriptions,
                 metrics, consumerId + groupId, time, false, autoCommitIntervalMs, null, false, Optional.empty());
-    }
-
-    private static MetadataResponse rackAwareMetadata(int numNodes,
-                                                      List<String> racks,
-                                                      Map<String, List<List<Integer>>> partitionReplicas) {
-        return rackAwareMetadata(numNodes, racks, Collections.emptySet(), partitionReplicas);
     }
 
     private static MetadataResponse rackAwareMetadata(int numNodes,
