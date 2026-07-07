@@ -333,6 +333,29 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
     }
 
     /**
+     * @return true while the window armed by {@link #throttleConversionDelete} is in effect for
+     *         the group, i.e. a recent classic-join conversion delete failed and the join path
+     *         must not re-invoke the plugin yet.
+     */
+    public boolean isConversionDeleteThrottled(String groupId) {
+        return backoff.isActive(groupId, StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN);
+    }
+
+    /**
+     * Arm (or continue) the back-off chain that throttles the classic-join conversion delete
+     * against a failing plugin. On {@code REBALANCE_IN_PROGRESS} the classic client retries the
+     * join immediately (no client-side back-off), so without this window a broken plugin would
+     * be hit with {@code deleteTopology} in a tight loop. Keyed at
+     * {@link StreamsGroup#STORED_TOPOLOGY_EPOCH_UNCERTAIN} — the group's stored epoch after the
+     * barrier write and never a real push epoch — so heartbeat/push windows are not disturbed;
+     * a stale real-epoch entry left from before the group emptied is replaced. The window is
+     * dropped by {@link #clearBackoffGroup} when a conversion or cleanup-cycle delete succeeds.
+     */
+    public void throttleConversionDelete(String groupId) {
+        backoff.armIfNotActive(groupId, StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN);
+    }
+
+    /**
      * Settle the per-group back-off after the bookkeeping write that records a push outcome
      * (the stored epoch on success, the failed epoch on a permanent failure) completes, and
      * return the response to send to the client — or rethrow the write failure so the service's

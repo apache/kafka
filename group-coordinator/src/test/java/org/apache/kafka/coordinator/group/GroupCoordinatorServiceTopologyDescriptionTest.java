@@ -1160,6 +1160,25 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
     }
 
     @Test
+    public void testCleanupCycleSwallowsMarkWriteFailure() throws Exception {
+        // A routine write failure (e.g. NOT_COORDINATOR during a shard move) on the UNCERTAIN
+        // mark must not fail the whole cycle's allOf: the partition is skipped with a targeted
+        // warn and the next cycle retries. No plugin delete and no finalize may run for it.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
+            .thenReturn(List.of(CompletableFuture.completedFuture(Map.of("foo", 4))));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any()))
+            .thenReturn(CompletableFuture.failedFuture(Errors.NOT_COORDINATOR.exception()));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        service.runOneStreamsTopologyCleanupCycle().get(5, TimeUnit.SECONDS);
+
+        verify(plugin, never()).deleteTopology(any());
+        verify(runtime, never()).scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), any(), any());
+    }
+
+    @Test
     public void testCleanupCycleClearsStoredEpochOnPluginSuccess() {
         // Eligibility scan returns one group at storedEpoch=4; the mark batch marks it UNCERTAIN;
         // plugin succeeds; the cycle must schedule the smart finalize so a concurrent setTopology
@@ -2052,6 +2071,37 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
 
         assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), resp.errorCode());
         verify(runtime, times(1)).scheduleWriteOperation(eq("classic-group-join"), any(), any());
+    }
+
+    @Test
+    public void testClassicJoinThrottlesPluginDeleteAfterFailure() throws Exception {
+        // First join: the conversion delete fails -> REBALANCE_IN_PROGRESS and the throttle is
+        // armed. The classic client retries the join immediately (RebalanceInProgressException
+        // skips its retry back-off), so the retry must fail fast without re-invoking the plugin
+        // or re-scheduling the mark write while the throttle window is in effect.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.deleteTopology("g"))
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("boom")));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
+        // Every join detects the empty streams group with a stored topology (cleanup needed).
+        when(runtime.scheduleWriteOperation(eq("classic-group-join"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        JoinGroupResponseData first = service.joinGroup(
+            requestContext(ApiKeys.JOIN_GROUP), classicJoinRequest("g"), BufferSupplier.NO_CACHING)
+            .get(5, TimeUnit.SECONDS);
+        assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), first.errorCode());
+
+        JoinGroupResponseData second = service.joinGroup(
+            requestContext(ApiKeys.JOIN_GROUP), classicJoinRequest("g"), BufferSupplier.NO_CACHING)
+            .get(5, TimeUnit.SECONDS);
+
+        assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), second.errorCode());
+        verify(plugin, times(1)).deleteTopology("g");
+        verify(runtime, times(1)).scheduleWriteOperation(eq("mark-topology-uncertain"), any(), any());
     }
 
     @Test

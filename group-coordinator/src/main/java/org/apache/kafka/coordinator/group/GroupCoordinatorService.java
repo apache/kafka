@@ -888,6 +888,17 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private CompletableFuture<Void> cleanupTopologyForPartition(Map<String, Integer> eligible) {
         TopicPartition tp = topicPartitionFor(eligible.keySet().iterator().next());
         return markTopologyUncertainBatchAsync(tp, eligible.keySet())
+            .exceptionally(throwable -> {
+                // Same containment as the finalize write: one shard's routine write failure
+                // (e.g. NOT_COORDINATOR during a move) must not fail the whole cycle's allOf,
+                // and the log should name the affected partition and groups. Skipping the
+                // plugin delete is safe — the groups keep their stored epoch and the next
+                // cycle retries.
+                log.warn("Failed to write the UNCERTAIN barrier for groups {} on partition {}; "
+                    + "skipping their plugin delete — the next cleanup cycle will retry.",
+                    eligible.keySet(), tp, throwable);
+                return Set.of();
+            })
             .thenCompose(stillEligible -> {
                 // The mark write re-checks the latest state and drops any candidate that was
                 // revived or converted since the committed scan. Nothing to do for a partition
@@ -1305,40 +1316,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             if (!needsCleanup) {
                 return CompletableFuture.completedFuture(null);
             }
-            // Converting this empty streams group to classic would orphan the plugin's topology.
-            // Delete it (behind a durable UNCERTAIN(-2) barrier) before re-running the join, which
-            // then converts because cleanup has been handled.
-            return markTopologyUncertainAsync(tp, request.groupId(), false)
-                .thenCompose(marked -> {
-                    if (!marked) {
-                        // The group changed underneath us (revived, converted, or removed) between
-                        // the join's cleanup check and the barrier write: no barrier exists, so
-                        // running the plugin delete could wipe a live group's topology. Fail the
-                        // join with a retriable error and let the client retry against the latest
-                        // group state.
-                        if (!responseFuture.isDone()) {
-                            responseFuture.complete(new JoinGroupResponseData()
-                                .setMemberId(request.memberId())
-                                .setErrorCode(Errors.REBALANCE_IN_PROGRESS.code()));
-                        }
-                        return CompletableFuture.<Void>completedFuture(null);
-                    }
-                    return streamsGroupTopologyDescriptionManager.invokeDeleteTopologies(Set.of(request.groupId()))
-                        .thenAccept(failures -> {
-                            recordPluginDeleteOutcome(1, failures.size());
-                            if (failures.isEmpty()) {
-                                streamsGroupTopologyDescriptionManager.clearBackoffGroup(request.groupId());
-                                runClassicGroupJoin(context, request, responseFuture, tp, true);
-                            } else if (!responseFuture.isDone()) {
-                                // Plugin delete failed: leave the group a streams group at UNCERTAIN(-2)
-                                // (reclaimable by the cleanup cycle and re-soliciting) and fail the join
-                                // with a retriable error instead of converting over orphaned plugin data.
-                                responseFuture.complete(new JoinGroupResponseData()
-                                    .setMemberId(request.memberId())
-                                    .setErrorCode(Errors.REBALANCE_IN_PROGRESS.code()));
-                            }
-                        });
-                });
+            return cleanupTopologyBeforeConversion(context, request, responseFuture, tp);
         }).exceptionally(exception -> {
             if (!responseFuture.isDone()) {
                 responseFuture.complete(handleOperationException(
@@ -1353,6 +1331,74 @@ public class GroupCoordinatorService implements GroupCoordinator {
         });
 
         return responseFuture;
+    }
+
+    /**
+     * Converting an empty streams group to classic would orphan the plugin's topology, so the
+     * join detected cleanup is needed: delete the topology (behind a durable UNCERTAIN(-2)
+     * barrier) and re-run the join, which then converts because cleanup has been handled.
+     *
+     * <p>Throttle first: on {@code REBALANCE_IN_PROGRESS} the classic client retries the join
+     * immediately ({@code RebalanceInProgressException} skips its retry back-off), so a broken
+     * plugin would otherwise be hit with {@code deleteTopology} in a tight loop. While the window
+     * armed by a previous failed conversion delete is in effect, fail fast without touching the
+     * plugin or scheduling the mark; the interval-throttled cleanup cycle reclaims the group in
+     * the meantime.
+     */
+    private CompletableFuture<Void> cleanupTopologyBeforeConversion(
+        AuthorizableRequestContext context,
+        JoinGroupRequestData request,
+        CompletableFuture<JoinGroupResponseData> responseFuture,
+        TopicPartition tp
+    ) {
+        if (streamsGroupTopologyDescriptionManager.isConversionDeleteThrottled(request.groupId())) {
+            failJoinRetriably(request, responseFuture);
+            return CompletableFuture.completedFuture(null);
+        }
+        return markTopologyUncertainAsync(tp, request.groupId(), false)
+            .thenCompose(marked -> {
+                if (!marked) {
+                    // The group changed underneath us (revived, converted, or removed) between
+                    // the join's cleanup check and the barrier write: no barrier exists, so
+                    // running the plugin delete could wipe a live group's topology. Fail the
+                    // join with a retriable error and let the client retry against the latest
+                    // group state.
+                    failJoinRetriably(request, responseFuture);
+                    return CompletableFuture.<Void>completedFuture(null);
+                }
+                return streamsGroupTopologyDescriptionManager.invokeDeleteTopologies(Set.of(request.groupId()))
+                    .thenAccept(failures -> {
+                        recordPluginDeleteOutcome(1, failures.size());
+                        if (failures.isEmpty()) {
+                            streamsGroupTopologyDescriptionManager.clearBackoffGroup(request.groupId());
+                            runClassicGroupJoin(context, request, responseFuture, tp, true);
+                        } else {
+                            // Plugin delete failed: leave the group a streams group at UNCERTAIN(-2)
+                            // (reclaimable by the cleanup cycle and re-soliciting), arm the
+                            // conversion-delete throttle so the client's immediate join retries do
+                            // not hammer the broken plugin, and fail the join with a retriable
+                            // error instead of converting over orphaned plugin data.
+                            streamsGroupTopologyDescriptionManager.throttleConversionDelete(request.groupId());
+                            failJoinRetriably(request, responseFuture);
+                        }
+                    });
+            });
+    }
+
+    /**
+     * Complete the join with {@code REBALANCE_IN_PROGRESS} (if not already completed): a
+     * retriable error classic clients respond to by re-joining, used when the pre-conversion
+     * topology cleanup could not run to completion.
+     */
+    private static void failJoinRetriably(
+        JoinGroupRequestData request,
+        CompletableFuture<JoinGroupResponseData> responseFuture
+    ) {
+        if (!responseFuture.isDone()) {
+            responseFuture.complete(new JoinGroupResponseData()
+                .setMemberId(request.memberId())
+                .setErrorCode(Errors.REBALANCE_IN_PROGRESS.code()));
+        }
     }
 
     /**
