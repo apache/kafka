@@ -166,6 +166,13 @@ public class TopologyDescriptionPluginIntegrationTest {
             // The permanent failure ratchets the group's failed topology epoch, so the broker
             // must not re-solicit the push: the call count stays at one across many heartbeat
             // intervals, the application keeps running, and describe reports NOT_STORED.
+            // Note: this window is shorter than the 30s initial re-solicitation back-off, so
+            // it cannot distinguish the permanent-failure ratchet from an armed back-off (a
+            // permanent failure misclassified as transient would also stay at one call here);
+            // that classification is pinned down at the unit level by
+            // GroupCoordinatorServiceTopologyDescriptionTest. What this does catch is the
+            // ratchet being lost entirely, since re-solicitation would then happen within a
+            // couple of heartbeats.
             Thread.sleep(2000);
             assertEquals(1, TrackingTopologyDescriptionPlugin.setTopologyCalls(appId),
                 "Expected no re-solicitation after a permanent plugin failure for group " + appId);
