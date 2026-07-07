@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.query;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.streams.processor.api.ReadOnlyRecord;
 import org.apache.kafka.streams.state.ReadOnlyRecordIterator;
@@ -58,6 +59,7 @@ import java.util.Optional;
  * @param <V> Type of values
  */
 @Evolving
+@InterfaceAudience.Public
 public final class TimestampedRangeWithHeadersQuery<K, V> implements Query<ReadOnlyRecordIterator<K, V>> {
 
     private final Optional<K> lower;
