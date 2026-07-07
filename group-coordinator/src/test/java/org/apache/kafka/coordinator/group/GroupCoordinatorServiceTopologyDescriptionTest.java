@@ -864,6 +864,11 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             any(),
             any()
         )).thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
+        when(runtime.scheduleWriteOperation(
+            eq("finalize-stored-topology-epoch-after-delete-batch"),
+            eq(GROUP_TP),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(null));
 
         DeleteGroupsResponseData.DeletableGroupResultCollection tombstoneResult =
             new DeleteGroupsResponseData.DeletableGroupResultCollection();
@@ -888,6 +893,10 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         assertEquals(Errors.NONE.code(), result.errorCode());
         assertNull(result.errorMessage());
         verify(plugin, times(1)).deleteTopology("foo");
+        // The successful plugin delete is smart-finalized before the tombstone, so a group that
+        // was revived past the tombstone cannot keep a raced push's epoch over the emptied plugin.
+        verify(runtime, times(1)).scheduleWriteOperation(
+            eq("finalize-stored-topology-epoch-after-delete-batch"), eq(GROUP_TP), any());
         verify(runtime, times(1)).scheduleWriteOperation(
             eq("delete-groups"), eq(GROUP_TP), any());
     }
@@ -1001,6 +1010,11 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             any(),
             any()
         )).thenReturn(CompletableFuture.completedFuture(Set.of("good", "bad")));
+        when(runtime.scheduleWriteOperation(
+            eq("finalize-stored-topology-epoch-after-delete-batch"),
+            any(),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(null));
 
         DeleteGroupsResponseData.DeletableGroupResultCollection tombstoneResult =
             new DeleteGroupsResponseData.DeletableGroupResultCollection();
@@ -1042,6 +1056,8 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .thenReturn(CompletableFuture.completedFuture(Set.of("g")));
         when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(Set.of("g")));
+        when(runtime.scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
 
         DeleteGroupsResponseData.DeletableGroupResultCollection tombstoneResult =
             new DeleteGroupsResponseData.DeletableGroupResultCollection();
@@ -1059,6 +1075,8 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         InOrder inOrder = inOrder(runtime, plugin);
         inOrder.verify(runtime).scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any());
         inOrder.verify(plugin).deleteTopology("g");
+        inOrder.verify(runtime).scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), any(), any());
+        inOrder.verify(runtime).scheduleWriteOperation(eq("delete-groups"), any(), any());
     }
 
     @Test
@@ -1097,6 +1115,9 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         assertNotNull(result);
         assertEquals(Errors.NON_EMPTY_GROUP.code(), result.errorCode());
         verify(plugin, never()).deleteTopology(anyString());
+        // No plugin delete ran, so there is nothing to smart-finalize either.
+        verify(runtime, never()).scheduleWriteOperation(
+            eq("finalize-stored-topology-epoch-after-delete-batch"), any(), any());
         verify(runtime, times(1)).scheduleWriteOperation(eq("delete-groups"), eq(GROUP_TP), any());
     }
 
@@ -2030,6 +2051,8 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         when(plugin.deleteTopology("g")).thenReturn(CompletableFuture.completedFuture(null));
         when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain"), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
+        when(runtime.scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
         // The first classic-group-join detects the empty streams group with a stored topology and
         // returns true (cleanup needed, no conversion); the second runs after cleanup and converts,
         // returning false.
@@ -2043,12 +2066,16 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         service.joinGroup(requestContext(ApiKeys.JOIN_GROUP), classicJoinRequest("g"), BufferSupplier.NO_CACHING);
 
         verify(runtime, timeout(5000).times(2)).scheduleWriteOperation(eq("classic-group-join"), any(), any());
+        // The successful conversion delete is smart-finalized after the re-join: a no-op for the
+        // converted group, but it heals a raced push if the group was revived in between.
+        verify(runtime, timeout(5000).times(1)).scheduleWriteOperation(
+            eq("finalize-stored-topology-epoch-after-delete-batch"), any(), any());
         InOrder inOrder = inOrder(runtime, plugin);
         inOrder.verify(runtime).scheduleWriteOperation(eq("classic-group-join"), any(), any());
         inOrder.verify(runtime).scheduleWriteOperation(eq("mark-topology-uncertain"), any(), any());
         inOrder.verify(plugin).deleteTopology("g");
         inOrder.verify(runtime).scheduleWriteOperation(eq("classic-group-join"), any(), any());
-        verify(runtime, never()).scheduleReadOperation(eq("is-empty-streams-group-with-stored-topology"), any(), any());
+        inOrder.verify(runtime).scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), any(), any());
     }
 
     @Test
@@ -2142,7 +2169,6 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         verify(runtime, timeout(5000)).scheduleWriteOperation(eq("classic-group-join"), any(), any());
         verify(runtime, times(1)).scheduleWriteOperation(eq("classic-group-join"), any(), any());
         verify(runtime, never()).scheduleWriteOperation(eq("mark-topology-uncertain"), any(), any());
-        verify(runtime, never()).scheduleReadOperation(eq("is-empty-streams-group-with-stored-topology"), any(), any());
         verify(plugin, never()).deleteTopology(any());
     }
 

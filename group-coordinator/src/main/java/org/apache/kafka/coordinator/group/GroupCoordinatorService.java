@@ -1367,12 +1367,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     return CompletableFuture.<Void>completedFuture(null);
                 }
                 return streamsGroupTopologyDescriptionManager.invokeDeleteTopologies(Set.of(request.groupId()))
-                    .thenAccept(failures -> {
+                    .thenCompose(failures -> {
                         recordPluginDeleteOutcome(1, failures.size());
-                        if (failures.isEmpty()) {
-                            streamsGroupTopologyDescriptionManager.clearBackoffGroup(request.groupId());
-                            runClassicGroupJoin(context, request, responseFuture, tp, true);
-                        } else {
+                        if (!failures.isEmpty()) {
                             // Plugin delete failed: leave the group a streams group at UNCERTAIN(-2)
                             // (reclaimable by the cleanup cycle and re-soliciting), arm the
                             // conversion-delete throttle so the client's immediate join retries do
@@ -1380,7 +1377,17 @@ public class GroupCoordinatorService implements GroupCoordinator {
                             // error instead of converting over orphaned plugin data.
                             streamsGroupTopologyDescriptionManager.throttleConversionDelete(request.groupId());
                             failJoinRetriably(request, responseFuture);
+                            return CompletableFuture.<Void>completedFuture(null);
                         }
+                        streamsGroupTopologyDescriptionManager.clearBackoffGroup(request.groupId());
+                        // Smart-finalize after the re-join: a no-op once the group has been
+                        // converted (it is no longer a streams group). It only writes for a group
+                        // revived between the barrier and the re-join — the re-join then rejects
+                        // with INCONSISTENT_GROUP_PROTOCOL and, without the finalize, a raced
+                        // push's epoch write would land on stored == UNCERTAIN and record a real
+                        // epoch over the plugin this delete just emptied.
+                        return runClassicGroupJoin(context, request, responseFuture, tp, true)
+                            .thenCompose(__ -> finalizeAfterDeleteBatchAsync(tp, Set.of(request.groupId())));
                     });
             });
     }
@@ -2042,7 +2049,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 return markTopologyUncertainBatchAsync(topicPartition, groupsWithStored)
                     .thenCompose(marked ->
                         streamsGroupTopologyDescriptionManager.invokeDeleteTopologies(marked)
-                            .thenApply(failures -> {
+                            .thenCompose(failures -> {
                                 recordPluginDeleteOutcome(marked.size(), failures.size());
                                 // Clear back-off entries for every group whose plugin state we
                                 // attempted to delete (regardless of plugin outcome): the group is
@@ -2050,7 +2057,20 @@ public class GroupCoordinatorService implements GroupCoordinator {
                                 // heartbeat on failure, so any in-flight back-off entry at the old
                                 // epoch is no longer load-bearing.
                                 marked.forEach(streamsGroupTopologyDescriptionManager::clearBackoffGroup);
-                                return failures;
+                                Set<String> succeeded = new LinkedHashSet<>(marked);
+                                succeeded.removeAll(failures.keySet());
+                                if (succeeded.isEmpty()) {
+                                    return CompletableFuture.completedFuture(failures);
+                                }
+                                // Smart-finalize the successful deletes before the tombstone,
+                                // mirroring the cleanup cycle: a group revived between the mark
+                                // and the plugin delete survives the tombstone (NON_EMPTY_GROUP),
+                                // and without the finalize a raced push's epoch write would land
+                                // on stored == UNCERTAIN and record a real epoch over the plugin
+                                // this delete just emptied. For groups the tombstone does remove
+                                // the extra record is harmless.
+                                return finalizeAfterDeleteBatchAsync(topicPartition, succeeded)
+                                    .thenApply(__ -> failures);
                             }));
             })
             .exceptionally(exception -> handleOperationException(

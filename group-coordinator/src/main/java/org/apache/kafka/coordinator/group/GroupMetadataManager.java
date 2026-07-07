@@ -8633,7 +8633,11 @@ public class GroupMetadataManager {
      * our delete was in flight may have been wiped.
      *
      * <ul>
-     *   <li>Stored still UNCERTAIN: no push raced; the plugin is empty -> clear to NONE.</li>
+     *   <li>Stored still UNCERTAIN: no push epoch write raced -> clear to NONE. Residual window:
+     *       a raced push whose plugin {@code setTopology} landed after our delete but reported a
+     *       transient failure writes no epoch record, so the plugin may still hold data at NONE.
+     *       That heals through the re-push the transient failure's back-off solicits, but leaks
+     *       the plugin entry if the group empties and is tombstoned first.</li>
      *   <li>Stored advanced past UNCERTAIN: a push raced; the pushed topology may be orphaned over
      *       an empty plugin, so force UNCERTAIN to re-solicit rather than leave a real epoch.</li>
      *   <li>Stored already NONE (e.g. a concurrent path cleared it): no-op.</li>
