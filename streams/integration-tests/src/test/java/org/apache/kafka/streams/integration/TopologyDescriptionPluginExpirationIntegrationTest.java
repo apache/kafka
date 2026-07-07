@@ -176,7 +176,13 @@ public class TopologyDescriptionPluginExpirationIntegrationTest {
                 describeGroup(admin, groupId);
                 return false;
             } catch (final ExecutionException exception) {
-                return exception.getCause() instanceof GroupIdNotFoundException;
+                if (exception.getCause() instanceof GroupIdNotFoundException) {
+                    return true;
+                }
+                // Unexpected failures (e.g. admin timeouts) must not be folded into
+                // "group not yet deleted": waitForCondition retries a throwing condition
+                // and rethrows the last exception at timeout, preserving the diagnostics.
+                throw exception;
             }
         }, "Expected group " + groupId + " to be tombstoned by the expiration sweep");
     }
