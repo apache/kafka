@@ -254,12 +254,14 @@ public class DescribeStreamsGroupTest {
         // The streams client pushes the topology description when the broker solicits it on
         // a heartbeat, so retry until the broker-side plugin has it stored. Until then the
         // command reports that no description is stored and exits non-zero, so the exit code
-        // is not asserted inside the retry loop.
+        // is not asserted inside the retry loop. The solicit -> push -> store round trip can
+        // take a couple of heartbeat intervals (5s each on this cluster), so allow a timeout
+        // well above that.
         TestUtils.waitForCondition(() -> {
             String output = ToolsTestUtils.grabConsoleOutput(() -> StreamsGroupCommand.execute(args.toArray(new String[0])));
             out.set(output);
             return output.contains("Topologies:") && output.contains(INPUT_TOPIC);
-        }, () -> String.format("Expected the topology description with source topic %s, but found:%n%s", INPUT_TOPIC, out.get()));
+        }, 60_000L, () -> String.format("Expected the topology description with source topic %s, but found:%n%s", INPUT_TOPIC, out.get()));
 
         assertTrue(out.get().contains("Sub-topology: 0"), "Expected a sub-topology in the output, but found:\n" + out.get());
     }
