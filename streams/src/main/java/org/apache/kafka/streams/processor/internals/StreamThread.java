@@ -970,6 +970,10 @@ public class StreamThread extends Thread implements ProcessingThread {
      * @throws StreamsException      if the store's change log does not contain the partition
      */
     boolean runLoop() {
+        // Populate the task-offset-sum snapshot before subscribing: subscribing triggers the join heartbeat,
+        // which must already carry the offset sums of tasks discovered in the local state directory, so that
+        // the broker-side sticky assignor can assign those tasks back to this client on a cold start.
+        taskManager.maybeUpdateTaskOffsetSumSnapshot();
         subscribeConsumer();
 
         // if the thread is still in the middle of a rebalance, we should keep polling

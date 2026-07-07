@@ -144,7 +144,45 @@ public class StickyTaskAssignor implements TaskAssignor {
                 }
             }
         }
+
+        maybeAddOffsetBasedPrevMembers(localState, groupSpec);
         return localState;
+    }
+
+    /**
+     * A member that rejoins after a restart gets a fresh member ID and an empty target assignment, so the previous
+     * ownership maps cannot capture that it owned any tasks before the restart. Such members report cumulative
+     * offsets for tasks with state on local disk; treat them like previous standbys of those tasks, so that the
+     * stickiness phases assign the tasks back to the local state, most caught-up state first. Members already known
+     * as previous standbys keep precedence over offset-based candidates.
+     */
+    private static void maybeAddOffsetBasedPrevMembers(final LocalState localState, final GroupSpec groupSpec) {
+        final Map<TaskId, ArrayList<MemberAndOffsetSum>> tasksWithReportedOffsets = new HashMap<>();
+        for (final String memberId : groupSpec.memberIds()) {
+            final Member member = new Member(groupSpec.memberMetadata(memberId).processId(), memberId);
+            for (final Map.Entry<String, Map<Integer, Long>> subtopologyOffsets : groupSpec.memberAssignmentState(memberId).taskOffsets().entrySet()) {
+                for (final Map.Entry<Integer, Long> partitionOffset : subtopologyOffsets.getValue().entrySet()) {
+                    if (partitionOffset.getValue() < 0) {
+                        continue;
+                    }
+                    tasksWithReportedOffsets
+                        .computeIfAbsent(new TaskId(subtopologyOffsets.getKey(), partitionOffset.getKey()), task -> new ArrayList<>())
+                        .add(new MemberAndOffsetSum(member, partitionOffset.getValue()));
+                }
+            }
+        }
+
+        for (final Map.Entry<TaskId, ArrayList<MemberAndOffsetSum>> entry : tasksWithReportedOffsets.entrySet()) {
+            final ArrayList<Member> candidates =
+                localState.standbyTaskToPrevMember.computeIfAbsent(entry.getKey(), task -> new ArrayList<>());
+            final Set<String> knownMemberIds = candidates.stream().map(candidate -> candidate.memberId).collect(Collectors.toSet());
+            entry.getValue().sort(Comparator.comparingLong(MemberAndOffsetSum::offsetSum).reversed());
+            for (final MemberAndOffsetSum memberAndOffsetSum : entry.getValue()) {
+                if (knownMemberIds.add(memberAndOffsetSum.member().memberId)) {
+                    candidates.add(memberAndOffsetSum.member());
+                }
+            }
+        }
     }
 
     private static GroupAssignment buildGroupAssignment(final LocalState localState, final Collection<String> members) {
@@ -436,6 +474,9 @@ public class StickyTaskAssignor implements TaskAssignor {
             this.processId = processId;
             this.memberId = memberId;
         }
+    }
+
+    private record MemberAndOffsetSum(Member member, long offsetSum) {
     }
 
     private static class LocalState {
