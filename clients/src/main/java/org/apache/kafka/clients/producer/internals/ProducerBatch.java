@@ -23,11 +23,11 @@ import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.AbstractRecords;
+import org.apache.kafka.common.record.internal.AbstractRecordsBuilder;
 import org.apache.kafka.common.record.internal.CompressionRatioEstimator;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.internal.MutableRecordBatch;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.ProduceResponse;
@@ -68,7 +68,7 @@ public final class ProducerBatch {
     final ProduceRequestResult produceFuture;
 
     private final List<Thunk> thunks = new ArrayList<>();
-    private final MemoryRecordsBuilder recordsBuilder;
+    private final AbstractRecordsBuilder recordsBuilder;
     private final AtomicInteger attempts = new AtomicInteger(0);
     private final boolean isSplitBatch;
     private final AtomicReference<FinalState> finalState = new AtomicReference<>(null);
@@ -89,11 +89,11 @@ public final class ProducerBatch {
     // Tracks the attempt in which leader was changed to currentLeaderEpoch for the 1st time.
     private int attemptsWhenLeaderLastChanged;
 
-    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs) {
+    public ProducerBatch(TopicPartition tp, AbstractRecordsBuilder recordsBuilder, long createdMs) {
         this(tp, recordsBuilder, createdMs, false);
     }
 
-    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs, boolean isSplitBatch) {
+    public ProducerBatch(TopicPartition tp, AbstractRecordsBuilder recordsBuilder, long createdMs, boolean isSplitBatch) {
         this.createdMs = createdMs;
         this.lastAttemptMs = createdMs;
         this.recordsBuilder = recordsBuilder;
@@ -331,8 +331,8 @@ public final class ProducerBatch {
     }
 
     private RecordBatch validateAndGetRecordBatch() {
-        MemoryRecords memoryRecords = recordsBuilder.build();
-        Iterator<MutableRecordBatch> recordBatchIter = memoryRecords.batches().iterator();
+        AbstractRecords builtRecords = recordsBuilder.build();
+        Iterator<? extends RecordBatch> recordBatchIter = builtRecords.batches().iterator();
 
         if (!recordBatchIter.hasNext())
             throw new IllegalStateException("Cannot split an empty producer batch.");
@@ -480,7 +480,7 @@ public final class ProducerBatch {
         return this.retry;
     }
 
-    public MemoryRecords records() {
+    public AbstractRecords records() {
         return recordsBuilder.build();
     }
 

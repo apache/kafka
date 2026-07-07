@@ -62,7 +62,7 @@
               files="(KerberosLogin|ConnectMetricsRegistry|AbstractRequest|AbstractResponse).java"/>
 
     <suppress checks="ParameterNumber"
-              files="(NetworkClient|FieldSpec|KafkaProducer|KafkaConsumer|ConsumerCoordinator|RecordAccumulator|Sender|ConfigDef|DefaultRecordBatch|MemoryRecordsBuilder|ClientUtils).java"/>
+              files="(NetworkClient|FieldSpec|KafkaProducer|KafkaConsumer|ConsumerCoordinator|RecordAccumulator|Sender|ConfigDef|DefaultRecordBatch|MemoryRecordsBuilder|AbstractRecordsBuilder|ClientUtils).java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
               files="(KafkaConsumer|ConsumerCoordinator|AbstractFetch|KafkaProducer|AbstractRequest|AbstractResponse|TransactionManager|Admin|KafkaAdminClient|MockAdminClient|KafkaNetworkChannelTest|ClientTelemetryReporterTest|Errors|SaslAuthenticatorTest|AgentTest|CoordinatorTest|NetworkClientTest).java"/>

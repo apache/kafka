@@ -46,7 +46,7 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.AbstractRecords;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
@@ -903,7 +903,7 @@ public class Sender implements Runnable {
         ProduceRequestData.TopicProduceDataCollection tpd = new ProduceRequestData.TopicProduceDataCollection();
         for (ProducerBatch batch : batches) {
             TopicPartition tp = batch.topicPartition;
-            MemoryRecords records = batch.records();
+            AbstractRecords records = batch.records();
             Uuid topicId = topicIds.get(tp.topic());
             ProduceRequestData.TopicProduceData tpData = tpd.find(tp.topic(), topicId);
 

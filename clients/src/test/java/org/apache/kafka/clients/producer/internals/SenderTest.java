@@ -3625,7 +3625,7 @@ public class SenderTest {
 
             ProducerBatch batch = sender.inFlightBatches(tp0).get(0);
             // Validate the backing array of the buffer is the same as the pooled one from the start
-            assertSame(buffer.array(), batch.records().buffer().array(), "Sender should have allocated the same buffer we created");
+            assertSame(buffer.array(), batch.buffer().array(), "Sender should have allocated the same buffer we created");
 
             time.sleep(DELIVERY_TIMEOUT_MS + 100);
             sender.runOnce();
