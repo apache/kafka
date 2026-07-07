@@ -1413,7 +1413,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                     if (ConsumerCoordinator.this.state == MemberState.PREPARING_REBALANCE) {
                                         exception = new RebalanceInProgressException("Offset commit cannot be completed since the " +
                                             "consumer member's old generation is fenced by its group instance id, it is possible that " +
-                                            "this consumer has already participated another rebalance and got a new generation");
+                                            "this consumer has already participated in another rebalance and got a new generation");
                                     } else {
                                         exception = new CommitFailedException();
                                     }
