@@ -36,6 +36,7 @@ import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -293,7 +294,7 @@ public class RecordAccumulator {
         // We keep track of the number of appending thread to make sure we do not miss batches in
         // abortIncompleteBatches().
         appendsInProgress.incrementAndGet();
-        ByteBuffer buffer = null;
+        ByteBufferOutputStream bufferStream = null;
         if (headers == null) headers = Record.EMPTY_HEADERS;
         try {
             // Loop to retry in case we encounter partitioner's race conditions.
@@ -331,12 +332,12 @@ public class RecordAccumulator {
                     }
                 }
 
-                if (buffer == null) {
+                if (bufferStream == null) {
                     int size = Math.max(this.batchSize, AbstractRecords.estimateSizeInBytesUpperBound(
                             RecordBatch.CURRENT_MAGIC_VALUE, compression.type(), key, value, headers));
                     log.trace("Allocating a new {} byte message buffer for topic {} partition {} with remaining timeout {}ms", size, topic, effectivePartition, maxTimeToBlock);
                     // This call may block if we exhausted buffer space.
-                    buffer = free.allocate(size, maxTimeToBlock);
+                    bufferStream = new ByteBufferOutputStream(free.allocate(size, maxTimeToBlock));
                     // Update the current time in case the buffer allocation blocked above.
                     // NOTE: getting time may be expensive, so calling it under a lock
                     // should be avoided.
@@ -348,10 +349,10 @@ public class RecordAccumulator {
                     if (partitionChanged(topic, topicInfo, partitionInfo, dq, nowMs, cluster))
                         continue;
 
-                    RecordAppendResult appendResult = appendNewBatch(topic, effectivePartition, dq, timestamp, key, value, headers, callbacks, buffer, nowMs);
+                    RecordAppendResult appendResult = appendNewBatch(topic, effectivePartition, dq, timestamp, key, value, headers, callbacks, bufferStream, nowMs);
                     // Set buffer to null, so that deallocate doesn't return it back to free pool, since it's used in the batch.
                     if (appendResult.newBatchCreated)
-                        buffer = null;
+                        bufferStream = null;
                     // If queue has incomplete batches we disable switch (see comments in updatePartitionInfo).
                     boolean enableSwitch = allBatchesFull(dq);
                     topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, appendResult.appendedBytes, cluster, enableSwitch);
@@ -359,7 +360,9 @@ public class RecordAccumulator {
                 }
             }
         } finally {
-            free.deallocate(buffer);
+            if (bufferStream != null) {
+                free.deallocate(bufferStream.buffer());
+            }
             appendsInProgress.decrementAndGet();
         }
     }
@@ -375,7 +378,7 @@ public class RecordAccumulator {
      * @param value The value for the record
      * @param headers the Headers for the record
      * @param callbacks The callbacks to execute
-     * @param buffer The buffer for the new batch
+     * @param bufferStream The buffer stream for the new batch
      * @param nowMs The current time, in milliseconds
      */
     private RecordAppendResult appendNewBatch(String topic,
@@ -386,7 +389,7 @@ public class RecordAccumulator {
                                               byte[] value,
                                               Header[] headers,
                                               AppendCallbacks callbacks,
-                                              ByteBuffer buffer,
+                                              ByteBufferOutputStream bufferStream,
                                               long nowMs) {
         assert partition != RecordMetadata.UNKNOWN_PARTITION;
 
@@ -396,7 +399,7 @@ public class RecordAccumulator {
             return appendResult;
         }
 
-        MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer);
+        MemoryRecordsBuilder recordsBuilder = recordsBuilder(bufferStream);
         ProducerBatch batch = new ProducerBatch(new TopicPartition(topic, partition), recordsBuilder, nowMs);
         FutureRecordMetadata future = Objects.requireNonNull(batch.tryAppend(timestamp, key, value, headers,
                 callbacks, nowMs));
@@ -407,8 +410,8 @@ public class RecordAccumulator {
         return new RecordAppendResult(future, dq.size() > 1 || batch.isFull(), true, batch.estimatedSizeInBytes());
     }
 
-    private MemoryRecordsBuilder recordsBuilder(ByteBuffer buffer) {
-        return MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compression, TimestampType.CREATE_TIME, 0L);
+    private MemoryRecordsBuilder recordsBuilder(ByteBufferOutputStream bufferStream) {
+        return MemoryRecords.builder(bufferStream, RecordBatch.CURRENT_MAGIC_VALUE, compression, TimestampType.CREATE_TIME, 0L);
     }
 
     /**
