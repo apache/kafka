@@ -142,7 +142,11 @@ public class TopologyDescriptionPluginIntegrationTest {
 
             // The broker solicits the push from a single member at a time and stops
             // soliciting once the description is stored, so a two-member group must
-            // trigger exactly one setTopology call.
+            // trigger exactly one setTopology call. Accepted flake risk: the client
+            // retries the push on a retriable send failure (e.g. a disconnect after the
+            // broker already processed the request), which would produce a duplicate
+            // setTopology call at the same epoch — client-retry noise, not a dedup
+            // regression. If this assertion ever flakes, that is why.
             assertEquals(1, TrackingTopologyDescriptionPlugin.setTopologyCalls(appId),
                 "Expected exactly one setTopology call for group " + appId);
         }
