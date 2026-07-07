@@ -992,8 +992,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             coordinator -> coordinator.finalizeStoredDescriptionTopologyEpochAfterDeleteBatch(groupIds)
         ).handle((__, throwable) -> {
             if (throwable != null) {
-                log.warn("Failed to finalize StoredDescriptionTopologyEpoch for {} group(s) on partition {}; "
-                    + "the next cleanup cycle will retry.", groupIds.size(), tp, throwable);
+                log.warn("Failed to finalize StoredDescriptionTopologyEpoch for groups {} on partition {}; "
+                    + "the next cleanup cycle will retry.", groupIds, tp, throwable);
             }
             return null;
         });
@@ -1987,8 +1987,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 topicPartition,
                 (coordinator, lastCommittedOffset) ->
                     coordinator.streamsGroupsWithStoredTopologyDescription(groupIds, lastCommittedOffset))
-            .thenCompose(groupsWithStored ->
-                markTopologyUncertainBatchAsync(topicPartition, groupsWithStored)
+            .thenCompose(groupsWithStored -> {
+                // Common case: the batch holds no streams groups with stored topology. Skip the
+                // mark entirely instead of scheduling a no-op write on the shard's event loop.
+                if (groupsWithStored.isEmpty()) {
+                    return CompletableFuture.<Map<String, ApiError>>completedFuture(Map.of());
+                }
+                return markTopologyUncertainBatchAsync(topicPartition, groupsWithStored)
                     .thenCompose(marked ->
                         streamsGroupTopologyDescriptionManager.invokeDeleteTopologies(marked)
                             .thenApply(failures -> {
@@ -2000,7 +2005,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                                 // epoch is no longer load-bearing.
                                 marked.forEach(streamsGroupTopologyDescriptionManager::clearBackoffGroup);
                                 return failures;
-                            })))
+                            }));
+            })
             .exceptionally(exception -> handleOperationException(
                 // Translate coordinator errors so a read failure reports the same retriable code
                 // as the rest of the DeleteGroups pipeline (e.g. NOT_LEADER_OR_FOLLOWER ->

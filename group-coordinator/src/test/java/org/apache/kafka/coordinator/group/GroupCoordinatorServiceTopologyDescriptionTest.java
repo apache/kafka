@@ -943,11 +943,6 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             eq(GROUP_TP),
             any()
         )).thenReturn(CompletableFuture.completedFuture(Set.of()));
-        when(runtime.scheduleWriteOperation(
-            eq("mark-topology-uncertain-batch"),
-            any(),
-            any()
-        )).thenReturn(CompletableFuture.completedFuture(Set.of()));
 
         DeleteGroupsResponseData.DeletableGroupResultCollection tombstoneResult =
             new DeleteGroupsResponseData.DeletableGroupResultCollection();
@@ -971,6 +966,10 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         assertNotNull(result);
         assertEquals(Errors.NONE.code(), result.errorCode());
         verify(plugin, never()).deleteTopology(anyString());
+        // No stored topology in the batch: the UNCERTAIN mark write must be skipped entirely,
+        // not scheduled as a no-op on the shard's event loop.
+        verify(runtime, never()).scheduleWriteOperation(
+            eq("mark-topology-uncertain-batch"), any(), any());
         verify(runtime, times(1)).scheduleWriteOperation(
             eq("delete-groups"), eq(GROUP_TP), any());
     }
@@ -1060,6 +1059,45 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         InOrder inOrder = inOrder(runtime, plugin);
         inOrder.verify(runtime).scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any());
         inOrder.verify(plugin).deleteTopology("g");
+    }
+
+    @Test
+    public void testDeleteGroupsSkipsPluginDeleteForRevivedGroup() throws Exception {
+        // The pre-delete read finds "g" with a stored topology, but the mark batch returns an
+        // empty subset: "g" was revived between the committed read and the barrier write. The
+        // plugin delete must be skipped (no barrier was written), no plugin failure recorded for
+        // it, and the pipeline must still proceed to the tombstone write, which reports the
+        // group's fate (NON_EMPTY_GROUP for a revived group).
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+
+        when(runtime.scheduleWriteOperation(eq("delete-share-groups"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Map.of()));
+        when(runtime.scheduleReadOperation(eq("streams-group-topology-pre-delete"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(Set.of("g")));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Set.of()));
+
+        DeleteGroupsResponseData.DeletableGroupResultCollection tombstoneResult =
+            new DeleteGroupsResponseData.DeletableGroupResultCollection();
+        tombstoneResult.add(new DeleteGroupsResponseData.DeletableGroupResult()
+            .setGroupId("g")
+            .setErrorCode(Errors.NON_EMPTY_GROUP.code()));
+        when(runtime.scheduleWriteOperation(eq("delete-groups"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(tombstoneResult));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        DeleteGroupsResponseData.DeletableGroupResultCollection results = service.deleteGroups(
+            requestContext(ApiKeys.DELETE_GROUPS),
+            List.of("g"),
+            BufferSupplier.NO_CACHING
+        ).get(5, TimeUnit.SECONDS);
+
+        DeleteGroupsResponseData.DeletableGroupResult result = results.find("g");
+        assertNotNull(result);
+        assertEquals(Errors.NON_EMPTY_GROUP.code(), result.errorCode());
+        verify(plugin, never()).deleteTopology(anyString());
+        verify(runtime, times(1)).scheduleWriteOperation(eq("delete-groups"), eq(GROUP_TP), any());
     }
 
     @Test
