@@ -90,6 +90,11 @@ public class RemoteLogSegmentMetadataUpdate extends RemoteLogMetadata {
     }
 
     @Override
+    public RemoteLogSegmentMetadataKey metadataKey() {
+        return RemoteLogSegmentMetadataKey.of(remoteLogSegmentId, state);
+    }
+
+    @Override
     public boolean equals(Object o) {
         if (this == o) {
             return true;

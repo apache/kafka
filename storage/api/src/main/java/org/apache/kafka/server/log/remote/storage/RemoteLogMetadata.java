@@ -60,4 +60,8 @@ public abstract class RemoteLogMetadata {
      * @return TopicIdPartition for which this event is generated.
      */
     public abstract TopicIdPartition topicIdPartition();
+
+    public RemoteLogSegmentMetadataKey metadataKey() {
+        return null;
+    }
 }
