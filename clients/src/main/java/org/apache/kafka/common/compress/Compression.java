@@ -17,6 +17,7 @@
 package org.apache.kafka.common.compress;
 
 import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 
@@ -54,6 +55,19 @@ public interface Compression {
      * performance impact.
      */
     InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier);
+
+    /**
+     * Wrap bufferStream with an InputStream that will decompress data with this Compression.
+     *
+     * @param bufferStream The {@link ByteBufferInputStream} instance holding the data to decompress.
+     * @param messageVersion The record format version to use.
+     * @param decompressionBufferSupplier The supplier of ByteBuffer(s) used for decompression if supported.
+     * For small record batches, allocating a potentially large buffer (64 KB for LZ4)
+     * will dominate the cost of decompressing and iterating over the records in the
+     * batch. As such, a supplier that reuses buffers will have a significant
+     * performance impact.
+     */
+    InputStream wrapForInput(ByteBufferInputStream bufferStream, byte messageVersion, BufferSupplier decompressionBufferSupplier);
 
     /**
      * Recommended size of buffer for storing decompressed output.

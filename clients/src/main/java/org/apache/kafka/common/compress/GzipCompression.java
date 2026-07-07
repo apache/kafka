@@ -59,6 +59,11 @@ public class GzipCompression implements Compression {
 
     @Override
     public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
+        return wrapForInput(new ByteBufferInputStream(buffer), messageVersion, decompressionBufferSupplier);
+    }
+
+    @Override
+    public InputStream wrapForInput(ByteBufferInputStream bufferStream, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
         try {
             // Set input buffer (compressed) to 8 KB (GZIPInputStream uses 0.5 KB by default) to ensure reasonable
             // performance in cases where the caller reads a small number of bytes (potentially a single byte).
@@ -67,7 +72,7 @@ public class GzipCompression implements Compression {
             //
             // ChunkedBytesStream is used to wrap the GZIPInputStream because the default implementation of
             // GZIPInputStream does not use an intermediate buffer for decompression in chunks.
-            return new ChunkedBytesStream(new GZIPInputStream(new ByteBufferInputStream(buffer), 8 * 1024),
+            return new ChunkedBytesStream(new GZIPInputStream(bufferStream, 8 * 1024),
                                           decompressionBufferSupplier,
                                           decompressionOutputSize(),
                                           false);

@@ -488,12 +488,18 @@ public class DefaultRecordBatchTest {
             Arguments.of(CompressionType.SNAPPY, 1, smallRecordValue),
             Arguments.of(CompressionType.SNAPPY, 1, largeRecordValue),
             /*
+             * 1 allocation per batch (i.e. per iterator instance) for ChunkedBytesStream's output buffer
+             * 1 allocation per batch (i.e. per iterator instance) for Lz4BlockInputStream's per-block staging buffer
+             * 1 allocation per batch (i.e. per iterator instance) for Lz4BlockInputStream's decompression buffer
+             * = 3 buffer allocations
+             */
+            Arguments.of(CompressionType.LZ4, 3, smallRecordValue),
+            Arguments.of(CompressionType.LZ4, 3, largeRecordValue),
+            /*
              * 1 allocation per batch (i.e. per iterator instance) for buffer holding compressed data
              * 1 allocation per batch (i.e. per iterator instance) for buffer holding uncompressed data
              * = 2 buffer allocations
              */
-            Arguments.of(CompressionType.LZ4, 2, smallRecordValue),
-            Arguments.of(CompressionType.LZ4, 2, largeRecordValue),
             Arguments.of(CompressionType.ZSTD, 2, smallRecordValue),
             Arguments.of(CompressionType.ZSTD, 2, largeRecordValue)
         );

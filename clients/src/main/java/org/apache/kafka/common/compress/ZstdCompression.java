@@ -64,8 +64,13 @@ public class ZstdCompression implements Compression {
 
     @Override
     public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
+        return wrapForInput(new ByteBufferInputStream(buffer), messageVersion, decompressionBufferSupplier);
+    }
+
+    @Override
+    public InputStream wrapForInput(ByteBufferInputStream bufferStream, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
         try {
-            return new ChunkedBytesStream(wrapForZstdInput(buffer, decompressionBufferSupplier),
+            return new ChunkedBytesStream(wrapForZstdInput(bufferStream, decompressionBufferSupplier),
                     decompressionBufferSupplier,
                     decompressionOutputSize(),
                     false);
@@ -76,6 +81,10 @@ public class ZstdCompression implements Compression {
 
     // visible for testing
     public static ZstdInputStreamNoFinalizer wrapForZstdInput(ByteBuffer buffer, BufferSupplier decompressionBufferSupplier) throws IOException {
+        return wrapForZstdInput(new ByteBufferInputStream(buffer), decompressionBufferSupplier);
+    }
+
+    public static ZstdInputStreamNoFinalizer wrapForZstdInput(ByteBufferInputStream bufferStream, BufferSupplier decompressionBufferSupplier) throws IOException {
         // We use our own BufferSupplier instead of com.github.luben.zstd.RecyclingBufferPool since our
         // implementation doesn't require locking or soft references. The buffer allocated by this buffer pool is
         // used by zstd-jni for 1\ reading compressed data from input stream into a buffer before passing it over JNI
@@ -94,7 +103,7 @@ public class ZstdCompression implements Compression {
         // Ideally, data from ZstdInputStreamNoFinalizer should be read in a bulk because every call to
         // `ZstdInputStreamNoFinalizer#read()` is a JNI call. The caller is expected to
         // balance the tradeoff between reading large amount of data vs. making multiple JNI calls.
-        return new ZstdInputStreamNoFinalizer(new ByteBufferInputStream(buffer), bufferPool);
+        return new ZstdInputStreamNoFinalizer(bufferStream, bufferPool);
     }
 
     /**

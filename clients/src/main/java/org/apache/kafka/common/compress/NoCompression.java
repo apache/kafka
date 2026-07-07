@@ -44,6 +44,11 @@ public class NoCompression implements Compression {
         return new ByteBufferInputStream(buffer);
     }
 
+    @Override
+    public InputStream wrapForInput(ByteBufferInputStream bufferStream, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
+        return bufferStream;
+    }
+
     public static class Builder implements Compression.Builder<NoCompression> {
 
         @Override
