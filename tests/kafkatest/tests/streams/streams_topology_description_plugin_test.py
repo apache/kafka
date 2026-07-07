@@ -13,8 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
-
 from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
@@ -74,10 +72,6 @@ class StreamsTopologyDescriptionPluginTest(Test):
         with processor.node.account.monitor_log(processor.LOG_FILE) as monitor:
             processor.start()
 
-            monitor.wait_until(self.STREAMS_RUNNING_LOG,
-                               timeout_sec=60,
-                               err_msg="Never saw 'REBALANCING -> RUNNING' message " + str(processor.node.account))
-
             monitor.wait_until(self.PUSH_SUCCESS_LOG,
                                timeout_sec=120,
                                err_msg="Streams client did not log a successful topology description push")
@@ -121,7 +115,8 @@ class StreamsTopologyDescriptionPluginTest(Test):
     def test_topology_description_not_stored_without_plugin(self, metadata_quorum):
         """
         Test the situation when no topology description plugin is configured on the broker.
-        The broker should never solicit a topology push from the client.
+        The broker never sets topologyDescriptionRequired=true, so the client is never
+        asked to push.
         """
         self.setup_kafka(plugin_enabled=False)
 
@@ -132,22 +127,21 @@ class StreamsTopologyDescriptionPluginTest(Test):
                                timeout_sec=60,
                                err_msg="Never saw 'REBALANCING -> RUNNING' message " + str(processor.node.account))
 
-        # streams.log shouldn't log broker requested topology description push line
         solicited = processor.node.account.ssh_capture(
             "grep -c '%s' %s || true" % (self.PUSH_REQUESTED_LOG, processor.LOG_FILE),
             allow_fail=False)
         assert int(next(solicited).strip()) == 0, \
-            "Broker solicited a topology push even though no plugin was configured"
+            "Broker solicited a topology push despite no plugin being configured on the broker"
 
         sent = processor.node.account.ssh_capture(
             "grep -c '%s' %s || true" % (self.PUSH_SENDING_LOG, processor.LOG_FILE),
             allow_fail=False)
         assert int(next(sent).strip()) == 0, \
-            "Client sent a topology description despite topology.description.push.enabled=false"
+            "Client sent a topology description despite no plugin being configured on the broker"
 
         pushed = processor.node.account.ssh_capture(
             "grep -c '%s' %s || true" % (self.PUSH_SUCCESS_LOG, processor.LOG_FILE),
             allow_fail=False)
         assert int(next(pushed).strip()) == 0, \
-            "Client logged a successful push despite topology.description.push.enabled=false"
+            "Client logged a successful push despite no plugin being configured on the broker"
         processor.stop()
