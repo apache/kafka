@@ -115,8 +115,15 @@ public class ReplicaManagerLogReader implements LogReader {
         }
 
         // Perform the local read for all partitions once; remote follow-ups (if any) are issued per partition.
-        LinkedHashMap<TopicIdPartition, LogReadResult> localReadResults =
-            read(fetchParams, partitionsToFetch, topicPartitionFetchOffsets, partitionMaxBytes);
+        // read() is expected to convert per-partition failures into a LogReadResult carrying an error code
+        // rather than throwing, but guard against an unexpected throw here anyway - readAsync must surface
+        // failures via the returned future, not by throwing synchronously out of this method.
+        LinkedHashMap<TopicIdPartition, LogReadResult> localReadResults;
+        try {
+            localReadResults = read(fetchParams, partitionsToFetch, topicPartitionFetchOffsets, partitionMaxBytes);
+        } catch (Exception e) {
+            return CompletableFuture.failedFuture(e);
+        }
 
         // Only look at partitions with non-null read results.
         LinkedHashMap<TopicIdPartition, CompletableFuture<LogReadResult>> futures = new LinkedHashMap<>();
