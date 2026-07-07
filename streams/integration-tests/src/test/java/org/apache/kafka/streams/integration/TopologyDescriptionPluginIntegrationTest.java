@@ -76,6 +76,12 @@ public class TopologyDescriptionPluginIntegrationTest {
             TrackingTopologyDescriptionPlugin.class.getName());
         // Frequent heartbeats keep the solicitation round-trips short.
         props.put(GroupCoordinatorConfig.STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, "200");
+        // Effectively disable the periodic cleanup cycle and expiration sweep (both run at
+        // this interval, 10 min by default): shouldInvokeDeleteTopologyOnDeleteGroups
+        // relies on the explicit DeleteGroups call being the only delete path, and a slow
+        // run crossing the default interval could otherwise expire the empty, offset-less
+        // group first.
+        props.put(GroupCoordinatorConfig.OFFSETS_RETENTION_CHECK_INTERVAL_MS_CONFIG, String.valueOf(Integer.MAX_VALUE));
         cluster = new EmbeddedKafkaCluster(1, props);
         cluster.start();
         bootstrapServers = cluster.bootstrapServers();

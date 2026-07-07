@@ -90,6 +90,17 @@ import static org.apache.kafka.common.utils.Utils.mkProperties;
 public class EmbeddedKafkaCluster {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedKafkaCluster.class);
+
+    /**
+     * Value for {@link GroupCoordinatorConfig#STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG}
+     * that opts a test cluster out of the {@link InMemoryTopologyDescriptionPlugin} configured by
+     * default, running the broker with the plugin-less production default. Needed because the
+     * config's default is null, but a {@link Properties} cannot carry null and an empty class name
+     * would fail config parsing, so {@link #addDefaultBrokerPropsIfAbsent} removes the property
+     * when it is set to this value.
+     */
+    public static final String NO_TOPOLOGY_DESCRIPTION_PLUGIN = "";
+
     private final KafkaClusterTestKit cluster;
     private final Properties brokerConfig;
     public final MockTime time;
@@ -403,10 +414,7 @@ public class EmbeddedKafkaCluster {
     private void addDefaultBrokerPropsIfAbsent(final Properties brokerConfig) {
         brokerConfig.putIfAbsent(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, 2 * 1024 * 1024L);
         brokerConfig.putIfAbsent(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG, InMemoryTopologyDescriptionPlugin.class.getName());
-        // An explicitly empty value opts out of the plugin default and runs the broker with
-        // the plugin-less production default: the config's default is null, but a Properties
-        // cannot carry null and an empty class name would fail config parsing, so remove it.
-        if ("".equals(brokerConfig.get(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG))) {
+        if (NO_TOPOLOGY_DESCRIPTION_PLUGIN.equals(brokerConfig.get(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG))) {
             brokerConfig.remove(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG);
         }
         brokerConfig.putIfAbsent(GroupCoordinatorConfig.STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, "100");

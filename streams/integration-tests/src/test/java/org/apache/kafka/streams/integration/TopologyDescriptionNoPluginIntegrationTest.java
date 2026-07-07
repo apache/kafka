@@ -66,9 +66,8 @@ public class TopologyDescriptionNoPluginIntegrationTest {
     @BeforeAll
     public static void startCluster() throws IOException {
         final Properties props = new Properties();
-        // An empty value opts out of EmbeddedKafkaCluster's default in-memory plugin and
-        // runs the broker with the plugin-less production default.
-        props.put(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG, "");
+        props.put(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
+            EmbeddedKafkaCluster.NO_TOPOLOGY_DESCRIPTION_PLUGIN);
         cluster = new EmbeddedKafkaCluster(1, props);
         cluster.start();
         bootstrapServers = cluster.bootstrapServers();
