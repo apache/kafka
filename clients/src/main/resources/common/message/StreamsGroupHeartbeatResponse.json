@@ -17,7 +17,8 @@
   "apiKey": 88,
   "type": "response",
   "name": "StreamsGroupHeartbeatResponse",
-  // Version 1 adds TopologyDescriptionRequired (KIP-1331).
+  // Version 1 adds TopologyDescriptionRequired (KIP-1331), and allows the broker to return the
+  // MISSING_CLIENT_TAGS status (code 6), which version 0 clients do not understand (KAFKA-20744).
   "validVersions": "0-1",
   "flexibleVersions": "0+",
   // Supported errors:

@@ -2049,6 +2049,7 @@ public class GroupMetadataManager {
      * @param clientTags          Used for rack-aware assignment algorithm, or null.
      * @param shutdownApplication Whether all Streams clients in the group should shut down.
      * @param memberEndpointEpoch The last endpoint information epoch seen be the group member.
+     * @param requestApiVersion   The api version of the StreamsGroupHeartbeat request.
      * @return A result containing the StreamsGroupHeartbeat response and a list of records to update the state machine.
      */
     private CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
@@ -2070,7 +2071,8 @@ public class GroupMetadataManager {
         Endpoint userEndpoint,
         List<KeyValue> clientTags,
         boolean shutdownApplication,
-        int memberEndpointEpoch
+        int memberEndpointEpoch,
+        int requestApiVersion
     ) throws ApiException {
         final long currentTimeMs = time.milliseconds();
         final List<CoordinatorRecord> records = new ArrayList<>();
@@ -2356,7 +2358,9 @@ public class GroupMetadataManager {
         ));
 
         String rackAwareTagsValue = currentAssignmentConfigs.getOrDefault("rack.aware.assignment.tags", "");
-        if (!rackAwareTagsValue.isEmpty()) {
+        // The MISSING_CLIENT_TAGS status (code 6) requires version 1 of the RPC: version 0 clients
+        // throw on unknown status codes, so it must not be sent to them.
+        if (requestApiVersion >= 1 && !rackAwareTagsValue.isEmpty()) {
             List<String> requiredTags = Arrays.asList(rackAwareTagsValue.split(",", -1));
             Set<String> memberTagKeys = updatedMember.clientTags().keySet();
             List<String> missingTags = requiredTags.stream()
@@ -5502,7 +5506,8 @@ public class GroupMetadataManager {
                 request.userEndpoint(),
                 request.clientTags(),
                 request.shutdownApplication(),
-                request.endpointInformationEpoch()
+                request.endpointInformationEpoch(),
+                context.requestVersion()
             );
         }
     }
