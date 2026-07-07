@@ -27,8 +27,9 @@ import java.nio.ByteBuffer;
 /**
  * Serde for {@link RemoteLogSegmentMetadataKey}.
  * <p>
- * Serializes to a compact 37-byte binary representation:
+ * Serializes to a 38-byte binary representation:
  * <ul>
+ *   <li>1 byte  – format version (currently {@value #VERSION})</li>
  *   <li>8 bytes – topicId most-significant bits</li>
  *   <li>8 bytes – topicId least-significant bits</li>
  *   <li>4 bytes – partition (big-endian int)</li>
@@ -39,13 +40,15 @@ import java.nio.ByteBuffer;
  */
 public class RemoteLogSegmentMetadataKeySerde implements Serde<RemoteLogSegmentMetadataKey> {
 
-    static final int SERIALIZED_SIZE = 8 + 8 + 4 + 8 + 8 + 1; // 37 bytes
+    static final byte VERSION = 0;
+    static final int SERIALIZED_SIZE = 1 + 8 + 8 + 4 + 8 + 8 + 1; // 38 bytes
 
     @Override
     public Serializer<RemoteLogSegmentMetadataKey> serializer() {
         return (topic, key) -> {
             if (key == null) return null;
             ByteBuffer buf = ByteBuffer.allocate(SERIALIZED_SIZE);
+            buf.put(VERSION);
             buf.putLong(key.topicId().getMostSignificantBits());
             buf.putLong(key.topicId().getLeastSignificantBits());
             buf.putInt(key.partition());
@@ -59,12 +62,19 @@ public class RemoteLogSegmentMetadataKeySerde implements Serde<RemoteLogSegmentM
     @Override
     public Deserializer<RemoteLogSegmentMetadataKey> deserializer() {
         return (topic, data) -> {
-            if (data == null) return null;
+            if (data == null)
+                return null;
+
             if (data.length != SERIALIZED_SIZE) {
                 throw new IllegalArgumentException(
                         "Expected " + SERIALIZED_SIZE + " bytes but got " + data.length);
             }
             ByteBuffer buf = ByteBuffer.wrap(data);
+            byte version = buf.get();
+            if (version != VERSION) {
+                throw new IllegalArgumentException(
+                        "Unsupported RemoteLogSegmentMetadataKey version: " + version);
+            }
             Uuid topicId = new Uuid(buf.getLong(), buf.getLong());
             int partition = buf.getInt();
             Uuid segmentId = new Uuid(buf.getLong(), buf.getLong());

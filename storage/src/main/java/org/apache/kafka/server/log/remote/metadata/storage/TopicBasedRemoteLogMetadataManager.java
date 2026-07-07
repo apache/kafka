@@ -162,7 +162,7 @@ public class TopicBasedRemoteLogMetadataManager implements BrokerReadyCallback, 
                 } catch (TimeoutException e) {
                     throw new KafkaException(e);
                 }
-            }).thenAcceptAsync(recordMetadata -> producerManager.maybePublishTombstoneRecords(remoteLogMetadata));
+            }).thenRunAsync(() -> producerManager.maybePublishTombstoneRecords(remoteLogMetadata));
         } catch (KafkaException e) {
             if (e instanceof RetriableException) {
                 throw e;
