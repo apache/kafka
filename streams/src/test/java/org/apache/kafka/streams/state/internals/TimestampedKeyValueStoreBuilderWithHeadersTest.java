@@ -60,6 +60,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -560,7 +561,7 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void shouldReturnUnknownQueryTypeForKeyQueryOnHeadersStore(final boolean cachingEnabled) {
+    public void shouldHandleKeyQueryOnHeadersStore(final boolean cachingEnabled) {
         final TimestampedKeyValueStoreWithHeaders<String, String> store = headersStoreMaybeWithCache(cachingEnabled);
 
         try {
@@ -571,13 +572,10 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
             final StateStore wrapped = ((WrappedStateStore) store).wrapped();
             final QueryResult<byte[]> result = wrapped.query(query, positionBound, config);
 
-            // Verify: Headers store currently returns UNKNOWN_QUERY_TYPE
-            assertFalse(result.isSuccess(), "Expected query to fail with unknown query type");
-            assertEquals(
-                FailureReason.UNKNOWN_QUERY_TYPE,
-                result.getFailureReason(),
-                "Expected UNKNOWN_QUERY_TYPE failure reason"
-            );
+            // KIP-1356 PoC: the headers store now serves KeyQuery (rather than UNKNOWN_QUERY_TYPE).
+            // No data was written for "test-key", so the result is a successful null lookup.
+            assertTrue(result.isSuccess(), "Expected KeyQuery to be handled");
+            assertNull(result.getResult(), "Expected null result for an absent key");
             assertNotNull(result.getPosition(), "Expected position to be set");
         } finally {
             store.close();
