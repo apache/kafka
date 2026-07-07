@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.StreamsInvalidTopologyException;
@@ -745,8 +746,19 @@ public class GroupCoordinatorService implements GroupCoordinator {
             .thenApply(__ -> StreamsGroupTopologyDescriptionConverter.fromRequest(request.topologyDescription()))
             .thenCompose(description ->
                 markTopologyUncertainAsync(tp, groupId, true)
-                    .thenCompose(__ -> streamsGroupTopologyDescriptionManager.invokeSetTopology(
-                        groupId, pushedEpoch, description)))
+                    .thenCompose(marked -> {
+                        if (!marked) {
+                            // The group vanished (or stopped being a streams group) between the
+                            // validate read and the barrier write, so no UNCERTAIN barrier exists.
+                            // Running the plugin op anyway would create an entry that no cleanup
+                            // path ever reclaims (the cleanup scan and DeleteGroups only iterate
+                            // live groups), so fail the push instead.
+                            return CompletableFuture.failedFuture(
+                                new GroupIdNotFoundException(String.format("Group %s not found.", groupId)));
+                        }
+                        return streamsGroupTopologyDescriptionManager.invokeSetTopology(
+                            groupId, pushedEpoch, description);
+                    }))
             .thenCompose(pluginOutcome -> {
                 recordPluginSetOutcome(pluginOutcome.kind());
                 return switch (pluginOutcome.kind()) {
@@ -1297,20 +1309,35 @@ public class GroupCoordinatorService implements GroupCoordinator {
             // Delete it (behind a durable UNCERTAIN(-2) barrier) before re-running the join, which
             // then converts because cleanup has been handled.
             return markTopologyUncertainAsync(tp, request.groupId(), false)
-                .thenCompose(__ -> streamsGroupTopologyDescriptionManager.invokeDeleteTopologies(Set.of(request.groupId())))
-                .thenAccept(failures -> {
-                    recordPluginDeleteOutcome(1, failures.size());
-                    if (failures.isEmpty()) {
-                        streamsGroupTopologyDescriptionManager.clearBackoffGroup(request.groupId());
-                        runClassicGroupJoin(context, request, responseFuture, tp, true);
-                    } else if (!responseFuture.isDone()) {
-                        // Plugin delete failed: leave the group a streams group at UNCERTAIN(-2)
-                        // (reclaimable by the cleanup cycle and re-soliciting) and fail the join
-                        // with a retriable error instead of converting over orphaned plugin data.
-                        responseFuture.complete(new JoinGroupResponseData()
-                            .setMemberId(request.memberId())
-                            .setErrorCode(Errors.REBALANCE_IN_PROGRESS.code()));
+                .thenCompose(marked -> {
+                    if (!marked) {
+                        // The group changed underneath us (revived, converted, or removed) between
+                        // the join's cleanup check and the barrier write: no barrier exists, so
+                        // running the plugin delete could wipe a live group's topology. Fail the
+                        // join with a retriable error and let the client retry against the latest
+                        // group state.
+                        if (!responseFuture.isDone()) {
+                            responseFuture.complete(new JoinGroupResponseData()
+                                .setMemberId(request.memberId())
+                                .setErrorCode(Errors.REBALANCE_IN_PROGRESS.code()));
+                        }
+                        return CompletableFuture.<Void>completedFuture(null);
                     }
+                    return streamsGroupTopologyDescriptionManager.invokeDeleteTopologies(Set.of(request.groupId()))
+                        .thenAccept(failures -> {
+                            recordPluginDeleteOutcome(1, failures.size());
+                            if (failures.isEmpty()) {
+                                streamsGroupTopologyDescriptionManager.clearBackoffGroup(request.groupId());
+                                runClassicGroupJoin(context, request, responseFuture, tp, true);
+                            } else if (!responseFuture.isDone()) {
+                                // Plugin delete failed: leave the group a streams group at UNCERTAIN(-2)
+                                // (reclaimable by the cleanup cycle and re-soliciting) and fail the join
+                                // with a retriable error instead of converting over orphaned plugin data.
+                                responseFuture.complete(new JoinGroupResponseData()
+                                    .setMemberId(request.memberId())
+                                    .setErrorCode(Errors.REBALANCE_IN_PROGRESS.code()));
+                            }
+                        });
                 });
         }).exceptionally(exception -> {
             if (!responseFuture.isDone()) {

@@ -779,7 +779,9 @@ public class StreamsGroup implements Group {
     /**
      * Defer tombstoning of an empty streams group while the broker-level topology-description
      * cleanup cycle still has work to do for it: a plugin is configured and the persisted
-     * {@code StoredDescriptionTopologyEpoch} is not the {@code -1} default. The cycle drives
+     * {@code StoredDescriptionTopologyEpoch} is not {@link #STORED_TOPOLOGY_EPOCH_NONE}. Both a
+     * real epoch and {@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN} defer — an UNCERTAIN group may
+     * still hold plugin data, so it must stay reclaimable by the cycle. The cycle drives
      * {@code plugin.deleteTopology} and clears the stored epoch; the next sweep then proceeds
      * with tombstoning. When no plugin is configured the gate never holds, so deferring
      * indefinitely is not possible.
@@ -791,7 +793,7 @@ public class StreamsGroup implements Group {
     @Override
     public boolean shouldExpire(GroupCoordinatorConfig config) {
         return !(config.isStreamsGroupTopologyDescriptionPluginConfigured()
-            && storedDescriptionTopologyEpoch() != -1);
+            && storedDescriptionTopologyEpoch() != STORED_TOPOLOGY_EPOCH_NONE);
     }
 
     /**

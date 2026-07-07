@@ -11214,6 +11214,24 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testSetStoredEpochReArmsUncertainWhenBarrierWasCleared() {
+        // The push marked UNCERTAIN before its plugin op, but by the time its epoch write runs
+        // the stored epoch is NONE: a racing delete's finalize cleared the barrier, meaning
+        // plugin.deleteTopology may have wiped the topology this push just stored. The write must
+        // re-arm UNCERTAIN (re-soliciting a push) instead of recording the pushed epoch.
+        String groupId = "s";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            groupId, 3, 0L, -1, Map.of(), StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE, -1));
+
+        CoordinatorResult<Void, CoordinatorRecord> r =
+            context.groupMetadataManager.setStoredDescriptionTopologyEpoch(groupId, 9);
+
+        StreamsGroupMetadataValue v = (StreamsGroupMetadataValue) r.records().get(0).value().message();
+        assertEquals(StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, v.storedDescriptionTopologyEpoch());
+    }
+
+    @Test
     public void testStreamsGroupMetadataReplayRoundTripsTopologyDescriptionEpochs() {
         // KIP-1331: replay must read storedDescriptionTopologyEpoch and failedDescriptionTopologyEpoch from the record
         // and apply them to the in-memory streams group.
@@ -11318,6 +11336,47 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testMarkUncertainSkipsRevivedGroupForDeleteCallers() {
+        // markWhenNone=false is the delete callers' mode and they only ever target empty groups.
+        // A group revived (a member joined) between the caller's committed read and this write
+        // must return false without a record so its plugin data is not deleted underneath the
+        // active member.
+        String groupId = "streams-group";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(
+            groupId, streamsGroupMemberBuilderWithDefaults("member-1").build()));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            groupId, 3, 0L, -1, Map.of(), 5, -1));
+
+        CoordinatorResult<Boolean, CoordinatorRecord> r =
+            context.groupMetadataManager.markStoredDescriptionTopologyEpochUncertain(groupId, false);
+
+        assertEquals(List.of(), r.records());
+        assertFalse(r.response());
+    }
+
+    @Test
+    public void testMarkUncertainMarksNonEmptyGroupForPushCallers() {
+        // markWhenNone=true is the push path, which operates on live (non-empty) groups: the
+        // emptiness re-check must not apply there — the barrier is still required before the
+        // plugin setTopology.
+        String groupId = "streams-group";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(
+            groupId, streamsGroupMemberBuilderWithDefaults("member-1").build()));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            groupId, 3, 0L, -1, Map.of(), 5, -1));
+
+        CoordinatorResult<Boolean, CoordinatorRecord> r =
+            context.groupMetadataManager.markStoredDescriptionTopologyEpochUncertain(groupId, true);
+
+        assertTrue(r.response());
+        assertEquals(1, r.records().size());
+        StreamsGroupMetadataValue v = (StreamsGroupMetadataValue) r.records().get(0).value().message();
+        assertEquals(StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, v.storedDescriptionTopologyEpoch());
+    }
+
+    @Test
     public void testMarkUncertainBatchReturnsOnlyEligibleSubset() {
         // The batch mark folds the per-group mark with markWhenNone=false and returns only the
         // subset that was actually marked UNCERTAIN. A streams group at a real epoch is marked and
@@ -11337,6 +11396,27 @@ public class GroupMetadataManagerTest {
         assertEquals(1, r.records().size());
         StreamsGroupMetadataValue v = (StreamsGroupMetadataValue) r.records().get(0).value().message();
         assertEquals(StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, v.storedDescriptionTopologyEpoch());
+        // The per-group records are independent, so a large shard's batch must be splittable
+        // across log batches rather than failing on the atomic batch-size limit.
+        assertFalse(r.isAtomic());
+    }
+
+    @Test
+    public void testFinalizeAfterDeleteBatchIsNonAtomic() {
+        // Same independence argument as the mark batch: the smart-finalize records for different
+        // groups may be split across log batches on a shard with many cleaned-up groups.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            "a", 3, 0L, -1, Map.of(), StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            "b", 1, 0L, -1, Map.of(), StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN, -1));
+
+        CoordinatorResult<Void, CoordinatorRecord> r =
+            context.groupMetadataManager.finalizeStoredDescriptionTopologyEpochAfterDeleteBatch(
+                new LinkedHashSet<>(List.of("a", "b")));
+
+        assertEquals(2, r.records().size());
+        assertFalse(r.isAtomic());
     }
 
     @Test

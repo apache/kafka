@@ -8597,9 +8597,19 @@ public class GroupMetadataManager {
 
         // Only advance these epochs, never regress them: a stale push committing after the group
         // advanced (or after a concurrent higher-epoch push) must not move stored/failed back.
-        int newStored = permanentFailure
-            ? group.storedDescriptionTopologyEpoch()
-            : Math.max(group.storedDescriptionTopologyEpoch(), pushedEpoch);
+        int stored = group.storedDescriptionTopologyEpoch();
+        int newStored;
+        if (permanentFailure) {
+            newStored = stored;
+        } else if (stored == StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE) {
+            // The UNCERTAIN barrier this push wrote before its plugin op is gone: only a delete's
+            // finalize clears UNCERTAIN to NONE, so a plugin.deleteTopology raced this push and,
+            // the plugin op order being unknown, may have wiped the topology just stored. Re-arm
+            // UNCERTAIN to re-solicit a push rather than record an epoch over an empty plugin.
+            newStored = StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN;
+        } else {
+            newStored = Math.max(stored, pushedEpoch);
+        }
         int newFailed = permanentFailure
             ? Math.max(group.failedDescriptionTopologyEpoch(), pushedEpoch)
             : group.failedDescriptionTopologyEpoch();
@@ -8667,7 +8677,9 @@ public class GroupMetadataManager {
         for (String groupId : groupIds) {
             records.addAll(finalizeStoredDescriptionTopologyEpochAfterDelete(groupId).records());
         }
-        return new CoordinatorResult<>(records, null);
+        // Non-atomic: the per-group records are independent, so the runtime may split them
+        // across log batches instead of failing a large shard's write on the batch-size limit.
+        return new CoordinatorResult<>(records, null, null, true, false);
     }
 
     /**
@@ -8679,7 +8691,10 @@ public class GroupMetadataManager {
      *
      * <p>{@code markWhenNone} controls the {@code NONE} pre-state. Push callers pass {@code true}
      * (we are about to put data in the plugin, so mark even from NONE). Delete callers pass
-     * {@code false} (a NONE group has nothing in the plugin, so skip the plugin op entirely).
+     * {@code false} (a NONE group has nothing in the plugin, so skip the plugin op entirely);
+     * for them the group must also still be empty at the latest state — a group revived since
+     * the caller's committed read drops out so its plugin data is not deleted underneath the
+     * active members.
      *
      * @return records carrying the {@code -2} write (empty if already UNCERTAIN or skipped), and a
      *         response of {@code true} iff the caller should run its plugin op for this group.
@@ -8690,6 +8705,13 @@ public class GroupMetadataManager {
     ) {
         Group group = groups.get(groupId);
         if (!(group instanceof StreamsGroup streamsGroup)) {
+            return new CoordinatorResult<>(List.of(), Boolean.FALSE);
+        }
+        if (!markWhenNone && !streamsGroup.isEmpty()) {
+            // Delete callers only ever target empty groups (the cleanup scan requires emptiness
+            // and a DeleteGroups tombstone fails a non-empty group with NON_EMPTY_GROUP anyway).
+            // Re-checking here closes the window between the caller's committed read and this
+            // write in which a member may have revived the group.
             return new CoordinatorResult<>(List.of(), Boolean.FALSE);
         }
         int stored = streamsGroup.storedDescriptionTopologyEpoch();
@@ -8714,9 +8736,9 @@ public class GroupMetadataManager {
     /**
      * Batched UNCERTAIN(-2) barrier write: folds {@link #markStoredDescriptionTopologyEpochUncertain}
      * with {@code markWhenNone=false} over every group in {@code groupIds}. The response is the
-     * subset that the per-group mark reported eligible for a plugin op (still a streams group at
-     * the latest state and now UNCERTAIN); revived or converted groups drop out so the cleanup
-     * cycle does not run {@code plugin.deleteTopology} against them.
+     * subset that the per-group mark reported eligible for a plugin op (still an <em>empty</em>
+     * streams group at the latest state and now UNCERTAIN); revived or converted groups drop out
+     * so the cleanup cycle does not run {@code plugin.deleteTopology} against them.
      */
     public CoordinatorResult<Set<String>, CoordinatorRecord> markStoredDescriptionTopologyEpochUncertainBatch(
         Set<String> groupIds
@@ -8731,7 +8753,11 @@ public class GroupMetadataManager {
                 records.addAll(one.records());
             }
         }
-        return new CoordinatorResult<>(records, eligible);
+        // Non-atomic: the per-group records are independent, so the runtime may split them
+        // across log batches instead of failing a large shard's write on the batch-size limit.
+        // A failed append still fails the whole operation, so the eligible set never reaches the
+        // plugin-delete step; any group whose UNCERTAIN record did commit retries next cycle.
+        return new CoordinatorResult<>(records, eligible, null, true, false);
     }
 
     /**

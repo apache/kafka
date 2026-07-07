@@ -237,6 +237,37 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
     }
 
     @Test
+    public void testUpdateSkipsPluginWhenBarrierWriteFindsGroupGone() throws Exception {
+        // The UNCERTAIN barrier write returns false when the group vanished (or stopped being a
+        // streams group) between the validate read and the write. No barrier record exists, so the
+        // push must not create a plugin entry that no cleanup path would ever reclaim.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(runtime.scheduleReadOperation(
+            eq("streams-group-topology-description-validate"),
+            eq(GROUP_TP),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleWriteOperation(
+            eq("mark-topology-uncertain"),
+            any(),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(Boolean.FALSE));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+
+        StreamsGroupTopologyDescriptionUpdateResponseData response = service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE),
+            validUpdateRequest()
+        ).get(5, TimeUnit.SECONDS);
+
+        assertEquals(Errors.GROUP_ID_NOT_FOUND.code(), response.errorCode());
+        verify(plugin, never()).setTopology(anyString(), anyInt(), any());
+        verify(runtime, never()).scheduleWriteOperation(
+            eq("streams-group-set-stored-topology-epoch"), any(), any());
+    }
+
+    @Test
     public void testUpdatePermanentFailurePersistsFailedEpoch() throws Exception {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
@@ -1620,6 +1651,8 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .thenReturn(CompletableFuture.completedFuture(null));
         when(runtime.scheduleReadOperation(eq("streams-group-topology-description-validate"), eq(GROUP_TP), any()))
             .thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
         when(runtime.scheduleWriteOperation(eq("streams-group-set-stored-topology-epoch"), eq(GROUP_TP), any()))
             .thenReturn(CompletableFuture.completedFuture(null));
 
@@ -1643,6 +1676,8 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
                 new StreamsTopologyDescriptionPermanentFailureException("too large")));
         when(runtime.scheduleReadOperation(eq("streams-group-topology-description-validate"), eq(GROUP_TP), any()))
             .thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
         when(runtime.scheduleWriteOperation(eq("streams-group-set-failed-topology-epoch"), eq(GROUP_TP), any()))
             .thenReturn(CompletableFuture.completedFuture(null));
 
@@ -1665,6 +1700,8 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .thenReturn(CompletableFuture.failedFuture(new RuntimeException("backend offline")));
         when(runtime.scheduleReadOperation(eq("streams-group-topology-description-validate"), eq(GROUP_TP), any()))
             .thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
 
         GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
@@ -1976,6 +2013,29 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .get(5, TimeUnit.SECONDS);
 
         assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), resp.errorCode());
+        verify(runtime, times(1)).scheduleWriteOperation(eq("classic-group-join"), any(), any());
+    }
+
+    @Test
+    public void testClassicJoinSkipsPluginDeleteWhenBarrierWriteFindsGroupChanged() throws Exception {
+        // The barrier write returns false when the group changed underneath the join (revived,
+        // converted, or removed) between the cleanup check and the mark: no barrier exists, so the
+        // plugin delete must be skipped — it could wipe a live group's topology — and the join
+        // fails with a retriable error so the client retries against the latest state.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Boolean.FALSE));
+        when(runtime.scheduleWriteOperation(eq("classic-group-join"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Boolean.TRUE));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        JoinGroupResponseData resp = service.joinGroup(
+            requestContext(ApiKeys.JOIN_GROUP), classicJoinRequest("g"), BufferSupplier.NO_CACHING)
+            .get(5, TimeUnit.SECONDS);
+
+        assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), resp.errorCode());
+        verify(plugin, never()).deleteTopology(any());
         verify(runtime, times(1)).scheduleWriteOperation(eq("classic-group-join"), any(), any());
     }
 
