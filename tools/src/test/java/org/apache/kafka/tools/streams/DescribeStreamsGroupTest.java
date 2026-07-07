@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.internals.Exit;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -75,6 +76,12 @@ public class DescribeStreamsGroupTest {
     public static void setup() throws Exception {
         // start the cluster and create the input topic
         final Properties props = new Properties();
+        // Configure the topology description plugin explicitly rather than relying on
+        // EmbeddedKafkaCluster's default: testDescribeStreamsGroupWithTopologyOption
+        // depends on it, and without a plugin the --topology option would time out
+        // with nothing stored on the broker.
+        props.put(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
+            "org.apache.kafka.server.streams.InMemoryTopologyDescriptionPlugin");
         cluster = new EmbeddedKafkaCluster(1, props);
         cluster.start();
         cluster.createTopic(INPUT_TOPIC, 2, 1);
