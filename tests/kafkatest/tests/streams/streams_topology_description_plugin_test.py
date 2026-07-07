@@ -98,11 +98,18 @@ class StreamsTopologyDescriptionPluginTest(Test):
                                timeout_sec=60,
                                err_msg="Never saw 'REBALANCING -> RUNNING' message " + str(processor.node.account))
 
+        solicited = processor.node.account.ssh_capture(
+            "grep -c '%s' %s || true" % (self.PUSH_REQUESTED_LOG, processor.LOG_FILE),
+            allow_fail=False)
+        assert int(next(solicited).strip()) == 0, \
+            "Broker solicited a topology push despite no plugin being configured on the broker"
+
         sent = processor.node.account.ssh_capture(
             "grep -c '%s' %s || true" % (self.PUSH_SENDING_LOG, processor.LOG_FILE),
             allow_fail=False)
         assert int(next(sent).strip()) == 0, \
             "Client sent a topology description despite topology.description.push.enabled=false"
+        
         pushed = processor.node.account.ssh_capture(
             "grep -c '%s' %s || true" % (self.PUSH_SUCCESS_LOG, processor.LOG_FILE),
             allow_fail=False)
