@@ -49,6 +49,10 @@ class StreamsBrokerCompatibility(Test):
                                   server_prop_overrides=[
                                       ["transaction.state.log.replication.factor", "1"],
                                       ["transaction.state.log.min.isr", "1"],
+                                      # KIP-1331 streams topology description plugin: broker_version>4.4 instantiate the plugin at startup;
+                                      # older brokers warn about the unknown config and ignores it.
+                                      # Note that the plugin is never invoked in this system test since it uses classic protocol,
+                                      # so this just verifies a plugin-configured broker still serves classic-protocol streams app without breaking it.
                                       ["group.streams.topology.description.plugin.class", INMEMORY_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS]
                                   ])
         self.consumer = VerifiableConsumer(test_context,
@@ -65,7 +69,6 @@ class StreamsBrokerCompatibility(Test):
                             str(LATEST_4_2),str(LATEST_4_3),str(DEV_BRANCH)],
             metadata_quorum=[quorum.combined_kraft]
             )
-    
     def test_compatible_brokers_eos_disabled(self, broker_version, metadata_quorum):
         self.kafka.set_version(KafkaVersion(broker_version))
         self.kafka.start()

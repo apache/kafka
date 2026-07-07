@@ -30,6 +30,7 @@ class StreamsTopologyDescriptionPluginTest(Test):
     PUSH_REQUESTED_LOG = "Broker requested topology description push"
     PUSH_SENDING_LOG = "Sending topology description for group"
     PUSH_SUCCESS_LOG = "Topology description pushed successfully"
+    STREAMS_RUNNING_LOG = "State transition from REBALANCING to RUNNING"
 
     SOURCE_TOPIC = "topologyDescriptionPluginSource"
     SINK_TOPIC = "topologyDescriptionPluginSink"
@@ -72,6 +73,11 @@ class StreamsTopologyDescriptionPluginTest(Test):
         processor = StreamsTopologyDescriptionPluginService(self.test_context, self.kafka)
         with processor.node.account.monitor_log(processor.LOG_FILE) as monitor:
             processor.start()
+
+            monitor.wait_until(self.STREAMS_RUNNING_LOG,
+                               timeout_sec=60,
+                               err_msg="Never saw 'REBALANCING -> RUNNING' message " + str(processor.node.account))
+
             monitor.wait_until(self.PUSH_SUCCESS_LOG,
                                timeout_sec=120,
                                err_msg="Streams client did not log a successful topology description push")
@@ -81,15 +87,23 @@ class StreamsTopologyDescriptionPluginTest(Test):
     @matrix(metadata_quorum=[quorum.combined_kraft])
     def test_topology_description_not_stored_when_client_opts_out(self, metadata_quorum):
         """
-        Test the situation when the broker has the topology description plugin configured
-        but the client opts out via topology.description.push.enabled=false. The client
-        should never send a topology description even though the broker solicits one.
+        Test the situation when the broker has the plugin loaded and requests a topology
+        description push on every heartbeat response (sets topologyDescriptionRequired=true),
+        but the client has topology.description.push.enabled=false. StreamThread never
+        builds a wire description, so StreamsGroupHeartbeatRequestManager suppresses the
+        "Broker requested topology description push" log message and never sends the
+        push RPC. The broker continues to request on subsequent heartbeats, the plugin's
+        setTopology is never called, and no push log lines appear on the client.
         """
         self.setup_kafka(plugin_enabled=True)
         processor = StreamsTopologyDescriptionPluginService(
             self.test_context, self.kafka, topology_description_push_enabled=False)
-        processor.start()
-        time.sleep(30)
+        with processor.node.account.monitor_log(processor.LOG_FILE) as monitor:
+            processor.start()
+            monitor.wait_until(self.STREAMS_RUNNING_LOG,
+                               timeout_sec=60,
+                               err_msg="Never saw 'REBALANCING -> RUNNING' message " + str(processor.node.account))
+
         sent = processor.node.account.ssh_capture(
             "grep -c '%s' %s || true" % (self.PUSH_SENDING_LOG, processor.LOG_FILE),
             allow_fail=False)
@@ -110,13 +124,30 @@ class StreamsTopologyDescriptionPluginTest(Test):
         The broker should never solicit a topology push from the client.
         """
         self.setup_kafka(plugin_enabled=False)
+
         processor = StreamsTopologyDescriptionPluginService(self.test_context, self.kafka)
-        processor.start()
-        time.sleep(30)
-        # count how many lines in streams.log contain Broker requested topology description push
+        with processor.node.account.monitor_log(processor.LOG_FILE) as monitor:
+            processor.start()
+            monitor.wait_until(self.STREAMS_RUNNING_LOG,
+                               timeout_sec=60,
+                               err_msg="Never saw 'REBALANCING -> RUNNING' message " + str(processor.node.account))
+
+        # streams.log shouldn't log broker requested topology description push line
         solicited = processor.node.account.ssh_capture(
             "grep -c '%s' %s || true" % (self.PUSH_REQUESTED_LOG, processor.LOG_FILE),
             allow_fail=False)
         assert int(next(solicited).strip()) == 0, \
             "Broker solicited a topology push even though no plugin was configured"
+
+        sent = processor.node.account.ssh_capture(
+            "grep -c '%s' %s || true" % (self.PUSH_SENDING_LOG, processor.LOG_FILE),
+            allow_fail=False)
+        assert int(next(sent).strip()) == 0, \
+            "Client sent a topology description despite topology.description.push.enabled=false"
+
+        pushed = processor.node.account.ssh_capture(
+            "grep -c '%s' %s || true" % (self.PUSH_SUCCESS_LOG, processor.LOG_FILE),
+            allow_fail=False)
+        assert int(next(pushed).strip()) == 0, \
+            "Client logged a successful push despite topology.description.push.enabled=false"
         processor.stop()
