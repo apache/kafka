@@ -22,36 +22,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 
 import java.util.Optional;
 
-/** responseLogValue should only be defined if request logging is enabled */
-public final class SendResponse implements Response {
-
-    private final Request request;
-    private final Send responseSend;
-    private final Optional<JsonNode> responseLogValue;
-
-    public SendResponse(Request request, Send responseSend,
-                        Optional<JsonNode> responseLogValue) {
-        this.request = request;
-        this.responseSend = responseSend;
-        this.responseLogValue = responseLogValue;
-    }
-
-    @Override
-    public Request request() {
-        return request;
-    }
-
-    public Send responseSend() {
-        return responseSend;
-    }
-
-    @Override
-    public Optional<JsonNode> responseLog() {
-        return responseLogValue;
-    }
+/**
+ * @param responseLog should only be defined if request logging is enabled
+ */
+public record SendResponse(Request request, Send responseSend, Optional<JsonNode> responseLog) implements Response {
 
     @Override
     public String toString() {
-        return "Response(type=Send, request=" + request + ", send=" + responseSend + ", asString=" + responseLogValue + ")";
+        return "Response(type=Send, request=" + request + ", send=" + responseSend + ", asString=" + responseLog + ")";
     }
 }

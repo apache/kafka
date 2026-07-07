@@ -24,10 +24,6 @@ public sealed interface Response permits SendResponse, NoOpResponse, CloseConnec
 
     Request request();
 
-    default int processor() {
-        return request().processor();
-    }
-
     default Optional<JsonNode> responseLog() {
         return Optional.empty();
     }
