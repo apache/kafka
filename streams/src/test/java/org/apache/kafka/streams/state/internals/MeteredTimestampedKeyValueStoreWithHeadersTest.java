@@ -305,42 +305,37 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
         assertTrue((Double) metric.metricValue() > 0);
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
     @Test
     public void shouldPropagateBoundsAndDescendingOrderForTimestampedRangeWithHeadersQuery() {
         setUp();
-        final ArgumentCaptor<RangeQuery> captor = ArgumentCaptor.forClass(RangeQuery.class);
-        when(inner.query(captor.capture(), any(), any())).thenReturn(
-            QueryResult.forResult(new KeyValueIteratorStub<>(List.<KeyValue<Bytes, byte[]>>of().iterator())));
         init();
-
-        final TimestampedRangeWithHeadersQuery<String, String> query =
-            TimestampedRangeWithHeadersQuery.<String, String>withLowerBound("a").withDescendingKeys();
-        metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
-
-        final RangeQuery<?, ?> rawQuery = captor.getValue();
+        final RangeQuery<?, ?> rawQuery = forwardedRawRangeQuery(
+            TimestampedRangeWithHeadersQuery.<String, String>withLowerBound("a").withDescendingKeys());
         assertEquals(ResultOrder.DESCENDING, rawQuery.resultOrder());
-        assertTrue(rawQuery.getLowerBound().isPresent());
+        assertEquals(Bytes.wrap("a".getBytes()), rawQuery.getLowerBound().get());
         assertFalse(rawQuery.getUpperBound().isPresent());
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
     @Test
     public void shouldPropagateBoundsAndAscendingOrderForTimestampedRangeWithHeadersQuery() {
         setUp();
-        final ArgumentCaptor<RangeQuery> captor = ArgumentCaptor.forClass(RangeQuery.class);
-        when(inner.query(captor.capture(), any(), any())).thenReturn(
-            QueryResult.forResult(new KeyValueIteratorStub<>(List.<KeyValue<Bytes, byte[]>>of().iterator())));
         init();
-
-        final TimestampedRangeWithHeadersQuery<String, String> query =
-            TimestampedRangeWithHeadersQuery.<String, String>withUpperBound("z").withAscendingKeys();
-        metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
-
-        final RangeQuery<?, ?> rawQuery = captor.getValue();
+        final RangeQuery<?, ?> rawQuery = forwardedRawRangeQuery(
+            TimestampedRangeWithHeadersQuery.<String, String>withUpperBound("z").withAscendingKeys());
         assertEquals(ResultOrder.ASCENDING, rawQuery.resultOrder());
         assertFalse(rawQuery.getLowerBound().isPresent());
-        assertTrue(rawQuery.getUpperBound().isPresent());
+        assertEquals(Bytes.wrap("z".getBytes()), rawQuery.getUpperBound().get());
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private RangeQuery<?, ?> forwardedRawRangeQuery(final Query<?> query) {
+        when(inner.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) QueryResult.forResult(
+                new KeyValueIteratorStub<>(List.<KeyValue<Bytes, byte[]>>of().iterator())));
+        metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+        final ArgumentCaptor<RangeQuery> captor = ArgumentCaptor.forClass(RangeQuery.class);
+        verify(inner).query(captor.capture(), any(PositionBound.class), any(QueryConfig.class));
+        return captor.getValue();
     }
 
     @Test
