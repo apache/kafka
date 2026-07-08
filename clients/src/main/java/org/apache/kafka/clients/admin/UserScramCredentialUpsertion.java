@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.security.scram.internals.ScramFormatter;
 
 import java.nio.charset.StandardCharsets;
@@ -28,6 +29,7 @@ import java.util.Objects;
  *
  * @see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-554%3A+Add+Broker-side+SCRAM+Config+API">KIP-554: Add Broker-side SCRAM Config API</a>
  */
+@InterfaceAudience.Public
 public class UserScramCredentialUpsertion extends UserScramCredentialAlteration {
     private final ScramCredentialInfo info;
     private final byte[] salt;

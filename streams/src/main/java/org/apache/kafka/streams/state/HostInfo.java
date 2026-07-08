@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
@@ -37,6 +38,7 @@ import static org.apache.kafka.common.utils.Utils.getPort;
  *  If developers wish to expose an endpoint in their KafkaStreams applications they should provide the above
  *  config.
  */
+@InterfaceAudience.Public
 public class HostInfo {
     private final String host;
     private final int port;

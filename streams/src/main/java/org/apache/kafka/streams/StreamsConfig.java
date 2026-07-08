@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -159,6 +160,7 @@ import static org.apache.kafka.common.config.ConfigDef.parseType;
  * @see ConsumerConfig
  * @see ProducerConfig
  */
+@InterfaceAudience.Public
 public class StreamsConfig extends AbstractConfig {
 
     private static final Logger log = LoggerFactory.getLogger(StreamsConfig.class);
@@ -912,6 +914,12 @@ public class StreamsConfig extends AbstractConfig {
             "Whether to use the configured <code>" + PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + "</code> during global store/KTable processing. " +
                     "Disabled by default. This config will be removed in Kafka Streams 5.0, where global exception handling will be enabled by default";
 
+    /** {@code topology.description.push.enabled} */
+    public static final String TOPOLOGY_DESCRIPTION_PUSH_ENABLED_CONFIG = "topology.description.push.enabled";
+    private static final String TOPOLOGY_DESCRIPTION_PUSH_ENABLED_DOC = "Controls whether the Kafka Streams client sends topology descriptions to the broker when requested. " +
+        "When set to false, the client will not prepare or push topology descriptions. " +
+        "Enabled by default.";
+
     static {
         CONFIG = new ConfigDef()
 
@@ -1359,7 +1367,12 @@ public class StreamsConfig extends AbstractConfig {
                     Type.LONG,
                     null,
                     Importance.LOW,
-                    WINDOW_SIZE_MS_DOC);
+                    WINDOW_SIZE_MS_DOC)
+            .define(TOPOLOGY_DESCRIPTION_PUSH_ENABLED_CONFIG,
+                    Type.BOOLEAN,
+                    true,
+                    Importance.MEDIUM,
+                    TOPOLOGY_DESCRIPTION_PUSH_ENABLED_DOC);
     }
 
     // this is the list of configs for underlying clients
@@ -1617,12 +1630,6 @@ public class StreamsConfig extends AbstractConfig {
 
     private void verifyStreamsProtocolCompatibility(final boolean doLog) {
         if (doLog && isStreamsProtocolEnabled()) {
-            final Map<String, Object> mainConsumerConfigs = getMainConsumerConfigs("dummy", "dummy", -1);
-            final String instanceId = (String) mainConsumerConfigs.get(CommonClientConfigs.GROUP_INSTANCE_ID_CONFIG);
-            if (instanceId != null && !instanceId.isEmpty()) {
-                throw new ConfigException("Streams rebalance protocol does not support static membership. "
-                    + "Please set group.protocol=classic or remove group.instance.id from the configuration.");
-            }
             if (getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG) != 0) {
                 log.warn("Warmup replicas are not supported yet with the streams protocol and will be ignored. "
                     + "If you want to use warmup replicas, please set group.protocol=classic.");

@@ -18,6 +18,7 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.CallbackHandler;
@@ -30,6 +31,7 @@ import javax.security.auth.callback.CallbackHandler;
  *
  * @see JwtValidator#validate(String)
  */
+@InterfaceAudience.Public
 public class JwtValidatorException extends KafkaException {
 
     public JwtValidatorException(String message) {

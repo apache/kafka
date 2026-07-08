@@ -107,6 +107,7 @@ public class DefaultStreamsRebalanceListenerTest {
                 )
             ),
             Map.of(),
+            Map::of,
             Map::of
         ));
         when(streamThread.state()).thenReturn(state);
@@ -132,7 +133,7 @@ public class DefaultStreamsRebalanceListenerTest {
         final Exception exception = new RuntimeException("sample exception");
         doThrow(exception).when(taskManager).handleRevocation(any());
 
-        createRebalanceListenerWithRebalanceData(new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of));
+        createRebalanceListenerWithRebalanceData(new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of, Map::of));
 
         final Exception actualException = assertThrows(RuntimeException.class, () -> defaultStreamsRebalanceListener.onTasksRevoked(Set.of()));
 
@@ -268,6 +269,7 @@ public class DefaultStreamsRebalanceListenerTest {
                 )
             ),
             Map.of(),
+            Map::of,
             Map::of
         ));
 
@@ -304,6 +306,7 @@ public class DefaultStreamsRebalanceListenerTest {
                 )
             ),
             Map.of(),
+            Map::of,
             Map::of
         ));
 
@@ -334,7 +337,7 @@ public class DefaultStreamsRebalanceListenerTest {
             return null;
         }).when(taskManager).handleLostAll();
 
-        createRebalanceListenerWithRebalanceData(new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of));
+        createRebalanceListenerWithRebalanceData(new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of, Map::of));
 
         defaultStreamsRebalanceListener.onAllTasksLost();
 
@@ -366,6 +369,7 @@ public class DefaultStreamsRebalanceListenerTest {
                 )
             ),
             Map.of(),
+            Map::of,
             Map::of
         ));
 
@@ -386,7 +390,7 @@ public class DefaultStreamsRebalanceListenerTest {
             throw exception;
         }).when(taskManager).handleAssignment(any(), any());
 
-        createRebalanceListenerWithRebalanceData(new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of));
+        createRebalanceListenerWithRebalanceData(new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of, Map::of));
 
         assertThrows(RuntimeException.class, () -> defaultStreamsRebalanceListener.onTasksAssigned(
             new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of(), false)

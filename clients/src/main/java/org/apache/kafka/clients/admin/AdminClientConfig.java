@@ -20,6 +20,7 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -41,6 +42,7 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 /**
  * The AdminClient configuration class, which also contains constants for configuration entry names.
  */
+@InterfaceAudience.Public
 public class AdminClientConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
 

@@ -26,7 +26,9 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
+import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -156,6 +158,7 @@ import static org.apache.kafka.streams.processor.internals.TopologyMetadata.UNNA
  * @see org.apache.kafka.streams.StreamsBuilder
  * @see org.apache.kafka.streams.Topology
  */
+@InterfaceAudience.Public
 public class KafkaStreams implements AutoCloseable {
 
     private static final String JMX_PREFIX = "kafka.streams";
@@ -169,7 +172,9 @@ public class KafkaStreams implements AutoCloseable {
     protected final String clientId;
     private final Metrics metrics;
     protected final StreamsConfig applicationConfigs;
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected field's generic signature exposes internal StreamThread for subclass access — pending KIP review to promote the type or refactor")
     protected final List<StreamThread> threads;
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected field exposes internal StreamsMetadataState for subclass access — pending KIP review to promote the type or refactor")
     protected final StreamsMetadataState streamsMetadataState;
     private final ScheduledExecutorService stateDirCleaner;
     private final ScheduledExecutorService rocksDBMetricsRecordingService;
@@ -180,12 +185,14 @@ public class KafkaStreams implements AutoCloseable {
     private final DelegatingStateRestoreListener delegatingStateRestoreListener;
     private final UUID processId;
     private final KafkaClientSupplier clientSupplier;
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected field exposes internal TopologyMetadata for subclass access — pending KIP review to promote the type or refactor")
     protected final TopologyMetadata topologyMetadata;
     private final QueryableStoreProvider queryableStoreProvider;
     private final DelegatingStandbyUpdateListener delegatingStandbyUpdateListener;
     private final LogContext logContext;
 
     GlobalStreamThread globalStreamThread;
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected field exposes internal StateDirectory for subclass access — pending KIP review to promote the type or refactor")
     protected StateDirectory stateDirectory = null;
     private KafkaStreams.StateListener stateListener;
     private BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler;
@@ -848,6 +855,7 @@ public class KafkaStreams implements AutoCloseable {
      * @param time           {@code Time} implementation; cannot be null
      * @throws StreamsException if any fatal error occurs
      */
+    @SuppressKafkaInternalApiUsage("KIP-1265: ctor leaks internal Time for test injection — pending KIP review to promote Time or refactor")
     public KafkaStreams(final Topology topology,
                         final Properties props,
                         final Time time) {
@@ -867,6 +875,7 @@ public class KafkaStreams implements AutoCloseable {
      * @param time           {@code Time} implementation; cannot be null
      * @throws StreamsException if any fatal error occurs
      */
+    @SuppressKafkaInternalApiUsage("KIP-1265: ctor leaks internal Time for test injection — pending KIP review to promote Time or refactor")
     public KafkaStreams(final Topology topology,
                         final Properties props,
                         final KafkaClientSupplier clientSupplier,
@@ -918,6 +927,7 @@ public class KafkaStreams implements AutoCloseable {
      * @param time           {@code Time} implementation; cannot be null
      * @throws StreamsException if any fatal error occurs
      */
+    @SuppressKafkaInternalApiUsage("KIP-1265: ctor leaks internal Time for test injection — pending KIP review to promote Time or refactor")
     public KafkaStreams(final Topology topology,
                         final StreamsConfig applicationConfigs,
                         final Time time) {
@@ -931,6 +941,7 @@ public class KafkaStreams implements AutoCloseable {
         this(new TopologyMetadata(topology.internalTopologyBuilder, applicationConfigs), applicationConfigs, clientSupplier, time);
     }
 
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected ctor takes internal TopologyMetadata as a subclass extension point — pending KIP review to promote the type or refactor")
     protected KafkaStreams(final TopologyMetadata topologyMetadata,
                            final StreamsConfig applicationConfigs,
                            final KafkaClientSupplier clientSupplier) throws StreamsException {
@@ -1886,6 +1897,7 @@ public class KafkaStreams implements AutoCloseable {
      * threads lock when looping threads.
      * @param consumer handler
      */
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected method's signature exposes internal StreamThread for subclass access — pending KIP review to promote the type or refactor")
     protected int processStreamThread(final Consumer<StreamThread> consumer) {
         final List<StreamThread> copy = new ArrayList<>(threads);
         for (final StreamThread thread : copy) consumer.accept(thread);
@@ -2058,6 +2070,7 @@ public class KafkaStreams implements AutoCloseable {
         return allLocalStorePartitionLags(allTasks);
     }
 
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected method's signature exposes internal Task for subclass access — pending KIP review to promote the type or refactor")
     protected Map<String, Map<Integer, LagInfo>> allLocalStorePartitionLags(final List<Task> tasksToCollectLagFor) {
         final Map<String, Map<Integer, LagInfo>> localStorePartitionLags = new TreeMap<>();
         final Collection<TopicPartition> allPartitions = new LinkedList<>();
