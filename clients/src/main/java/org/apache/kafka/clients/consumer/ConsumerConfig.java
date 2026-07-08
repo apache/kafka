@@ -179,8 +179,22 @@ public class ConsumerConfig extends AbstractConfig {
             "Negative duration is not allowed.</li>" +
             "<li>none: throw exception to the consumer if no previous offset is found for the consumer's group</li>" +
             "<li>anything else: throw exception to the consumer.</li></ul>" +
-            "<p>Note that altering partition numbers while setting this config to latest may cause message delivery loss since " +
-            "producers could start to send messages to newly added partitions (i.e. no initial offsets exist yet) before consumers reset their offsets.";
+            "<p>Note that increasing a topic's partition count while this config is set to <code>latest</code> may cause silent " +
+            "message loss: producers may begin appending records to a newly created partition before the consumer discovers it, " +
+            "and <code>latest</code> resets the position to the log end offset, skipping any records produced during that discovery gap.</p>" +
+            "<p>To avoid this, prefer <code>by_duration:&lt;duration&gt;</code>. When a partition has no committed offset, " +
+            "<code>by_duration</code> determines the starting position by issuing a <code>ListOffsets</code> lookup for " +
+            "<code>now() - duration</code>. If the target timestamp is earlier than the partition's creation time, the lookup " +
+            "returns offset 0, ensuring that records produced during the discovery window are still consumed. Size the duration to cover " +
+            "the worst-case partition-discovery latency for the group protocol in use:</p>" +
+            "<ul><li>With the <code>consumer</code> group protocol (KIP-848), newly assigned partitions are pushed on the next " +
+            "group heartbeat, so a value slightly greater than <code>group.consumer.heartbeat.interval.ms</code> " +
+            "(server default 5000&nbsp;ms) is sufficient, for example <code>by_duration:PT5S</code>.</li>" +
+            "<li>With the <code>classic</code> group protocol, new partitions are discovered through periodic metadata refresh, " +
+            "so the duration must exceed <code>metadata.max.age.ms</code> (client default 300000&nbsp;ms), " +
+            "for example <code>by_duration:PT5M</code>.</li></ul>" +
+            "<p>Consumers with a valid committed offset are unaffected. The reset applies only to partitions whose offset is " +
+            "missing or out of range, so <code>by_duration</code> does not force existing consumers to replay historical data on restart.</p>";
 
     /**
      * <code>fetch.min.bytes</code>
