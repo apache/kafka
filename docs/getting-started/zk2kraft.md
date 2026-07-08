@@ -1,6 +1,6 @@
 ---
 title: KRaft vs ZooKeeper
-description: 
+description: Understand how KRaft mode differs from ZooKeeper mode, including removed features, metric changes, and behavioral changes.
 weight: 6
 tags: ['kafka', 'docs']
 aliases: 

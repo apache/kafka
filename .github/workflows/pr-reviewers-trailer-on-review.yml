@@ -1,0 +1,77 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# When someone reviews a PR (even a plain Approve), credit them in the
+# `Reviewers:` trailer. Reviewer comes from workflow_run.actor.login.
+#
+# Two things to know:
+#   - We trigger on `types: [requested]`, not `completed`. On a first-time
+#     contributor's fork PR the "Pull Request Reviewed" run is blocked pending
+#     approval and never completes; the `requested` event still fires the
+#     moment it is queued, so we act on that.
+#   - workflow_run doesn't carry the PR number for fork PRs, so we recover it
+#     by matching the run's head_sha against the open PRs via the API.
+
+name: Reviewers Trailer (on review)
+
+on:
+  workflow_run:
+    workflows: [Pull Request Reviewed]
+    types:
+      - requested
+
+run-name: Reviewers Trailer for ${{ github.event.workflow_run.display_title }}
+
+jobs:
+  append-trailer:
+    # Only react to review submissions. The "Pull Request Reviewed" workflow
+    # also runs on `pull_request` (open / edit), where the actor is the PR
+    # author rather than a reviewer.
+    if: |
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.event == 'pull_request_review'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Env
+        run: printenv
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Append reviewer trailer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          REVIEWER_LOGIN: ${{ github.event.workflow_run.actor.login }}
+        run: |
+          set -e
+          # Match the run's head_sha against open PRs. Stream matches across
+          # all pages and take the first, rather than a per-page map(...).[0]
+          # which would emit a `null` per non-matching page under --paginate.
+          PR_NUMBER=$(gh api --paginate "repos/$REPO/pulls?state=open&per_page=100" \
+            --jq ".[] | select(.head.sha==\"$HEAD_SHA\") | .number" | head -n 1)
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No open PR found for head sha $HEAD_SHA; nothing to do."
+            exit 0
+          fi
+          echo "Crediting reviewer '$REVIEWER_LOGIN' on PR #$PR_NUMBER."
+          PR_NUMBER="$PR_NUMBER" REVIEWER_LOGIN="$REVIEWER_LOGIN" \
+            python .github/scripts/pr-reviewers-trailer.py

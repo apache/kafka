@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.Topology;
 
 import java.util.Optional;
@@ -51,6 +52,7 @@ import java.util.Set;
  * @see Topology#addSink(String, String, StreamPartitioner, String...)
  */
 @FunctionalInterface
+@InterfaceAudience.Public
 public interface StreamPartitioner<K, V> {
 
     /**

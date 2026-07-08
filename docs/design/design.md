@@ -1,6 +1,6 @@
 ---
 title: Design
-description: 
+description: Kafka architecture design and the principles behind its core features.
 weight: 1
 tags: ['kafka', 'docs']
 aliases: 
@@ -454,7 +454,11 @@ This can be used to prevent messages newer than a minimum message age from being
 log.cleaner.max.compaction.lag.ms
 ```
 
-This can be used to prevent log with low produce rate from remaining ineligible for compaction for an unbounded duration. If not set, logs that do not exceed min.cleanable.dirty.ratio are not compacted. Note that this compaction deadline is not a hard guarantee since it is still subjected to the availability of log cleaner threads and the actual compaction time. You will want to monitor the uncleanable-partitions-count, max-clean-time-secs and max-compaction-delay-secs metrics. 
+This can be used to prevent log with low produce rate from remaining ineligible for compaction for an unbounded duration. If not set, logs that do not exceed min.cleanable.dirty.ratio are not compacted.
+
+Because the active segment is never compacted (as noted above), records become eligible for compaction only through active segment rolling. For a compacted topic the active segment is rolled when the first of these is reached: it grows to segment.bytes, or its age reaches the smaller of segment.ms and max.compaction.lag.ms. So max.compaction.lag.ms governs two distinct things. First, it triggers active segment rolling by lowering the effective time-based roll threshold to the smaller of segment.ms and max.compaction.lag.ms, moving older records out of the active segment. Second, max.compaction.lag.ms then makes the rolled records eligible for compaction even when the log's dirty ratio is below min.cleanable.dirty.ratio.
+
+Note that this compaction deadline is not a hard guarantee since it is still subjected to the availability of log cleaner threads and the actual compaction time. You will want to monitor the uncleanable-partitions-count, max-clean-time-secs and max-compaction-delay-secs metrics. 
 
 Further cleaner configurations are described [here](/documentation.html#brokerconfigs). 
 

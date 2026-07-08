@@ -14,8 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * The {@code ForeachAction} interface for performing an action on a {@link org.apache.kafka.streams.KeyValue key-value
@@ -31,6 +33,7 @@ package org.apache.kafka.streams.kstream;
  * @see KStream#foreach(ForeachAction)
  */
 @FunctionalInterface
+@InterfaceAudience.Public
 public interface ForeachAction<K, V> {
 
     /**

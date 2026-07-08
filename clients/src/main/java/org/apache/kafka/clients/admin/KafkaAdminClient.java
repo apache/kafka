@@ -88,6 +88,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
@@ -317,6 +318,7 @@ import static org.apache.kafka.common.utils.Utils.closeQuietly;
  * This class is thread-safe.
  * </p>
  */
+@InterfaceAudience.Public
 public class KafkaAdminClient extends AdminClient {
 
     /**
@@ -3856,7 +3858,7 @@ public class KafkaAdminClient extends AdminClient {
                                                              final DescribeStreamsGroupsOptions options) {
         SimpleAdminApiFuture<CoordinatorKey, StreamsGroupDescription> future =
             DescribeStreamsGroupsHandler.newFuture(groupIds);
-        DescribeStreamsGroupsHandler handler = new DescribeStreamsGroupsHandler(options.includeAuthorizedOperations(), logContext);
+        DescribeStreamsGroupsHandler handler = new DescribeStreamsGroupsHandler(options.includeAuthorizedOperations(), options.includeTopologyDescription(), logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new DescribeStreamsGroupsResult(future.all().entrySet().stream()
             .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
