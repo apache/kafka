@@ -92,7 +92,7 @@ class ShareConsumerDLQTest(VerifiableShareConsumerTest):
         return dlq_records
 
     @cluster(num_nodes=10)
-    @matrix(metadata_quorum=[quorum.isolated_kraft])
+    @matrix(metadata_quorum=[quorum.isolated_kraft, quorum.combined_kraft])
     def test_single_partition_dlq_reject(self, metadata_quorum=quorum.isolated_kraft):
         """Every record is REJECTed and must be written to the DLQ topic exactly once, headers-only
         (copy-record left at its default of false)."""
@@ -122,7 +122,7 @@ class ShareConsumerDLQTest(VerifiableShareConsumerTest):
             "Expected DLQ records to carry no value when copy-record is disabled"
 
     @cluster(num_nodes=10)
-    @matrix(metadata_quorum=[quorum.isolated_kraft])
+    @matrix(metadata_quorum=[quorum.isolated_kraft, quorum.combined_kraft])
     def test_single_partition_dlq_release(self, metadata_quorum=quorum.isolated_kraft):
         """Every record is RELEASEd repeatedly; once its delivery count exceeds the (lowered) limit
         it must be written to the DLQ topic."""
@@ -155,7 +155,7 @@ class ShareConsumerDLQTest(VerifiableShareConsumerTest):
         consumer.stop_all()
 
     @cluster(num_nodes=10)
-    @matrix(metadata_quorum=[quorum.isolated_kraft])
+    @matrix(metadata_quorum=[quorum.isolated_kraft, quorum.combined_kraft])
     def test_single_partition_dlq_mixed(self, metadata_quorum=quorum.isolated_kraft):
         """Records are cycled reject/release/accept by (offset % 3); reject+release offsets must
         eventually land in the DLQ topic with the original value copied (copy-record enabled),
