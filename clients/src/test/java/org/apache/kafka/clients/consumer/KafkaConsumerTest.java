@@ -494,9 +494,9 @@ public class KafkaConsumerTest {
     public void testPollReturnsRecords(GroupProtocol groupProtocol) throws InterruptedException {
         consumer = setUpConsumerWithRecordsToPoll(groupProtocol, tp0, 5);
 
-        // Poll until the expected records are consumed. A single poll(Duration.ZERO)d may not be enough
-        // and make the test flaky, as it can return empty when the heartbeat
-        // thread and the consumer thread race to fire the fetch completion.
+        // Poll until the expected records are consumed. A single poll(Duration.ZERO) may not be enough
+        // and make the test flaky, as it can return empty when the heartbeat thread and the consumer
+        // thread race to fire the fetch completion.
         AtomicReference<ConsumerRecords<String, String>> polled = new AtomicReference<>(ConsumerRecords.empty());
         TestUtils.waitForCondition(() -> {
             polled.set((ConsumerRecords<String, String>) consumer.poll(Duration.ZERO));
@@ -522,9 +522,9 @@ public class KafkaConsumerTest {
 
         consumer = setUpConsumerWithRecordsToPoll(groupProtocol, tp0, 5, deserializer);
 
-        // Poll until the expected records are consumed. A single poll(Duration.ZERO)d may not be enough
-        // and make the test flaky, as it can return empty when the heartbeat
-        // thread and the consumer thread race to fire the fetch completion.
+        // Poll until the expected records are consumed. A single poll(Duration.ZERO) may not be enough
+        // and make the test flaky, as it can return empty when the heartbeat thread and the consumer
+        // thread race to fire the fetch completion.
         AtomicReference<ConsumerRecords<String, String>> polled = new AtomicReference<>(ConsumerRecords.empty());
         TestUtils.waitForCondition(() -> {
             polled.set((ConsumerRecords<String, String>) consumer.poll(Duration.ZERO));
