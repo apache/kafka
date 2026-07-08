@@ -142,8 +142,8 @@ class KStreamKTableJoinProcessor<StreamKey, StreamValue, TableKey, TableValue, V
 
     private boolean maybeDropRecord(final Record<StreamKey, StreamValue> record) {
         // we do join iff the join keys are equal, thus, if {@code keyMapper} returns {@code null} we
-        // cannot join and just ignore the record. Note for KTables, this is the same as having a null key
-        // since keyMapper just returns the key, but for GlobalKTables we can have other keyMappers
+        // cannot join and just ignore the record. For stream-KTable joins the {@code keyMapper} is the
+        // identity, so a {@code null} mapped key is equivalent to a {@code null} stream record key.
         //
         // we also ignore the record if value is null, because in a key-value data model a null-value indicates
         // an empty message (ie, there is nothing to be joined) -- this contrast SQL NULL semantics
