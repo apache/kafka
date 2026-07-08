@@ -75,6 +75,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -792,6 +793,14 @@ public class NetworkClient implements KafkaClient {
             cancelBootstrapResolution();
             if (bootstrapExecutor != null) {
                 bootstrapExecutor.shutdownNow();
+                // Wait briefly for the executor's worker thread to actually terminate. Otherwise
+                // a lingering thread can trip test-side thread-leak detectors even though the
+                // executor has already been shut down.
+                try {
+                    bootstrapExecutor.awaitTermination(1, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
             }
             this.selector.close();
             this.metadataUpdater.close();
