@@ -55,10 +55,12 @@ public final class RaftClientBenchmarkContext {
     private final RaftClientTestContext context;
     private final MockLog log;
     private final MockNetworkChannel channel;
-    private final List<ReplicaKey> voters;
+
+    private final List<ReplicaKey> startingVoters;
+    private final List<ReplicaKey> startingObservers;
 
     // Each tracks one cumulative mock counter as a drainable delta against a baseline. The baseline is
-    // reset by zeroCountersOnSetup() at the end of benchmark setup.
+    // snapshotted at construction and re-baselined by zeroCountersOnSetup() at the end of benchmark setup.
     private final DrainableCounter logFlushes;
     private final DrainableCounter logReads;
     private final DrainableCounter logTruncations;
@@ -66,11 +68,16 @@ public final class RaftClientBenchmarkContext {
     private final DrainableCounter quorumStateWrites;
     private final DrainableCounter quorumStateReads;
 
-    private RaftClientBenchmarkContext(RaftClientTestContext context, List<ReplicaKey> voters) {
+    private RaftClientBenchmarkContext(
+        RaftClientTestContext context,
+        List<ReplicaKey> startingVoters,
+        List<ReplicaKey> startingObservers
+    ) {
         this.context = context;
         this.log = context.log;
         this.channel = context.channel;
-        this.voters = List.copyOf(voters);
+        this.startingVoters = List.copyOf(startingVoters);
+        this.startingObservers = List.copyOf(startingObservers);
         this.logFlushes = new DrainableCounter(log::flushCount);
         this.logReads = new DrainableCounter(log::readCount);
         this.logTruncations = new DrainableCounter(log::truncationCount);
@@ -97,33 +104,47 @@ public final class RaftClientBenchmarkContext {
         if (voterCount < 2) {
             throw new IllegalArgumentException("voterCount must be at least 2; a single voter self-elects at init");
         }
-        List<ReplicaKey> voterKeys = voterKeys(voterCount);
-        return new RaftClientBenchmarkContext(buildContext(voterKeys, kraftVersion, raftProtocol), voterKeys);
+        List<ReplicaKey> voterKeys = replicaKeys(randomReplicaId(), voterCount);
+        return new RaftClientBenchmarkContext(
+            buildContext(voterKeys, kraftVersion, raftProtocol), voterKeys, List.of());
     }
 
     public static RaftClientBenchmarkContext leader(int voterCount) throws Exception {
-        return leader(voterCount, DEFAULT_KRAFT_VERSION, DEFAULT_RAFT_PROTOCOL);
+        return leader(voterCount, 0, DEFAULT_KRAFT_VERSION, DEFAULT_RAFT_PROTOCOL);
     }
 
-    public static RaftClientBenchmarkContext leader(
-        int voterCount,
-        KRaftVersion kraftVersion,
-        RaftProtocol raftProtocol
-    ) throws Exception {
-        List<ReplicaKey> voterKeys = voterKeys(voterCount);
-        RaftClientTestContext context = buildContext(voterKeys, kraftVersion, raftProtocol);
-        context.unattachedToLeader();
-
-        return new RaftClientBenchmarkContext(context, voterKeys);
+    public static RaftClientBenchmarkContext leader(int voterCount, int observerCount) throws Exception {
+        return leader(voterCount, observerCount, DEFAULT_KRAFT_VERSION, DEFAULT_RAFT_PROTOCOL);
     }
 
     /**
-     * {@code voterCount} voter keys, each with a random directory id, with the local node first.
+     * Builds a leader in a cluster of {@code voterCount} voters and {@code observerCount} observers.
      */
-    private static List<ReplicaKey> voterKeys(int voterCount) {
+    public static RaftClientBenchmarkContext leader(
+        int voterCount,
+        int observerCount,
+        KRaftVersion kraftVersion,
+        RaftProtocol raftProtocol
+    ) throws Exception {
+        if (voterCount < 1) {
+            throw new IllegalArgumentException("voterCount must be at least 1 (the local leader is a voter)");
+        }
         int localId = randomReplicaId();
-        return IntStream.range(0, voterCount)
-            .mapToObj(i -> ReplicaKey.of(localId + i, Uuid.randomUuid()))
+        List<ReplicaKey> voterKeys = replicaKeys(localId, voterCount);
+        List<ReplicaKey> observerKeys = replicaKeys(localId + voterCount, observerCount);
+        RaftClientTestContext context = buildContext(voterKeys, kraftVersion, raftProtocol);
+        context.unattachedToLeader();
+
+        return new RaftClientBenchmarkContext(context, voterKeys, observerKeys);
+    }
+
+    /**
+     * {@code count} replica keys with consecutive ids starting at {@code startId}, each with a random
+     * directory id.
+     */
+    private static List<ReplicaKey> replicaKeys(int startId, int count) {
+        return IntStream.range(0, count)
+            .mapToObj(i -> ReplicaKey.of(startId + i, Uuid.randomUuid()))
             .collect(Collectors.toList());
     }
 
@@ -161,11 +182,15 @@ public final class RaftClientBenchmarkContext {
     }
 
     /**
-     * The voters other than the local node, in voter-set order. May be empty (single-voter cluster).
-     * Use these as the source of delivered requests, e.g. a FETCH from a follower on the leader.
+     * The starting voters other than the local node, in voter-set order. May be empty (single-voter
+     * cluster).
      */
     public List<ReplicaKey> remoteVoters() {
-        return voters.subList(1, voters.size());
+        return startingVoters.subList(1, startingVoters.size());
+    }
+
+    public List<ReplicaKey> startingObservers() {
+        return startingObservers;
     }
 
     /**
@@ -175,34 +200,36 @@ public final class RaftClientBenchmarkContext {
      * before the measured region begins.
      */
     public void zeroCountersOnSetup() {
-        logFlushes.reset();
-        logReads.reset();
-        logTruncations.reset();
-        rpcRequestsSent.reset();
-        quorumStateWrites.reset();
-        quorumStateReads.reset();
+        // Draining each counter (ignoring the returned delta) advances its baseline to the current
+        // value, so the setup work counted so far is excluded from the next drain.
+        logFlushes.drainDelta();
+        logReads.drainDelta();
+        logTruncations.drainDelta();
+        rpcRequestsSent.drainDelta();
+        quorumStateWrites.drainDelta();
+        quorumStateReads.drainDelta();
         channel.drainSendQueue();
         context.drainAllSentResponses();
     }
 
     public int getLogFlushesDelta() {
-        return logFlushes.delta();
+        return logFlushes.drainDelta();
     }
 
     public int getLogReadsDelta() {
-        return logReads.delta();
+        return logReads.drainDelta();
     }
 
     public int getLogTruncationsDelta() {
-        return logTruncations.delta();
+        return logTruncations.drainDelta();
     }
 
     /**
-     * Total number of requests (all API keys) the client has sent since the last call. Uses the
+     * Total number of requests (all API keys) the client has sent since the last drain. Uses the
      * channel's cumulative counter, so it is unaffected by a test driver draining the send queue.
      */
     public int getRpcRequestsSentDelta() {
-        return rpcRequestsSent.delta();
+        return rpcRequestsSent.drainDelta();
     }
 
     /**
@@ -219,11 +246,11 @@ public final class RaftClientBenchmarkContext {
     }
 
     public int getQuorumStateWritesDelta() {
-        return quorumStateWrites.delta();
+        return quorumStateWrites.drainDelta();
     }
 
     public int getQuorumStateReadsDelta() {
-        return quorumStateReads.delta();
+        return quorumStateReads.drainDelta();
     }
 
     /**

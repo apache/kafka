@@ -87,11 +87,11 @@ public class MockLog implements RaftLog {
 
     @Override
     public void truncateTo(long offset) {
-        truncationCount++;
         if (offset < highWatermark.offset()) {
             throw new IllegalArgumentException("Illegal attempt to truncate to offset " + offset +
                 " which is below the current high watermark " + highWatermark);
         }
+        truncationCount++;
 
         logger.debug("Truncating log to end offset {}", offset);
         batches.removeIf(entry -> entry.lastOffset() >= offset);
@@ -445,8 +445,8 @@ public class MockLog implements RaftLog {
 
     @Override
     public LogFetchInfo read(long startOffset, Isolation isolation, int maxTotalBatchBytes) {
-        readCount++;
         verifyOffsetInRange(startOffset);
+        readCount++;
 
         long maxOffset = isolation == Isolation.COMMITTED ? highWatermark.offset() : endOffset().offset();
         if (startOffset >= maxOffset) {

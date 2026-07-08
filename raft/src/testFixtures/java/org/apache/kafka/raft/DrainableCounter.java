@@ -20,9 +20,10 @@ import java.util.function.IntSupplier;
 
 /**
  * Tracks a cumulative, monotonically increasing counter (e.g. the work counters on the raft mocks) as
- * a drainable delta against a baseline. {@link #reset()} snapshots the current value (so the next
- * {@link #delta()} starts from zero), and {@link #delta()} returns the increase since the last
- * reset/delta and advances the baseline.
+ * a drainable delta against a baseline. The baseline is snapshotted at construction, and
+ * {@link #drainDelta()} returns the increase since construction or the previous drain, consuming it so
+ * nothing is counted twice. Draining with the result ignored therefore re-baselines the counter, e.g.
+ * to exclude setup work from the next measurement.
  */
 final class DrainableCounter {
     private final IntSupplier source;
@@ -30,13 +31,10 @@ final class DrainableCounter {
 
     DrainableCounter(IntSupplier source) {
         this.source = source;
+        this.baseline = source.getAsInt();
     }
 
-    void reset() {
-        baseline = source.getAsInt();
-    }
-
-    int delta() {
+    int drainDelta() {
         int current = source.getAsInt();
         int delta = current - baseline;
         baseline = current;

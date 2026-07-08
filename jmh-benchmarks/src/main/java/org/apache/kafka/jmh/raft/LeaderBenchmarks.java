@@ -49,11 +49,10 @@ import java.util.concurrent.TimeUnit;
 public class LeaderBenchmarks {
 
     /**
-     * Starting state: the local node is Leader with the high watermark at the log end and a caught-up
-     * follower ready to fetch.
+     * Starting state: the local node is leader with the high watermark at the log end.
      */
     @State(Scope.Thread)
-    public static class LeaderWithCaughtUpFollower {
+    public static class LeaderWithHwmAtLogEnd {
         static final int VOTER_COUNT = 3;
 
         RaftClientBenchmarkContext benchmark;
@@ -79,11 +78,12 @@ public class LeaderBenchmarks {
      *
      * <p>Note: a real caught-up follower long-polls with {@code maxWaitMs > 0}, and such a fetch is
      * <em>deferred</em> (held until new data arrives or the wait times out) — it would not produce an
-     * immediate response. This benchmark deliberately uses {@code maxWaitMs = 0} to measure the immediate-reply path
+     * immediate response. This benchmark deliberately uses {@code maxWaitMs = 0} to measure the
+     * immediate-reply path.
      */
     @Benchmark
     public void handleNoWaitFetchFromCaughtUpFollower(
-        LeaderWithCaughtUpFollower state,
+        LeaderWithHwmAtLogEnd state,
         KRaftBenchmarkingCounters counters
     ) throws Exception {
         state.context.deliverRequest(

@@ -68,13 +68,18 @@ public class KRaftBenchmarkingCounters {
     /**
      * Captures the number of measurement data points — {@code forks x measurement iterations} — that
      * JMH will SUM the {@code *PerOp()} methods over ({@code Type.EVENTS} secondary results are
-     * SUM-aggregated). Each per-op method pre-divides by this count so that the SUM reports the exact
-     * per-operation value (e.g. {@code logReadsPerOp = 1.0}) in the summary row. Reading it from
-     * {@link BenchmarkParams} tracks the actual run shape (including {@code -f}/{@code -i} overrides)
-     * rather than hardcoding the annotation values.
+     * SUM-aggregated across iterations and forks). Each per-op method pre-divides by this count so that
+     * the SUM reports the exact per-operation value (e.g. {@code logReadsPerOp = 1.0}) in the summary
+     * row. Reading it from {@link BenchmarkParams} tracks the actual run shape (including
+     * {@code -f}/{@code -i} overrides) rather than hardcoding the annotation values.
      */
     @Setup(Level.Trial)
     public void captureRunShape(BenchmarkParams params) {
+        if (params.getThreads() != 1) {
+            throw new IllegalStateException(
+                "raft benchmarks are single-threaded (one client over shared mocks); got "
+                    + params.getThreads() + " threads");
+        }
         // forks() is 0 when forking is disabled (in-process), which is still one set of iterations.
         int forks = Math.max(1, params.getForks());
         measurementDataPoints = (double) forks * params.getMeasurement().getCount();

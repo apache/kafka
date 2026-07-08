@@ -25,86 +25,74 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public final class DrainableCounterTest {
 
     @Test
-    public void testDeltaReturnsIncreaseSinceLastDelta() {
+    public void testDrainDeltaReturnsIncreaseSinceLastDrain() {
         AtomicInteger source = new AtomicInteger();
         DrainableCounter counter = new DrainableCounter(source::get);
-        counter.reset();
 
         source.addAndGet(3);
-        assertEquals(3, counter.delta());
+        assertEquals(3, counter.drainDelta());
 
         source.addAndGet(2);
-        assertEquals(2, counter.delta());
+        assertEquals(2, counter.drainDelta());
     }
 
     @Test
-    public void testDeltaIsZeroWhenSourceUnchanged() {
+    public void testDrainDeltaIsZeroWhenSourceUnchanged() {
         AtomicInteger source = new AtomicInteger(7);
         DrainableCounter counter = new DrainableCounter(source::get);
-        counter.reset();
 
-        assertEquals(0, counter.delta());
-        assertEquals(0, counter.delta());
+        assertEquals(0, counter.drainDelta());
+        assertEquals(0, counter.drainDelta());
     }
 
     @Test
-    public void testDeltaAdvancesTheBaseline() {
+    public void testDrainDeltaAdvancesTheBaseline() {
         AtomicInteger source = new AtomicInteger();
         DrainableCounter counter = new DrainableCounter(source::get);
-        counter.reset();
 
         source.addAndGet(6);
-        assertEquals(6, counter.delta());
-        assertEquals(0, counter.delta());
+        assertEquals(6, counter.drainDelta());
+        // The previous drainDelta() advanced the baseline, so the same increase is not counted twice.
+        assertEquals(0, counter.drainDelta());
     }
 
     @Test
-    public void testResetExcludesPriorIncreasesFromTheNextDelta() {
-        AtomicInteger source = new AtomicInteger();
-        DrainableCounter counter = new DrainableCounter(source::get);
-
-        // e.g. work done while setting up a benchmark, before the measured region begins
-        source.addAndGet(5);
-        counter.reset();
-        assertEquals(0, counter.delta());
-
-        source.addAndGet(4);
-        assertEquals(4, counter.delta());
-    }
-
-    @Test
-    public void testBaselineStartsAtZeroWithoutReset() {
+    public void testBaselineIsSnapshottedAtConstruction() {
         AtomicInteger source = new AtomicInteger(9);
         DrainableCounter counter = new DrainableCounter(source::get);
 
-        assertEquals(9, counter.delta());
-    }
-
-    @Test
-    public void testResetDiscardsIncreasesSinceLastDelta() {
-        AtomicInteger source = new AtomicInteger();
-        DrainableCounter counter = new DrainableCounter(source::get);
-        counter.reset();
+        // The constructor snapshots the current value, so the first drain only reflects increases
+        // since construction, not the source's prior history.
+        assertEquals(0, counter.drainDelta());
 
         source.addAndGet(3);
-        assertEquals(3, counter.delta());
-
-        // Increases that happen between a delta and a reset are never counted.
-        source.addAndGet(5);
-        counter.reset();
-        assertEquals(0, counter.delta());
-
-        source.addAndGet(2);
-        assertEquals(2, counter.delta());
+        assertEquals(3, counter.drainDelta());
     }
 
     @Test
-    public void testDeltaIsCorrectWhenSourceOverflows() {
+    public void testIgnoredDrainDeltaExcludesPriorIncreasesFromTheNextDrain() {
+        AtomicInteger source = new AtomicInteger();
+        DrainableCounter counter = new DrainableCounter(source::get);
+
+        source.addAndGet(3);
+        assertEquals(3, counter.drainDelta());
+
+        // Draining with the result ignored re-baselines the counter, e.g. to exclude work done while
+        // setting up a benchmark from the measured region.
+        source.addAndGet(5);
+        counter.drainDelta();
+        assertEquals(0, counter.drainDelta());
+
+        source.addAndGet(4);
+        assertEquals(4, counter.drainDelta());
+    }
+
+    @Test
+    public void testDrainDeltaIsCorrectWhenSourceOverflows() {
         AtomicInteger source = new AtomicInteger(Integer.MAX_VALUE);
         DrainableCounter counter = new DrainableCounter(source::get);
-        counter.reset();
 
         source.incrementAndGet();
-        assertEquals(1, counter.delta());
+        assertEquals(1, counter.drainDelta());
     }
 }
