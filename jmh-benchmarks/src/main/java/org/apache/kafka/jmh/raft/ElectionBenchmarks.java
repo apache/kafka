@@ -62,7 +62,7 @@ public class ElectionBenchmarks {
 
         @Setup(Level.Invocation)
         public void setup() throws Exception {
-            benchmark = RaftClientBenchmarkContext.unattached(voterCount);
+            benchmark = RaftClientBenchmarkContext.unattachedVoter(voterCount);
             context = benchmark.testContext();
             benchmark.zeroCountersOnSetup();
         }

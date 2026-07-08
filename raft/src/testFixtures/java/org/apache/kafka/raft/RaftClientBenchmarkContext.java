@@ -56,6 +56,7 @@ public final class RaftClientBenchmarkContext {
     private final MockLog log;
     private final MockNetworkChannel channel;
 
+    private final ReplicaKey localKey;
     private final List<ReplicaKey> startingVoters;
     private final List<ReplicaKey> startingObservers;
 
@@ -70,12 +71,14 @@ public final class RaftClientBenchmarkContext {
 
     private RaftClientBenchmarkContext(
         RaftClientTestContext context,
+        ReplicaKey localKey,
         List<ReplicaKey> startingVoters,
         List<ReplicaKey> startingObservers
     ) {
         this.context = context;
         this.log = context.log;
         this.channel = context.channel;
+        this.localKey = localKey;
         this.startingVoters = List.copyOf(startingVoters);
         this.startingObservers = List.copyOf(startingObservers);
         this.logFlushes = new DrainableCounter(log::flushCount);
@@ -87,16 +90,17 @@ public final class RaftClientBenchmarkContext {
     }
 
     /**
-     * Builds a local, unattached node in a {@code voterCount}-node cluster (the local node is not yet
-     * the leader). Use {@link RaftClientTestContext#unattachedToLeader()} on {@link #testContext()} as
-     * the measured operation to drive a full Unattached &rarr; Leader election. A single-voter cluster
-     * is rejected because such a node elects itself at initialization, before any measured poll.
+     * Builds the local node as a voter in the Unattached state (a voter with no leader yet) in a
+     * {@code voterCount}-node cluster. The local node is a voter because only a voter can drive the
+     * measured operation {@link RaftClientTestContext#unattachedToLeader()} (on {@link #testContext()})
+     * — an Unattached &rarr; Leader election, a path observers cannot take. A single-voter cluster is
+     * rejected because such a node elects itself at initialization, before any measured poll.
      */
-    public static RaftClientBenchmarkContext unattached(int voterCount) throws Exception {
-        return unattached(voterCount, DEFAULT_KRAFT_VERSION, DEFAULT_RAFT_PROTOCOL);
+    public static RaftClientBenchmarkContext unattachedVoter(int voterCount) throws Exception {
+        return unattachedVoter(voterCount, DEFAULT_KRAFT_VERSION, DEFAULT_RAFT_PROTOCOL);
     }
 
-    public static RaftClientBenchmarkContext unattached(
+    public static RaftClientBenchmarkContext unattachedVoter(
         int voterCount,
         KRaftVersion kraftVersion,
         RaftProtocol raftProtocol
@@ -105,8 +109,9 @@ public final class RaftClientBenchmarkContext {
             throw new IllegalArgumentException("voterCount must be at least 2; a single voter self-elects at init");
         }
         List<ReplicaKey> voterKeys = replicaKeys(randomReplicaId(), voterCount);
+        ReplicaKey local = voterKeys.get(0);
         return new RaftClientBenchmarkContext(
-            buildContext(voterKeys, kraftVersion, raftProtocol), voterKeys, List.of());
+            buildContext(local, voterKeys, kraftVersion, raftProtocol), local, voterKeys, List.of());
     }
 
     public static RaftClientBenchmarkContext leader(int voterCount) throws Exception {
@@ -129,13 +134,14 @@ public final class RaftClientBenchmarkContext {
         if (voterCount < 1) {
             throw new IllegalArgumentException("voterCount must be at least 1 (the local leader is a voter)");
         }
-        int localId = randomReplicaId();
-        List<ReplicaKey> voterKeys = replicaKeys(localId, voterCount);
-        List<ReplicaKey> observerKeys = replicaKeys(localId + voterCount, observerCount);
-        RaftClientTestContext context = buildContext(voterKeys, kraftVersion, raftProtocol);
+        List<ReplicaKey> voterKeys = replicaKeys(randomReplicaId(), voterCount);
+        ReplicaKey local = voterKeys.get(0);
+
+        List<ReplicaKey> observerKeys = replicaKeys(local.id() + voterCount, observerCount);
+        RaftClientTestContext context = buildContext(local, voterKeys, kraftVersion, raftProtocol);
         context.unattachedToLeader();
 
-        return new RaftClientBenchmarkContext(context, voterKeys, observerKeys);
+        return new RaftClientBenchmarkContext(context, local, voterKeys, observerKeys);
     }
 
     /**
@@ -153,15 +159,17 @@ public final class RaftClientBenchmarkContext {
     }
 
     /**
-     * Initializes a local, unattached node in a cluster of {@code voterKeys} (first entry is the local
-     * node).
+     * Initializes the local node {@code local}, unattached, in a cluster whose voter set is
+     * {@code voterKeys}. {@code local} is passed explicitly rather than assumed to be a member of
+     * {@code voterKeys}: when it is a voter it appears in the set, and a future benchmark can make the
+     * local node an observer by passing a {@code local} that is not in {@code voterKeys}.
      */
     private static RaftClientTestContext buildContext(
+        ReplicaKey local,
         List<ReplicaKey> voterKeys,
         KRaftVersion kraftVersion,
         RaftProtocol raftProtocol
     ) throws Exception {
-        ReplicaKey local = voterKeys.get(0);
         VoterSet voters = VoterSetTestUtil.voterSet(voterKeys.stream());
 
         return new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
@@ -182,11 +190,15 @@ public final class RaftClientBenchmarkContext {
     }
 
     /**
-     * The starting voters other than the local node, in voter-set order. May be empty (single-voter
-     * cluster).
+     * The starting voters other than the local node, in voter-set order. Computed by excluding the
+     * local node's identity rather than assuming it sits at a fixed index, so this is correct whether
+     * the local node is one of the voters (it is excluded) or an observer outside the voter set (none
+     * is excluded). May be empty (a single-voter cluster whose only voter is the local node).
      */
     public List<ReplicaKey> remoteVoters() {
-        return startingVoters.subList(1, startingVoters.size());
+        return startingVoters.stream()
+            .filter(voter -> !voter.equals(localKey))
+            .collect(Collectors.toList());
     }
 
     public List<ReplicaKey> startingObservers() {
