@@ -2051,14 +2051,15 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         streamsGroupTopologyDescriptionManager.invokeDeleteTopologies(marked)
                             .thenCompose(failures -> {
                                 recordPluginDeleteOutcome(marked.size(), failures.size());
-                                // Clear back-off entries for every group whose plugin state we
-                                // attempted to delete (regardless of plugin outcome): the group is
-                                // about to be tombstoned on success and re-evaluated by the next
-                                // heartbeat on failure, so any in-flight back-off entry at the old
-                                // epoch is no longer load-bearing.
-                                marked.forEach(streamsGroupTopologyDescriptionManager::clearBackoffGroup);
                                 Set<String> succeeded = new LinkedHashSet<>(marked);
                                 succeeded.removeAll(failures.keySet());
+                                // Clear the push-path back-off only for groups whose plugin delete
+                                // succeeded (the group is about to be tombstoned), mirroring the
+                                // cleanup cycle. A failed delete leaves the group at UNCERTAIN(-2),
+                                // which re-solicits a push on the next heartbeat — keep its back-off
+                                // so a rejoining member does not immediately hit the still-broken
+                                // plugin, and let the interval-throttled cleanup cycle retry it.
+                                succeeded.forEach(streamsGroupTopologyDescriptionManager::clearBackoffGroup);
                                 if (succeeded.isEmpty()) {
                                     return CompletableFuture.completedFuture(failures);
                                 }

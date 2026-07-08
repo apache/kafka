@@ -1045,6 +1045,64 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
     }
 
     @Test
+    public void testDeleteGroupsPreservesBackoffOnPluginFailure() throws Exception {
+        // Symmetric with the cleanup cycle (testCleanupCyclePreservesBackoffOnPluginFailure): a
+        // failed plugin.deleteTopology in DeleteGroups leaves the group at UNCERTAIN(-2) — not
+        // tombstoned — which re-solicits a push on the next heartbeat. The back-off entry must
+        // survive so a rejoining member does not immediately re-attack the still-broken plugin.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.deleteTopology("foo"))
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("plugin offline")));
+        when(runtime.scheduleWriteOperation(eq("delete-share-groups"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Map.of()));
+        when(runtime.scheduleReadOperation(eq("streams-group-topology-pre-delete"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        service.streamsGroupTopologyDescriptionManager().armBackoff("foo", 4);
+        service.deleteGroups(
+            requestContext(ApiKeys.DELETE_GROUPS), List.of("foo"), BufferSupplier.NO_CACHING
+        ).get(5, TimeUnit.SECONDS);
+
+        assertFalse(heartbeatTopologyDescriptionRequired(runtime, service, 4, 2, -1),
+            "failed plugin delete in DeleteGroups must not clear the back-off entry");
+    }
+
+    @Test
+    public void testDeleteGroupsClearsBackoffOnPluginSuccess() throws Exception {
+        // Counterpart: a successful plugin.deleteTopology means the group is on its way to
+        // tombstone, so its back-off entry is no longer load-bearing and is cleared.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.deleteTopology("foo")).thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleWriteOperation(eq("delete-share-groups"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Map.of()));
+        when(runtime.scheduleReadOperation(eq("streams-group-topology-pre-delete"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
+        when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
+        when(runtime.scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+        DeleteGroupsResponseData.DeletableGroupResultCollection tombstoneResult =
+            new DeleteGroupsResponseData.DeletableGroupResultCollection();
+        tombstoneResult.add(new DeleteGroupsResponseData.DeletableGroupResult().setGroupId("foo"));
+        when(runtime.scheduleWriteOperation(eq("delete-groups"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(tombstoneResult));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        service.streamsGroupTopologyDescriptionManager().armBackoff("foo", 4);
+        service.deleteGroups(
+            requestContext(ApiKeys.DELETE_GROUPS), List.of("foo"), BufferSupplier.NO_CACHING
+        ).get(5, TimeUnit.SECONDS);
+
+        assertTrue(heartbeatTopologyDescriptionRequired(runtime, service, 4, 2, -1),
+            "successful plugin delete in DeleteGroups must clear the back-off entry");
+    }
+
+    @Test
     public void testDeleteGroupsMarksUncertainBeforePluginDelete() throws Exception {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
