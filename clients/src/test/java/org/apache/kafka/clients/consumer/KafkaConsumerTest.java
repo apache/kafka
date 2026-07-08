@@ -491,11 +491,19 @@ public class KafkaConsumerTest {
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     @SuppressWarnings("unchecked")
-    public void testPollReturnsRecords(GroupProtocol groupProtocol) {
+    public void testPollReturnsRecords(GroupProtocol groupProtocol) throws InterruptedException {
         consumer = setUpConsumerWithRecordsToPoll(groupProtocol, tp0, 5);
 
-        ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ZERO);
+        // Poll until the expected records are consumed. A single poll(Duration.ZERO)d may not be enough
+        // and make the test flaky, as it can return empty when the heartbeat
+        // thread and the consumer thread race to fire the fetch completion.
+        AtomicReference<ConsumerRecords<String, String>> polled = new AtomicReference<>(ConsumerRecords.empty());
+        TestUtils.waitForCondition(() -> {
+            polled.set((ConsumerRecords<String, String>) consumer.poll(Duration.ZERO));
+            return polled.get().count() == 5;
+        }, "Consumer did not return the fetched records.");
 
+        ConsumerRecords<String, String> records = polled.get();
         assertEquals(5, records.count());
         assertEquals(Set.of(tp0), records.partitions());
         assertEquals(5, records.records(tp0).size());
@@ -507,14 +515,23 @@ public class KafkaConsumerTest {
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     @SuppressWarnings("unchecked")
-    public void testSecondPollWithDeserializationErrorThrowsRecordDeserializationException(GroupProtocol groupProtocol) {
+    public void testSecondPollWithDeserializationErrorThrowsRecordDeserializationException(GroupProtocol groupProtocol) throws InterruptedException {
         int invalidRecordNumber = 4;
         int invalidRecordOffset = 3;
         StringDeserializer deserializer = mockErrorDeserializer(invalidRecordNumber);
 
         consumer = setUpConsumerWithRecordsToPoll(groupProtocol, tp0, 5, deserializer);
-        ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ZERO);
 
+        // Poll until the expected records are consumed. A single poll(Duration.ZERO)d may not be enough
+        // and make the test flaky, as it can return empty when the heartbeat
+        // thread and the consumer thread race to fire the fetch completion.
+        AtomicReference<ConsumerRecords<String, String>> polled = new AtomicReference<>(ConsumerRecords.empty());
+        TestUtils.waitForCondition(() -> {
+            polled.set((ConsumerRecords<String, String>) consumer.poll(Duration.ZERO));
+            return polled.get().count() == invalidRecordNumber - 1;
+        }, "Consumer did not return the records preceding the deserialization error.");
+
+        ConsumerRecords<String, String> records = polled.get();
         assertEquals(invalidRecordNumber - 1, records.count());
         assertEquals(Set.of(tp0), records.partitions());
         assertEquals(invalidRecordNumber - 1, records.records(tp0).size());
