@@ -43,8 +43,6 @@ public final class Log4jControllerRegistration {
         if (REGISTERED.compareAndSet(false, true)) {
             if (Utils.registerMBean(new LoggingController(), MBEAN_NAME)) {
                 LOGGER.info("Registered `{}` MBean", MBEAN_NAME);
-            } else {
-                LOGGER.warn("Couldn't register `{}` MBean", MBEAN_NAME);
             }
         }
     }
