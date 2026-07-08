@@ -160,7 +160,7 @@ public class BufferPool {
                             throw new KafkaException("Producer closed while allocating memory");
 
                         if (waitingTimeElapsed) {
-                            this.metrics.sensor("buffer-exhausted-records").record();
+                            recordBufferExhausted();
                             throw new BufferExhaustedException("Failed to allocate " + size + " bytes within the configured max blocking time "
                                 + maxTimeToBlockMs + " ms. Total memory: " + totalMemory() + " bytes. Available memory: " + availableMemory()
                                 + " bytes. Poolable size: " + poolableSize() + " bytes");
@@ -211,6 +211,10 @@ public class BufferPool {
     // Protected for testing
     protected void recordWaitTime(long timeNs) {
         this.waitTime.record(timeNs, time.milliseconds());
+    }
+
+    protected void recordBufferExhausted() {
+        this.metrics.sensor("buffer-exhausted-records").record();
     }
 
     /**

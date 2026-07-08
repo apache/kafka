@@ -18,6 +18,7 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.producer.BufferExhaustedException;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
@@ -140,6 +141,21 @@ public class ChunkedBufferPoolTest {
 
         p.deallocate(held);
         assertEquals(total, p.availableMemory());
+    }
+
+    /** A drop due to pool exhaustion increments the shared buffer-exhausted metric. */
+    @Test
+    public void testBufferExhaustedMetricRecordedOnTimeout() throws Exception {
+        int chunkSize = 64;
+        ChunkedBufferPool p = pool(chunkSize, chunkSize); // room for exactly 1 chunk
+        p.allocate(chunkSize, 100); // drain the pool
+
+        KafkaMetric exhausted = metrics.metric(metrics.metricName("buffer-exhausted-total", "producer-metrics"));
+        assertEquals(0.0, (double) exhausted.metricValue());
+
+        // Zero deadline → immediate timeout → BufferExhaustedException, metric recorded.
+        assertThrows(BufferExhaustedException.class, () -> p.allocateChunks(chunkSize, 0));
+        assertEquals(1.0, (double) exhausted.metricValue());
     }
 
     /**
