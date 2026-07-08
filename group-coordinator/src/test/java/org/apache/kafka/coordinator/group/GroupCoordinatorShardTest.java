@@ -1580,7 +1580,7 @@ public class GroupCoordinatorShardTest {
         when(groupMetadataManager.maybeGroup("unexpired-offsets", committedOffset)).thenReturn(unexpired);
         when(offsetMetadataManager.groupHasNoOffsets(eq("unexpired-offsets"), anyLong())).thenReturn(false);
 
-        // eligible: passes every predicate; storedEpoch=7 must appear in the result map.
+        // eligible: passes every predicate; only its group id must appear in the result set.
         StreamsGroup eligible = mock(StreamsGroup.class);
         when(eligible.type()).thenReturn(Group.GroupType.STREAMS);
         when(eligible.isEmpty(committedOffset)).thenReturn(true);
@@ -1588,9 +1588,9 @@ public class GroupCoordinatorShardTest {
         when(groupMetadataManager.maybeGroup("eligible", committedOffset)).thenReturn(eligible);
         when(offsetMetadataManager.groupHasNoOffsets(eq("eligible"), anyLong())).thenReturn(true);
 
-        Map<String, Integer> result = coordinator.listStreamsGroupsNeedingTopologyCleanup(committedOffset);
+        Set<String> result = coordinator.listStreamsGroupsNeedingTopologyCleanup(committedOffset);
 
-        assertEquals(Map.of("eligible", 7), result);
+        assertEquals(Set.of("eligible"), result);
     }
 
     @Test
@@ -1614,9 +1614,9 @@ public class GroupCoordinatorShardTest {
         when(groupMetadataManager.maybeGroup("uncertain", committedOffset)).thenReturn(uncertain);
         when(offsetMetadataManager.groupHasNoOffsets(eq("uncertain"), anyLong())).thenReturn(true);
 
-        Map<String, Integer> result = coordinator.listStreamsGroupsNeedingTopologyCleanup(committedOffset);
+        Set<String> result = coordinator.listStreamsGroupsNeedingTopologyCleanup(committedOffset);
 
-        assertEquals(Map.of("uncertain", StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN), result);
+        assertEquals(Set.of("uncertain"), result);
     }
 
     @Test
@@ -1656,9 +1656,9 @@ public class GroupCoordinatorShardTest {
         when(groupMetadataManager.maybeGroup("good", committedOffset)).thenReturn(good);
         when(offsetMetadataManager.groupHasNoOffsets(eq("good"), anyLong())).thenReturn(true);
 
-        Map<String, Integer> result = coordinator.listStreamsGroupsNeedingTopologyCleanup(committedOffset);
+        Set<String> result = coordinator.listStreamsGroupsNeedingTopologyCleanup(committedOffset);
 
-        assertEquals(Map.of("good", 3), result);
+        assertEquals(Set.of("good"), result);
     }
 
     @Test

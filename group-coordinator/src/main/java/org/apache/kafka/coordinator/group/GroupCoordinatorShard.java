@@ -991,11 +991,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     /**
      * Return the streams groups on this shard eligible for plugin-side topology cleanup: empty
      * (no live members), no committed offsets and no pending transactional offsets, and a
-     * {@code StoredDescriptionTopologyEpoch != -1}. Keyed by group id, valued by the
-     * {@code StoredDescriptionTopologyEpoch} observed at {@code committedOffset}. The cleanup
-     * cycle marks each candidate UNCERTAIN at the latest state before the plugin delete and
-     * smart-finalizes afterwards, so a concurrent {@code setTopology} that has since advanced the
-     * field is re-solicited rather than silently undone by a stale plugin delete.
+     * {@code StoredDescriptionTopologyEpoch != -1}. The cleanup cycle marks each candidate
+     * UNCERTAIN at the latest state before the plugin delete and smart-finalizes afterwards, so a
+     * concurrent {@code setTopology} that has since advanced the field is re-solicited rather than
+     * silently undone by a stale plugin delete — the observed epoch is not needed downstream, so
+     * only the group-id set is returned.
      *
      * <p>This sweep relies on the regular offset-expiration cycle to have already tombstoned
      * expired offsets, so the eligibility check itself only asks "does this group still have any
@@ -1010,8 +1010,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * <p>Non-streams and missing groups are silently skipped. Per-group errors are logged and
      * the scan continues so one bad group cannot stall the cycle.
      */
-    public Map<String, Integer> listStreamsGroupsNeedingTopologyCleanup(long committedOffset) {
-        Map<String, Integer> eligible = new HashMap<>();
+    public Set<String> listStreamsGroupsNeedingTopologyCleanup(long committedOffset) {
+        Set<String> eligible = new HashSet<>();
         for (String groupId : groupMetadataManager.groupIds(committedOffset)) {
             try {
                 Group group = groupMetadataManager.maybeGroup(groupId, committedOffset);
@@ -1022,7 +1022,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 // -2 (UNCERTAIN) falls through: a half-finished push/delete may have left plugin data.
                 if (storedEpoch == StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE) continue;
                 if (!offsetMetadataManager.groupHasNoOffsets(groupId, committedOffset)) continue;
-                eligible.put(groupId, storedEpoch);
+                eligible.add(groupId);
             } catch (Throwable t) {
                 // One bad group must not abort the whole scan; the next cycle retries.
                 log.warn("Unexpected error scanning streams group {} for topology cleanup; skipping.", groupId, t);

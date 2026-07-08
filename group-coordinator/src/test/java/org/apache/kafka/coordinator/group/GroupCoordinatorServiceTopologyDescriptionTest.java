@@ -55,7 +55,7 @@ import org.mockito.MockedStatic;
 
 import java.time.Duration;
 import java.util.Collections;
-import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -1141,8 +1141,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         when(plugin.deleteTopology("foo")).thenReturn(CompletableFuture.completedFuture(null));
 
-        Map<String, Integer> eligible = new LinkedHashMap<>();
-        eligible.put("foo", 4);
+        Set<String> eligible = Set.of("foo");
         when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
             .thenReturn(List.of(CompletableFuture.completedFuture(eligible)));
         when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any()))
@@ -1166,8 +1165,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
 
-        Map<String, Integer> eligible = new LinkedHashMap<>();
-        eligible.put("foo", 4);
+        Set<String> eligible = Set.of("foo");
         when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
             .thenReturn(List.of(CompletableFuture.completedFuture(eligible)));
         when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any()))
@@ -1188,7 +1186,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
-            .thenReturn(List.of(CompletableFuture.completedFuture(Map.of("foo", 4))));
+            .thenReturn(List.of(CompletableFuture.completedFuture(Set.of("foo"))));
         when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any()))
             .thenReturn(CompletableFuture.failedFuture(Errors.NOT_COORDINATOR.exception()));
 
@@ -1208,7 +1206,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         when(plugin.deleteTopology("foo")).thenReturn(CompletableFuture.completedFuture(null));
         when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
-            .thenReturn(List.of(CompletableFuture.completedFuture(Map.of("foo", 4))));
+            .thenReturn(List.of(CompletableFuture.completedFuture(Set.of("foo"))));
         when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), eq(GROUP_TP), any()))
             .thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
         when(runtime.scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), eq(GROUP_TP), any()))
@@ -1230,9 +1228,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         when(plugin.deleteTopology("foo")).thenReturn(CompletableFuture.completedFuture(null));
         when(plugin.deleteTopology("bar")).thenReturn(CompletableFuture.completedFuture(null));
-        Map<String, Integer> eligible = new LinkedHashMap<>();
-        eligible.put("foo", 4);
-        eligible.put("bar", 9);
+        Set<String> eligible = new LinkedHashSet<>(List.of("foo", "bar"));
         when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
             .thenReturn(List.of(CompletableFuture.completedFuture(eligible)));
         when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any()))
@@ -1258,7 +1254,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         when(plugin.deleteTopology("foo"))
             .thenReturn(CompletableFuture.failedFuture(new RuntimeException("plugin offline")));
         when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
-            .thenReturn(List.of(CompletableFuture.completedFuture(Map.of("foo", 4))));
+            .thenReturn(List.of(CompletableFuture.completedFuture(Set.of("foo"))));
         when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
 
@@ -1282,7 +1278,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         when(plugin.deleteTopology("foo"))
             .thenReturn(CompletableFuture.failedFuture(new RuntimeException("plugin offline")));
         when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
-            .thenReturn(List.of(CompletableFuture.completedFuture(Map.of("foo", 4))));
+            .thenReturn(List.of(CompletableFuture.completedFuture(Set.of("foo"))));
         when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
 
@@ -1308,7 +1304,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         when(plugin.deleteTopology("foo")).thenReturn(CompletableFuture.completedFuture(null));
         when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
-            .thenReturn(List.of(CompletableFuture.completedFuture(Map.of("foo", 4))));
+            .thenReturn(List.of(CompletableFuture.completedFuture(Set.of("foo"))));
         when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), eq(GROUP_TP), any()))
             .thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
         when(runtime.scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), eq(GROUP_TP), any()))
@@ -1328,7 +1324,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
-            .thenReturn(List.of(CompletableFuture.completedFuture(Map.of())));
+            .thenReturn(List.of(CompletableFuture.completedFuture(Set.of())));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
         service.runOneStreamsTopologyCleanupCycle();
@@ -1366,7 +1362,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         when(plugin.deleteTopology("foo")).thenReturn(CompletableFuture.completedFuture(null));
         when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
-            .thenReturn(List.of(CompletableFuture.completedFuture(Map.of("foo", 4))));
+            .thenReturn(List.of(CompletableFuture.completedFuture(Set.of("foo"))));
         when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), eq(GROUP_TP), any()))
             .thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
         CompletableFuture<Object> parkedFinalizeWrite = new CompletableFuture<>();
@@ -1415,7 +1411,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         when(plugin.deleteTopology("foo")).thenReturn(CompletableFuture.completedFuture(null));
         when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
-            .thenReturn(List.of(CompletableFuture.completedFuture(Map.of("foo", 4))));
+            .thenReturn(List.of(CompletableFuture.completedFuture(Set.of("foo"))));
         when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), eq(GROUP_TP), any()))
             .thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
         when(runtime.scheduleWriteOperation(eq("finalize-stored-topology-epoch-after-delete-batch"), eq(GROUP_TP), any()))
@@ -1439,8 +1435,8 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         // behavior.
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
-        CompletableFuture<Map<String, Integer>> parkedRead = new CompletableFuture<>();
-        when(runtime.<Map<String, Integer>>scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
+        CompletableFuture<Set<String>> parkedRead = new CompletableFuture<>();
+        when(runtime.<Set<String>>scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
             .thenReturn(List.of(parkedRead));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
@@ -1452,7 +1448,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         service.shutdown();
         // Now resolve the read: the handle runs under running==false and must skip the
         // mark batch, plugin dispatch, and finalize write that would have followed.
-        parkedRead.complete(Map.of("foo", 4));
+        parkedRead.complete(Set.of("foo"));
 
         verify(plugin, never()).deleteTopology(anyString());
         verify(runtime, never()).scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any());
@@ -2184,8 +2180,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         when(plugin.deleteTopology("g")).thenReturn(CompletableFuture.completedFuture(null));
-        Map<String, Integer> eligible = new LinkedHashMap<>();
-        eligible.put("g", StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN);
+        Set<String> eligible = Set.of("g");
         when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
             .thenReturn(List.of(CompletableFuture.completedFuture(eligible)));
         when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any()))
@@ -2208,8 +2203,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         when(plugin.deleteTopology("g")).thenReturn(CompletableFuture.completedFuture(null));
-        Map<String, Integer> eligible = new LinkedHashMap<>();
-        eligible.put("g", StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN);
+        Set<String> eligible = Set.of("g");
         when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
             .thenReturn(List.of(CompletableFuture.completedFuture(eligible)));
         when(runtime.scheduleWriteOperation(eq("mark-topology-uncertain-batch"), any(), any()))

@@ -845,7 +845,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         groupCoordinatorMetrics.recordSensor(
             GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_CYCLE_RUNS_SENSOR_NAME);
 
-        List<CompletableFuture<Map<String, Integer>>> partitionFutures = runtime.scheduleReadAllOperation(
+        List<CompletableFuture<Set<String>>> partitionFutures = runtime.scheduleReadAllOperation(
             "list-streams-groups-needing-topology-cleanup",
             GroupCoordinatorShard::listStreamsGroupsNeedingTopologyCleanup
         );
@@ -854,7 +854,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         // from whichever thread completed each runtime read.
         Queue<CompletableFuture<?>> perGroupFutures = new ConcurrentLinkedQueue<>();
         List<CompletableFuture<Void>> partitionDoneFutures = new ArrayList<>(partitionFutures.size());
-        for (CompletableFuture<Map<String, Integer>> partitionFuture : partitionFutures) {
+        for (CompletableFuture<Set<String>> partitionFuture : partitionFutures) {
             partitionDoneFutures.add(partitionFuture.handle((eligible, throwable) -> {
                 if (throwable != null) {
                     log.warn("Topology-description cleanup read failed for one partition.", throwable);
@@ -885,9 +885,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * {@code eligible} came from the same partition's read so they hash to the same
      * __consumer_offsets partition; one mark/finalize write covers this shard.
      */
-    private CompletableFuture<Void> cleanupTopologyForPartition(Map<String, Integer> eligible) {
-        TopicPartition tp = topicPartitionFor(eligible.keySet().iterator().next());
-        return markTopologyUncertainBatchAsync(tp, eligible.keySet())
+    private CompletableFuture<Void> cleanupTopologyForPartition(Set<String> eligible) {
+        TopicPartition tp = topicPartitionFor(eligible.iterator().next());
+        return markTopologyUncertainBatchAsync(tp, eligible)
             .exceptionally(throwable -> {
                 // Same containment as the finalize write: one shard's routine write failure
                 // (e.g. NOT_COORDINATOR during a move) must not fail the whole cycle's allOf,
@@ -896,7 +896,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 // cycle retries.
                 log.warn("Failed to write the UNCERTAIN barrier for groups {} on partition {}; "
                     + "skipping their plugin delete — the next cleanup cycle will retry.",
-                    eligible.keySet(), tp, throwable);
+                    eligible, tp, throwable);
                 return Set.of();
             })
             .thenCompose(stillEligible -> {
