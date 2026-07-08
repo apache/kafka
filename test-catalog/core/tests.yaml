@@ -2407,6 +2407,7 @@ kafka.server.share.DelayedShareFetchTest:
 - testTryCompleteWhenMinBytesNotSatisfiedOnSubsequentFetch
 - testTryCompleteWhenPartitionMaxBytesStrategyThrowsException
 kafka.server.share.ReplicaManagerLogReaderTest:
+- testReadAsyncCompletesExceptionallyWhenLocalReadThrows
 - testReadAsyncFollowsRemoteWhenTieredAndReadRemoteTrue
 - testReadAsyncResolvesPartitionsIndependently
 - testReadAsyncReturnsEmptyWhenNoPartitionsToFetch

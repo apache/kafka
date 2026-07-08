@@ -102,6 +102,10 @@ org.apache.kafka.streams.integration.HighAvailabilityTaskAssignorIntegrationTest
 org.apache.kafka.streams.integration.IQv2EndpointToPartitionsIntegrationTest:
 - CLASSIC
 - STREAMS
+org.apache.kafka.streams.integration.IQv2HeadersStoreIntegrationTest:
+- shouldFailWithUnknownQueryTypeAgainstNonHeadersStore
+- shouldHandleTimestampedKeyWithHeadersQuery
+- shouldServeCacheHitWhenCachingEnabledAndRecordNotYetFlushed
 org.apache.kafka.streams.integration.IQv2IntegrationTest:
 - CLASSIC
 - STREAMS
