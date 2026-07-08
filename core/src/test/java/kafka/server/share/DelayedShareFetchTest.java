@@ -1730,8 +1730,12 @@ public class DelayedShareFetchTest {
             List<RemoteFetch> remoteFetches = delayedShareFetch.pendingRemoteFetches().remoteFetches();
             assertEquals(1, remoteFetches.size());
             assertTrue(remoteFetches.get(0).remoteFetchTask().isCancelled());
-            // Partition locks should be released for all 3 topic partitions
-            Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(Set.of(tp0, tp1, tp2));
+            // Partition locks should be released for all 3 topic partitions. tp0 and tp1 (local log read)
+            // locks are released twice: once when the remote fetch is prepared (as non-remote partitions)
+            // and again after they are re-acquired for the additional local read in onComplete. tp2 (remote
+            // storage read) lock is released once when the remote fetch completes.
+            Mockito.verify(delayedShareFetch, times(2)).releasePartitionLocks(Set.of(tp0, tp1));
+            Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(Set.of(tp2));
             assertTrue(shareFetch.isCompleted());
             // Share fetch response contained tp0 and tp1 (local fetch) but not tp2, since it errored out.
             assertEquals(Set.of(tp0, tp1), future.join().keySet());
@@ -2002,8 +2006,12 @@ public class DelayedShareFetchTest {
             // the future of shareFetch completes.
             assertTrue(shareFetch.isCompleted());
             assertEquals(Set.of(tp0, tp1, tp2), future.join().keySet());
-            // Verify the locks are released for both local log and remote storage read topic partitions tp0, tp1 and tp2.
-            Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(Set.of(tp0, tp1, tp2));
+            // Verify the locks are released for both local log and remote storage read topic partitions.
+            // tp0 and tp1 (local log read) locks are released twice: once when the remote fetch is prepared
+            // (as non-remote partitions) and again after they are re-acquired for the additional local read
+            // in onComplete. tp2 (remote storage read) lock is released once when the remote fetch completes.
+            Mockito.verify(delayedShareFetch, times(2)).releasePartitionLocks(Set.of(tp0, tp1));
+            Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(Set.of(tp2));
             assertEquals(Errors.NONE.code(), future.join().get(tp0).errorCode());
             assertEquals(Errors.NONE.code(), future.join().get(tp1).errorCode());
             assertEquals(Errors.NONE.code(), future.join().get(tp2).errorCode());
@@ -2363,6 +2371,7 @@ public class DelayedShareFetchTest {
         Uuid topicId = Uuid.randomUuid();
         LogReader logReader = mock(LogReader.class);
         PartitionMetadataProvider metadataProvider = mock(PartitionMetadataProvider.class);
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
         TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
 
         SharePartition sp0 = mock(SharePartition.class);
@@ -2389,6 +2398,7 @@ public class DelayedShareFetchTest {
         DelayedShareFetch delayedShareFetch = DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
             .withSharePartitions(sharePartitions)
+            .withReplicaManager(replicaManager)
             .withLogReader(logReader)
             .withMetadataProvider(metadataProvider)
             .withPartitionMaxBytesStrategy(partitionMaxBytesStrategy)
@@ -2406,8 +2416,15 @@ public class DelayedShareFetchTest {
         // Invoke tryComplete again to simulate async read completion but should return false as future
         // is not yet completed.
         assertFalse(delayedShareFetch.tryComplete());
-        // Complete future to simulate async read completion
+        // Complete future to simulate async read completion. The registered callback should trigger a
+        // purgatory check rather than completing the request directly on the completing thread.
         asyncReadFuture.complete(buildLogReadResultMap(List.of(tp0)));
+        // Verify the callback handler executed the request completion.
+        Mockito.verify(replicaManager).completeDelayedShareFetchRequest(any());
+        // The request should not be completed yet as the purgatory check (mocked) is a no-op here.
+        assertFalse(delayedShareFetch.isCompleted());
+        // Simulate the purgatory re-invoking tryComplete now that the async read is done.
+        assertTrue(delayedShareFetch.tryComplete());
         // Force complete should have been executed and the request must be completed.
         assertTrue(delayedShareFetch.isCompleted());
 

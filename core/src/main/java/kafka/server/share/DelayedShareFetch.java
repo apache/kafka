@@ -247,8 +247,8 @@ public class DelayedShareFetch extends DelayedOperation {
     }
 
     private void completeShareFetchAsyncRequest() {
-        // Check if async read is still not completed then rather waiting further the request should
-        // be aborted. A warning log should be added to see if the fetches are taking long.
+        // If the async read is still not completed at timeout, rather than waiting further the request
+        // should be completed without data.
         if (!pendingFetch.isDone()) {
             // Async read still in progress at timeout, cannot wait for it to complete. So release
             // locks and proceed without data. The new request will be created on next poll from client.
@@ -266,7 +266,9 @@ public class DelayedShareFetch extends DelayedOperation {
                 shareFetch.groupId(), shareFetch.memberId(), e);
             recordTopicPartitionsFetchRatioMetric(partitionsAcquired);
             handleFetchException(shareFetch, partitionsAcquired.keySet(), e);
-            releasePartitionLocksAndAddToActionQueue(partitionsAcquired.keySet(), partitionsAcquired.keySet());
+            // No data could be fetched as the async read failed, hence pass an empty set of partitions
+            // with data to the action queue.
+            releasePartitionLocksAndAddToActionQueue(partitionsAcquired.keySet(), Set.of());
             return;
         } finally {
             // Clear the pending future regardless of completion status
@@ -275,7 +277,7 @@ public class DelayedShareFetch extends DelayedOperation {
         // If the code reaches here then that does mean the async pending fetch is completed successfully
         // and the data is retrieved in localPartitionsAlreadyFetched. Hence, we can proceed to complete
         // the request with the data. Skip the local log fetch re-try as the pending async fetch was
-        // not null hence a call fetch data has already procesed.
+        // not null hence a call to fetch data has already been processed.
         completeLocalLogShareFetchRequest();
     }
 
@@ -311,9 +313,9 @@ public class DelayedShareFetch extends DelayedOperation {
     }
 
     private void processAcquiredTopicPartitionsForLocalLogFetch(LinkedHashMap<TopicIdPartition, Long> topicPartitionData) {
-        // If localPartitionsAlreadyFetched is empty hence the async fetch was never attempted hence retry
-        // else try to complete the request.
-        CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> readFuture = null;
+        // If localPartitionsAlreadyFetched is empty then the async fetch was never attempted, so read
+        // from the log now. Otherwise, use the already fetched data and only read the remaining partitions.
+        CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> readFuture;
         try {
             if (localPartitionsAlreadyFetched.isEmpty()) {
                 readFuture = readFromLog(
@@ -336,7 +338,8 @@ public class DelayedShareFetch extends DelayedOperation {
             releasePartitionLocksAndAddToActionQueue(topicPartitionData.keySet(), new HashSet<>());
             return;
         }
-        // If the future is successfully created then complete the request asynchronously.
+        // If the future is successfully created then complete the request asynchronously. The completion
+        // handler is registered from on-complete hence no 2 threads can run concurrently.
         readFuture.whenComplete((result, throwable) -> {
             if (throwable != null) {
                 log.error("Async fetch failed during request completion for group {}, member {}",
@@ -345,7 +348,8 @@ public class DelayedShareFetch extends DelayedOperation {
                 releasePartitionLocksAndAddToActionQueue(topicPartitionData.keySet(), new HashSet<>());
                 return;
             }
-            // Complete the share fetch request
+            // Complete the share fetch request and release the locks as completion handler will complete
+            // the request.
             processFetchResultAndComplete(result, topicPartitionData, shareFetchPartitionDataList ->
                 shareFetch.maybeComplete(ShareFetchUtils.processFetchResponse(
                     shareFetch,
@@ -383,7 +387,7 @@ public class DelayedShareFetch extends DelayedOperation {
                 shareFetch.groupId(), shareFetch.memberId(), e);
             handleFetchException(shareFetch, topicPartitionData.keySet(), e);
         } finally {
-            // Always release locks and update action queue
+            // Always release locks and update action queue.
             releasePartitionLocksAndAddToActionQueue(
                 topicPartitionData.keySet(),
                 partitionsWithData(shareFetchPartitionDataList)
@@ -459,20 +463,26 @@ public class DelayedShareFetch extends DelayedOperation {
                     // invoke tryComplete() again, where we'll process the result.
                     partitionsAcquired = topicPartitionData;
                     pendingFetch = readFuture;
-
-                    // Register callback to be invoked when async read completes
-                    // This callback executes on the thread that completes the future (IO thread pool)
+                    // Register callback to be invoked when async read completes. This callback executes on the
+                    // thread that completes the future (IO thread pool). Hence, rather than processing the result
+                    // directly here, trigger a purgatory check so that tryComplete() is invoked again for
+                    // this operation under the operation lock (via safeTryComplete). Processing the async
+                    // result inside tryComplete() ensures the shared state mutations (pendingFetch,
+                    // partitionsAcquired, localPartitionsAlreadyFetched) happen under the lock and avoids a
+                    // race with a concurrent tryComplete() invoked by a purgatory watcher thread.
+                    // Also, the operation is watched on the group key for each topic partition in the request,
+                    // hence triggering a check on any one of them will re-invoke tryComplete()
+                    // for this operation. Just take the first in the list.
+                    TopicIdPartition topicIdPartition = topicPartitionData.keySet().iterator().next();
                     readFuture.whenComplete((result, throwable) -> {
                         if (throwable != null) {
                             log.error("Async read failed for group {}, member {}",
                                 shareFetch.groupId(), shareFetch.memberId(), throwable);
                             // Error is handled in maybeCompleteAsyncFetch() via get() exception handling
+                            // when tryComplete() re-processes the completed future.
                         }
-                        // maybeCompleteAsyncFetch() handles: get(), remote fetch check, minBytes check
-                        // and calls forceComplete() internally when the request should complete
-                        maybeCompleteAsyncFetch(readFuture, topicPartitionData);
-                        // Note: return value is ignored since we're in callback context, not tryComplete()
-                        // forceComplete() is called internally by processAsyncReadResponse() when needed.
+                        replicaManager.completeDelayedShareFetchRequest(
+                            new DelayedShareFetchGroupKey(shareFetch.groupId(), topicIdPartition));
                     });
                     // Return false to keep request in purgatory - locks remain held
                     return false;
@@ -688,15 +698,20 @@ public class DelayedShareFetch extends DelayedOperation {
         acquireStartTimeMs = currentTimeMs;
     }
 
+    /**
+     * Process the result of a completed async read future. The caller must ensure the future is
+     * already completed (i.e. {@code completedFuture.isDone()} is true) before invoking this method,
+     * as {@link CompletableFuture#get()} is called without any additional wait.
+     */
     private boolean maybeCompleteAsyncFetch(
         CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> completedFuture,
         LinkedHashMap<TopicIdPartition, Long> topicPartitionData
     ) {
         LinkedHashMap<TopicIdPartition, LogReadResult> readResponse;
         try {
-            // Use getNow() to retrieve result without blocking (safe because isDone() was true)
-            // getNow() returns the result immediately if future is complete
-            // or throws CompletionException if the async operation failed.
+            // Retrieve the result without blocking (safe because the caller ensured isDone() was true).
+            // get() returns the result immediately since the future is complete, or throws
+            // ExecutionException if the async operation failed.
             readResponse = completedFuture.get();
             // Remove pending fetch as the request is completed now.
             pendingFetch = null;
@@ -757,15 +772,16 @@ public class DelayedShareFetch extends DelayedOperation {
 
     private void completeAsyncRequestWithEmptyResponse(LinkedHashMap<TopicIdPartition, Long> topicPartitionData) {
         try {
-            log.warn("Completing async fetch for group {}, member {}, partitions {} with empty reponse",
+            log.warn("Completing async fetch for group {}, member {}, partitions {} with empty response",
                 shareFetch.groupId(), shareFetch.memberId(), topicPartitionData.keySet());
             pendingFetch = null;
-            // Update fetch ration metric and complete the request with empty response.
+            // Update fetch ratio metric and complete the request with empty response.
             recordTopicPartitionsFetchRatioMetric(topicPartitionData);
             shareFetch.maybeComplete(Map.of());
         } finally {
-            // Release locks for all partitions acquired for this request
-            releasePartitionLocksAndAddToActionQueue(topicPartitionData.keySet(), topicPartitionData.keySet());
+            // Release locks for all partitions acquired for this request. The async fetch did not
+            // complete, so no partition has data, hence pass an empty set as the partitions with data.
+            releasePartitionLocksAndAddToActionQueue(topicPartitionData.keySet(), Set.of());
         }
     }
 
@@ -1089,14 +1105,14 @@ public class DelayedShareFetch extends DelayedOperation {
                 if (!acquiredNonRemoteFetchTopicPartitionData.isEmpty()) {
                     log.trace("Fetchable local share partitions for a remote share fetch request data: {} with groupId: {} fetch params: {}",
                         acquiredNonRemoteFetchTopicPartitionData, shareFetch.groupId(), shareFetch.fetchParams());
-                    LinkedHashMap<TopicIdPartition, Long> partititionsToFetch = acquiredNonRemoteFetchTopicPartitionData;
+                    LinkedHashMap<TopicIdPartition, Long> partitionsToFetch = acquiredNonRemoteFetchTopicPartitionData;
                     // Register for further read and request completion.
                     readAndProcessFetchResultCompletion(
                         acquiredNonRemoteFetchTopicPartitionData,
                         readableBytes,
                         addedShareFetchPartitionDataList -> {
                             shareFetchPartitionDataList.addAll(addedShareFetchPartitionDataList);
-                            completeRemoteFetchRequest(shareFetchPartitionDataList, partititionsToFetch);
+                            completeRemoteFetchRequest(shareFetchPartitionDataList, partitionsToFetch);
                         });
                     return;
                 }
@@ -1139,13 +1155,12 @@ public class DelayedShareFetch extends DelayedOperation {
             log.error("Unexpected error in processing delayed share fetch request", e);
             handleExceptionInCompletingRemoteStorageShareFetchRequest(acquiredNonRemoteFetchTopicPartitionData.keySet(), e);
         } finally {
-            // TODO: Check maybe to skip acquiredNonRemoteFetchTopicPartitionData from releasing locks
-            // as that might also be tried to release in processFetchResultAndComplete. Avoid it in current
-            // implementation and validate later with tests. It won't have any downside as SharePartition
-            // has the right protection against illegal locks release.
-            Set<TopicIdPartition> topicIdPartitions = new LinkedHashSet<>(partitionsAcquired.keySet());
-            topicIdPartitions.addAll(acquiredNonRemoteFetchTopicPartitionData.keySet());
-            releasePartitionLocksAndAddToActionQueue(topicIdPartitions, partitionsWithData(shareFetchPartitionDataList));
+            // The locks for acquiredNonRemoteFetchTopicPartitionData are released by
+            // processFetchResultAndComplete (invoked via readAndProcessFetchResultCompletion). As the
+            // locks are release in finally block in readAndProcessFetchResultCompletion hence share
+            // fetch will be completed in the current try block prior locks getting released. Hence,
+            // need to release the locks for the remote fetch partitions here.
+            releasePartitionLocksAndAddToActionQueue(partitionsAcquired.keySet(), partitionsWithData(shareFetchPartitionDataList));
         }
     }
 
@@ -1154,7 +1169,7 @@ public class DelayedShareFetch extends DelayedOperation {
         int readBytes,
         Consumer<List<ShareFetchPartitionData>> completionConsumer
     ) {
-        CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> readFuture = null;
+        CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> readFuture;
         // Start async read for additional local partitions
         try {
             readFuture = readFromLog(
@@ -1172,7 +1187,9 @@ public class DelayedShareFetch extends DelayedOperation {
             return;
         }
 
-        // Handle async read completion
+        // Handle async read completion. This async completion is registered only from on-complete
+        // hence multiple threads cannot execute at same time. It's safe to register further processing
+        // in completion handler.
         readFuture.whenComplete((responseData, throwable) -> {
             if (throwable != null) {
                 log.error("Async fetch failed in remote completion for group {}, member {}",
