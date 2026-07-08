@@ -248,6 +248,27 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             }
         });
 
+        // Iterate over the session handlers again to remove any partitions which are no longer
+        // being fetched and which also have no acknowledgements to send. This handles the case
+        // where a node has not otherwise been picked up in this poll, but we need to send a
+        // ShareFetch to remove the stale partitions from the share session.
+        sessionHandlers.forEach((nodeId, sessionHandler) -> {
+            Node node = cluster.nodeById(nodeId);
+            if (node != null && !handlerMap.containsKey(node) && !sessionHandler.sessionPartitionMap().isEmpty()) {
+                if (nodesWithPendingRequests.contains(node.id())) {
+                    log.trace("Skipping fetch because previous fetch request to {} has not been processed", nodeId);
+                } else {
+                    Set<TopicPartition> currentPartitionsToFetch = new HashSet<>(partitionsToFetch());
+                    boolean hasPartitionsToRemove = sessionHandler.sessionPartitions().stream()
+                        .anyMatch(tip -> !currentPartitionsToFetch.contains(tip.topicPartition()));
+                    if (hasPartitionsToRemove) {
+                        handlerMap.put(node, sessionHandler);
+                        log.debug("Added fetch request for previously subscribed partitions without acknowledgements to node {}", nodeId);
+                    }
+                }
+            }
+        });
+
         // Iterate over the share session handlers and build a list of UnsentRequests.
         List<UnsentRequest> requests = handlerMap.entrySet().stream().map(entry -> {
             Node target = entry.getKey();

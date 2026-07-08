@@ -2204,6 +2204,10 @@ public class AsyncKafkaConsumerTest {
         verify(applicationEventHandler, never()).add(ArgumentMatchers.isA(SyncCommitEvent.class));
         verify(applicationEventHandler, never()).add(ArgumentMatchers.isA(AsyncCommitEvent.class));
         verify(applicationEventHandler, never()).add(ArgumentMatchers.isA(CommitOnCloseEvent.class));
+
+        // Auto-commit is enabled, so close() will send a commit-on-close event and wait for it to
+        // complete. Mock the handler to complete the commit event so close() does not hang.
+        completeCommitSyncApplicationEventSuccessfully();
     }
 
     private static Stream<CompletableBackgroundEvent<?>> assignmentEventsSource() {
@@ -2343,7 +2347,7 @@ public class AsyncKafkaConsumerTest {
             new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
                 .setMemberId("")
                 .setMemberEpoch(0));
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        Node coordinator = new GroupCoordinatorNode(node.id(), node.host(), node.port());
         client.prepareResponseFrom(result, coordinator);
 
         SubscriptionState subscriptionState = mock(SubscriptionState.class);

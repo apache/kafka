@@ -600,6 +600,44 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         }
     }
 
+    @Test
+    public void shouldReportUncommittedPositionForTransactionalStore() {
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        props.setProperty(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, "true");
+        final InternalMockProcessorContext<Bytes, byte[]> ctx = new InternalMockProcessorContext<>(
+            TestUtils.tempDirectory(),
+            new Serdes.BytesSerde(),
+            new Serdes.ByteArraySerde(),
+            new StreamsConfig(props)
+        );
+        final InMemoryKeyValueStore store = new InMemoryKeyValueStore("txn-pos-store");
+        store.init(ctx, store);
+        try {
+            ctx.setRecordContext(new ProcessorRecordContext(0, 1, 0, "topic", new RecordHeaders()));
+            store.put(bytesKey("key1"), bytesValue("value1"));
+
+            final Position expected = Position.fromMap(mkMap(mkEntry("topic", mkMap(mkEntry(0, 1L)))));
+
+            // READ_UNCOMMITTED query should expose the staged position before commit
+            final org.apache.kafka.streams.query.QueryResult<?> uncommitted = store.query(
+                org.apache.kafka.streams.query.RangeQuery.withNoBounds(),
+                org.apache.kafka.streams.query.PositionBound.unbounded(),
+                new org.apache.kafka.streams.query.QueryConfig(false));
+            assertEquals(expected, uncommitted.getPosition(), "READ_UNCOMMITTED query position");
+
+            // getPosition() reports the uncommitted (committed + staged) position, mirroring
+            // RocksDBStore, so the changelog consistency vector reflects the staged write.
+            assertEquals(expected, store.getPosition(), "getPosition before commit (uncommitted)");
+
+            // after commit, committed position populated
+            store.commit(Map.of());
+            assertEquals(expected, store.getPosition(), "getPosition after commit");
+        } finally {
+            store.close();
+        }
+    }
+
     private InMemoryKeyValueStore openTransactionalStore() {
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);

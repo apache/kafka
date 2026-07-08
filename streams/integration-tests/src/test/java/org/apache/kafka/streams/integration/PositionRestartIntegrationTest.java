@@ -255,12 +255,14 @@ public class PositionRestartIntegrationTest {
         final List<Arguments> values = new ArrayList<>();
         for (final boolean cacheEnabled : Arrays.asList(true, false)) {
             for (final boolean logEnabled : Arrays.asList(true, false)) {
-                for (final StoresToTest toTest : StoresToTest.values()) {
-                    // We don't need to test if non-persistent stores without logging
-                    // survive restarts, since those are by definition not durable.
-                    if (logEnabled || toTest.supplier().get().persistent()) {
-                        for (final String kind : Arrays.asList("DSL", "PAPI")) {
-                            values.add(Arguments.of(cacheEnabled, logEnabled, toTest, kind));
+                for (final boolean transactional : Arrays.asList(true, false)) {
+                    for (final StoresToTest toTest : StoresToTest.values()) {
+                        // We don't need to test if non-persistent stores without logging
+                        // survive restarts, since those are by definition not durable.
+                        if (logEnabled || toTest.supplier().get().persistent()) {
+                            for (final String kind : Arrays.asList("DSL", "PAPI")) {
+                                values.add(Arguments.of(cacheEnabled, logEnabled, transactional, toTest, kind));
+                            }
                         }
                     }
                 }
@@ -361,8 +363,8 @@ public class PositionRestartIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void verifyStore(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind) {
-        final Properties streamsConfig = streamsConfiguration(cache, log, storeToTest.name(), kind);
+    public void verifyStore(final boolean cache, final boolean log, final boolean transactional, final StoresToTest storeToTest, final String kind) {
+        final Properties streamsConfig = streamsConfiguration(cache, log, transactional, storeToTest.name(), kind);
         final StreamsBuilder streamsBuilder = getStreamBuilder(cache, log, storeToTest, kind);
         kafkaStreams = IntegrationTestUtils.getStartedStreams(streamsConfig, streamsBuilder, true);
 
@@ -647,11 +649,12 @@ public class PositionRestartIntegrationTest {
     }
 
     private static Properties streamsConfiguration(final boolean cache,
-                                            final boolean log,
-                                            final String supplier,
-                                            final String kind) {
+                                                   final boolean log,
+                                                   final boolean transactional,
+                                                   final String supplier,
+                                                   final String kind) {
         final String safeTestName =
-            PositionRestartIntegrationTest.class.getName() + "-" + cache + "-" + log + "-"
+            PositionRestartIntegrationTest.class.getName() + "-" + cache + "-" + log + "-" + transactional + "-"
                 + supplier + "-" + kind;
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
@@ -668,6 +671,7 @@ public class PositionRestartIntegrationTest {
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         config.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         config.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
+        config.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, transactional);
         return config;
     }
 }

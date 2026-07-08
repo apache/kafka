@@ -1982,28 +1982,6 @@ project(':clients') {
     shadowed
   }
 
-  // Rewire test fixtures dependencies to avoid depending on the shadow JAR:
-  // java-test-fixtures creates dependencies testImplementation -> testFixturesApi -> (main artifact)
-  // It prefers the main artifact over the raw main classpath so that dependents on fixtures get the same
-  // packaged artifact as production consumers. In this module the main artifact is the shadow JAR,
-  // so this creates a test dependency on createVersionFile breaking AppInfoParserTest, and worse:
-  // test code is compiled against the original packages, but the shadow JAR contains relocated bytecode,
-  // causing runtime errors for various tests. To fix this, we rewire the test fixtures dependency to the raw
-  // source set output, so tests continue to use compiled classes and original dependencies instead of the shadow JAR.
-  // https://github.com/gradle/gradle/blob/v9.4.1/platforms/jvm/plugins-jvm-test-fixtures/src/main/java/org/gradle/api/plugins/JavaTestFixturesPlugin.java#L89-L90
-  afterEvaluate {
-    configurations.testFixturesApi.dependencies.removeIf { dep ->
-      dep instanceof ProjectDependency && dep.name == project.name
-    }
-    dependencies {
-      testFixturesApi files(sourceSets.main.output.classesDirs)
-      testFixturesApi files(sourceSets.main.output.resourcesDir)
-    }
-    tasks.named('compileTestFixturesJava') {
-      dependsOn tasks.named('classes')
-    }
-  }
-
   dependencies {
     implementation libs.zstd
     implementation libs.lz4
@@ -2204,6 +2182,7 @@ project(':clients:clients-integration-tests') {
     testImplementation project(':raft')
     testImplementation project(':server')
     testImplementation project(':storage')
+    testImplementation testFixtures(project(':storage'))
     testImplementation project(':core').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
     implementation project(':server-common')
@@ -2706,6 +2685,7 @@ project(':tools') {
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
+    testImplementation project(':test-common:test-common-util')
     testImplementation project(':server-common')
     testImplementation testFixtures(project(':server-common'))
     testImplementation project(':connect:api')
