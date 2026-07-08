@@ -445,32 +445,21 @@ public class AclControlManagerTest {
 
     @Test
     public void testValidateHostPatternValid() {
-        // Wildcard, this works with or without CIDR support
+        // Wildcard
         AclControlManager.validateHostPattern("*", false);
         AclControlManager.validateHostPattern("*", true);
 
-        // Regular IPv4 addresses this works with or without CIDR support
+        // Plain IPv4 addresses
         AclControlManager.validateHostPattern("192.168.1.1", false);
-        AclControlManager.validateHostPattern("10.0.0.1", false);
         AclControlManager.validateHostPattern("127.0.0.1", true);
 
-        // Regular IPv6 addresses, this works with or without CIDR support
+        // Plain IPv6 addresses
         AclControlManager.validateHostPattern("2001:db8::1", false);
-        AclControlManager.validateHostPattern("::1", false);
-        AclControlManager.validateHostPattern("fe80::1", true);
+        AclControlManager.validateHostPattern("::1", true);
 
-        // Valid IPv4 CIDR notations (require CIDR support)
-        AclControlManager.validateHostPattern("192.168.0.0/24", true);
-        AclControlManager.validateHostPattern("10.0.0.0/8", true);
-        AclControlManager.validateHostPattern("172.16.0.0/16", true);
-        AclControlManager.validateHostPattern("192.168.1.1/32", true);
-        AclControlManager.validateHostPattern("0.0.0.0/0", true);
-
-        // Valid IPv6 CIDR notations (require CIDR support)
-        AclControlManager.validateHostPattern("2001:db8::/32", true);
-        AclControlManager.validateHostPattern("2001:db8:abcd::/48", true);
-        AclControlManager.validateHostPattern("::1/128", true);
-        AclControlManager.validateHostPattern("::/0", true);
+        // Hostnames (no slash, so validateHostPattern accepts them as literal hosts)
+        AclControlManager.validateHostPattern("example.com", false);
+        AclControlManager.validateHostPattern("example.com", true);
     }
 
     @Test
@@ -481,40 +470,15 @@ public class AclControlManagerTest {
         assertThrows(InvalidRequestException.class, () ->
             AclControlManager.validateHostPattern("", true));
 
-        // Invalid IPv4 CIDR, prefix too large
+        // Invalid CIDR wraps CidrUtils.validate() IllegalArgumentException into InvalidRequestException
         InvalidRequestException e = assertThrows(InvalidRequestException.class, () ->
             AclControlManager.validateHostPattern("192.168.0.0/33", true));
         assertTrue(e.getMessage().contains("Invalid CIDR notation"));
 
-        // Invalid IPv4 CIDR, negative prefix
+        // Hostname with path is not a valid CIDR
         e = assertThrows(InvalidRequestException.class, () ->
-            AclControlManager.validateHostPattern("192.168.0.0/-1", true));
+            AclControlManager.validateHostPattern("example.com/test", true));
         assertTrue(e.getMessage().contains("Invalid CIDR notation"));
-
-        // Invalid IPv4 CIDR, malformed address
-        e = assertThrows(InvalidRequestException.class, () ->
-            AclControlManager.validateHostPattern("192.168.0.256/24", true));
-        assertTrue(e.getMessage().contains("Invalid CIDR notation"));
-
-        // Invalid IPv4 CIDR, non-numeric prefix
-        e = assertThrows(InvalidRequestException.class, () ->
-            AclControlManager.validateHostPattern("192.168.0.0/abc", true));
-        assertTrue(e.getMessage().contains("Invalid CIDR notation"));
-
-        // Invalid IPv6 CIDR, prefix too large
-        e = assertThrows(InvalidRequestException.class, () ->
-            AclControlManager.validateHostPattern("2001:db8::/129", true));
-        assertTrue(e.getMessage().contains("Invalid CIDR notation"));
-
-        // Invalid, just a slash with no prefix
-        e = assertThrows(InvalidRequestException.class, () ->
-            AclControlManager.validateHostPattern("192.168.0.0/", true));
-        assertTrue(e.getMessage().contains("Invalid CIDR notation"));
-
-        // ::ffff:x.x.x.x/N is rejected: the JVM normalizes ::ffff:x.x.x.x to Inet4Address,
-        // so isIpv6() returns false and SubnetUtils rejects the ::ffff: prefix.
-        assertThrows(InvalidRequestException.class, () ->
-            AclControlManager.validateHostPattern("::ffff:192.168.1.0/24", true));
     }
 
     @Test

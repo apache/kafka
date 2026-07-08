@@ -23,13 +23,58 @@ import org.junit.jupiter.api.Timeout;
 import java.net.InetAddress;
 
 import static org.apache.kafka.metadata.authorizer.CidrUtils.isInRange;
+import static org.apache.kafka.metadata.authorizer.CidrUtils.validate;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(value = 40)
 public class CidrUtilsTest {
+
+    @Test
+    public void testValidateValidIpv4Cidr() {
+        assertDoesNotThrow(() -> validate("192.168.0.0/24"));
+        assertDoesNotThrow(() -> validate("10.0.0.0/8"));
+        assertDoesNotThrow(() -> validate("172.16.0.0/16"));
+        assertDoesNotThrow(() -> validate("192.168.1.1/32"));
+        assertDoesNotThrow(() -> validate("0.0.0.0/0"));
+    }
+
+    @Test
+    public void testValidateValidIpv6Cidr() {
+        assertDoesNotThrow(() -> validate("2001:db8::/32"));
+        assertDoesNotThrow(() -> validate("2001:db8:abcd::/48"));
+        assertDoesNotThrow(() -> validate("::1/128"));
+        assertDoesNotThrow(() -> validate("::/0"));
+    }
+
+    @Test
+    public void testValidateInvalidIpv4Cidr() {
+        assertThrows(IllegalArgumentException.class, () -> validate("192.168.0.0/33"));
+        assertThrows(IllegalArgumentException.class, () -> validate("192.168.0.0/-1"));
+        assertThrows(IllegalArgumentException.class, () -> validate("192.168.0.256/24"));
+        assertThrows(IllegalArgumentException.class, () -> validate("192.168.0.0/abc"));
+        assertThrows(IllegalArgumentException.class, () -> validate("192.168.0.0/"));
+    }
+
+    @Test
+    public void testValidateInvalidIpv6Cidr() {
+        assertThrows(IllegalArgumentException.class, () -> validate("2001:db8::/129"));
+    }
+
+    @Test
+    public void testValidateIpv4MappedIpv6Cidr() {
+        // ::ffff:x.x.x.x/N contains ':', so isIpv6() returns true and SubnetUtils6 handles it.
+        assertThrows(IllegalArgumentException.class, () -> validate("::ffff:192.168.1.0/24"));
+    }
+
+    @Test
+    public void testValidateHostnameWithPath() {
+        assertThrows(IllegalArgumentException.class, () -> validate("example.com/test"));
+    }
 
     @Test
     public void testIsInRangeNullOrNonCidr() {
@@ -49,8 +94,8 @@ public class CidrUtilsTest {
 
     @Test
     public void testIpv4MappedAddressWithSubnet() {
-        // ::ffff:x.x.x.x/N: JVM normalizes ::ffff:x.x.x.x to Inet4Address, isIpv6() returns false,
-        // SubnetUtils rejects the ::ffff: prefix. No client can ever match.
+        // ::ffff:x.x.x.x/N contains ':', so isIpv6() returns true and SubnetUtils6 handles it.
+        // Plain IPv4 hosts don't match this IPv6 CIDR range.
         assertFalse(isInRange("192.168.1.5", "::ffff:192.168.1.0/24"));
         assertFalse(isInRange("::1", "::ffff:192.168.1.0/24"));
         assertFalse(isInRange("2001:db8::1", "::ffff:192.168.1.0/24"));
