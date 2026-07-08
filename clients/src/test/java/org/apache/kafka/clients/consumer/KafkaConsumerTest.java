@@ -2387,8 +2387,6 @@ public class KafkaConsumerTest {
         consumer2.close(CloseOptions.timeout(Duration.ZERO));
     }
 
-    // TODO: this test references RPCs to be sent that are not part of the CONSUMER group protocol.
-    //       We are deferring any attempts at generalizing this test for both group protocols to the future.
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     @SuppressWarnings("unchecked")
