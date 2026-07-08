@@ -25,8 +25,10 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import org.junit.jupiter.api.Test;
@@ -981,17 +983,17 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
     }
 
     @Test
-    public void shouldReturnUnknownQueryTypeForQuery() {
+    public void shouldReturnUnknownQueryTypeForUnsupportedQuery() {
         // Initialize the store
         rocksDBStore.init(context, rocksDBStore);
 
-        // Create a query
-        final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(new Bytes("test-key".getBytes()));
+        // A query type the store has no handler for still yields UNKNOWN_QUERY_TYPE.
+        final Query<Void> unsupportedQuery = new Query<>() { };
         final PositionBound positionBound = PositionBound.unbounded();
         final QueryConfig config = new QueryConfig(false);
 
         // Execute query
-        final QueryResult<byte[]> result = rocksDBStore.query(query, positionBound, config);
+        final QueryResult<Void> result = rocksDBStore.query(unsupportedQuery, positionBound, config);
 
         // Verify result indicates unknown query type
         assertFalse(result.isSuccess(), "Expected query to fail with unknown query type");
@@ -1002,6 +1004,49 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
         );
 
         // Verify position is set
+        assertNotNull(result.getPosition(), "Expected position to be set");
+    }
+
+    @Test
+    public void shouldHandleKeyQuery() {
+        // Initialize the store
+        rocksDBStore.init(context, rocksDBStore);
+
+        // Store raw (serialized ValueTimestampHeaders) bytes for a key.
+        final Bytes key = new Bytes("test-key".getBytes());
+        final byte[] storedBytes = "headers+timestamp+value".getBytes();
+        rocksDBStore.put(key, storedBytes);
+
+        // KIP-1356: removing the query() override lets the native store serve KeyQuery (previously
+        // UNKNOWN_QUERY_TYPE), matching the adapter build path. The raw stored bytes are returned;
+        // the metered store performs the header-aware deserialization.
+        final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(key);
+        final QueryResult<byte[]> result =
+            rocksDBStore.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.isSuccess(), "Expected KeyQuery to succeed");
+        assertArrayEquals(storedBytes, result.getResult(), "Expected the raw stored bytes to be returned");
+        assertNotNull(result.getPosition(), "Expected position to be set");
+    }
+
+    @Test
+    public void shouldReturnUnknownQueryTypeForRangeQuery() {
+        // Initialize the store
+        rocksDBStore.init(context, rocksDBStore);
+
+        // KIP-1356 (point query only): this store enables KeyQuery but leaves RangeQuery (and every
+        // other non-KeyQuery type) as UNKNOWN_QUERY_TYPE, unchanged from before. RangeQuery support on
+        // the native header store is deferred to the range KIP-1356 follow-up.
+        final RangeQuery<Bytes, byte[]> query = RangeQuery.withNoBounds();
+        final QueryResult<KeyValueIterator<Bytes, byte[]>> result =
+                rocksDBStore.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertFalse(result.isSuccess(), "Expected RangeQuery to be unsupported");
+        assertEquals(
+            FailureReason.UNKNOWN_QUERY_TYPE,
+            result.getFailureReason(),
+            "Expected UNKNOWN_QUERY_TYPE failure reason"
+        );
         assertNotNull(result.getPosition(), "Expected position to be set");
     }
 
