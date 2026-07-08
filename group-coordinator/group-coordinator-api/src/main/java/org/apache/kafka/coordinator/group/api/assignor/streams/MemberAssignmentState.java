@@ -20,37 +20,43 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Map;
-import java.util.Optional;
+import java.util.Set;
 
 /**
- * Interface representing the static subscription metadata for a streams group member.
+ * Interface representing the current assignment state for a streams group member.
  *
- * <p>The subscription contains the per-member metadata that does not change during the assignment
- * computation. The member's current task assignment state is exposed separately through
- * {@link MemberAssignmentState}.
+ * <p>This is the assignment the member currently owns and is used by the {@link TaskAssignor}
+ * to compute a new, sticky target assignment. Note that the assignor does not assign warm-up
+ * tasks itself (they are decided during reconciliation), but the currently-assigned warm-up
+ * tasks are exposed here so that the assignor can take them into account.
  */
 @InterfaceAudience.Public
 @InterfaceStability.Evolving
-public interface MemberSubscription {
+public interface MemberAssignmentState {
 
     /**
-     * @return The instance ID if provided.
+     * @return The current active tasks keyed by subtopology Id.
      */
-    Optional<String> instanceId();
+    Map<String, Set<Integer>> activeTasks();
 
     /**
-     * @return The rack ID if provided.
+     * @return The current standby tasks keyed by subtopology Id.
      */
-    Optional<String> rackId();
+    Map<String, Set<Integer>> standbyTasks();
 
     /**
-     * @return The process ID.
+     * @return The current warm-up tasks keyed by subtopology Id.
      */
-    String processId();
+    Map<String, Set<Integer>> warmupTasks();
 
     /**
-     * @return The client tags for a rack-aware assignment.
+     * @return The last received cumulative task offsets of assigned tasks or dormant tasks.
      */
-    Map<String, String> clientTags();
+    Map<TaskId, Long> taskOffsets();
+
+    /**
+     * @return The last received cumulative task end offsets of assigned tasks or dormant tasks.
+     */
+    Map<TaskId, Long> taskEndOffsets();
 
 }

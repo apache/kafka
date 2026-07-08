@@ -20,6 +20,7 @@ package org.apache.kafka.coordinator.group.streams.assignor;
 import org.apache.kafka.coordinator.group.api.assignor.streams.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.streams.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignmentState;
 import org.apache.kafka.coordinator.group.api.assignor.streams.MemberSubscription;
 import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignorException;
@@ -30,6 +31,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -75,7 +77,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             assignStandby(statefulTasks);
         }
 
-        return buildGroupAssignment(groupSpec.members().keySet());
+        return buildGroupAssignment(groupSpec.memberIds());
     }
 
     private LinkedList<TaskId> taskIds(final TopologyDescriber topologyDescriber, final boolean isActive) {
@@ -94,8 +96,8 @@ public class StickyTaskAssignor implements TaskAssignor {
     private void initialize(final GroupSpec groupSpec, final TopologyDescriber topologyDescriber) {
         localState = new LocalState();
         localState.numStandbyReplicas =
-            groupSpec.assignmentConfigs().isEmpty() ? 0
-                : Integer.parseInt(groupSpec.assignmentConfigs().get("num.standby.replicas"));
+            groupSpec.configs().isEmpty() ? 0
+                : Integer.parseInt(groupSpec.configs().get("num.standby.replicas"));
 
         // Helpers for computing active tasks per member, and tasks per member
         localState.totalActiveTasks = 0;
@@ -107,25 +109,25 @@ public class StickyTaskAssignor implements TaskAssignor {
             if (topologyDescriber.isStateful(subtopology))
                 localState.totalTasks += numberOfPartitions * localState.numStandbyReplicas;
         }
-        localState.totalMembersWithActiveTaskCapacity = groupSpec.members().size();
-        localState.totalMembersWithTaskCapacity = groupSpec.members().size();
+        localState.totalMembersWithActiveTaskCapacity = groupSpec.memberIds().size();
+        localState.totalMembersWithTaskCapacity = groupSpec.memberIds().size();
         localState.activeTasksPerMember = computeTasksPerMember(localState.totalActiveTasks, localState.totalMembersWithActiveTaskCapacity);
         localState.totalTasksPerMember = computeTasksPerMember(localState.totalTasks, localState.totalMembersWithTaskCapacity);
 
         localState.processIdToState = new HashMap<>(localState.totalMembersWithActiveTaskCapacity);
         localState.activeTaskToPrevMember = new HashMap<>(localState.totalActiveTasks);
         localState.standbyTaskToPrevMember = new HashMap<>(localState.numStandbyReplicas > 0 ? (localState.totalTasks - localState.totalActiveTasks) / localState.numStandbyReplicas : 0);
-        for (final Map.Entry<String, MemberSubscription> memberEntry : groupSpec.members().entrySet()) {
-            final String memberId = memberEntry.getKey();
-            final String processId = memberEntry.getValue().processId();
+        for (final String memberId : groupSpec.memberIds()) {
+            final MemberSubscription memberSubscription = groupSpec.memberSubscription(memberId);
+            final MemberAssignmentState memberAssignmentState = groupSpec.memberAssignmentState(memberId);
+            final String processId = memberSubscription.processId();
             final Member member = new Member(processId, memberId);
-            final MemberSubscription memberSpec = memberEntry.getValue();
 
             localState.processIdToState.putIfAbsent(processId, new ProcessState(processId));
             localState.processIdToState.get(processId).addMember(memberId);
 
             // prev active tasks
-            for (final Map.Entry<String, Set<Integer>> entry : memberSpec.activeTasks().entrySet()) {
+            for (final Map.Entry<String, Set<Integer>> entry : memberAssignmentState.activeTasks().entrySet()) {
                 final Set<Integer> partitionNoSet = entry.getValue();
                 for (final int partitionNo : partitionNoSet) {
                     localState.activeTaskToPrevMember.put(new TaskId(entry.getKey(), partitionNo), member);
@@ -133,7 +135,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             }
 
             // prev standby tasks
-            for (final Map.Entry<String, Set<Integer>> entry : memberSpec.standbyTasks().entrySet()) {
+            for (final Map.Entry<String, Set<Integer>> entry : memberAssignmentState.standbyTasks().entrySet()) {
                 final Set<Integer> partitionNoSet = entry.getValue();
                 for (final int partitionNo : partitionNoSet) {
                     final TaskId taskId = new TaskId(entry.getKey(), partitionNo);
@@ -144,7 +146,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         }
     }
 
-    private GroupAssignment buildGroupAssignment(final Set<String> members) {
+    private GroupAssignment buildGroupAssignment(final Collection<String> members) {
         final Map<String, MemberAssignment> memberAssignments = new HashMap<>();
 
         final Map<String, Set<TaskId>> activeTasksAssignments = localState.processIdToState.entrySet().stream()
@@ -171,7 +173,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             if (standbyTasksAssignments.containsKey(memberId)) {
                 standByTasks.putAll(toCompactedTaskIds(standbyTasksAssignments.get(memberId)));
             }
-            memberAssignments.put(memberId, new MemberAssignment(activeTasks, standByTasks, new HashMap<>()));
+            memberAssignments.put(memberId, new MemberAssignmentImpl(activeTasks, standByTasks));
         }
 
         return new GroupAssignment(memberAssignments);

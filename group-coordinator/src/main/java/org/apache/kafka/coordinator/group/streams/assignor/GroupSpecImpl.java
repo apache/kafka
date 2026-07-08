@@ -17,23 +17,51 @@
 package org.apache.kafka.coordinator.group.streams.assignor;
 
 import org.apache.kafka.coordinator.group.api.assignor.streams.GroupSpec;
+import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignmentState;
 import org.apache.kafka.coordinator.group.api.assignor.streams.MemberSubscription;
 
+import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
 
 /**
  * The assignment specification for a streams group.
  *
- * @param members           The member metadata keyed by member ID.
- * @param assignmentConfigs Any configurations passed to the assignor.
+ * @param members The member metadata keyed by member Id. Each value provides both the
+ *                {@link MemberSubscription} and the {@link MemberAssignmentState} for the member.
+ * @param configs Any configurations passed to the assignor.
  */
-public record GroupSpecImpl(Map<String, MemberSubscription> members,
-                            Map<String, String> assignmentConfigs) implements GroupSpec {
+public record GroupSpecImpl(
+    Map<String, MemberSubscriptionAndAssignmentImpl> members,
+    Map<String, String> configs
+) implements GroupSpec {
 
     public GroupSpecImpl {
         Objects.requireNonNull(members);
-        Objects.requireNonNull(assignmentConfigs);
+        Objects.requireNonNull(configs);
+    }
+
+    @Override
+    public Collection<String> memberIds() {
+        return members.keySet();
+    }
+
+    @Override
+    public MemberSubscription memberSubscription(String memberId) {
+        MemberSubscriptionAndAssignmentImpl member = members.get(memberId);
+        if (member == null) {
+            throw new IllegalArgumentException("Member Id " + memberId + " not found.");
+        }
+        return member;
+    }
+
+    @Override
+    public MemberAssignmentState memberAssignmentState(String memberId) {
+        MemberSubscriptionAndAssignmentImpl member = members.get(memberId);
+        if (member == null) {
+            throw new IllegalArgumentException("Member Id " + memberId + " not found.");
+        }
+        return member;
     }
 
 }

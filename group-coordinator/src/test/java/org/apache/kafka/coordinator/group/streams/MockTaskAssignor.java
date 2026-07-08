@@ -22,6 +22,7 @@ import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignorException;
 import org.apache.kafka.coordinator.group.api.assignor.streams.TopologyDescriber;
+import org.apache.kafka.coordinator.group.streams.assignor.MemberAssignmentImpl;
 
 import java.util.Map;
 import java.util.Map.Entry;
@@ -48,8 +49,8 @@ public class MockTaskAssignor implements TaskAssignor {
                     Entry::getKey,
                     entry -> {
                         TasksTuple tasksTuple = entry.getValue();
-                        return new MemberAssignment(
-                            tasksTuple.activeTasks(), tasksTuple.standbyTasks(), tasksTuple.warmupTasks());
+                        return (MemberAssignment) new MemberAssignmentImpl(
+                            tasksTuple.activeTasks(), tasksTuple.standbyTasks());
                     })));
     }
 
@@ -70,7 +71,7 @@ public class MockTaskAssignor implements TaskAssignor {
     @Override
     public GroupAssignment assign(final GroupSpec groupSpec, final TopologyDescriber topologyDescriber)
         throws TaskAssignorException {
-        assignmentConfigs = groupSpec.assignmentConfigs();
+        assignmentConfigs = groupSpec.configs();
         return preparedGroupAssignment;
     }
 }

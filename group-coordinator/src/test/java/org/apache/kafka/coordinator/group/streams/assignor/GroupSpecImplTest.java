@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.coordinator.group.streams.assignor;
 
-import org.apache.kafka.coordinator.group.api.assignor.streams.MemberSubscription;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -26,18 +24,21 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 public class GroupSpecImplTest {
 
-    private Map<String, MemberSubscription> members;
+    private Map<String, MemberSubscriptionAndAssignmentImpl> members;
+    private MemberSubscriptionAndAssignmentImpl member;
     private GroupSpecImpl groupSpec;
 
     @BeforeEach
     void setUp() {
         members = new HashMap<>();
 
-        members.put("test-member", new MemberSubscription(
+        member = new MemberSubscriptionAndAssignmentImpl(
             Optional.of("test-instance"),
             Optional.of("test-rack"),
             Map.of(),
@@ -47,7 +48,8 @@ public class GroupSpecImplTest {
             Map.of(),
             Map.of(),
             Map.of()
-        ));
+        );
+        members.put("test-member", member);
 
         groupSpec = new GroupSpecImpl(
             members,
@@ -56,8 +58,29 @@ public class GroupSpecImplTest {
     }
 
     @Test
-    void testMembers() {
-        assertEquals(members, groupSpec.members());
+    void testMemberIds() {
+        assertEquals(members.keySet(), groupSpec.memberIds());
+    }
+
+    @Test
+    void testMemberSubscription() {
+        assertEquals(member, groupSpec.memberSubscription("test-member"));
+    }
+
+    @Test
+    void testMemberAssignmentState() {
+        assertEquals(member, groupSpec.memberAssignmentState("test-member"));
+    }
+
+    @Test
+    void testMemberNotFound() {
+        assertThrows(IllegalArgumentException.class, () -> groupSpec.memberSubscription("unknown"));
+        assertThrows(IllegalArgumentException.class, () -> groupSpec.memberAssignmentState("unknown"));
+    }
+
+    @Test
+    void testConfigs() {
+        assertTrue(groupSpec.configs().isEmpty());
     }
 
 }

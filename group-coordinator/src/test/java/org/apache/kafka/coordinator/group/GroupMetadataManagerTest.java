@@ -19348,7 +19348,8 @@ public class GroupMetadataManagerTest {
             .build();
 
         assignor.prepareGroupAssignment(new org.apache.kafka.coordinator.group.api.assignor.streams.GroupAssignment(Map.of(
-            memberId, org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignment.empty()
+            memberId, (org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignment)
+                org.apache.kafka.coordinator.group.streams.assignor.MemberAssignmentImpl.empty()
         )));
 
         // Member joins the streams group.

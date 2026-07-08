@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.api.assignor.streams;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
+import java.util.Collection;
 import java.util.Map;
 
 /**
@@ -29,13 +30,29 @@ import java.util.Map;
 public interface GroupSpec {
 
     /**
-     * @return Member metadata keyed by member Id.
+     * @return The member Ids of all members in the group.
      */
-    Map<String, MemberSubscription> members();
+    Collection<String> memberIds();
+
+    /**
+     * Gets the static subscription metadata for a given member.
+     *
+     * @param memberId The member Id.
+     * @return The static member subscription.
+     */
+    MemberSubscription memberSubscription(String memberId);
+
+    /**
+     * Gets the current assignment state for a given member.
+     *
+     * @param memberId The member Id.
+     * @return The current member assignment state.
+     */
+    MemberAssignmentState memberAssignmentState(String memberId);
 
     /**
      * @return Any configurations passed to the assignor.
      */
-    Map<String, String> assignmentConfigs();
+    Map<String, String> configs();
 
 }

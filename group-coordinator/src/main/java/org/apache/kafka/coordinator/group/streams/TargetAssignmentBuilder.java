@@ -21,10 +21,11 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.api.assignor.streams.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignment;
-import org.apache.kafka.coordinator.group.api.assignor.streams.MemberSubscription;
 import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignorException;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
+import org.apache.kafka.coordinator.group.streams.assignor.MemberAssignmentImpl;
+import org.apache.kafka.coordinator.group.streams.assignor.MemberSubscriptionAndAssignmentImpl;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 
 import java.util.ArrayList;
@@ -116,12 +117,12 @@ public class TargetAssignmentBuilder {
         this.assignmentConfigs = Objects.requireNonNull(assignmentConfigs);
     }
 
-    static MemberSubscription createMemberSubscription(
+    static MemberSubscriptionAndAssignmentImpl createMemberSubscriptionAndAssignment(
         StreamsGroupMember member,
         TasksTuple targetAssignment,
         MemberTaskOffsets taskOffsets
     ) {
-        return new MemberSubscription(
+        return new MemberSubscriptionAndAssignmentImpl(
             member.instanceId(),
             member.rackId(),
             targetAssignment.activeTasks(),
@@ -217,10 +218,10 @@ public class TargetAssignmentBuilder {
      * @throws TaskAssignorException if the target assignment cannot be computed.
      */
     public TargetAssignmentResult build() throws TaskAssignorException {
-        Map<String, MemberSubscription> memberSpecs = new HashMap<>();
+        Map<String, MemberSubscriptionAndAssignmentImpl> memberSpecs = new HashMap<>();
 
         // Prepare the member spec for all members.
-        members.forEach((memberId, member) -> memberSpecs.put(memberId, createMemberSubscription(
+        members.forEach((memberId, member) -> memberSpecs.put(memberId, createMemberSubscriptionAndAssignment(
             member,
             targetAssignment.getOrDefault(memberId, org.apache.kafka.coordinator.group.streams.TasksTuple.EMPTY),
             taskOffsets.getOrDefault(memberId, MemberTaskOffsets.EMPTY)
@@ -241,7 +242,7 @@ public class TargetAssignmentBuilder {
             );
         } else {
             newGroupAssignment = new GroupAssignment(
-                memberSpecs.keySet().stream().collect(Collectors.toMap(x -> x, x -> MemberAssignment.empty())));
+                memberSpecs.keySet().stream().collect(Collectors.toMap(x -> x, x -> (MemberAssignment) MemberAssignmentImpl.empty())));
         }
 
         // Compute delta from previous to new target assignment and create the
@@ -294,7 +295,8 @@ public class TargetAssignmentBuilder {
             return new TasksTuple(
                 newMemberAssignment.activeTasks(),
                 newMemberAssignment.standbyTasks(),
-                newMemberAssignment.warmupTasks()
+                // Warm-up tasks are not assigned by the assignor; they are decided during reconciliation.
+                Map.of()
             );
         } else {
             return TasksTuple.EMPTY;

@@ -20,29 +20,26 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
 /**
  * The task assignment for a streams group member.
  *
- * @param activeTasks  The active tasks assigned to this member keyed by subtopologyId.
- * @param standbyTasks The standby tasks assigned to this member keyed by subtopologyId.
- * @param warmupTasks  The warm-up tasks assigned to this member keyed by subtopologyId.
+ * <p>Only active and standby tasks are assigned by the {@link TaskAssignor}. Warm-up tasks are
+ * not assigned by the assignor; they are decided during reconciliation.
  */
 @InterfaceAudience.Public
 @InterfaceStability.Evolving
-public record MemberAssignment(Map<String, Set<Integer>> activeTasks,
-                               Map<String, Set<Integer>> standbyTasks,
-                               Map<String, Set<Integer>> warmupTasks) {
+public interface MemberAssignment {
 
-    public MemberAssignment {
-        Objects.requireNonNull(activeTasks);
-        Objects.requireNonNull(standbyTasks);
-        Objects.requireNonNull(warmupTasks);
-    }
+    /**
+     * @return The active tasks assigned to this member keyed by subtopology Id.
+     */
+    Map<String, Set<Integer>> activeTasks();
 
-    public static MemberAssignment empty() {
-        return new MemberAssignment(Map.of(), Map.of(), Map.of());
-    }
+    /**
+     * @return The standby tasks assigned to this member keyed by subtopology Id.
+     */
+    Map<String, Set<Integer>> standbyTasks();
+
 }

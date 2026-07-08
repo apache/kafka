@@ -20,12 +20,13 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.api.assignor.streams.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.streams.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignment;
-import org.apache.kafka.coordinator.group.api.assignor.streams.MemberSubscription;
 import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.streams.TopologyDescriber;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.TopologyMetadata;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
+import org.apache.kafka.coordinator.group.streams.assignor.MemberAssignmentImpl;
+import org.apache.kafka.coordinator.group.streams.assignor.MemberSubscriptionAndAssignmentImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 
@@ -132,28 +133,29 @@ public class StreamsStickyAssignorBenchmark {
         GroupAssignment initialAssignment = new StickyTaskAssignor().assign(groupSpec, topologyDescriber);
         Map<String, MemberAssignment> members = initialAssignment.members();
 
-        Map<String, MemberSubscription> updatedMemberSpec = new HashMap<>();
+        Map<String, MemberSubscriptionAndAssignmentImpl> updatedMemberSpec = new HashMap<>();
 
-        for (Map.Entry<String, MemberSubscription> member : groupSpec.members().entrySet()) {
+        for (String memberId : groupSpec.memberIds()) {
             MemberAssignment memberAssignment = members.getOrDefault(
-                member.getKey(),
-                new MemberAssignment(Map.of(), Map.of(), Map.of())
+                memberId,
+                new MemberAssignmentImpl(Map.of(), Map.of())
             );
 
-            updatedMemberSpec.put(member.getKey(), new MemberSubscription(
+            updatedMemberSpec.put(memberId, new MemberSubscriptionAndAssignmentImpl(
                 Optional.empty(),
                 Optional.empty(),
                 memberAssignment.activeTasks(),
                 memberAssignment.standbyTasks(),
-                memberAssignment.warmupTasks(),
-                member.getValue().processId(),
+                // Warm-up tasks are not assigned by the assignor; they are decided during reconciliation.
+                Map.of(),
+                groupSpec.memberSubscription(memberId).processId(),
                 Map.of(),
                 Map.of(),
                 Map.of()
             ));
         }
 
-        updatedMemberSpec.put("newMember", new MemberSubscription(
+        updatedMemberSpec.put("newMember", new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
             Map.of(),
