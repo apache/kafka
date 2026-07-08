@@ -160,9 +160,7 @@ public final class RaftClientBenchmarkContext {
 
     /**
      * Initializes the local node {@code local}, unattached, in a cluster whose voter set is
-     * {@code voterKeys}. {@code local} is passed explicitly rather than assumed to be a member of
-     * {@code voterKeys}: when it is a voter it appears in the set, and a future benchmark can make the
-     * local node an observer by passing a {@code local} that is not in {@code voterKeys}.
+     * {@code voterKeys}.
      */
     private static RaftClientTestContext buildContext(
         ReplicaKey local,
@@ -190,10 +188,7 @@ public final class RaftClientBenchmarkContext {
     }
 
     /**
-     * The starting voters other than the local node, in voter-set order. Computed by excluding the
-     * local node's identity rather than assuming it sits at a fixed index, so this is correct whether
-     * the local node is one of the voters (it is excluded) or an observer outside the voter set (none
-     * is excluded). May be empty (a single-voter cluster whose only voter is the local node).
+     * The starting voters other than the local node, in voter-set order. May be empty (a single-voter cluster whose only voter is the local node).
      */
     public List<ReplicaKey> remoteVoters() {
         return startingVoters.stream()
@@ -212,8 +207,6 @@ public final class RaftClientBenchmarkContext {
      * before the measured region begins.
      */
     public void zeroCountersOnSetup() {
-        // Draining each counter (ignoring the returned delta) advances its baseline to the current
-        // value, so the setup work counted so far is excluded from the next drain.
         logFlushes.drainDelta();
         logReads.drainDelta();
         logTruncations.drainDelta();
