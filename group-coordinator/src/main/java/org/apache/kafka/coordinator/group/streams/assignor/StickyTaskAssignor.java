@@ -17,6 +17,15 @@
 
 package org.apache.kafka.coordinator.group.streams.assignor;
 
+import org.apache.kafka.coordinator.group.api.assignor.streams.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.streams.GroupSpec;
+import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.streams.MemberSubscription;
+import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignor;
+import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignorException;
+import org.apache.kafka.coordinator.group.api.assignor.streams.TaskId;
+import org.apache.kafka.coordinator.group.api.assignor.streams.TopologyDescriber;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -106,11 +115,11 @@ public class StickyTaskAssignor implements TaskAssignor {
         localState.processIdToState = new HashMap<>(localState.totalMembersWithActiveTaskCapacity);
         localState.activeTaskToPrevMember = new HashMap<>(localState.totalActiveTasks);
         localState.standbyTaskToPrevMember = new HashMap<>(localState.numStandbyReplicas > 0 ? (localState.totalTasks - localState.totalActiveTasks) / localState.numStandbyReplicas : 0);
-        for (final Map.Entry<String, AssignmentMemberSpec> memberEntry : groupSpec.members().entrySet()) {
+        for (final Map.Entry<String, MemberSubscription> memberEntry : groupSpec.members().entrySet()) {
             final String memberId = memberEntry.getKey();
             final String processId = memberEntry.getValue().processId();
             final Member member = new Member(processId, memberId);
-            final AssignmentMemberSpec memberSpec = memberEntry.getValue();
+            final MemberSubscription memberSpec = memberEntry.getValue();
 
             localState.processIdToState.putIfAbsent(processId, new ProcessState(processId));
             localState.processIdToState.get(processId).addMember(memberId);

@@ -14,20 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.streams.assignor;
-
-import org.apache.kafka.common.errors.ApiException;
 
 /**
- * Exception thrown by {@link TaskAssignor#assign(GroupSpec, TopologyDescriber)}}. The exception is only used internally.
+ * Provides the public API for broker-side custom task assignors used by Kafka Streams groups.
  */
-public class TaskAssignorException extends ApiException {
-
-    public TaskAssignorException(String message) {
-        super(message);
-    }
-
-    public TaskAssignorException(String message, Throwable cause) {
-        super(message, cause);
-    }
-}
+package org.apache.kafka.coordinator.group.api.assignor.streams;

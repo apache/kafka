@@ -18,7 +18,7 @@ package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
-import org.apache.kafka.coordinator.group.streams.assignor.TaskId;
+import org.apache.kafka.coordinator.group.api.assignor.streams.TaskId;
 
 import org.junit.jupiter.api.Test;
 

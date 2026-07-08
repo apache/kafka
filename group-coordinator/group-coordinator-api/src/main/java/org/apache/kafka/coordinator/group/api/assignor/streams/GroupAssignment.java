@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.streams.assignor;
+package org.apache.kafka.coordinator.group.api.assignor.streams;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Map;
 import java.util.Objects;
@@ -24,6 +27,8 @@ import java.util.Objects;
  *
  * @param members The member assignments keyed by member ID.
  */
+@InterfaceAudience.Public
+@InterfaceStability.Evolving
 public record GroupAssignment(Map<String, MemberAssignment> members) {
 
     public GroupAssignment {

@@ -14,23 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.streams.assignor;
+package org.apache.kafka.coordinator.group.api.assignor.streams;
 
-import java.util.Map;
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.errors.ApiException;
 
 /**
- * The group metadata specifications required to compute the target assignment.
+ * Exception thrown by {@link TaskAssignor#assign(GroupSpec, TopologyDescriber)}}. The exception is only used internally.
  */
-public interface GroupSpec {
+@InterfaceAudience.Public
+@InterfaceStability.Evolving
+public class TaskAssignorException extends ApiException {
 
-    /**
-     * @return Member metadata keyed by member Id.
-     */
-    Map<String, AssignmentMemberSpec> members();
+    public TaskAssignorException(String message) {
+        super(message);
+    }
 
-    /**
-     * @return Any configurations passed to the assignor.
-     */
-    Map<String, String> assignmentConfigs();
-
+    public TaskAssignorException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

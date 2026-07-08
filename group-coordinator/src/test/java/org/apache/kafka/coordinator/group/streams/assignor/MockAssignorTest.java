@@ -16,6 +16,12 @@
  */
 package org.apache.kafka.coordinator.group.streams.assignor;
 
+import org.apache.kafka.coordinator.group.api.assignor.streams.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.streams.MemberSubscription;
+import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignorException;
+import org.apache.kafka.coordinator.group.api.assignor.streams.TopologyDescriber;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -60,7 +66,7 @@ public class MockAssignorTest {
     @Test
     public void testDoubleAssignment() {
 
-        final AssignmentMemberSpec memberSpec1 = new AssignmentMemberSpec(
+        final MemberSubscription memberSpec1 = new MemberSubscription(
             Optional.empty(),
             Optional.empty(),
             Map.of("test-subtopology", Set.of(0)),
@@ -72,7 +78,7 @@ public class MockAssignorTest {
             Map.of()
         );
 
-        final AssignmentMemberSpec memberSpec2 = new AssignmentMemberSpec(
+        final MemberSubscription memberSpec2 = new MemberSubscription(
             Optional.empty(),
             Optional.empty(),
             Map.of("test-subtopology", Set.of(0)),
@@ -113,7 +119,7 @@ public class MockAssignorTest {
     @Test
     public void testSingleMember() {
 
-        final AssignmentMemberSpec memberSpec = new AssignmentMemberSpec(
+        final MemberSubscription memberSpec = new MemberSubscription(
             Optional.empty(),
             Optional.empty(),
             Map.of(),
@@ -145,7 +151,7 @@ public class MockAssignorTest {
     @Test
     public void testTwoMembersTwoSubtopologies() {
 
-        final AssignmentMemberSpec memberSpec1 = new AssignmentMemberSpec(
+        final MemberSubscription memberSpec1 = new MemberSubscription(
             Optional.empty(),
             Optional.empty(),
             Map.of(),
@@ -157,7 +163,7 @@ public class MockAssignorTest {
             Map.of()
         );
 
-        final AssignmentMemberSpec memberSpec2 = new AssignmentMemberSpec(
+        final MemberSubscription memberSpec2 = new MemberSubscription(
             Optional.empty(),
             Optional.empty(),
             Map.of(),
@@ -198,7 +204,7 @@ public class MockAssignorTest {
     @Test
     public void testTwoMembersTwoSubtopologiesStickiness() {
 
-        final AssignmentMemberSpec memberSpec1 = new AssignmentMemberSpec(
+        final MemberSubscription memberSpec1 = new MemberSubscription(
             Optional.empty(),
             Optional.empty(),
             mkMap(
@@ -213,7 +219,7 @@ public class MockAssignorTest {
             Map.of()
         );
 
-        final AssignmentMemberSpec memberSpec2 = new AssignmentMemberSpec(
+        final MemberSubscription memberSpec2 = new MemberSubscription(
             Optional.empty(),
             Optional.empty(),
             mkMap(

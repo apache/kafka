@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.streams.assignor;
+package org.apache.kafka.coordinator.group.api.assignor.streams;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Map;
 import java.util.Objects;
@@ -27,6 +30,8 @@ import java.util.Set;
  * @param standbyTasks The standby tasks assigned to this member keyed by subtopologyId.
  * @param warmupTasks  The warm-up tasks assigned to this member keyed by subtopologyId.
  */
+@InterfaceAudience.Public
+@InterfaceStability.Evolving
 public record MemberAssignment(Map<String, Set<Integer>> activeTasks,
                                Map<String, Set<Integer>> standbyTasks,
                                Map<String, Set<Integer>> warmupTasks) {

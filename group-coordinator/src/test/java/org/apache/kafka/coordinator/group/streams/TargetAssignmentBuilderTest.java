@@ -22,14 +22,14 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
+import org.apache.kafka.coordinator.group.api.assignor.streams.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.streams.MemberSubscription;
+import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignor;
+import org.apache.kafka.coordinator.group.api.assignor.streams.TaskId;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.TaskRole;
-import org.apache.kafka.coordinator.group.streams.assignor.AssignmentMemberSpec;
-import org.apache.kafka.coordinator.group.streams.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
-import org.apache.kafka.coordinator.group.streams.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
-import org.apache.kafka.coordinator.group.streams.assignor.TaskId;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 
@@ -50,7 +50,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedRecordsEquals;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord;
-import static org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.createAssignmentMemberSpec;
+import static org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.createMemberSubscription;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksTuple;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -88,7 +88,7 @@ public class TargetAssignmentBuilderTest {
 
     @ParameterizedTest
     @EnumSource(TaskRole.class)
-    public void testCreateAssignmentMemberSpec(TaskRole taskRole) {
+    public void testCreateMemberSubscription(TaskRole taskRole) {
         String fooSubtopologyId = Uuid.randomUuid().toString();
         String barSubtopologyId = Uuid.randomUuid().toString();
 
@@ -105,13 +105,13 @@ public class TargetAssignmentBuilderTest {
             mkTasks(barSubtopologyId, 1, 2, 3)
         );
 
-        AssignmentMemberSpec assignmentMemberSpec = createAssignmentMemberSpec(
+        MemberSubscription memberSubscription = createMemberSubscription(
             member,
             assignment,
             MemberTaskOffsets.EMPTY
         );
 
-        assertEquals(new AssignmentMemberSpec(
+        assertEquals(new MemberSubscription(
             Optional.of("instanceId"),
             Optional.of("rackId"),
             assignment.activeTasks(),
@@ -121,11 +121,11 @@ public class TargetAssignmentBuilderTest {
             clientTags,
             Map.of(),
             Map.of()
-        ), assignmentMemberSpec);
+        ), memberSubscription);
     }
 
     @Test
-    public void testCreateAssignmentMemberSpecPopulatesTaskOffsets() {
+    public void testCreateMemberSubscriptionPopulatesTaskOffsets() {
         String fooSubtopologyId = Uuid.randomUuid().toString();
 
         StreamsGroupMember member = new StreamsGroupMember.Builder("member-id")
@@ -138,14 +138,14 @@ public class TargetAssignmentBuilderTest {
         Map<TaskId, Long> taskOffsets = Map.of(new TaskId(fooSubtopologyId, 0), 10L);
         Map<TaskId, Long> taskEndOffsets = Map.of(new TaskId(fooSubtopologyId, 0), 20L);
 
-        AssignmentMemberSpec assignmentMemberSpec = createAssignmentMemberSpec(
+        MemberSubscription memberSubscription = createMemberSubscription(
             member,
             TasksTuple.EMPTY,
             new MemberTaskOffsets(taskOffsets, taskEndOffsets)
         );
 
-        assertEquals(taskOffsets, assignmentMemberSpec.taskOffsets());
-        assertEquals(taskEndOffsets, assignmentMemberSpec.taskEndOffsets());
+        assertEquals(taskOffsets, memberSubscription.taskOffsets());
+        assertEquals(taskEndOffsets, memberSubscription.taskEndOffsets());
     }
 
     @Test
@@ -429,9 +429,9 @@ public class TargetAssignmentBuilderTest {
 
         public org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult build() {
             // Prepare expected member specs.
-            Map<String, AssignmentMemberSpec> memberSpecs = new HashMap<>();
+            Map<String, MemberSubscription> memberSpecs = new HashMap<>();
             members.forEach((memberId, member) ->
-                memberSpecs.put(memberId, createAssignmentMemberSpec(
+                memberSpecs.put(memberId, createMemberSubscription(
                         member,
                         targetAssignment.getOrDefault(memberId, TasksTuple.EMPTY),
                         MemberTaskOffsets.EMPTY

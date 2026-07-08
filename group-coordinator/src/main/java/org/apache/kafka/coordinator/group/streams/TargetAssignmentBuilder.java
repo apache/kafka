@@ -19,12 +19,12 @@ package org.apache.kafka.coordinator.group.streams;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
-import org.apache.kafka.coordinator.group.streams.assignor.AssignmentMemberSpec;
-import org.apache.kafka.coordinator.group.streams.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.streams.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.streams.MemberSubscription;
+import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignor;
+import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignorException;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
-import org.apache.kafka.coordinator.group.streams.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
-import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 
 import java.util.ArrayList;
@@ -116,12 +116,12 @@ public class TargetAssignmentBuilder {
         this.assignmentConfigs = Objects.requireNonNull(assignmentConfigs);
     }
 
-    static AssignmentMemberSpec createAssignmentMemberSpec(
+    static MemberSubscription createMemberSubscription(
         StreamsGroupMember member,
         TasksTuple targetAssignment,
         MemberTaskOffsets taskOffsets
     ) {
-        return new AssignmentMemberSpec(
+        return new MemberSubscription(
             member.instanceId(),
             member.rackId(),
             targetAssignment.activeTasks(),
@@ -217,10 +217,10 @@ public class TargetAssignmentBuilder {
      * @throws TaskAssignorException if the target assignment cannot be computed.
      */
     public TargetAssignmentResult build() throws TaskAssignorException {
-        Map<String, AssignmentMemberSpec> memberSpecs = new HashMap<>();
+        Map<String, MemberSubscription> memberSpecs = new HashMap<>();
 
         // Prepare the member spec for all members.
-        members.forEach((memberId, member) -> memberSpecs.put(memberId, createAssignmentMemberSpec(
+        members.forEach((memberId, member) -> memberSpecs.put(memberId, createMemberSubscription(
             member,
             targetAssignment.getOrDefault(memberId, org.apache.kafka.coordinator.group.streams.TasksTuple.EMPTY),
             taskOffsets.getOrDefault(memberId, MemberTaskOffsets.EMPTY)

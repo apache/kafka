@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.coordinator.group.streams.assignor;
 
+import org.apache.kafka.coordinator.group.api.assignor.streams.GroupSpec;
+import org.apache.kafka.coordinator.group.api.assignor.streams.MemberSubscription;
+
 import java.util.Map;
 import java.util.Objects;
 
@@ -25,7 +28,7 @@ import java.util.Objects;
  * @param members           The member metadata keyed by member ID.
  * @param assignmentConfigs Any configurations passed to the assignor.
  */
-public record GroupSpecImpl(Map<String, AssignmentMemberSpec> members,
+public record GroupSpecImpl(Map<String, MemberSubscription> members,
                             Map<String, String> assignmentConfigs) implements GroupSpec {
 
     public GroupSpecImpl {

@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.jmh.assignor;
 
+import org.apache.kafka.coordinator.group.api.assignor.streams.GroupSpec;
+import org.apache.kafka.coordinator.group.api.assignor.streams.MemberSubscription;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
-import org.apache.kafka.coordinator.group.streams.assignor.AssignmentMemberSpec;
-import org.apache.kafka.coordinator.group.streams.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredInternalTopic;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
@@ -46,14 +46,14 @@ public class StreamsAssignorBenchmarkUtils {
         Map<String, StreamsGroupMember> members,
         Map<String, String> assignmentConfigs
     ) {
-        Map<String, AssignmentMemberSpec> memberSpecs = new HashMap<>();
+        Map<String, MemberSubscription> memberSpecs = new HashMap<>();
 
         // Prepare the member spec for all members.
         for (Map.Entry<String, StreamsGroupMember> memberEntry : members.entrySet()) {
             String memberId = memberEntry.getKey();
             StreamsGroupMember member = memberEntry.getValue();
 
-            memberSpecs.put(memberId, new AssignmentMemberSpec(
+            memberSpecs.put(memberId, new MemberSubscription(
                 member.instanceId(),
                 member.rackId(),
                 Map.of(),

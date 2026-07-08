@@ -17,16 +17,16 @@
 package org.apache.kafka.jmh.assignor;
 
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
+import org.apache.kafka.coordinator.group.api.assignor.streams.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.streams.GroupSpec;
+import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.streams.MemberSubscription;
+import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignor;
+import org.apache.kafka.coordinator.group.api.assignor.streams.TopologyDescriber;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.TopologyMetadata;
-import org.apache.kafka.coordinator.group.streams.assignor.AssignmentMemberSpec;
-import org.apache.kafka.coordinator.group.streams.assignor.GroupAssignment;
-import org.apache.kafka.coordinator.group.streams.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
-import org.apache.kafka.coordinator.group.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
-import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
-import org.apache.kafka.coordinator.group.streams.assignor.TopologyDescriber;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 
 import org.openjdk.jmh.annotations.Benchmark;
@@ -132,15 +132,15 @@ public class StreamsStickyAssignorBenchmark {
         GroupAssignment initialAssignment = new StickyTaskAssignor().assign(groupSpec, topologyDescriber);
         Map<String, MemberAssignment> members = initialAssignment.members();
 
-        Map<String, AssignmentMemberSpec> updatedMemberSpec = new HashMap<>();
+        Map<String, MemberSubscription> updatedMemberSpec = new HashMap<>();
 
-        for (Map.Entry<String, AssignmentMemberSpec> member : groupSpec.members().entrySet()) {
+        for (Map.Entry<String, MemberSubscription> member : groupSpec.members().entrySet()) {
             MemberAssignment memberAssignment = members.getOrDefault(
                 member.getKey(),
                 new MemberAssignment(Map.of(), Map.of(), Map.of())
             );
 
-            updatedMemberSpec.put(member.getKey(), new AssignmentMemberSpec(
+            updatedMemberSpec.put(member.getKey(), new MemberSubscription(
                 Optional.empty(),
                 Optional.empty(),
                 memberAssignment.activeTasks(),
@@ -153,7 +153,7 @@ public class StreamsStickyAssignorBenchmark {
             ));
         }
 
-        updatedMemberSpec.put("newMember", new AssignmentMemberSpec(
+        updatedMemberSpec.put("newMember", new MemberSubscription(
             Optional.empty(),
             Optional.empty(),
             Map.of(),

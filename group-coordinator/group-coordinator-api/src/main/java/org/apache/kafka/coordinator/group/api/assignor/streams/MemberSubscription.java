@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.streams.assignor;
+package org.apache.kafka.coordinator.group.api.assignor.streams;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collections;
 import java.util.Map;
@@ -34,7 +37,9 @@ import java.util.Set;
  * @param clientTags   The client tags for a rack-aware assignment.
  * @param taskOffsets  The last received cumulative task offsets of assigned tasks or dormant tasks.
  */
-public record AssignmentMemberSpec(Optional<String> instanceId,
+@InterfaceAudience.Public
+@InterfaceStability.Evolving
+public record MemberSubscription(Optional<String> instanceId,
                                    Optional<String> rackId,
                                    Map<String, Set<Integer>> activeTasks,
                                    Map<String, Set<Integer>> standbyTasks,
@@ -45,7 +50,7 @@ public record AssignmentMemberSpec(Optional<String> instanceId,
                                    Map<TaskId, Long> taskEndOffsets
 ) {
 
-    public AssignmentMemberSpec {
+    public MemberSubscription {
         Objects.requireNonNull(instanceId);
         Objects.requireNonNull(rackId);
         activeTasks = Collections.unmodifiableMap(Objects.requireNonNull(activeTasks));

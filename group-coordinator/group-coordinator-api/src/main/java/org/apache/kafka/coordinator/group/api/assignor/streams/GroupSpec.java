@@ -14,30 +14,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.streams.assignor;
+package org.apache.kafka.coordinator.group.api.assignor.streams;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.InterfaceStability;
+
+import java.util.Map;
 
 /**
- * Server side task assignor used by streams groups.
+ * The group metadata specifications required to compute the target assignment.
  */
-public interface TaskAssignor {
+@InterfaceAudience.Public
+@InterfaceStability.Evolving
+public interface GroupSpec {
 
     /**
-     * Unique name for this assignor.
+     * @return Member metadata keyed by member Id.
      */
-    String name();
+    Map<String, MemberSubscription> members();
 
     /**
-     * Assigns tasks to group members based on the given assignment specification and topic metadata.
-     *
-     * @param groupSpec         The assignment spec which includes member metadata.
-     * @param topologyDescriber The task metadata describer.
-     * @return The new assignment for the group.
-     *
-     * @throws TaskAssignorException For empty groups
+     * @return Any configurations passed to the assignor.
      */
-    GroupAssignment assign(
-        GroupSpec groupSpec,
-        TopologyDescriber topologyDescriber
-    ) throws TaskAssignorException;
+    Map<String, String> assignmentConfigs();
 
 }

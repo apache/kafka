@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.coordinator.group.streams.assignor;
 
+import org.apache.kafka.coordinator.group.api.assignor.streams.MemberSubscription;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -28,14 +30,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class GroupSpecImplTest {
 
-    private Map<String, AssignmentMemberSpec> members;
+    private Map<String, MemberSubscription> members;
     private GroupSpecImpl groupSpec;
 
     @BeforeEach
     void setUp() {
         members = new HashMap<>();
 
-        members.put("test-member", new AssignmentMemberSpec(
+        members.put("test-member", new MemberSubscription(
             Optional.of("test-instance"),
             Optional.of("test-rack"),
             Map.of(),

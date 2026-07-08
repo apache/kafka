@@ -16,6 +16,14 @@
  */
 package org.apache.kafka.coordinator.group.streams.assignor;
 
+import org.apache.kafka.coordinator.group.api.assignor.streams.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.streams.GroupSpec;
+import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.streams.MemberSubscription;
+import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignor;
+import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignorException;
+import org.apache.kafka.coordinator.group.api.assignor.streams.TopologyDescriber;
+
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -56,9 +64,9 @@ public class MockAssignor implements TaskAssignor {
         }
 
         // Copy existing assignment and fill temporary data structures
-        for (Map.Entry<String, AssignmentMemberSpec> memberEntry : groupSpec.members().entrySet()) {
+        for (Map.Entry<String, MemberSubscription> memberEntry : groupSpec.members().entrySet()) {
             final String memberId = memberEntry.getKey();
-            final AssignmentMemberSpec memberSpec = memberEntry.getValue();
+            final MemberSubscription memberSpec = memberEntry.getValue();
 
             Map<String, Set<Integer>> activeTasks = new HashMap<>(memberSpec.activeTasks());
 

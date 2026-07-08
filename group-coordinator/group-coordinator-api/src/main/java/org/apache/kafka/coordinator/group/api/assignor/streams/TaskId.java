@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.streams.assignor;
+package org.apache.kafka.coordinator.group.api.assignor.streams;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Comparator;
 import java.util.Objects;
@@ -25,6 +28,8 @@ import java.util.Objects;
  * @param subtopologyId The unique identifier of the subtopology.
  * @param partition     The partition of the input topics this task is processing.
  */
+@InterfaceAudience.Public
+@InterfaceStability.Evolving
 public record TaskId(String subtopologyId, int partition) implements Comparable<TaskId> {
 
     public TaskId {
