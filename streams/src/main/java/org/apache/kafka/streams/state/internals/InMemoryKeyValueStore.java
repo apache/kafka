@@ -125,6 +125,16 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public Position getPosition() {
+        // Mirror RocksDBStore#getPosition: report the uncommitted position (committed + staged) so the
+        // changelog consistency vector, which ChangeLogging*BytesStore writes at put() time via
+        // getPosition(), reflects the input position of the staged write. Otherwise a transactional
+        // store's changelog records carry the stale committed position and the position cannot be
+        // rebuilt when the store is restored from its changelog.
+        if (transactionBuffer != null) {
+            synchronized (position) {
+                return position.copy().merge(transactionBuffer.pendingPosition());
+            }
+        }
         return position;
     }
 
@@ -133,14 +143,26 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
 
-        return StoreQueryUtils.handleBasicQueries(
-            query,
-            positionBound,
-            config,
-            this,
-            position,
-            context
-        );
+        synchronized (position) {
+            // Mirror RocksDBStore#query: under READ_UNCOMMITTED, expose the writes staged in the
+            // transaction buffer since the last commit by merging the buffer's pending position
+            // deltas into a copy of the committed position. READ_COMMITTED (and the
+            // non-transactional store) query the committed position directly.
+            final Position queryPosition;
+            if (transactionBuffer != null && config.getIsolationLevel() == IsolationLevel.READ_UNCOMMITTED) {
+                queryPosition = position.copy().merge(transactionBuffer.pendingPosition());
+            } else {
+                queryPosition = position;
+            }
+            return StoreQueryUtils.handleBasicQueries(
+                query,
+                positionBound,
+                config,
+                this,
+                queryPosition,
+                context
+            );
+        }
     }
 
     @Override
@@ -167,6 +189,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     public synchronized void put(final Bytes key, final byte[] value) {
         if (transactionBuffer != null) {
             transactionBuffer.stage(key, value);
+            transactionBuffer.updatePosition(context);
             return;
         }
         putInternal(key, value);
@@ -199,6 +222,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         if (transactionBuffer != null) {
             for (final KeyValue<Bytes, byte[]> entry : entries) {
                 transactionBuffer.stage(entry.key, entry.value);
+                transactionBuffer.updatePosition(context);
             }
             return;
         }
@@ -365,7 +389,10 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     void commitStagedWrites() {
         if (transactionBuffer != null) {
-            transactionBuffer.commit();
+            synchronized (position) {
+                transactionBuffer.mergePendingPositionInto(position);
+                transactionBuffer.commit();
+            }
         }
     }
 

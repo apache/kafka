@@ -18,6 +18,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
@@ -31,6 +32,7 @@ import java.util.concurrent.ExecutionException;
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
+@InterfaceAudience.Public
 public class DescribeStreamsGroupsResult {
 
     private final Map<String, KafkaFuture<StreamsGroupDescription>> futures;

@@ -14,11 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Thrown when the share coordinator rejected the request because the share-group state epoch did not match.
  */
+@InterfaceAudience.Public
 public class FencedStateEpochException extends ApiException {
     private static final long serialVersionUID = 1L;
 

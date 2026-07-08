@@ -27,6 +27,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
@@ -390,6 +391,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * We have intentionally avoided implementing a particular threading model for processing. Various options for
  * multithreaded processing are possible, of which the most straightforward is to dedicate a thread to each consumer.
  */
+@InterfaceAudience.Public
 public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
 
     private static final ShareConsumerDelegateCreator CREATOR = new ShareConsumerDelegateCreator();

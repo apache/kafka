@@ -126,8 +126,12 @@ public class ShareGroupDLQRecordFetcher {
 
             if (!future.isDone()) {
                 // A remote read is in flight: resume from the callback so the calling thread is unblocked.
+                // Uses whenCompleteAsync (not whenComplete) to close a race between the isDone() check
+                // above and callback registration: if the future completes in that gap, whenComplete
+                // would run the callback inline on this thread, letting resume() recurse into runFrom()
+                // on the same stack. whenCompleteAsync always dispatches off-thread, so that can't happen.
                 long readFrom = nextOffset;
-                future.whenComplete((results, exception) -> resume(readFrom, logReadResult(results), exception));
+                future.whenCompleteAsync((results, exception) -> resume(readFrom, logReadResult(results), exception));
                 return;
             }
 
@@ -169,8 +173,8 @@ public class ShareGroupDLQRecordFetcher {
                 runFrom(advanced);  // resume the loop
             }
         } catch (Exception e) {
-            log.warn("Unexpected error processing records for {}. Skipping record copy.", param, e);
-            result.complete(Map.of());
+            log.warn("Unexpected error processing records for {}. Returning records fetched so far.", param, e);
+            complete();
         }
     }
 

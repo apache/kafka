@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.tools;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.connect.connector.Task;
@@ -30,6 +31,7 @@ import java.util.Map;
  * A simple source connector that is capable of producing static data with
  * {@link org.apache.kafka.connect.data.Struct Struct} schemas.
  */
+@InterfaceAudience.Public
 public class SchemaSourceConnector extends SourceConnector {
 
     private Map<String, String> config;

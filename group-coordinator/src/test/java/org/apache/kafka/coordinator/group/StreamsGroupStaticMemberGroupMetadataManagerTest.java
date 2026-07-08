@@ -611,6 +611,12 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         assertEquals(rejoinMemberId, result.response().data().memberId());
         assertEquals(groupEpoch, result.response().data().memberEpoch());
 
+        // The static member rejoined with a new member id while the assignment is up to date, so the
+        // target assignment is reused from the persisted state. Its relabelling to the new member id
+        // is queued but not yet replayed, so the rejoining member must still get its assignment back
+        // (not an empty one).
+        assertEquals(topic.responseTasks(0, 1, 2, 3), result.response().data().activeTasks());
+
         Optional<StreamsGroupMemberMetadataValue> updatedMemberMetadataValue = result.records().stream()
             .filter(record -> record.key() instanceof StreamsGroupMemberMetadataKey)
             .filter(record -> ((StreamsGroupMemberMetadataKey) record.key()).memberId().equals(rejoinMemberId))
