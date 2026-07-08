@@ -195,6 +195,7 @@ public interface MetadataCache extends ConfigRepository {
     private static Node[] toArray(int[] replicas, Map<Integer, List<Node>> brokerToNodes) {
         return Arrays.stream(replicas)
             .mapToObj(brokerToNodes::get)
+            .filter(Objects::nonNull)
             .flatMap(Collection::stream)
             .toArray(Node[]::new);
     }
