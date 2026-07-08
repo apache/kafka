@@ -324,6 +324,7 @@ org.apache.kafka.controller.ReplicationControlManagerTest:
 - testRemoveLeaderships
 - testShrinkAndExpandIsr
 - testTopicNameCollision
+- testTotalNumberOfPartitionsValidationDoesNotOverflow
 - testValidateBadManualPartitionAssignments
 - testValidateGoodManualPartitionAssignments
 - testValidateNewTopicNames

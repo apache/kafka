@@ -309,6 +309,7 @@ org.apache.kafka.connect.runtime.AbstractHerderTest:
 - testHeaderConverterPluginConfig
 - testPauseConnector
 - testPredicatePluginConfig
+- testRepeatedConfigValidationOfInvalidVersionSurfacesAvailableVersions
 - testResumeConnector
 - testReverseTransformConfigs
 - testSinkConnectorPluginConfig
@@ -342,6 +343,8 @@ org.apache.kafka.connect.runtime.AbstractWorkerSourceTaskTest:
 - testTopicCreateSucceedsWhenCreateReturnsNewTopicFound
 - testTopicCreateWhenTopicExists
 - testTopicDescribeFails
+org.apache.kafka.connect.runtime.CachedConnectorsTest:
+- testCachedInvalidVersionFailurePreservesAvailableVersions
 org.apache.kafka.connect.runtime.ConnectMetricsTest:
 - testConnectorPluginMetrics
 - testDisableJmxReporter
