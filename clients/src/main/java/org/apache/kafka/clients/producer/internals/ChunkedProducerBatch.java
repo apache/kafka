@@ -20,7 +20,6 @@ import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
 
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -59,9 +58,7 @@ public class ChunkedProducerBatch extends ProducerBatch {
         // ratio-adjusted when compressed), not per-record. Per-record sizing would over-count the
         // header and miss the compressor's flush-accumulation behavior.
         int target = recordsBuilder.estimatedBytesWrittenAfter(key, value, headers);
-        ByteBufferOutputStream stream = recordsBuilder.bufferStream();
-        int totalAttachedCapacity = stream.position() + stream.remaining();
-        return Math.max(0, target - totalAttachedCapacity);
+        return Math.max(0, target - stream().attachedCapacity());
     }
 
     /**

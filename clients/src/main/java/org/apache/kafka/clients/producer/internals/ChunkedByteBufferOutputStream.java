@@ -229,6 +229,14 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     }
 
     /**
+     * Total capacity across all attached chunks (written + free).
+     * Every chunk has the same size, so this equals {@code position() + remaining()} without walking the list.
+     */
+    int attachedCapacity() {
+        return chunks.size() * chunkSize;
+    }
+
+    /**
      * Total bytes available across the current chunk and every queued (not-yet-active) chunk.
      */
     @Override
