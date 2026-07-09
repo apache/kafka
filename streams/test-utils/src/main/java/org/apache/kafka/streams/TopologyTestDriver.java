@@ -602,7 +602,10 @@ public class TopologyTestDriver implements Closeable {
             task.updateLags();
             while (task.hasRecordsQueued() && task.isProcessable(mockWallClockTime.milliseconds())) {
                 // Process the record ...
-                task.process(mockWallClockTime.milliseconds());
+                final long processWallClockMs = mockWallClockTime.milliseconds();
+                task.process(processWallClockMs);
+                // flush terminal e2e latency for the record just processed, as TaskExecutor does
+                task.maybeFlushTerminalE2ELatency(processWallClockMs);
                 task.maybePunctuateStreamTime();
                 commit(task.prepareCommit(true));
                 task.postCommit(true);

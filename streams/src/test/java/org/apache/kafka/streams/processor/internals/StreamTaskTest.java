@@ -129,6 +129,7 @@ import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.closeTo;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.is;
@@ -817,8 +818,11 @@ public class StreamTaskTest {
         final Metric terminalMax = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), terminalNodeName);
 
         // e2e latency = 10
+        time.sleep(10L);
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(0, 0L)));
         task.process(10L);
+        // flush terminal e2e for the batch, as TaskExecutor.processTask does
+        task.maybeFlushTerminalE2ELatency(10L);
 
         assertThat(sourceAvg.metricValue(), equalTo(10.0));
         assertThat(sourceMin.metricValue(), equalTo(10.0));
@@ -833,6 +837,7 @@ public class StreamTaskTest {
         // e2e latency = 15
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(1, 0L)));
         task.process(15L);
+        task.maybeFlushTerminalE2ELatency(15L);
 
         assertThat(sourceAvg.metricValue(), equalTo(12.5));
         assertThat(sourceMin.metricValue(), equalTo(10.0));
@@ -845,8 +850,10 @@ public class StreamTaskTest {
 
 
         // e2e latency = 23
+        time.sleep(13L);
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(2, 0L)));
         task.process(23L);
+        task.maybeFlushTerminalE2ELatency(23L);
 
         assertThat(sourceAvg.metricValue(), equalTo(16.0));
         assertThat(sourceMin.metricValue(), equalTo(10.0));
@@ -861,6 +868,7 @@ public class StreamTaskTest {
         // e2e latency = 5
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(3, 0L)));
         task.process(5L);
+        task.maybeFlushTerminalE2ELatency(5L);
 
         assertThat(sourceAvg.metricValue(), equalTo(13.25));
         assertThat(sourceMin.metricValue(), equalTo(5.0));
@@ -870,6 +878,102 @@ public class StreamTaskTest {
         assertThat(terminalAvg.metricValue(), equalTo(16.5));
         assertThat(terminalMin.metricValue(), equalTo(10.0));
         assertThat(terminalMax.metricValue(), equalTo(23.0));
+    }
+
+    @Test
+    public void shouldIncludeProcessingDelayInTerminalNodeE2ELatency() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        time = new MockTime(0L, 0L, 0L);
+        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
+
+        final long processingDelay = 5L;
+
+        // A source node that simulates processing work by advancing wall-clock time before forwarding
+        final MockSourceNode<Integer, Integer> delayingSourceNode = new MockSourceNode<>(intDeserializer, intDeserializer) {
+            InternalProcessorContext<Integer, Integer> context;
+
+            @Override
+            public void init(final InternalProcessorContext<Integer, Integer> context) {
+                this.context = context;
+                super.init(context);
+            }
+
+            @Override
+            public void process(final Record<Integer, Integer> record) {
+                time.sleep(processingDelay);
+                context.forward(record);
+            }
+        };
+
+        task = createStatelessTaskWithForwardingTopology(delayingSourceNode);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        final String sourceNodeName = delayingSourceNode.name();
+        final String terminalNodeName = processorStreamTime.name();
+
+        final Metric sourceMax = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), sourceNodeName);
+        final Metric terminalMax = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), terminalNodeName);
+
+        // record (timestamp 0) is observed by the source node at wall-clock time 10
+        time.sleep(10L);
+        task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(0, 0L)));
+        task.process(time.milliseconds());
+        // the source advanced the clock while processing, so the batch-end flush time includes the delay
+        task.maybeFlushTerminalE2ELatency(time.milliseconds());
+
+        // source node measures only consumption latency (record timestamp -> source observed it)
+        assertThat(sourceMax.metricValue(), equalTo(10.0));
+        // terminal node measures full end-to-end latency, including the processing delay
+        assertThat(terminalMax.metricValue(), equalTo(10.0 + processingDelay));
+    }
+
+    @Test
+    public void shouldReconstructTerminalE2ELatencyForBatchWithSkewedTimestamps() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        time = new MockTime(0L, 0L, 0L);
+        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
+
+        // Source node that forwards every record to the terminal node.
+        final MockSourceNode<Integer, Integer> forwardingSourceNode = new MockSourceNode<>(intDeserializer, intDeserializer) {
+            InternalProcessorContext<Integer, Integer> context;
+
+            @Override
+            public void init(final InternalProcessorContext<Integer, Integer> context) {
+                this.context = context;
+                super.init(context);
+            }
+
+            @Override
+            public void process(final Record<Integer, Integer> record) {
+                context.forward(record);
+            }
+        };
+
+        task = createStatelessTaskWithForwardingTopology(forwardingSourceNode);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        final String terminalNodeName = processorStreamTime.name();
+        final Metric terminalAvg = getProcessorMetric("record-e2e-latency", "%s-avg", task.id().toString(), terminalNodeName);
+        final Metric terminalMin = getProcessorMetric("record-e2e-latency", "%s-min", task.id().toString(), terminalNodeName);
+        final Metric terminalMax = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), terminalNodeName);
+
+        // five records with skewed timestamps (= offsets) reach the terminal node in one batch
+        final long[] timestamps = {100L, 450L, 480L, 490L, 500L};
+        for (int i = 0; i < timestamps.length; i++) {
+            task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(i, timestamps[i])));
+            task.process(1000L);
+        }
+
+        // batch completes at 1000; true latencies [900,550,520,510,500] -> max 900, min 500, avg 596
+        task.maybeFlushTerminalE2ELatency(1000L);
+
+        assertThat(terminalMax.metricValue(), equalTo(900.0));
+        assertThat(terminalMin.metricValue(), equalTo(500.0));
+        assertThat((double) terminalAvg.metricValue(), closeTo(596.0, 1e-9));
     }
 
     @Test

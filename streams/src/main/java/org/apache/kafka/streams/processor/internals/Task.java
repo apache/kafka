@@ -183,6 +183,13 @@ public interface Task {
     default void recordProcessBatchTime(final long processBatchTime) {
     }
 
+    /**
+     * Record terminal-node e2e latency buffered during the current batch/punctuation against a
+     * single wall-clock time. No-op for tasks that do not forward to terminal nodes.
+     */
+    default void maybeFlushTerminalE2ELatency(final long endMs) {
+    }
+
     default void recordProcessTimeRatioAndBufferSize(final long allTaskProcessMs, final long now) {
     }
 
