@@ -31,8 +31,8 @@ import org.apache.kafka.common.record.internal.MutableRecordBatch;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.ProduceResponse;
-import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
