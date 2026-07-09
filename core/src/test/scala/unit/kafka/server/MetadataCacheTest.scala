@@ -929,6 +929,59 @@ class MetadataCacheTest {
     ), offlinePartitions(brokers, partitions))
   }
 
+  @Test
+  def testToClusterIncludesFencedReplicasAsOffline(): Unit = {
+    val delta = new MetadataDelta.Builder().build()
+    val broker0RegisterRecord = new RegisterBrokerRecord()
+      .setBrokerId(0)
+      .setFenced(false)
+      .setEndPoints(new BrokerEndpointCollection(Seq(
+        new BrokerEndpoint()
+          .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+          .setPort(9092)
+          .setName("PLAINTEXT")
+          .setHost("broker-0")
+      ).iterator.asJava))
+    val broker1RegisterRecord = new RegisterBrokerRecord()
+      .setBrokerId(1)
+      .setFenced(true)
+      .setEndPoints(new BrokerEndpointCollection(Seq(
+        new BrokerEndpoint()
+          .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+          .setPort(9092)
+          .setName("PLAINTEXT")
+          .setHost("broker-1")
+      ).iterator.asJava))
+
+    delta.replay(broker0RegisterRecord)
+    delta.replay(broker1RegisterRecord)
+
+    val topicName = "foo"
+    val topicId = Uuid.randomUuid()
+    val partitionId = 0
+    val broker0 = broker0RegisterRecord.brokerId()
+    val broker1 = broker1RegisterRecord.brokerId()
+    delta.replay(new TopicRecord().setTopicId(topicId).setName(topicName))
+    // Broker 1 is not in the ISR, but it remains in the replica set.
+    // This used to trigger a NullPointerException when fenced brokers were
+    // omitted from the broker map used to build replica metadata.
+    delta.replay(new PartitionRecord()
+      .setTopicId(topicId)
+      .setPartitionId(partitionId)
+      .setReplicas(asList[Integer](broker0, broker1))
+      .setLeader(broker0)
+      .setIsr(asList[Integer](broker0)))
+
+    val cluster = MetadataCache.toCluster("cluster-id", delta.apply(MetadataProvenance.EMPTY))
+    val partition = cluster.partition(new TopicPartition(topicName, partitionId))
+
+    assertNotNull(partition)
+    assertEquals(Seq(broker0, broker1), partition.replicas().map(_.id()).toSeq)
+    assertEquals(Seq(broker1), partition.offlineReplicas().map(_.id()).toSeq)
+    val fencedBroker = cluster.nodeById(broker1)
+    assertNotNull(fencedBroker)
+    assertTrue(fencedBroker.isFenced)
+  }
 
   val oldRequestControllerEpoch: Int = 122
   val newRequestControllerEpoch: Int = 123
