@@ -48,7 +48,7 @@ public class RequestChannelMetrics {
         this(ApiKeys.apisForListener(scope));
     }
 
-    public RequestMetrics apply(String metricName) {
+    public RequestMetrics get(String metricName) {
         RequestMetrics requestMetrics = metricsMap.get(metricName);
         if (requestMetrics == null) {
             throw new NoSuchElementException("No RequestMetrics for " + metricName);

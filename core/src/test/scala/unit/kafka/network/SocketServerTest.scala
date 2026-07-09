@@ -1098,7 +1098,7 @@ class SocketServerTest {
       val channel = overrideServer.dataPlaneRequestChannel
       val request = receiveRequest(channel)
 
-      val requestMetrics = channel.metrics(request.header.apiKey.name)
+      val requestMetrics = channel.metrics.get(request.header.apiKey.name)
       def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.count
       val expectedTotalTimeCount = totalTimeHistCount() + 1
       val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(ByteBuffer.allocate(responseBufferSize)))
@@ -1170,7 +1170,7 @@ class SocketServerTest {
       TestUtils.waitUntilTrue(() => overrideServer.dataPlaneAcceptor(listener).get.processors(request.processor).channel(request.context.connectionId).isEmpty,
         s"Idle connection `${request.context.connectionId}` was not closed by selector")
 
-      val requestMetrics = channel.metrics(request.header.apiKey.name)
+      val requestMetrics = channel.metrics.get(request.header.apiKey.name)
       def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.count
       val expectedTotalTimeCount = totalTimeHistCount() + 1
 
@@ -1189,9 +1189,9 @@ class SocketServerTest {
     server.stopProcessingRequests()
     val version = ApiKeys.PRODUCE.latestVersion
     val version2 = (version - 1).toShort
-    for (_ <- 0 to 1) server.dataPlaneRequestChannel.metrics(ApiKeys.PRODUCE.name).requestRate(version).mark()
-    server.dataPlaneRequestChannel.metrics(ApiKeys.PRODUCE.name).requestRate(version2).mark()
-    assertEquals(2, server.dataPlaneRequestChannel.metrics(ApiKeys.PRODUCE.name).requestRate(version).count())
+    for (_ <- 0 to 1) server.dataPlaneRequestChannel.metrics.get(ApiKeys.PRODUCE.name).requestRate(version).mark()
+    server.dataPlaneRequestChannel.metrics.get(ApiKeys.PRODUCE.name).requestRate(version2).mark()
+    assertEquals(2, server.dataPlaneRequestChannel.metrics.get(ApiKeys.PRODUCE.name).requestRate(version).count())
     server.dataPlaneRequestChannel.updateErrorMetrics(ApiKeys.PRODUCE, Map(Errors.NONE -> 1))
     val nonZeroMeters = Map(s"kafka.network:type=RequestMetrics,name=RequestsPerSec,request=Produce,version=$version" -> 2,
       s"kafka.network:type=RequestMetrics,name=RequestsPerSec,request=Produce,version=$version2" -> 1,
