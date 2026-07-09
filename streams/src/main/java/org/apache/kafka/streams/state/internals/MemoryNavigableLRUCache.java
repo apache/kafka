@@ -91,8 +91,6 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
     public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix, final PS prefixKeySerializer) {
 
         final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
-        // A null upper bound means the prefix has no lexicographic successor (e.g. it is all 0xFF bytes),
-        // so the scan is unbounded and must run to the end of the keyspace.
         final Bytes to = ByteUtils.incrementWithoutOverflow(from);
 
         final TreeMap<Bytes, byte[]> treeMap = toTreeMap();

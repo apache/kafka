@@ -92,6 +92,7 @@ public class ByteUtilsTest {
         byte[] input = new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF};
         assertNull(ByteUtils.incrementWithoutOverflow(Bytes.wrap(input)));
     }
+
     @Test
     public void testIncrementWithSubmap() {
         final NavigableMap<Bytes, byte[]> map = new TreeMap<>();

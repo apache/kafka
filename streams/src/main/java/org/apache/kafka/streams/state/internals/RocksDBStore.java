@@ -1551,5 +1551,4 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             return position.copy().merge(dbAccessor.uncommittedPositionDeltas());
         }
     }
-
 }
