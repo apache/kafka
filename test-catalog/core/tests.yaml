@@ -2402,6 +2402,7 @@ kafka.server.share.DelayedShareFetchTest:
 - testRemoteStorageFetchTryCompletionDueToBrokerBecomingOffline
 - testReplicaManagerFetchShouldHappenOnComplete
 - testToCompleteAnAlreadyCompletedFuture
+- testTryCompleteAsyncCompletion
 - testTryCompleteLocksReleasedOnCompleteException
 - testTryCompleteWhenMinBytesNotSatisfiedOnFirstFetch
 - testTryCompleteWhenMinBytesNotSatisfiedOnSubsequentFetch
