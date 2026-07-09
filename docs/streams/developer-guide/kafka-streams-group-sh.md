@@ -44,7 +44,7 @@ A **Streams group** is a broker‑coordinated group type for Kafka Streams that 
     * The processing topology, as recorded by the broker's topology description plugin (with `--topology`), in a format that mirrors `Topology#describe()`.
   * **Reset input‑topic offsets** for a Streams group to control reprocessing boundaries using precise specifiers (earliest, latest, to‑offset, to‑datetime, by‑duration, shift‑by, from‑file). Requires `--dry-run` or `--execute` and inactive instances.
   * **Delete offsets** for input topics to force re‑consumption on next start.
-  * **Delete a Streams group** to clean up broker‑side Streams metadata (offsets, topology, assignments). Optionally delete all **internal topics** at the same time using `--delete-all-internal-topics`.
+  * **Delete a Streams group** to clean up broker‑side Streams metadata (offsets, topology, assignments). Internal topics can be deleted by specifying selected topics with `--delete-internal-topic`, or all internal topics with `--delete-all-internal-topics`.
 
 
 
@@ -126,7 +126,7 @@ Delete offsets for all or specific input topics to have the group re-read data o
 
 ## Delete a Streams group (cleanup)
 
-Delete broker-side Streams metadata for a group and optionally remove all internal topics.
+Delete broker-side Streams metadata for a group and optionally remove internal topics.
     
     
     # Delete Streams group metadata
