@@ -29,6 +29,8 @@ class StreamsTopologyDescriptionPluginTest(Test):
     PUSH_SENDING_LOG = "Sending topology description for group"
     PUSH_SUCCESS_LOG = "Topology description pushed successfully"
     STREAMS_RUNNING_LOG = "State transition from REBALANCING to RUNNING"
+    BROKER_SOLICITED_LOG = "Requested topology description push at topology epoch"
+    BROKER_LOG_FILE = "%s/server.log" % KafkaService.OPERATIONAL_LOG_INFO_DIR
 
     SOURCE_TOPIC = "topologyDescriptionPluginSource"
     SINK_TOPIC = "topologyDescriptionPluginSink"
@@ -81,13 +83,13 @@ class StreamsTopologyDescriptionPluginTest(Test):
     @matrix(metadata_quorum=[quorum.combined_kraft])
     def test_topology_description_not_stored_when_client_opts_out(self, metadata_quorum):
         """
-        Test the situation when the broker has the plugin loaded and requests a topology
-        description push on every heartbeat response (sets topologyDescriptionRequired=true),
-        but the client has topology.description.push.enabled=false. StreamThread never
-        builds a wire description, so StreamsGroupHeartbeatRequestManager suppresses the
-        "Broker requested topology description push" log message and never sends the
-        push RPC. The broker continues to request on subsequent heartbeats, the plugin's
-        setTopology is never called, and no push log lines appear on the client.
+        Test the situation when the broker has the plugin configured and solicits a
+        topology description push on the heartbeat response (sets
+        topologyDescriptionRequired=true), but the client has
+        topology.description.push.enabled=false. StreamThread never builds a wire
+        description, so the StreamsGroupHeartbeatRequestManager suppresses the
+        "Broker requested topology description push" log message. never sends the push RPC
+        and the plugin's setTopology is never invoked.
         """
         self.setup_kafka(plugin_enabled=True)
         processor = StreamsTopologyDescriptionPluginService(
@@ -98,18 +100,25 @@ class StreamsTopologyDescriptionPluginTest(Test):
                                timeout_sec=60,
                                err_msg="Never saw 'REBALANCING -> RUNNING' message " + str(processor.node.account))
 
-        solicited = processor.node.account.ssh_capture(
+        broker_node = self.kafka.nodes[0]
+        solicited = broker_node.account.ssh_capture(
+            "grep -c '%s' %s || true" % (self.BROKER_SOLICITED_LOG, self.BROKER_LOG_FILE),
+            allow_fail=False)
+        assert int(next(solicited).strip()) > 0, \
+            "Broker never solicited a topology push despite the plugin being configured"
+
+        acknowledged = processor.node.account.ssh_capture(
             "grep -c '%s' %s || true" % (self.PUSH_REQUESTED_LOG, processor.LOG_FILE),
             allow_fail=False)
-        assert int(next(solicited).strip()) == 0, \
-            "Broker solicited a topology push despite no plugin being configured on the broker"
+        assert int(next(acknowledged).strip()) == 0, \
+            "Client acknowledged the broker's solicitation despite topology.description.push.enabled=false"
 
         sent = processor.node.account.ssh_capture(
             "grep -c '%s' %s || true" % (self.PUSH_SENDING_LOG, processor.LOG_FILE),
             allow_fail=False)
         assert int(next(sent).strip()) == 0, \
             "Client sent a topology description despite topology.description.push.enabled=false"
-        
+
         pushed = processor.node.account.ssh_capture(
             "grep -c '%s' %s || true" % (self.PUSH_SUCCESS_LOG, processor.LOG_FILE),
             allow_fail=False)
