@@ -23,7 +23,12 @@ import org.apache.kafka.common.config.ConfigValue;
 import java.util.List;
 import java.util.Map;
 
-public class SampleImbalancedConfigVerificationConnector extends SampleSourceConnector {
+/**
+ * The purpose of this connector is to check that the error validation process can handle partially validated configuration.
+ * This connector will validate only a subset of the overall configuration.
+ * Debezium (and maybe others) have a concept of deprecated field that are not validated.
+ */
+public class SamplePartiallyValidatingConnector extends SampleSourceConnector {
 
     @Override
     public ConfigDef config() {
@@ -33,7 +38,7 @@ public class SampleImbalancedConfigVerificationConnector extends SampleSourceCon
     }
 
     /**
-     * Do not validate "optional" on purpose. This will create an imbalance in the error validation process.
+     * Do not validate "optional" on purpose.
      */
     @Override
     public Config validate(Map<String, String> connectorConfigs) {

@@ -1335,10 +1335,10 @@ public class AbstractHerderTest {
 
     @Test
     public void testDifferenceInConfigDefAndValidation() {
-        AbstractHerder herder = createConfigValidationHerder(SampleImbalancedConfigVerificationConnector.class, noneConnectorClientConfigOverridePolicy);
+        AbstractHerder herder = createConfigValidationHerder(SamplePartiallyValidatingConnector.class, noneConnectorClientConfigOverridePolicy);
 
         Map<String, String> config = new HashMap<>();
-        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, SampleImbalancedConfigVerificationConnector.class.getName());
+        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, SamplePartiallyValidatingConnector.class.getName());
         config.put("name", "somename");
         config.put("required", "value");
         config.put("testKey", null);
