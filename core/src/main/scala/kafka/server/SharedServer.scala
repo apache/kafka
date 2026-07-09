@@ -21,6 +21,7 @@ import kafka.metrics.KafkaMetricsReporter
 import kafka.raft.KafkaRaftManager
 import kafka.server.Server.MetricsPrefix
 import kafka.utils.{Logging, VerifiableProperties}
+import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -40,6 +41,7 @@ import org.apache.kafka.server.config.DefaultSupportedConfigChecker
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.{FaultHandler, LoggingFaultHandler, ProcessTerminatingFaultHandler}
 import org.apache.kafka.server.metrics.{BrokerServerMetrics, KafkaYammerMetrics, NodeMetrics}
+import org.apache.kafka.server.quota.ClientQuotaCallback
 
 import java.net.InetSocketAddress
 import java.util.Arrays
@@ -114,6 +116,10 @@ class SharedServer(
   private var usedByController: Boolean = false
   val brokerConfig = new KafkaConfig(sharedServerConfig.props, false)
   val controllerConfig = new KafkaConfig(sharedServerConfig.props, false)
+  // Create the client quota callback once so that, in combined mode, the broker and controller share a
+  // single instance instead of each instantiating their own via reflection with divergent state (KAFKA-20650).
+  val clientQuotaCallbackPlugin: Optional[Plugin[ClientQuotaCallback]] =
+    QuotaFactory.createClientQuotaCallback(sharedServerConfig, _metrics, ProcessRole.BrokerRole.toString)
   val supportedConfigChecker: SupportedConfigChecker = new DefaultSupportedConfigChecker()
   
   // Factory for creating request handler pools with shared aggregate thread counter
