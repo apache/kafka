@@ -31,6 +31,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.TreeMap;
 
@@ -90,13 +91,18 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
     public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix, final PS prefixKeySerializer) {
 
         final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
-        final Bytes to = ByteUtils.increment(from);
+        // A null upper bound means the prefix has no lexicographic successor (e.g. it is all 0xFF bytes),
+        // so the scan is unbounded and must run to the end of the keyspace.
+        final Bytes to = ByteUtils.incrementWithoutOverflow(from);
 
         final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
+        final NavigableMap<Bytes, byte[]> subMap = to == null
+            ? treeMap.tailMap(from, true)
+            : treeMap.subMap(from, true, to, false);
 
         return new DelegatingPeekingKeyValueIterator<>(
             name(),
-            new MemoryNavigableLRUCache.CacheIterator(treeMap.subMap(from, true, to, false).keySet().iterator(), treeMap)
+            new MemoryNavigableLRUCache.CacheIterator(subMap.keySet().iterator(), treeMap)
         );
     }
 

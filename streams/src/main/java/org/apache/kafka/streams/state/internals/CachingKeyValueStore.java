@@ -439,7 +439,9 @@ public class CachingKeyValueStore
         validateStoreOpen();
         final KeyValueIterator<Bytes, byte[]> storeIterator = underlying.prefixScan(prefix, prefixKeySerializer);
         final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
-        final Bytes to = ByteUtils.increment(from);
+        // A null upper bound means the prefix has no lexicographic successor (e.g. it is all 0xFF bytes),
+        // so the scan is unbounded and must run to the end of the keyspace.
+        final Bytes to = ByteUtils.incrementWithoutOverflow(from);
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = internalContext.cache().range(cacheName, from, to, false);
         return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator, true);
     }

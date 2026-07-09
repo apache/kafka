@@ -239,13 +239,18 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     private <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix, final PS prefixKeySerializer,
                                                                                      final IsolationLevel isolationLevel) {
         final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
-        final Bytes to = ByteUtils.increment(from);
+        // A null upper bound means the prefix has no lexicographic successor (e.g. it is all 0xFF bytes),
+        // so the scan is unbounded and must run to the end of the keyspace.
+        final Bytes to = ByteUtils.incrementWithoutOverflow(from);
 
         if (transactionBuffer != null) {
             return transactionBuffer.range(from, to, true, false, isolationLevel);
         }
         synchronized (this) {
-            return new InMemoryKeyValueIterator(map.subMap(from, true, to, false).keySet(), true);
+            final NavigableMap<Bytes, byte[]> subMap = to == null
+                ? map.tailMap(from, true)
+                : map.subMap(from, true, to, false);
+            return new InMemoryKeyValueIterator(subMap.keySet(), true);
         }
     }
 

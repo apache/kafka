@@ -67,6 +67,23 @@ public final class ByteUtils {
     }
 
     /**
+     * Same as {@link #increment(Bytes)} but returns {@code null} instead of throwing
+     * {@code IndexOutOfBoundsException} when incrementing would overflow the byte array
+     * (i.e. every byte is {@code 0xFF}). A {@code null} result represents an unbounded
+     * upper range, which callers performing prefix scans should treat as "scan to the end".
+     *
+     * @param input the byte array to increment
+     * @return A new copy of the incremented byte array, or {@code null} if incrementing would overflow
+     */
+    public static Bytes incrementWithoutOverflow(final Bytes input) {
+        try {
+            return increment(input);
+        } catch (final IndexOutOfBoundsException e) {
+            return null;
+        }
+    }
+
+    /**
      * A byte array comparator based on lexicographic ordering.
      */
     public static final ByteArrayComparator BYTES_LEXICO_COMPARATOR = new LexicographicByteArrayComparator();

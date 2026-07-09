@@ -660,5 +660,27 @@ public abstract class AbstractKeyValueStoreTest {
                 iter.next();
             }
         }
-    }                  
+    }
+
+    @Test
+    public void prefixScanShouldReturnMatchesWhenPrefixHasNoUpperBound() {
+        // A prefix that serializes to all 0xFF bytes has no lexicographically larger successor,
+        // so incrementing it would overflow. The scan must treat this as an unbounded upper range
+        // and run to the end of the keyspace rather than throwing IndexOutOfBoundsException.
+        // IntegerSerializer encodes -1 as 0xFFFFFFFF, which reproduces the overflow case (KAFKA-20597).
+        store.put(0, "zero");
+        store.put(1, "one");
+        store.put(2, "two");
+        store.put(-1, "minus-one");
+
+        final List<KeyValue<Integer, String>> result = new ArrayList<>();
+        try (final KeyValueIterator<Integer, String> iter = store.prefixScan(-1, new IntegerSerializer())) {
+            while (iter.hasNext()) {
+                result.add(iter.next());
+            }
+        }
+
+        // Only the key whose bytes are 0xFFFFFFFF matches the prefix; the lower-valued keys are excluded.
+        assertEquals(Collections.singletonList(KeyValue.pair(-1, "minus-one")), result);
+    }
 }
