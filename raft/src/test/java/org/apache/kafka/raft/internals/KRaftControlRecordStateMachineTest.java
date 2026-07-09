@@ -37,10 +37,13 @@ import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.spy;
 
@@ -495,7 +498,7 @@ final class KRaftControlRecordStateMachineTest {
             partitionState.updateState();
 
             // The log read creates a BufferSupplier and closes it via try-with-resources.
-            bufferSupplierMock.verify(BufferSupplier::create, Mockito.atLeastOnce());
+            bufferSupplierMock.verify(BufferSupplier::create, Mockito.times(1));
         }
 
         Mockito.verify(supplier).close();
@@ -524,13 +527,19 @@ final class KRaftControlRecordStateMachineTest {
         }
         log.truncateToLatestSnapshot();
 
+        List<BufferSupplier> suppliers = new ArrayList<>();
         try (MockedStatic<BufferSupplier> bufferSupplierMock = mockStatic(BufferSupplier.class)) {
-            bufferSupplierMock.when(BufferSupplier::create).thenAnswer(invocation -> new BufferSupplier.GrowableBufferSupplier());
+            bufferSupplierMock.when(BufferSupplier::create).thenAnswer(invocation -> {
+                BufferSupplier supplier = spy(new BufferSupplier.GrowableBufferSupplier());
+                suppliers.add(supplier);
+                return supplier;
+            });
 
             partitionState.updateState();
-
-            // The snapshot read creates a BufferSupplier.
-            bufferSupplierMock.verify(BufferSupplier::create, Mockito.atLeastOnce());
         }
+
+        // Every BufferSupplier created during the read is closed via try-with-resources.
+        assertFalse(suppliers.isEmpty());
+        suppliers.forEach(supplier -> Mockito.verify(supplier).close());
     }
 }
