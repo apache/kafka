@@ -432,7 +432,7 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
     public void onComplete(Map<TopicIdPartition, Set<Long>> offsetsMap, Exception exception) {
         List<AcknowledgedData> acknowledgedOffsets = new ArrayList<>();
         int totalAcknowledged = 0;
-        Map<String, Long> ackTypeCounts = ackPattern.isEmpty() ? null : new HashMap<>();
+        Map<String, Long> ackTypeCounts = (ackPattern.isEmpty() || exception != null) ? null : new HashMap<>();
         for (Map.Entry<TopicIdPartition, Set<Long>> offsetEntry : offsetsMap.entrySet()) {
             TopicIdPartition tp = offsetEntry.getKey();
             acknowledgedOffsets.add(new AcknowledgedData(tp.topic(), tp.partition(), offsetEntry.getValue()));
