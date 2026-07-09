@@ -24,6 +24,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
@@ -78,6 +79,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
@@ -895,6 +897,54 @@ public class AbstractCoordinatorTest {
 
         mockClient.respond(heartbeatResponse(Errors.REBALANCE_IN_PROGRESS));
         assertEquals(currGen, coordinator.generation());
+    }
+
+    @Test
+    public void testTimeToNextHeartbeatDoesNotBusySpinAfterHeartbeatThreadAuthenticationFailure() {
+        verifyNoBusySpinAfterHeartbeatThreadFailure(new AuthenticationException("SASL authentication failed"));
+    }
+
+    @Test
+    public void testTimeToNextHeartbeatDoesNotBusySpinAfterHeartbeatThreadGroupAuthorizationFailure() {
+        verifyNoBusySpinAfterHeartbeatThreadFailure(GroupAuthorizationException.forGroupId(GROUP_ID));
+    }
+
+    /**
+     * KAFKA-20253: when the heartbeat thread dies from a fatal error it is cleared to null by
+     * pollHeartbeat() after the cause is raised to the caller. With no thread left to service the
+     * heartbeat timer, timeToNextHeartbeat() must not return the (possibly expired, i.e. 0) timer
+     * value, since that would drive the consumer poll loop into a NetworkClient.poll(0) CPU busy-spin.
+     */
+    private void verifyNoBusySpinAfterHeartbeatThreadFailure(RuntimeException failureCause) {
+        AtomicReference<BaseHeartbeatThread> heartbeatThread = new AtomicReference<>();
+        setupCoordinator(RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS, REBALANCE_TIMEOUT_MS,
+            Optional.empty(),
+            Optional.of(() -> {
+                BaseHeartbeatThread thread = new BaseHeartbeatThread("test-heartbeat-thread", true);
+                heartbeatThread.set(thread);
+                return thread;
+            }));
+
+        joinGroup();
+        assertNotNull(heartbeatThread.get(), "the heartbeat thread should have been created while joining");
+
+        // Expire the heartbeat timer so that, absent the fix, timeToNextHeartbeat() would fall through
+        // to heartbeat.timeToNextHeartbeat() == 0 and reproduce the busy-spin.
+        mockTime.sleep(HEARTBEAT_INTERVAL_MS);
+        assertEquals(0L, coordinator.heartbeat().timeToNextHeartbeat(mockTime.milliseconds()));
+
+        // Simulate the fatal error terminating the heartbeat thread, mirroring what the run() catch
+        // blocks do for AuthenticationException / GroupAuthorizationException.
+        heartbeatThread.get().setFailureCause(failureCause);
+
+        // pollHeartbeat() raises the failure to the caller and clears the heartbeat thread to null.
+        RuntimeException raised = assertThrows(RuntimeException.class,
+            () -> coordinator.pollHeartbeat(mockTime.milliseconds()));
+        assertSame(failureCause, raised);
+
+        // With no heartbeat thread left to service the timer, the consumer must report that no
+        // heartbeat is due rather than 0; otherwise the poll loop spins on NetworkClient.poll(0).
+        assertEquals(Long.MAX_VALUE, coordinator.timeToNextHeartbeat(mockTime.milliseconds()));
     }
 
     @Test
