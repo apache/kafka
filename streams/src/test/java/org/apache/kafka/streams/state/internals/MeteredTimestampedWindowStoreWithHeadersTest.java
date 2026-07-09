@@ -39,10 +39,17 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.TimestampedWindowKeyWithHeadersQuery;
+import org.apache.kafka.streams.query.WindowKeyQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.KeyValueIteratorStub;
 import org.apache.kafka.test.MockRecordCollector;
@@ -51,13 +58,16 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.time.Instant;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -515,5 +525,55 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
         iterator.close();
 
         verify(keyDeserializer).deserialize(any(), eq(HEADERS), eq(KEY.getBytes()));
+    }
+
+    @Test
+    public void shouldForwardWindowKeyQueryBoundsForTimestampedWindowKeyWithHeadersQuery() {
+        setUp();
+        store.init(context, store);
+
+        final Instant timeFrom = Instant.ofEpochMilli(5);
+        final Instant timeTo = Instant.ofEpochMilli(100);
+        final WindowKeyQuery<?, ?> rawQuery = forwardedRawWindowKeyQuery(
+            TimestampedWindowKeyWithHeadersQuery.<String, String>withKeyAndWindowStartRange(KEY, timeFrom, timeTo));
+
+        // The typed query is translated into a raw byte-level WindowKeyQuery with the serialized key
+        // and the same window-start range, forwarded to the wrapped store.
+        assertEquals(KEY_BYTES, rawQuery.getKey());
+        assertEquals(Optional.of(timeFrom), rawQuery.getTimeFrom());
+        assertEquals(Optional.of(timeTo), rawQuery.getTimeTo());
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private WindowKeyQuery<?, ?> forwardedRawWindowKeyQuery(final Query<?> query) {
+        when(innerStoreMock.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) QueryResult.forResult(windowStoreIterator(List.of())));
+        store.query(query, PositionBound.unbounded(), new QueryConfig(false));
+        final ArgumentCaptor<WindowKeyQuery> captor = ArgumentCaptor.forClass(WindowKeyQuery.class);
+        verify(innerStoreMock).query(captor.capture(), any(PositionBound.class), any(QueryConfig.class));
+        return captor.getValue();
+    }
+
+    private static WindowStoreIterator<byte[]> windowStoreIterator(final List<KeyValue<Long, byte[]>> data) {
+        final Iterator<KeyValue<Long, byte[]>> iterator = data.iterator();
+        return new WindowStoreIterator<>() {
+            @Override
+            public void close() { }
+
+            @Override
+            public Long peekNextKey() {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public boolean hasNext() {
+                return iterator.hasNext();
+            }
+
+            @Override
+            public KeyValue<Long, byte[]> next() {
+                return iterator.next();
+            }
+        };
     }
 }

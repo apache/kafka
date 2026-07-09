@@ -35,6 +35,7 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
@@ -49,11 +50,14 @@ import org.apache.kafka.streams.query.StateQueryRequest;
 import org.apache.kafka.streams.query.StateQueryResult;
 import org.apache.kafka.streams.query.TimestampedKeyWithHeadersQuery;
 import org.apache.kafka.streams.query.TimestampedRangeWithHeadersQuery;
+import org.apache.kafka.streams.query.TimestampedWindowKeyWithHeadersQuery;
 import org.apache.kafka.streams.state.ReadOnlyRecordIterator;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
+import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.test.TestUtils;
@@ -68,6 +72,7 @@ import org.junit.jupiter.api.TestInfo;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -101,6 +106,11 @@ public class IQv2HeadersStoreIntegrationTest {
     private static final Headers HEADERS = new RecordHeaders()
         .add("source", "test".getBytes())
         .add("version", "1.0".getBytes());
+
+    // Window-store test parameters (used by the window headers query tests).
+    private static final long WINDOW_SIZE_MS = 10L;
+    private static final Duration WINDOW_SIZE = Duration.ofMillis(WINDOW_SIZE_MS);
+    private static final Duration RETENTION = Duration.ofMinutes(1);
 
     private String inputStream;
     private String outputStream;
@@ -392,6 +402,82 @@ public class IQv2HeadersStoreIntegrationTest {
         assertThrows(IllegalStateException.class, () -> range.get(0).headers().remove("source"));
     }
 
+    @Test
+    public void shouldHandleTimestampedWindowKeyWithHeadersQuery() throws Exception {
+        // Caching disabled: the window key query reads the underlying store directly.
+        startStreamsWithWindowHeadersStore();
+
+        final long window0 = baseTimestamp;
+        final long window1 = baseTimestamp + 100;
+        final long window2 = baseTimestamp + 200;
+
+        // A single key across three window starts: window0 (headers), window1 (empty headers),
+        // window2 written then tombstone.
+        produceDataToTopicWithHeaders(inputStream, window0, HEADERS, KeyValue.pair(1, "v0"));
+        produceDataToTopicWithHeaders(inputStream, window1, new RecordHeaders(), KeyValue.pair(1, "v1"));
+        produceDataToTopicWithHeaders(inputStream, window2, HEADERS, KeyValue.pair(1, "v2"), KeyValue.pair(1, null));
+
+        final List<ReadOnlyRecord<Windowed<Integer>, String>> records =
+                windowKeyQuery(1, Instant.ofEpochMilli(window0), Instant.ofEpochMilli(window2));
+
+        // window2 tombstone -> omitted; window0 and window1 returned in window-start order.
+        assertEquals(2, records.size());
+
+        // window0: windowed key + value + timestamp + headers round-trip, with the window in the key.
+        final ReadOnlyRecord<Windowed<Integer>, String> r0 = records.get(0);
+        assertEquals(Integer.valueOf(1), r0.key().key());
+        assertEquals(window0, r0.key().window().start());
+        assertEquals(window0 + WINDOW_SIZE_MS, r0.key().window().end());
+        assertEquals("v0", r0.value());
+        assertEquals(window0, r0.timestamp());
+        assertEquals(HEADERS, r0.headers());
+        // returned headers are a read-only snapshot: no mutation (add or remove) is allowed
+        assertThrows(IllegalStateException.class, () -> r0.headers().add("x", new byte[0]));
+        assertThrows(IllegalStateException.class, () -> r0.headers().remove("source"));
+
+        // window1: written without headers -> empty (never null) headers.
+        final ReadOnlyRecord<Windowed<Integer>, String> r1 = records.get(1);
+        assertEquals(Integer.valueOf(1), r1.key().key());
+        assertEquals(window1, r1.key().window().start());
+        assertEquals(window1 + WINDOW_SIZE_MS, r1.key().window().end());
+        assertEquals("v1", r1.value());
+        assertEquals(window1, r1.timestamp());
+        assertEquals(new RecordHeaders(), r1.headers());
+        // even the empty headers are a read-only snapshot: no mutation (add or remove) is allowed
+        assertThrows(IllegalStateException.class, () -> r1.headers().add("x", new byte[0]));
+        assertThrows(IllegalStateException.class, () -> r1.headers().remove("source"));
+    }
+
+    @Test
+    public void shouldFailWithUnknownQueryTypeForWindowKeyQueryAgainstNonHeadersStore() throws Exception {
+        startStreamsWithWindowNonHeadersStore();
+        assertUnknownQueryType(TimestampedWindowKeyWithHeadersQuery.<Integer, String>withKeyAndWindowStartRange(
+                1, Instant.ofEpochMilli(baseTimestamp), Instant.ofEpochMilli(baseTimestamp + 1)));
+    }
+
+    @Test
+    public void shouldThrowForTimestampedWindowKeyWithHeadersQueryOnPlainSupplier() throws Exception {
+        // A WithHeaders window builder over a plain (non-timestamped) window supplier: entries come back
+        // with timestamp = -1. The query succeeds, but iterating throws because -1 cannot be a ReadOnlyRecord.
+        startStreamsWithWindowPlainSupplierStore();
+
+        produceDataToTopicWithHeaders(inputStream, baseTimestamp, HEADERS, KeyValue.pair(1, "one"));
+
+        final StateQueryRequest<ReadOnlyRecordIterator<Windowed<Integer>, String>> request =
+            inStore(STORE_NAME)
+                .withQuery(TimestampedWindowKeyWithHeadersQuery.<Integer, String>withKeyAndWindowStartRange(
+                    1, Instant.ofEpochMilli(baseTimestamp), Instant.ofEpochMilli(baseTimestamp + 1)))
+                .withPositionBound(PositionBound.at(inputPosition));
+        final StateQueryResult<ReadOnlyRecordIterator<Windowed<Integer>, String>> result =
+            IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
+
+        final QueryResult<ReadOnlyRecordIterator<Windowed<Integer>, String>> onlyResult = result.getOnlyPartitionResult();
+        assertTrue(onlyResult.isSuccess());
+        try (ReadOnlyRecordIterator<Windowed<Integer>, String> iterator = onlyResult.getResult()) {
+            assertThrows(StreamsException.class, iterator::next);
+        }
+    }
+
     private void startStreams(final StoreBuilder<?> storeBuilder,
                               final ProcessorSupplier<Integer, String, Integer, String> processorSupplier) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -455,8 +541,45 @@ public class IQv2HeadersStoreIntegrationTest {
             KeyValueHeadersStoreWriterProcessor::new);
     }
 
+    private void startStreamsWithWindowHeadersStore() throws Exception {
+        // Caching disabled: every IQv2 query is forced down to the persistent
+        // RocksDBTimestampedWindowStoreWithHeaders layer, exercising its inherited WindowKeyQuery
+        // handling (rather than being short-circuited by a cache hit).
+        startStreams(
+            Stores.timestampedWindowStoreWithHeadersBuilder(
+                Stores.persistentTimestampedWindowStoreWithHeaders(STORE_NAME, RETENTION, WINDOW_SIZE, false),
+                Serdes.Integer(),
+                Serdes.String()).withCachingDisabled(),
+            WindowHeadersStoreWriterProcessor::new);
+    }
+
+    private void startStreamsWithWindowNonHeadersStore() throws Exception {
+        // A plain (non-WithHeaders) timestamped window store: the headers-aware query types are unsupported here.
+        startStreams(
+            Stores.timestampedWindowStoreBuilder(
+                Stores.persistentTimestampedWindowStore(STORE_NAME, RETENTION, WINDOW_SIZE, false),
+                Serdes.Integer(),
+                Serdes.String()),
+            WindowPlainStoreWriterProcessor::new);
+    }
+
+    private void startStreamsWithWindowPlainSupplierStore() throws Exception {
+        // A WithHeaders window builder over a plain (non-timestamped) window supplier: entries come back
+        // with timestamp = -1, which cannot be represented as a ReadOnlyRecord.
+        startStreams(
+            Stores.timestampedWindowStoreWithHeadersBuilder(
+                Stores.persistentWindowStore(STORE_NAME, RETENTION, WINDOW_SIZE, false),
+                Serdes.Integer(),
+                Serdes.String()).withCachingDisabled(),
+            WindowHeadersStoreWriterProcessor::new);
+    }
+
     private <R> void assertUnknownQueryTypeAgainstNonHeadersStore(final Query<R> query) throws Exception {
         startStreamsWithKeyValueNonHeadersStore();
+        assertUnknownQueryType(query);
+    }
+
+    private <R> void assertUnknownQueryType(final Query<R> query) {
         produceDataToTopicWithHeaders(inputStream, baseTimestamp, HEADERS, KeyValue.pair(1, "a0"));
 
         final StateQueryRequest<R> request =
@@ -501,6 +624,25 @@ public class IQv2HeadersStoreIntegrationTest {
             IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
         final List<ReadOnlyRecord<Integer, String>> records = new ArrayList<>();
         try (ReadOnlyRecordIterator<Integer, String> iterator = result.getOnlyPartitionResult().getResult()) {
+            while (iterator.hasNext()) {
+                records.add(iterator.next());
+            }
+        }
+        return records;
+    }
+
+    private List<ReadOnlyRecord<Windowed<Integer>, String>> windowKeyQuery(final int key,
+                                                                           final Instant timeFrom,
+                                                                           final Instant timeTo) {
+        final StateQueryRequest<ReadOnlyRecordIterator<Windowed<Integer>, String>> request =
+            inStore(STORE_NAME)
+                .withQuery(TimestampedWindowKeyWithHeadersQuery.<Integer, String>withKeyAndWindowStartRange(
+                    key, timeFrom, timeTo))
+                .withPositionBound(PositionBound.at(inputPosition));
+        final StateQueryResult<ReadOnlyRecordIterator<Windowed<Integer>, String>> result =
+            IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
+        final List<ReadOnlyRecord<Windowed<Integer>, String>> records = new ArrayList<>();
+        try (ReadOnlyRecordIterator<Windowed<Integer>, String> iterator = result.getOnlyPartitionResult().getResult()) {
             while (iterator.hasNext()) {
                 records.add(iterator.next());
             }
@@ -593,6 +735,51 @@ public class IQv2HeadersStoreIntegrationTest {
             store.put(
                 record.key(),
                 ValueAndTimestamp.make(record.value(), record.timestamp()));
+            context.forward(record);
+        }
+    }
+
+    private static class WindowHeadersStoreWriterProcessor implements Processor<Integer, String, Integer, String> {
+        private ProcessorContext<Integer, String> context;
+        private TimestampedWindowStoreWithHeaders<Integer, String> store;
+
+        @Override
+        public void init(final ProcessorContext<Integer, String> context) {
+            this.context = context;
+            store = context.getStateStore(STORE_NAME);
+        }
+
+        @Override
+        public void process(final Record<Integer, String> record) {
+            // The record timestamp doubles as the window start; a null value tombstones that window.
+            if (record.value() == null) {
+                store.put(record.key(), null, record.timestamp());
+            } else {
+                store.put(
+                    record.key(),
+                    ValueTimestampHeaders.make(record.value(), record.timestamp(), record.headers()),
+                    record.timestamp());
+            }
+            context.forward(record);
+        }
+    }
+
+    private static class WindowPlainStoreWriterProcessor implements Processor<Integer, String, Integer, String> {
+        private ProcessorContext<Integer, String> context;
+        private TimestampedWindowStore<Integer, String> store;
+
+        @Override
+        public void init(final ProcessorContext<Integer, String> context) {
+            this.context = context;
+            store = context.getStateStore(STORE_NAME);
+        }
+
+        @Override
+        public void process(final Record<Integer, String> record) {
+            store.put(
+                record.key(),
+                ValueAndTimestamp.make(record.value(), record.timestamp()),
+                record.timestamp());
             context.forward(record);
         }
     }

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.PositionBound;
@@ -39,6 +40,7 @@ import java.io.File;
 import java.time.Instant;
 import java.util.Properties;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -87,17 +89,31 @@ public class RocksDBTimeOrderedWindowStoreWithHeadersTest {
     }
 
     @Test
-    public void shouldReturnUnknownQueryTypeForWindowKeyQuery() {
+    public void shouldHandleWindowKeyQuery() {
+        // KIP-1356 (window key query only): the native time-ordered window header store special-cases
+        // WindowKeyQuery to the inherited RocksDBTimeOrderedWindowStore handling (StoreQueryUtils),
+        // returning the raw stored header-format bytes (previously UNKNOWN_QUERY_TYPE); the metered store
+        // does the header-aware deserialization. This matches the adapter build path.
+        final Bytes key = new Bytes("test-key".getBytes());
+        final byte[] storedBytes = "headers+timestamp+value".getBytes();
+        final long windowStart = 1_000L;
+        windowStore.put(key, storedBytes, windowStart);
+
         final WindowKeyQuery<Bytes, byte[]> query = WindowKeyQuery.withKeyAndWindowStartRange(
-            new Bytes("test-key".getBytes()),
+            key,
             Instant.ofEpochMilli(0),
-            Instant.ofEpochMilli(Long.MAX_VALUE)
+            Instant.ofEpochMilli(RETENTION_PERIOD)
         );
         final QueryResult<WindowStoreIterator<byte[]>> result =
             windowStore.query(query, PositionBound.unbounded(), new QueryConfig(false));
 
-        assertFalse(result.isSuccess());
-        assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, result.getFailureReason());
+        assertTrue(result.isSuccess(), "Expected WindowKeyQuery to succeed");
+        try (WindowStoreIterator<byte[]> iterator = result.getResult()) {
+            assertTrue(iterator.hasNext(), "Expected the stored entry in the window key result");
+            final KeyValue<Long, byte[]> keyValue = iterator.next();
+            assertEquals(windowStart, keyValue.key);
+            assertArrayEquals(storedBytes, keyValue.value, "Expected the raw stored bytes to be returned");
+        }
         assertNotNull(result.getPosition());
     }
 
