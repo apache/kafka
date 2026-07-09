@@ -17,8 +17,8 @@
 package org.apache.kafka.coordinator.group.streams.assignor;
 
 import org.apache.kafka.coordinator.group.api.assignor.streams.GroupSpec;
+import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignmentMetadata;
 import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignmentState;
-import org.apache.kafka.coordinator.group.api.assignor.streams.MemberSubscription;
 
 import java.util.Collection;
 import java.util.Map;
@@ -28,7 +28,7 @@ import java.util.Objects;
  * The assignment specification for a streams group.
  *
  * @param members The member metadata keyed by member Id. Each value provides both the
- *                {@link MemberSubscription} and the {@link MemberAssignmentState} for the member.
+ *                {@link MemberAssignmentMetadata} and the {@link MemberAssignmentState} for the member.
  * @param configs Any configurations passed to the assignor.
  */
 public record GroupSpecImpl(
@@ -47,7 +47,7 @@ public record GroupSpecImpl(
     }
 
     @Override
-    public MemberSubscription memberSubscription(String memberId) {
+    public MemberAssignmentMetadata memberMetadata(String memberId) {
         MemberSubscriptionAndAssignmentImpl member = members.get(memberId);
         if (member == null) {
             throw new IllegalArgumentException("Member Id " + memberId + " not found.");

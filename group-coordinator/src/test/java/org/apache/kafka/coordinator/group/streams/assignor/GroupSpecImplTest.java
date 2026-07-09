@@ -63,8 +63,8 @@ public class GroupSpecImplTest {
     }
 
     @Test
-    void testMemberSubscription() {
-        assertEquals(member, groupSpec.memberSubscription("test-member"));
+    void testMemberMetadata() {
+        assertEquals(member, groupSpec.memberMetadata("test-member"));
     }
 
     @Test
@@ -74,7 +74,7 @@ public class GroupSpecImplTest {
 
     @Test
     void testMemberNotFound() {
-        assertThrows(IllegalArgumentException.class, () -> groupSpec.memberSubscription("unknown"));
+        assertThrows(IllegalArgumentException.class, () -> groupSpec.memberMetadata("unknown"));
         assertThrows(IllegalArgumentException.class, () -> groupSpec.memberAssignmentState("unknown"));
     }
 

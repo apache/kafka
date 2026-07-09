@@ -20,8 +20,8 @@ package org.apache.kafka.coordinator.group.streams.assignor;
 import org.apache.kafka.coordinator.group.api.assignor.streams.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.streams.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignmentMetadata;
 import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignmentState;
-import org.apache.kafka.coordinator.group.api.assignor.streams.MemberSubscription;
 import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignorException;
 import org.apache.kafka.coordinator.group.api.assignor.streams.TaskId;
@@ -118,9 +118,9 @@ public class StickyTaskAssignor implements TaskAssignor {
         localState.activeTaskToPrevMember = new HashMap<>(localState.totalActiveTasks);
         localState.standbyTaskToPrevMember = new HashMap<>(localState.numStandbyReplicas > 0 ? (localState.totalTasks - localState.totalActiveTasks) / localState.numStandbyReplicas : 0);
         for (final String memberId : groupSpec.memberIds()) {
-            final MemberSubscription memberSubscription = groupSpec.memberSubscription(memberId);
+            final MemberAssignmentMetadata memberMetadata = groupSpec.memberMetadata(memberId);
             final MemberAssignmentState memberAssignmentState = groupSpec.memberAssignmentState(memberId);
-            final String processId = memberSubscription.processId();
+            final String processId = memberMetadata.processId();
             final Member member = new Member(processId, memberId);
 
             localState.processIdToState.putIfAbsent(processId, new ProcessState(processId));

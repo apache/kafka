@@ -23,15 +23,15 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Interface representing the static subscription metadata for a streams group member.
+ * Interface representing the static metadata for a streams group member.
  *
- * <p>The subscription contains the per-member metadata that does not change during the assignment
+ * <p>The metadata contains the per-member information that does not change during the assignment
  * computation. The member's current task assignment state is exposed separately through
  * {@link MemberAssignmentState}.
  */
 @InterfaceAudience.Public
 @InterfaceStability.Evolving
-public interface MemberSubscription {
+public interface MemberAssignmentMetadata {
 
     /**
      * @return The instance ID if provided.

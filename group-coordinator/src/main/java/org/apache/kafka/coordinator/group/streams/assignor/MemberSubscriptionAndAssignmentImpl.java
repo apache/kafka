@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.coordinator.group.streams.assignor;
 
+import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignmentMetadata;
 import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignmentState;
-import org.apache.kafka.coordinator.group.api.assignor.streams.MemberSubscription;
 import org.apache.kafka.coordinator.group.api.assignor.streams.TaskId;
 
 import java.util.Collections;
@@ -27,7 +27,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Implementation of both the {@link MemberSubscription} and the {@link MemberAssignmentState}
+ * Implementation of both the {@link MemberAssignmentMetadata} and the {@link MemberAssignmentState}
  * interfaces for a streams group member.
  *
  * @param instanceId    The instance ID if provided.
@@ -49,7 +49,7 @@ public record MemberSubscriptionAndAssignmentImpl(Optional<String> instanceId,
                                                   Map<String, String> clientTags,
                                                   Map<TaskId, Long> taskOffsets,
                                                   Map<TaskId, Long> taskEndOffsets
-) implements MemberSubscription, MemberAssignmentState {
+) implements MemberAssignmentMetadata, MemberAssignmentState {
 
     public MemberSubscriptionAndAssignmentImpl {
         Objects.requireNonNull(instanceId);

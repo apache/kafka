@@ -35,12 +35,12 @@ public interface GroupSpec {
     Collection<String> memberIds();
 
     /**
-     * Gets the static subscription metadata for a given member.
+     * Gets the static metadata for a given member.
      *
      * @param memberId The member Id.
-     * @return The static member subscription.
+     * @return The static member metadata.
      */
-    MemberSubscription memberSubscription(String memberId);
+    MemberAssignmentMetadata memberMetadata(String memberId);
 
     /**
      * Gets the current assignment state for a given member.

@@ -148,7 +148,7 @@ public class StreamsStickyAssignorBenchmark {
                 memberAssignment.standbyTasks(),
                 // Warm-up tasks are not assigned by the assignor; they are decided during reconciliation.
                 Map.of(),
-                groupSpec.memberSubscription(memberId).processId(),
+                groupSpec.memberMetadata(memberId).processId(),
                 Map.of(),
                 Map.of(),
                 Map.of()
