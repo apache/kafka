@@ -213,6 +213,11 @@ public class BufferPool {
         this.waitTime.record(timeNs, time.milliseconds());
     }
 
+    /**
+     * Record that a record send was dropped because the buffer pool was exhausted. Shared by the
+     * full strategy (allocate) and the incremental strategy (ChunkedRecordAccumulator),
+     * so both update the same buffer-exhausted metrics.
+     */
     protected void recordBufferExhausted() {
         this.metrics.sensor("buffer-exhausted-records").record();
     }

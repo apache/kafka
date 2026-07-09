@@ -22,6 +22,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.MemoryRecords;
@@ -456,6 +457,37 @@ public class ChunkedRecordAccumulatorTest {
             assertEquals(1, dq.peekFirst().recordCount);
             assertNotNull(dq.peekLast());
             assertEquals(1, dq.peekLast().recordCount);
+        } finally {
+            accum.close();
+        }
+    }
+
+    /**
+     * A single dropped record is counted exactly once even when it first fails the extension attempt
+     * (recovered) and then fails the new-batch acquire.
+     * Uses a real (non-overridden) pool so the actual allocateChunks path runs on both acquires.
+     */
+    @Test
+    public void testBufferExhaustedNotDoubleCountedAcrossExtensionAndNewBatch() throws Exception {
+        int chunkSize = 256;
+        // Pool holds exactly one chunk: the first record consumes it, leaving the pool empty so both
+        // the second record's extension attempt and its new-batch acquire fail.
+        ChunkedRecordAccumulator accum = newAccumulator(8192, chunkSize, chunkSize, Compression.NONE);
+        try {
+            KafkaMetric exhausted = metrics.metric(metrics.metricName("buffer-exhausted-total", "producer-metrics"));
+
+            // First record fills the one available chunk (pool now empty), opening the batch.
+            accum.append(topic, partition1, 0L, key, new byte[150], Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+            assertEquals(0.0, (double) exhausted.metricValue());
+
+            // Second record overflows the batch's chunk, so extension attempt fails (pool empty,
+            // recovered by closing the batch), then the new-batch acquire fails too (maxTimeToBlock
+            // = 0). The two failed acquires must count as a single dropped record.
+            assertThrows(BufferExhaustedException.class, () -> accum.append(topic, partition1, 0L, key,
+                    new byte[150], Record.EMPTY_HEADERS, null, 0L, time.milliseconds(), cluster));
+            assertEquals(1.0, (double) exhausted.metricValue(),
+                    "the dropped record must be counted once, not once per failed acquire");
         } finally {
             accum.close();
         }

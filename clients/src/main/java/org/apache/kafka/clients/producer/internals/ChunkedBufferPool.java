@@ -117,7 +117,10 @@ public class ChunkedBufferPool extends BufferPool {
                             throw new KafkaException("Producer closed while allocating memory");
 
                         if (waitingTimeElapsed) {
-                            recordBufferExhausted();
+                            // Intentionally not recording the buffer-exhausted metric here.
+                            // This may be called on the extension path, which recovers without
+                            // dropping the record, so the caller is the one recording
+                            // the drop if needed.
                             throw new BufferExhaustedException("Failed to allocate " + memoryRequired
                                 + " bytes (" + numChunks + " chunks of " + chunkSize
                                 + ") within the configured max blocking time " + maxTimeToBlockMs

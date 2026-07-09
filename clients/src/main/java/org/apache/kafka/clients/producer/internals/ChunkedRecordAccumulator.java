@@ -189,7 +189,15 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                             recordUncompressed);
                     log.trace("Allocating {} byte chunked buffer ({} byte chunks) for topic {} partition {} with remaining timeout {}ms",
                             size, chunkedFree.poolableSize(), topic, effectivePartition, maxTimeToBlock);
-                    List<ByteBuffer> initialChunks = chunkedFree.allocateChunks(size, maxTimeToBlock);
+                    List<ByteBuffer> initialChunks;
+                    try {
+                        initialChunks = chunkedFree.allocateChunks(size, maxTimeToBlock);
+                    } catch (BufferExhaustedException e) {
+                        // The blocking new-batch acquire was not able to get memory within
+                        // max.block.ms. Record it in the buffer-exhausted metrics.
+                        chunkedFree.recordBufferExhausted();
+                        throw e;
+                    }
                     nowMs = time.milliseconds();
                     bufferStream = new ChunkedByteBufferOutputStream(initialChunks, chunkedFree.poolableSize(), chunkedFree);
                 }
