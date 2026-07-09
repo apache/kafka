@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -67,16 +65,6 @@ public class SampleSourceConnector extends SourceConnector {
         return new ConfigDef(SourceConnectorConfig.configDef())
                 .define("required", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "required docs")
                 .define("optional", ConfigDef.Type.STRING, "defaultVal", ConfigDef.Importance.HIGH, "optional docs");
-    }
-
-    @Override
-    public Config validate(Map<String, String> connectorConfigs) {
-        // do not validate "optional" on purpose
-        ConfigDef configDef = new ConfigDef()
-                .define("required", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "required docs");
-        List<ConfigValue> configValues = configDef
-                .validate(connectorConfigs);
-        return new Config(configValues);
     }
 
     public static class SampleSourceTask extends SourceTask {
