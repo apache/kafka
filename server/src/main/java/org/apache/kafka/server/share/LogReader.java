@@ -30,21 +30,6 @@ import java.util.concurrent.CompletableFuture;
 public interface LogReader {
 
     /**
-     * Read records for the given partitions starting at the specified offsets.
-     *
-     * @param fetchParams             The fetch parameters (isolation level, maxBytes, etc.)
-     * @param partitionsToFetch       The set of partitions to actually fetch (after filtering erroneous ones)
-     * @param topicPartitionFetchOffsets The fetch offset per partition
-     * @param partitionMaxBytes       The max bytes per partition
-     * @return A map of partition to log read result
-     */
-    LinkedHashMap<TopicIdPartition, LogReadResult> read(
-        FetchParams fetchParams,
-        Set<TopicIdPartition> partitionsToFetch,
-        LinkedHashMap<TopicIdPartition, Long> topicPartitionFetchOffsets,
-        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes);
-
-    /**
      * Read records for the given partitions starting at the specified offsets, combining the local read
      * and - when {@code readRemote} is true and the requested data has been tiered off the local log - the
      * follow-up remote read into a single call.
