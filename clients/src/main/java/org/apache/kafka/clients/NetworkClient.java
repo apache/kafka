@@ -1355,11 +1355,8 @@ public class NetworkClient implements KafkaClient {
      * {@code AdminMetadataManager#bootstrapFatalException()} for AdminClient).
      */
     private void checkBootstrapTimeout() {
-        // Only declare timeout when there is no in-flight resolution attempt. This gives the
-        // current attempt a chance to complete — important when bootstrap.resolve.timeout.ms
-        // is set to 0 (or a very small value), where the timer would otherwise be expired
-        // before the first resolution has had a chance to run.
-        if (bootstrapTimer.isExpired() && bootstrapException == null && pendingBootstrapResolution == null) {
+        if (bootstrapTimer.isExpired() && bootstrapException == null) {
+            cancelBootstrapResolution();
             bootstrapException = new BootstrapResolutionException("Failed to resolve bootstrap servers after " +
                 bootstrapConfiguration.bootstrapResolveTimeoutMs + "ms. " +
                 "Please check your bootstrap.servers configuration and DNS settings.");

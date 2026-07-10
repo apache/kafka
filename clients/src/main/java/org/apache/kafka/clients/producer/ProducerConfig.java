@@ -449,7 +449,7 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG,
                                         Type.LONG,
                                         CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
-                                        atLeast(0L),
+                                        atLeast(1L),
                                         Importance.HIGH,
                                         CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC)
                                 .define(ENABLE_METRICS_PUSH_CONFIG,
