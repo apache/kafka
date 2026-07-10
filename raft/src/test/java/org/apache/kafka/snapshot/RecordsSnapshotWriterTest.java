@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.raft.VoterSetTest;
+import org.apache.kafka.raft.internals.ControlAndDataDecodingStrategy;
 import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.OffsetAndEpoch;
@@ -66,7 +67,7 @@ final class RecordsSnapshotWriterTest {
 
         try (RecordsSnapshotReader<String> reader = RecordsSnapshotReader.of(
                 new MockRawSnapshotReader(snapshotId, buffer.get()),
-                STRING_SERDE,
+                new ControlAndDataDecodingStrategy<>(STRING_SERDE),
                 BufferSupplier.NO_CACHING,
                 maxBatchSizeBytes,
                 true,
@@ -139,7 +140,7 @@ final class RecordsSnapshotWriterTest {
 
         try (RecordsSnapshotReader<String> reader = RecordsSnapshotReader.of(
                 new MockRawSnapshotReader(snapshotId, buffer.get()),
-                STRING_SERDE,
+                new ControlAndDataDecodingStrategy<>(STRING_SERDE),
                 BufferSupplier.NO_CACHING,
                 maxBatchSizeBytes,
                 true,
@@ -197,7 +198,7 @@ final class RecordsSnapshotWriterTest {
 
         try (RecordsSnapshotReader<String> reader = RecordsSnapshotReader.of(
                 new MockRawSnapshotReader(snapshotId, buffer.get()),
-                STRING_SERDE,
+                new ControlAndDataDecodingStrategy<>(STRING_SERDE),
                 BufferSupplier.NO_CACHING,
                 maxBatchSizeBytes,
                 true,

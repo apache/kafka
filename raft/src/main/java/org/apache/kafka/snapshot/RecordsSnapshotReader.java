@@ -22,10 +22,9 @@ import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.Batch;
-import org.apache.kafka.raft.internals.ControlAndDataDecodingStrategy;
+import org.apache.kafka.raft.internals.DecodingStrategy;
 import org.apache.kafka.raft.internals.RecordsIterator;
 import org.apache.kafka.server.common.OffsetAndEpoch;
-import org.apache.kafka.server.common.serialization.RecordSerde;
 
 import java.util.NoSuchElementException;
 import java.util.Optional;
@@ -111,7 +110,7 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
 
     public static <T> RecordsSnapshotReader<T> of(
         RawSnapshotReader snapshot,
-        RecordSerde<T> serde,
+        DecodingStrategy<T> decodingStrategy,
         BufferSupplier bufferSupplier,
         int maxBatchSize,
         boolean doCrcValidation,
@@ -121,7 +120,7 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
             snapshot.snapshotId(),
             new RecordsIterator<>(
                 snapshot.records(),
-                new ControlAndDataDecodingStrategy<>(serde),
+                decodingStrategy,
                 bufferSupplier,
                 maxBatchSize,
                 doCrcValidation,

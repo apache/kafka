@@ -34,6 +34,7 @@ import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.MockLog.LogBatch;
 import org.apache.kafka.raft.MockLog.LogEntry;
+import org.apache.kafka.raft.internals.ControlAndDataDecodingStrategy;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.serialization.RecordSerde;
@@ -1252,7 +1253,7 @@ public class RaftEventSimulationTest {
 
                 try (SnapshotReader<Integer> snapshot = RecordsSnapshotReader.of(
                         log.readSnapshot(snapshotId).get(),
-                        node.intSerde,
+                        new ControlAndDataDecodingStrategy<>(node.intSerde),
                         BufferSupplier.create(),
                         Integer.MAX_VALUE,
                         true,

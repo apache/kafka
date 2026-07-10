@@ -57,7 +57,6 @@ final class KRaftControlRecordStateMachineTest {
         return new KRaftControlRecordStateMachine(
             staticVoterSet,
             log,
-            STRING_SERDE,
             BufferSupplier.NO_CACHING,
             1024,
             new LogContext(),

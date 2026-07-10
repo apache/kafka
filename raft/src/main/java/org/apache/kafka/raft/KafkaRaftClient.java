@@ -73,6 +73,7 @@ import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
 import org.apache.kafka.raft.internals.BlockingMessageQueue;
 import org.apache.kafka.raft.internals.CloseListener;
+import org.apache.kafka.raft.internals.ControlAndDataDecodingStrategy;
 import org.apache.kafka.raft.internals.DefaultRequestSender;
 import org.apache.kafka.raft.internals.FuturePurgatory;
 import org.apache.kafka.raft.internals.KRaftControlRecordStateMachine;
@@ -452,7 +453,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private Optional<SnapshotReader<T>> latestSnapshot() {
         return log.latestSnapshot().map(reader ->
             RecordsSnapshotReader.of(reader,
-                serde,
+                new ControlAndDataDecodingStrategy<>(serde),
                 BufferSupplier.create(),
                 MAX_BATCH_SIZE_BYTES,
                 true, /* Validate batch CRC*/
@@ -498,7 +499,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         partitionState = new KRaftControlRecordStateMachine(
             staticVoters,
             log,
-            serde,
             BufferSupplier.create(),
             MAX_BATCH_SIZE_BYTES,
             logContext,
