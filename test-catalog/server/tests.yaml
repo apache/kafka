@@ -6,6 +6,12 @@ org.apache.kafka.network.RequestConvertToJsonTest:
 - testAllRequestTypesHandled
 - testAllResponseTypesHandled
 - testClientInfoNode
+org.apache.kafka.network.RequestTest:
+- testAlterRequests
+- testBuildEnvelopeResponse
+- testIncrementalAlterRequests
+- testJsonRequests
+- testNonAlterRequestsNotTransformed
 org.apache.kafka.network.SocketServerConfigsTest:
 - testAnotherListenerListToEndPointsWithIpV6
 - testAnotherListenerListToEndPointsWithNonDefaultProtoMap

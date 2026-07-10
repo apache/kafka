@@ -992,12 +992,6 @@ kafka.network.ProcessorTest:
 - testParseRequestHeaderWithDisabledApiVersion
 - testParseRequestHeaderWithUnsupportedApi
 - testParseRequestHeaderWithUnsupportedApiVersion
-kafka.network.RequestChannelTest:
-- testAlterRequests
-- testBuildEnvelopeResponse
-- testIncrementalAlterRequests
-- testJsonRequests
-- testNonAlterRequestsNotTransformed
 kafka.network.RequestConvertToJsonTest:
 - testRequestDesc
 - testRequestDescMetrics

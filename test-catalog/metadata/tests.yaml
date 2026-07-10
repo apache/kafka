@@ -1,6 +1,7 @@
 org.apache.kafka.controller.AclControlManagerTest:
 - testAddAndDelete
 - testCreateAclDeleteAcl
+- testCreateAclWithCidrHosts
 - testCreateDedupe
 - testDeleteDedupe
 - testDeleteExceedsMaxRecords
@@ -8,6 +9,9 @@ org.apache.kafka.controller.AclControlManagerTest:
 - testValidateAclWithBadPrincipal
 - testValidateAclWithEmptyPrincipal
 - testValidateFilter
+- testValidateHostPatternCidrNotSupported
+- testValidateHostPatternInvalid
+- testValidateHostPatternValid
 - testValidateNewAcl
 org.apache.kafka.controller.ActivationRecordsGeneratorTest:
 - testActivationMessageForEmptyLog
@@ -758,6 +762,7 @@ org.apache.kafka.metadata.MetadataCacheTest:
 - testGetPartitionReplicaEndpoints
 - testIsBrokerFenced
 - testIsBrokerInControlledShutdown
+- testToClusterIncludesFencedReplicasAsOffline
 org.apache.kafka.metadata.MetadataRecordSerdeTest:
 - testDeserializeWithUnhandledFrameVersion
 - testParsingMalformedFrameVersionVarint
@@ -819,6 +824,16 @@ org.apache.kafka.metadata.VersionRangeTest:
 - testContains
 - testEquality
 - testToString
+org.apache.kafka.metadata.authorizer.CidrUtilsTest:
+- testIpv4MappedAddress
+- testIpv4MappedAddressWithSubnet
+- testIsInRangeNullOrNonCidr
+- testValidateHostnameWithPath
+- testValidateInvalidIpv4Cidr
+- testValidateInvalidIpv6Cidr
+- testValidateIpv4MappedIpv6Cidr
+- testValidateValidIpv4Cidr
+- testValidateValidIpv6Cidr
 org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizerTest:
 - testCreateAcls
 - testCreateAclsError
@@ -840,6 +855,8 @@ org.apache.kafka.metadata.authorizer.StandardAuthorizerPropertyTest:
 - matchingPrefixAllowWithNoMatchingDenyRules
 - matchingPrefixDenyOverridesAllAllowRules
 org.apache.kafka.metadata.authorizer.StandardAuthorizerTest:
+- testAclWithCidrHost
+- testAclWithIpv6CidrHost
 - testAllowAuditLogging
 - testAllowEveryoneIfNoAclFoundConfigDisabled
 - testAllowEveryoneIfNoAclFoundConfigEnabled
@@ -857,6 +874,10 @@ org.apache.kafka.metadata.authorizer.StandardAuthorizerTest:
 - testGetDefaultResult
 - testHostAddressAclValidation
 - testListAcls
+- testOverlappingCidrAllowNarrowDenyWide
+- testOverlappingCidrDenyNarrowAllowWide
+- testOverlappingCidrSamePermissionBothAllow
+- testOverlappingCidrWithWildcardAllow
 - testPrefixAcls
 - testSimpleAuthorizations
 - testStartWithEarlyStartListeners
