@@ -1084,9 +1084,10 @@ public class InternalTopologyBuilderTest {
 
     @Test
     @SuppressWarnings("deprecation")
-    public void shouldDisableLegacyBufferedRecordsTopologyOverrideWhenGlobalInputBufferMaxBytesIsSet() {
-        // user opts into the bytes path globally; a named topology must not re-enable the legacy
-        // per-partition pause through a topology-level override.
+    public void shouldHonorLegacyBufferedRecordsTopologyOverrideEvenWhenGlobalInputBufferMaxBytesIsSet() {
+        // A topology-level legacy override wins locally (strongest signal of intent); the thread-wide
+        // bytes guard still bounds memory globally. A global input.buffer.max.bytes (possibly just the
+        // documented default) must not silently drop the topology's explicit override.
         final Properties globalProps = StreamsTestUtils.getStreamsConfig();
         globalProps.put(StreamsConfig.INPUT_BUFFER_MAX_BYTES_CONFIG, 100L);
         final StreamsConfig config = new StreamsConfig(globalProps);
@@ -1097,7 +1098,7 @@ public class InternalTopologyBuilderTest {
         final InternalTopologyBuilder topologyBuilder = new InternalTopologyBuilder(
             new TopologyConfig("my-topology", config, topologyOverrides)
         );
-        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().maxBufferedSize, is(-1));
+        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().maxBufferedSize, is(15));
     }
 
     @SuppressWarnings("deprecation")

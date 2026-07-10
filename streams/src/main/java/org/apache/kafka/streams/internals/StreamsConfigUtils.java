@@ -104,7 +104,9 @@ public class StreamsConfigUtils {
         return -1;
     }
 
-    // Returns -1L when only the legacy config is set; -1L disables the bytes-based pause.
+    // Always returns a usable bytes cap so memory stays bounded (KIP-770). Only when the legacy
+    // config alone is set do we fall through to the new config's default; the legacy per-partition
+    // record cap still applies in parallel via getBufferedRecordsPerPartition.
     @SuppressWarnings("deprecation")
     public static long getInputBufferMaxBytes(final StreamsConfig config) {
         if (config.originals().containsKey(BUFFERED_RECORDS_PER_PARTITION_CONFIG) && config.originals().containsKey(INPUT_BUFFER_MAX_BYTES_CONFIG)) {
@@ -115,12 +117,14 @@ public class StreamsConfigUtils {
                 INPUT_BUFFER_MAX_BYTES_CONFIG);
             return config.getLong(INPUT_BUFFER_MAX_BYTES_CONFIG);
         } else if (config.originals().containsKey(BUFFERED_RECORDS_PER_PARTITION_CONFIG)) {
-            LOG.warn("Deprecated config {} is set, and will be used; we suggest setting the new config {} to keep memory usage under control " +
-                    "instead as deprecated {} would be removed in the future.",
+            LOG.warn("Deprecated config {} is set. The new config {} (default {}) is applied to bound memory usage; " +
+                    "we suggest setting {} explicitly as {} will be removed in the future.",
                 BUFFERED_RECORDS_PER_PARTITION_CONFIG,
                 INPUT_BUFFER_MAX_BYTES_CONFIG,
+                config.getLong(INPUT_BUFFER_MAX_BYTES_CONFIG),
+                INPUT_BUFFER_MAX_BYTES_CONFIG,
                 BUFFERED_RECORDS_PER_PARTITION_CONFIG);
-            return -1L;
+            return config.getLong(INPUT_BUFFER_MAX_BYTES_CONFIG);
         }
         return config.getLong(INPUT_BUFFER_MAX_BYTES_CONFIG);
     }

@@ -1208,9 +1208,13 @@ public class StreamTaskTest {
         ));
         assertEquals(0, consumer.paused().size());
 
+        // Draining empties the queue. In bytes-mode the per-task resume must NOT fire — otherwise it
+        // would undo a StreamThread bytes-guard pause and cause pause/resume churn (KIP-770).
         while (task.process(0L)) { /* drain */ }
+        // pre-pause a partition to prove resumePollingForPartitionsWithAvailableSpace leaves it alone
+        consumer.pause(Set.of(partition1));
         task.resumePollingForPartitionsWithAvailableSpace();
-        assertEquals(0, consumer.paused().size());
+        assertTrue(consumer.paused().contains(partition1));
         assertFalse(task.hasRecordsQueued());
     }
 

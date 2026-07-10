@@ -87,6 +87,8 @@ import static org.apache.kafka.streams.StreamsConfig.TRANSACTIONAL_STATE_STORES_
 import static org.apache.kafka.streams.StreamsConfig.adminClientPrefix;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.getBufferedRecordsPerPartition;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.getInputBufferMaxBytes;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.totalCacheSize;
 import static org.apache.kafka.test.StreamsTestUtils.getStreamsConfig;
 import static org.hamcrest.CoreMatchers.containsString;
@@ -1348,6 +1350,43 @@ public class StreamsConfigTest {
     public void shouldUseDefaultStateStoreCacheMaxBytesConfigWhenNoConfigIsSet() {
         final StreamsConfig config = new StreamsConfig(props);
         assertEquals(10 * 1024 * 1024, totalCacheSize(config));
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldUseInputBufferMaxBytesWhenBothBufferConfigsAreSet() {
+        props.put(StreamsConfig.INPUT_BUFFER_MAX_BYTES_CONFIG, 100L);
+        props.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 10);
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals(100L, getInputBufferMaxBytes(config));
+        // deprecated per-partition path is disabled when both are set
+        assertEquals(-1, getBufferedRecordsPerPartition(config));
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldUseDefaultInputBufferMaxBytesWhenOnlyDeprecatedConfigIsSet() {
+        props.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 10);
+        final StreamsConfig config = new StreamsConfig(props);
+        // KIP-770: legacy-only users still get the bytes cap at its default, so memory stays bounded,
+        // while the deprecated per-partition record cap remains active in parallel.
+        assertEquals(512 * 1024 * 1024L, getInputBufferMaxBytes(config));
+        assertEquals(10, getBufferedRecordsPerPartition(config));
+    }
+
+    @Test
+    public void shouldUseInputBufferMaxBytesWhenOnlyNewConfigIsSet() {
+        props.put(StreamsConfig.INPUT_BUFFER_MAX_BYTES_CONFIG, 100L);
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals(100L, getInputBufferMaxBytes(config));
+        assertEquals(-1, getBufferedRecordsPerPartition(config));
+    }
+
+    @Test
+    public void shouldUseDefaultInputBufferMaxBytesWhenNoBufferConfigIsSet() {
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals(512 * 1024 * 1024L, getInputBufferMaxBytes(config));
+        assertEquals(-1, getBufferedRecordsPerPartition(config));
     }
 
     @Test

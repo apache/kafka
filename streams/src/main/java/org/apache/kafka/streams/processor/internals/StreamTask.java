@@ -810,11 +810,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             log.trace("Task processed record: topic={}, partition={}, offset={}",
                 record.topic(), record.partition(), record.offset());
 
+            // Only the legacy count-mode resumes here; in bytes-mode StreamThread owns pause/resume,
+            // so resuming per-task would undo its thread-wide pause and cause churn.
             // headRecordIsCorrupted() catches a queue whose only remaining records are corrupted —
             // size() never drops below the legacy threshold, so without this we'd stay paused forever.
-            if (recordInfo.queue().isEmpty()
-                    || (maxBufferedSize != UNDEFINED_MAX_BUFFERED_SIZE && recordInfo.queue().size() <= maxBufferedSize)
-                    || recordInfo.queue().headRecordIsCorrupted()) {
+            if (maxBufferedSize != UNDEFINED_MAX_BUFFERED_SIZE
+                    && (recordInfo.queue().isEmpty()
+                        || recordInfo.queue().size() <= maxBufferedSize
+                        || recordInfo.queue().headRecordIsCorrupted())) {
                 log.trace("Resume consumption for partition {}: buffered size {} is under the threshold {}",
                         partition, recordInfo.queue().size(), maxBufferedSize);
                 partitionsToResume.add(partition);
