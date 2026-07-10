@@ -142,7 +142,7 @@ public class IQv2HeadersStoreIntegrationTest {
 
     @Test
     public void shouldHandleTimestampedKeyWithHeadersQuery() throws Exception {
-        startStreamsWithHeadersStore();
+        startStreamsWithKeyValueHeadersStore();
 
         // key 1 has headers, key 2 has empty headers, key 3 is tombstoned (null value)
         produceDataToTopicWithHeaders(inputStream, baseTimestamp, HEADERS,
@@ -153,24 +153,24 @@ public class IQv2HeadersStoreIntegrationTest {
             KeyValue.pair(3, "c0"), KeyValue.pair(3, null));
 
         // key 1: key + value + timestamp + headers round-trip
-        final ReadOnlyRecord<Integer, String> result1 = query(1);
+        final ReadOnlyRecord<Integer, String> result1 = keyQuery(1);
         assertEquals(Integer.valueOf(1), result1.key());
         assertEquals("a0", result1.value());
         assertEquals(baseTimestamp, result1.timestamp());
         assertEquals(HEADERS, result1.headers());
 
         // key 2: written with no headers -> empty (never null) headers
-        final ReadOnlyRecord<Integer, String> result2 = query(2);
+        final ReadOnlyRecord<Integer, String> result2 = keyQuery(2);
         assertEquals(Integer.valueOf(2), result2.key());
         assertEquals("b0", result2.value());
         assertEquals(baseTimestamp + 1, result2.timestamp());
         assertEquals(new RecordHeaders(), result2.headers());
 
         // key 3: tombstoned -> null result, never a partially-populated wrapper
-        assertNull(query(3));
+        assertNull(keyQuery(3));
 
         // never-written key -> null result
-        assertNull(query(999));
+        assertNull(keyQuery(999));
     }
 
     @Test
@@ -180,16 +180,16 @@ public class IQv2HeadersStoreIntegrationTest {
         // successful query therefore proves the result was served from the cache via
         // CachingKeyValueStoreWithHeaders -> the metered store's cache-hit path, end-to-end.
         commitIntervalMs = Duration.ofMinutes(10).toMillis();
-        startStreamsWithHeadersStore(true);
+        startStreamsWithKeyValueHeadersStore(true);
 
         produceDataToTopicWithHeaders(inputStream, baseTimestamp, HEADERS, KeyValue.pair(1, "a0"));
 
         // Read-your-writes: the not-yet-flushed record is visible (served from the cache), with headers.
-        final ReadOnlyRecord<Integer, String> result = query(1);
+        final ReadOnlyRecord<Integer, String> result = keyQuery(1);
         // skipCache bypasses the cache and reads the persistent store directly. A null result positively
         // proves nothing has been flushed, so the read above was genuinely cache-served (not an accidental
         // store read) -- and it covers skipCache end-to-end.
-        assertNull(querySkipCache(1));
+        assertNull(keyQuerySkipCache(1));
         assertEquals(Integer.valueOf(1), result.key());
         assertEquals("a0", result.value());
         assertEquals(baseTimestamp, result.timestamp());
@@ -205,7 +205,7 @@ public class IQv2HeadersStoreIntegrationTest {
     public void shouldHandleTimestampedRangeWithHeadersQuery() throws Exception {
         // Caching disabled: a range query reads the underlying store directly (it never consults the
         // cache), so the writes must be store-served.
-        startStreamsWithHeadersStore();
+        startStreamsWithKeyValueHeadersStore();
 
         // keys 1,2 (headers), key 3 (empty headers), key 4 written then tombstone
         produceDataToTopicWithHeaders(inputStream, baseTimestamp, HEADERS,
@@ -286,6 +286,62 @@ public class IQv2HeadersStoreIntegrationTest {
         assertEquals(baseTimestamp, upperBounded.get(1).timestamp());
         assertThrows(IllegalStateException.class, () -> upperBounded.get(0).headers().add("x", new byte[0]));
         assertThrows(IllegalStateException.class, () -> upperBounded.get(0).headers().remove("source"));
+
+        // withRange(2, 2), equal bounds -> key 2 only (bounds are inclusive on both ends).
+        final List<ReadOnlyRecord<Integer, String>> equalBounds = rangeQuery(TimestampedRangeWithHeadersQuery.withRange(2, 2));
+        assertEquals(List.of(2), keys(equalBounds));
+        assertEquals(List.of("two"), values(equalBounds));
+        assertEquals(HEADERS, equalBounds.get(0).headers());
+        assertEquals(baseTimestamp, equalBounds.get(0).timestamp());
+        assertThrows(IllegalStateException.class, () -> equalBounds.get(0).headers().add("x", new byte[0]));
+        assertThrows(IllegalStateException.class, () -> equalBounds.get(0).headers().remove("source"));
+
+        // withRange(2, 3), descending -> keys 3, 2.
+        final List<ReadOnlyRecord<Integer, String>> rangeDescending =
+            rangeQuery(TimestampedRangeWithHeadersQuery.<Integer, String>withRange(2, 3).withDescendingKeys());
+        assertEquals(List.of(3, 2), keys(rangeDescending));
+        assertEquals(List.of("three", "two"), values(rangeDescending));
+        // key 3 written without headers -> empty (never null) headers
+        assertEquals(new RecordHeaders(), rangeDescending.get(0).headers()); // key 3
+        assertEquals(baseTimestamp + 1, rangeDescending.get(0).timestamp());
+        assertEquals(HEADERS, rangeDescending.get(1).headers());            // key 2
+        assertEquals(baseTimestamp, rangeDescending.get(1).timestamp());
+        // returned headers are a read-only snapshot: no mutation (add or remove) is allowed
+        assertThrows(IllegalStateException.class, () -> rangeDescending.get(1).headers().add("x", new byte[0]));
+        assertThrows(IllegalStateException.class, () -> rangeDescending.get(1).headers().remove("source"));
+
+        // A bound matching no keys -> empty result (the no-match path).
+        final List<ReadOnlyRecord<Integer, String>> noMatch =
+            rangeQuery(TimestampedRangeWithHeadersQuery.withRange(4, 200));
+        assertTrue(noMatch.isEmpty());
+
+        // withRange(3, 2), lower > upper -> empty result (an inverted range matches nothing, rather than failing).
+        final List<ReadOnlyRecord<Integer, String>> invertedBounds = rangeQuery(TimestampedRangeWithHeadersQuery.withRange(3, 2));
+        assertTrue(invertedBounds.isEmpty());
+    }
+
+    @Test
+    public void shouldNotSeeUnflushedWriteInRangeQueryWhenCachingEnabled() throws Exception {
+        // Unlike the point query (CachingKeyValueStoreWithHeaders serves KeyQuery/TimestampedKeyWithHeadersQuery
+        // from the cache), CachingKeyValueStoreWithHeaders.query() forwards RangeQuery/TimestampedRangeWithHeadersQuery
+        // straight to the underlying store, bypassing the cache. That underlying store's Position is only
+        // advanced by writes that actually reach it, so a range query bound on the input position never catches
+        // up while the write lives only in the cache -- it fails NOT_UP_TO_BOUND, rather than returning an empty
+        // (but successful) result. Use a very large commit interval so the record is never flushed during the test.
+        commitIntervalMs = Duration.ofMinutes(10).toMillis();
+        startStreamsWithKeyValueHeadersStore(true);
+
+        produceDataToTopicWithHeaders(inputStream, baseTimestamp, HEADERS, KeyValue.pair(1, "a0"));
+
+        final StateQueryRequest<ReadOnlyRecordIterator<Integer, String>> request =
+                inStore(STORE_NAME)
+                        .withQuery(TimestampedRangeWithHeadersQuery.<Integer, String>withNoBounds())
+                        .withPositionBound(PositionBound.at(inputPosition));
+        final StateQueryResult<ReadOnlyRecordIterator<Integer, String>> result = kafkaStreams.query(request);
+
+        final QueryResult<ReadOnlyRecordIterator<Integer, String>> onlyResult = result.getOnlyPartitionResult();
+        assertTrue(onlyResult.isFailure(), "A range query bound on the input position must not catch up while the write is cache-only");
+        assertEquals(FailureReason.NOT_UP_TO_BOUND, onlyResult.getFailureReason());
     }
 
     @Test
@@ -296,7 +352,7 @@ public class IQv2HeadersStoreIntegrationTest {
     @Test
     public void shouldThrowForTimestampedRangeWithHeadersQueryOnPlainSupplier() throws Exception {
         // The query succeeds, but iterating throws because timestamp = -1 cannot be a ReadOnlyRecord.
-        startStreamsWithPlainSupplierStore();
+        startStreamsWithKeyValuePlainSupplierStore();
 
         produceDataToTopicWithHeaders(inputStream, baseTimestamp, HEADERS,
             KeyValue.pair(1, "one"), KeyValue.pair(2, "two"));
@@ -315,6 +371,27 @@ public class IQv2HeadersStoreIntegrationTest {
         }
     }
 
+    @Test
+    public void shouldReturnEmptyHeadersForTimestampedRangeWithHeadersQueryOnAdapterStore() throws Exception {
+        // A WithHeaders builder over a plain *timestamped* supplier (persistentTimestampedKeyValueStore)
+        // keeps timestamps but drops headers -- distinct from the plain-supplier build above, which can't
+        // even represent the timestamp. A range query reads the underlying store directly, so headers
+        // come back empty (never null), even though they were written.
+        startStreamsWithKeyValueAdapterStore();
+
+        produceDataToTopicWithHeaders(inputStream, baseTimestamp, HEADERS, KeyValue.pair(1, "one"));
+
+        final List<ReadOnlyRecord<Integer, String>> range =
+            rangeQuery(TimestampedRangeWithHeadersQuery.<Integer, String>withNoBounds());
+        assertEquals(List.of(1), keys(range));
+        assertEquals(List.of("one"), values(range));
+        assertEquals(baseTimestamp, range.get(0).timestamp());
+        assertEquals(new RecordHeaders(), range.get(0).headers());
+        // returned headers are a read-only snapshot: no mutation (add or remove) is allowed, even when empty
+        assertThrows(IllegalStateException.class, () -> range.get(0).headers().add("x", new byte[0]));
+        assertThrows(IllegalStateException.class, () -> range.get(0).headers().remove("source"));
+    }
+
     private void startStreams(final StoreBuilder<?> storeBuilder,
                               final ProcessorSupplier<Integer, String, Integer, String> processorSupplier) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -328,14 +405,14 @@ public class IQv2HeadersStoreIntegrationTest {
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(kafkaStreams);
     }
 
-    private void startStreamsWithHeadersStore() throws Exception {
+    private void startStreamsWithKeyValueHeadersStore() throws Exception {
         // Caching disabled: every IQv2 query is forced down to the persistent
         // RocksDBTimestampedStoreWithHeaders layer, exercising its KeyQuery handling
         // (rather than being short-circuited by a cache hit).
-        startStreamsWithHeadersStore(false);
+        startStreamsWithKeyValueHeadersStore(false);
     }
 
-    private void startStreamsWithHeadersStore(final boolean cachingEnabled) throws Exception {
+    private void startStreamsWithKeyValueHeadersStore(final boolean cachingEnabled) throws Exception {
         final StoreBuilder<TimestampedKeyValueStoreWithHeaders<Integer, String>> storeBuilder =
             Stores.timestampedKeyValueStoreWithHeadersBuilder(
                 Stores.persistentTimestampedKeyValueStoreWithHeaders(STORE_NAME),
@@ -343,20 +420,20 @@ public class IQv2HeadersStoreIntegrationTest {
                 Serdes.String());
         startStreams(
             cachingEnabled ? storeBuilder.withCachingEnabled() : storeBuilder.withCachingDisabled(),
-            HeadersStoreWriterProcessor::new);
+            KeyValueHeadersStoreWriterProcessor::new);
     }
 
-    private void startStreamsWithNonHeadersStore() throws Exception {
+    private void startStreamsWithKeyValueNonHeadersStore() throws Exception {
         // A plain (non-WithHeaders) timestamped store: the headers-aware query types are unsupported here.
         startStreams(
             Stores.timestampedKeyValueStoreBuilder(
                 Stores.persistentTimestampedKeyValueStore(STORE_NAME),
                 Serdes.Integer(),
                 Serdes.String()),
-            PlainStoreWriterProcessor::new);
+            KeyValuePlainStoreWriterProcessor::new);
     }
 
-    private void startStreamsWithPlainSupplierStore() throws Exception {
+    private void startStreamsWithKeyValuePlainSupplierStore() throws Exception {
         // A WithHeaders builder over a plain (non-timestamped) supplier: entries come back with
         // timestamp = -1, which cannot be represented as a ReadOnlyRecord.
         startStreams(
@@ -364,11 +441,22 @@ public class IQv2HeadersStoreIntegrationTest {
                 Stores.persistentKeyValueStore(STORE_NAME),
                 Serdes.Integer(),
                 Serdes.String()).withCachingDisabled(),
-            HeadersStoreWriterProcessor::new);
+            KeyValueHeadersStoreWriterProcessor::new);
+    }
+
+    private void startStreamsWithKeyValueAdapterStore() throws Exception {
+        // A WithHeaders builder over a plain *timestamped* supplier: keeps timestamps (unlike the
+        // plain-supplier build above) but drops headers via TimestampedToHeadersStoreAdapter.
+        startStreams(
+            Stores.timestampedKeyValueStoreWithHeadersBuilder(
+                Stores.persistentTimestampedKeyValueStore(STORE_NAME),
+                Serdes.Integer(),
+                Serdes.String()).withCachingDisabled(),
+            KeyValueHeadersStoreWriterProcessor::new);
     }
 
     private <R> void assertUnknownQueryTypeAgainstNonHeadersStore(final Query<R> query) throws Exception {
-        startStreamsWithNonHeadersStore();
+        startStreamsWithKeyValueNonHeadersStore();
         produceDataToTopicWithHeaders(inputStream, baseTimestamp, HEADERS, KeyValue.pair(1, "a0"));
 
         final StateQueryRequest<R> request =
@@ -379,7 +467,7 @@ public class IQv2HeadersStoreIntegrationTest {
         assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, result.getOnlyPartitionResult().getFailureReason());
     }
 
-    private ReadOnlyRecord<Integer, String> query(final int key) {
+    private ReadOnlyRecord<Integer, String> keyQuery(final int key) {
         final StateQueryRequest<ReadOnlyRecord<Integer, String>> request =
             inStore(STORE_NAME)
                 .withQuery(TimestampedKeyWithHeadersQuery.<Integer, String>withKey(key))
@@ -394,7 +482,7 @@ public class IQv2HeadersStoreIntegrationTest {
         return onlyResult == null ? null : onlyResult.getResult();
     }
 
-    private ReadOnlyRecord<Integer, String> querySkipCache(final int key) {
+    private ReadOnlyRecord<Integer, String> keyQuerySkipCache(final int key) {
         // skipCache forwards the query past the record cache to the persistent store. Use the default
         // (unbounded) position bound on purpose: the persistent layer may legitimately be empty (nothing
         // flushed), so bounding on the input position would never be satisfied.
@@ -467,7 +555,7 @@ public class IQv2HeadersStoreIntegrationTest {
         }
     }
 
-    private static class HeadersStoreWriterProcessor implements Processor<Integer, String, Integer, String> {
+    private static class KeyValueHeadersStoreWriterProcessor implements Processor<Integer, String, Integer, String> {
         private ProcessorContext<Integer, String> context;
         private TimestampedKeyValueStoreWithHeaders<Integer, String> store;
 
@@ -490,7 +578,7 @@ public class IQv2HeadersStoreIntegrationTest {
         }
     }
 
-    private static class PlainStoreWriterProcessor implements Processor<Integer, String, Integer, String> {
+    private static class KeyValuePlainStoreWriterProcessor implements Processor<Integer, String, Integer, String> {
         private ProcessorContext<Integer, String> context;
         private TimestampedKeyValueStore<Integer, String> store;
 
