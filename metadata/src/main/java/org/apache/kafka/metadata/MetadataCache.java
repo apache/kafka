@@ -37,11 +37,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
@@ -148,10 +148,8 @@ public interface MetadataCache extends ConfigRepository {
         boolean ignoreTopicsWithExceptions);
 
     static Cluster toCluster(String clusterId, MetadataImage image) {
-        Map<Integer, List<Node>> brokerToNodes = new HashMap<>();
-        image.cluster().brokers().values().stream()
-            .filter(broker -> !broker.fenced())
-            .forEach(broker -> brokerToNodes.put(broker.id(), broker.nodes()));
+        Map<Integer, List<Node>> brokerToNodes = image.cluster().brokers().values().stream()
+            .collect(Collectors.toMap(BrokerRegistration::id, BrokerRegistration::nodes));
 
         List<PartitionInfo> partitionInfos = new ArrayList<>();
         Set<String> internalTopics = new HashSet<>();
@@ -169,6 +167,7 @@ public interface MetadataCache extends ConfigRepository {
                             toArray(partition.isr, brokerToNodes),
                             getOfflineReplicas(image, partition).stream()
                                 .map(brokerToNodes::get)
+                                .filter(Objects::nonNull)
                                 .flatMap(Collection::stream)
                                 .toArray(Node[]::new)
                         ));
@@ -197,6 +196,7 @@ public interface MetadataCache extends ConfigRepository {
     private static Node[] toArray(int[] replicas, Map<Integer, List<Node>> brokerToNodes) {
         return Arrays.stream(replicas)
             .mapToObj(brokerToNodes::get)
+            .filter(Objects::nonNull)
             .flatMap(Collection::stream)
             .toArray(Node[]::new);
     }
