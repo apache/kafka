@@ -26,7 +26,7 @@ import org.slf4j.Logger;
 
 import java.util.Optional;
 import java.util.OptionalInt;
-
+/*ci test commit*/
 public final class CandidateState implements NomineeState {
     private final int localId;
     private final Uuid localDirectoryId;
