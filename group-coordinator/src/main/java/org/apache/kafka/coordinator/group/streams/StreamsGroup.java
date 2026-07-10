@@ -1308,7 +1308,11 @@ public class StreamsGroup implements Group {
         members.entrySet(committedOffset).forEach(
             entry -> describedGroup.members().add(
                 entry.getValue().asStreamsGroupDescribeMember(
-                    targetAssignment.get(entry.getValue().memberId(), committedOffset)
+                    targetAssignment.get(entry.getValue().memberId(), committedOffset),
+                    // Task (end-)offsets are transient, unpersisted telemetry, so unlike the rest of the member state
+                    // they are read from the latest in-memory value rather than at committedOffset. Members that have
+                    // not reported any yield MemberTaskOffsets.EMPTY.
+                    taskOffsets(entry.getValue().memberId())
                 )
             )
         );

@@ -21,6 +21,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAss
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentValue.TaskIds;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue.KeyValue;
+import org.apache.kafka.coordinator.group.streams.assignor.TaskId;
 
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -343,8 +344,20 @@ public class StreamsGroupMemberTest {
             mkMap(mkEntry(SUBTOPOLOGY2, new HashSet<>(assignedTasks2))),
             mkMap(mkEntry(SUBTOPOLOGY3, new HashSet<>(assignedTasks1)))
         );
+        MemberTaskOffsets taskOffsets = new MemberTaskOffsets(
+            mkMap(
+                mkEntry(new TaskId(SUBTOPOLOGY1, 0), 100L),
+                mkEntry(new TaskId(SUBTOPOLOGY1, 2), 120L),
+                mkEntry(new TaskId(SUBTOPOLOGY2, 1), 200L)
+            ),
+            mkMap(
+                mkEntry(new TaskId(SUBTOPOLOGY1, 0), 150L),
+                mkEntry(new TaskId(SUBTOPOLOGY1, 2), 170L),
+                mkEntry(new TaskId(SUBTOPOLOGY2, 1), 250L)
+            )
+        );
 
-        StreamsGroupDescribeResponseData.Member actual = member.asStreamsGroupDescribeMember(targetAssignment);
+        StreamsGroupDescribeResponseData.Member actual = member.asStreamsGroupDescribeMember(targetAssignment, taskOffsets);
         StreamsGroupDescribeResponseData.Member expected = new StreamsGroupDescribeResponseData.Member()
             .setMemberId(MEMBER_ID)
             .setMemberEpoch(MEMBER_EPOCH)
@@ -357,6 +370,16 @@ public class StreamsGroupMemberTest {
             .setClientTags(List.of(
                 new StreamsGroupDescribeResponseData.KeyValue().setKey(CLIENT_TAG_KEY).setValue(CLIENT_TAG_VALUE))
             )
+            .setTaskOffsets(List.of(
+                new StreamsGroupDescribeResponseData.TaskOffset().setSubtopologyId(SUBTOPOLOGY1).setPartition(0).setOffset(100L),
+                new StreamsGroupDescribeResponseData.TaskOffset().setSubtopologyId(SUBTOPOLOGY1).setPartition(2).setOffset(120L),
+                new StreamsGroupDescribeResponseData.TaskOffset().setSubtopologyId(SUBTOPOLOGY2).setPartition(1).setOffset(200L)
+            ))
+            .setTaskEndOffsets(List.of(
+                new StreamsGroupDescribeResponseData.TaskOffset().setSubtopologyId(SUBTOPOLOGY1).setPartition(0).setOffset(150L),
+                new StreamsGroupDescribeResponseData.TaskOffset().setSubtopologyId(SUBTOPOLOGY1).setPartition(2).setOffset(170L),
+                new StreamsGroupDescribeResponseData.TaskOffset().setSubtopologyId(SUBTOPOLOGY2).setPartition(1).setOffset(250L)
+            ))
             .setAssignment(
                 new StreamsGroupDescribeResponseData.Assignment()
                     .setActiveTasks(List.of(
@@ -404,9 +427,27 @@ public class StreamsGroupMemberTest {
     @Test
     public void testAsStreamsGroupDescribeWithTargetAssignmentNull() {
         final StreamsGroupMember member = createStreamsGroupMember();
-        StreamsGroupDescribeResponseData.Member streamsGroupDescribeMember = member.asStreamsGroupDescribeMember(null);
+        StreamsGroupDescribeResponseData.Member streamsGroupDescribeMember =
+            member.asStreamsGroupDescribeMember(null, MemberTaskOffsets.EMPTY);
 
         assertEquals(new StreamsGroupDescribeResponseData.Assignment(), streamsGroupDescribeMember.targetAssignment());
+    }
+
+    @Test
+    public void testAsStreamsGroupDescribeMemberWithEmptyOrNullTaskOffsets() {
+        final StreamsGroupMember member = createStreamsGroupMember();
+
+        // Task (end-)offsets are transient telemetry: a member that has reported none (EMPTY), or a null passed
+        // defensively, must describe as empty lists rather than throwing.
+        StreamsGroupDescribeResponseData.Member fromEmpty =
+            member.asStreamsGroupDescribeMember(TasksTuple.EMPTY, MemberTaskOffsets.EMPTY);
+        assertEquals(List.of(), fromEmpty.taskOffsets());
+        assertEquals(List.of(), fromEmpty.taskEndOffsets());
+
+        StreamsGroupDescribeResponseData.Member fromNull =
+            member.asStreamsGroupDescribeMember(TasksTuple.EMPTY, null);
+        assertEquals(List.of(), fromNull.taskOffsets());
+        assertEquals(List.of(), fromNull.taskEndOffsets());
     }
 
     @Test

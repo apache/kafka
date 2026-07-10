@@ -11064,7 +11064,8 @@ public class GroupMetadataManagerTest {
                 .setGroupId(streamsGroupIds.get(1))
                 .setMembers(List.of(
                     memberBuilder.build().asStreamsGroupDescribeMember(
-                        TasksTuple.EMPTY
+                        TasksTuple.EMPTY,
+                        MemberTaskOffsets.EMPTY
                     )
                 ))
                 .setTopology(expectedTopology)
@@ -11145,8 +11146,8 @@ public class GroupMetadataManagerTest {
         describedGroup = new StreamsGroupDescribeResponseData.DescribedGroup()
             .setGroupId(streamsGroupId)
             .setMembers(Arrays.asList(
-                memberBuilder1.build().asStreamsGroupDescribeMember(TasksTuple.EMPTY),
-                memberBuilder2.build().asStreamsGroupDescribeMember(assignment)
+                memberBuilder1.build().asStreamsGroupDescribeMember(TasksTuple.EMPTY, MemberTaskOffsets.EMPTY),
+                memberBuilder2.build().asStreamsGroupDescribeMember(assignment, MemberTaskOffsets.EMPTY)
             ))
             .setTopology(
                 new StreamsGroupDescribeResponseData.Topology()
@@ -18777,6 +18778,23 @@ public class GroupMetadataManagerTest {
             ),
             group.taskOffsets(memberId)
         );
+
+        // Describing the group surfaces the retained offsets on the member, even though they were never persisted.
+        context.commit();
+        List<StreamsGroupDescribeResponseData.DescribedGroup> describedGroups =
+            context.groupMetadataManager.streamsGroupDescribe(List.of(groupId), context.lastCommittedOffset).describedGroups();
+        assertEquals(1, describedGroups.size());
+        StreamsGroupDescribeResponseData.Member describedMember = describedGroups.get(0).members().get(0);
+        assertEquals(
+            List.of(new StreamsGroupDescribeResponseData.TaskOffset()
+                .setSubtopologyId(subtopology1).setPartition(0).setOffset(12L)),
+            describedMember.taskOffsets()
+        );
+        assertEquals(
+            List.of(new StreamsGroupDescribeResponseData.TaskOffset()
+                .setSubtopologyId(subtopology1).setPartition(0).setOffset(20L)),
+            describedMember.taskEndOffsets()
+        );
     }
 
     @Test
@@ -19019,7 +19037,7 @@ public class GroupMetadataManagerTest {
             )
             .setMembers(Collections.singletonList(
                 expectedMember.asStreamsGroupDescribeMember(TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
-                    TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)))
+                    TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)), MemberTaskOffsets.EMPTY)
             ))
             .setGroupState(StreamsGroupState.STABLE.toString())
             .setGroupEpoch(2);
