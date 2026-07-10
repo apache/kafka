@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer;
 import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.admin.SharePartitionOffsetInfo;
 import org.apache.kafka.clients.producer.Producer;
@@ -2031,6 +2032,65 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
             assertNull(sharePartitionOffsetInfo);
         } catch (ExecutionException | InterruptedException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    @ClusterTest
+    public void testAddedPartitionsOfKnownTopicStartAtOffsetZero() throws InterruptedException, ExecutionException {
+        String groupId = "expand-group";
+        String topic = "expand-topic";
+        createTopic(topic, 1, 1);
+
+        alterShareAutoOffsetReset(groupId, "latest");
+
+        try (Producer<byte[], byte[]> producer = createProducer();
+             Admin admin = createAdminClient();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId)) {
+
+            // Produce 10 records to partition 0 before anyone subscribes.
+            for (int i = 0; i < 10; i++) {
+                producer.send(new ProducerRecord<>(topic, 0, null, ("p0-key-" + i).getBytes(), ("p0-value-" + i).getBytes()));
+            }
+            producer.flush();
+
+            // The consumer joins and polls: with "latest" it starts partition 0 at the log end, so it receives
+            // none of the pre-existing records. This also makes the group aware of (initializes) the topic.
+            shareConsumer.subscribe(Set.of(topic));
+            int received = 0;
+            long deadline = System.currentTimeMillis() + 10000L;
+            while (System.currentTimeMillis() < deadline) {
+                received += shareConsumer.poll(Duration.ofMillis(1000)).count();
+            }
+            assertEquals(0, received, "latest reset should skip records produced before the topic was known");
+
+            // Expand the topic and produce 10 records to the brand-new partition 1, each with a distinct,
+            // known value so we can assert all of them are delivered (none skipped by the latest reset).
+            admin.createPartitions(Map.of(topic, NewPartitions.increaseTo(2))).all().get();
+            cluster.waitTopicCreation(topic, 2);
+
+            List<String> expectedValues = new ArrayList<>();
+            for (int i = 0; i < 10; i++) {
+                String value = "p1-value-" + i;
+                expectedValues.add(value);
+                producer.send(new ProducerRecord<>(topic, 1, null, ("p1-key-" + i).getBytes(), value.getBytes()));
+            }
+            producer.flush();
+
+            // Partition 1 belongs to an already-known topic, so it must be initialized at offset 0 and deliver
+            // every record produced above — even though it was created under a "latest" reset. Share consumers
+            // deliver at-least-once, so records may be redelivered; track distinct values in a set so
+            // duplicates don't cause spurious failures, then assert the count of distinct records.
+            Set<String> receivedValues = new HashSet<>();
+            waitForCondition(() -> {
+                ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(1000));
+                for (ConsumerRecord<byte[], byte[]> record : records) {
+                    if (record.partition() == 1) {
+                        receivedValues.add(new String(record.value()));
+                    }
+                }
+                return receivedValues.size() >= expectedValues.size();
+            }, 30000L, 500L, () -> "did not receive all records from the newly added partition");
+            assertEquals(expectedValues.size(), receivedValues.size());
         }
     }
 }

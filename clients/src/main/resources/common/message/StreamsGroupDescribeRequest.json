@@ -18,9 +18,7 @@
   "type": "request",
   "listeners": ["broker"],
   "name": "StreamsGroupDescribeRequest",
-  // Version 1 adds IncludeTopologyDescription (KIP-1331). Marked unstable until the broker
-  // topology-description manager lands; flip to false before release.
-  "latestVersionUnstable": true,
+  // Version 1 adds IncludeTopologyDescription (KIP-1331).
   "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [

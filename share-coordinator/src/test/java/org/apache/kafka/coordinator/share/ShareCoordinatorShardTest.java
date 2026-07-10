@@ -411,7 +411,7 @@ class ShareCoordinatorShardTest {
     }
 
     @Test
-    public void testWriteStateInvalidRequestData() {
+    public void testWriteStateInvalidPartitionRequestData() {
         int partition = -1;
 
         WriteShareGroupStateRequestData request = new WriteShareGroupStateRequestData()
@@ -434,6 +434,72 @@ class ShareCoordinatorShardTest {
 
         WriteShareGroupStateResponseData expectedData = WriteShareGroupStateResponse.toErrorResponseData(
             TOPIC_ID, partition, Errors.INVALID_REQUEST, ShareCoordinatorShard.NEGATIVE_PARTITION_ID.getMessage());
+        List<CoordinatorRecord> expectedRecords = List.of();
+
+        assertEquals(expectedData, result.response());
+        assertEquals(expectedRecords, result.records());
+
+        assertNull(shard.getShareStateMapValue(SHARE_PARTITION_KEY));
+        assertNull(shard.getLeaderMapValue(SHARE_PARTITION_KEY));
+    }
+
+    @Test
+    public void testWriteStateInvalidLeaderEpochRequestData() {
+        int leaderEpoch = -1;
+
+        WriteShareGroupStateRequestData request = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(0)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
+                    .setStateEpoch(0)
+                    .setLeaderEpoch(leaderEpoch)
+                    .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
+                        .setFirstOffset(0)
+                        .setLastOffset(10)
+                        .setDeliveryCount((short) 1)
+                        .setDeliveryState((byte) 0)))))));
+
+        CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> result = shard.writeState(request);
+
+        WriteShareGroupStateResponseData expectedData = WriteShareGroupStateResponse.toErrorResponseData(
+            TOPIC_ID, 0, Errors.INVALID_REQUEST, ShareCoordinatorShard.NEGATIVE_LEADER_EPOCH.getMessage());
+        List<CoordinatorRecord> expectedRecords = List.of();
+
+        assertEquals(expectedData, result.response());
+        assertEquals(expectedRecords, result.records());
+
+        assertNull(shard.getShareStateMapValue(SHARE_PARTITION_KEY));
+        assertNull(shard.getLeaderMapValue(SHARE_PARTITION_KEY));
+    }
+
+    @Test
+    public void testWriteStateInvalidStateEpochRequestData() {
+        int stateEpoch = -1;
+
+        WriteShareGroupStateRequestData request = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(0)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
+                    .setStateEpoch(stateEpoch)
+                    .setLeaderEpoch(0)
+                    .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
+                        .setFirstOffset(0)
+                        .setLastOffset(10)
+                        .setDeliveryCount((short) 1)
+                        .setDeliveryState((byte) 0)))))));
+
+        CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> result = shard.writeState(request);
+
+        WriteShareGroupStateResponseData expectedData = WriteShareGroupStateResponse.toErrorResponseData(
+            TOPIC_ID, 0, Errors.INVALID_REQUEST, ShareCoordinatorShard.NEGATIVE_STATE_EPOCH.getMessage());
         List<CoordinatorRecord> expectedRecords = List.of();
 
         assertEquals(expectedData, result.response());
@@ -1000,12 +1066,12 @@ class ShareCoordinatorShardTest {
                 .setTopicId(TOPIC_ID)
                 .setPartitions(List.of(new ReadShareGroupStateRequestData.PartitionData()
                     .setPartition(PARTITION)
-                    .setLeaderEpoch(-1)
+                    .setLeaderEpoch(2)
                 ))));
 
         CoordinatorResult<ReadShareGroupStateResponseData, CoordinatorRecord> result2 = shard.readStateAndMaybeUpdateLeaderEpoch(request2);
 
-        assertTrue(result2.records().isEmpty());    // Leader epoch -1 - no update.
+        assertTrue(result2.records().isEmpty());    // Leader epoch same - no update.
         assertEquals(Errors.NONE.code(), result2.response().results().get(0).partitions().get(0).errorCode());
         assertEquals(2, shard.getLeaderMapValue(SHARE_PARTITION_KEY));
 
@@ -1015,7 +1081,7 @@ class ShareCoordinatorShardTest {
                 .setTopicId(TOPIC_ID)
                 .setPartitions(List.of(new ReadShareGroupStateRequestData.PartitionData()
                     .setPartition(PARTITION)
-                    .setLeaderEpoch(-1)
+                    .setLeaderEpoch(2)
                 ))));
 
         CoordinatorResult<ReadShareGroupStateResponseData, CoordinatorRecord> result3 = shard.readStateAndMaybeUpdateLeaderEpoch(request3);
@@ -1024,6 +1090,29 @@ class ShareCoordinatorShardTest {
         assertEquals(Errors.NONE.code(), result3.response().results().get(0).partitions().get(0).errorCode());
         assertEquals(2, shard.getLeaderMapValue(SHARE_PARTITION_KEY));
         verify(shard.getMetricsShard()).record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_SENSOR_NAME);
+    }
+
+    @Test
+    public void testReadStateNegativeLeaderEpochDisallowed() {
+        ReadShareGroupStateRequestData request1 = new ReadShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new ReadShareGroupStateRequestData.ReadStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new ReadShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setLeaderEpoch(-1)
+                ))));
+
+        CoordinatorResult<ReadShareGroupStateResponseData, CoordinatorRecord> result = shard.readStateAndMaybeUpdateLeaderEpoch(request1);
+        short errCode = result.response().results().get(0).partitions().get(0).errorCode();
+        String errMessage = result.response().results().get(0).partitions().get(0).errorMessage();
+
+        assertEquals(Errors.INVALID_REQUEST.code(), errCode);
+        assertEquals(ShareCoordinatorShard.NEGATIVE_LEADER_EPOCH.getMessage(), errMessage);
+        assertTrue(result.records().isEmpty());    // Record not generated.
+
+        assertNull(shard.getLeaderMapValue(SHARE_PARTITION_KEY));
+        verify(shard.getMetricsShard(), times(0)).record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_SENSOR_NAME);
     }
 
     @Test
@@ -1289,6 +1378,32 @@ class ShareCoordinatorShardTest {
         expectedData = InitializeShareGroupStateResponse.toErrorResponseData(
             TOPIC_ID, partition, Errors.FENCED_STATE_EPOCH, Errors.FENCED_STATE_EPOCH.exception().getMessage());
         expectedRecords = List.of();
+
+        assertEquals(expectedData, result.response());
+        assertEquals(expectedRecords, result.records());
+    }
+
+    @Test
+    public void testInitializeStateInvalidStateEpochRequestData() {
+        // invalid stateEpoch
+        int stateEpoch = -1;
+
+        InitializeShareGroupStateRequestData request = new InitializeShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new InitializeShareGroupStateRequestData.InitializeStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new InitializeShareGroupStateRequestData.PartitionData()
+                    .setPartition(0)
+                    .setStateEpoch(stateEpoch)
+                    .setStartOffset(1)
+                ))
+            ));
+
+        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> result = shard.initializeState(request);
+
+        InitializeShareGroupStateResponseData expectedData = InitializeShareGroupStateResponse.toErrorResponseData(
+            TOPIC_ID, 0, Errors.INVALID_REQUEST, ShareCoordinatorShard.NEGATIVE_STATE_EPOCH.getMessage());
+        List<CoordinatorRecord> expectedRecords = List.of();
 
         assertEquals(expectedData, result.response());
         assertEquals(expectedRecords, result.records());

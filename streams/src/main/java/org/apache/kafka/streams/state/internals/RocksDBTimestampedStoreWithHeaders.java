@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
@@ -199,6 +200,14 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
     public <R> QueryResult<R> query(final Query<R> query,
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
+        // KIP-1356 (point query only): the headers-aware TimestampedKeyWithHeadersQuery forwards a raw
+        // KeyQuery to this native store, so enable KeyQuery via the inherited RocksDBStore handling.
+        // Every other query type (e.g. RangeQuery) stays UNKNOWN_QUERY_TYPE here, unchanged from before;
+        // those are enabled by their own KIP-1356 follow-ups.
+        if (query instanceof KeyQuery) {
+            return super.query(query, positionBound, config);
+        }
+
         final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
         final QueryResult<R> result;
 
