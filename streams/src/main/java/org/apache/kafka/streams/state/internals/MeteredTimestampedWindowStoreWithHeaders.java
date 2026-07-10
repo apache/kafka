@@ -353,14 +353,14 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
     @Override
     public ReadOnlyWindowStore<K, ValueTimestampHeaders<V>> readOnly(final IsolationLevel isolationLevel) {
         Objects.requireNonNull(isolationLevel, "isolationLevel cannot be null");
-        return new HeadersReadOnlyView(wrapped().readOnly(isolationLevel));
+        return new ReadOnlyHeadersView(wrapped().readOnly(isolationLevel));
     }
 
-    private final class HeadersReadOnlyView implements ReadOnlyWindowStore<K, ValueTimestampHeaders<V>> {
+    private final class ReadOnlyHeadersView implements ReadOnlyWindowStore<K, ValueTimestampHeaders<V>> {
 
         private final ReadOnlyWindowStore<Bytes, byte[]> underlying;
 
-        HeadersReadOnlyView(final ReadOnlyWindowStore<Bytes, byte[]> underlying) {
+        ReadOnlyHeadersView(final ReadOnlyWindowStore<Bytes, byte[]> underlying) {
             this.underlying = underlying;
         }
 

@@ -365,14 +365,14 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
     @Override
     public ReadOnlySessionStore<K, AggregationWithHeaders<AGG>> readOnly(final IsolationLevel isolationLevel) {
         Objects.requireNonNull(isolationLevel, "isolationLevel cannot be null");
-        return new HeadersReadOnlyView(wrapped().readOnly(isolationLevel));
+        return new ReadOnlyHeadersView(wrapped().readOnly(isolationLevel));
     }
 
-    private final class HeadersReadOnlyView implements ReadOnlySessionStore<K, AggregationWithHeaders<AGG>> {
+    private final class ReadOnlyHeadersView implements ReadOnlySessionStore<K, AggregationWithHeaders<AGG>> {
 
         private final ReadOnlySessionStore<Bytes, byte[]> underlying;
 
-        HeadersReadOnlyView(final ReadOnlySessionStore<Bytes, byte[]> underlying) {
+        ReadOnlyHeadersView(final ReadOnlySessionStore<Bytes, byte[]> underlying) {
             this.underlying = underlying;
         }
 
