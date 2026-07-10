@@ -37,6 +37,12 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.TimestampedRangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -450,6 +456,56 @@ public class MeteredTimestampedKeyValueStoreTest {
 
         assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
     }
+
+    @Test
+    public void shouldTrackOpenIteratorsMetricForRangeQuery() {
+        assertTracksOpenIteratorsMetricForQuery(
+            RangeQuery.<String, String>withNoBounds()
+        );
+    }
+
+    @Test
+    public void shouldTrackOpenIteratorsMetricForTimestampedRangeQuery() {
+        assertTracksOpenIteratorsMetricForQuery(
+            TimestampedRangeQuery.<String, String>withNoBounds()
+        );
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private void assertTracksOpenIteratorsMetricForQuery(final Query<?> query) {
+        setUp();
+
+        final QueryResult<KeyValueIterator<Bytes, byte[]>> rawResult =
+            QueryResult.forResult(KeyValueIterators.emptyIterator());
+
+        when(inner.query(
+            any(),
+            any(PositionBound.class),
+            any(QueryConfig.class)
+        )).thenReturn((QueryResult) rawResult);
+
+        init();
+
+        final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
+        assertThat(openIteratorsMetric, not(nullValue()));
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+
+        final QueryResult<?> result = metered.query(
+            query,
+            PositionBound.unbounded(),
+            new QueryConfig(false)
+        );
+
+        assertTrue(result.isSuccess());
+
+        try (final KeyValueIterator<?, ?> unused =
+                (KeyValueIterator<?, ?>) result.getResult()) {
+            assertThat((Long) openIteratorsMetric.metricValue(), equalTo(1L));
+        }
+
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+    }
+    
 
     @SuppressWarnings("unused")
     @Test
