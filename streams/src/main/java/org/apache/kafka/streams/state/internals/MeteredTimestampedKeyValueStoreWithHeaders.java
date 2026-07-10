@@ -653,13 +653,49 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         return new MeteredTimestampedKeyValueStoreWithHeadersIterator(store.reverseAll(), allSensor);
     }
 
-    @SuppressWarnings("unchecked")
-    private class MeteredTimestampedKeyValueStoreWithHeadersQueryIterator implements KeyValueIterator<K, V>, MeteredIterator {
+    /**
+     * Shared scaffolding for the metered iterators below: tracks {@code num-open-iterators},
+     * {@code oldest-iterator-open-since-ms}, and per-operation iterator duration, and delegates
+     * closing the wrapped raw iterator. Subclasses only need to implement the deserializing
+     * {@code next()}/{@code hasNext()} (and, where applicable, {@code peekNextKey()}).
+     */
+    private abstract class AbstractMeteredIterator implements MeteredIterator {
 
-        private final KeyValueIterator<Bytes, byte[]> iter;
+        final KeyValueIterator<Bytes, byte[]> iter;
         private final Sensor sensor;
         private final long startNs;
         private final long startTimestampMs;
+
+        AbstractMeteredIterator(final KeyValueIterator<Bytes, byte[]> iter, final Sensor sensor) {
+            this.iter = iter;
+            this.sensor = sensor;
+            this.startNs = time.nanoseconds();
+            this.startTimestampMs = time.milliseconds();
+            numOpenIterators.increment();
+            openIterators.add(this);
+        }
+
+        @Override
+        public long startTimestamp() {
+            return startTimestampMs;
+        }
+
+        public void close() {
+            try {
+                iter.close();
+            } finally {
+                final long duration = time.nanoseconds() - startNs;
+                sensor.record(duration);
+                iteratorDurationSensor.record(duration);
+                numOpenIterators.decrement();
+                openIterators.remove(this);
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private class MeteredTimestampedKeyValueStoreWithHeadersQueryIterator extends AbstractMeteredIterator implements KeyValueIterator<K, V> {
+
         private final Function<byte[], ValueTimestampHeaders<V>> valueTimestampHeadersDeserializer;
 
         private final boolean returnPlainValue;
@@ -671,19 +707,9 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             final Function<byte[], ValueTimestampHeaders<V>> valueTimestampHeadersDeserializer,
             final boolean returnPlainValue
         ) {
-            this.iter = iter;
-            this.sensor = sensor;
+            super(iter, sensor);
             this.valueTimestampHeadersDeserializer = valueTimestampHeadersDeserializer;
-            this.startNs = time.nanoseconds();
-            this.startTimestampMs = time.milliseconds();
             this.returnPlainValue = returnPlainValue;
-            numOpenIterators.increment();
-            openIterators.add(this);
-        }
-
-        @Override
-        public long startTimestamp() {
-            return startTimestampMs;
         }
 
         @Override
@@ -715,19 +741,6 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         }
 
         @Override
-        public void close() {
-            try {
-                iter.close();
-            } finally {
-                final long duration = time.nanoseconds() - startNs;
-                sensor.record(duration);
-                iteratorDurationSensor.record(duration);
-                numOpenIterators.decrement();
-                openIterators.remove(this);
-            }
-        }
-
-        @Override
         public K peekNextKey() {
             if (cachedNext == null) {
                 cachedNext = next();
@@ -753,14 +766,15 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
      * because a lazily-evaluated range has already returned a successful {@link QueryResult} before any
      * entry is read, such an entry cannot be surfaced as a query-level failure; it is instead reported
      * by throwing a {@link StreamsException} while advancing the iterator.
+     *
+     * <p>That throw does not close the iterator: a caller that catches it and abandons the iterator
+     * leaks the underlying raw iterator and permanently inflates {@code num-open-iterators}. Callers
+     * must close this iterator in a {@code finally} block or a try-with-resources statement, even when
+     * {@code next()} throws.
      */
     private class MeteredTimestampedKeyValueStoreWithHeadersReadOnlyRecordIterator
-        implements ReadOnlyRecordIterator<K, V>, MeteredIterator {
+        extends AbstractMeteredIterator implements ReadOnlyRecordIterator<K, V> {
 
-        private final KeyValueIterator<Bytes, byte[]> iter;
-        private final Sensor sensor;
-        private final long startNs;
-        private final long startTimestampMs;
         private final Function<byte[], ValueTimestampHeaders<V>> valueTimestampHeadersDeserializer;
 
         private MeteredTimestampedKeyValueStoreWithHeadersReadOnlyRecordIterator(
@@ -768,18 +782,8 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             final Sensor sensor,
             final Function<byte[], ValueTimestampHeaders<V>> valueTimestampHeadersDeserializer
         ) {
-            this.iter = iter;
-            this.sensor = sensor;
+            super(iter, sensor);
             this.valueTimestampHeadersDeserializer = valueTimestampHeadersDeserializer;
-            this.startNs = time.nanoseconds();
-            this.startTimestampMs = time.milliseconds();
-            numOpenIterators.increment();
-            openIterators.add(this);
-        }
-
-        @Override
-        public long startTimestamp() {
-            return startTimestampMs;
         }
 
         @Override
@@ -806,43 +810,18 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             ((RecordHeaders) record.headers()).setReadOnly();
             return record;
         }
-
-        @Override
-        public void close() {
-            try {
-                iter.close();
-            } finally {
-                final long duration = time.nanoseconds() - startNs;
-                sensor.record(duration);
-                iteratorDurationSensor.record(duration);
-                numOpenIterators.decrement();
-                openIterators.remove(this);
-            }
-        }
     }
 
-    private class MeteredTimestampedKeyValueStoreWithHeadersIterator implements KeyValueIterator<K, ValueTimestampHeaders<V>>, MeteredIterator {
-        private final KeyValueIterator<Bytes, byte[]> iter;
-        private final Sensor sensor;
-        private final long startNs;
-        private final long startTimestampMs;
+    private class MeteredTimestampedKeyValueStoreWithHeadersIterator
+        extends AbstractMeteredIterator implements KeyValueIterator<K, ValueTimestampHeaders<V>> {
+
         private KeyValue<K, ValueTimestampHeaders<V>> cachedNext;
 
         private MeteredTimestampedKeyValueStoreWithHeadersIterator(
             final KeyValueIterator<Bytes, byte[]> iter,
             final Sensor sensor
         ) {
-            this.iter = iter;
-            this.sensor = sensor;
-            this.startNs = time.nanoseconds();
-            this.startTimestampMs = time.milliseconds();
-            numOpenIterators.increment();
-            openIterators.add(this);
-        }
-
-        @Override
-        public long startTimestamp() {
-            return startTimestampMs;
+            super(iter, sensor);
         }
 
         @Override
@@ -862,19 +841,6 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             final ValueTimestampHeaders<V> valueTimestampHeaders = deserializeValue(keyValue.value);
             final K key = deserializeKey(keyValue.key.get(), valueTimestampHeaders.headers());
             return KeyValue.pair(key, valueTimestampHeaders);
-        }
-
-        @Override
-        public void close() {
-            try {
-                iter.close();
-            } finally {
-                final long duration = time.nanoseconds() - startNs;
-                sensor.record(duration);
-                iteratorDurationSensor.record(duration);
-                numOpenIterators.decrement();
-                openIterators.remove(this);
-            }
         }
 
         @Override
