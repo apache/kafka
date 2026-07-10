@@ -240,7 +240,7 @@ public final class KRaftControlRecordStateMachine {
             );
             try (RecordsIterator<?> iterator = new RecordsIterator<>(
                     info.records,
-                    serde,
+                    new ControlOnlyDecodingStrategy<>(),
                     bufferSupplier,
                     maxBatchSizeBytes,
                     true, // Validate batch CRC

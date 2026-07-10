@@ -22,6 +22,7 @@ import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.Batch;
+import org.apache.kafka.raft.internals.ControlAndDataDecodingStrategy;
 import org.apache.kafka.raft.internals.RecordsIterator;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.serialization.RecordSerde;
@@ -118,7 +119,14 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
     ) {
         return new RecordsSnapshotReader<>(
             snapshot.snapshotId(),
-            new RecordsIterator<>(snapshot.records(), serde, bufferSupplier, maxBatchSize, doCrcValidation, logContext)
+            new RecordsIterator<>(
+                snapshot.records(),
+                new ControlAndDataDecodingStrategy<>(serde),
+                bufferSupplier,
+                maxBatchSize,
+                doCrcValidation,
+                logContext
+            )
         );
     }
 

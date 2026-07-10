@@ -326,7 +326,7 @@ public final class RecordsIteratorTest {
     ) {
         return new RecordsIterator<>(
             records,
-            STRING_SERDE,
+            new ControlAndDataDecodingStrategy<>(STRING_SERDE),
             bufferSupplier,
             Records.HEADER_SIZE_UP_TO_MAGIC,
             validateCrc,
