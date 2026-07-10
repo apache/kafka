@@ -38,7 +38,6 @@ import java.util.Properties;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Contract tests for {@link TimestampedKeyValueStoreWithHeaders}.
@@ -188,7 +187,7 @@ public class TimestampedKeyValueStoreWithHeadersContractTest {
         final ValueTimestampHeaders<String> result = store.get("k");
         assertEquals("v", result.value());
         assertEquals(new RecordHeaders(), result.headers());
-        assertTrue(result.headers().toArray().length == 0);
+        assertEquals(0, result.headers().toArray().length);
     }
 
     private static Headers headersWith(final String key, final String value) {

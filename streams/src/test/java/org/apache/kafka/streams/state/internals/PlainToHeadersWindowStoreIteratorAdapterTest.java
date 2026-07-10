@@ -84,6 +84,16 @@ public class PlainToHeadersWindowStoreIteratorAdapterTest {
     }
 
     @Test
+    public void shouldReturnNullWhenInnerKeyValueIsNull() {
+        when(innerIterator.next()).thenReturn(null);
+
+        final PlainToHeadersWindowStoreIteratorAdapter adapter =
+            new PlainToHeadersWindowStoreIteratorAdapter(innerIterator);
+
+        assertNull(adapter.next());
+    }
+
+    @Test
     public void shouldDelegatePeekNextKey() {
         when(innerIterator.peekNextKey()).thenReturn(100L);
 

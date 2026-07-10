@@ -41,7 +41,6 @@ import java.util.Properties;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Contract tests for {@link SessionStoreWithHeaders}.
@@ -208,7 +207,7 @@ public class SessionStoreWithHeadersContractTest {
         final AggregationWithHeaders<String> result = store.fetchSession("k", 100L, 200L);
         assertEquals("agg", result.aggregation());
         assertEquals(new RecordHeaders(), result.headers());
-        assertTrue(result.headers().toArray().length == 0);
+        assertEquals(0, result.headers().toArray().length);
     }
 
     private static Windowed<String> windowed(final String key, final long start, final long end) {
