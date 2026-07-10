@@ -317,11 +317,10 @@ public final class TopologyConfig extends AbstractConfig {
 
     private int configureMaxBufferedSize() {
         final boolean bufferedRecordsPerPartitionOverridden = isTopologyOverride(BUFFERED_RECORDS_PER_PARTITION_CONFIG, topologyOverrides);
-        // a global input.buffer.max.bytes setting also locks out the legacy per-topology override,
-        // since the user has explicitly opted into the bytes path app-wide.
-        final boolean inputBufferMaxBytesOverridden =
-            isTopologyOverride(INPUT_BUFFER_MAX_BYTES_CONFIG, topologyOverrides)
-                || globalAppConfigs.originals().containsKey(INPUT_BUFFER_MAX_BYTES_CONFIG);
+        // A topology-level override is the strongest signal of intent, so we let it win locally; the
+        // thread-wide bytes guard still bounds memory globally. We deliberately do NOT lock this out
+        // based on a global input.buffer.max.bytes value (which could just be the documented default).
+        final boolean inputBufferMaxBytesOverridden = isTopologyOverride(INPUT_BUFFER_MAX_BYTES_CONFIG, topologyOverrides);
 
         if (!bufferedRecordsPerPartitionOverridden && !inputBufferMaxBytesOverridden) {
             return getBufferedRecordsPerPartition(globalAppConfigs);
@@ -333,7 +332,7 @@ public final class TopologyConfig extends AbstractConfig {
     private int setMaxBufferedRecordsPerPartition(final boolean bufferedRecordsPerPartitionOverridden,
                                                   final boolean inputBufferMaxBytesOverridden) {
         if (bufferedRecordsPerPartitionOverridden && inputBufferMaxBytesOverridden) {
-            log.info("Topology {} is using both deprecated config {} and new config {}, hence {} is ignored and the new config {} is used to keep memory usage under control.",
+            log.warn("Topology {} overrides both deprecated config {} and new config {}; {} is ignored and {} is used to keep memory usage under control.",
                 topologyName,
                 BUFFERED_RECORDS_PER_PARTITION_CONFIG,
                 INPUT_BUFFER_MAX_BYTES_CONFIG,
@@ -342,7 +341,7 @@ public final class TopologyConfig extends AbstractConfig {
             return UNDEFINED_MAX_BUFFERED_SIZE;
         }
         if (bufferedRecordsPerPartitionOverridden) {
-            log.warn("Topology {} is using deprecated config {}, and will be used to set max buffered size; we suggest setting the new config {} instead as deprecated {} would be removed in the future.",
+            log.warn("Topology {} overrides deprecated config {} which will be used to set max buffered size; we suggest setting {} instead as {} will be removed in the future.",
                 topologyName,
                 BUFFERED_RECORDS_PER_PARTITION_CONFIG,
                 INPUT_BUFFER_MAX_BYTES_CONFIG,
