@@ -252,6 +252,7 @@ public class KafkaStreamsTest {
                 any(StreamsMetadataState.class),
                 anyLong(),
                 anyLong(),
+                anyLong(),
                 any(StateDirectory.class),
                 any(StateRestoreListener.class),
                 any(StandbyUpdateListener.class),
