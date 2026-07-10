@@ -149,6 +149,10 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         return interBrokerListenerNameAndSecurityProtocol().getValue();
     }
 
+    public String saslMechanismInterBrokerProtocol() {
+        return getString(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG);
+    }
+
     public int initialRegistrationTimeoutMs() {
         return getInt(KRaftConfigs.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG);
     }
