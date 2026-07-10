@@ -57,10 +57,22 @@ jobs:
       - name: Setup Python
         uses: ./.github/actions/setup-python
 
-      - name: Checkout baseline branch
+      # The baseline lives on the benchmark-results orphan branch, which does not exist until the
+      # first Mode B (trunk) run. Probe for it so a missing branch is a clean skip rather than a
+      # failed checkout — actions/checkout hard-fails and retries on a non-existent ref.
+      - name: Check for existing baseline branch
         id: baseline
+        run: |
+          if git ls-remote --exit-code --heads origin benchmark-results >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false (first run — compare will soft-pass with no baseline)"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout baseline branch
+        if: steps.baseline.outputs.exists == 'true'
         uses: actions/checkout@v5
-        continue-on-error: true       # branch may not exist before the first Mode B run
         with:
           ref: benchmark-results
           path: baseline
@@ -73,10 +85,12 @@ jobs:
       # 5 forks SingleShot; LeaderBenchmarks: 3 forks AverageTime) rather than overriding to -f 1,
       # which would remove JMH's fork-variance defense. -prof gc adds gc.alloc.rate.norm (bytes/op).
       # NOTE: build.gradle splits jmhArgs on spaces, so every token here must be space-free.
+      # -rff uses an absolute path because the jmh JavaExec task runs in the jmh-benchmarks/
+      # subproject dir, so a relative path would land the file there instead of the workspace root.
       - name: Run raft JMH benchmarks
         run: >-
           ./gradlew :jmh-benchmarks:jmh
-          -DjmhArgs="-rf json -rff jmh-result.json -foe true -prof gc -jvmArgsAppend -Xmx2g org.apache.kafka.jmh.raft"
+          -DjmhArgs="-rf json -rff $GITHUB_WORKSPACE/jmh-result.json -foe true -prof gc -jvmArgsAppend -Xmx2g org.apache.kafka.jmh.raft"
 
       - name: Upload JMH result
         uses: actions/upload-artifact@v4
