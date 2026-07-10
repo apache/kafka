@@ -1462,6 +1462,10 @@ project(':metadata') {
     implementation project(':server-common')
     implementation project(':clients')
     implementation project(':raft')
+    // commons-io is a transitive dependency not needed by SubnetUtils/SubnetUtils6
+    implementation(libs.commonsNet) {
+      exclude group: 'commons-io', module: 'commons-io'
+    }
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
     implementation libs.metrics
