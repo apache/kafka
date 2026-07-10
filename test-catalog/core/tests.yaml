@@ -2370,6 +2370,7 @@ kafka.server.metadata.ClientQuotaMetadataManagerTest:
 - testHandleIpQuota
 - testTransferToClientQuotaEntity
 kafka.server.share.DelayedShareFetchTest:
+- testAsyncReadExceptionReleasesLocks
 - testCombineLogReadResponse
 - testDelayedShareFetchTryCompleteReturnsFalseDueToNonAcquirablePartitions
 - testDelayedShareFetchTryCompleteReturnsTrue
@@ -2380,6 +2381,8 @@ kafka.server.share.DelayedShareFetchTest:
 - testLocksReleasedAcquireException
 - testLocksReleasedForCompletedFetch
 - testOnCompleteExecutionOnTimeout
+- testOnCompleteWithCompletedAsyncFetch
+- testOnCompleteWithPendingAsyncFetch
 - testPartitionMaxBytesFromUniformStrategyInCombineLogReadResponse
 - testPartitionMaxBytesFromUniformStrategyWhenAllPartitionsAreAcquirable
 - testPartitionMaxBytesFromUniformStrategyWhenFewPartitionsAreAcquirable
