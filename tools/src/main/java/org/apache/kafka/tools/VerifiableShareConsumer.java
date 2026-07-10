@@ -118,6 +118,10 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
     private final List<AcknowledgeType> ackPattern;
     private final Map<TopicPartition, Map<Long, AcknowledgeType>> pendingAckTypes = new HashMap<>();
+    // Tracks, per offset, which ackPattern index to apply next. Only advances past a RENEW (RENEW
+    // re-delivers the same record), so non-renewed offsets keep resolving to their original
+    // (offset % ackPattern.size()) entry, e.g. a RELEASE keeps being re-applied on every redelivery.
+    private final Map<TopicPartition, Map<Long, Integer>> ackPatternIndex = new HashMap<>();
 
     public static class PartitionData {
         private final String topic;
@@ -410,9 +414,18 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
                 partitionOffsets.add(record.offset());
 
                 if (!ackPattern.isEmpty()) {
-                    AcknowledgeType type = ackPattern.get((int) (record.offset() % ackPattern.size()));
+                    Map<Long, Integer> partitionIndex = ackPatternIndex.computeIfAbsent(tp, k -> new HashMap<>());
+                    int index = partitionIndex.computeIfAbsent(record.offset(),
+                        offset -> (int) (offset % ackPattern.size()));
+                    AcknowledgeType type = ackPattern.get(index);
                     consumer.acknowledge(record, type);
                     pendingAckTypes.computeIfAbsent(tp, k -> new HashMap<>()).put(record.offset(), type);
+                    if (type == AcknowledgeType.RENEW) {
+                        // RENEW re-delivers the same record; advance to the next pattern entry so a
+                        // subsequent delivery resolves to a different (eventually terminal) type
+                        // instead of renewing the same offset indefinitely.
+                        partitionIndex.put(record.offset(), (index + 1) % ackPattern.size());
+                    }
                 }
             }
 
@@ -442,10 +455,21 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
                 TopicPartition topicPartition = new TopicPartition(tp.topic(), tp.partition());
                 Map<Long, AcknowledgeType> offsetTypes = pendingAckTypes.get(topicPartition);
                 if (offsetTypes != null) {
-                    for (Long offset : offsetEntry.getValue()) {
+                    for (long offset : offsetEntry.getValue()) {
                         AcknowledgeType type = offsetTypes.remove(offset);
                         if (type != null) {
                             ackTypeCounts.merge(type.name(), 1L, Long::sum);
+                            if (type != AcknowledgeType.RENEW) {
+                                // Terminal (or about-to-be-redelivered-unchanged, e.g. RELEASE) outcome:
+                                // no future delivery of this offset needs an advanced pattern index.
+                                Map<Long, Integer> partitionIndex = ackPatternIndex.get(topicPartition);
+                                if (partitionIndex != null) {
+                                    partitionIndex.remove(offset);
+                                    if (partitionIndex.isEmpty()) {
+                                        ackPatternIndex.remove(topicPartition);
+                                    }
+                                }
+                            }
                         }
                     }
                     if (offsetTypes.isEmpty()) {
@@ -620,10 +644,12 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             .dest("ackPattern")
             .metavar("ACK-PATTERN")
             .help("Comma-separated cycle of accept|release|reject|renew applied to each consumed record " +
-                "via AcknowledgeType, selected by (record offset % pattern length). When set, the share " +
-                "consumer is switched to explicit acknowledgement mode and requires --acknowledgement-mode " +
-                "to be 'sync' or 'async'. When empty (the default), acknowledgement is implicit via commit " +
-                "(existing behavior, unchanged).");
+                "via AcknowledgeType, selected by (record offset % pattern length). RENEW re-delivers the " +
+                "same record, so its next delivery advances to the following pattern entry instead of " +
+                "renewing again (a pattern of only 'renew' is rejected, since it could never resolve). " +
+                "When set, the share consumer is switched to explicit acknowledgement mode and requires " +
+                "--acknowledgement-mode to be 'sync' or 'async'. When empty (the default), acknowledgement " +
+                "is implicit via commit (existing behavior, unchanged).");
 
         parser.addArgument("--offset-reset-strategy")
             .action(store())
@@ -670,6 +696,11 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             if (acknowledgementMode == AcknowledgementMode.AUTO) {
                 throw new ArgumentParserException(
                     "--ack-pattern requires --acknowledgement-mode to be 'sync' or 'async', not 'auto'", parser);
+            }
+            if (ackPattern.stream().allMatch(type -> type == AcknowledgeType.RENEW)) {
+                throw new ArgumentParserException(
+                    "--ack-pattern must contain at least one non-RENEW type; a pattern of only 'renew' " +
+                        "would re-deliver every record indefinitely without ever resolving it", parser);
             }
         }
 
