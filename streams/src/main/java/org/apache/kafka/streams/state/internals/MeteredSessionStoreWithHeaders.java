@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
@@ -35,6 +36,7 @@ import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.SessionStoreWithHeaders;
 
@@ -358,6 +360,101 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
             );
         }
         return queryResult;
+    }
+
+    @Override
+    public ReadOnlySessionStore<K, AggregationWithHeaders<AGG>> readOnly(final IsolationLevel isolationLevel) {
+        Objects.requireNonNull(isolationLevel, "isolationLevel cannot be null");
+        return new HeadersReadOnlyView(wrapped().readOnly(isolationLevel));
+    }
+
+    private final class HeadersReadOnlyView implements ReadOnlySessionStore<K, AggregationWithHeaders<AGG>> {
+
+        private final ReadOnlySessionStore<Bytes, byte[]> underlying;
+
+        HeadersReadOnlyView(final ReadOnlySessionStore<Bytes, byte[]> underlying) {
+            this.underlying = underlying;
+        }
+
+        @Override
+        public AggregationWithHeaders<AGG> fetchSession(
+            final K key, final long earliestSessionEndTime, final long latestSessionStartTime) {
+            Objects.requireNonNull(key, "key cannot be null");
+            return maybeMeasureLatency(
+                () -> deserializeValue(underlying.fetchSession(
+                    serializeKey(key, internalContext.headers()), earliestSessionEndTime, latestSessionStartTime)),
+                time,
+                fetchSensor
+            );
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> fetch(final K key) {
+            Objects.requireNonNull(key, "key cannot be null");
+            return new MeteredSessionStoreWithHeadersIterator(underlying.fetch(serializeKey(key, internalContext.headers())));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFetch(final K key) {
+            Objects.requireNonNull(key, "key cannot be null");
+            return new MeteredSessionStoreWithHeadersIterator(underlying.backwardFetch(serializeKey(key, internalContext.headers())));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> fetch(final K keyFrom, final K keyTo) {
+            return new MeteredSessionStoreWithHeadersIterator(
+                underlying.fetch(serializeKey(keyFrom, internalContext.headers()), serializeKey(keyTo, internalContext.headers()))
+            );
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFetch(final K keyFrom, final K keyTo) {
+            return new MeteredSessionStoreWithHeadersIterator(
+                underlying.backwardFetch(serializeKey(keyFrom, internalContext.headers()), serializeKey(keyTo, internalContext.headers()))
+            );
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(
+            final K key, final long earliestSessionEndTime, final long latestSessionStartTime) {
+            Objects.requireNonNull(key, "key cannot be null");
+            return new MeteredSessionStoreWithHeadersIterator(
+                underlying.findSessions(serializeKey(key, internalContext.headers()), earliestSessionEndTime, latestSessionStartTime)
+            );
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFindSessions(
+            final K key, final long earliestSessionEndTime, final long latestSessionStartTime) {
+            Objects.requireNonNull(key, "key cannot be null");
+            return new MeteredSessionStoreWithHeadersIterator(
+                underlying.backwardFindSessions(serializeKey(key, internalContext.headers()), earliestSessionEndTime, latestSessionStartTime)
+            );
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(
+            final K keyFrom, final K keyTo, final long earliestSessionEndTime, final long latestSessionStartTime) {
+            return new MeteredSessionStoreWithHeadersIterator(
+                underlying.findSessions(
+                    serializeKey(keyFrom, internalContext.headers()),
+                    serializeKey(keyTo, internalContext.headers()),
+                    earliestSessionEndTime,
+                    latestSessionStartTime)
+            );
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFindSessions(
+            final K keyFrom, final K keyTo, final long earliestSessionEndTime, final long latestSessionStartTime) {
+            return new MeteredSessionStoreWithHeadersIterator(
+                underlying.backwardFindSessions(
+                    serializeKey(keyFrom, internalContext.headers()),
+                    serializeKey(keyTo, internalContext.headers()),
+                    earliestSessionEndTime,
+                    latestSessionStartTime)
+            );
+        }
     }
 
     private class MeteredSessionStoreWithHeadersIterator

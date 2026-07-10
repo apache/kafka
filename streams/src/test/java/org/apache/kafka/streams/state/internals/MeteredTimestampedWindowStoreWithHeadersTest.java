@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -39,6 +40,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -54,6 +56,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.time.Instant;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -482,6 +485,36 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
+        verify(keyDeserializer).deserialize(any(), eq(HEADERS), eq(KEY.getBytes()));
+    }
+
+    @Test
+    public void shouldUseHeadersFromValueToDeserializeKeyInReadOnlyFetchAll() {
+        setUp();
+
+        final Windowed<Bytes> windowedKey = new Windowed<>(KEY_BYTES, new TimeWindow(0, WINDOW_SIZE_MS));
+        final KeyValue<Windowed<Bytes>, byte[]> testData = KeyValue.pair(windowedKey, VALUE_TIMESTAMP_HEADERS_BYTES);
+
+        final ReadOnlyWindowStore<Bytes, byte[]> readOnlyInner = mock(ReadOnlyWindowStore.class);
+        when(innerStoreMock.readOnly(IsolationLevel.READ_COMMITTED)).thenReturn(readOnlyInner);
+        when(readOnlyInner.fetchAll(Instant.ofEpochMilli(0), Instant.ofEpochMilli(100)))
+            .thenReturn(new KeyValueIteratorStub<>(List.of(testData).iterator()));
+
+        store = createStoreWithMockSerdes();
+
+        final KeyValueIterator<Windowed<String>, ValueTimestampHeaders<String>> iterator =
+            store.readOnly(IsolationLevel.READ_COMMITTED).fetchAll(Instant.ofEpochMilli(0), Instant.ofEpochMilli(100));
+
+        assertTrue(iterator.hasNext());
+        assertEquals(KEY, iterator.peekNextKey().key());
+        final KeyValue<Windowed<String>, ValueTimestampHeaders<String>> result = iterator.next();
+
+        assertEquals(KEY, result.key.key());
+        assertEquals(VALUE_TIMESTAMP_HEADERS, result.value);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        // The critical verification: readOnly() must still use headers-aware deserialization order
         verify(keyDeserializer).deserialize(any(), eq(HEADERS), eq(KEY.getBytes()));
     }
 }
