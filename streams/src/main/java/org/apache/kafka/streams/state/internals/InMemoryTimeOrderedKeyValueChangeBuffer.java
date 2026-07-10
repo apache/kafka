@@ -36,6 +36,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.RecordQueue;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.Position;
@@ -447,11 +448,10 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
                 serializedValue
             );
 
-            return Maybe.defined(ValueTimestampHeaders.make(
-                deserializedValue,
-                bufferValue.context().timestamp(),
-                new RecordHeaders(bufferValue.context().headers())
-            ));
+            // it's unfortunately not possible to know this, unless we materialize the suppressed result, since our only
+            // knowledge of the prior value is what the upstream processor sends us as the "old value" when we first
+            // buffer something.
+            return Maybe.defined(ValueTimestampHeaders.make(deserializedValue, RecordQueue.UNKNOWN, new RecordHeaders()));
         } else {
             return Maybe.undefined();
         }
