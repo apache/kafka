@@ -606,18 +606,24 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldHandleRangeQuery(final boolean cachingEnabled) {
-        // KIP-1356: the native header store now serves RangeQuery (header-stripped results), matching
-        // the adapter build path (caching on or off).
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(StoreType.NATIVE, cachingEnabled);
+    @Test
+    public void shouldHandleRangeQuery() {
+        // KIP-1356: the native header store now serves RangeQuery (header-stripped results). A range
+        // query reads the underlying store directly (never the cache), so caching on/off makes no
+        // difference here; use a store-served (caching-disabled) build, matching the other range tests.
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(StoreType.NATIVE, false);
         try {
+            store.put("k", ValueTimestampHeaders.make("v", 123L, headersWith("h", "x")));
+
             final QueryResult<KeyValueIterator<String, String>> result =
                 store.query(RangeQuery.withNoBounds(), PositionBound.unbounded(), new QueryConfig(false));
             assertTrue(result.isSuccess(), "Expected RangeQuery to be handled on the native header store");
             try (KeyValueIterator<String, String> iterator = result.getResult()) {
-                assertFalse(iterator.hasNext(), "Expected empty result from an empty store");
+                assertTrue(iterator.hasNext(), "Expected the stored record to be returned");
+                final KeyValue<String, String> keyValue = iterator.next();
+                assertEquals("k", keyValue.key);
+                assertEquals("v", keyValue.value);
+                assertFalse(iterator.hasNext());
             }
             assertNotNull(result.getPosition(), "Expected position to be set");
         } finally {
@@ -700,8 +706,10 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
 
             assertTrue(result.isSuccess(), "The range query itself succeeds; the failure surfaces while iterating");
             try (ReadOnlyRecordIterator<String, String> iterator = result.getResult()) {
-                assertThrows(StreamsException.class, iterator::next,
+                final StreamsException exception = assertThrows(StreamsException.class, iterator::next,
                     "An entry with ts=-1 cannot be represented as a ReadOnlyRecord");
+                assertTrue(exception.getMessage().contains("timestamp"),
+                    "Expected exception message to mention the timestamp: " + exception.getMessage());
             }
         } finally {
             store.close();
@@ -722,7 +730,9 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
 
             assertTrue(result.isSuccess());
             try (ReadOnlyRecordIterator<String, String> iterator = result.getResult()) {
-                assertThrows(StreamsException.class, iterator::next);
+                final StreamsException exception = assertThrows(StreamsException.class, iterator::next);
+                assertTrue(exception.getMessage().contains("timestamp"),
+                    "Expected exception message to mention the timestamp: " + exception.getMessage());
             }
         } finally {
             store.close();
@@ -775,22 +785,36 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
     @Test
     public void shouldReturnIdenticalRangeResultsForNativeAndAdapterBuiltStores() {
         // Build-path parity for the existing (header-stripped) range query types. Range queries read the
-        // underlying store (never the cache), so use a store-served (caching-disabled) build.
-        final ValueTimestampHeaders<String> value = ValueTimestampHeaders.make("v", 123L, headersWith("h", "x"));
+        // underlying store (never the cache), so use a store-served (caching-disabled) build. Multiple
+        // keys pin that ordering (not just per-key equality) matches across both build paths.
         final TimestampedKeyValueStoreWithHeaders<String, String> nativeStore = buildAndInitStore(StoreType.NATIVE, false);
         final TimestampedKeyValueStoreWithHeaders<String, String> adapterStore = buildAndInitStore(StoreType.ADAPTER, false);
         try {
-            nativeStore.put("k", value);
-            adapterStore.put("k", value);
+            // Insert in a different order per store: a range result is sorted by key bytes, not insertion
+            // order, so if either build path were (incorrectly) insertion-order-dependent, the two stores
+            // would diverge here instead of accidentally matching.
+            for (final String key : List.of("a", "b", "c")) {
+                nativeStore.put(key, ValueTimestampHeaders.make("v-" + key, 123L, headersWith("h", "x")));
+            }
+            for (final String key : List.of("c", "b", "a")) {
+                adapterStore.put(key, ValueTimestampHeaders.make("v-" + key, 123L, headersWith("h", "x")));
+            }
 
-            assertEquals(
-                drain(nativeStore.query(RangeQuery.<String, String>withNoBounds(), PositionBound.unbounded(), new QueryConfig(false)).getResult()),
-                drain(adapterStore.query(RangeQuery.<String, String>withNoBounds(), PositionBound.unbounded(), new QueryConfig(false)).getResult()),
-                "RangeQuery results should be identical across native and adapter build paths");
-            assertEquals(
-                drain(nativeStore.query(TimestampedRangeQuery.<String, String>withNoBounds(), PositionBound.unbounded(), new QueryConfig(false)).getResult()),
-                drain(adapterStore.query(TimestampedRangeQuery.<String, String>withNoBounds(), PositionBound.unbounded(), new QueryConfig(false)).getResult()),
-                "TimestampedRangeQuery results should be identical across native and adapter build paths");
+            final List<KeyValue<String, String>> nativeRange =
+                drain(nativeStore.query(RangeQuery.<String, String>withNoBounds(), PositionBound.unbounded(), new QueryConfig(false)).getResult());
+            final List<KeyValue<String, String>> adapterRange =
+                drain(adapterStore.query(RangeQuery.<String, String>withNoBounds(), PositionBound.unbounded(), new QueryConfig(false)).getResult());
+            assertEquals(3, nativeRange.size(), "Expected all three keys to be returned");
+            assertEquals(nativeRange, adapterRange,
+                "RangeQuery results (including order) should be identical across native and adapter build paths");
+
+            final List<KeyValue<String, ValueAndTimestamp<String>>> nativeTimestampedRange =
+                drain(nativeStore.query(TimestampedRangeQuery.<String, String>withNoBounds(), PositionBound.unbounded(), new QueryConfig(false)).getResult());
+            final List<KeyValue<String, ValueAndTimestamp<String>>> adapterTimestampedRange =
+                drain(adapterStore.query(TimestampedRangeQuery.<String, String>withNoBounds(), PositionBound.unbounded(), new QueryConfig(false)).getResult());
+            assertEquals(3, nativeTimestampedRange.size(), "Expected all three keys to be returned");
+            assertEquals(nativeTimestampedRange, adapterTimestampedRange,
+                "TimestampedRangeQuery results (including order) should be identical across native and adapter build paths");
         } finally {
             nativeStore.close();
             adapterStore.close();
