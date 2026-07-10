@@ -32,7 +32,7 @@ package org.apache.kafka.streams.kstream;
 public interface ValueJoinerWithMappedAndStreamKey<K1, K2, V1, V2, VR> {
 
     /**
-     * Return a joined value consisting of {@code mappedKey}, {@code streamKey}, {@code value1} and {@code value2}.
+     * Return a joined value derived from {@code mappedKey}, {@code streamKey}, {@code value1} and {@code value2}.
      *
      * @param mappedKey the join key produced by the {@link KeyValueMapper} (i.e. the {@link GlobalKTable}
      *                  lookup key); may be {@code null} for a left-join when the mapper returns {@code null}.

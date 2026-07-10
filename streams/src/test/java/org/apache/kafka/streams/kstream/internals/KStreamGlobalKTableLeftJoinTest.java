@@ -164,6 +164,7 @@ public class KStreamGlobalKTableLeftJoinTest {
         inputTableTopic = driver.createInputTopic(globalTableTopic, new StringSerializer(), new StringSerializer());
     }
 
+    @SuppressWarnings("deprecation")
     private void initWithDeprecatedStreamKeyJoiner(
         final ValueJoinerWithKey<Integer, String, String, String> joiner) {
         driver.close();
