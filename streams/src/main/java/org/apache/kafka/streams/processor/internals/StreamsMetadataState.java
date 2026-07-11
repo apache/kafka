@@ -256,6 +256,7 @@ public class StreamsMetadataState {
                                                                     final StreamPartitioner<? super K, ?> partitioner) {
         Objects.requireNonNull(storeName, "storeName can't be null");
         Objects.requireNonNull(key, "key can't be null");
+        Objects.requireNonNull(headers, "headers can't be null");
         Objects.requireNonNull(partitioner, "partitioner can't be null");
         if (topologyMetadata.hasNamedTopologies()) {
             throw new IllegalArgumentException("Cannot invoke the keyQueryMetadataForKey(storeName, key, partitioner)"
@@ -293,9 +294,9 @@ public class StreamsMetadataState {
                                                                     final String topologyName) {
         Objects.requireNonNull(storeName, "storeName can't be null");
         Objects.requireNonNull(key, "key can't be null");
+        Objects.requireNonNull(headers, "headers can't be null");
         Objects.requireNonNull(partitioner, "partitioner can't be null");
         Objects.requireNonNull(topologyName, "topologyName can't be null");
-
 
         if (!isInitialized()) {
             return KeyQueryMetadata.NOT_AVAILABLE;

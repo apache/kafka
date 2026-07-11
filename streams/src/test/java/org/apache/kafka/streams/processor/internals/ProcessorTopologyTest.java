@@ -1074,13 +1074,7 @@ public class ProcessorTopologyTest {
     }
 
     private StreamPartitioner<String, String> constantPartitioner(final Integer partition) {
-        return new StreamPartitioner<>() {
-            @SuppressWarnings("removal")
-            @Override
-            public Optional<Set<Integer>> partitions(final String topic, final String key, final String value, final int numPartitions) {
-                return Optional.of(Collections.singleton(partition));
-            }
-        };
+        return (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(partition));
     }
 
     private Topology createSimpleTopology(final int partition) {

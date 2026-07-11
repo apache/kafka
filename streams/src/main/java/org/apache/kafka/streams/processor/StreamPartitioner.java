@@ -56,6 +56,10 @@ import java.util.Set;
 @InterfaceAudience.Public
 public interface StreamPartitioner<K, V> {
 
+    /**
+     * @deprecated Since 4.4. Use {@link #partitions(String, Object, Object, Headers, int)} instead.
+     * This method is planned to be removed in 5.0.
+     */
     @Deprecated(since = "4.4", forRemoval = true)
     Optional<Set<Integer>> partitions(String topic, K key, V value, int numPartitions);
 

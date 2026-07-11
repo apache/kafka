@@ -20,6 +20,8 @@ import org.apache.kafka.clients.producer.internals.BuiltInPartitioner;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.streams.kstream.TimeWindowedSerializer;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -86,7 +88,7 @@ public class WindowedStreamPartitionerTest {
     @Test
     public void testCopartitioningWithHeaders() {
         final Random rand = new Random();
-        final org.apache.kafka.common.header.Headers headers = new org.apache.kafka.common.header.internals.RecordHeaders();
+        final Headers headers = new RecordHeaders();
         headers.add("key", "value".getBytes());
 
         @SuppressWarnings("unchecked")
