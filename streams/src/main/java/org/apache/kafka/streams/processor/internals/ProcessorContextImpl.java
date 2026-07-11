@@ -41,9 +41,6 @@ import org.apache.kafka.streams.state.internals.PositionSerde;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -187,63 +184,62 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
     }
 
     /**
-     * Merge vector clock entries into raw serialized header bytes without deserializing
-     * existing headers. The raw format is [count(varint)][entry1][entry2]... or empty.
+     * Merge the two consistency vector-clock entries into raw serialized header bytes without
+     * deserializing the existing headers. The raw format is [count(varint)][entry1][entry2]...
+     * or empty.
+     * <p>
+     * This sits on the changelog hot path (once per record when consistency is enabled), so it
+     * writes directly into a single exactly-sized {@link ByteBuffer} rather than chaining
+     * {@code ByteArrayOutputStream}/{@code DataOutputStream} and intermediate copies.
      */
     private byte[] mergeVectorClockIntoRawHeaders(final byte[] rawHeaders, final Position position) {
-        try {
-            final ByteArrayOutputStream result = new ByteArrayOutputStream();
-            final DataOutputStream out = new DataOutputStream(result);
-
-            int existingCount = 0;
-            byte[] existingEntries = new byte[0];
-            if (rawHeaders != null && rawHeaders.length > 0) {
-                final ByteBuffer buf = ByteBuffer.wrap(rawHeaders);
-                existingCount = ByteUtils.readVarint(buf);
-                existingEntries = new byte[buf.remaining()];
-                buf.get(existingEntries);
-            }
-
-            final byte[] vcEntryBytes = serializeVectorClockEntries(position);
-
-            ByteUtils.writeVarint(existingCount + 2, out);
-            out.write(existingEntries);
-            out.write(vcEntryBytes);
-
-            return result.toByteArray();
-        } catch (final IOException e) {
-            throw new StreamsException("Failed to merge vector clock into raw headers", e);
+        int existingCount = 0;
+        int existingEntriesOffset = 0;
+        int existingEntriesLength = 0;
+        if (rawHeaders != null && rawHeaders.length > 0) {
+            final ByteBuffer buf = ByteBuffer.wrap(rawHeaders);
+            existingCount = ByteUtils.readVarint(buf);
+            existingEntriesOffset = buf.position();
+            existingEntriesLength = buf.remaining();
         }
-    }
 
-    private byte[] serializeVectorClockEntries(final Position position) throws IOException {
-        final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        final DataOutputStream out = new DataOutputStream(baos);
-
-        // Entry 1: version header
+        // The two vector-clock entries appended to every consistency record.
         final Header versionHeader = ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY;
-        writeHeaderEntry(out, versionHeader);
+        final byte[] versionKey = versionHeader.key().getBytes(StandardCharsets.UTF_8);
+        final byte[] versionValue = versionHeader.value();
+        final byte[] positionKey = ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY
+            .getBytes(StandardCharsets.UTF_8);
+        final byte[] positionValue = PositionSerde.serialize(position).array();
 
-        // Entry 2: position header
-        final Header positionHeader = new RecordHeader(
-            ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
-            PositionSerde.serialize(position).array()
-        );
-        writeHeaderEntry(out, positionHeader);
+        final int totalSize = ByteUtils.sizeOfVarint(existingCount + 2)
+            + existingEntriesLength
+            + headerEntrySize(versionKey, versionValue)
+            + headerEntrySize(positionKey, positionValue);
 
-        return baos.toByteArray();
+        final ByteBuffer out = ByteBuffer.allocate(totalSize);
+        ByteUtils.writeVarint(existingCount + 2, out);
+        if (existingEntriesLength > 0) {
+            out.put(rawHeaders, existingEntriesOffset, existingEntriesLength);
+        }
+        writeHeaderEntry(out, versionKey, versionValue);
+        writeHeaderEntry(out, positionKey, positionValue);
+
+        return out.array();
     }
 
-    private static void writeHeaderEntry(final DataOutputStream out, final Header header) throws IOException {
-        final byte[] keyBytes = header.key().getBytes(StandardCharsets.UTF_8);
-        ByteUtils.writeVarint(keyBytes.length, out);
-        out.write(keyBytes);
-        final byte[] val = header.value();
-        if (val == null) {
+    private static int headerEntrySize(final byte[] key, final byte[] value) {
+        return ByteUtils.sizeOfVarint(key.length) + key.length
+            + (value == null ? ByteUtils.sizeOfVarint(-1) : ByteUtils.sizeOfVarint(value.length) + value.length);
+    }
+
+    private static void writeHeaderEntry(final ByteBuffer out, final byte[] key, final byte[] value) {
+        ByteUtils.writeVarint(key.length, out);
+        out.put(key);
+        if (value == null) {
             ByteUtils.writeVarint(-1, out);
         } else {
-            ByteUtils.writeVarint(val.length, out);
-            out.write(val);
+            ByteUtils.writeVarint(value.length, out);
+            out.put(value);
         }
     }
 
