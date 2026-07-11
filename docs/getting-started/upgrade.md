@@ -46,8 +46,6 @@ type: docs
   * When clients connect to the cluster, they now include cluster and node information to enable detection and handling of misrouted connections. For further details, please refer to [KIP-1242](https://cwiki.apache.org/confluence/x/W4LMFw).
   * The `kafka-cluster.sh` tool now provides an `api-versions` command to display the API versions supported by the brokers or controllers, and it accepts both `--bootstrap-server` and `--bootstrap-controller`. As a result, `kafka-broker-api-versions.sh` is deprecated and will be removed in the next major release; use `kafka-cluster.sh api-versions` instead. For further details, please refer to [KIP-1220](https://cwiki.apache.org/confluence/x/-QkbFw).
 
->>>>>>> trunk
-
 ## Upgrading to 4.3.0
 
 ### Upgrading Servers to 4.3.0 from any version 3.3.x through 4.2.0
