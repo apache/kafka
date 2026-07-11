@@ -622,6 +622,8 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
         @Override
         public void logChange(final String storeName, final Bytes key, final byte[] value, final long timestamp, final Headers headers, final Position position) { }
         @Override
+        public void logChange(final String storeName, final Bytes key, final byte[] value, final long timestamp, final byte[] rawSerializedHeaders, final Position position) { }
+        @Override
         public String changelogFor(final String storeName) {
             return "changelog";
         }

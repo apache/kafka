@@ -20,9 +20,10 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.PreSerializedHeaders;
 import org.apache.kafka.common.header.internals.RecordHeader;
-import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Cancellable;
@@ -171,13 +172,15 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
         }
 
         final byte[] keyBytes = BYTES_KEY_SERIALIZER.serialize(changelogPartition.topic(), null, key);
+        // Wrap the already-serialized header bytes in a lazy carrier so the producer can write them
+        // verbatim, avoiding a deserialize/re-serialize round trip on the changelog hot path.
         final ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
             changelogPartition.topic(),
             changelogPartition.partition(),
             timestamp,
             keyBytes,
             value,
-            finalRawHeaders
+            new PreSerializedHeaders(finalRawHeaders)
         );
 
         collector.send(key, value, null, null, record);

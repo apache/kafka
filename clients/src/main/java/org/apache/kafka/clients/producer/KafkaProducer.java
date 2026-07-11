@@ -61,6 +61,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.PreSerializedHeaders;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.internals.Plugin;
@@ -1172,7 +1173,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             long timestamp = record.timestamp() == null ? nowMs : record.timestamp();
 
             final RecordAccumulator.RecordAppendResult result;
-            byte[] rawHeaders = record.rawSerializedHeaders();
+            // Fast path: if the record carries headers that are already serialized in the wire
+            // format and were never read/modified (e.g. Kafka Streams changelog writes), hand the
+            // bytes straight to the accumulator without a deserialize/re-serialize round trip. If
+            // anything materialized them (interceptor, serializer, headers() read), rawIfUnmodified()
+            // returns null and we take the normal Header[] path.
+            byte[] rawHeaders = record.headers() instanceof PreSerializedHeaders
+                ? ((PreSerializedHeaders) record.headers()).rawIfUnmodified()
+                : null;
             if (rawHeaders != null) {
                 int serializedSize = AbstractRecords.estimateSizeInBytesUpperBound(RecordBatch.CURRENT_MAGIC_VALUE,
                         compression.type(), serializedKey, serializedValue, rawHeaders);

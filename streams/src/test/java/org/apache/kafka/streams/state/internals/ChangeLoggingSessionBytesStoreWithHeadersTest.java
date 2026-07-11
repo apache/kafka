@@ -104,7 +104,7 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
 
         store.put(key1, serializedValue);
 
-        final byte[] expectedRawHeaders = AggregationWithHeadersDeserializer.rawHeaderBytes(serializedValue);
+        final byte[] expectedRawHeaders = Utils.rawHeaderBytes(serializedValue);
         final ArgumentCaptor<byte[]> rawHeadersCaptor = ArgumentCaptor.forClass(byte[].class);
         verify(inner).put(key1, serializedValue);
         verify(context).logChange(
@@ -127,7 +127,7 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
 
         store.put(key1, serializedValue);
 
-        final byte[] expectedRawHeaders = AggregationWithHeadersDeserializer.rawHeaderBytes(serializedValue);
+        final byte[] expectedRawHeaders = Utils.rawHeaderBytes(serializedValue);
         final ArgumentCaptor<byte[]> rawHeadersCaptor = ArgumentCaptor.forClass(byte[].class);
         verify(inner).put(key1, serializedValue);
         verify(context).logChange(
@@ -166,7 +166,7 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
 
         store.put(key1, serializedValue);
 
-        final byte[] expectedRawHeaders = AggregationWithHeadersDeserializer.rawHeaderBytes(serializedValue);
+        final byte[] expectedRawHeaders = Utils.rawHeaderBytes(serializedValue);
         final ArgumentCaptor<byte[]> rawHeadersCaptor = ArgumentCaptor.forClass(byte[].class);
         verify(inner).put(key1, serializedValue);
         verify(context).logChange(
@@ -208,7 +208,7 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
 
         store.put(key1, serializedValue);
 
-        final byte[] expectedRawHeaders = AggregationWithHeadersDeserializer.rawHeaderBytes(serializedValue);
+        final byte[] expectedRawHeaders = Utils.rawHeaderBytes(serializedValue);
         final ArgumentCaptor<byte[]> rawHeadersCaptor = ArgumentCaptor.forClass(byte[].class);
         verify(inner).put(key1, serializedValue);
         verify(context).logChange(

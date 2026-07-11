@@ -182,8 +182,8 @@ public class Utils {
      * Works for any value format whose leading section is {@code [headersSize(varint)][headers]}
      * (e.g. AggregationWithHeaders and ValueTimestampHeaders), returning just the {@code [headers]}
      * bytes. For empty headers this returns a zero-length array. This lets the changelog write path
-     * carry the headers through as opaque bytes (see {@link SerializedHeaders}) without paying for
-     * a deserialization that the producer would only re-serialize.
+     * carry the headers through as opaque bytes without paying for a deserialization that the
+     * producer would only re-serialize.
      */
     public static byte[] rawHeaderBytes(final byte[] rawValueWithHeaders) {
         if (rawValueWithHeaders == null) {

@@ -225,7 +225,16 @@ public class DefaultRecord implements Record {
     /**
      * Write the record to {@code out} using pre-serialized header bytes, bypassing per-header
      * iteration. The {@code rawSerializedHeaders} must use the standard Kafka header wire format:
-     * {@code [count(varint)][header1][header2]...}, or be empty (length 0) for zero headers.
+     * {@code [count(varint)][keyLen(varint)][key][valueLen(varint)|-1][value]...}, or be empty
+     * (length 0) for zero headers.
+     *
+     * <p><b>Format invariant:</b> the bytes are written verbatim with no validation, so this is
+     * correct <em>only</em> because the header section of the on-wire {@link DefaultRecord} format
+     * is byte-identical to the format the callers pre-serialize (the KIP-1271 stored-header format
+     * and {@code Headers} serialization both use this exact layout). The empty-headers case is
+     * still normalized to a {@code 0} count varint here. Callers must therefore supply bytes from a
+     * trusted internal producer (e.g. Kafka Streams changelog writes); feeding malformed bytes
+     * would silently corrupt the record.
      */
     public static int writeTo(DataOutputStream out,
                               int offsetDelta,

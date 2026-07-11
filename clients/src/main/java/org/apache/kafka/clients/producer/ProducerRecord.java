@@ -19,9 +19,9 @@ package org.apache.kafka.clients.producer;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.PreSerializedHeaders;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 
-import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -57,11 +57,10 @@ public class ProducerRecord<K, V> {
     private final K key;
     private final V value;
     private final Long timestamp;
-    private final byte[] rawSerializedHeaders;
 
     /**
      * Creates a record with a specified timestamp to be sent to a specified topic and partition
-     * 
+     *
      * @param topic The topic the record will be appended to
      * @param partition The partition to which the record should be sent
      * @param timestamp The timestamp of the record, in milliseconds since epoch. If null, the producer will assign
@@ -84,36 +83,12 @@ public class ProducerRecord<K, V> {
         this.key = key;
         this.value = value;
         this.timestamp = timestamp;
-        this.headers = new RecordHeaders(headers);
-        this.rawSerializedHeaders = null;
-    }
-
-    /**
-     * Creates a record carrying pre-serialized header bytes. When this constructor is used, the
-     * producer writes {@code rawSerializedHeaders} directly into the record batch without
-     * deserializing or re-serializing individual headers. The {@code rawSerializedHeaders} must
-     * use the standard Kafka header wire format: {@code [count(varint)][header1][header2]...},
-     * or be empty (length 0) for zero headers.
-     *
-     * <p>This is intended for internal use (e.g., Kafka Streams changelog writing) where headers
-     * are already available in serialized form and the deserialization round-trip should be avoided.
-     */
-    public ProducerRecord(String topic, Integer partition, Long timestamp, K key, V value, byte[] rawSerializedHeaders) {
-        if (topic == null)
-            throw new IllegalArgumentException("Topic cannot be null.");
-        if (timestamp != null && timestamp < 0)
-            throw new IllegalArgumentException(
-                    String.format("Invalid timestamp: %d. Timestamp should always be non-negative or null.", timestamp));
-        if (partition != null && partition < 0)
-            throw new IllegalArgumentException(
-                    String.format("Invalid partition: %d. Partition number should always be non-negative or null.", partition));
-        this.topic = topic;
-        this.partition = partition;
-        this.key = key;
-        this.value = value;
-        this.timestamp = timestamp;
-        this.headers = new RecordHeaders();
-        this.rawSerializedHeaders = rawSerializedHeaders;
+        // Preserve an internal PreSerializedHeaders carrier as-is so the producer can take the
+        // raw-bytes write path; copying into a fresh RecordHeaders would force deserialization.
+        // Any other Headers/Iterable is copied defensively as before.
+        this.headers = headers instanceof PreSerializedHeaders
+            ? (PreSerializedHeaders) headers
+            : new RecordHeaders(headers);
     }
 
     /**
@@ -218,14 +193,6 @@ public class ProducerRecord<K, V> {
         return partition;
     }
 
-    /**
-     * @return Pre-serialized header bytes in Kafka wire format, or null if headers were
-     *         provided as {@link Headers} objects via the standard constructors.
-     */
-    public byte[] rawSerializedHeaders() {
-        return rawSerializedHeaders;
-    }
-
     @Override
     public String toString() {
         String headers = this.headers == null ? "null" : this.headers.toString();
@@ -250,8 +217,7 @@ public class ProducerRecord<K, V> {
             Objects.equals(topic, that.topic) &&
             Objects.equals(headers, that.headers) &&
             Objects.equals(value, that.value) &&
-            Objects.equals(timestamp, that.timestamp) &&
-            Arrays.equals(rawSerializedHeaders, that.rawSerializedHeaders);
+            Objects.equals(timestamp, that.timestamp);
     }
 
     @Override
@@ -262,7 +228,6 @@ public class ProducerRecord<K, V> {
         result = 31 * result + (key != null ? key.hashCode() : 0);
         result = 31 * result + (value != null ? value.hashCode() : 0);
         result = 31 * result + (timestamp != null ? timestamp.hashCode() : 0);
-        result = 31 * result + Arrays.hashCode(rawSerializedHeaders);
         return result;
     }
 }
