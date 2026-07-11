@@ -80,22 +80,22 @@ public class PlainToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte
 
     @Override
     public WindowStoreIterator<byte[]> fetch(final Bytes key, final long timeFrom, final long timeTo) {
-        return new PlainToHeadersWindowStoreIteratorAdapter(store.fetch(key, timeFrom, timeTo));
+        return MappingKeyValueIteratorAdapter.plainToHeadersWindow(store.fetch(key, timeFrom, timeTo));
     }
 
     @Override
     public WindowStoreIterator<byte[]> fetch(final Bytes key, final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
-        return new PlainToHeadersWindowStoreIteratorAdapter(store.fetch(key, timeFrom, timeTo));
+        return MappingKeyValueIteratorAdapter.plainToHeadersWindow(store.fetch(key, timeFrom, timeTo));
     }
 
     @Override
     public WindowStoreIterator<byte[]> backwardFetch(final Bytes key, final long timeFrom, final long timeTo) {
-        return new PlainToHeadersWindowStoreIteratorAdapter(store.backwardFetch(key, timeFrom, timeTo));
+        return MappingKeyValueIteratorAdapter.plainToHeadersWindow(store.backwardFetch(key, timeFrom, timeTo));
     }
 
     @Override
     public WindowStoreIterator<byte[]> backwardFetch(final Bytes key, final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
-        return new PlainToHeadersWindowStoreIteratorAdapter(store.backwardFetch(key, timeFrom, timeTo));
+        return MappingKeyValueIteratorAdapter.plainToHeadersWindow(store.backwardFetch(key, timeFrom, timeTo));
     }
 
     @Override
@@ -168,7 +168,7 @@ public class PlainToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte
 
             if (rawResult.isSuccess()) {
                 final WindowStoreIterator<byte[]> wrappedIterator =
-                    new PlainToHeadersWindowStoreIteratorAdapter(rawResult.getResult());
+                    MappingKeyValueIteratorAdapter.plainToHeadersWindow(rawResult.getResult());
                 result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, wrappedIterator);
             } else {
                 result = (QueryResult<R>) rawResult;

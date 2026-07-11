@@ -26,6 +26,7 @@ import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.SessionStoreWithHeaders;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
+import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.util.function.Function;
 
@@ -78,6 +79,28 @@ class MappingKeyValueIteratorAdapter<K> implements KeyValueIterator<K, byte[]> {
         return new MappingKeyValueIteratorAdapter<>(inner, HeadersBytesStore::convertToHeaderFormat);
     }
 
+    /**
+     * Window-store variant of {@link #plainToHeaders}: converts plain values to the
+     * timestamp-with-headers format while preserving the {@link WindowStoreIterator}
+     * marker on the return type.
+     *
+     * @see PlainToHeadersWindowStoreAdapter
+     */
+    static WindowStoreIterator<byte[]> plainToHeadersWindow(final KeyValueIterator<Long, byte[]> inner) {
+        return new WindowStoreIteratorAdapter(inner, HeadersBytesStore::convertFromPlainToHeaderFormat);
+    }
+
+    /**
+     * Window-store variant of {@link #timestampedToHeaders}: adds empty headers to
+     * timestamp-only values while preserving the {@link WindowStoreIterator} marker
+     * on the return type.
+     *
+     * @see TimestampedToHeadersWindowStoreAdapter
+     */
+    static WindowStoreIterator<byte[]> timestampedToHeadersWindow(final KeyValueIterator<Long, byte[]> inner) {
+        return new WindowStoreIteratorAdapter(inner, HeadersBytesStore::convertToHeaderFormat);
+    }
+
     @Override
     public void close() {
         innerIterator.close();
@@ -100,5 +123,19 @@ class MappingKeyValueIteratorAdapter<K> implements KeyValueIterator<K, byte[]> {
             return null;
         }
         return KeyValue.pair(keyValue.key, valueMapper.apply(keyValue.value));
+    }
+
+    /**
+     * Carries the {@link WindowStoreIterator} marker on top of the shared mapping
+     * behavior, so window-store adapters can return values in the header format.
+     */
+    private static final class WindowStoreIteratorAdapter
+        extends MappingKeyValueIteratorAdapter<Long>
+        implements WindowStoreIterator<byte[]> {
+
+        WindowStoreIteratorAdapter(final KeyValueIterator<Long, byte[]> inner,
+                                   final Function<byte[], byte[]> valueMapper) {
+            super(inner, valueMapper);
+        }
     }
 }
