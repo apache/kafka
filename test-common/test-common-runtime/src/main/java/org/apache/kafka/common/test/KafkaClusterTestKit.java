@@ -71,6 +71,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -645,6 +646,50 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
         broker1.startup();
         broker2.startup();
+    }
+
+    /**
+     * Shuts down the given broker (if it isn't already) and starts it back up with a possibly
+     * modified static configuration. This allows tests to change read-only configs, such as
+     * {@code log.dirs}, which can only be applied when the broker process (re)starts.
+     * <p>
+     * The broker keeps its identity (node ID, cluster metadata, bound ports): a new
+     * {@link SharedServer}/{@link BrokerServer} pair is created from the previous broker's
+     * {@link MetaPropertiesEnsemble} and socket factory, but with a {@link KafkaConfig} derived
+     * from the previous one with {@code propOverrides} applied on top.
+     *
+     * @param nodeId         The ID of the broker to restart.
+     * @param propOverrides  Configs to override in the broker's static configuration.
+     */
+    public void restartBroker(int nodeId, Properties propOverrides) {
+        BrokerServer broker = brokers.get(nodeId);
+        if (broker == null) {
+            throw new IllegalArgumentException("Unknown broker ID " + nodeId);
+        }
+        if (!broker.isShutdown()) {
+            broker.shutdown();
+        }
+
+        Properties props = new Properties();
+        props.putAll(broker.config().originals());
+        props.putAll(propOverrides);
+        KafkaConfig newConfig = new KafkaConfig(props, false);
+
+        SharedServer sharedServer = new SharedServer(
+            newConfig,
+            broker.sharedServer().metaPropsEnsemble(),
+            Time.SYSTEM,
+            new Metrics(),
+            CompletableFuture.completedFuture(
+                QuorumConfig.parseVoterConnections(newConfig.quorumConfig().voters())),
+            QuorumConfig.parseBootstrapServers(newConfig.quorumConfig().bootstrapServers()),
+            faultHandlerFactory,
+            socketFactoryManager.getOrCreateSocketFactory(nodeId)
+        );
+        broker = new BrokerServer(sharedServer);
+        brokers.put(nodeId, broker);
+
+        broker.startup();
     }
 
     /**

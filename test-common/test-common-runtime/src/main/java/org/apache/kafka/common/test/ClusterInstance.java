@@ -63,6 +63,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -258,6 +259,8 @@ public interface ClusterInstance {
     void shutdownBroker(int brokerId);
 
     void startBroker(int brokerId);
+
+    void restartBroker(int brokerId, Properties propOverrides);
 
     void restartBrokersWithSwappedClientListenerPorts(int brokerId1, int brokerId2);
 
