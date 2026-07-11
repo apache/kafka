@@ -238,6 +238,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     private <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix, final PS prefixKeySerializer,
                                                                                      final IsolationLevel isolationLevel) {
+        // Header propagation is not required here because serialization was already performed with headers in the metered store
         final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
         final Bytes to = ByteUtils.increment(from);
 
