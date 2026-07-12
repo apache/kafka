@@ -93,9 +93,9 @@ import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.MockPartitioner;
 import org.apache.kafka.test.MockProducerInterceptor;
@@ -2074,6 +2074,7 @@ public class KafkaProducerTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testSendOffsetsToTransactionNegotiatesV6WhenMetadataKnowsTopicId() {
         var topic = "topic";
         var topicId = Uuid.randomUuid();
@@ -2148,6 +2149,7 @@ public class KafkaProducerTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testSendOffsetsToTransactionTriggersMetadataRefreshThenNegotiatesV6() {
         var topic = "topic";
         var topicId = Uuid.randomUuid();

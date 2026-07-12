@@ -36,7 +36,7 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.utils._
 import org.apache.kafka.common.utils.internals.{AppInfoParser, LogContext}
-import org.apache.kafka.network.{CallbackRequest, Request, RequestConvertToJson, ShutdownRequest, SocketServerConfigs, WakeupRequest}
+import org.apache.kafka.network.{CallbackRequest, NoOpResponse, Request, RequestConvertToJson, Response, SendResponse, ShutdownRequest, SocketServerConfigs, WakeupRequest}
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.{ApiVersionManager, SimpleApiVersionManager}
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
@@ -60,7 +60,7 @@ import java.security.cert.X509Certificate
 import java.util
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent._
-import java.util.{Properties, Random}
+import java.util.{Optional, Properties, Random}
 import javax.net.ssl._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -164,7 +164,7 @@ class SocketServerTest {
     val byteBuffer = request.body(classOf[AbstractRequest]).serializeWithHeader(request.header)
     val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(byteBuffer))
     val headerLog = RequestConvertToJson.requestHeaderNode(request.header)
-    channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(headerLog)))
+    channel.sendResponse(new SendResponse(request, send, Optional.of(headerLog)))
   }
 
   def processRequestNoOpResponse(channel: RequestChannel, request: Request): Unit = {
@@ -652,9 +652,9 @@ class SocketServerTest {
     val headerLog = RequestConvertToJson.requestHeaderNode(request.header)
     val response =
       if (!noOpResponse)
-        new RequestChannel.SendResponse(request, send, Some(headerLog))
+        new SendResponse(request, send, Optional.of(headerLog))
       else
-        new RequestChannel.NoOpResponse(request)
+        new NoOpResponse(request)
     server.dataPlaneRequestChannel.sendResponse(response)
 
     // Quota manager would call notifyThrottlingDone() on throttling completion. Simulate it if throttlingInProgress is
@@ -1104,7 +1104,7 @@ class SocketServerTest {
       val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(ByteBuffer.allocate(responseBufferSize)))
       val headerLog = new ObjectNode(JsonNodeFactory.instance)
       headerLog.set("response", new TextNode("someResponse"))
-      channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(headerLog)))
+      channel.sendResponse(new SendResponse(request, send, Optional.of(headerLog)))
 
       TestUtils.waitUntilTrue(() => totalTimeHistCount() == expectedTotalTimeCount,
         s"request metrics not updated, expected: $expectedTotalTimeCount, actual: ${totalTimeHistCount()}")
@@ -2083,7 +2083,7 @@ class SocketServerTest {
       this.conn = Some(conn)
     }
 
-    override protected[network] def sendResponse(response: RequestChannel.Response, responseSend: Send): Unit = {
+    override protected[network] def sendResponse(response: Response, responseSend: Send): Unit = {
       this.conn.foreach(_.close())
       super.sendResponse(response, responseSend)
     }

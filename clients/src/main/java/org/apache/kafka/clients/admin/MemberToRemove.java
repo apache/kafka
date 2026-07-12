@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 
@@ -24,6 +25,7 @@ import java.util.Objects;
 /**
  * A struct containing information about the member to be removed.
  */
+@InterfaceAudience.Public
 public class MemberToRemove {
     private final String groupInstanceId;
 

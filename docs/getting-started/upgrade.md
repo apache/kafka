@@ -1,6 +1,6 @@
 ---
 title: Upgrading
-description: 
+description: Find upgrade steps for Kafka clusters and clients, along with compatibility requirements and notable changes across releases.
 weight: 5
 tags: ['kafka', 'docs']
 aliases: 
@@ -35,6 +35,15 @@ type: docs
   * The `ClientQuotaCallback#updateClusterMetadata` method is deprecated and will be removed in Kafka 5.0. Custom implementations of `ClientQuotaCallback` no longer need to override this method, as a default no-op implementation is now provided. For further details, please refer to [KIP-1200](https://cwiki.apache.org/confluence/x/axBJFg).
   * The in-memory keystores (used for PEM certificates) now use the default type provided by `KeyStore.getDefaultType()` instead of the hardcoded PKCS12 type.
   * Storage directories formatted by the `kafka-storage` tool are no longer forward-compatible. A Kafka broker must be the same version as, or newer than, the `kafka-storage` tool that formatted its directory, regardless of the `--release-version` chosen at format time. For further details, please refer to [KIP-1170](https://cwiki.apache.org/confluence/x/ZYoEFQ).
+  * The Linux I/O metrics collector now exposes all 7 fields from /proc/self/io via JMX, adding linux-disk-rchar, linux-disk-wchar, linux-disk-syscr, linux-disk-syscw, and linux-disk-cancelled-write-bytes alongside the existing linux-disk-read-bytes and linux-disk-write-bytes. These additional metrics let operators calculate page-cache hit ratios, detect write amplification from filesystem overhead, identify inefficient syscall patterns, and monitor log-compaction I/O activity. For further details, please refer to [KIP-1291](https://cwiki.apache.org/confluence/x/co48G).
+  * The `kafka-share-groups.sh` tool can be used to initialize share group offsets from a file. This enables a share group to be initialized from the committed offsets of a consumer group. For further details, please refer to [KIP-1323](https://cwiki.apache.org/confluence/x/vY0mGQ).
+  * Several Yammer-based group coordinator metrics are deprecated and will be removed in Kafka 5.0 in favor of equivalent Kafka Metrics.
+    Please use `kafka.server:type=group-coordinator-metrics,name=group-count,protocol=classic` instead of `kafka.coordinator.group:type=GroupMetadataManager,name=NumGroups`,
+    `kafka.server:type=group-coordinator-metrics,name=offset-count` instead of `kafka.coordinator.group:type=GroupMetadataManager,name=NumOffsets`, and
+    `kafka.server:type=group-coordinator-metrics,name=classic-group-count,state={PreparingRebalance|CompletingRebalance|Stable|Dead|Empty}` instead of the `kafka.coordinator.group:type=GroupMetadataManager,name=NumGroups{PreparingRebalance|CompletingRebalance|Stable|Dead|Empty}` metrics.
+    For further details, please refer to [KIP-1301](https://cwiki.apache.org/confluence/x/Z5U8G).
+  * The broker-side OAUTHBEARER JWT validator now fails fast at startup when a JWKS endpoint (`sasl.oauthbearer.jwks.endpoint.url`) is configured but `sasl.oauthbearer.expected.audience` or `sasl.oauthbearer.expected.issuer` is not set. Brokers that previously started without these settings will now fail to start until they are configured. To intentionally accept tokens regardless of their audience or issuer, set the new `sasl.oauthbearer.allow.unverified.audience` or `sasl.oauthbearer.allow.unverified.issuer` configs (both default `false`) to `true`.
+  * When clients connect to the cluster, they now include cluster and node information to enable detection and handling of misrouted connections. For further details, please refer to [KIP-1242](https://cwiki.apache.org/confluence/x/W4LMFw).
 
 ## Upgrading to 4.3.0
 

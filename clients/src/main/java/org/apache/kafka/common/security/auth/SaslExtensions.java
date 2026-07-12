@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.security.auth;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collections;
 import java.util.Map;
@@ -46,6 +49,7 @@ import javax.security.auth.Subject;
  *
  * See <a href="https://issues.apache.org/jira/browse/KAFKA-14062">KAFKA-14062</a> for more detail.
  */
+@InterfaceAudience.Public
 public class SaslExtensions {
     private final Map<String, String> extensionsMap;
 

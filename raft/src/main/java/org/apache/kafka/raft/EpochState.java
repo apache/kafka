@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.raft;
 
-import java.io.Closeable;
 import java.util.Optional;
 
-public interface EpochState extends Closeable {
+public sealed interface EpochState extends AutoCloseable
+    permits LeaderState, FollowerState, UnattachedState, ResignedState, NomineeState {
 
     default Optional<LogOffsetMetadata> highWatermark() {
         return Optional.empty();
@@ -49,6 +49,11 @@ public interface EpochState extends Closeable {
     int epoch();
 
     /**
+     * Get the current leader and epoch.
+     */
+    LeaderAndEpoch leaderAndEpoch();
+
+    /**
      * Returns the known endpoints for the leader.
      *
      * If the leader is not known then {@code Endpoints.empty()} is returned.
@@ -61,8 +66,7 @@ public interface EpochState extends Closeable {
     String name();
 
     /**
-     * Since all subclasses implement the Closeable interface while none throw any IOException,
-     * this implementation is provided to eliminate the need for exception handling in the close operation.
+     * Epoch states should be auto closeable but shouldn't throw any checked exceptions.
      */
     @Override
     void close();

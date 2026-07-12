@@ -36,6 +36,12 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.KeyQuery;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.TimestampedKeyWithHeadersQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
@@ -43,6 +49,7 @@ import org.apache.kafka.test.KeyValueIteratorStub;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -141,6 +148,33 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
 
     private void init() {
         metered.init(context, metered);
+    }
+
+    // --- skipCache propagation: the TimestampedKeyWithHeadersQuery handler must forward isSkipCache()
+    //     onto the raw KeyQuery it builds, otherwise the caching layer never sees it. ---
+
+    @Test
+    public void shouldPropagateSkipCacheForTimestampedKeyWithHeadersQuery() {
+        setUp();
+        init();
+        assertTrue(forwardedRawKeyQuery(TimestampedKeyWithHeadersQuery.withKey(KEY).skipCache()).isSkipCache());
+    }
+
+    @Test
+    public void shouldNotSkipCacheForTimestampedKeyWithHeadersQueryByDefault() {
+        setUp();
+        init();
+        assertFalse(forwardedRawKeyQuery(TimestampedKeyWithHeadersQuery.withKey(KEY)).isSkipCache());
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private KeyQuery<?, ?> forwardedRawKeyQuery(final Query<?> query) {
+        when(inner.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) QueryResult.forResult(null));
+        metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+        final ArgumentCaptor<KeyQuery> captor = ArgumentCaptor.forClass(KeyQuery.class);
+        verify(inner).query(captor.capture(), any(PositionBound.class), any(QueryConfig.class));
+        return captor.getValue();
     }
 
     @Test

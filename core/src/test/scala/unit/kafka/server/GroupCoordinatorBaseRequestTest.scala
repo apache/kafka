@@ -31,7 +31,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, AddOffsetsToTxnRequest, AddOffsetsToTxnResponse, ConsumerGroupDescribeRequest, ConsumerGroupDescribeResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse, DeleteGroupsRequest, DeleteGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, EndTxnRequest, EndTxnResponse, HeartbeatRequest, HeartbeatResponse, InitProducerIdRequest, InitProducerIdResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsRequest, ListGroupsResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetDeleteRequest, OffsetDeleteResponse, OffsetFetchRequest, OffsetFetchResponse, ShareGroupDescribeRequest, ShareGroupDescribeResponse, ShareGroupHeartbeatRequest, ShareGroupHeartbeatResponse, StreamsGroupDescribeRequest, StreamsGroupDescribeResponse, StreamsGroupHeartbeatRequest, StreamsGroupHeartbeatResponse, SyncGroupRequest, SyncGroupResponse, TxnOffsetCommitRequest, TxnOffsetCommitResponse, WriteTxnMarkersRequest, WriteTxnMarkersResponse}
 import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.common.test.ClusterInstance
-import org.apache.kafka.common.utils.ProducerIdAndEpoch
+import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.IntegrationTestUtils
@@ -39,7 +39,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 
 import java.net.Socket
 import java.util
-import java.util.{Comparator, Properties}
+import java.util.Comparator
 import java.util.stream.Collectors
 import scala.collection.Seq
 import scala.collection.mutable.ListBuffer
@@ -78,7 +78,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
         replicationFactor = brokers().head.config.getShort(TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG).toInt,
         brokers = brokers(),
         controllers = controllerServers(),
-        topicConfig = new Properties()
+        topicConfig = util.Map.of()
       )
     } finally {
       admin.close()
@@ -127,7 +127,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     topic: String,
     numPartitions: Int = 1,
     replicationFactor: Int = 1,
-    topicConfig: Properties = new Properties
+    topicConfig: util.Map[String, String] = util.Map.of()
   ): Map[TopicIdPartition, Int] = {
     val admin = cluster.admin()
     try {
@@ -262,7 +262,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
      partition: Int,
      offset: Long,
      expectedError: Errors,
-     version: Short = ApiKeys.TXN_OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)
+     version: Short = ApiKeys.TXN_OFFSET_COMMIT.latestVersion()
   ): Unit = {
     val request = TxnOffsetCommitRequest.Builder.forTopicNames(
       new TxnOffsetCommitRequestData()

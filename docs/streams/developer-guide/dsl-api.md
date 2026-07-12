@@ -1,6 +1,6 @@
 ---
 title: Streams DSL
-description: 
+description: Kafka Streams DSL API for defining stream processing logic.
 weight: 3
 tags: ['kafka', 'docs']
 aliases: 

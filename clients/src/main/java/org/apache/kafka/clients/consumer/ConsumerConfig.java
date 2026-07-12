@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.ShareAcknowledgementMode;
 import org.apache.kafka.clients.consumer.internals.ShareAcquireMode;
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -57,6 +58,7 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 /**
  * The consumer configuration keys
  */
+@InterfaceAudience.Public
 public class ConsumerConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
 

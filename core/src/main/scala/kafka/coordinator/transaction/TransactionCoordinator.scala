@@ -27,16 +27,16 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.internal.RecordBatch
 import org.apache.kafka.common.requests.{AddPartitionsToTxnResponse, TransactionResult}
-import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
+import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.internals.LogContext
-import org.apache.kafka.coordinator.transaction.{ProducerIdManager, TransactionConfig, TransactionLogConfig, TransactionMetadata, TransactionState, TransactionStateManagerConfig, TransactionalIdAndProducerIdEpoch, TxnTransitMetadata}
+import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch
+import org.apache.kafka.coordinator.transaction.{InitProducerIdResult, ProducerIdManager, TransactionConfig, TransactionLogConfig, TransactionMetadata, TransactionState, TransactionStateManagerConfig, TransactionalIdAndProducerIdEpoch, TxnTransitMetadata}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
 
 import java.util
-import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 import scala.jdk.OptionConverters._
 
@@ -77,11 +77,11 @@ object TransactionCoordinator {
   }
 
   private def initTransactionError(error: Errors): InitProducerIdResult = {
-    InitProducerIdResult(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, error)
+    new InitProducerIdResult(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, error)
   }
 
   private def initTransactionMetadata(txnMetadata: TxnTransitMetadata): InitProducerIdResult = {
-    InitProducerIdResult(txnMetadata.producerId, txnMetadata.producerEpoch, Errors.NONE)
+    new InitProducerIdResult(txnMetadata.producerId, txnMetadata.producerEpoch, Errors.NONE)
   }
 }
 
@@ -127,7 +127,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
       // if the transactional id is null, then always blindly accept the request
       // and return a new producerId from the producerId manager
       try {
-        responseCallback(InitProducerIdResult(producerIdManager.generateProducerId(), producerEpoch = 0, Errors.NONE))
+        responseCallback(new InitProducerIdResult(producerIdManager.generateProducerId(), 0, Errors.NONE))
       } catch {
         case e: Exception => responseCallback(initTransactionError(Errors.forException(e)))
       }
@@ -1012,14 +1012,14 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
    *
    * @return Properties of the transaction state topic.
    */
-  def transactionStateTopicConfigs: Properties = {
-    val props = new Properties
-    props.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "false")
-    props.put(TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.UNCOMPRESSED.name)
-    props.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
-    props.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, txnConfig.transactionLogMinInsyncReplicas.toString)
-    props.put(TopicConfig.SEGMENT_BYTES_CONFIG, txnConfig.transactionLogSegmentBytes.toString)
-    props
+  def transactionStateTopicConfigs: util.Map[String, String] = {
+    util.Map.of(
+      TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "false",
+      TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.UNCOMPRESSED.name,
+      TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT,
+      TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, txnConfig.transactionLogMinInsyncReplicas.toString,
+      TopicConfig.SEGMENT_BYTES_CONFIG, txnConfig.transactionLogSegmentBytes.toString
+    )
   }
 
   def partitionFor(transactionalId: String): Int = txnManager.partitionFor(transactionalId)
@@ -1114,5 +1114,3 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     info("Shutdown complete.")
   }
 }
-
-case class InitProducerIdResult(producerId: Long, producerEpoch: Short, error: Errors)

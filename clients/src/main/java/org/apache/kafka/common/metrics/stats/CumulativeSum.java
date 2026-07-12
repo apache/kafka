@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.metrics.stats;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.MetricConfig;
 
@@ -25,6 +26,7 @@ import org.apache.kafka.common.metrics.MetricConfig;
  *
  * See also {@link CumulativeCount} if you just want to increment the value by 1 on each recording.
  */
+@InterfaceAudience.Public
 public class CumulativeSum implements MeasurableStat {
 
     private double total;
