@@ -1076,7 +1076,6 @@ public class MeteredSessionStoreWithHeadersTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
-        // The critical verification: readOnly() must still use headers-aware deserialization order
         verify(keySerde.deserializer()).deserialize(any(), eq(HEADERS), eq(KEY.getBytes()));
     }
 

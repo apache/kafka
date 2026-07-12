@@ -514,7 +514,6 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
-        // The critical verification: readOnly() must still use headers-aware deserialization order
         verify(keyDeserializer).deserialize(any(), eq(HEADERS), eq(KEY.getBytes()));
     }
 }
