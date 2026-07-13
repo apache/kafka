@@ -45,6 +45,7 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.query.ResultOrder;
 import org.apache.kafka.streams.query.TimestampedKeyWithHeadersQuery;
+import org.apache.kafka.streams.query.TimestampedRangeQuery;
 import org.apache.kafka.streams.query.TimestampedRangeWithHeadersQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -60,6 +61,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -370,9 +373,29 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
         assertEquals(FailureReason.NOT_UP_TO_BOUND, result.getFailureReason());
     }
 
-    @SuppressWarnings("unchecked")
+    // The num-open-iterators gauge is tracked by every metered iterator this store returns from query().
+    // Each query type is served by a different iterator class, so each needs its own 0->1->0 guard:
+    //   - TimestampedRangeWithHeadersQuery -> MeteredTimestampedKeyValueStoreWithHeadersReadOnlyRecordIterator
+    //   - RangeQuery / TimestampedRangeQuery -> MeteredTimestampedKeyValueStoreWithHeadersQueryIterator
+    // (the all()/range() KeyValueIterator path is covered separately by shouldTrackOpenIteratorsMetric).
+
     @Test
-    public void shouldTrackOpenIteratorsMetricForTimestampedRangeWithHeadersQuery() {
+    public void shouldTrackOpenIteratorsMetricForTimestampedRangeWithHeadersQuery() throws IOException {
+        assertQueryTracksOpenIteratorsMetric(TimestampedRangeWithHeadersQuery.withNoBounds());
+    }
+
+    @Test
+    public void shouldTrackOpenIteratorsMetricForRangeQuery() throws IOException {
+        assertQueryTracksOpenIteratorsMetric(RangeQuery.withNoBounds());
+    }
+
+    @Test
+    public void shouldTrackOpenIteratorsMetricForTimestampedRangeQuery() throws IOException {
+        assertQueryTracksOpenIteratorsMetric(TimestampedRangeQuery.withNoBounds());
+    }
+
+    @SuppressWarnings("unchecked")
+    private void assertQueryTracksOpenIteratorsMetric(final Query<?> query) throws IOException {
         setUp();
         when(inner.query(any(), any(PositionBound.class), any(QueryConfig.class)))
                 .thenReturn((QueryResult) QueryResult.forResult(KeyValueIterators.emptyIterator()));
@@ -381,9 +404,10 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
         final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
         assertEquals(0L, (Long) openIteratorsMetric.metricValue());
 
-        final QueryResult<ReadOnlyRecordIterator<String, String>> result = metered.query(
-                TimestampedRangeWithHeadersQuery.withNoBounds(), PositionBound.unbounded(), new QueryConfig(false));
-        try (ReadOnlyRecordIterator<String, String> iterator = result.getResult()) {
+        // The result iterator type differs per query (ReadOnlyRecordIterator vs KeyValueIterator); both are
+        // Closeable, which is all this gauge check needs.
+        try (Closeable iterator = (Closeable) metered.query(
+                query, PositionBound.unbounded(), new QueryConfig(false)).getResult()) {
             assertEquals(1L, (Long) openIteratorsMetric.metricValue());
         }
 
