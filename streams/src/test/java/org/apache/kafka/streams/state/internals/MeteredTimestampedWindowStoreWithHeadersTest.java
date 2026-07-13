@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -39,6 +40,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
@@ -46,6 +48,7 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.TimestampedWindowKeyWithHeadersQuery;
 import org.apache.kafka.streams.query.WindowKeyQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlyRecordIterator;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.WindowStore;
@@ -72,6 +75,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -528,7 +532,7 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
     }
 
     @Test
-    public void shouldForwardWindowKeyQueryBoundsForTimestampedWindowKeyWithHeadersQuery() {
+    public void shouldPropagateWindowKeyQueryBoundsForTimestampedWindowKeyWithHeadersQuery() {
         setUp();
         store.init(context, store);
 
@@ -542,6 +546,102 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
         assertEquals(KEY_BYTES, rawQuery.getKey());
         assertEquals(Optional.of(timeFrom), rawQuery.getTimeFrom());
         assertEquals(Optional.of(timeTo), rawQuery.getTimeTo());
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    public void shouldPropagateWrappedStoreFailureForTimestampedWindowKeyWithHeadersQuery() {
+        setUp();
+        store.init(context, store);
+        when(innerStoreMock.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+                .thenReturn((QueryResult) QueryResult.forFailure(FailureReason.STORE_EXCEPTION, "boom"));
+
+        final QueryResult<ReadOnlyRecordIterator<Windowed<String>, String>> result = store.query(
+                TimestampedWindowKeyWithHeadersQuery.<String, String>withKeyAndWindowStartRange(
+                        KEY, Instant.ofEpochMilli(5), Instant.ofEpochMilli(100)),
+                PositionBound.unbounded(),
+                new QueryConfig(false));
+
+        assertFalse(result.isSuccess());
+        assertEquals(FailureReason.STORE_EXCEPTION, result.getFailureReason());
+        assertEquals("boom", result.getFailureMessage());
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    public void shouldTrackNumOpenIteratorsForTimestampedWindowKeyWithHeadersQuery() {
+        setUp();
+        store.init(context, store);
+        when(innerStoreMock.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) QueryResult.forResult(windowStoreIterator(List.of())));
+
+        final KafkaMetric openIterators = numOpenIteratorsMetric();
+        assertEquals(0L, (Long) openIterators.metricValue());
+
+        final QueryResult<ReadOnlyRecordIterator<Windowed<String>, String>> result = store.query(
+            TimestampedWindowKeyWithHeadersQuery.<String, String>withKeyAndWindowStartRange(
+                KEY, Instant.ofEpochMilli(5), Instant.ofEpochMilli(100)),
+            PositionBound.unbounded(),
+            new QueryConfig(false));
+        assertTrue(result.isSuccess());
+
+        // The query's ReadOnlyRecordIterator registers itself on open and deregisters on close.
+        try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = result.getResult()) {
+            assertEquals(1L, (Long) openIterators.metricValue());
+        }
+        assertEquals(0L, (Long) openIterators.metricValue());
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    public void shouldDecrementOpenIteratorsTwiceWhenClosedTwiceForTimestampedWindowKeyWithHeadersQuery() {
+        setUp();
+        store.init(context, store);
+        when(innerStoreMock.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) QueryResult.forResult(windowStoreIterator(List.of())));
+
+        final KafkaMetric openIterators = numOpenIteratorsMetric();
+        final ReadOnlyRecordIterator<Windowed<String>, String> iterator = store.query(
+            TimestampedWindowKeyWithHeadersQuery.<String, String>withKeyAndWindowStartRange(
+                KEY, Instant.ofEpochMilli(5), Instant.ofEpochMilli(100)),
+            PositionBound.unbounded(),
+            new QueryConfig(false)).getResult();
+
+        assertEquals(1L, (Long) openIterators.metricValue());
+        iterator.close();
+        assertEquals(0L, (Long) openIterators.metricValue());
+        // close() is intentionally not idempotent (matching the sibling metered iterators): each call
+        // decrements, so a repeated close drives the gauge below zero. Callers must close exactly once.
+        iterator.close();
+        assertEquals(-1L, (Long) openIterators.metricValue());
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    public void shouldLeaveIteratorOpenWhenNextThrowsAndNotClosed() {
+        setUp();
+        store.init(context, store);
+        // A stored entry with a negative timestamp cannot be represented as a ReadOnlyRecord, so next() throws.
+        final byte[] negativeTimestampBytes = new ValueTimestampHeadersSerializer<>(new StringSerializer())
+            .serialize("topic", ValueTimestampHeaders.make("value", -1L, HEADERS));
+        when(innerStoreMock.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) QueryResult.forResult(
+                windowStoreIterator(List.of(KeyValue.pair(5L, negativeTimestampBytes)))));
+
+        final KafkaMetric openIterators = numOpenIteratorsMetric();
+        final ReadOnlyRecordIterator<Windowed<String>, String> iterator = store.query(
+            TimestampedWindowKeyWithHeadersQuery.<String, String>withKeyAndWindowStartRange(
+                KEY, Instant.ofEpochMilli(5), Instant.ofEpochMilli(100)),
+            PositionBound.unbounded(),
+            new QueryConfig(false)).getResult();
+
+        assertEquals(1L, (Long) openIterators.metricValue());
+        // next() throws on the negative-timestamp entry but does not close the iterator, so it stays
+        // registered (num-open-iterators stays incremented) until the caller closes it.
+        assertThrows(StreamsException.class, iterator::next);
+        assertEquals(1L, (Long) openIterators.metricValue());
+        iterator.close();
+        assertEquals(0L, (Long) openIterators.metricValue());
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -575,5 +675,13 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
                 return iterator.next();
             }
         };
+    }
+
+    private KafkaMetric numOpenIteratorsMetric() {
+        return metrics.metrics().entrySet().stream()
+                .filter(entry -> entry.getKey().name().equals("num-open-iterators"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("num-open-iterators metric not registered"))
+                .getValue();
     }
 }

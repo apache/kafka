@@ -113,6 +113,7 @@ public class RocksDBTimeOrderedWindowStoreWithHeadersTest {
             final KeyValue<Long, byte[]> keyValue = iterator.next();
             assertEquals(windowStart, keyValue.key);
             assertArrayEquals(storedBytes, keyValue.value, "Expected the raw stored bytes to be returned");
+            assertFalse(iterator.hasNext(), "Expected exactly one entry in the window key result");
         }
         assertNotNull(result.getPosition());
     }
