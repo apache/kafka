@@ -222,7 +222,8 @@ public class ChunkedRecordAccumulatorTest {
      * remaining capacity, so a batch can end up with more chunk capacity than its batch-size limit
      * admits. The limit must still be enforced on append: a record that no longer fits after the
      * race winner's append rolls to a new batch even though the over-reserved chunks could
-     * physically hold it, and the unused surplus returns to the pool when the batch closes.
+     * physically hold it, and the unused surplus returns to the pool as soon as the batch is closed
+     * for appends during that roll (before completion).
      */
     @Test
     public void testConcurrentExtensionRaceLoserStartsNewBatch() throws Exception {
@@ -231,8 +232,25 @@ public class ChunkedRecordAccumulatorTest {
         // Sized so each record fits the batch-size limit individually, but not both together.
         final byte[] value = new byte[500];
         final AtomicReference<ChunkedRecordAccumulator> injectAppendOnce = new AtomicReference<>();
+        final AtomicInteger chunkDeallocations = new AtomicInteger();
 
-        ChunkedBufferPool pool = poolMockingConcurrentChunkAllocation(chunkSize, 64L * chunkSize, injectAppendOnce, value);
+        ChunkedBufferPool pool = new ChunkedBufferPool(64L * chunkSize, chunkSize, metrics, time, "producer-metrics") {
+            @Override
+            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
+                List<ByteBuffer> chunks = super.allocateChunks(totalSize, maxTimeToBlockMs);
+                ChunkedRecordAccumulator toInject = injectAppendOnce.getAndSet(null);
+                if (toInject != null)
+                    toInject.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null,
+                            maxBlockTimeMs, time.milliseconds(), cluster);
+                return chunks;
+            }
+
+            @Override
+            public void deallocate(ByteBuffer buffer) {
+                chunkDeallocations.incrementAndGet();
+                super.deallocate(buffer);
+            }
+        };
         ChunkedRecordAccumulator accum = new ChunkedRecordAccumulator(logContext, batchSize, Compression.NONE,
                 /* lingerMs */ 0, /* retryBackoffMs */ 0L, /* retryBackoffMaxMs */ 0L,
                 /* deliveryTimeoutMs */ 3200, metrics, "producer-metrics", time,
@@ -241,6 +259,7 @@ public class ChunkedRecordAccumulatorTest {
             // Open the batch with a tiny record; both racing records will extend it.
             accum.append(topic, partition1, 0L, key, new byte[1], Record.EMPTY_HEADERS, null,
                     maxBlockTimeMs, time.milliseconds(), cluster);
+            int deallocsAfterOpen = chunkDeallocations.get();
 
             // This append sizes its gap, then the injected append wins the race while the gap
             // chunks are held off-lock. The retry finds the batch over its batch-size limit, so
@@ -251,19 +270,17 @@ public class ChunkedRecordAccumulatorTest {
 
             Deque<ProducerBatch> dq = batchesFor(accum, tp1);
             assertEquals(2, dq.size(), "The losing record must roll to a new batch, not exceed batch.size");
-            ProducerBatch first = dq.peekFirst();
-            ProducerBatch second = dq.peekLast();
-            assertNotNull(first);
-            assertNotNull(second);
-            assertEquals(2, first.recordCount, "First batch should have the initial record plus the race winner");
-            assertEquals(1, second.recordCount, "Second batch should have the loser record");
+            assertNotNull(dq.peekFirst());
+            assertNotNull(dq.peekLast());
+            assertEquals(2, dq.peekFirst().recordCount, "First batch should have the initial record plus the race winner");
+            assertNotNull(dq.peekLast());
+            assertEquals(1, dq.peekLast().recordCount, "Second batch should have the loser record");
 
-            // The loser's extension chunks were attached but never used (the over-reservation);
-            // closing the first batch returns that unused surplus to the pool.
-            long beforeClose = pool.availableMemory();
-            first.close();
-            assertTrue(pool.availableMemory() > beforeClose,
-                    "The over-reserved unused chunks should return to the pool at close");
+            // The loser's extension chunks were attached to the first batch but never used (the
+            // over-reservation). They are freed as soon as the first batch is closed for appends
+            // (during the roll to the new batch) — before completion, not held until deallocate.
+            assertTrue(chunkDeallocations.get() > deallocsAfterOpen,
+                    "the over-reserved unused chunks are freed when the first batch is closed for appends");
         } finally {
             accum.close();
         }

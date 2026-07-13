@@ -162,20 +162,24 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
             chunk.position(chunkPos);
         }
         dirty = false;
-        releaseUnusedChunks();
         return flattenedBuffer;
     }
 
     /**
-     * Release the fully-unused chunks (nothing written) back to the pool, now rather than at batch
-     * completion. Called at batch close, when the chunk set is final.
-     * <p>
-     * The data-bearing chunks are intentionally kept until batch completion: they are what keeps
-     * the batch's in-flight data reserved against the buffer.memory budget, so releasing them at
-     * close would let the pool admit more data than buffer.memory intends while the batch is still
-     * in flight.
+     * Releases the fully-unused chunks, given that the stream is closed for appends.
+     */
+    @Override
+    public void close() {
+        releaseUnusedChunks();
+    }
+
+    /**
+     * Return the fully-unused chunks to the pool. The data-bearing chunks are
+     * kept until batch completion ({@link #deallocate()}), as they hold the in-flight data.
      */
     private void releaseUnusedChunks() {
+        if (currentChunk == null)  // already deallocated; nothing attached
+            return;
         List<ByteBuffer> unused = chunks.subList(currentChunkIndex + 1, chunks.size());
         if (pool != null) {
             for (ByteBuffer chunk : unused)
