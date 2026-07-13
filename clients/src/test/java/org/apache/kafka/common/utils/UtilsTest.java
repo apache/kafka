@@ -17,6 +17,7 @@
 package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;

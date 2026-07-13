@@ -269,6 +269,8 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
         // both arm the back-off and double the window beyond its intended length.
         if (backoff.armIfNotActive(groupId, currentEpoch)) {
             response.setTopologyDescriptionRequired(true);
+            log.info("[GroupId {}] Requested topology description push at topology epoch {}.",
+                groupId, currentEpoch);
         }
         return result;
     }

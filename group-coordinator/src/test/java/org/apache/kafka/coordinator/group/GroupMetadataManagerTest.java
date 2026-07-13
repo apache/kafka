@@ -6133,10 +6133,10 @@ public class GroupMetadataManagerTest {
             requiredKnownMemberId
         )).toList();
 
-        // Advance clock by group initial rebalance delay to complete first inital delayed join.
+        // Advance clock by group initial rebalance delay to complete first initial delayed join.
         // This will extend the initial rebalance as new members have joined.
         GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(50));
-        // Advance clock by group initial rebalance delay to complete second inital delayed join.
+        // Advance clock by group initial rebalance delay to complete second initial delayed join.
         // Since there are no new members that joined since the previous delayed join,
         // the join group phase will complete.
         GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(50));
@@ -6182,10 +6182,10 @@ public class GroupMetadataManagerTest {
         assertEquals(groupMaxSize, group.numAwaitingJoinResponse());
         assertTrue(group.isInState(PREPARING_REBALANCE));
 
-        // Advance clock by group initial rebalance delay to complete first inital delayed join.
+        // Advance clock by group initial rebalance delay to complete first initial delayed join.
         // This will extend the initial rebalance as new members have joined.
         GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(50));
-        // Advance clock by group initial rebalance delay to complete second inital delayed join.
+        // Advance clock by group initial rebalance delay to complete second initial delayed join.
         // Since there are no new members that joined since the previous delayed join,
         // we will complete the rebalance.
         GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(50));
@@ -6237,7 +6237,7 @@ public class GroupMetadataManagerTest {
         // Advance clock by group initial rebalance delay to complete first initial delayed join.
         // This will extend the initial rebalance as new members have joined.
         GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(50));
-        // Advance clock by group initial rebalance delay to complete second inital delayed join.
+        // Advance clock by group initial rebalance delay to complete second initial delayed join.
         // Since there are no new members that joined since the previous delayed join,
         // we will complete the rebalance.
         GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(50));
@@ -6307,10 +6307,10 @@ public class GroupMetadataManagerTest {
             requiredKnownMemberId
         )).toList();
 
-        // Advance clock by group initial rebalance delay to complete first inital delayed join.
+        // Advance clock by group initial rebalance delay to complete first initial delayed join.
         // This will extend the initial rebalance as new members have joined.
         GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(50));
-        // Advance clock by group initial rebalance delay to complete second inital delayed join.
+        // Advance clock by group initial rebalance delay to complete second initial delayed join.
         // Since there are no new members that joined since the previous delayed join,
         // we will complete the rebalance.
         GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(50));

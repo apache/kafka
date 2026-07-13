@@ -32,7 +32,7 @@ public enum ShareVersion implements FeatureVersion {
 
     public static final String FEATURE_NAME = "share.version";
 
-    public static final ShareVersion LATEST_PRODUCTION = SV_1;
+    public static final ShareVersion LATEST_PRODUCTION = SV_2;
 
     private final short featureLevel;
     private final MetadataVersion bootstrapMetadataVersion;

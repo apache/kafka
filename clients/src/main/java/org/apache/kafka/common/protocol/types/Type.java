@@ -287,7 +287,7 @@ public abstract class Type {
             if (item instanceof Integer)
                 return (Integer) item;
             else
-                throw new SchemaException(item + " is not an a Integer (encoding an unsigned short)");
+                throw new SchemaException(item + " is not an Integer (encoding an unsigned short)");
         }
 
         @Override

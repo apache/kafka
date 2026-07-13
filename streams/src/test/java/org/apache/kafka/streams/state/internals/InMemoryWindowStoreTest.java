@@ -408,6 +408,46 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
         }
     }
 
+    @Test
+    public void shouldReportUncommittedPositionForTransactionalStore() {
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        props.setProperty(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, "true");
+        final InternalMockProcessorContext<Bytes, byte[]> ctx = new InternalMockProcessorContext<>(
+            TestUtils.tempDirectory(),
+            new Serdes.BytesSerde(),
+            new Serdes.ByteArraySerde(),
+            new StreamsConfig(props)
+        );
+        final InMemoryWindowStore store = new InMemoryWindowStore(
+            "txn-pos-window-store", RETENTION_PERIOD, WINDOW_SIZE, false, "scope");
+        store.init(ctx, store);
+        try {
+            ctx.setRecordContext(new ProcessorRecordContext(0, 1, 0, "topic", new RecordHeaders()));
+            store.put(Bytes.wrap("k".getBytes()), "v".getBytes(), 0L);
+
+            final Position expected = Position.fromMap(mkMap(mkEntry("topic", mkMap(mkEntry(0, 1L)))));
+
+            // READ_UNCOMMITTED query should expose the staged position before commit
+            final QueryResult<?> uncommitted = store.query(
+                WindowKeyQuery.withKeyAndWindowStartRange(
+                    Bytes.wrap("k".getBytes()), Instant.ofEpochMilli(0), Instant.ofEpochMilli(WINDOW_SIZE)),
+                PositionBound.unbounded(),
+                new QueryConfig(false));
+            assertEquals(expected, uncommitted.getPosition(), "READ_UNCOMMITTED query position");
+
+            // getPosition() reports the uncommitted (committed + staged) position, mirroring
+            // RocksDBStore, so the changelog consistency vector reflects the staged write.
+            assertEquals(expected, store.getPosition(), "getPosition before commit (uncommitted)");
+
+            // after commit, committed position populated
+            store.commit(java.util.Map.of());
+            assertEquals(expected, store.getPosition(), "getPosition after commit");
+        } finally {
+            store.close();
+        }
+    }
+
     private InMemoryWindowStore openTransactionalWindowStore() {
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
