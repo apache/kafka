@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
-import org.apache.kafka.streams.state.WindowStore;
 
 /**
  * Defines a range of records around an anchor record, and fetches them from the buffer store.
@@ -52,9 +51,9 @@ public abstract class Range<K, V> {
      *
      * @param anchor the record that triggered the range evaluation
      * @param store  the buffer store holding records for the anchor's group key
-     * @return a closeable iterator of records that fall within the defined range
+     * @return a ranged record iterator of records that fall within the defined range
      */
-    public abstract CloseableIterator<Record<K, V>> fetch(Record<K, V> anchor, ReadOnlyWindowStore<K, V> store);
+    public abstract RangedRecordIterator<Record<K, V>> fetch(Record<K, V> anchor, ReadOnlyWindowStore<K, V> store);
 
     /**
      * @return the grace period in milliseconds. Records arriving after stream time has advanced

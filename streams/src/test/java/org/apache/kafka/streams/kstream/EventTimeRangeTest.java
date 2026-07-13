@@ -28,13 +28,13 @@ public class EventTimeRangeTest {
 
     @Test
     public void shouldReturnGracePeriodForNoGrace() {
-        final EventTimeRange<?, ?> range = EventTimeRange.ofTimeBoundsWithNoGrace(Duration.ofSeconds(10), Duration.ofSeconds(5));
+        final EventTimeRange<?, ?> range = EventTimeRange.ofTimeBoundsWithNoGrace(Duration.ofSeconds(10));
         assertEquals(0L, range.gracePeriodMs());
     }
 
     @Test
     public void shouldReturnGracePeriod() {
-        final EventTimeRange<?, ?> range = EventTimeRange.ofTimeBoundsAndGrace(Duration.ofSeconds(10), Duration.ofSeconds(5), Duration.ofSeconds(3));
+        final EventTimeRange<?, ?> range = EventTimeRange.ofTimeBoundsAndGrace(Duration.ofSeconds(10), Duration.ofSeconds(3));
         assertEquals(3000L, range.gracePeriodMs());
     }
 
@@ -43,7 +43,7 @@ public class EventTimeRangeTest {
         final long beforeMs = Duration.ofSeconds(20).toMillis();
         final long gracePeriodMs = Duration.ofSeconds(5).toMillis();
         final EventTimeRange<?, ?> range = EventTimeRange.ofTimeBoundsAndGrace(
-            Duration.ofMillis(beforeMs), Duration.ofSeconds(0), Duration.ofMillis(gracePeriodMs));
+            Duration.ofMillis(beforeMs), Duration.ofMillis(gracePeriodMs));
         assertEquals(beforeMs, range.rangeRetentionMs());
         assertEquals(beforeMs + gracePeriodMs, range.retentionMs());
     }
@@ -51,59 +51,66 @@ public class EventTimeRangeTest {
     @Test
     public void rangeRetentionMsShouldEqualBefore() {
         final long beforeMs = Duration.ofMinutes(5).toMillis();
-        final EventTimeRange<?, ?> range = EventTimeRange.ofTimeBoundsWithNoGrace(Duration.ofMillis(beforeMs), Duration.ofSeconds(10));
+        final EventTimeRange<?, ?> range = EventTimeRange.ofTimeBoundsWithNoGrace(Duration.ofMillis(beforeMs));
         assertEquals(beforeMs, range.rangeRetentionMs());
     }
 
     @Test
     public void beforeMustNotBeNegative() {
         assertThrows(IllegalArgumentException.class,
-            () -> EventTimeRange.ofTimeBoundsWithNoGrace(Duration.ofMillis(-1), Duration.ofSeconds(5)));
+            () -> EventTimeRange.ofTimeBoundsWithNoGrace(Duration.ofMillis(-1)));
     }
 
     @Test
-    public void afterMustNotBeNegative() {
+    public void lookAheadMustNotBeNegative() {
         assertThrows(IllegalArgumentException.class,
-            () -> EventTimeRange.ofTimeBoundsWithNoGrace(Duration.ofSeconds(10), Duration.ofMillis(-1)));
+            () -> EventTimeRange.ofTimeBoundsWithNoGrace(Duration.ofSeconds(10)).withLookAhead(Duration.ofMillis(-1)));
     }
 
     @Test
     public void gracePeriodMustNotBeNegative() {
         assertThrows(IllegalArgumentException.class,
-            () -> EventTimeRange.ofTimeBoundsAndGrace(Duration.ofSeconds(10), Duration.ofSeconds(5), Duration.ofMillis(-1)));
+            () -> EventTimeRange.ofTimeBoundsAndGrace(Duration.ofSeconds(10), Duration.ofMillis(-1)));
     }
 
     @Test
     public void shouldThrowOnOverflowingBeforeDuration() {
         assertThrows(IllegalArgumentException.class,
-            () -> EventTimeRange.ofTimeBoundsWithNoGrace(Duration.ofSeconds(Long.MAX_VALUE), Duration.ofSeconds(5)));
+            () -> EventTimeRange.ofTimeBoundsWithNoGrace(Duration.ofSeconds(Long.MAX_VALUE)));
     }
 
     @Test
-    public void shouldThrowOnOverflowingAfterDuration() {
+    public void shouldThrowOnOverflowingLookAheadDuration() {
         assertThrows(IllegalArgumentException.class,
-            () -> EventTimeRange.ofTimeBoundsWithNoGrace(Duration.ofSeconds(10), Duration.ofSeconds(Long.MAX_VALUE)));
+            () -> EventTimeRange.ofTimeBoundsWithNoGrace(Duration.ofSeconds(10)).withLookAhead(Duration.ofSeconds(Long.MAX_VALUE)));
     }
 
     @Test
     public void shouldThrowOnOverflowingGraceDuration() {
         assertThrows(IllegalArgumentException.class,
-            () -> EventTimeRange.ofTimeBoundsAndGrace(Duration.ofSeconds(10), Duration.ofSeconds(5), Duration.ofSeconds(Long.MAX_VALUE)));
+            () -> EventTimeRange.ofTimeBoundsAndGrace(Duration.ofSeconds(10), Duration.ofSeconds(Long.MAX_VALUE)));
     }
 
     @Test
     public void withMaxRecordsShouldReturnConcreteType() {
-        final EventTimeRange<String, String> range = EventTimeRange.<String, String>ofTimeBoundsWithNoGrace(Duration.ofSeconds(10), Duration.ofSeconds(5))
+        final EventTimeRange<String, String> range = EventTimeRange.<String, String>ofTimeBoundsWithNoGrace(Duration.ofSeconds(10))
             .withMaxRecords(100);
+        assertInstanceOf(EventTimeRange.class, range);
+    }
+
+    @Test
+    public void withLookAheadShouldReturnConcreteType() {
+        final EventTimeRange<String, String> range = EventTimeRange.<String, String>ofTimeBoundsWithNoGrace(Duration.ofSeconds(10))
+            .withLookAhead(Duration.ofSeconds(5));
         assertInstanceOf(EventTimeRange.class, range);
     }
 
     @Test
     public void maxRecordsMustBePositive() {
         assertThrows(IllegalArgumentException.class,
-            () -> EventTimeRange.ofTimeBoundsWithNoGrace(Duration.ofSeconds(10), Duration.ofSeconds(5)).withMaxRecords(0));
+            () -> EventTimeRange.ofTimeBoundsWithNoGrace(Duration.ofSeconds(10)).withMaxRecords(0));
         assertThrows(IllegalArgumentException.class,
-            () -> EventTimeRange.ofTimeBoundsWithNoGrace(Duration.ofSeconds(10), Duration.ofSeconds(5)).withMaxRecords(-1));
+            () -> EventTimeRange.ofTimeBoundsWithNoGrace(Duration.ofSeconds(10)).withMaxRecords(-1));
     }
 
     @Test

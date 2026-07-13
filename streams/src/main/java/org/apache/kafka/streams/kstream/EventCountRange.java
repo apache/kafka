@@ -30,71 +30,64 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 
 /**
- * A count-based {@link Range} that includes up to {@code before} records preceding the anchor and
- * up to {@code after} records following it in event-time order. A required time floor
- * {@code maxTimeBefore} prevents looking back arbitrarily far.
+ * A count-based {@link Range} that includes up to {@code before} records preceding the anchor
+ * in event-time order. A required time floor {@code maxTimeBefore} prevents looking back
+ * arbitrarily far.
  *
  * <p>Use {@link #ofCountBoundsWithNoGrace} or {@link #ofCountBoundsAndGrace} to create instances.
+ * Use {@link #withLookAhead(int)} to include lookahead for out-of-order anchor context resolution.
  * Use {@link #withMaxTimeAfter(Duration)} to add an optional time ceiling on the forward direction.
  */
 public final class EventCountRange<K, V> extends Range<K, V> {
 
     private final int before;
-    private final int after;
+    private int after = 0;
     private final long maxTimeBeforeMs;
     private Long maxTimeAfterMs = null;
 
-    private EventCountRange(final int before, final int after, final long maxTimeBeforeMs, final long gracePeriodMs) {
+    private EventCountRange(final int before, final long maxTimeBeforeMs, final long gracePeriodMs) {
         super(gracePeriodMs);
         this.before = before;
-        this.after = after;
         this.maxTimeBeforeMs = maxTimeBeforeMs;
     }
 
     /**
-     * Create an {@link EventCountRange} including {@code before} records before and {@code after}
-     * records after the anchor record in event-time order. {@code maxTimeBefore} sets a required
-     * time floor: records older than {@code anchor.timestamp() - maxTimeBefore} are excluded
-     * regardless of count. Records that arrive out of order are immediately dropped.
-     * Use {@link #ofCountBoundsAndGrace} to tolerate late arrivals.
-     * Use {@link #withMaxTimeAfter(Duration)} to add an optional time ceiling.
+     * Create an {@link EventCountRange} including up to {@code before} records prior to
+     * the anchor record in event-time order, capping the upper boundary at the anchor record.
+     * Late-arriving records past the stream time watermark are dropped.
+     * Use {@link #ofCountBoundsAndGrace(int, Duration, Duration)} to tolerate late arrivals.
+     * Use {@link #withLookAhead(int)} to include lookahead for late arriving records.
+     * Use {@link #withMaxTimeAfter(Duration)} to add an optional time ceiling on the forward direction.
      *
-     * @param before        the number of records before the anchor to include. Must not be negative.
-     * @param after         the number of records after the anchor to include. Must not be negative.
-     * @param maxTimeBefore the maximum time before the anchor's timestamp to look back. Must not be
-     *                      negative.
+     * @param before        the number of records before the anchor record to include. Must not be negative.
+     * @param maxTimeBefore the maximum time before the anchor's timestamp to look back. Must not be negative.
      * @return a new {@link EventCountRange} with no grace period
-     * @throws IllegalArgumentException if any count is negative or the duration cannot be
-     *                                  represented as {@code long} milliseconds
+     * @throws IllegalArgumentException if the count is negative or the duration can't be represented as {@code long milliseconds}
      */
-    public static <K, V> EventCountRange<K, V> ofCountBoundsWithNoGrace(final int before, final int after, final Duration maxTimeBefore) {
+    public static <K, V> EventCountRange<K, V> ofCountBoundsWithNoGrace(final int before, final Duration maxTimeBefore) {
         validateNonNegativeCount(before, "before");
-        validateNonNegativeCount(after, "after");
         final long maxTimeBeforeMs = validateNonNegativeMs(maxTimeBefore, "maxTimeBefore");
-        return new EventCountRange<>(before, after, maxTimeBeforeMs, 0L);
+        return new EventCountRange<>(before, maxTimeBeforeMs, 0L);
     }
 
     /**
-     * Create an {@link EventCountRange} including {@code before} records before and {@code after}
-     * records after the anchor record in event-time order, accepting late records up to
-     * {@code grace} beyond the range boundary. {@code maxTimeBefore} sets a required time floor.
-     * Use {@link #withMaxTimeAfter(Duration)} to add an optional time ceiling.
+     * Create an {@link EventCountRange} including a count of {@code before} records prior to
+     * the anchor record in event-time order, accepting late records up to {@code grace} beyond the range boundary.
+     * {@code maxTimeBefore} sets a required time floor: records older than {@code anchor.timestamp - maxTimeBefore}
+     * are excluded regardless of count.
+     * Use {@link #withMaxTimeAfter(Duration)} to add an optional time ceiling on the forward direction.
      *
-     * @param before        the number of records before the anchor to include. Must not be negative.
-     * @param after         the number of records after the anchor to include. Must not be negative.
-     * @param maxTimeBefore the maximum time before the anchor's timestamp to look back. Must not be
-     *                      negative.
+     * @param before        the number of records before the anchor record to include. Must not be negative.
+     * @param maxTimeBefore the maximum time before the anchor's timestamp to look back. Must not be negative.
      * @param grace         the grace period to tolerate late-arriving records. Must not be negative.
      * @return a new {@link EventCountRange} with the specified grace period
-     * @throws IllegalArgumentException if any count is negative or any duration cannot be
-     *                                  represented as {@code long} milliseconds
+     * @throws IllegalArgumentException if any count is negative or any duration can't be represented as {@code long milliseconds}
      */
-    public static <K, V> EventCountRange<K, V> ofCountBoundsAndGrace(final int before, final int after, final Duration maxTimeBefore, final Duration grace) {
+    public static <K, V> EventCountRange<K, V> ofCountBoundsAndGrace(final int before, final Duration maxTimeBefore, final Duration grace) {
         validateNonNegativeCount(before, "before");
-        validateNonNegativeCount(after, "after");
         final long maxTimeBeforeMs = validateNonNegativeMs(maxTimeBefore, "maxTimeBefore");
         final long graceMs = validateNonNegativeMs(grace, "grace");
-        return new EventCountRange<>(before, after, maxTimeBeforeMs, graceMs);
+        return new EventCountRange<>(before, maxTimeBeforeMs, graceMs);
     }
 
     /**
@@ -112,8 +105,22 @@ public final class EventCountRange<K, V> extends Range<K, V> {
         return this;
     }
 
+    /**
+     * Enable a forward-looking window over a count of newer records that have already
+     * been buffered in the shared state store (useful for out-of-order anchor context resolution).
+     *
+     * @param after the number of records after the anchor to include. Must not be negative.
+     * @return this {@link EventCountRange} instance
+     * @throws IllegalArgumentException if the count is negative
+     */
+    public EventCountRange<K, V> withLookAhead(final int after) {
+        validateNonNegativeCount(after, "after");
+        this.after = after;
+        return this;
+    }
+
     @Override
-    public CloseableIterator<Record<K, V>> fetch(final Record<K, V> anchor, final ReadOnlyWindowStore<K, V> store) {
+    public RangedRecordIterator<Record<K, V>> fetch(final Record<K, V> anchor, final ReadOnlyWindowStore<K, V> store) {
         final long from = anchor.timestamp() - maxTimeBeforeMs;
         final long forwardTo = maxTimeAfterMs != null ? anchor.timestamp() + maxTimeAfterMs : Long.MAX_VALUE;
 
@@ -160,7 +167,7 @@ public final class EventCountRange<K, V> extends Range<K, V> {
         return ms;
     }
 
-    private static final class ConcatenatingIterator<K, V> implements CloseableIterator<Record<K, V>> {
+    private static final class ConcatenatingIterator<K, V> implements RangedRecordIterator<Record<K, V>> {
 
         private final Iterator<Record<K, V>> backwardPart;
         private final WindowStoreIterator<V> forwardIt;

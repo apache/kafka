@@ -75,7 +75,7 @@ public class RangedKStreamImplTest {
         final Materialized<String, String, WindowStore<Bytes, byte[]>> mat = buildMaterialized("store-" + cachingEnabled, cachingEnabled);
 
         final KStream<String, Long> counts = grouped
-            .rangeOver(EventTimeRange.ofTimeBoundsWithNoGrace(BEFORE, AFTER), mat)
+            .rangeOver(EventTimeRange.<String, String>ofTimeBoundsWithNoGrace(BEFORE).withLookAhead(AFTER), mat)
             .count();
 
         counts.to(OUTPUT_TOPIC, Produced.with(Serdes.String(), Serdes.Long()));
@@ -113,7 +113,7 @@ public class RangedKStreamImplTest {
                 .withRetention(Duration.ofMillis(200));
 
         final KStream<String, Long> counts = grouped
-            .rangeOver(EventTimeRange.ofTimeBoundsAndGrace(BEFORE, AFTER, GRACE), mat)
+            .rangeOver(EventTimeRange.<String, String>ofTimeBoundsAndGrace(BEFORE, GRACE).withLookAhead(AFTER), mat)
             .count();
 
         counts.to(OUTPUT_TOPIC, Produced.with(Serdes.String(), Serdes.Long()));
@@ -143,7 +143,7 @@ public class RangedKStreamImplTest {
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
 
         final KStream<String, Long> counts = grouped
-            .rangeOver(EventTimeRange.ofTimeBoundsWithNoGrace(BEFORE, AFTER))
+            .rangeOver(EventTimeRange.<String, String>ofTimeBoundsWithNoGrace(BEFORE).withLookAhead(AFTER))
             .count();
         counts.to(OUTPUT_TOPIC, Produced.with(Serdes.String(), Serdes.Long()));
 
@@ -168,7 +168,7 @@ public class RangedKStreamImplTest {
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
 
         final KStream<String, Long> counts = grouped
-            .rangeOver(EventTimeRange.ofTimeBoundsWithNoGrace(BEFORE, AFTER))
+            .rangeOver(EventTimeRange.<String, String>ofTimeBoundsWithNoGrace(BEFORE).withLookAhead(AFTER))
             .count();
         counts.to(OUTPUT_TOPIC, Produced.with(Serdes.String(), Serdes.Long()));
 
@@ -199,7 +199,7 @@ public class RangedKStreamImplTest {
                 .withRetention(BEFORE.plusMillis(1));
 
         final RangedKStream<String, String> ranged = grouped.rangeOver(
-            EventTimeRange.ofTimeBoundsWithNoGrace(BEFORE, AFTER), mat
+            EventTimeRange.<String, String>ofTimeBoundsWithNoGrace(BEFORE).withLookAhead(AFTER), mat
         );
 
         final KStream<String, Long> counts = ranged.count();
@@ -247,7 +247,7 @@ public class RangedKStreamImplTest {
 
         final KStream<String, Long> counts = grouped
             .rangeOver(
-                EventTimeRange.<String, String>ofTimeBoundsWithNoGrace(Duration.ofMillis(150), AFTER).withMaxRecords(2),
+                EventTimeRange.<String, String>ofTimeBoundsWithNoGrace(Duration.ofMillis(150)).withLookAhead(AFTER).withMaxRecords(2),
                 mat
             )
             .count();
@@ -286,7 +286,7 @@ public class RangedKStreamImplTest {
 
         final KStream<String, Long> counts = grouped
             .rangeOver(
-                EventCountRange.ofCountBoundsWithNoGrace(1, 0, Duration.ofHours(1)),
+                EventCountRange.ofCountBoundsWithNoGrace(1, Duration.ofHours(1)),
                 mat
             )
             .count();
@@ -329,7 +329,7 @@ public class RangedKStreamImplTest {
 
         assertThrows(IllegalArgumentException.class, () ->
             grouped.rangeOver(
-                EventTimeRange.ofTimeBoundsAndGrace(Duration.ofMillis(100), Duration.ofMillis(50), Duration.ofMillis(20)),
+                EventTimeRange.ofTimeBoundsAndGrace(Duration.ofMillis(100), Duration.ofMillis(20)).withLookAhead(Duration.ofMillis(50)),
                 mat
             )
         );
@@ -353,7 +353,7 @@ public class RangedKStreamImplTest {
                 .withValueSerde(Serdes.String());
 
         assertThrows(IllegalArgumentException.class, () ->
-            grouped.rangeOver(EventTimeRange.ofTimeBoundsWithNoGrace(Duration.ofSeconds(5), Duration.ofSeconds(1)), mat)
+            grouped.rangeOver(EventTimeRange.ofTimeBoundsWithNoGrace(Duration.ofSeconds(5)), mat)
         );
     }
 

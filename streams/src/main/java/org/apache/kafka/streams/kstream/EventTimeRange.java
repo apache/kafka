@@ -28,62 +28,57 @@ import java.util.NoSuchElementException;
 
 /**
  * A time-based {@link Range} that includes all records whose timestamps fall within
- * [{@code anchor.timestamp() - before}, {@code anchor.timestamp() + after}].
+ * [{@code anchor.timestamp() - before}, {@code anchor.timestamp()}].
  *
  * <p>Use {@link #ofTimeBoundsWithNoGrace} or {@link #ofTimeBoundsAndGrace} to create instances.
  * Use {@link #withMaxRecords(int)} to cap the number of included records.
+ * Use {@link #withLookAhead(Duration)} to include lookahead for out-of-order anchor context resolution.
  */
 public final class EventTimeRange<K, V> extends Range<K, V> {
 
     private final long beforeMs;
-    private final long afterMs;
+    private long afterMs = 0L;
     private int maxRecords = Integer.MAX_VALUE;
 
-    private EventTimeRange(final long beforeMs, final long afterMs, final long gracePeriodMs) {
+    private EventTimeRange(final long beforeMs, final long gracePeriodMs) {
         super(gracePeriodMs);
         this.beforeMs = beforeMs;
-        this.afterMs = afterMs;
     }
 
     /**
-     * Create an {@link EventTimeRange} spanning {@code before} time before and {@code after} time
-     * after the anchor record's timestamp. Records that arrive out of order are immediately dropped.
-     * Use {@link #ofTimeBoundsAndGrace} to tolerate late arrivals.
+     * Create an {@link EventTimeRange} spanning {@code before} time prior to the anchor
+     * record's timestamp, capping the upper boundary strictly at the anchor record (Current Row).
+     * Late-arriving records past the stream time watermark are dropped.
+     * Use {@link #ofTimeBoundsAndGrace(Duration, Duration)} to tolerate late arrivals.
      * Use {@link #withMaxRecords(int)} to cap the number of records included.
      *
      * @param before the time before the anchor record's timestamp that defines the start of the
      *               range. Must not be negative.
-     * @param after  the time after the anchor record's timestamp that defines the end of the range.
-     *               Must not be negative.
      * @return a new {@link EventTimeRange} with no grace period
-     * @throws IllegalArgumentException if either duration is negative or cannot be represented as
+     * @throws IllegalArgumentException if the duration is negative or cannot be represented as
      *                                  {@code long} milliseconds
      */
-    public static <K, V> EventTimeRange<K, V> ofTimeBoundsWithNoGrace(final Duration before, final Duration after) {
+    public static <K, V> EventTimeRange<K, V> ofTimeBoundsWithNoGrace(final Duration before) {
         final long beforeMs = validateNonNegativeMs(before, "before");
-        final long afterMs = validateNonNegativeMs(after, "after");
-        return new EventTimeRange<>(beforeMs, afterMs, 0L);
+        return new EventTimeRange<>(beforeMs, 0L);
     }
 
     /**
-     * Create an {@link EventTimeRange} spanning {@code before} time before and {@code after} time
-     * after the anchor record's timestamp, accepting late records up to {@code grace} beyond the
-     * range boundary. Use {@link #withMaxRecords(int)} to cap the number of records included.
+     * Create an {@link EventTimeRange} spanning {@code before} time prior to the anchor
+     * record's timestamp, accepting late records up to {@code grace} beyond the range boundary.
+     * Use {@link #withMaxRecords(int)} to cap the number of records included.
      *
      * @param before the time before the anchor record's timestamp that defines the start of the
      *               range. Must not be negative.
-     * @param after  the time after the anchor record's timestamp that defines the end of the range.
-     *               Must not be negative.
      * @param grace  the grace period to tolerate late-arriving records. Must not be negative.
      * @return a new {@link EventTimeRange} with the specified grace period
      * @throws IllegalArgumentException if any duration is negative or cannot be represented as
      *                                  {@code long} milliseconds
      */
-    public static <K, V> EventTimeRange<K, V> ofTimeBoundsAndGrace(final Duration before, final Duration after, final Duration grace) {
+    public static <K, V> EventTimeRange<K, V> ofTimeBoundsAndGrace(final Duration before, final Duration grace) {
         final long beforeMs = validateNonNegativeMs(before, "before");
-        final long afterMs = validateNonNegativeMs(after, "after");
         final long graceMs = validateNonNegativeMs(grace, "grace");
-        return new EventTimeRange<>(beforeMs, afterMs, graceMs);
+        return new EventTimeRange<>(beforeMs, graceMs);
     }
 
     /**
@@ -102,8 +97,21 @@ public final class EventTimeRange<K, V> extends Range<K, V> {
         return this;
     }
 
+    /**
+     * Enable a forward-looking window over newer records that have already been
+     * buffered in the state store (useful for out-of-order anchor context resolution).
+     *
+     * @param after the time after the anchor record's timestamp to look forward. Must not be negative.
+     * @return this {@link EventTimeRange} instance
+     * @throws IllegalArgumentException if the duration is negative or can't be represented as {@code long milliseconds}
+     */
+    public EventTimeRange<K, V> withLookAhead(final Duration after) {
+        this.afterMs = validateNonNegativeMs(after, "after");
+        return this;
+    }
+
     @Override
-    public CloseableIterator<Record<K, V>> fetch(final Record<K, V> anchor, final ReadOnlyWindowStore<K, V> store) {
+    public RangedRecordIterator<Record<K, V>> fetch(final Record<K, V> anchor, final ReadOnlyWindowStore<K, V> store) {
         final Instant from = Instant.ofEpochMilli(anchor.timestamp() - beforeMs);
         final Instant to = Instant.ofEpochMilli(anchor.timestamp() + afterMs);
         return new LimitingWindowStoreIterator<>(store.fetch(anchor.key(), from, to), anchor.key(), maxRecords);
@@ -122,7 +130,7 @@ public final class EventTimeRange<K, V> extends Range<K, V> {
         return ms;
     }
 
-    private static final class LimitingWindowStoreIterator<K, V> implements CloseableIterator<Record<K, V>> {
+    private static final class LimitingWindowStoreIterator<K, V> implements RangedRecordIterator<Record<K, V>> {
 
         private final WindowStoreIterator<V> inner;
         private final K key;
