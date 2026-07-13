@@ -134,6 +134,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
+import org.apache.kafka.coordinator.group.streams.MemberTaskOffsets;
 import org.apache.kafka.coordinator.group.streams.MockTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
@@ -6132,10 +6133,10 @@ public class GroupMetadataManagerTest {
             requiredKnownMemberId
         )).toList();
 
-        // Advance clock by group initial rebalance delay to complete first inital delayed join.
+        // Advance clock by group initial rebalance delay to complete first initial delayed join.
         // This will extend the initial rebalance as new members have joined.
         GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(50));
-        // Advance clock by group initial rebalance delay to complete second inital delayed join.
+        // Advance clock by group initial rebalance delay to complete second initial delayed join.
         // Since there are no new members that joined since the previous delayed join,
         // the join group phase will complete.
         GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(50));
@@ -6181,10 +6182,10 @@ public class GroupMetadataManagerTest {
         assertEquals(groupMaxSize, group.numAwaitingJoinResponse());
         assertTrue(group.isInState(PREPARING_REBALANCE));
 
-        // Advance clock by group initial rebalance delay to complete first inital delayed join.
+        // Advance clock by group initial rebalance delay to complete first initial delayed join.
         // This will extend the initial rebalance as new members have joined.
         GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(50));
-        // Advance clock by group initial rebalance delay to complete second inital delayed join.
+        // Advance clock by group initial rebalance delay to complete second initial delayed join.
         // Since there are no new members that joined since the previous delayed join,
         // we will complete the rebalance.
         GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(50));
@@ -6236,7 +6237,7 @@ public class GroupMetadataManagerTest {
         // Advance clock by group initial rebalance delay to complete first initial delayed join.
         // This will extend the initial rebalance as new members have joined.
         GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(50));
-        // Advance clock by group initial rebalance delay to complete second inital delayed join.
+        // Advance clock by group initial rebalance delay to complete second initial delayed join.
         // Since there are no new members that joined since the previous delayed join,
         // we will complete the rebalance.
         GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(50));
@@ -6306,10 +6307,10 @@ public class GroupMetadataManagerTest {
             requiredKnownMemberId
         )).toList();
 
-        // Advance clock by group initial rebalance delay to complete first inital delayed join.
+        // Advance clock by group initial rebalance delay to complete first initial delayed join.
         // This will extend the initial rebalance as new members have joined.
         GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(50));
-        // Advance clock by group initial rebalance delay to complete second inital delayed join.
+        // Advance clock by group initial rebalance delay to complete second initial delayed join.
         // Since there are no new members that joined since the previous delayed join,
         // we will complete the rebalance.
         GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(50));
@@ -18577,6 +18578,111 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testStreamsGroupHeartbeatDoesNotStoreTaskOffsetsWhenOwnedTasksAreInvalid() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 3)
+                .buildCoordinatorMetadataImage())
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, 10)
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(10)
+                    .setAssignedTasks(mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 10,
+                        TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2)))
+                    .build())
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topology))
+                .withTargetAssignment(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+                    TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2)))
+                .withTargetAssignmentEpoch(10)
+            )
+            .build();
+
+        // The heartbeat reports task offsets but also claims an invalid owned task, so it is rejected during
+        // validation. The reported offsets must not be stored: updating the (non-timeline) task-offsets map before
+        // validation would leave an orphaned entry that the coordinator runtime does not roll back.
+        assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(10)
+                .setActiveTasks(List.of(new StreamsGroupHeartbeatRequestData.TaskIds()
+                    .setSubtopologyId(subtopology1)
+                    .setPartitions(List.of(3)))) // partition 3 is out of range (only 0, 1, 2 exist)
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
+                .setTaskOffsets(List.of(new StreamsGroupHeartbeatRequestData.TaskOffset()
+                    .setSubtopologyId(subtopology1).setPartition(0).setOffset(10L)))
+                .setTaskEndOffsets(List.of(new StreamsGroupHeartbeatRequestData.TaskOffset()
+                    .setSubtopologyId(subtopology1).setPartition(0).setOffset(20L)))));
+
+        StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+        assertEquals(MemberTaskOffsets.EMPTY, group.taskOffsets(memberId));
+    }
+
+    @Test
+    public void testStreamsGroupHeartbeatRejectsDuplicateTaskOffsets() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 3)
+                .buildCoordinatorMetadataImage())
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, 10)
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(10)
+                    .setAssignedTasks(mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 10,
+                        TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2)))
+                    .build())
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topology))
+                .withTargetAssignment(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+                    TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2)))
+                .withTargetAssignmentEpoch(10)
+            )
+            .build();
+
+        // The owned tasks are valid, but the reported task offsets contain a duplicate (subtopologyId, partition)
+        // entry. This is a malformed request and must be rejected with a clear client error; nothing is stored.
+        InvalidRequestException e = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(10)
+                .setActiveTasks(List.of(new StreamsGroupHeartbeatRequestData.TaskIds()
+                    .setSubtopologyId(subtopology1)
+                    .setPartitions(List.of(0, 1, 2))))
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
+                .setTaskOffsets(List.of(
+                    new StreamsGroupHeartbeatRequestData.TaskOffset().setSubtopologyId(subtopology1).setPartition(0).setOffset(10L),
+                    new StreamsGroupHeartbeatRequestData.TaskOffset().setSubtopologyId(subtopology1).setPartition(0).setOffset(11L)))));
+        assertEquals("Task offsets contain a duplicate entry for subtopology " + subtopology1 + " and partition 0.", e.getMessage());
+
+        StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+        assertEquals(MemberTaskOffsets.EMPTY, group.taskOffsets(memberId));
+    }
+
+    @Test
     public void testStreamsGroupHeartbeatStoresTaskOffsetsWithoutPersisting() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
@@ -27247,12 +27353,15 @@ public class GroupMetadataManagerTest {
         assertTrue(actual.isPresent());
         assertRecordEquals(expected, actual.get());
 
+        // t1 is already initialized, so its newly added partitions (2, 3) must start at offset 0
+        // to avoid losing records produced before initialization completes.
         verifyShareGroupHeartbeatInitializeRequest(
             result.response().getValue(),
             Map.of(
                 t1Uuid,
                 Set.of(2, 3)
             ),
+            Map.of(t1Uuid, 0L),
             groupId,
             3,
             true
@@ -27260,6 +27369,114 @@ public class GroupMetadataManagerTest {
 
         assertEquals(Map.of(t1Uuid, Set.of(0, 1), t2Uuid, Set.of(0, 1)), context.groupMetadataManager.initializedShareGroupPartitions(groupId));
         verify(context.metrics, times(2)).record(SHARE_GROUP_REBALANCES_SENSOR_NAME);
+    }
+
+    @Test
+    public void testShareGroupHeartbeatInitializeMixedNewAndExpandedTopics() {
+        // A single heartbeat that both adds a brand-new topic and expands an already-initialized
+        // topic must produce one initialize request where the new topic uses the uninitialized (-1)
+        // start offset (so share.auto.offset.reset applies) while the expanded topic's new
+        // partitions use a fixed start offset of 0 (to avoid losing records).
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+
+        Uuid t1Uuid = Uuid.randomUuid();
+        String t1Name = "t1";
+        Uuid t2Uuid = Uuid.randomUuid();
+        String t2Name = "t2";
+        Uuid t3Uuid = Uuid.randomUuid();
+        String t3Name = "t3";
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
+            .addTopic(t1Uuid, t1Name, 2)
+            .addTopic(t2Uuid, t2Name, 2)
+            .buildCoordinatorMetadataImage();
+
+        String groupId = "share-group";
+
+        context.groupMetadataManager.onMetadataUpdate(mock(CoordinatorMetadataDelta.class), image);
+
+        Uuid memberId = Uuid.randomUuid();
+        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId.toString())
+                .setMemberEpoch(0)
+                .setSubscribedTopicNames(List.of(t1Name, t2Name)));
+
+        // Both topics are brand-new, so both initialize at the uninitialized (-1) start offset.
+        verifyShareGroupHeartbeatInitializeRequest(
+            result.response().getValue(),
+            Map.of(
+                t1Uuid, Set.of(0, 1),
+                t2Uuid, Set.of(0, 1)
+            ),
+            groupId,
+            2,
+            true
+        );
+
+        context.groupMetadataManager.replay(
+            new ShareGroupStatePartitionMetadataKey()
+                .setGroupId(groupId),
+            new ShareGroupStatePartitionMetadataValue()
+                .setInitializingTopics(List.of())
+                .setInitializedTopics(List.of(
+                    new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                        .setTopicId(t1Uuid)
+                        .setTopicName(t1Name)
+                        .setPartitions(List.of(0, 1)),
+                    new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                        .setTopicId(t2Uuid)
+                        .setTopicName(t2Name)
+                        .setPartitions(List.of(0, 1))
+                ))
+                .setDeletingTopics(List.of())
+        );
+
+        // t1 expands from 2 to 4 partitions and a brand-new topic t3 (3 partitions) is added.
+        image = new MetadataImageBuilder()
+            .addTopic(t1Uuid, t1Name, 4)
+            .addTopic(t2Uuid, t2Name, 2)
+            .addTopic(t3Uuid, t3Name, 3)
+            .buildCoordinatorMetadataImage();
+
+        context.groupMetadataManager.onMetadataUpdate(mock(CoordinatorMetadataDelta.class), image);
+
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            Map.of(
+                memberId.toString(),
+                new MemberAssignmentImpl(
+                    Map.of(
+                        t1Uuid, Set.of(0, 1),
+                        t2Uuid, Set.of(0, 1)
+                    )
+                )
+            )
+        ));
+
+        result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId.toString())
+                .setMemberEpoch(2)
+                .setSubscribedTopicNames(List.of(t1Name, t2Name, t3Name)));
+
+        // Single request: t1's new partitions {2,3} (already-initialized topic) start at 0, while
+        // brand-new topic t3's partitions {0,1,2} use the uninitialized (-1) start offset.
+        verifyShareGroupHeartbeatInitializeRequest(
+            result.response().getValue(),
+            Map.of(
+                t1Uuid, Set.of(2, 3),
+                t3Uuid, Set.of(0, 1, 2)
+            ),
+            Map.of(t1Uuid, 0L),
+            groupId,
+            3,
+            true
+        );
     }
 
     @Test
@@ -27441,9 +27658,12 @@ public class GroupMetadataManagerTest {
             ))
         );
 
+        // t1 was already in the initializing state, so retrying its initialization uses a fixed
+        // start offset of 0 rather than re-deferring to the share.auto.offset.reset strategy.
         verifyShareGroupHeartbeatInitializeRequest(
             result.response().getValue(),
             Map.of(t1Uuid, Set.of(0, 1)),
+            Map.of(t1Uuid, 0L),
             groupId,
             3,
             true
@@ -29120,16 +29340,29 @@ public class GroupMetadataManagerTest {
         int stateEpoch,
         boolean shouldExist
     ) {
+        // Brand-new topics are expected to use the uninitialized (-1) start offset.
+        verifyShareGroupHeartbeatInitializeRequest(initRequest, expectedTopicPartitionsMap, Map.of(), groupId, stateEpoch, shouldExist);
+    }
+
+    private void verifyShareGroupHeartbeatInitializeRequest(
+        Optional<InitializeShareGroupStateParameters> initRequest,
+        Map<Uuid, Set<Integer>> expectedTopicPartitionsMap,
+        Map<Uuid, Long> expectedStartOffsetByTopic,
+        String groupId,
+        int stateEpoch,
+        boolean shouldExist
+    ) {
         if (shouldExist) {
             assertTrue(initRequest.isPresent());
             InitializeShareGroupStateParameters request = initRequest.get();
             assertEquals(groupId, request.groupTopicPartitionData().groupId());
             Map<Uuid, Set<Integer>> actualTopicPartitionsMap = new HashMap<>();
             for (TopicData<PartitionStateData> topicData : request.groupTopicPartitionData().topicsData()) {
+                long expectedStartOffset = expectedStartOffsetByTopic.getOrDefault(topicData.topicId(), -1L);
                 actualTopicPartitionsMap.computeIfAbsent(topicData.topicId(), k -> new HashSet<>())
                     .addAll(topicData.partitions().stream().map(partitionData -> {
                         assertEquals(stateEpoch, partitionData.stateEpoch());
-                        assertEquals(-1, partitionData.startOffset());
+                        assertEquals(expectedStartOffset, partitionData.startOffset());
                         return partitionData.partition();
                     }).toList());
             }

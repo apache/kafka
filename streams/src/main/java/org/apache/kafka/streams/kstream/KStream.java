@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -58,6 +59,7 @@ import java.time.Duration;
  * @param <K> the key type of this stream
  * @param <V> the value type of this stream
  */
+@InterfaceAudience.Public
 public interface KStream<K, V> {
 
     /**

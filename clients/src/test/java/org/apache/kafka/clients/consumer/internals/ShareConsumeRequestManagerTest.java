@@ -70,11 +70,11 @@ import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.AfterEach;
@@ -1115,20 +1115,65 @@ public class ShareConsumeRequestManagerTest {
         // Change the subscription.
         subscriptions.assignFromSubscribed(List.of(tp1));
 
-        // Now we will be sending the request to node1 only as leader for tip1 is node1.
-        // We do not build the request for tip0 as there are no acknowledgements to send.
+        // We build a request to node 1 to fetch tip1, and a request to node 0 to remove tip0
+        // from the share session even though there are no acknowledgements to send.
         NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
-        assertEquals(1, pollResult.unsentRequests.size());
-        assertEquals(nodeId1, pollResult.unsentRequests.get(0).node().get());
+        assertEquals(2, pollResult.unsentRequests.size());
 
-        ShareFetchRequest.Builder builder = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
+        ShareFetchRequest.Builder node0Builder, node1Builder;
+        if (pollResult.unsentRequests.get(0).node().get() == nodeId0) {
+            node0Builder = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
+            node1Builder = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(1).requestBuilder();
+            assertEquals(nodeId1, pollResult.unsentRequests.get(1).node().get());
+        } else {
+            node0Builder = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(1).requestBuilder();
+            node1Builder = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
+            assertEquals(nodeId0, pollResult.unsentRequests.get(1).node().get());
+            assertEquals(nodeId1, pollResult.unsentRequests.get(0).node().get());
+        }
 
-        assertEquals(1, builder.data().topics().size());
-        ShareFetchRequestData.FetchTopic fetchTopic = builder.data().topics().stream().findFirst().get();
+        // node1 fetches the newly assigned partition tip1.
+        assertEquals(1, node1Builder.data().topics().size());
+        ShareFetchRequestData.FetchTopic fetchTopic = node1Builder.data().topics().stream().findFirst().get();
         assertEquals(tip1.topicId(), fetchTopic.topicId());
         assertEquals(1, fetchTopic.partitions().size());
         assertEquals(1, fetchTopic.partitions().stream().findFirst().get().partitionIndex());
-        assertEquals(0, builder.data().forgottenTopicsData().size());
+        assertEquals(0, node1Builder.data().forgottenTopicsData().size());
+
+        // node0 removes tip0 from the share session and fetches nothing.
+        assertEquals(0, node0Builder.data().topics().size());
+        assertEquals(1, node0Builder.data().forgottenTopicsData().size());
+        assertEquals(tip0.topicId(), node0Builder.data().forgottenTopicsData().get(0).topicId());
+        assertEquals(1, node0Builder.data().forgottenTopicsData().get(0).partitions().size());
+        assertEquals(0, node0Builder.data().forgottenTopicsData().get(0).partitions().get(0));
+    }
+
+    @Test
+    public void testShareFetchRemovesUnassignedPartitionFromSession() {
+        buildRequestManager();
+
+        assignFromSubscribed(Set.of(tp0));
+
+        // Establish the share session by fetching from tp0.
+        sendFetchAndVerifyResponse(records, emptyAcquiredRecords, Errors.NONE);
+        fetchRecords();
+
+        // The partition is no longer assigned and there are no acknowledgements to send.
+        subscriptions.assignFromSubscribed(Set.of());
+
+        // We still build a ShareFetch to remove tip0 from the share session on the broker.
+        NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
+        assertEquals(1, pollResult.unsentRequests.size());
+
+        ShareFetchRequest.Builder builder = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
+        assertEquals(0, builder.data().topics().size());
+        assertEquals(1, builder.data().forgottenTopicsData().size());
+        assertEquals(tip0.topicId(), builder.data().forgottenTopicsData().get(0).topicId());
+        assertEquals(1, builder.data().forgottenTopicsData().get(0).partitions().size());
+        assertEquals(0, builder.data().forgottenTopicsData().get(0).partitions().get(0));
+
+        // The partition has already been removed from the session, so no further ShareFetch is built.
+        assertEquals(0, shareConsumeRequestManager.sendFetches());
     }
 
     @Test

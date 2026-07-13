@@ -24,7 +24,9 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
@@ -113,6 +115,7 @@ class ShareGroupDLQStateManagerTest {
     private static final Uuid SOURCE_TOPIC_ID = Uuid.randomUuid();
     private static final Node DEFAULT_LEADER = new Node(0, HOST, PORT);
     private static final LogReader MOCK_LOG_READER = mock(LogReader.class);
+    private static final int DEFAULT_MAX_MESSAGE_BYTES = 1024 * 1024;
 
     private final MockTimer mockTimer = new MockTimer(MOCK_TIME);
     private final ShareGroupMetrics mockMetrics = mock(ShareGroupMetrics.class);
@@ -214,6 +217,7 @@ class ShareGroupDLQStateManagerTest {
             List.of(leader)
         ));
         when(helper.isShareGroupDlqCopyRecordEnabled(GROUP_ID)).thenReturn(false);
+        when(helper.dlqTopicMaxMessageBytes(anyString())).thenReturn(DEFAULT_MAX_MESSAGE_BYTES);
         return helper;
     }
 
@@ -560,6 +564,7 @@ class ShareGroupDLQStateManagerTest {
             List.of(DEFAULT_LEADER)
         ));
         when(cacheHelper.getClusterNodes()).thenReturn(List.of(DEFAULT_LEADER));
+        when(cacheHelper.dlqTopicMaxMessageBytes(anyString())).thenReturn(DEFAULT_MAX_MESSAGE_BYTES);
 
         MockClient client = new MockClient(MOCK_TIME);
         List<ProduceRequest> capturedProduces = new ArrayList<>();
@@ -613,6 +618,7 @@ class ShareGroupDLQStateManagerTest {
             List.of(DEFAULT_LEADER)
         ));
         when(cacheHelper.containsTopic(DLQ_TOPIC)).thenReturn(false);
+        when(cacheHelper.dlqTopicMaxMessageBytes(anyString())).thenReturn(DEFAULT_MAX_MESSAGE_BYTES);
 
         MockClient client = new MockClient(MOCK_TIME);
         List<ProduceRequest> capturedProduces = new ArrayList<>();
@@ -653,6 +659,26 @@ class ShareGroupDLQStateManagerTest {
         verify(mockMetrics).recordDLQProduce(GROUP_ID);
         verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
         verify(mockMetrics, never()).recordDLQProduceFailed(any());
+    }
+
+    @Test
+    public void testCreateTopicBuilderPinsCreateTimeAlongsideDlqEnableConfig() throws Exception {
+        // DLQ record timestamps are explicitly set to the write time (see topicProduceData()), so an
+        // auto-created DLQ topic must pin CreateTime rather than inheriting the cluster's broker-level
+        // log.message.timestamp.type default, which - if LogAppendTime - would silently discard it.
+        stateManager = builder().build();
+        ShareGroupDLQStateManager.ProduceRequestHandler handler = newHandlerForCoalesceTest(stateManager, GROUP_ID, 0);
+
+        CreateTopicsRequest request = ((CreateTopicsRequest.Builder) handler.createTopicBuilder()).build();
+        CreateTopicsRequestData.CreatableTopic topic = request.data().topics().iterator().next();
+        assertEquals(DLQ_TOPIC, topic.name());
+
+        Map<String, String> configs = new HashMap<>();
+        topic.configs().forEach(c -> configs.put(c.name(), c.value()));
+        assertEquals(Map.of(
+            TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true",
+            TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "CreateTime"
+        ), configs);
     }
 
     @Test
@@ -760,6 +786,7 @@ class ShareGroupDLQStateManagerTest {
             Optional.of(DLQ_TOPIC_ID),
             List.of(DEFAULT_LEADER)
         ));
+        when(cacheHelper.dlqTopicMaxMessageBytes(anyString())).thenReturn(DEFAULT_MAX_MESSAGE_BYTES);
 
         Timer realTimer = new SystemTimerReaper("shareGroupDLQTestTimer",
             new SystemTimer("shareGroupDLQTestTimer"));
@@ -864,6 +891,52 @@ class ShareGroupDLQStateManagerTest {
         } finally {
             Utils.closeQuietly(realTimer, "shareGroupDLQTestTimer");
         }
+    }
+
+    @Test
+    public void testDlqChunksOverMaxMessageBytesAcrossMultipleProduceRequests() throws Exception {
+        // param() spans 3 offsets (0-2). With a 1-byte budget, topicProduceData() still always
+        // includes at least one record per request (see topicProduceData()'s single-record floor),
+        // so the range must be sent as three sequential produce requests instead of failing or
+        // sending an oversized one.
+        ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
+        when(cacheHelper.dlqTopicMaxMessageBytes(anyString())).thenReturn(1);
+
+        MockClient client = new MockClient(MOCK_TIME);
+        List<ProduceRequest> capturedProduces = new ArrayList<>();
+        MockClient.RequestMatcher captureProduce = body -> {
+            if (body instanceof ProduceRequest pr) {
+                capturedProduces.add(pr);
+                return true;
+            }
+            return false;
+        };
+        client.prepareResponseFrom(captureProduce, successfulProduceResponse(0), DEFAULT_LEADER);
+        client.prepareResponseFrom(captureProduce, successfulProduceResponse(0), DEFAULT_LEADER);
+        client.prepareResponseFrom(captureProduce, successfulProduceResponse(0), DEFAULT_LEADER);
+
+        stateManager = builder().withClient(client).withCacheHelper(cacheHelper).build();
+        stateManager.start();
+        assertNull(stateManager.dlq(param()).get(10, TimeUnit.SECONDS));
+
+        assertEquals(3, capturedProduces.size(), "The 3-offset range must be split into 3 chunked requests");
+        Map<String, String> sharedHeaders = Map.of(
+            HEADER_DLQ_ERRORS_TOPIC, "source-topic",
+            HEADER_DLQ_ERRORS_PARTITION, "0",
+            HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
+            HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
+            HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
+        );
+        for (int offset = 0; offset < 3; offset++) {
+            assertDlqProduceRecordHeaders(capturedProduces.get(offset), Map.of(
+                0, new ExpectedDlqPartition(offset, offset, sharedHeaders, List.of(), List.of())
+            ));
+        }
+
+        // Each chunk goes through topicProduceData()/generateRequests() independently.
+        verify(mockMetrics, times(3)).recordDLQProduce(GROUP_ID);
+        verify(mockMetrics, times(3)).recordDLQRecordWrite(GROUP_ID, 1);
+        verify(mockMetrics, never()).recordDLQProduceFailed(any());
     }
 
     @Test
@@ -1569,6 +1642,59 @@ class ShareGroupDLQStateManagerTest {
         ProduceRequest request = ((ProduceRequest.Builder) result.request()).build();
         assertEquals(1, request.data().topicData().size());
         assertEquals(DLQ_TOPIC_ID, request.data().topicData().iterator().next().topicId());
+    }
+
+    @Test
+    public void testCoalesceProduceRequestsDefersHandlersThatExceedPartitionBudget() throws Exception {
+        // Three single-offset handlers targeting the same DLQ partition (default cache helper: single
+        // DLQ partition). With a 1-byte budget, the first handler for the partition is still admitted
+        // (topicProduceData() always includes at least one record), but merging a second or third
+        // handler's records in would exceed the budget - they must be deferred, not failed.
+        ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
+        when(cacheHelper.dlqTopicMaxMessageBytes(anyString())).thenReturn(1);
+        stateManager = builder().withCacheHelper(cacheHelper).build();
+
+        ShareGroupDLQStateManager.ProduceRequestHandler h0 = newHandlerForCoalesceTest(stateManager, GROUP_ID, 0);
+        ShareGroupDLQStateManager.ProduceRequestHandler h1 = newHandlerForCoalesceTest(stateManager, GROUP_ID, 1);
+        ShareGroupDLQStateManager.ProduceRequestHandler h2 = newHandlerForCoalesceTest(stateManager, GROUP_ID, 2);
+        h0.populateDLQTopicData();
+        h1.populateDLQTopicData();
+        h2.populateDLQTopicData();
+
+        ShareGroupDLQStateManager.CoalesceResults round1 =
+            ShareGroupDLQStateManager.coalesceProduceRequests(List.of(h0, h1, h2));
+
+        assertEquals(List.of(h0), round1.liveHandlers(),
+            "Only the first handler for the partition should be admitted within the byte budget");
+        assertEquals(List.of(h1, h2), round1.deferredHandlers(),
+            "Handlers that don't fit within the budget must be deferred, not failed");
+        // Deferred handlers haven't produced anything yet, so the metric must count only h0.
+        verify(mockMetrics, times(1)).recordDLQProduce(GROUP_ID);
+
+        // The resulting request must still be well-formed, containing only the admitted handler's record.
+        ProduceRequest request = ((ProduceRequest.Builder) round1.request()).build();
+        ProduceRequestData.TopicProduceData topic = request.data().topicData().iterator().next();
+        assertEquals(1, topic.partitionData().size());
+        assertEquals(1, recordCount((MemoryRecords) topic.partitionData().get(0).records()));
+
+        // Simulate the next tick: h1 and h2 were re-added to the node map (real generateRequests()
+        // re-enqueues deferredHandlers via addRequestToNodeMap) and get coalesced again on their own.
+        // h1 now gets the free first-handler pass; h2 is deferred a second time.
+        ShareGroupDLQStateManager.CoalesceResults round2 =
+            ShareGroupDLQStateManager.coalesceProduceRequests(List.of(h1, h2));
+        assertEquals(List.of(h1), round2.liveHandlers());
+        assertEquals(List.of(h2), round2.deferredHandlers());
+        // h2 has now been deferred twice (round1 and round2) without ever being admitted - its
+        // repeated re-evaluation must not inflate the metric on its own.
+        verify(mockMetrics, times(2)).recordDLQProduce(GROUP_ID);
+
+        // Round 3: h2 is alone and finally gets admitted.
+        ShareGroupDLQStateManager.CoalesceResults round3 =
+            ShareGroupDLQStateManager.coalesceProduceRequests(List.of(h2));
+        assertEquals(List.of(h2), round3.liveHandlers());
+        assertEquals(List.of(), round3.deferredHandlers());
+        // Exactly one recordDLQProduce per handler, total - not once per deferral re-evaluation.
+        verify(mockMetrics, times(3)).recordDLQProduce(GROUP_ID);
     }
 
     // --- DLQ record with copy record enabled ---

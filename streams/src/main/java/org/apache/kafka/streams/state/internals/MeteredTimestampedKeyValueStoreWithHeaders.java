@@ -26,8 +26,11 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.processor.api.ReadOnlyRecord;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
+import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
@@ -36,6 +39,7 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.query.ResultOrder;
 import org.apache.kafka.streams.query.TimestampedKeyQuery;
+import org.apache.kafka.streams.query.TimestampedKeyWithHeadersQuery;
 import org.apache.kafka.streams.query.TimestampedRangeQuery;
 import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -90,6 +94,10 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             mkEntry(
                 TimestampedKeyQuery.class,
                 (query, positionBound, config, store) -> runTimestampedKeyQuery(query, positionBound, config)
+            ),
+            mkEntry(
+                TimestampedKeyWithHeadersQuery.class,
+                (query, positionBound, config, store) -> runTimestampedKeyWithHeadersQuery(query, positionBound, config)
             ),
             mkEntry(
                 RangeQuery.class,
@@ -286,10 +294,6 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
     /**
      * Executes a query against this store.
      *
-     * <p>Note: Query results do NOT include headers, even though headers are
-     * preserved in the underlying store. This behavior provides compatibility
-     * with existing IQv2 APIs that operate on timestamped stores.
-     *
      * @param query the query to execute
      * @param positionBound the position bound
      * @param config the query configuration
@@ -374,6 +378,72 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             final QueryResult<ValueAndTimestamp<V>> typedQueryResult =
                 InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, valueAndTimestamp);
             result = (QueryResult<R>) typedQueryResult;
+        } else {
+            // the generic type doesn't matter, since failed queries have no result set.
+            result = (QueryResult<R>) rawResult;
+        }
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private <R> QueryResult<R> runTimestampedKeyWithHeadersQuery(
+        final Query<R> query,
+        final PositionBound positionBound,
+        final QueryConfig config
+    ) {
+        final QueryResult<R> result;
+        final TimestampedKeyWithHeadersQuery<K, V> typedKeyQuery = (TimestampedKeyWithHeadersQuery<K, V>) query;
+
+        // Forward a raw byte-level KeyQuery to the wrapped store, propagating skipCache so the caching
+        // layer can honor it; the result bytes are the serialized ValueTimestampHeaders, which we
+        // deserialize below to recover value, timestamp, and headers.
+        // The existing KeyQuery/TimestampedKeyQuery handlers do not yet propagate skipCache across the
+        // metered stores; that general fix is tracked in KAFKA-20776.
+        KeyQuery<Bytes, byte[]> rawKeyQuery = KeyQuery.withKey(serializeKey(typedKeyQuery.key(), internalContext.headers()));
+        if (typedKeyQuery.isSkipCache()) {
+            rawKeyQuery = rawKeyQuery.skipCache();
+        }
+        final QueryResult<byte[]> rawResult = wrapped().query(rawKeyQuery, positionBound, config);
+        if (rawResult.isSuccess()) {
+            final Function<byte[], ValueTimestampHeaders<V>> deserializer = StoreQueryUtils.deserializeValue(serdes, wrapped());
+            final ValueTimestampHeaders<V> valueTimestampHeaders = deserializer.apply(rawResult.getResult());
+            if (valueTimestampHeaders != null && valueTimestampHeaders.timestamp() < 0) {
+                // The result is modeled as a Record, whose constructor rejects negative timestamps. A
+                // negative stored timestamp cannot arise from the normal record-driven flow (the PAPI
+                // Record a processor stores already forbids it), so it indicates corrupted/unexpected
+                // store state; surface it as a failed result rather than letting `new Record<>` throw
+                // out of query().
+                final QueryResult<ReadOnlyRecord<K, V>> failure = QueryResult.forFailure(
+                    FailureReason.STORE_EXCEPTION,
+                    "Stored record for the queried key has a negative timestamp ("
+                        + valueTimestampHeaders.timestamp() + "); cannot construct a ReadOnlyRecord.");
+                // Preserve the wrapped store's execution info (empty unless collectExecutionInfo is set),
+                // matching the success path and the raw-failure path below.
+                rawResult.getExecutionInfo().forEach(failure::addExecutionInfo);
+                failure.setPosition(rawResult.getPosition());
+                result = (QueryResult<R>) failure;
+            } else {
+                // Surface the result as a ReadOnlyRecord (implemented by Record), keeping the headers.
+                // A null wrapper means the key is absent or tombstoned, which we surface as a null result.
+                final ReadOnlyRecord<K, V> record;
+                if (valueTimestampHeaders == null) {
+                    record = null;
+                } else {
+                    final Record<K, V> headerRecord = new Record<>(
+                        typedKeyQuery.key(),
+                        valueTimestampHeaders.value(),
+                        valueTimestampHeaders.timestamp(),
+                        valueTimestampHeaders.headers());
+                    // An IQ result is a read-only snapshot, so its headers should be immutable too.
+                    // Record copies the headers into a RecordHeaders; mark it read-only so a caller
+                    // cannot mutate the returned Headers.
+                    ((RecordHeaders) headerRecord.headers()).setReadOnly();
+                    record = headerRecord;
+                }
+                final QueryResult<ReadOnlyRecord<K, V>> typedQueryResult =
+                    InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, record);
+                result = (QueryResult<R>) typedQueryResult;
+            }
         } else {
             // the generic type doesn't matter, since failed queries have no result set.
             result = (QueryResult<R>) rawResult;

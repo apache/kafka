@@ -17,9 +17,12 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AlterConfigOp;
+import org.apache.kafka.clients.admin.AlterConfigsOptions;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -47,6 +50,7 @@ import java.util.Set;
 
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -268,6 +272,134 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
     }
 
     /**
+     * End-to-end DLQ copy when the source records have been tiered to remote storage. The source topic enables
+     * tiered storage and rolls a segment per record, with a 45s total retention and a 5s local retention so the
+     * early offsets are offloaded to remote storage and then deleted locally (well before the remote segments
+     * expire). Once the local segments are gone (verified via the earliest-local offset advancing past them), the
+     * records are rejected with record copy enabled - so the DLQ record fetcher must read the original records
+     * back from remote storage. The resulting DLQ records carrying the original key/value confirm the fetcher
+     * successfully pulled them from remote storage.
+     *
+     * <p>Tiered storage is backed by the local-filesystem {@code LocalTieredStorage} RSM and the default
+     * {@code TopicBasedRemoteLogMetadataManager}; short task/cleanup intervals keep the offload + local-delete
+     * cycle quick.
+     */
+    @ClusterTest(
+        serverProperties = {
+            @ClusterConfigProperty(key = "remote.log.storage.system.enable", value = "true"),
+            @ClusterConfigProperty(key = "remote.log.storage.manager.class.name",
+                value = "org.apache.kafka.server.log.remote.storage.LocalTieredStorage"),
+            @ClusterConfigProperty(key = "remote.log.manager.task.interval.ms", value = "500"),
+            @ClusterConfigProperty(key = "remote.log.metadata.manager.listener.name", value = "EXTERNAL"),
+            @ClusterConfigProperty(key = "rlmm.config.remote.log.metadata.topic.replication.factor", value = "1"),
+            @ClusterConfigProperty(key = "rlmm.config.remote.log.metadata.topic.num.partitions", value = "1"),
+            @ClusterConfigProperty(key = "log.retention.check.interval.ms", value = "500"),
+            @ClusterConfigProperty(key = "log.initial.task.delay.ms", value = "100")
+        }
+    )
+    public void testDlqCopiesRecordsReadFromRemoteStorage() throws Exception {
+        String groupId = "dlq-remote-group";
+        // The broker's default share-group DLQ topic prefix is "dlq.", so the topic name must start with it.
+        String dlqTopic = "dlq.remote";
+        String sourceTopic = "dlq-remote-source";
+        int recordCount = 5;
+
+        alterShareAutoOffsetReset(groupId, "earliest");
+        createDlqTopic(dlqTopic);
+        alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, dlqTopic);
+        // Record copy enabled: the DLQ fetcher must read the original records back to copy their key/value.
+        alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, "true");
+
+        // Tiered source topic: one segment per record, 45s total retention and 5s local retention so inactive
+        // segments are offloaded to remote storage and then deleted locally shortly after, while the remote
+        // segments comfortably survive the rest of the test.
+        createRemoteStorageSourceTopic(sourceTopic, 45_000L, 5_000L);
+
+        produceTo(sourceTopic, 0, recordCount);
+
+        // Wait until the early offsets have been offloaded to remote storage AND removed locally - i.e. the
+        // earliest *local* offset has advanced past them, so reading those offsets must now hit remote storage.
+        // The last record stays in the active (never-offloaded) segment, so the earliest local offset should
+        // reach recordCount - 1. A generous timeout (well inside the 45s remote retention) absorbs remote-log
+        // metadata-manager startup; it normally resolves a few seconds after the 5s local retention elapses.
+        waitForCondition(() -> earliestLocalOffset(sourceTopic, 0) >= recordCount - 1,
+            30_000L, 500L,
+            () -> "Source records were not tiered to remote storage and removed locally in time");
+
+        // Reject every record. Both the share fetch (to deliver them) and the DLQ record fetcher (to copy them)
+        // must read the tiered offsets back from remote storage.
+        rejectRecords(groupId, sourceTopic, recordCount);
+
+        // Record copy is enabled, so every DLQ record must carry the original key/value. For the tiered offsets
+        // (no longer present locally) that is only possible if the DLQ fetcher pulled them from remote storage.
+        verifyDlqTopicRecords(dlqTopic, groupId, sourceTopic, 0, expectedSourceOffsets(recordCount), true);
+        verifyDlqMetrics(groupId, recordCount);
+    }
+
+    @ClusterTest(
+        serverProperties = {
+            @ClusterConfigProperty(key = "remote.log.storage.system.enable", value = "true"),
+            @ClusterConfigProperty(key = "remote.log.storage.manager.class.name",
+                value = "org.apache.kafka.server.log.remote.storage.LocalTieredStorage"),
+            @ClusterConfigProperty(key = "remote.log.manager.task.interval.ms", value = "500"),
+            @ClusterConfigProperty(key = "remote.log.metadata.manager.listener.name", value = "EXTERNAL"),
+            @ClusterConfigProperty(key = "rlmm.config.remote.log.metadata.topic.replication.factor", value = "1"),
+            @ClusterConfigProperty(key = "rlmm.config.remote.log.metadata.topic.num.partitions", value = "1"),
+            @ClusterConfigProperty(key = "log.retention.check.interval.ms", value = "500"),
+            @ClusterConfigProperty(key = "log.initial.task.delay.ms", value = "100"),
+            @ClusterConfigProperty(key = "group.share.min.heartbeat.interval.ms", value = "1500"),
+            @ClusterConfigProperty(key = "group.share.heartbeat.interval.ms", value = "1500")
+        }
+    )
+    public void testDlqCopiesRecordsReadFromRemoteAndLocalStorage() throws Exception {
+        String groupId = "dlq-remote-and-local-group";
+        // The broker's default share-group DLQ topic prefix is "dlq.", so the topic name must start with it.
+        String dlqTopic = "dlq.remote-and-local-topic";
+        String sourceTopic = "dlq-remote-and-local-source";
+        int recordCount = 5;
+
+        alterShareAutoOffsetReset(groupId, "earliest");
+        createDlqTopic(dlqTopic);
+        alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, dlqTopic);
+        // Record copy enabled: the DLQ fetcher must read the original records back to copy their key/value.
+        alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, "true");
+
+        // Tiered source topic: one segment per record, 45s total retention and 5s local retention so inactive
+        // segments are offloaded to remote storage and then deleted locally shortly after, while the remote
+        // segments comfortably survive the rest of the test.
+        createRemoteStorageSourceTopic(sourceTopic, 45_000L, 10_000L);
+
+        produceTo(sourceTopic, 0, recordCount);
+
+        // Wait until the early offsets have been offloaded to remote storage AND removed locally - i.e. the
+        // earliest *local* offset has advanced past them, so reading those offsets must now hit remote storage.
+        // The last record stays in the active (never-offloaded) segment, so the earliest local offset should
+        // reach recordCount - 1. A generous timeout (well inside the 45s remote retention) absorbs remote-log
+        // metadata-manager startup; it normally resolves a few seconds after the 5s local retention elapses.
+        waitForCondition(() -> earliestLocalOffset(sourceTopic, 0) >= recordCount - 1,
+            30_000L, 500L,
+            () -> "Source records were not tiered to remote storage and removed locally in time");
+
+        // Produce some more which stay in local.
+        produceTo(sourceTopic, 0, recordCount);
+
+        // Reject every record. Both the share fetch (to deliver them) and the DLQ record fetcher (to copy them)
+        // must read the tiered offsets back from remote storage.
+        rejectRecords(groupId, sourceTopic, recordCount * 2);
+
+        // Record copy is enabled, so every DLQ record must carry the original key/value. For the tiered offsets
+        // (no longer present locally) that is only possible if the DLQ fetcher pulled them from remote storage.
+        verifyDlqTopicRecords(dlqTopic, groupId, sourceTopic, 0, expectedSourceOffsets(recordCount * 2), true);
+
+        // Make sure not all offsets from second produce are tiered.
+        waitForCondition(() -> earliestLocalOffset(sourceTopic, 0) < recordCount * 2 - 1,
+            30_000L, 500L,
+            () -> "Offsets from second produce were tiered");
+
+        verifyDlqMetrics(groupId, recordCount * 2);
+    }
+
+    /**
      * Rejects records from a multi-partition source topic and verifies they are routed to the correct DLQ
      * partition. The destination partition is {@code sourcePartition % numDlqPartitions}; with a DLQ topic that
      * has as many partitions as the source, each source partition maps to the DLQ partition of the same index.
@@ -331,6 +463,140 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
 
         verifyDlqTopicRecords(dlqTopic, groupId, expectedSourceOffsets(recordCount), false);
         verifyDlqMetrics(groupId, recordCount);
+    }
+
+    /**
+     * Verifies that the DLQ topic's own {@code max.message.bytes} - not the source topic's - bounds each DLQ
+     * produce request, and that this is honored dynamically when the config changes.
+     *
+     * <p>Phase 1: the source topic allows records up to {@code sourceMaxMessageBytes}, but the DLQ topic is
+     * configured with a third of that ({@code dlqMaxMessageBytes}). Three records, each sized so that any two
+     * of their (record-copy-enabled) DLQ copies together would exceed dlqMaxMessageBytes, are rejected together
+     * in a single commit - so SharePartition issues one DLQ call spanning the whole offset range (see
+     * ShareGroupDLQStateManagerTest for the underlying chunking logic). The DLQ produce path must then split
+     * that single call into multiple sequential produce requests (one record each) rather than failing or
+     * dropping any record; this confirms all 3 records still land on the DLQ topic, and that the DLQ
+     * produce-request count increased by at least 3 (one per chunk) - concrete proof splitting occurred, since
+     * without it the single oversized request would be rejected once (non-retriable) and no records would ever
+     * arrive.
+     *
+     * <p>Phase 2: the DLQ topic's {@code max.message.bytes} is then raised via {@code IncrementalAlterConfigs}
+     * to comfortably exceed what a fresh batch of 3 more (same-sized) records needs combined, and the reject
+     * scenario is repeated with that new batch. This confirms two more things: the broker picks up the raised
+     * limit dynamically (not a value cached at startup), and the chunking logic does not split unnecessarily
+     * once the budget is actually sufficient - the produce-request count must increase by exactly 1 for the
+     * second batch, not 3.
+     */
+    @ClusterTest
+    public void testDlqRespectsDlqTopicMaxMessageBytesNotEqToSourceTopic() throws Exception {
+        String groupId = "dlq-maxbytes-group";
+        String sourceTopic = "dlq-maxbytes-source";
+        String dlqTopic = "dlq.maxbytes";
+        int recordCount = 3;
+        int sourceMaxMessageBytes = 300_000;
+        int dlqMaxMessageBytes = sourceMaxMessageBytes / 3;
+        // Leave headroom below dlqMaxMessageBytes for the DLQ context headers/record-batch framing overhead,
+        // so a single record's DLQ copy cleanly fits under the limit but two together clearly don't.
+        int payloadSize = dlqMaxMessageBytes - 2_000;
+
+        try (Admin admin = createAdminClient()) {
+            admin.createTopics(Set.of(
+                new NewTopic(sourceTopic, 1, (short) 1)
+                    .configs(Map.of(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(sourceMaxMessageBytes))),
+                new NewTopic(dlqTopic, 1, (short) 1)
+                    .configs(Map.of(
+                        TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true",
+                        TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(dlqMaxMessageBytes)))
+            )).all().get();
+        }
+
+        alterShareAutoOffsetReset(groupId, "earliest");
+        alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, dlqTopic);
+        // Record copy must be enabled - otherwise DLQ records carry headers only (tiny) and would never
+        // approach dlqMaxMessageBytes regardless of the source record size.
+        alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, "true");
+
+        byte[] payload = new byte[payloadSize];
+        try (Producer<byte[], byte[]> producer = createProducer()) {
+            for (int i = 0; i < recordCount; i++) {
+                producer.send(new ProducerRecord<>(sourceTopic, 0, "key".getBytes(StandardCharsets.UTF_8), payload));
+            }
+            producer.flush();
+        }
+
+        // Reject all 3 records together in one commit, so SharePartition issues a single DLQ call spanning
+        // the whole offset range (a fresh, contiguous, single-fetch acquisition with no prior redeliveries
+        // maps to one cached in-flight batch, so one client-side reject commit produces one DLQ call).
+        rejectRecords(groupId, sourceTopic, recordCount);
+
+        // All 3 records must still reach the DLQ, split across multiple produce requests since no pairing
+        // of their DLQ copies fits within dlqMaxMessageBytes. Verified inline (rather than via
+        // verifyDlqTopicRecords()) since that helper hardcodes checking the copied value against the fixed
+        // "value" content produced by produceMessages()/produceTo(), not this test's large payload.
+        List<ConsumerRecord<byte[], byte[]>> dlqRecords = readDlqPartition(dlqTopic, 0, recordCount);
+        assertEquals(recordCount, dlqRecords.size(), "Unexpected number of records on the DLQ topic");
+        Set<Long> actualSourceOffsets = new HashSet<>();
+        for (ConsumerRecord<byte[], byte[]> record : dlqRecords) {
+            assertArrayEquals(payload, record.value(), "DLQ record value should be the copied payload");
+            assertEquals(groupId, headerValue(record, HEADER_DLQ_ERRORS_GROUP));
+            assertEquals(sourceTopic, headerValue(record, HEADER_DLQ_ERRORS_TOPIC));
+            assertEquals("0", headerValue(record, HEADER_DLQ_ERRORS_PARTITION));
+            actualSourceOffsets.add(Long.parseLong(Objects.requireNonNull(headerValue(record, HEADER_DLQ_ERRORS_OFFSET))));
+        }
+        assertEquals(expectedSourceOffsets(recordCount), actualSourceOffsets,
+            "DLQ records should cover every expected source offset");
+        verifyDlqMetrics(groupId, recordCount);
+
+        // Concrete proof that splitting - not some other mechanism - is why all 3 records arrived: there is
+        // exactly one logical DLQ call here (one contiguous reject batch, offsets 0-2), so any produce-request
+        // count above 1 for this group can only come from the resumable-cursor chunking logic splitting that
+        // one call into multiple sequential produce requests to stay within dlqMaxMessageBytes. Without it,
+        // the single oversized request would be rejected once (MESSAGE_TOO_LARGE is not retriable) and no
+        // records would ever reach the DLQ - contradicting the assertions above. >= rather than == tolerates
+        // an occasional extra retry (e.g. a transient network blip) without being flaky.
+        assertTrue(dlqMeterCount(METRIC_DLQ_PRODUCE_TOTAL, groupId) >= recordCount,
+            "Expected at least " + recordCount + " separate DLQ produce requests (one per chunk), was "
+                + dlqMeterCount(METRIC_DLQ_PRODUCE_TOTAL, groupId));
+        long produceCountBeforeRaise = dlqMeterCount(METRIC_DLQ_PRODUCE_TOTAL, groupId);
+
+        // Now raise the DLQ topic's max.message.bytes well above what all 3 (record-copy-enabled) DLQ copies
+        // need together, and repeat the same reject scenario with a fresh batch of 3 records. This confirms
+        // two things at once: dlqTopicMaxMessageBytes() picks up the change dynamically (it wraps a live
+        // topic-config lookup, not a value captured once at startup - see ShareCoordinatorMetadataCacheHelperImpl),
+        // and the chunking logic doesn't split unnecessarily when the budget is actually sufficient - the
+        // produce-request count must increase by exactly 1 (one request for the whole new batch), not 3.
+        int raisedDlqMaxMessageBytes = sourceMaxMessageBytes * 2;
+        ConfigResource dlqTopicResource = new ConfigResource(ConfigResource.Type.TOPIC, dlqTopic);
+        try (Admin admin = createAdminClient()) {
+            admin.incrementalAlterConfigs(
+                Map.of(dlqTopicResource, List.of(new AlterConfigOp(
+                    new ConfigEntry(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(raisedDlqMaxMessageBytes)),
+                    AlterConfigOp.OpType.SET))),
+                new AlterConfigsOptions()
+            ).all().get();
+            waitForCondition(() -> {
+                Config config = admin.describeConfigs(List.of(dlqTopicResource)).all().get().get(dlqTopicResource);
+                ConfigEntry entry = config.get(TopicConfig.MAX_MESSAGE_BYTES_CONFIG);
+                return entry != null && entry.value().equals(Integer.toString(raisedDlqMaxMessageBytes));
+            }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Raised max.message.bytes did not propagate on the DLQ topic");
+        }
+
+        try (Producer<byte[], byte[]> producer = createProducer()) {
+            for (int i = 0; i < recordCount; i++) {
+                producer.send(new ProducerRecord<>(sourceTopic, 0, "key".getBytes(StandardCharsets.UTF_8), payload));
+            }
+            producer.flush();
+        }
+        rejectRecords(groupId, sourceTopic, recordCount);
+
+        List<ConsumerRecord<byte[], byte[]>> secondBatchDlqRecords = readDlqPartition(dlqTopic, 0, recordCount * 2);
+        assertEquals(recordCount * 2, secondBatchDlqRecords.size(),
+            "Unexpected number of records on the DLQ topic after the second batch");
+
+        waitForCondition(() -> dlqMeterCount(METRIC_DLQ_PRODUCE_TOTAL, groupId) == produceCountBeforeRaise + 1,
+            DEFAULT_MAX_WAIT_MS, 200L,
+            () -> "Expected exactly 1 additional DLQ produce request for the second batch (budget no longer forces "
+                + "chunking), count went from " + produceCountBeforeRaise + " to " + dlqMeterCount(METRIC_DLQ_PRODUCE_TOTAL, groupId));
     }
 
     /**
@@ -537,13 +803,23 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
      */
     private void verifyDlqTopicRecords(String dlqTopic, String groupId, Set<Long> expectedSourceOffsets,
                                        boolean copyEnabled) throws InterruptedException {
+        verifyDlqTopicRecords(dlqTopic, groupId, tp.topic(), tp.partition(), expectedSourceOffsets, copyEnabled);
+    }
+
+    /**
+     * As {@link #verifyDlqTopicRecords(String, String, Set, boolean)}, but for an explicit source topic-partition
+     * (rather than the base {@code tp}). The DLQ records' context headers must reference {@code sourceTopic} /
+     * {@code sourcePartition}.
+     */
+    private void verifyDlqTopicRecords(String dlqTopic, String groupId, String sourceTopic, int sourcePartition,
+                                       Set<Long> expectedSourceOffsets, boolean copyEnabled) throws InterruptedException {
         List<ConsumerRecord<byte[], byte[]>> dlqRecords = readDlqPartition(dlqTopic, 0, expectedSourceOffsets.size());
 
         assertEquals(expectedSourceOffsets.size(), dlqRecords.size(), "Unexpected number of records on the DLQ topic");
         Set<Long> actualSourceOffsets = new HashSet<>();
         for (ConsumerRecord<byte[], byte[]> record : dlqRecords) {
             if (copyEnabled) {
-                // produceMessages() produces records with key "key" and value "value".
+                // produceMessages()/produceTo() produce records with key "key" and value "value".
                 assertEquals("key", new String(Objects.requireNonNull(record.key()), StandardCharsets.UTF_8),
                     "DLQ record key should be copied when record copy is enabled");
                 assertEquals("value", new String(Objects.requireNonNull(record.value()), StandardCharsets.UTF_8),
@@ -553,8 +829,8 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
                 assertNull(record.value(), "DLQ record value should be null when record copy is disabled");
             }
             assertEquals(groupId, headerValue(record, HEADER_DLQ_ERRORS_GROUP));
-            assertEquals(tp.topic(), headerValue(record, HEADER_DLQ_ERRORS_TOPIC));
-            assertEquals(Integer.toString(tp.partition()), headerValue(record, HEADER_DLQ_ERRORS_PARTITION));
+            assertEquals(sourceTopic, headerValue(record, HEADER_DLQ_ERRORS_TOPIC));
+            assertEquals(Integer.toString(sourcePartition), headerValue(record, HEADER_DLQ_ERRORS_PARTITION));
             actualSourceOffsets.add(Long.parseLong(Objects.requireNonNull(headerValue(record, HEADER_DLQ_ERRORS_OFFSET))));
         }
         assertEquals(expectedSourceOffsets, actualSourceOffsets, "DLQ records should cover every expected source offset");
@@ -589,6 +865,36 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
                 admin.createTopics(Set.of(newTopic)).all().get();
             }
         }, "Failed to create DLQ topic");
+    }
+
+    // Creates a single-partition source topic with tiered storage enabled and one log segment per record (via
+    // per-record index entries). A short local retention (`localRetentionMs`) deletes inactive segments from
+    // local storage soon after they are offloaded to remote storage, so reading those offsets must hit remote
+    // storage; the total retention (`retentionMs`) is kept generous so the remote segments are not deleted while
+    // the test is still running.
+    private void createRemoteStorageSourceTopic(String topic, long retentionMs, long localRetentionMs) {
+        assertDoesNotThrow(() -> {
+            try (Admin admin = createAdminClient()) {
+                Map<String, String> configs = Map.of(
+                    TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true",
+                    TopicConfig.RETENTION_MS_CONFIG, Long.toString(retentionMs),
+                    TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, Long.toString(localRetentionMs),
+                    // Roll a segment for every record so each inactive segment can be offloaded then deleted locally.
+                    TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1",
+                    TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, "12");
+                admin.createTopics(Set.of(new NewTopic(topic, 1, (short) 1).configs(configs))).all().get();
+            }
+        }, "Failed to create remote-storage source topic");
+    }
+
+    // The earliest offset still held in local storage. Offsets below this have been removed locally (e.g. after
+    // being offloaded to remote storage), so reading them must hit remote storage. Used to confirm tiering.
+    private long earliestLocalOffset(String topic, int partition) throws Exception {
+        TopicPartition topicPartition = new TopicPartition(topic, partition);
+        try (Admin admin = createAdminClient()) {
+            return admin.listOffsets(Map.of(topicPartition, OffsetSpec.earliestLocal()))
+                .partitionResult(topicPartition).get().offset();
+        }
     }
 
     // Produces `count` records (key "key", value "value") to a specific topic-partition.

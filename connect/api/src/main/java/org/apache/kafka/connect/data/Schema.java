@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.data;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.connect.errors.DataException;
 
 import java.util.List;
@@ -40,6 +41,7 @@ import java.util.Map;
  *     Schemas can be created directly, but in most cases using {@link SchemaBuilder} will be simpler.
  * </p>
  */
+@InterfaceAudience.Public
 public interface Schema {
     /**
      * The type of a schema. These only include the core types; logical types must be determined by checking the schema name.
