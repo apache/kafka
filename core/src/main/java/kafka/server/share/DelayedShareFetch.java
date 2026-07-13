@@ -63,6 +63,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -476,6 +477,13 @@ public class DelayedShareFetch extends DelayedOperation {
                     TopicIdPartition topicIdPartition = topicPartitionData.keySet().iterator().next();
                     readFuture.whenComplete((result, throwable) -> {
                         if (throwable != null) {
+                            if (throwable instanceof CancellationException) {
+                                // The completion handler execution has been cancelled due to the operation
+                                // being completed in onComplete.
+                                log.trace("Async read was cancelled for group {}, member {}",
+                                    shareFetch.groupId(), shareFetch.memberId());
+                                return;
+                            }
                             log.error("Async read failed for group {}, member {}",
                                 shareFetch.groupId(), shareFetch.memberId(), throwable);
                             // Error is handled in maybeCompleteAsyncFetch() via get() exception handling
@@ -774,6 +782,8 @@ public class DelayedShareFetch extends DelayedOperation {
         try {
             log.warn("Completing async fetch for group {}, member {}, partitions {} with empty response",
                 shareFetch.groupId(), shareFetch.memberId(), topicPartitionData.keySet());
+            // Cancel the future invocation of pending fetch.
+            pendingFetch.cancel(true);
             pendingFetch = null;
             // Update fetch ratio metric and complete the request with empty response.
             recordTopicPartitionsFetchRatioMetric(topicPartitionData);
@@ -884,10 +894,10 @@ public class DelayedShareFetch extends DelayedOperation {
 
     private boolean maybeRegisterCallbackPendingRemoteFetch() {
         log.trace("Registering callback pending remote fetch");
-        PendingRemoteFetches pendingFetch = pendingRemoteFetchesOpt.get();
-        if (!pendingFetch.isDone() && shareFetch.fetchParams().maxWaitMs < remoteFetchMaxWaitMs) {
+        PendingRemoteFetches pendingRemoteFetches = pendingRemoteFetchesOpt.get();
+        if (!pendingRemoteFetches.isDone() && shareFetch.fetchParams().maxWaitMs < remoteFetchMaxWaitMs) {
             TimerTask timerTask = new PendingRemoteFetchTimerTask();
-            pendingFetch.invokeCallbackOnCompletion(((ignored, throwable) -> {
+            pendingRemoteFetches.invokeCallbackOnCompletion(((ignored, throwable) -> {
                 timerTask.cancel();
                 log.trace("Invoked remote storage fetch callback for group {}, member {}, "
                         + "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
