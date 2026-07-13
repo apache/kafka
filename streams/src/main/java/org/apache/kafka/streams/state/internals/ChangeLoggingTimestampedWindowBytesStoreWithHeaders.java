@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.WindowStore;
 
@@ -53,7 +52,7 @@ public class ChangeLoggingTimestampedWindowBytesStoreWithHeaders extends ChangeL
         } else {
             internalContext.logChange(
                 name(), key, null, internalContext.recordContext().timestamp(),
-                new RecordHeaders(), wrapped().getPosition()
+                internalContext.recordContext().headers(), wrapped().getPosition()
             );
         }
     }
