@@ -35,22 +35,19 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Compares {@link ProducerMetadata#add} against a baseline that mirrors the prior, fully
- * {@code synchronized} implementation (map update + newTopics bookkeeping as a single
- * {@code synchronized} block). Every {@code send()} call refreshes the expiry of the topic
- * it's producing to via {@code add()}, so with many application threads sharing one producer,
- * this refresh is on the hot path and contends across threads for a topic that's virtually
- * always already tracked. This benchmark simulates that: many threads concurrently refreshing
- * a shared pool of already-registered topics.
+ * Benchmarks {@link ProducerMetadata#add} refreshing an already-tracked topic's expiry. Every
+ * {@code send()} call does this refresh, so with many application threads sharing one producer,
+ * it's on the hot path and contends across threads for a topic that's virtually always already
+ * tracked. This benchmark simulates that: many threads concurrently refreshing a shared pool of
+ * already-registered topics.
+ *
+ * To measure the effect of a change to {@code add()}, run this benchmark before and after the
+ * change and compare the throughput, rather than hand-mirroring the old implementation here
+ * where it could drift out of sync with reality.
  */
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -65,8 +62,7 @@ public class ProducerMetadataAddBenchmark {
     private static final long METADATA_IDLE_MS = TimeUnit.MINUTES.toMillis(5);
 
     private String[] topics;
-    private ProducerMetadata lockFreeHotPathMetadata;
-    private FullySynchronizedProducerMetadata fullySynchronizedMetadata;
+    private ProducerMetadata metadata;
 
     @Setup(Level.Trial)
     public void setup() {
@@ -75,48 +71,18 @@ public class ProducerMetadataAddBenchmark {
             topics[i] = "topic-" + i;
         }
 
-        lockFreeHotPathMetadata = new ProducerMetadata(100L, 1000L, TimeUnit.MINUTES.toMillis(5), METADATA_IDLE_MS,
+        metadata = new ProducerMetadata(100L, 1000L, TimeUnit.MINUTES.toMillis(5), METADATA_IDLE_MS,
             new LogContext(), new ClusterResourceListeners(), Time.SYSTEM);
-        fullySynchronizedMetadata = new FullySynchronizedProducerMetadata(METADATA_IDLE_MS);
 
         long nowMs = Time.SYSTEM.milliseconds();
         for (String topic : topics) {
-            lockFreeHotPathMetadata.add(topic, nowMs);
-            fullySynchronizedMetadata.add(topic, nowMs);
+            metadata.add(topic, nowMs);
         }
     }
 
     @Benchmark
-    public void addExistingTopicFullySynchronized() {
+    public void addExistingTopic() {
         String topic = topics[ThreadLocalRandom.current().nextInt(TOPIC_COUNT)];
-        fullySynchronizedMetadata.add(topic, Time.SYSTEM.milliseconds());
-    }
-
-    @Benchmark
-    public void addExistingTopicLockFreeHotPath() {
-        String topic = topics[ThreadLocalRandom.current().nextInt(TOPIC_COUNT)];
-        lockFreeHotPathMetadata.add(topic, Time.SYSTEM.milliseconds());
-    }
-
-    /**
-     * Baseline mirroring the prior {@code ProducerMetadata#add}: a plain {@code HashMap}
-     * guarded end-to-end by a single {@code synchronized} method, so every call - including a
-     * refresh of an already-tracked topic - serializes on the instance lock.
-     */
-    private static class FullySynchronizedProducerMetadata {
-        private final long metadataIdleMs;
-        private final Map<String, Long> topics = new HashMap<>();
-        private final Set<String> newTopics = new HashSet<>();
-
-        FullySynchronizedProducerMetadata(long metadataIdleMs) {
-            this.metadataIdleMs = metadataIdleMs;
-        }
-
-        synchronized void add(String topic, long nowMs) {
-            Objects.requireNonNull(topic, "topic cannot be null");
-            if (topics.put(topic, nowMs + metadataIdleMs) == null) {
-                newTopics.add(topic);
-            }
-        }
+        metadata.add(topic, Time.SYSTEM.milliseconds());
     }
 }
