@@ -523,6 +523,22 @@ public class IQv2HeadersStoreIntegrationTest {
         }
     }
 
+    @Test
+    public void shouldReturnEmptyHeadersForTimestampedWindowKeyWithHeadersQueryOnAdapterStore() throws Exception {
+        // A WithHeaders window builder over a plain *timestamped* window supplier keeps timestamps
+        // (unlike the plain-supplier build above) but drops headers via
+        // TimestampedToHeadersWindowStoreAdapter. A window key query reads the underlying store
+        // directly, so headers come back empty (never null), even though they were written.
+        startStreamsWithWindowAdapterStore();
+
+        produceDataToTopicWithHeaders(inputStream, baseTimestamp, HEADERS, KeyValue.pair(1, "one"));
+
+        final List<ReadOnlyRecord<Windowed<Integer>, String>> records =
+                windowKeyQuery(1, Instant.ofEpochMilli(baseTimestamp), Instant.ofEpochMilli(baseTimestamp));
+        assertEquals(1, records.size());
+        assertWindowedRecord(records.get(0), 1, baseTimestamp, "one", new RecordHeaders());
+    }
+
     private void startStreams(final StoreBuilder<?> storeBuilder,
                               final ProcessorSupplier<Integer, String, Integer, String> processorSupplier) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
