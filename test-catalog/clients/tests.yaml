@@ -1397,6 +1397,7 @@ org.apache.kafka.clients.consumer.internals.ConsumerHeartbeatRequestManagerTest:
 - testHeartbeatResponseErrorNotifiedToGroupManagerAfterErrorPropagated
 - testHeartbeatResponseOnErrorHandling
 - testHeartbeatState
+- testLogsHeartbeatIntervalReceivedFromCoordinatorOnlyWhenChanged
 - testMaximumTimeToWaitWhenHeartbeatShouldBeSkipped
 - testNetworkTimeout
 - testNoCoordinator
@@ -2450,6 +2451,7 @@ org.apache.kafka.clients.consumer.internals.ShareHeartbeatRequestManagerTest:
 - testHeartbeatOutsideInterval
 - testHeartbeatResponseOnErrorHandling
 - testHeartbeatState
+- testLogsHeartbeatIntervalReceivedFromCoordinatorOnlyWhenChanged
 - testNetworkTimeout
 - testNoCoordinator
 - testPollTimerExpiration
