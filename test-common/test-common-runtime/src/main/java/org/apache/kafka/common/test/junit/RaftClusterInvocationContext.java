@@ -32,7 +32,6 @@ import org.apache.kafka.common.test.TestKitNodes;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.metadata.BrokerState;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.storage.FormatterException;
 import org.apache.kafka.server.common.Feature;
@@ -54,7 +53,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -70,40 +68,12 @@ import java.util.stream.Stream;
  *     <li>ClusterInstance (includes methods to expose underlying SocketServer-s)</li>
  * </ul>
  */
-public class RaftClusterInvocationContext implements TestTemplateInvocationContext {
+class RaftClusterInvocationContext implements TestTemplateInvocationContext {
 
     private final String baseDisplayName;
     private final ClusterConfig clusterConfig;
     private final boolean isCombined;
 
-    /**
-     * Wait for condition to be met for at most 15 seconds and throw assertion failure otherwise.
-     * This should be used instead of {@code Thread.sleep} whenever possible as it allows a longer timeout to be used
-     * without unnecessarily increasing test time (as the condition is checked frequently). The longer timeout is needed to
-     * avoid transient failures due to slow or overloaded machines.
-     */
-    static void waitForCondition(final java.util.function.Supplier<Boolean> testCondition,
-                                        final String conditionDetails) throws InterruptedException {
-        var maxWaitMs = 15_000L;
-        long endTime = System.currentTimeMillis() + maxWaitMs;
-
-        while (System.currentTimeMillis() < endTime) {
-            try {
-                if (testCondition.get()) {
-                    return;
-                }
-            } catch (Exception e) {
-                if (System.currentTimeMillis() >= endTime) {
-                    throw new AssertionError(String.format("Assertion failed with an exception after %s ms", maxWaitMs), e);
-                }
-            }
-
-            if (System.currentTimeMillis() < endTime) {
-                TimeUnit.MILLISECONDS.sleep(100);
-            }
-        }
-        throw new AssertionError("Condition not met: " + conditionDetails);
-    }
 
     public RaftClusterInvocationContext(String baseDisplayName, ClusterConfig clusterConfig, boolean isCombined) {
         this.baseDisplayName = baseDisplayName;
@@ -228,10 +198,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 format();
                 if (started.compareAndSet(false, true)) {
                     clusterTestKit.startup();
-                    waitForCondition(
-                            () -> this.clusterTestKit.brokers().values().stream().allMatch(
-                                    brokers -> brokers.brokerState() == BrokerState.RUNNING
-                            ), "Broker never made it to RUNNING state.");
+                    clusterTestKit.waitForReadyBrokers();
                 }
             } catch (Exception e) {
                 throw new RuntimeException("Failed to start Raft server", e);

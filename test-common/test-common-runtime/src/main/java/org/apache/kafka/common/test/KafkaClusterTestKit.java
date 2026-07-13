@@ -78,7 +78,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG;
 import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIRS_CONFIG;
@@ -657,7 +657,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
         controller.waitForReadyBrokers(brokers.size()).get();
 
         // make sure metadata cache in each broker server is up-to-date
-        TestUtils.waitForCondition(() ->
+        waitForCondition(() ->
                 brokers.values().stream().map(BrokerServer::metadataCache)
                     .allMatch(cache -> brokers.values().stream().map(b -> b.config().brokerId()).allMatch(cache::hasAliveBroker)),
             "Failed to wait for publisher to publish the metadata update to each broker.");
@@ -756,16 +756,16 @@ public class KafkaClusterTestKit implements AutoCloseable {
     }
 
     public Controller waitForActiveController() throws InterruptedException {
-        AtomicReference<Controller> active = new AtomicReference<>(null);
-        TestUtils.waitForCondition(() -> {
+        long endTime = System.currentTimeMillis() + 60_000L;
+        while (System.currentTimeMillis() < endTime) {
             for (ControllerServer controllerServer : controllers.values()) {
                 if (controllerServer.controller().isActive()) {
-                    active.set(controllerServer.controller());
+                    return controllerServer.controller();
                 }
             }
-            return active.get() != null;
-        }, 60_000, "Controller not active");
-        return active.get();
+            TimeUnit.MILLISECONDS.sleep(100);
+        }
+        throw new RuntimeException("Controller not active after 60000 ms");
     }
 
     public Map<Integer, BrokerServer> brokers() {
@@ -853,8 +853,26 @@ public class KafkaClusterTestKit implements AutoCloseable {
         }
     }
 
+    private static void waitForCondition(Supplier<Boolean> testCondition,
+                                           String conditionDetails) throws InterruptedException {
+        long maxWaitMs = 15_000L;
+        long endTime = System.currentTimeMillis() + maxWaitMs;
+        Exception lastException = null;
+        while (System.currentTimeMillis() < endTime) {
+            try {
+                if (testCondition.get()) return;
+            } catch (Exception e) {
+                lastException = e;
+            }
+            if (System.currentTimeMillis() < endTime) {
+                TimeUnit.MILLISECONDS.sleep(100);
+            }
+        }
+        throw new AssertionError("Condition not met after " + maxWaitMs + " ms: " + conditionDetails, lastException);
+    }
+
     private void waitForAllThreads() throws InterruptedException {
-        TestUtils.waitForCondition(() -> Thread.getAllStackTraces().keySet()
+        waitForCondition(() -> Thread.getAllStackTraces().keySet()
                     .stream().noneMatch(t -> threadFactory.getThreadIds().contains(t.getId())),
                 "Failed to wait for all threads to shut down.");
     }

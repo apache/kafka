@@ -27,7 +27,6 @@ import org.apache.kafka.clients.admin.DescribeLogDirsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -76,7 +75,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import scala.jdk.javaapi.CollectionConverters;
 
@@ -330,11 +328,7 @@ public class ClusterTestExtensionsTest {
             producer.send(new ProducerRecord<>(topic, key, value));
             producer.flush();
             consumer.subscribe(List.of(topic));
-            List<ConsumerRecord<String, String>> records = new ArrayList<>();
-            RaftClusterInvocationContext.waitForCondition(() -> {
-                consumer.poll(Duration.ofMillis(100)).forEach(records::add);
-                return records.size() == 1;
-            }, "Failed to receive message");
+            List<ConsumerRecord<String, String>> records = pollUntil(consumer, 1);
             assertEquals(key, records.get(0).key());
             assertEquals(value, records.get(0).value());
         }
@@ -358,11 +352,7 @@ public class ClusterTestExtensionsTest {
             producer.send(new ProducerRecord<>(topic, key, value));
             producer.flush();
             consumer.subscribe(List.of(topic));
-            List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
-            RaftClusterInvocationContext.waitForCondition(() -> {
-                consumer.poll(Duration.ofMillis(100)).forEach(records::add);
-                return records.size() == 1;
-            }, "Failed to receive message");
+            List<ConsumerRecord<byte[], byte[]>> records = pollUntil(consumer, 1);
             assertArrayEquals(key, records.get(0).key());
             assertArrayEquals(value, records.get(0).value());
         }
@@ -436,10 +426,7 @@ public class ClusterTestExtensionsTest {
         }
         try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer()) {
             consumer.subscribe(List.of(topic));
-            RaftClusterInvocationContext.waitForCondition(() -> {
-                ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
-                return records.count() == 1;
-            }, "Failed to receive message");
+            pollUntil(consumer, 1);
         }
 
         // client with non-admin credentials
@@ -466,18 +453,7 @@ public class ClusterTestExtensionsTest {
         }
         try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(nonAdminConfig)) {
             consumer.subscribe(List.of(topic));
-            AtomicBoolean hasException = new AtomicBoolean(false);
-            RaftClusterInvocationContext.waitForCondition(() -> {
-                if (hasException.get()) {
-                    return true;
-                }
-                try {
-                    consumer.poll(Duration.ofMillis(100));
-                } catch (TopicAuthorizationException e) {
-                    hasException.set(true);
-                }
-                return false;
-            }, "Failed to get exception");
+            assertThrows(TopicAuthorizationException.class, () -> pollUntil(consumer, Integer.MAX_VALUE));
         }
 
         // client with unknown credentials
@@ -504,18 +480,7 @@ public class ClusterTestExtensionsTest {
         }
         try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(unknownUserConfig)) {
             consumer.subscribe(List.of(topic));
-            AtomicBoolean hasException = new AtomicBoolean(false);
-            RaftClusterInvocationContext.waitForCondition(() -> {
-                if (hasException.get()) {
-                    return true;
-                }
-                try {
-                    consumer.poll(Duration.ofMillis(100));
-                } catch (SaslAuthenticationException e) {
-                    hasException.set(true);
-                }
-                return false;
-            }, "Failed to get exception");
+            assertThrows(SaslAuthenticationException.class, () -> pollUntil(consumer, Integer.MAX_VALUE));
         }
     }
 
@@ -594,5 +559,15 @@ public class ClusterTestExtensionsTest {
             );
             assertInstanceOf(SaslAuthenticationException.class, exception.getCause());
         }
+    }
+
+    private static <K, V> List<ConsumerRecord<K, V>> pollUntil(Consumer<K, V> consumer, int expectedRecords) {
+        long endTime = System.currentTimeMillis() + 15_000;
+        List<ConsumerRecord<K, V>> records = new ArrayList<>();
+        while (System.currentTimeMillis() < endTime) {
+            consumer.poll(Duration.ofMillis(100)).forEach(records::add);
+            if (records.size() >= expectedRecords) return records;
+        }
+        throw new RuntimeException("can't fetch records after 15000 ms");
     }
 }

@@ -21,6 +21,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -47,7 +48,8 @@ public class JaasUtils {
     public static final String KAFKA_PLAIN_ADMIN_PASSWORD = "plain-admin-secret";
 
     public static File writeJaasContextsToFile(Set<JaasSection> jaasSections) throws IOException {
-        File jaasFile = org.apache.kafka.test.TestUtils.tempFile();
+        File jaasFile = Files.createTempFile("kafka", ".tmp").toFile();
+        jaasFile.deleteOnExit();
         try (FileOutputStream fileStream = new FileOutputStream(jaasFile);
              OutputStreamWriter writer = new OutputStreamWriter(fileStream, StandardCharsets.UTF_8)) {
             writer.write(String.join("", jaasSections.stream().map(Object::toString).toArray(String[]::new)));

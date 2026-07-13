@@ -36,6 +36,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.SaslConfigs;
@@ -65,7 +66,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
@@ -158,7 +161,7 @@ public interface ClusterInstance {
         props.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         props.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         props.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + TestUtils.randomString(5));
+        props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + Uuid.randomUuid().toString().substring(0, 8));
         props.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
         return new KafkaConsumer<>(setClientSaslConfig(setClientSslConfig(props)));
     }
@@ -183,7 +186,7 @@ public interface ClusterInstance {
         if (valueDeserializer == null) {
             props.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         }
-        props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + TestUtils.randomString(5));
+        props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + Uuid.randomUuid().toString().substring(0, 8));
         props.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
         return new KafkaShareConsumer<>(setClientSaslConfig(setClientSslConfig(props)), keyDeserializer, valueDeserializer);
     }
@@ -266,7 +269,7 @@ public interface ClusterInstance {
     default void waitTopicDeletion(String topic) throws InterruptedException {
         Collection<KafkaBroker> brokers = aliveBrokers().values();
         // wait for metadata
-        TestUtils.waitForCondition(
+        waitForCondition(
             () -> brokers.stream().allMatch(
                 broker -> broker.metadataCache().numPartitions(topic).isEmpty()),
                 60000L, topic + " metadata not propagated after 60000 ms");
@@ -276,17 +279,17 @@ public interface ClusterInstance {
         TopicPartition topicPartition = new TopicPartition(topic, 0);
 
         // Ensure that the topic-partition has been deleted from all brokers' replica managers
-        TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
+        waitForCondition(() -> brokers.stream().allMatch(broker ->
                 broker.replicaManager().onlinePartition(topicPartition).isEmpty()
         ), "Replica manager's should have deleted all of this topic's partitions");
 
         // Ensure that logs from all replicas are deleted
-        TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
+        waitForCondition(() -> brokers.stream().allMatch(broker ->
                 broker.logManager().getLog(topicPartition, false).isEmpty()
         ), "Replica logs not deleted after delete topic is complete");
 
         // Ensure that the topic is removed from all cleaner offsets
-        TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker -> {
+        waitForCondition(() -> brokers.stream().allMatch(broker -> {
             Collection<File> liveLogDirs = broker.logManager().liveLogDirs();
             return liveLogDirs.stream().allMatch(logDir -> {
                 OffsetCheckpointFile checkpointFile;
@@ -300,13 +303,13 @@ public interface ClusterInstance {
         }), "Cleaner offset for deleted partition should have been removed");
 
         // Ensure that the topic directories are soft-deleted
-        TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
+        waitForCondition(() -> brokers.stream().allMatch(broker ->
                 broker.config().logDirs().stream().allMatch(logDir ->
                     !new File(logDir, topicPartition.topic() + "-" + topicPartition.partition()).exists())
         ), "Failed to soft-delete the data to a delete directory");
 
         // Ensure that the topic directories are hard-deleted
-        TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
+        waitForCondition(() -> brokers.stream().allMatch(broker ->
                 broker.config().logDirs().stream().allMatch(logDir ->
                     Arrays.stream(Objects.requireNonNull(new File(logDir).list())).noneMatch(partitionDirectoryName ->
                         partitionDirectoryName.startsWith(topicPartition.topic() + "-" + topicPartition.partition()) &&
@@ -355,7 +358,7 @@ public interface ClusterInstance {
 
         // wait for metadata
         Collection<KafkaBroker> brokers = aliveBrokers().values();
-        TestUtils.waitForCondition(
+        waitForCondition(
             () -> brokers.stream().allMatch(broker -> broker.metadataCache().numPartitions(topic).filter(p -> p == partitions).isPresent()),
                 60000L, topic + " metadata not propagated after 60000 ms");
 
@@ -369,7 +372,7 @@ public interface ClusterInstance {
     default void ensureConsistentMetadata(Collection<KafkaBroker> brokers, Collection<ControllerServer> controllers) throws InterruptedException  {
         for (ControllerServer controller : controllers) {
             long controllerOffset = controller.raftManager().raftLog().endOffset().offset() - 1;
-            TestUtils.waitForCondition(
+            waitForCondition(
                 () -> brokers.stream().allMatch(broker -> ((BrokerServer) broker).sharedServer().loader().lastAppliedOffset() >= controllerOffset),
                 60000L, "Timeout waiting for controller metadata propagating to brokers");
         }
@@ -389,7 +392,7 @@ public interface ClusterInstance {
     default void waitAcls(AclBindingFilter filter, Collection<AccessControlEntry> entries) throws InterruptedException {
         for (Authorizer authorizer : authorizers()) {
             AtomicReference<Set<AccessControlEntry>> actualEntries = new AtomicReference<>(new HashSet<>());
-            TestUtils.waitForCondition(() -> {
+            waitForCondition(() -> {
                 Set<AccessControlEntry> accessControlEntrySet = new HashSet<>();
                 authorizer.acls(filter).forEach(aclBinding -> accessControlEntrySet.add(aclBinding.entry()));
                 actualEntries.set(accessControlEntrySet);
@@ -412,5 +415,26 @@ public interface ClusterInstance {
                     .findFirst()
                     .orElseThrow(() -> new RuntimeException("Leader not found for tp " + topicPartition));
         }
+    }
+
+    private void waitForCondition(Supplier<Boolean> condition, String details) throws InterruptedException {
+        waitForCondition(condition, 15_000L, details);
+    }
+
+    private void waitForCondition(Supplier<Boolean> condition, long maxWaitMs, String details) throws InterruptedException {
+        Exception lastException = null;
+        long endTime = System.currentTimeMillis() + maxWaitMs;
+        while (System.currentTimeMillis() < endTime) {
+            try {
+                if (Boolean.TRUE.equals(condition.get())) return;
+            } catch (Exception e) {
+                lastException = e;
+            }
+
+            if (System.currentTimeMillis() < endTime) {
+                TimeUnit.MILLISECONDS.sleep(100);
+            }
+        }
+        throw new AssertionError("Condition not met after " + maxWaitMs + " ms: " + details, lastException);
     }
 }

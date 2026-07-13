@@ -38,7 +38,7 @@ import java.lang.reflect.Executable;
  * lifecycle methods have been run. Constructor injection is meant for convenience so helper methods can be defined on
  * the test which can rely on a class member rather than an argument for ClusterInstance.
  */
-public class ClusterInstanceParameterResolver implements ParameterResolver {
+class ClusterInstanceParameterResolver implements ParameterResolver {
     private final ClusterInstance clusterInstance;
 
     ClusterInstanceParameterResolver(ClusterInstance clusterInstance) {

@@ -21,6 +21,8 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.test.api.TestKitDefaults;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
@@ -29,6 +31,8 @@ import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collections;
@@ -47,6 +51,21 @@ import java.util.stream.Stream;
 public class TestKitNodes {
 
     public static class Builder {
+        private static Path createTempDirectory() {
+            try {
+                Path tempPath = Files.createTempDirectory("kafka-");
+                Exit.addShutdownHook("delete-temp-file-shutdown-hook", () -> {
+                    try {
+                        Utils.delete(tempPath.toFile());
+                    } catch (IOException ignored) {
+                    }
+                });
+                return tempPath;
+            } catch (IOException ex) {
+                throw new RuntimeException("Failed to create a temp dir", ex);
+            }
+        }
+
         private boolean combined;
         private String clusterId;
         private Path baseDirectory;
@@ -168,7 +187,7 @@ public class TestKitNodes {
                 throw new IllegalArgumentException("Currently only support PLAINTEXT / SASL_PLAINTEXT / SASL_SSL security protocol");
             }
             if (baseDirectory == null) {
-                this.baseDirectory = TestUtils.tempDirectory().toPath();
+                this.baseDirectory = createTempDirectory();
             }
             if (clusterId == null) {
                 clusterId = Uuid.randomUuid().toString();
