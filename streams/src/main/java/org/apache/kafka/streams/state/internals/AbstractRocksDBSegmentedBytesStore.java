@@ -312,6 +312,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
         segments.openExisting(internalProcessorContext, observedStreamTime);
         this.position = segments.position;
+        this.pendingPosition = Position.emptyPosition();
         StoreQueryUtils.maybeMigrateExistingPositionFile(stateStoreContext.stateDir(), name(), this.position);
 
         // register and possibly restore the state from the logs
@@ -370,6 +371,8 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     public void close() {
         open = false;
         segments.close();
+        // The segments discard their uncommitted writes on close; drop the staged position to match.
+        pendingPosition = Position.emptyPosition();
     }
 
     @Override
