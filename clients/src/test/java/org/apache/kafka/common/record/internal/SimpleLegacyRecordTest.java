@@ -20,8 +20,8 @@ import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 
 import org.junit.jupiter.api.Test;
 
