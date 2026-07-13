@@ -200,7 +200,7 @@ public final class GroupConfig extends AbstractConfig {
             INT,
             GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_DEFAULT,
             atLeast(0),
-            MEDIUM,
+            LOW,
             GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_DOC)
         .define(CONSUMER_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
             BOOLEAN,
@@ -258,7 +258,7 @@ public final class GroupConfig extends AbstractConfig {
             INT,
             GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_DEFAULT,
             atLeast(0),
-            MEDIUM,
+            LOW,
             GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_DOC)
         .define(SHARE_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
             BOOLEAN,
@@ -293,7 +293,7 @@ public final class GroupConfig extends AbstractConfig {
             INT,
             GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_DEFAULT,
             atLeast(0),
-            MEDIUM,
+            LOW,
             GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_DOC)
         .define(STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
             BOOLEAN,
