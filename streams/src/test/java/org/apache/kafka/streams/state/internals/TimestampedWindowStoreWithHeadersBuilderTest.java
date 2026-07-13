@@ -49,6 +49,8 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -74,7 +76,7 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class TimestampedWindowStoreWithHeadersBuilderTest {
 
-    private enum StoreType { NATIVE, ADAPTER, PLAIN_ADAPTER }
+    private enum StoreType { NATIVE, ADAPTER, PLAIN_ADAPTER, IN_MEMORY }
 
     @Nested
     class BuilderTests {
@@ -276,6 +278,10 @@ public class TimestampedWindowStoreWithHeadersBuilderTest {
                         new RocksDBSegmentedBytesStore(
                             STORE_NAME, METRICS_SCOPE, RETENTION, SEGMENT_INTERVAL, new WindowKeySchema()),
                         false, WINDOW_SIZE);
+                case IN_MEMORY:
+                    // Non-persistent supplier: the builder wraps it with the in-memory headers marker,
+                    // which (like the native store) persists the value-with-headers byte format.
+                    return new InMemoryWindowStore(STORE_NAME, RETENTION, WINDOW_SIZE, false, METRICS_SCOPE);
                 default:
                     throw new IllegalArgumentException("unknown store type: " + storeType);
             }
@@ -314,11 +320,13 @@ public class TimestampedWindowStoreWithHeadersBuilderTest {
                 new QueryConfig(false));
         }
 
-        @Test
-        public void shouldReturnHeadersForTimestampedWindowKeyWithHeadersQueryOnHeaderPersistingStore() {
-            // The native header window store persists headers, so the record carries them; the window in
-            // the Windowed key comes from the stored window start, the timestamp from the stored value.
-            final TimestampedWindowStoreWithHeaders<String, String> store = buildAndInitStore(StoreType.NATIVE);
+        @ParameterizedTest
+        @CsvSource({"NATIVE", "IN_MEMORY"})
+        public void shouldReturnHeadersForTimestampedWindowKeyWithHeadersQueryOnHeaderPersistingStore(final StoreType storeType) {
+            // The native and in-memory builds both persist headers: the native store keeps them in its
+            // headers column family, and the in-memory marker stores the value bytes verbatim (the metered
+            // layer serializes the headers into those bytes). The adapter build is the one that drops them.
+            final TimestampedWindowStoreWithHeaders<String, String> store = buildAndInitStore(storeType);
             try {
                 final Headers headers = headersWith("h", "x");
                 store.put("k", ValueTimestampHeaders.make("v", 1_005L, headers), WINDOW_START);
@@ -335,8 +343,9 @@ public class TimestampedWindowStoreWithHeadersBuilderTest {
                     assertEquals("v", record.value());
                     assertEquals(1_005L, record.timestamp());
                     assertEquals(headers, record.headers());
-                    // The IQ result is a read-only snapshot: its headers are immutable.
+                    // The IQ result is a read-only snapshot: its headers are immutable (neither add nor remove).
                     assertThrows(IllegalStateException.class, () -> record.headers().add("new", new byte[0]));
+                    assertThrows(IllegalStateException.class, () -> record.headers().remove("h"));
                     assertFalse(iterator.hasNext());
                 }
                 assertNotNull(result.getPosition(), "Expected position to be set");
@@ -364,6 +373,9 @@ public class TimestampedWindowStoreWithHeadersBuilderTest {
                     assertEquals("v", record.value());
                     assertEquals(1_005L, record.timestamp());
                     assertEquals(new RecordHeaders(), record.headers());
+                    // Even the empty headers are a read-only snapshot: neither add nor remove is allowed.
+                    assertThrows(IllegalStateException.class, () -> record.headers().add("new", new byte[0]));
+                    assertThrows(IllegalStateException.class, () -> record.headers().remove("h"));
                     assertFalse(iterator.hasNext());
                 }
                 assertNotNull(result.getPosition(), "Expected position to be set");
@@ -384,8 +396,10 @@ public class TimestampedWindowStoreWithHeadersBuilderTest {
 
                 assertTrue(result.isSuccess(), "The query itself succeeds; the failure surfaces while iterating");
                 try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = result.getResult()) {
-                    assertThrows(StreamsException.class, iterator::next,
+                    final StreamsException e = assertThrows(StreamsException.class, iterator::next,
                         "An entry with ts=-1 cannot be represented as a ReadOnlyRecord");
+                    assertTrue(e.getMessage().contains("as a ReadOnlyRecord") && e.getMessage().contains("is negative"),
+                        "unexpected message: " + e.getMessage());
                 }
             } finally {
                 store.close();
@@ -405,7 +419,9 @@ public class TimestampedWindowStoreWithHeadersBuilderTest {
 
                 assertTrue(result.isSuccess());
                 try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = result.getResult()) {
-                    assertThrows(StreamsException.class, iterator::next);
+                    final StreamsException e = assertThrows(StreamsException.class, iterator::next);
+                    assertTrue(e.getMessage().contains("as a ReadOnlyRecord") && e.getMessage().contains("is negative"),
+                        "unexpected message: " + e.getMessage());
                 }
             } finally {
                 store.close();
@@ -460,17 +476,37 @@ public class TimestampedWindowStoreWithHeadersBuilderTest {
         public void shouldReturnIdenticalResultsForNativeAndAdapterBuiltStores() {
             // Build-path parity for the existing (header-stripped) WindowKeyQuery: KIP-1356 makes the native
             // store serve it exactly as the adapter build already did.
-            final ValueTimestampHeaders<String> value = ValueTimestampHeaders.make("v", 1_005L, headersWith("h", "x"));
+            final ValueTimestampHeaders<String> v1 = ValueTimestampHeaders.make("v1", 1_005L, headersWith("h", "1"));
+            final ValueTimestampHeaders<String> v2 = ValueTimestampHeaders.make("v2", 3_005L, headersWith("h", "2"));
+            final ValueTimestampHeaders<String> v3 = ValueTimestampHeaders.make("v3", 5_005L, headersWith("h", "3"));
+            final ValueTimestampHeaders<String> o1 = ValueTimestampHeaders.make("o1", 2_005L, headersWith("h", "o"));
+            final ValueTimestampHeaders<String> o2 = ValueTimestampHeaders.make("o2", 4_005L, headersWith("h", "o"));
+
             final TimestampedWindowStoreWithHeaders<String, String> nativeStore = buildAndInitStore(StoreType.NATIVE);
             final TimestampedWindowStoreWithHeaders<String, String> adapterStore = buildAndInitStore(StoreType.ADAPTER);
             try {
-                nativeStore.put("k", value, WINDOW_START);
-                adapterStore.put("k", value, WINDOW_START);
+                // ascending window-start insertion order, interleaved with a different key at shared windows
+                nativeStore.put("other", o1, WINDOW_START);
+                nativeStore.put("k", v1, WINDOW_START);
+                nativeStore.put("k", v2, WINDOW_START + 2_000L);
+                nativeStore.put("other", o2, WINDOW_START + 2_000L);
+                nativeStore.put("k", v3, WINDOW_START + 4_000L);
+                // descending window-start insertion order (same windows, reversed), plus the other key
+                adapterStore.put("k", v3, WINDOW_START + 4_000L);
+                adapterStore.put("other", o2, WINDOW_START + 2_000L);
+                adapterStore.put("k", v2, WINDOW_START + 2_000L);
+                adapterStore.put("k", v1, WINDOW_START);
+                adapterStore.put("other", o1, WINDOW_START);
 
-                assertEquals(
-                    plainWindowKeyResults(nativeStore),
-                    plainWindowKeyResults(adapterStore),
-                    "WindowKeyQuery results should be identical across native and adapter build paths");
+                final List<KeyValue<Long, ValueAndTimestamp<String>>> expected = List.of(
+                    KeyValue.pair(WINDOW_START, ValueAndTimestamp.make("v1", 1_005L)),
+                    KeyValue.pair(WINDOW_START + 2_000L, ValueAndTimestamp.make("v2", 3_005L)),
+                    KeyValue.pair(WINDOW_START + 4_000L, ValueAndTimestamp.make("v3", 5_005L)));
+
+                assertEquals(expected, plainWindowKeyResults(nativeStore),
+                    "native WindowKeyQuery should return all windows in window-start order");
+                assertEquals(expected, plainWindowKeyResults(adapterStore),
+                    "adapter WindowKeyQuery should return all windows in window-start order");
             } finally {
                 nativeStore.close();
                 adapterStore.close();
