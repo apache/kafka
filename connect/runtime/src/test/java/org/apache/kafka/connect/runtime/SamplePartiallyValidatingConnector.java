@@ -38,7 +38,7 @@ public class SamplePartiallyValidatingConnector extends SampleSourceConnector {
     }
 
     /**
-     * Do not validate "optional" on purpose.
+     * Skips validating "optional", so it produces no ConfigValue.
      */
     @Override
     public Config validate(Map<String, String> connectorConfigs) {
