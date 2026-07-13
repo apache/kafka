@@ -13,36 +13,36 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# KRaft JMH benchmark regression gate. Two modes share one job:
-#   * Mode A (compare) runs on `kraft`-labeled PRs, diffs the deterministic counters against the
-#     stored baseline, and fails the check on a mismatch (the `benchmark-override` label downgrades
-#     that to a warning). It never pushes.
-#   * Mode B (update) runs on pushes to trunk that touch KRaft paths and refreshes the baseline on
+# KRaft JMH benchmark regression gate.
+#   * 1. runs on PRs touching KRaft paths, diffs the deterministic counters against
+#     the stored baseline, and fails the check on a mismatch (the `benchmark-override` label
+#     downgrades that to a warning). It never pushes.
+#   * 2. runs on pushes to trunk that touch KRaft paths and refreshes the baseline on
 #     the `benchmark-results` orphan branch.
 # See .github/scripts/benchmark_regression.py for the compare/update engine.
 name: KRaft Benchmarks
 on:
   push:
     branches: [trunk]
-    paths: ['raft/**', 'metadata/**', 'jmh-benchmarks/**']   # baseline update
+    paths: ['raft/**', 'metadata/**', 'jmh-benchmarks/**']
   pull_request:
-    types: [opened, labeled, synchronize, reopened]           # gated on the `kraft` label below
+    types: [opened, labeled, synchronize, reopened]
+    paths: ['raft/**', 'metadata/**', 'jmh-benchmarks/**']
 
-# Serialize baseline writes across rapid trunk merges; keep PR runs independent per ref.
 concurrency:
   group: kraft-benchmarks-${{ github.event_name == 'push' && 'baseline' || github.ref }}
-  cancel-in-progress: false
+  # PRs: cancel a superseded run when a newer commit is pushed
+  # Baseline (push): never cancel
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 
 permissions:
-  contents: write   # push to the orphan branch (Mode B only; fork PRs get a read-only token regardless)
+  contents: write
 
 jobs:
   kraft-benchmarks:
     name: KRaft Benchmarks
     runs-on: ubuntu-24.04
-    if: >-
-      github.event_name == 'push' ||
-      contains(github.event.pull_request.labels.*.name, 'kraft')
+    timeout-minutes: 180
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -52,7 +52,7 @@ jobs:
       - name: Setup Gradle
         uses: ./.github/actions/setup-gradle
         with:
-          java-version: 17
+          java-version: 25
 
       - name: Setup Python
         uses: ./.github/actions/setup-python
@@ -60,7 +60,7 @@ jobs:
       - name: Checkout baseline branch
         id: baseline
         uses: actions/checkout@v5
-        continue-on-error: true       # branch may not exist before the first Mode B run
+        continue-on-error: true
         with:
           ref: benchmark-results
           path: baseline
@@ -69,14 +69,10 @@ jobs:
       - name: Ensure baseline directory
         run: mkdir -p baseline/benchmarks
 
-      # Honor the fork/iteration counts baked into the benchmark annotations (ElectionBenchmarks:
-      # 5 forks SingleShot; LeaderBenchmarks: 3 forks AverageTime) rather than overriding to -f 1,
-      # which would remove JMH's fork-variance defense. -prof gc adds gc.alloc.rate.norm (bytes/op).
-      # NOTE: build.gradle splits jmhArgs on spaces, so every token here must be space-free.
       - name: Run raft JMH benchmarks
         run: >-
           ./gradlew :jmh-benchmarks:jmh
-          -DjmhArgs="-rf json -rff jmh-result.json -foe true -prof gc -jvmArgsAppend -Xmx2g org.apache.kafka.jmh.raft"
+          -DjmhArgs="-rf json -rff $GITHUB_WORKSPACE/jmh-result.json -foe true -prof gc -jvmArgsAppend -Xmx4g org.apache.kafka.jmh.raft"
 
       - name: Upload JMH result
         uses: actions/upload-artifact@v4
