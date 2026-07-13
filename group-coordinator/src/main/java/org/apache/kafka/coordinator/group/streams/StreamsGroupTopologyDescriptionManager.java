@@ -532,8 +532,9 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
             return null;
         }
         Integer storedEpoch = result.storedDescriptionTopologyEpochs().get(describedGroup.groupId());
-        // <= NONE covers both NONE(-1) and UNCERTAIN(-2): nothing reliably stored.
-        if (storedEpoch == null || storedEpoch <= StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE || storedEpoch != describedGroup.topology().epoch()) {
+        if (storedEpoch == null
+            || !StreamsGroup.isReliablyStoredTopologyEpoch(storedEpoch)
+            || storedEpoch != describedGroup.topology().epoch()) {
             describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_NOT_STORED);
             return null;
         }

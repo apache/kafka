@@ -85,6 +85,16 @@ public class StreamsGroup implements Group {
      */
     public static final int STORED_TOPOLOGY_EPOCH_UNCERTAIN = -2;
 
+    /**
+     * @return true when {@code storedEpoch} is a real, reliably-stored topology epoch — i.e. the
+     *         plugin definitely holds exactly that topology. Real epochs are non-negative; every
+     *         sentinel ({@link #STORED_TOPOLOGY_EPOCH_NONE}, {@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN},
+     *         and any added later) is negative and therefore not reliably stored.
+     */
+    public static boolean isReliablyStoredTopologyEpoch(int storedEpoch) {
+        return storedEpoch >= 0;
+    }
+
     public enum StreamsGroupState {
         EMPTY("Empty"),
         NOT_READY("NotReady"),
