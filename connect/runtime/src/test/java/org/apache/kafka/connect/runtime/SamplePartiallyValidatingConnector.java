@@ -42,7 +42,6 @@ public class SamplePartiallyValidatingConnector extends SampleSourceConnector {
      */
     @Override
     public Config validate(Map<String, String> connectorConfigs) {
-        // do not validate "optional" on purpose
         ConfigDef configDef = new ConfigDef()
                 .define("required", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "required docs");
         List<ConfigValue> configValues = configDef
