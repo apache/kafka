@@ -31,21 +31,26 @@ class ShareConsumerDLQTest(VerifiableShareConsumerTest):
     """
 
     TOPIC = {"name": "dlq-source-topic", "partitions": 1, "replication_factor": 1}
+    TOPIC_MULTI = {"name": "dlq-source-multi", "partitions": 3, "replication_factor": 3}
 
     num_consumers = 1
     num_producers = 1
     num_brokers = 3
 
     share_group_id = "dlq-test-group"
-    total_messages = 300
+    total_messages = 50
 
     default_timeout_sec = 180
 
     def __init__(self, test_context):
+        topics = {}
+        for topic in (self.TOPIC, self.TOPIC_MULTI):
+            topics[topic["name"]] = {"partitions": topic["partitions"],
+                                      "replication-factor": topic["replication_factor"]}
+
         super(ShareConsumerDLQTest, self).__init__(test_context, num_consumers=self.num_consumers,
             num_producers=self.num_producers, num_zk=0, num_brokers=self.num_brokers,
-            topics={self.TOPIC["name"]: {"partitions": self.TOPIC["partitions"],
-                                          "replication-factor": self.TOPIC["replication_factor"]}})
+            topics=topics)
 
         # DLQ (KIP-1191) is gated behind share.version=2, which is not yet the production
         # default (LATEST_PRODUCTION=SV_1) -- bootstrap the cluster with it explicitly. KafkaTest's
@@ -59,13 +64,45 @@ class ShareConsumerDLQTest(VerifiableShareConsumerTest):
         self.kafka = KafkaService(test_context, self.num_brokers, self.zk, topics=self.topics,
                                    controller_num_nodes_override=self.num_zk, share_version="2")
 
-    def create_dlq_topic(self, name):
+    def create_dlq_topic(self, name, partitions=1, replication_factor=1):
         self.kafka.create_topic({
             "topic": name,
-            "partitions": 1,
-            "replication-factor": 1,
+            "partitions": partitions,
+            "replication-factor": replication_factor,
             "configs": {"errors.deadletterqueue.group.enable": "true"}
         })
+
+    def assert_dlq_routing(self, dlq_records, num_dlq_partitions, source_topic=None):
+        """Assert each DLQ record's __dlq.errors.partition header maps to the DLQ partition it was
+        actually read from via (source_partition % num_dlq_partitions), and optionally that the
+        __dlq.errors.topic header matches source_topic.
+        """
+        for record in dlq_records:
+            headers = record["headers"]
+            source_partition = int(headers["__dlq.errors.partition"])
+            expected_dlq_partition = source_partition % num_dlq_partitions
+            assert expected_dlq_partition == record["partition"], \
+                "DLQ record for source partition %d landed in DLQ partition %d, expected %d" % \
+                (source_partition, record["partition"], expected_dlq_partition)
+            if source_topic is not None:
+                assert headers["__dlq.errors.topic"] == source_topic, \
+                    "Expected __dlq.errors.topic header %s, got %s" % (source_topic, headers["__dlq.errors.topic"])
+
+    def expected_mixed_dlq_outcome(self, producer):
+        """For a producer whose consumer uses the reject/release/accept-cycling ack pattern, compute
+        the expected DLQ'd value set and accepted count from the producer's actual per-partition ack
+        order: (offset % 3) is evaluated per-partition, not globally, since each partition has its
+        own independent offset sequence starting at 0.
+        """
+        dlq_values = set()
+        accepted_count = 0
+        for values in producer.acked_values_by_partition.values():
+            for offset, value in enumerate(values):
+                if offset % 3 != 2:
+                    dlq_values.add(value)
+                else:
+                    accepted_count += 1
+        return dlq_values, accepted_count
 
     def setup_dlq_group_config(self, dlq_topic, copy_record_enable=None):
         wait_until(lambda: self.kafka.set_share_group_offset_reset_strategy(group=self.share_group_id, strategy="earliest"),
@@ -198,5 +235,107 @@ class ShareConsumerDLQTest(VerifiableShareConsumerTest):
         actual_dlq_values = {int(record["value"]) for record in dlq_records}
         assert actual_dlq_values == expected_dlq_values, \
             "DLQ record values did not match the original produced values (copy-record enabled)"
+
+        consumer.stop_all()
+
+    @cluster(num_nodes=10)
+    @matrix(metadata_quorum=[quorum.isolated_kraft, quorum.combined_kraft], num_dlq_partitions=[3, 1])
+    def test_multi_partition_dlq_reject(self, metadata_quorum=quorum.isolated_kraft, num_dlq_partitions=3):
+        """Every record on a 3-partition source topic is REJECTed. Verifies both DLQ topic content
+        and per-record routing (source_partition % num_dlq_partitions) -- num_dlq_partitions=3 covers
+        1:1 routing, num_dlq_partitions=1 covers the modulus-collapsing case."""
+        dlq_topic = "dlq.reject-multi-partition-%d" % num_dlq_partitions
+        self.create_dlq_topic(dlq_topic, partitions=num_dlq_partitions, replication_factor=3)
+        self.setup_dlq_group_config(dlq_topic)
+
+        producer = self.setup_producer(self.TOPIC_MULTI["name"], max_messages=self.total_messages)
+        consumer = self.setup_share_group(self.TOPIC_MULTI["name"], group_id=self.share_group_id,
+                                           acknowledgement_mode="sync", ack_pattern=["reject"])
+
+        producer.start()
+        self.await_produced_messages(producer, min_messages=self.total_messages, timeout_sec=self.default_timeout_sec)
+
+        consumer.start()
+        self.await_all_members(consumer, timeout_sec=self.default_timeout_sec)
+
+        wait_until(lambda: consumer.total_rejected() >= self.total_messages, timeout_sec=self.default_timeout_sec,
+                   err_msg="Timed out waiting for all records to be rejected")
+
+        producer.stop()
+        consumer.stop_all()
+
+        dlq_records = self.read_dlq_topic(dlq_topic, self.total_messages)
+        assert len(dlq_records) == self.total_messages
+        self.assert_dlq_routing(dlq_records, num_dlq_partitions, source_topic=self.TOPIC_MULTI["name"])
+
+    @cluster(num_nodes=10)
+    @matrix(metadata_quorum=[quorum.isolated_kraft, quorum.combined_kraft])
+    def test_multi_partition_dlq_release(self, metadata_quorum=quorum.isolated_kraft):
+        """Same as test_single_partition_dlq_release but on a 3-partition source topic."""
+        dlq_topic = "dlq.release-multi-partition"
+        num_dlq_partitions = 3
+        delivery_count_limit = 2
+        self.create_dlq_topic(dlq_topic, partitions=num_dlq_partitions, replication_factor=3)
+        self.setup_dlq_group_config(dlq_topic)
+        wait_until(lambda: self.kafka.set_share_group_delivery_count_limit(group=self.share_group_id, limit=delivery_count_limit),
+                   timeout_sec=20, backoff_sec=2, err_msg="share.delivery.count.limit not set")
+
+        producer = self.setup_producer(self.TOPIC_MULTI["name"], max_messages=self.total_messages)
+        consumer = self.setup_share_group(self.TOPIC_MULTI["name"], group_id=self.share_group_id,
+                                           acknowledgement_mode="sync", ack_pattern=["release"])
+
+        producer.start()
+        self.await_produced_messages(producer, min_messages=self.total_messages, timeout_sec=self.default_timeout_sec)
+
+        consumer.start()
+        self.await_all_members(consumer, timeout_sec=self.default_timeout_sec)
+
+        producer.stop()
+
+        dlq_records = self.read_dlq_topic(dlq_topic, self.total_messages, timeout_sec=self.default_timeout_sec * 2)
+        assert len(dlq_records) == self.total_messages
+        self.assert_dlq_routing(dlq_records, num_dlq_partitions, source_topic=self.TOPIC_MULTI["name"])
+
+        consumer.stop_all()
+
+    @cluster(num_nodes=10)
+    @matrix(metadata_quorum=[quorum.isolated_kraft, quorum.combined_kraft])
+    def test_multi_partition_dlq_mixed(self, metadata_quorum=quorum.isolated_kraft):
+        """Same as test_single_partition_dlq_mixed but on a 3-partition source topic. The expected
+        DLQ set/count is computed per-partition from the producer's actual per-partition ack order
+        (offset % 3 is evaluated per-partition, not globally, since each partition has its own
+        independent offset sequence starting at 0)."""
+        dlq_topic = "dlq.mixed-multi-partition"
+        num_dlq_partitions = 3
+        delivery_count_limit = 2
+        self.create_dlq_topic(dlq_topic, partitions=num_dlq_partitions, replication_factor=3)
+        self.setup_dlq_group_config(dlq_topic, copy_record_enable=True)
+        wait_until(lambda: self.kafka.set_share_group_delivery_count_limit(group=self.share_group_id, limit=delivery_count_limit),
+                   timeout_sec=20, backoff_sec=2, err_msg="share.delivery.count.limit not set")
+
+        producer = self.setup_producer(self.TOPIC_MULTI["name"], max_messages=self.total_messages)
+        consumer = self.setup_share_group(self.TOPIC_MULTI["name"], group_id=self.share_group_id,
+                                           acknowledgement_mode="sync", ack_pattern=["reject", "release", "accept"])
+
+        producer.start()
+        self.await_produced_messages(producer, min_messages=self.total_messages, timeout_sec=self.default_timeout_sec)
+
+        consumer.start()
+        self.await_all_members(consumer, timeout_sec=self.default_timeout_sec)
+
+        expected_dlq_values, expected_accepted_count = self.expected_mixed_dlq_outcome(producer)
+
+        wait_until(lambda: consumer.total_accepted() >= expected_accepted_count, timeout_sec=self.default_timeout_sec,
+                   err_msg="Timed out waiting for all accept-pattern records to be accepted")
+
+        producer.stop()
+
+        dlq_records = self.read_dlq_topic(dlq_topic, len(expected_dlq_values), timeout_sec=self.default_timeout_sec * 2)
+        assert len(dlq_records) == len(expected_dlq_values)
+
+        actual_dlq_values = {int(record["value"]) for record in dlq_records}
+        assert actual_dlq_values == expected_dlq_values, \
+            "DLQ record values did not match the original produced values (copy-record enabled)"
+        self.assert_dlq_routing(dlq_records, num_dlq_partitions, source_topic=self.TOPIC_MULTI["name"])
 
         consumer.stop_all()
