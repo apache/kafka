@@ -123,8 +123,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         return streamsConfiguration;
     }
 
-    @SuppressWarnings("rawtypes")
-    private void buildAndStart(final StoreBuilder storeBuilder,
+    private void buildAndStart(final StoreBuilder<?> storeBuilder,
                                final ProcessorSupplier<String, String, Void, Void> processorSupplier,
                                final String storeName,
                                final Properties props) throws Exception {
@@ -136,9 +135,8 @@ public class HeadersStoreUpgradeIntegrationTest {
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(kafkaStreams);
     }
 
-    @SuppressWarnings("rawtypes")
     private void assertDowngradeThrowsProcessorStateException(
-            final StoreBuilder storeBuilder,
+            final StoreBuilder<?> storeBuilder,
             final ProcessorSupplier<String, String, Void, Void> processorSupplier,
             final String storeName,
             final Properties props) {
@@ -164,7 +162,6 @@ public class HeadersStoreUpgradeIntegrationTest {
         } finally {
             if (kafkaStreams != null) {
                 kafkaStreams.close(Duration.ofSeconds(30L));
-                kafkaStreams = null;
             }
         }
         if (!exceptionThrown) {
