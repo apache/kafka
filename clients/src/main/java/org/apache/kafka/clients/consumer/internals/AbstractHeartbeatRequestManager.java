@@ -259,12 +259,12 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
         if (pollTimer.isExpired()) {
             return 0L;
         }
-        // KAFKA-20253: A 0 wait means "wake immediately to send a heartbeat now". Only honor that
-        // when a heartbeat can actually be sent, i.e. the coordinator is known. When the coordinator
-        // is unavailable (e.g. after a re-authentication failure) poll() returns EMPTY, so returning 0
-        // here would busy-spin the application thread (and, via wakeups, the network thread). There is
-        // nothing to send until the coordinator is rediscovered, which CoordinatorRequestManager drives.
-        if (coordinatorRequestManager.coordinator().isEmpty()) {
+        // KAFKA-20253: mirror the guard in poll(). A heartbeat is only sent when the coordinator is known
+        // and the member is in a state that heartbeats. When the coordinator is unavailable (e.g. after a
+        // re-authentication failure) or the member should skip heartbeats (FATAL/FENCED/STALE/UNSUBSCRIBED),
+        // poll() returns EMPTY, so falling through to the timer-based branches below would return 0 (the
+        // heartbeat timer is left permanently expired) and busy-spin both the application and network threads.
+        if (coordinatorRequestManager.coordinator().isEmpty() || membershipManager().shouldSkipHeartbeat()) {
             return heartbeatRequestState.heartbeatIntervalMs();
         }
         if (membershipManager().shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight()) {

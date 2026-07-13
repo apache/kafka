@@ -107,12 +107,9 @@ public class CoordinatorRequestManager implements RequestManager {
             return new NetworkClientDelegate.PollResult(request);
         }
 
-        // KAFKA-20253: canSendRequest() is false either because a FindCoordinator request is already
-        // in flight, or because we are still within the retry backoff. When a request is in flight,
-        // remainingBackoffMs() can be 0 (the backoff since the last send has already elapsed), and
-        // returning 0 tells the network thread to poll again immediately - a busy-spin, since there
-        // is nothing to send until the in-flight request completes. Wait instead; the network thread
-        // still wakes on the response's I/O (or the request timeout).
+        // When a request is in flight, remainingBackoffMs() can be 0, and returning 0 tells the network thread to
+        // poll again immediately which causes a busy spin. Wait instead by returning a PollResult with a Long.MAX_VALUE
+        // backoff
         if (coordinatorRequestState.requestInFlight()) {
             return EMPTY;
         }
