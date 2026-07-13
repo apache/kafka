@@ -70,8 +70,6 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
     extends MeteredWindowStore<K, ValueTimestampHeaders<V>>
     implements TimestampedWindowStoreWithHeaders<K, V> {
 
-    private final long windowSizeMs;
-
     MeteredTimestampedWindowStoreWithHeaders(
         final WindowStore<Bytes, byte[]> inner,
         final long windowSizeMs,
@@ -81,7 +79,6 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
         final Serde<ValueTimestampHeaders<V>> valueSerde
     ) {
         super(inner, windowSizeMs, metricScope, time, keySerde, valueSerde);
-        this.windowSizeMs = windowSizeMs;
     }
 
     @SuppressWarnings("unchecked")
@@ -241,6 +238,9 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
     ) {
         final QueryResult<R> queryResult;
 
+        // Mirrors WindowKeyQuery handling: the closed-range contract (both bounds present) is guaranteed
+        // by the sole withKeyAndWindowStartRange factory today, but the Optional accessors are @Evolving,
+        // so we reject an open-ended range with UNKNOWN_QUERY_TYPE rather than assuming .get() is safe.
         if (query.timeFrom().isPresent() && query.timeTo().isPresent()) {
             final WindowKeyQuery<Bytes, byte[]> rawKeyQuery =
                 WindowKeyQuery.withKeyAndWindowStartRange(
@@ -584,6 +584,11 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
      * because a lazily-evaluated iterator has already returned a successful {@link QueryResult}
      * before any entry is read, such an entry cannot be surfaced as a query-level failure; it is
      * instead reported by throwing a {@link StreamsException} while advancing the iterator.
+     *
+     * <p>Because {@link #next()} can throw mid-iteration, the caller must always close this iterator
+     * (via try-with-resources or a {@code finally} block) even when iteration throws: a caller that
+     * catches the exception and abandons the iterator without closing it leaks the underlying store
+     * iterator and leaves the {@code num-open-iterators} metric permanently incremented.
      */
     private class MeteredWindowStoreWithHeadersReadOnlyRecordIterator
         implements ReadOnlyRecordIterator<Windowed<K>, V>, MeteredIterator {

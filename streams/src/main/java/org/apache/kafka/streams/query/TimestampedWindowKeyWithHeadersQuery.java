@@ -59,6 +59,10 @@ import java.util.Optional;
  * {@code Stores.persistentTimestampedWindowStoreWithHeaders(...)} to persist timestamps and headers,
  * or use {@link WindowKeyQuery} if headers are not needed.
  *
+ * <p>Because iteration can throw mid-stream, always close the returned {@link ReadOnlyRecordIterator}
+ * (for example with try-with-resources), even when a call to {@code next()} throws; otherwise the
+ * underlying store iterator leaks and the {@code num-open-iterators} metric stays incremented.
+ *
  * @param <K> Type of keys
  * @param <V> Type of values
  */
