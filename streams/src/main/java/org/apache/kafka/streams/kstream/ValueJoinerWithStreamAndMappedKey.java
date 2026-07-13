@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * The {@code ValueJoinerWithStreamAndMappedKey} interface for joining two values into a new value of
  * arbitrary type, with access to both the mapped join key and the original {@link KStream} record key.
@@ -30,6 +32,7 @@ package org.apache.kafka.streams.kstream;
  * @param <VOut> the type of the joined result value
  */
 @FunctionalInterface
+@InterfaceAudience.Public
 public interface ValueJoinerWithStreamAndMappedKey<StreamKey, TableKey, StreamValue, TableValue, VOut> {
 
     /**
