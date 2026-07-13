@@ -466,7 +466,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG), "true");
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
-            appender.setClassLogger(StreamsConfig.class, Level.ERROR);
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
 
             final StreamsConfig streamsConfig = new StreamsConfig(props);
 
@@ -485,13 +485,13 @@ public class StreamsConfigTest {
             assertEquals("false", globalConfigs.get(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
                     "Global consumer should not allow auto topic creation with consumer.* override");
 
-            // Verify exactly 1 error is logged (consumer.* prefix is validated once in getCommonConsumerConfigs for each type of consumer)
-            final List<String> errorMessages = appender.getMessages();
-            final long errorCount = errorMessages.stream()
+            // Verify a warning is logged once per consumer (getCommonConsumerConfigs feeds all three consumer types)
+            final List<String> warnMessages = appender.getMessages();
+            final long warnCount = warnMessages.stream()
                     .filter(msg -> msg.contains("Unexpected user-specified consumer config 'allow.auto.create.topics' found"))
                     .count();
-            assertEquals(3, errorCount,
-                    "Should log exactly 3 error for consumer.* prefix");
+            assertEquals(3, warnCount,
+                    "Should log exactly 3 warnings for consumer.* prefix");
         }
     }
 
@@ -503,7 +503,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.globalConsumerPrefix(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG), "true");
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
-            appender.setClassLogger(StreamsConfig.class, Level.ERROR);
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
 
             final StreamsConfig streamsConfig = new StreamsConfig(props);
 
@@ -522,22 +522,22 @@ public class StreamsConfigTest {
             assertEquals("false", globalConfigs.get(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
                     "Global consumer should not allow auto topic creation with global.consumer.* override");
 
-            // Verify exactly 3 errors are logged (one for each specific prefix)
-            final List<String> errorMessages = appender.getMessages();
-            final long errorCount = errorMessages.stream()
+            // Verify exactly 3 warnings are logged (one for each specific prefix)
+            final List<String> warnMessages = appender.getMessages();
+            final long warnCount = warnMessages.stream()
                     .filter(msg -> msg.contains("Unexpected user-specified consumer config 'allow.auto.create.topics' found"))
                     .count();
-            assertEquals(3, errorCount,
-                    "Should log exactly 3 errors: one for main.consumer.*, one for restore.consumer.*, one for global.consumer.*");
+            assertEquals(3, warnCount,
+                    "Should log exactly 3 warnings: one for main.consumer.*, one for restore.consumer.*, one for global.consumer.*");
         }
     }
 
     @Test
-    public void shouldLogErrorAndIgnoreUserOverrideOfGroupId() {
+    public void shouldLogWarningAndIgnoreUserOverrideOfGroupId() {
         props.put(consumerPrefix(ConsumerConfig.GROUP_ID_CONFIG), "user-group-id");
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
-            appender.setClassLogger(StreamsConfig.class, Level.ERROR);
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
 
             final StreamsConfig streamsConfig = new StreamsConfig(props);
             final Map<String, Object> mainConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
@@ -545,19 +545,19 @@ public class StreamsConfigTest {
             assertEquals(groupId, mainConfigs.get(ConsumerConfig.GROUP_ID_CONFIG),
                     "Streams should force group.id to the application id and ignore the user override");
 
-            final long errorCount = appender.getMessages().stream()
+            final long warnCount = appender.getMessages().stream()
                     .filter(msg -> msg.contains("Unexpected user-specified consumer config 'group.id' found"))
                     .count();
-            assertEquals(1, errorCount, "Should log exactly one error for the group.id override");
+            assertEquals(1, warnCount, "Should log exactly one warning for the group.id override");
         }
     }
 
     @Test
-    public void shouldLogErrorAndIgnoreUserOverrideOfPartitionAssignmentStrategy() {
+    public void shouldLogWarningAndIgnoreUserOverrideOfPartitionAssignmentStrategy() {
         props.put(consumerPrefix(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG), "com.example.MyAssignor");
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
-            appender.setClassLogger(StreamsConfig.class, Level.ERROR);
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
 
             final StreamsConfig streamsConfig = new StreamsConfig(props);
             final Map<String, Object> mainConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
@@ -566,17 +566,17 @@ public class StreamsConfigTest {
                     mainConfigs.get(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
                     "Streams should force its own partition assignor and ignore the user override");
 
-            final long errorCount = appender.getMessages().stream()
+            final long warnCount = appender.getMessages().stream()
                     .filter(msg -> msg.contains("Unexpected user-specified consumer config 'partition.assignment.strategy' found"))
                     .count();
-            assertEquals(1, errorCount, "Should log exactly one error for the partition.assignment.strategy override");
+            assertEquals(1, warnCount, "Should log exactly one warning for the partition.assignment.strategy override");
         }
     }
 
     @Test
-    public void shouldNotLogErrorWhenUserDoesNotOverrideControlledConfigs() {
+    public void shouldNotLogWarningWhenUserDoesNotOverrideControlledConfigs() {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
-            appender.setClassLogger(StreamsConfig.class, Level.ERROR);
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
 
             final StreamsConfig streamsConfig = new StreamsConfig(props);
             // Building each client's configs must not warn about configs the user never set. This guards
@@ -586,10 +586,10 @@ public class StreamsConfigTest {
             streamsConfig.getRestoreConsumerConfigs(clientId);
             streamsConfig.getGlobalConsumerConfigs(clientId);
 
-            final long errorCount = appender.getMessages().stream()
+            final long warnCount = appender.getMessages().stream()
                     .filter(msg -> msg.contains("Unexpected user-specified"))
                     .count();
-            assertEquals(0, errorCount, "Should not log a controlled-config error when the user overrides nothing");
+            assertEquals(0, warnCount, "Should not log a controlled-config warning when the user overrides nothing");
         }
     }
 
@@ -874,6 +874,31 @@ public class StreamsConfigTest {
         final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
 
         assertThat(producerConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG), is(nullValue()));
+    }
+
+    @Test
+    public void shouldLogWarningAndIgnoreUserOverridesOfControlledProducerConfigsIfEosV2Enabled() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
+        props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
+        props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "user-TxId");
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+
+            final Map<String, Object> producerConfigs = new StreamsConfig(props).getProducerConfigs(clientId);
+
+            assertTrue((Boolean) producerConfigs.get(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG),
+                    "Streams should force idempotence on under EOS and ignore the user override");
+            assertThat(producerConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG), is(nullValue()));
+
+            final List<String> messages = appender.getMessages();
+            assertEquals(1, messages.stream()
+                    .filter(msg -> msg.contains("Unexpected user-specified producer config 'enable.idempotence' found"))
+                    .count(), "Should warn once for the enable.idempotence override");
+            assertEquals(1, messages.stream()
+                    .filter(msg -> msg.contains("Unexpected user-specified producer config 'transactional.id' found"))
+                    .count(), "Should warn once for the transactional.id override");
+        }
     }
 
     @Test

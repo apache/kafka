@@ -171,6 +171,9 @@ public class StreamsConfig extends AbstractConfig {
     private static final long DEFAULT_COMMIT_INTERVAL_MS = 30000L;
     private static final long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
     private static final int DEFAULT_TRANSACTION_TIMEOUT = 10000;
+    private static final String DEFAULT_MAX_POLL_RECORDS = "1000";
+    private static final String DEFAULT_AUTO_OFFSET_RESET = "earliest";
+    private static final String DEFAULT_LINGER_MS = "100";
 
     @Deprecated
     @SuppressWarnings("unused")
@@ -892,17 +895,6 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG = "windowstore.changelog.additional.retention.ms";
     private static final String WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC = "Added to a windows maintainMs to ensure data is not deleted from the log prematurely. Allows for clock drift. Default is 1 day";
-
-    private static final String[] NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS =
-        new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, ConsumerConfig.GROUP_PROTOCOL_CONFIG, ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG};
-    private static final String[] NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS =
-        new String[] {ConsumerConfig.ISOLATION_LEVEL_CONFIG};
-    private static final String[] NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS =
-        new String[] {
-            ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG,
-            ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION,
-            ProducerConfig.TRANSACTIONAL_ID_CONFIG
-        };
     /**
      * {@code processing.exception.handler.global.enabled}
      * @deprecated Since 4.3. Default will change to {@code true} when removed.
@@ -1375,36 +1367,41 @@ public class StreamsConfig extends AbstractConfig {
                     TOPOLOGY_DESCRIPTION_PUSH_ENABLED_DOC);
     }
 
-    // this is the list of configs for underlying clients
-    // that streams prefer different default values
-    private static final Map<String, Object> PRODUCER_DEFAULT_OVERRIDES = Map.of(ProducerConfig.LINGER_MS_CONFIG, "100");
-
-    private static final Map<String, Object> PRODUCER_EOS_OVERRIDES;
-    static {
-        final Map<String, Object> tempProducerDefaultOverrides = new HashMap<>(PRODUCER_DEFAULT_OVERRIDES);
-        tempProducerDefaultOverrides.putAll(Map.of(
-            ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE,
-            ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true,
-            // Reduce the transaction timeout for quicker pending offset expiration on broker side.
-            ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, DEFAULT_TRANSACTION_TIMEOUT
-        ));
-        PRODUCER_EOS_OVERRIDES = Collections.unmodifiableMap(tempProducerDefaultOverrides);
-    }
-
-    private static final Map<String, Object> CONSUMER_DEFAULT_OVERRIDES = Map.of(
-        ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1000",
-        ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
-        ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
-        ConsumerConfig.GROUP_PROTOCOL_CONFIG, "classic",
-        ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, "false"
+    // Configs for the underlying clients that Streams prefers different default values for.
+    // These are only defaults: the user may still override them.
+    private static final Map<String, Object> DEFAULT_CONSUMER_CONFIGS = Map.of(
+        ConsumerConfig.MAX_POLL_RECORDS_CONFIG, DEFAULT_MAX_POLL_RECORDS,
+        ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, DEFAULT_AUTO_OFFSET_RESET
     );
 
-    private static final Map<String, Object> CONSUMER_EOS_OVERRIDES;
+    private static final Map<String, Object> DEFAULT_PRODUCER_CONFIGS = Map.of(ProducerConfig.LINGER_MS_CONFIG, DEFAULT_LINGER_MS);
+
+    private static final Map<String, Object> DEFAULT_PRODUCER_CONFIGS_EOS_ENABLED;
     static {
-        final Map<String, Object> tempConsumerDefaultOverrides = new HashMap<>(CONSUMER_DEFAULT_OVERRIDES);
-        tempConsumerDefaultOverrides.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, READ_COMMITTED.toString());
-        CONSUMER_EOS_OVERRIDES = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
+        final Map<String, Object> tempProducerDefaults = new HashMap<>(DEFAULT_PRODUCER_CONFIGS);
+        tempProducerDefaults.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
+        // Reduce the transaction timeout for quicker pending offset expiration on broker side.
+        tempProducerDefaults.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, DEFAULT_TRANSACTION_TIMEOUT);
+        DEFAULT_PRODUCER_CONFIGS_EOS_ENABLED = Collections.unmodifiableMap(tempProducerDefaults);
     }
+
+    // Configs that Streams controls: a user-specified value is ignored (with a warning) and the
+    // Streams value is enforced after the user props have been merged.
+    private static final Map<String, Object> CONTROLLED_CONSUMER_CONFIGS = Map.of(
+        ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
+        ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, "false",
+        ConsumerConfig.GROUP_PROTOCOL_CONFIG, "classic"
+    );
+
+    private static final Map<String, Object> CONTROLLED_CONSUMER_CONFIGS_EOS_ENABLED;
+    static {
+        final Map<String, Object> tempControlledConfigs = new HashMap<>(CONTROLLED_CONSUMER_CONFIGS);
+        tempControlledConfigs.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, READ_COMMITTED.toString());
+        CONTROLLED_CONSUMER_CONFIGS_EOS_ENABLED = Collections.unmodifiableMap(tempControlledConfigs);
+    }
+
+    private static final Map<String, Object> CONTROLLED_PRODUCER_CONFIGS_EOS_ENABLED =
+        Map.of(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
 
     private static final Map<String, Object> ADMIN_CLIENT_OVERRIDES =
         Map.of(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, true);
@@ -1793,12 +1790,12 @@ public class StreamsConfig extends AbstractConfig {
     private Map<String, Object> getCommonConsumerConfigs() {
         final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(CONSUMER_PREFIX, ConsumerConfig.configNames());
 
+        // The Streams-level group.protocol (classic|streams) shares its name with the consumer config but
+        // has different legal values, so strip any leaked/explicit value here. Streams controls this config
+        // and forces it to "classic" via enforceControlledConsumerConfigs in each consumer builder.
         clientProvidedProps.remove(GROUP_PROTOCOL_CONFIG);
 
-        checkIfUnexpectedUserSpecifiedClientConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
-        checkIfUnexpectedUserSpecifiedClientConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS);
-
-        final Map<String, Object> consumerProps = new HashMap<>(eosEnabled ? CONSUMER_EOS_OVERRIDES : CONSUMER_DEFAULT_OVERRIDES);
+        final Map<String, Object> consumerProps = new HashMap<>(DEFAULT_CONSUMER_CONFIGS);
         if (StreamsConfigUtils.eosEnabled(this)) {
             consumerProps.put("internal.throw.on.fetch.stable.offset.unsupported", true);
         }
@@ -1811,89 +1808,49 @@ public class StreamsConfig extends AbstractConfig {
         return consumerProps;
     }
 
-    private void checkIfUnexpectedUserSpecifiedClientConfig(final Map<String, Object> clientProvidedProps,
-                                                            final String[] nonConfigurableConfigs) {
-        // Streams does not allow users to configure certain client configurations (consumer/producer),
-        // for example, enable.auto.commit or transactional.id. In cases where user tries to override
-        // such non-configurable client configurations, log a warning and remove the user defined value
-        // from the Map. Thus, the default values for these client configurations that are suitable for
-        // Streams will be used instead.
+    private static final String CONTROLLED_CONFIG_OVERRIDE_MESSAGE =
+        "Unexpected user-specified {} config '{}' found. User setting ({}) will be ignored and the Streams default setting ({}) will be used.";
 
-        final String nonConfigurableConfigMessage = "Unexpected user-specified {} config '{}' found. {} setting ({}) will be ignored and the Streams default setting ({}) will be used.";
-        final String eosMessage = "'" + PROCESSING_GUARANTEE_CONFIG + "' is set to \"" + getString(PROCESSING_GUARANTEE_CONFIG) + "\". Hence, user";
-
-        for (final String config: nonConfigurableConfigs) {
-            if (clientProvidedProps.containsKey(config)) {
-
-                if (CONSUMER_DEFAULT_OVERRIDES.containsKey(config)) {
-                    if (!clientProvidedProps.get(config).equals(CONSUMER_DEFAULT_OVERRIDES.get(config))) {
-                        log.error(
-                            nonConfigurableConfigMessage,
-                            "consumer",
-                            config,
-                            "User",
-                            clientProvidedProps.get(config),
-                            CONSUMER_DEFAULT_OVERRIDES.get(config)
-                        );
-                        clientProvidedProps.remove(config);
-                    }
-                } else if (eosEnabled) {
-                    if (CONSUMER_EOS_OVERRIDES.containsKey(config)) {
-                        if (!clientProvidedProps.get(config).equals(CONSUMER_EOS_OVERRIDES.get(config))) {
-                            log.warn(
-                                nonConfigurableConfigMessage,
-                                "consumer",
-                                config,
-                                eosMessage,
-                                clientProvidedProps.get(config),
-                                CONSUMER_EOS_OVERRIDES.get(config)
-                            );
-                            clientProvidedProps.remove(config);
-                        }
-                    } else if (PRODUCER_EOS_OVERRIDES.containsKey(config)) {
-                        if (!clientProvidedProps.get(config).equals(PRODUCER_EOS_OVERRIDES.get(config))) {
-                            log.warn(
-                                nonConfigurableConfigMessage,
-                                "producer",
-                                config,
-                                eosMessage,
-                                clientProvidedProps.get(config),
-                                PRODUCER_EOS_OVERRIDES.get(config)
-                            );
-                            clientProvidedProps.remove(config);
-                        }
-                    } else if (ProducerConfig.TRANSACTIONAL_ID_CONFIG.equals(config)) {
-                        log.warn(
-                            nonConfigurableConfigMessage,
-                            "producer",
-                            config,
-                            eosMessage,
-                            clientProvidedProps.get(config),
-                            "<appId>-<generatedSuffix>"
-                        );
-                        clientProvidedProps.remove(config);
-                    }
-                }
-            }
-        }
-
-        if (eosEnabled) {
-            verifyMaxInFlightRequestPerConnection(clientProvidedProps.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION));
-        }
-    }
-
-    /** Set a config that Streams controls, warning if the user tried to set a different value. */
-    private void enforceConfig(final Map<String, Object> props,
-                               final String config,
-                               final Object streamsValue,
-                               final String clientType) {
-        final Object userValue = props.get(config);
-        if (userValue != null && !userValue.equals(streamsValue)) {
-            log.error("Unexpected user-specified {} config '{}' found. User setting ({}) will be ignored "
-                            + "and the Streams default setting ({}) will be used.",
-                    clientType, config, userValue, streamsValue);
+    /**
+     * Enforce a config that Streams controls: if the user set a different value, log a warning that it
+     * is being ignored, then overwrite it with the Streams value. Must be called after the user-provided
+     * props have been merged into {@code props}, so an override at any prefix is caught in one place.
+     */
+    private void overwriteControlledConfig(final Map<String, Object> props,
+                                           final String config,
+                                           final Object streamsValue,
+                                           final String clientType) {
+        if (props.containsKey(config) && !Objects.equals(props.get(config), streamsValue)) {
+            log.warn(CONTROLLED_CONFIG_OVERRIDE_MESSAGE, clientType, config, props.get(config), streamsValue);
         }
         props.put(config, streamsValue);
+    }
+
+    /** Enforce the consumer configs that Streams controls on an already-assembled consumer config map. */
+    private void enforceControlledConsumerConfigs(final Map<String, Object> consumerProps) {
+        final Map<String, Object> controlledConfigs =
+            eosEnabled ? CONTROLLED_CONSUMER_CONFIGS_EOS_ENABLED : CONTROLLED_CONSUMER_CONFIGS;
+        controlledConfigs.forEach((config, streamsValue) ->
+            overwriteControlledConfig(consumerProps, config, streamsValue, "consumer"));
+    }
+
+    /** Enforce the producer configs that Streams controls on an already-assembled producer config map. */
+    private void enforceControlledProducerConfigs(final Map<String, Object> producerProps) {
+        if (!eosEnabled) {
+            return;
+        }
+        CONTROLLED_PRODUCER_CONFIGS_EOS_ENABLED.forEach((config, streamsValue) ->
+            overwriteControlledConfig(producerProps, config, streamsValue, "producer"));
+
+        // Streams assigns a unique transactional.id per task later (see ActiveTaskCreator), so any
+        // user-provided value is ignored. Warn and drop it rather than forcing a fixed value.
+        if (producerProps.containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG)) {
+            log.warn(CONTROLLED_CONFIG_OVERRIDE_MESSAGE, "producer", ProducerConfig.TRANSACTIONAL_ID_CONFIG,
+                producerProps.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG), "<application.id>-<generated suffix>");
+            producerProps.remove(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
+        }
+
+        verifyMaxInFlightRequestPerConnection(producerProps.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION));
     }
 
     private void verifyMaxInFlightRequestPerConnection(final Object maxInFlightRequests) {
@@ -1938,14 +1895,16 @@ public class StreamsConfig extends AbstractConfig {
 
         // Get main consumer override configs
         final Map<String, Object> mainConsumerProps = originalsWithPrefix(MAIN_CONSUMER_PREFIX);
-        checkIfUnexpectedUserSpecifiedClientConfig(mainConsumerProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
         consumerProps.putAll(mainConsumerProps);
+
+        // Enforce the configs Streams controls now that all user-provided consumer props are merged.
+        enforceControlledConsumerConfigs(consumerProps);
 
         // this is a hack to work around StreamsConfig constructor inside StreamsPartitionAssignor to avoid casting
         consumerProps.put(APPLICATION_ID_CONFIG, groupId);
 
         // add group id, client id with stream client id prefix, and group instance id
-        enforceConfig(consumerProps, ConsumerConfig.GROUP_ID_CONFIG, groupId, "consumer");
+        overwriteControlledConfig(consumerProps, ConsumerConfig.GROUP_ID_CONFIG, groupId, "consumer");
         consumerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
         final String groupInstanceId = (String) consumerProps.get(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
         // Suffix each thread consumer with thread.id to enforce uniqueness of group.instance.id.
@@ -1954,7 +1913,7 @@ public class StreamsConfig extends AbstractConfig {
         }
 
         // add configs required for stream partition assignor
-        enforceConfig(consumerProps, ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StreamsPartitionAssignor.class.getName(), "consumer");
+        overwriteControlledConfig(consumerProps, ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StreamsPartitionAssignor.class.getName(), "consumer");
         consumerProps.put(UPGRADE_FROM_CONFIG, getString(UPGRADE_FROM_CONFIG));
         consumerProps.put(REPLICATION_FACTOR_CONFIG, getInt(REPLICATION_FACTOR_CONFIG));
         consumerProps.put(APPLICATION_SERVER_CONFIG, getString(APPLICATION_SERVER_CONFIG));
@@ -2011,8 +1970,10 @@ public class StreamsConfig extends AbstractConfig {
 
         // Get restore consumer override configs
         final Map<String, Object> restoreConsumerProps = originalsWithPrefix(RESTORE_CONSUMER_PREFIX);
-        checkIfUnexpectedUserSpecifiedClientConfig(restoreConsumerProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
         baseConsumerProps.putAll(restoreConsumerProps);
+
+        // Enforce the configs Streams controls now that all user-provided consumer props are merged.
+        enforceControlledConsumerConfigs(baseConsumerProps);
 
         // no need to set group id for a restore consumer
         baseConsumerProps.remove(ConsumerConfig.GROUP_ID_CONFIG);
@@ -2045,8 +2006,10 @@ public class StreamsConfig extends AbstractConfig {
 
         // Get global consumer override configs
         final Map<String, Object> globalConsumerProps = originalsWithPrefix(GLOBAL_CONSUMER_PREFIX);
-        checkIfUnexpectedUserSpecifiedClientConfig(globalConsumerProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
         baseConsumerProps.putAll(globalConsumerProps);
+
+        // Enforce the configs Streams controls now that all user-provided consumer props are merged.
+        enforceControlledConsumerConfigs(baseConsumerProps);
 
         // no need to set group id for a global consumer
         baseConsumerProps.remove(ConsumerConfig.GROUP_ID_CONFIG);
@@ -2073,12 +2036,13 @@ public class StreamsConfig extends AbstractConfig {
     public Map<String, Object> getProducerConfigs(final String clientId) {
         final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(PRODUCER_PREFIX, ProducerConfig.configNames());
 
-        checkIfUnexpectedUserSpecifiedClientConfig(clientProvidedProps, NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS);
-
         // generate producer configs from original properties and overridden maps
-        final Map<String, Object> props = new HashMap<>(eosEnabled ? PRODUCER_EOS_OVERRIDES : PRODUCER_DEFAULT_OVERRIDES);
+        final Map<String, Object> props = new HashMap<>(eosEnabled ? DEFAULT_PRODUCER_CONFIGS_EOS_ENABLED : DEFAULT_PRODUCER_CONFIGS);
         props.putAll(getClientCustomProps());
         props.putAll(clientProvidedProps);
+
+        // Enforce the configs Streams controls now that all user-provided producer props are merged.
+        enforceControlledProducerConfigs(props);
 
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, originals().get(BOOTSTRAP_SERVERS_CONFIG));
         // add client id with stream client id prefix
