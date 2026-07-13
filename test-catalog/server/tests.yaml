@@ -563,6 +563,7 @@ org.apache.kafka.server.share.dlq.ShareGroupDLQRecordFetcherTest:
 - testRecordsBeyondEndOffsetIgnored
 - testSingleOffsetFetch
 org.apache.kafka.server.share.dlq.ShareGroupDLQStateManagerTest:
+- testCoalesceProduceRequestsDefersHandlersThatExceedPartitionBudget
 - testCoalesceProduceRequestsKeepsDifferentDlqTopicsSeparate
 - testCoalesceProduceRequestsMergesPartitionsForSameDlqTopic
 - testCoalesceProduceRequestsMergesRecordsForSameDlqPartition
@@ -575,6 +576,7 @@ org.apache.kafka.server.share.dlq.ShareGroupDLQStateManagerTest:
 - testConstructorRejectsNullShareGroupMetrics
 - testConstructorRejectsNullTime
 - testConstructorRejectsNullTimer
+- testCreateTopicBuilderPinsCreateTimeAlongsideDlqEnableConfig
 - testDLQRecordCopyDisabledSkipsFetch
 - testDLQRecordCopyEnabled
 - testDLQRecordCopyEnabledButInvalidConfigSkipsFetch
@@ -587,6 +589,7 @@ org.apache.kafka.server.share.dlq.ShareGroupDLQStateManagerTest:
 - testDLQRecordCopyEnabledWithRemoteFetchFailureSkipsRecords
 - testDlqAfterStopFailsWithIllegalState
 - testDlqBeforeStartFailsWithIllegalState
+- testDlqChunksOverMaxMessageBytesAcrossMultipleProduceRequests
 - testDlqCreateTopicFatalErrorFailsFuture
 - testDlqCreateTopicNoClusterNodesFailsFuture
 - testDlqCreateTopicPartialFailuresThenSucceeds

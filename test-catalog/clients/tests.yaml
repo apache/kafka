@@ -5577,15 +5577,6 @@ org.apache.kafka.common.telemetry.internals.TelemetryMetricNamingConventionTest:
 - testNullPrefix
 - testStandardConsumerMetrics
 - testStandardProducerMetrics
-org.apache.kafka.common.utils.ByteBufferInputStreamTest:
-- testReadUnsignedIntFromInputStream
-org.apache.kafka.common.utils.ByteBufferOutputStreamTest:
-- testExpandByteBufferOnPositionIncrease
-- testExpandByteBufferOnWrite
-- testExpandDirectByteBufferOnPositionIncrease
-- testExpandDirectByteBufferOnWrite
-- testWriteByteBuffer
-- testWriteDirectByteBuffer
 org.apache.kafka.common.utils.BytesTest:
 - compareToReflectsLexicographicUnsignedOrdering
 - constructorThrowsForNullInput
@@ -5691,6 +5682,15 @@ org.apache.kafka.common.utils.internals.AppInfoParserTest:
 - testClientIdWontAddRepeatedly
 - testRegisterAppInfoRegistersMetrics
 - testUnregisterAppInfoUnregistersMetrics
+org.apache.kafka.common.utils.internals.ByteBufferInputStreamTest:
+- testReadUnsignedIntFromInputStream
+org.apache.kafka.common.utils.internals.ByteBufferOutputStreamTest:
+- testExpandByteBufferOnPositionIncrease
+- testExpandByteBufferOnWrite
+- testExpandDirectByteBufferOnPositionIncrease
+- testExpandDirectByteBufferOnWrite
+- testWriteByteBuffer
+- testWriteDirectByteBuffer
 org.apache.kafka.common.utils.internals.ByteBufferUnmapperTest:
 - testUnmap
 org.apache.kafka.common.utils.internals.ByteUtilsTest:

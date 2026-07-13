@@ -359,6 +359,7 @@ org.apache.kafka.clients.consumer.ShareConsumerDLQTest:
 - testDlqCopiesRecordsReadFromRemoteStorage
 - testDlqNotTriggeredWhenGatedOff
 - testDlqRecordsRoutedToCorrectDlqPartition
+- testDlqRespectsDlqTopicMaxMessageBytesNotEqToSourceTopic
 - testDlqStopsAfterDisablingForGroup
 - testManyRejectedRecordsAllWrittenToDlq
 - testMixedAcknowledgementTypesWrittenToDlq
