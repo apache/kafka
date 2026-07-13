@@ -88,7 +88,7 @@ import static org.mockito.Mockito.when;
 
 
 public class ConsumerHeartbeatRequestManagerTest
-        extends AbstractHeartbeatRequestManagerTest {
+        extends AbstractHeartbeatRequestManagerTest<ConsumerGroupHeartbeatResponse> {
 
     private static final String DEFAULT_REMOTE_ASSIGNOR = "uniform";
     private static final String DEFAULT_GROUP_INSTANCE_ID = "group-instance-id";
@@ -101,6 +101,10 @@ public class ConsumerHeartbeatRequestManagerTest
     private Metadata metadata;
     private HeartbeatState heartbeatState;
     private LogContext logContext;
+
+    public ConsumerHeartbeatRequestManagerTest() {
+        super(ConsumerGroupHeartbeatResponse.class);
+    }
 
     @BeforeEach
     public void setUp() {
@@ -903,17 +907,25 @@ public class ConsumerHeartbeatRequestManagerTest
     @Override
     protected ClientResponse createHeartbeatResponse(NetworkClientDelegate.UnsentRequest request,
                                                      Errors error) {
-        return createHeartbeatResponse(request, error, "stubbed error message");
+        return createHeartbeatResponse(request, error, DEFAULT_HEARTBEAT_INTERVAL_MS, "stubbed error message");
+    }
+
+    @Override
+    protected ClientResponse createHeartbeatResponse(NetworkClientDelegate.UnsentRequest request,
+                                                     Errors error,
+                                                     int heartbeatIntervalMs) {
+        return createHeartbeatResponse(request, error, heartbeatIntervalMs, "stubbed error message");
     }
 
     private ClientResponse createHeartbeatResponse(
         final NetworkClientDelegate.UnsentRequest request,
         final Errors error,
+        final int heartbeatIntervalMs,
         final String msg
     ) {
         ConsumerGroupHeartbeatResponseData data = new ConsumerGroupHeartbeatResponseData()
             .setErrorCode(error.code())
-            .setHeartbeatIntervalMs(DEFAULT_HEARTBEAT_INTERVAL_MS)
+            .setHeartbeatIntervalMs(heartbeatIntervalMs)
             .setMemberId(DEFAULT_MEMBER_ID)
             .setMemberEpoch(DEFAULT_MEMBER_EPOCH);
         if (error != Errors.NONE) {

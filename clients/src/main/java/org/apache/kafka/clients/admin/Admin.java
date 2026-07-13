@@ -29,6 +29,7 @@ import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.FeatureUpdateFailedException;
@@ -122,6 +123,7 @@ import java.util.Set;
  * version required.
  * <p>
  */
+@InterfaceAudience.Public
 public interface Admin extends AutoCloseable {
 
     /**

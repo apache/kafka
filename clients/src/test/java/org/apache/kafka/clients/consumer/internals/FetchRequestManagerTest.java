@@ -78,12 +78,12 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.BytesDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.DelayedReceive;
 import org.apache.kafka.test.MockSelector;
@@ -1758,6 +1758,45 @@ public class FetchRequestManagerTest {
     private void fetchRecordsInto(List<ConsumerRecord<byte[], byte[]>> allFetchedRecords) {
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchRecords();
         fetchedRecords.values().forEach(allFetchedRecords::addAll);
+    }
+
+    @Test
+    public void testFetchResponseWithUnexpectedPartitionIsIgnored() {
+        buildFetcher();
+
+        // Only tp0 is assigned and seeked; tp1 is not part of this fetch session.
+        // When the response includes an unexpected partition (tp1), FetchSessionHandler
+        // rejects the entire response, so tp0 records are also not returned.
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        assertEquals(1, sendFetches());
+        networkClientDelegate.poll(time.timer(0));
+        assertEquals(1, client.inFlightRequestCount());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        // Respond to the in-flight request with a response that includes an unexpected
+        // partition (tp1) that is not part of the fetch session.
+        Map<TopicIdPartition, FetchResponseData.PartitionData> partitions = new LinkedHashMap<>();
+        partitions.put(tidp0, new FetchResponseData.PartitionData()
+                .setPartitionIndex(tp0.partition())
+                .setHighWatermark(100L)
+                .setLogStartOffset(0)
+                .setRecords(records));
+        partitions.put(tidp1, new FetchResponseData.PartitionData()
+                .setPartitionIndex(tp1.partition())
+                .setHighWatermark(100L)
+                .setLogStartOffset(0)
+                .setRecords(records));
+        client.respond(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions), List.of()));
+        networkClientDelegate.poll(time.timer(0));
+
+        // The in-flight request has completed, but FetchSessionHandler rejected the whole
+        // response because of the unexpected partition (tp1), so nothing is buffered or
+        // returned to the consumer.
+        assertEquals(0, client.inFlightRequestCount());
+        assertFalse(fetcher.hasCompletedFetches());
+        assertTrue(fetchRecords().isEmpty());
     }
 
     @Test

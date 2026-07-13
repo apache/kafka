@@ -70,7 +70,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class ShareHeartbeatRequestManagerTest
-        extends AbstractHeartbeatRequestManagerTest {
+        extends AbstractHeartbeatRequestManagerTest<ShareGroupHeartbeatResponse> {
 
     private static final String SHARE_CONSUMER_COORDINATOR_METRICS = "consumer-share-coordinator-metrics";
 
@@ -83,6 +83,10 @@ public class ShareHeartbeatRequestManagerTest
     private ShareHeartbeatRequestManager.HeartbeatState heartbeatState;
     private Metrics metrics;
     private LogContext logContext;
+
+    public ShareHeartbeatRequestManagerTest() {
+        super(ShareGroupHeartbeatResponse.class);
+    }
 
     @BeforeEach
     public void setUp() {
@@ -457,9 +461,17 @@ public class ShareHeartbeatRequestManagerTest
     protected ClientResponse createHeartbeatResponse(
             final NetworkClientDelegate.UnsentRequest request,
             final Errors error) {
+        return createHeartbeatResponse(request, error, DEFAULT_HEARTBEAT_INTERVAL_MS);
+    }
+
+    @Override
+    protected ClientResponse createHeartbeatResponse(
+            final NetworkClientDelegate.UnsentRequest request,
+            final Errors error,
+            final int heartbeatIntervalMs) {
         ShareGroupHeartbeatResponseData data = new ShareGroupHeartbeatResponseData()
                 .setErrorCode(error.code())
-                .setHeartbeatIntervalMs(DEFAULT_HEARTBEAT_INTERVAL_MS)
+                .setHeartbeatIntervalMs(heartbeatIntervalMs)
                 .setMemberId(DEFAULT_MEMBER_ID)
                 .setMemberEpoch(DEFAULT_MEMBER_EPOCH);
         if (error != Errors.NONE) {

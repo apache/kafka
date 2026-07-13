@@ -84,7 +84,7 @@ Additionally, you can access state stores via the test driver before or after a 
     
     KeyValueStore store = testDriver.getKeyValueStore("store-name");
 
-Note, that you should always close the test driver at the end to make sure all resources are release properly. 
+Note, that you should always close the test driver at the end to make sure all resources are released properly. 
     
     
     testDriver.close();

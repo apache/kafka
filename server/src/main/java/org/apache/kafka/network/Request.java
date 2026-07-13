@@ -356,7 +356,7 @@ public final class Request implements BaseRequest {
         };
 
         for (String metricName : overrideMetricNames) {
-            RequestMetrics m = metrics.apply(metricName);
+            RequestMetrics m = metrics.get(metricName);
             m.requestRate(header().apiVersion()).mark();
             m.deprecatedRequestRate(header().apiKey(), header().apiVersion(), context.clientInformation)
                 .ifPresent(Meter::mark);

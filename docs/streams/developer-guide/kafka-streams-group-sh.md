@@ -32,7 +32,7 @@ Use `kafka-streams-groups.sh` to manage **Streams groups** for the Streams Rebal
 
 A **Streams group** is a broker‑coordinated group type for Kafka Streams that uses Streams‑specific RPCs and metadata, distinct from classic consumer groups. The CLI surfaces Streams‑specific states, assignments, and input‑topic offsets to simplify visibility and administration.
 
-**Use with care:** Mutating operations (offset resets/deletes, group deletion) affect how applications will reprocess data when restarted. Always preview with \--dry-run before executing and ensure application instances are stopped/inactive and the group is empty before executing the command. 
+**Use with care:** Mutating operations (offset resets/deletes, group deletion) affect how applications will reprocess data when restarted. Always preview offset resets with \--dry-run before executing and ensure application instances are stopped/inactive and the group is empty before executing the command.
 
 # What the Streams Groups tool does
 
@@ -41,9 +41,10 @@ A **Streams group** is a broker‑coordinated group type for Kafka Streams that 
     * Group state, group epoch, target assignment epoch (with `--state`, `--verbose` for additional details).
     * Per‑member info such as epochs, current vs target assignments, and whether a member still uses the classic protocol (with `--members` and `--verbose`).
     * Input‑topic offsets and lag (with `--offsets`), to understand how far behind processing is.
+    * The processing topology, as recorded by the broker's topology description plugin (with `--topology`), in a format that mirrors `Topology#describe()`.
   * **Reset input‑topic offsets** for a Streams group to control reprocessing boundaries using precise specifiers (earliest, latest, to‑offset, to‑datetime, by‑duration, shift‑by, from‑file). Requires `--dry-run` or `--execute` and inactive instances.
   * **Delete offsets** for input topics to force re‑consumption on next start.
-  * **Delete a Streams group** to clean up broker‑side Streams metadata (offsets, topology, assignments). Optionally delete all, or a subset of, **internal topics** at the same time using `--internal-topics`.
+  * **Delete a Streams group** to clean up broker‑side Streams metadata (offsets, topology, assignments). Internal topics can be deleted by specifying selected topics with `--delete-internal-topic`, or all internal topics with `--delete-all-internal-topics`.
 
 
 
@@ -83,6 +84,10 @@ Inspecting group's state, members, and lag
     # Describe a group: input-topic offsets and lag
     kafka-streams-groups.sh --bootstrap-server localhost:9092 \
       --describe --group my-streams-app --offsets
+
+    # Describe a group: processing topology
+    kafka-streams-groups.sh --bootstrap-server localhost:9092 \
+      --describe --group my-streams-app --topology
     
 
 ## Reset input-topic offsets (preview, then apply) {#reset-offsets}
@@ -108,30 +113,30 @@ Ensure all application instances are stopped/inactive. Always preview changes wi
 Delete offsets for all or specific input topics to have the group re-read data on restart.
     
     
-    # Delete offsets for all input topics (execute)
+    # Delete offsets for all input topics
     kafka-streams-groups.sh --bootstrap-server localhost:9092 \
       --group my-streams-app \
-      --delete-offsets --all-input-topics --execute
+      --delete-offsets --all-input-topics
     
     # Delete offsets for specific topics
     kafka-streams-groups.sh --bootstrap-server localhost:9092 \
       --group my-streams-app \
-      --delete-offsets --topic input-a --topic input-b --execute
+      --delete-offsets --input-topic input-a --input-topic input-b
     
 
 ## Delete a Streams group (cleanup)
 
-Delete broker-side Streams metadata for a group and optionally remove a subset of internal topics.
+Delete broker-side Streams metadata for a group and optionally remove internal topics.
     
     
     # Delete Streams group metadata
     kafka-streams-groups.sh --bootstrap-server localhost:9092 \
       --delete --group my-streams-app
     
-    # Delete a subset of internal topics alongside the group (use with care)
+    # Delete all internal topics alongside the group (use with care)
     kafka-streams-groups.sh --bootstrap-server localhost:9092 \
       --delete --group my-streams-app \
-      --internal-topics my-app-repartition-0,my-app-changelog
+      --delete-all-internal-topics
     
 
 # All options and flags
@@ -140,18 +145,19 @@ Delete broker-side Streams metadata for a group and optionally remove a subset o
 
   * `--list`: List Streams groups. Use `--state` to display/filter by state.
   * `--describe`: Describe a group selected by `--group`. Combine with: 
-    * `--state` (group state and epochs), `--members` (members and assignments), `--offsets` (input and repartition topics offsets/lag).
+    * `--state` (group state and epochs), `--members` (members and assignments), `--offsets` (input and repartition topics offsets/lag), `--topology` (processing topology recorded by the broker's topology description plugin).
     * `--verbose` for additional details (e.g., leader epochs where applicable).
   * `--reset-offsets`: Reset input-topic offsets (one group at a time; instances should be inactive). Choose exactly one specifier: 
     * `--to-earliest`, `--to-latest`, `--to-current`, `--to-offset <n>`
     * `--by-duration <PnDTnHnMnS>`, `--to-datetime <YYYY-MM-DDTHH:mm:SS.sss>`
     * `--shift-by <n>` (±), `--from-file` (CSV)
 Scope: 
-    * `--all-input-topics` or one/more `--topic <name>`; some builds also support `--all-topics` (all input topics per broker topology metadata).
+    * `--all-input-topics` or one/more `--input-topic <name>`.
 Safety: 
     * Requires `--dry-run` or `--execute`.
-  * `--delete-offsets`: Delete offsets for `--all-input-topics`, specific `--topic` names, or `--from-file`.
-  * `--delete`: Delete Streams group metadata; optionally pass `--internal-topics <list>` to delete a subset of internal topics.
+    * With `--execute`, optionally pass `--delete-internal-topic <name>` or `--delete-all-internal-topics` to delete internal topics.
+  * `--delete-offsets`: Delete offsets for `--all-input-topics` or specific `--input-topic` names.
+  * `--delete`: Delete Streams group metadata; optionally pass `--delete-all-internal-topics` to delete all internal topics.
 
 
 
@@ -161,16 +167,16 @@ Safety:
   * `--all-groups`: Operate on all groups (allowed with `--delete`).
   * `--bootstrap-server <host:port>`: Broker(s) to connect to (required).
   * `--command-config <file>`: Properties for AdminClient (security, timeouts, etc.).
-  * `--timeout <ms>`: Wait time for group stabilization in some operations (default: 5000ms).
-  * `--dry-run`, `--execute`: Preview vs apply for mutating operations.
+  * `--timeout <ms>`: Wait time for group stabilization in some operations (default: 30000ms).
+  * `--dry-run`, `--execute`: Preview vs apply for offset reset operations.
   * `--help`, `--version`, `--verbose`: Usage, version, verbosity.
 
 
 
 # Best practices and safety
 
-  * Preview changes with `--dry-run` to verify topic scope and impact before `--execute`.
-  * Use `--internal-topics` carefully: deleting internal topics removes state backing topics; only do this when you intend to rebuild state from input topics.
+  * Preview offset reset changes with `--dry-run` to verify topic scope and impact before `--execute`.
+  * Use `--delete-internal-topic` and `--delete-all-internal-topics` carefully: deleting internal topics removes state backing topics; only do this when you intend to rebuild state from input topics.
 
 
 

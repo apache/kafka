@@ -35,14 +35,15 @@ import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.DefaultRecord;
+import org.apache.kafka.common.record.internal.DefaultRecordBatch;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.Record;
-import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
-import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.Time;
@@ -50,13 +51,10 @@ import org.apache.kafka.common.utils.internals.ExponentialBackoffManager;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.share.LogReader;
 import org.apache.kafka.server.share.metrics.ShareGroupMetrics;
-import org.apache.kafka.server.storage.log.FetchIsolation;
-import org.apache.kafka.server.storage.log.FetchParams;
 import org.apache.kafka.server.util.InterBrokerSendThread;
 import org.apache.kafka.server.util.RequestAndCompletionHandler;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
-import org.apache.kafka.storage.internals.log.LogReadResult;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -185,9 +183,32 @@ public class ShareGroupDLQStateManager {
 
     // Visibility for tests
     CompletableFuture<Void> dlq(ShareGroupDLQRecordParameter param, long requestBackoffMs, long requestBackoffMaxMs, int maxRequestAttempts) {
+        if (!this.isStarted.get()) {
+            return CompletableFuture.failedFuture(new IllegalStateException("ShareGroupDLQStateManager is not started."));
+        }
         CompletableFuture<Void> future = new CompletableFuture<>();
         ProduceRequestHandler requestHandler = new ProduceRequestHandler(param, future, requestBackoffMs, requestBackoffMaxMs, maxRequestAttempts);
-        enqueue(requestHandler);
+
+        // Validate the DLQ configuration up front, synchronously on the calling thread, so a
+        // misconfigured DLQ fails fast, and we never read source records for one. enqueue() also
+        // re-validates so that retries re-check the (dynamic) config.
+        Optional<Throwable> validationError = requestHandler.validateDlqTopic();
+        if (validationError.isPresent()) {
+            future.completeExceptionally(validationError.get());
+            return future;
+        }
+
+        // Resolve the source records once, here - on the calling thread for local offsets and, for
+        // tiered offsets, asynchronously on the remote-storage reader pool - and enqueue only once
+        // resolution finishes. This keeps both the local and remote reads off the single sender
+        // thread, and the memoized result is reused on every (re)send so retries never re-fetch.
+        // Records are only read when copy is enabled for the group and the DLQ is correctly
+        // configured (validated above); otherwise we enqueue immediately.
+        if (cacheHelper.isShareGroupDlqCopyRecordEnabled(param.groupId())) {
+            requestHandler.resolveRecords().whenComplete((ignored, ignoredError) -> enqueue(requestHandler));
+        } else {
+            enqueue(requestHandler);
+        }
         return future;
     }
 
@@ -218,9 +239,6 @@ public class ShareGroupDLQStateManager {
      * @param handler The handler instance to add to the node map.
      */
     private void addRequestToNodeMap(Node node, ProduceRequestHandler handler) {
-        if (!handler.isBatchable()) {
-            return;
-        }
         synchronized (nodeMapLock) {
             nodeRPCMap.computeIfAbsent(node, k -> new LinkedList<>())
                 .add(handler);
@@ -235,9 +253,29 @@ public class ShareGroupDLQStateManager {
         private static final Logger LOG = LoggerFactory.getLogger(ShareGroupDLQStateManager.ProduceRequestHandler.class);
         private final ExponentialBackoffManager createTopicsBackoff;
         private final ExponentialBackoffManager produceRequestBackoff;
-        private Node dlqPartitionLeaderNode;
-        private int dlqDestinationPartition;
-        private ShareGroupDLQMetadataCacheHelper.TopicPartitionData dlqTopicPartitionData;
+        // These DLQ topic fields are written by populateDLQTopicData() and read while building the
+        // produce request - both on the sender thread (from dlqTopicExists()/handleCreateTopicsResponse()).
+        // Kept volatile defensively.
+        private volatile Node dlqPartitionLeaderNode;
+        private volatile int dlqDestinationPartition;
+        private volatile ShareGroupDLQMetadataCacheHelper.TopicPartitionData dlqTopicPartitionData;
+        // The original source records, resolved once before this handler is enqueued (see resolveRecords()).
+        // Volatile because resolution runs off the sender thread - on the calling thread for local offsets
+        // and, for tiered offsets, on the remote-storage reader pool - while this value is read on the
+        // sender thread when the produce request is built. Memoized: set once and reused for every (re)send,
+        // so retries never re-fetch.
+        private volatile Map<Long, Record> resolvedRecordData = Map.of();
+        // The next offset that has not yet been included in a produce request. Starts at
+        // param.firstOffset() and advances past whatever topicProduceData() managed to fit within
+        // dlqTopicMaxMessageBytes() on each successful send, so a range that doesn't fit in a single
+        // batch is sent as a sequence of produce requests instead of failing.
+        private volatile long nextOffsetToSend;
+        // The last offset included in the most recently built produce request (see topicProduceData()),
+        // read back in handleProduceResponse() to decide whether more offsets remain to be sent.
+        private volatile long lastOffsetIncludedThisRound;
+        // The dlqTopicMaxMessageBytes() value used to build the most recent topicProduceData(), cached
+        // so coalesceProduceRequests()'s partition-budget check reuses the exact same value.
+        private volatile int lastMaxMessageBytes;
 
         public static final String HEADER_DLQ_ERRORS_TOPIC = "__dlq.errors.topic";
         public static final String HEADER_DLQ_ERRORS_PARTITION = "__dlq.errors.partition";
@@ -255,6 +293,8 @@ public class ShareGroupDLQStateManager {
         ) {
             this.param = param;
             this.result = result;
+            this.nextOffsetToSend = param.firstOffset();
+            this.lastOffsetIncludedThisRound = param.firstOffset() - 1;
             this.createTopicsBackoff = new ExponentialBackoffManager(
                 maxRPCRetryAttempts,
                 backoffMs,
@@ -293,19 +333,6 @@ public class ShareGroupDLQStateManager {
             return "ProduceRequestHandler";
         }
 
-        /**
-         * This method helps determine if the handler could
-         * participate in batching (added to nodeMap). This will
-         * be helpful if the RPCs which cannot be batched are included in
-         * this class as well.
-         *
-         * @return Boolean indicating whether this handler can be coalesced with others
-         * to reduce number of RPCs sent.
-         */
-        boolean isBatchable() {
-            return true;
-        }
-
         public void requestErrorResponse(Throwable exception) {
             this.result.completeExceptionally(exception);
         }
@@ -322,6 +349,13 @@ public class ShareGroupDLQStateManager {
                 .setName(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG)
                 .setValue("true");
             topicConfigs.add(enableDLQConfig);
+            // Every DLQ record's timestamp is explicitly set to the DLQ write time (see topicProduceData()),
+            // so pin CreateTime here rather than letting the topic inherit the cluster's broker-level
+            // log.message.timestamp.type default, which - if LogAppendTime - would silently overwrite it.
+            CreateTopicsRequestData.CreatableTopicConfig timestampTypeConfig = new CreateTopicsRequestData.CreatableTopicConfig()
+                .setName(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG)
+                .setValue(TimestampType.CREATE_TIME.name);
+            topicConfigs.add(timestampTypeConfig);
 
             CreateTopicsRequestData.CreatableTopicCollection topicCollection = new CreateTopicsRequestData.CreatableTopicCollection();
             topicCollection.add(new CreateTopicsRequestData.CreatableTopic()
@@ -332,10 +366,6 @@ public class ShareGroupDLQStateManager {
 
             return new CreateTopicsRequest.Builder(new CreateTopicsRequestData()
                 .setTopics(topicCollection));
-        }
-
-        public AbstractRequest.Builder<? extends AbstractRequest> requestBuilder() {
-            throw new RuntimeException("Produce requests are batchable, hence individual requests not needed.");
         }
 
         public void populateDLQTopicData() throws ConfigException {
@@ -369,29 +399,57 @@ public class ShareGroupDLQStateManager {
         }
 
         public ProduceRequestData.TopicProduceData topicProduceData() {
-            Map<Long, Record> originalRecordData = maybeFetchRecordData();
+            // Records have already been resolved (including any remote storage reads) before this
+            // handler was added to the node map, so no blocking fetch happens on the sender thread here.
+            Map<Long, Record> originalRecordData = resolvedRecordData;
+            int maxMessageBytes = dlqTopicMaxMessageBytes();
 
+            // In most cases the offset range is a single offset (see DLQ_MAX_FETCH_BYTES). Track the
+            // running batch size incrementally via DefaultRecord.sizeInBytes() - the same formula
+            // MemoryRecords itself uses - instead of re-serializing the whole batch-so-far on every
+            // offset, which would make this loop quadratic in the number of offsets.
             List<SimpleRecord> simpleRecords = new ArrayList<>();
-            for (long i = param.firstOffset(); i <= param.lastOffset(); i++) {
+            int batchSize = DefaultRecordBatch.RECORD_BATCH_OVERHEAD;
+            Long baseTimestamp = null;
+            for (long offset = nextOffsetToSend; offset <= param.lastOffset(); offset++) {
                 long timestamp = time.hiResClockMs();
                 ByteBuffer key = null;
                 ByteBuffer value = null;
-                Record record = originalRecordData.get(i);
+                Record record = originalRecordData.get(offset);
                 if (record != null) {
                     key = record.hasKey() ? record.key() : null;
                     value = record.hasValue() ? record.value() : null;
                 }
-                simpleRecords.add(new SimpleRecord(timestamp, key, value, headers(i)));
+                Header[] recordHeaders = headers(offset);
+                if (baseTimestamp == null) {
+                    baseTimestamp = timestamp;
+                }
+                int recordSize = DefaultRecord.sizeInBytes(simpleRecords.size(), timestamp - baseTimestamp, key, value, recordHeaders);
+
+                if (batchSize + recordSize > maxMessageBytes && !simpleRecords.isEmpty()) {
+                    // Adding this record would exceed the limit and the batch already has at least one
+                    // record - stop here and send the rest in a follow-up request.
+                    break;
+                }
+                simpleRecords.add(new SimpleRecord(timestamp, key, value, recordHeaders));
+                batchSize += recordSize;
+                if (batchSize > maxMessageBytes) {
+                    // A single record (with its DLQ headers) already exceeds the limit on its own;
+                    // nothing to be gained by holding it back, so send it and let the broker
+                    // enforce/report the ultimate limit for this one, rather than stalling forever.
+                    break;
+                }
             }
+            lastOffsetIncludedThisRound = nextOffsetToSend + simpleRecords.size() - 1;
+            // Cached so coalesceProduceRequests()'s partition-budget check can reuse the exact value
+            // used above to build this batch, instead of looking it up (and dynamically re-resolving
+            // it) a second time for the same round.
+            this.lastMaxMessageBytes = maxMessageBytes;
 
             MemoryRecords records = MemoryRecords.withRecords(
                 Compression.NONE,
                 simpleRecords.toArray(new SimpleRecord[]{})
             );
-
-            // Update the metric to say a new request is created to se sent. This might not be the
-            // actual RPC count as we coalesce the requests before sending.
-            shareGroupMetrics.recordDLQProduce(param.groupId());
 
             return new ProduceRequestData.TopicProduceData()
                 .setName(dlqTopicPartitionData.topicName())
@@ -401,6 +459,18 @@ public class ShareGroupDLQStateManager {
                         .setIndex(dlqDestinationPartition)  // partition
                         .setRecords(records)
                 ));
+        }
+
+        int dlqTopicMaxMessageBytes() {
+            return cacheHelper.dlqTopicMaxMessageBytes(dlqTopicPartitionData.topicName());
+        }
+
+        int lastMaxMessageBytes() {
+            return lastMaxMessageBytes;
+        }
+
+        void recordProduceMetric() {
+            shareGroupMetrics.recordDLQProduce(param.groupId());
         }
 
         public Node dlqPartitionLeaderNode() {
@@ -448,6 +518,7 @@ public class ShareGroupDLQStateManager {
                 } catch (ConfigException e) {
                     return false;
                 }
+                // Source records were already resolved before enqueue; just add to the node map.
                 addRequestToNodeMap(dlqPartitionLeaderNode, this);
             }
             return isDlqTopicPresent;
@@ -542,11 +613,8 @@ public class ShareGroupDLQStateManager {
                             try {
                                 populateDLQTopicData();
                                 createTopicsBackoff.resetAttempts();
-                                if (this.isBatchable()) {
-                                    addRequestToNodeMap(this.dlqPartitionLeaderNode, this);
-                                } else {
-                                    enqueue(this);
-                                }
+                                // Source records were already resolved before enqueue; just add to the node map.
+                                addRequestToNodeMap(this.dlqPartitionLeaderNode, this);
                             } catch (ConfigException e) {
                                 LOG.error("Error enqueueing after DLQ create topic response {}.", this, e);
                                 if (!createTopicsBackoff.canAttempt()) {
@@ -640,9 +708,16 @@ public class ShareGroupDLQStateManager {
                     switch (error) {
                         case NONE:
                             LOG.debug("Successfully produced records {} to dlq topic node {}.", this, dlqPartitionLeaderNode());
-                            shareGroupMetrics.recordDLQRecordWrite(param.groupId(), (int) (param.lastOffset() - param.firstOffset() + 1));
+                            shareGroupMetrics.recordDLQRecordWrite(param.groupId(), (int) (lastOffsetIncludedThisRound - nextOffsetToSend + 1));
                             produceRequestBackoff.resetAttempts();
-                            this.result.complete(null);
+                            if (lastOffsetIncludedThisRound < param.lastOffset()) {
+                                // Only part of the offset range fit within dlqTopicMaxMessageBytes - continue
+                                // sending the remainder as a follow-up produce request instead of completing.
+                                nextOffsetToSend = lastOffsetIncludedThisRound + 1;
+                                addRequestToNodeMap(dlqPartitionLeaderNode(), this);
+                            } else {
+                                this.result.complete(null);
+                            }
                             break;
 
                         case NOT_LEADER_OR_FOLLOWER:
@@ -687,78 +762,37 @@ public class ShareGroupDLQStateManager {
             }
         }
 
-        private Map<Long, Record> maybeFetchRecordData() {
+        /**
+         * Resolves the original source records for this handler once, before it is enqueued - reading
+         * from the local log on the calling thread and, for any offsets tiered to remote storage,
+         * asynchronously on the remote-storage reader pool. The result is memoized in
+         * {@link #resolvedRecordData} and reused for every (re)send, so the single sender thread never
+         * reads the log (neither local nor remote) and retries do not re-fetch.
+         *
+         * <p>A failed fetch is non-fatal: {@link #resolvedRecordData} stays empty and the DLQ record is
+         * produced with headers only (no key/value), mirroring how individually unavailable offsets are skipped.
+         *
+         * @return A future that always completes normally, once resolution has finished.
+         */
+        CompletableFuture<Void> resolveRecords() {
+            CompletableFuture<Void> resolved = new CompletableFuture<>();
+            maybeFetchRecordData().whenComplete((records, exception) -> {
+                if (exception != null || records == null) {
+                    LOG.warn("Unable to fetch original record data for handler {}. DLQ records will be produced with headers only.", this, exception);
+                    this.resolvedRecordData = Map.of();
+                } else {
+                    this.resolvedRecordData = records;
+                }
+                resolved.complete(null);
+            });
+            return resolved;
+        }
+
+        private CompletableFuture<Map<Long, Record>> maybeFetchRecordData() {
             if (!cacheHelper.isShareGroupDlqCopyRecordEnabled(param.groupId())) {
-                return Map.of();
+                return CompletableFuture.completedFuture(Map.of());
             }
-            long startTime = time.hiResClockMs();
-            TopicIdPartition tp = param.topicIdPartition();
-
-            FetchParams fetchParams = new FetchParams(
-                FetchRequest.CONSUMER_REPLICA_ID,           // -1, reading as a consumer
-                -1,                                         // replicaEpoch
-                0L,                                         // maxWaitMs - don't block
-                1,                                          // minBytes
-                DLQ_MAX_FETCH_BYTES,                        // maxBytes
-                FetchIsolation.HIGH_WATERMARK,              // committed only
-                Optional.empty()                            // clientMetadata
-            );
-
-            long nextOffset = param.firstOffset();
-            long endOffset = param.lastOffset();
-            int recordCount = (int) (param.lastOffset() - param.firstOffset() + 1);
-
-            Map<Long, Record> recordMap = new HashMap<>(recordCount);
-            LinkedHashMap<TopicIdPartition, Long> offsets = new LinkedHashMap<>();
-            LinkedHashMap<TopicIdPartition, Integer> maxBytesMap = new LinkedHashMap<>();
-            maxBytesMap.put(tp, DLQ_MAX_FETCH_BYTES);
-
-            // We are fetching data for one TopicIdPartition only. Hence, there
-            // is no need to keep recreating the maxBytes map, and we can re-use a
-            // single copy. In similar vein, we needn't clear the offsets map
-            // either and just update the value corresponding to the TopicIdPartition
-            // key in offsets map within the while loop.
-            while (nextOffset <= endOffset) {
-                long readFrom = nextOffset; // offset requested for this iteration
-                offsets.put(tp, readFrom);
-
-                LinkedHashMap<TopicIdPartition, LogReadResult> result =
-                    logReader.read(fetchParams, Set.of(tp), offsets, maxBytesMap);
-
-                LogReadResult res = result.get(param.topicIdPartition());
-                if (res == null || res.error().code() != Errors.NONE.code()) {
-                    log.warn("Unable to fetch actual record at offset {} for handler {}.", readFrom, this);
-                    return Map.of();
-                }
-
-                res.info().delayedRemoteStorageFetch.ifPresent(data -> log.info(
-                    "Some offset data in is in remote storage. Skipping it."));
-
-                for (RecordBatch batch : res.info().records.batches()) {
-                    for (Record record : batch) {
-                        // A fetch can return a batch whose base offset is below the requested
-                        // offset, so skip any record at or before the read position to avoid
-                        // re-processing and dragging nextOffset backwards.
-                        if (record.offset() < readFrom) continue;
-                        if (record.offset() > param.lastOffset()) {
-                            log.trace("Preempted log fetch took {} ms for {} records starting at {} for {}", time.hiResClockMs() - startTime,
-                                recordCount, param.firstOffset(), this);
-                            return Map.copyOf(recordMap);
-                        }
-                        recordMap.put(record.offset(), record);
-                        nextOffset = Math.max(nextOffset, record.offset() + 1); // never moves backwards
-                    }
-                }
-
-                // If the read position did not advance this iteration we have made no progress
-                // (reached HWM/LEO or only stale records were returned). Bail out to guarantee
-                // termination rather than re-fetching the same offset forever.
-                if (nextOffset <= readFrom) break;
-            }
-            log.trace("Full log fetch took {} ms for {} records starting at {} for {}", time.hiResClockMs() - startTime,
-                recordCount, param.firstOffset(), this);
-            log.info("Total offsets fetched: {}, Records found: {}", recordCount, recordMap.size());
-            return Map.copyOf(recordMap);
+            return new ShareGroupDLQRecordFetcher(logReader, time, param, DLQ_MAX_FETCH_BYTES).fetch();
         }
     }
 
@@ -803,16 +837,9 @@ public class ShareGroupDLQStateManager {
                         log.error("Unable to create topic request for handler {}.", handler, exp);
                         handler.requestErrorResponse(Errors.INVALID_CONFIG.exception());
                     }
-                } else {
-                    if (!handler.isBatchable()) {
-                        requests.add(new RequestAndCompletionHandler(
-                            time.milliseconds(),
-                            handler.dlqPartitionLeaderNode(),
-                            handler.requestBuilder(),
-                            handler
-                        ));
-                    }
                 }
+                // When the DLQ topic already exists, the handler is added to the node map for produce
+                // coalescing (asynchronously, once its records are resolved), so nothing more to do here.
             }
 
             // {
@@ -837,27 +864,32 @@ public class ShareGroupDLQStateManager {
             // 10. at this point P2, P3, etc. could be sent as a combined request thus achieving batching.
             final Set<Node> sending = new HashSet<>();
             final Set<Node> emptyNodes = new HashSet<>();   // Nodes for which no coalesced handler was found.
+            // Handlers that didn't fit within this round's dlqTopicMaxMessageBytes budget for their
+            // destination partition - re-added to the node map below (after nodeRPCMap.remove(node),
+            // which would otherwise wipe them out) so they're retried on a subsequent tick.
+            final List<ProduceRequestHandler> deferredForNextRound = new ArrayList<>();
             synchronized (nodeMapLock) {
                 nodeRPCMap.forEach((destNode, handlers) -> {
                     // this condition causes requests of same type and same destination node
                     // to not be sent immediately but get batched
                     if (!inFlight.contains(destNode)) {
                         CoalesceResults results = coalesceProduceRequests(handlers);
-                        if (results.liveHandlers.isEmpty()) {
+                        deferredForNextRound.addAll(results.deferredHandlers());
+                        if (results.liveHandlers().isEmpty()) {
                             emptyNodes.add(destNode);
                             return;
                         }
                         requests.add(new RequestAndCompletionHandler(
                             time.milliseconds(),
                             destNode,
-                            results.request,
+                            results.request(),
                             response -> {
                                 inFlight.remove(destNode);
 
                                 // now the combined request has completed
                                 // we need to create responses for individual
                                 // requests which composed the combined request
-                                results.liveHandlers.forEach(handler -> handler.onComplete(response));
+                                results.liveHandlers().forEach(handler -> handler.onComplete(response));
                                 wakeup();
                             }));
                         sending.add(destNode);
@@ -873,6 +905,8 @@ public class ShareGroupDLQStateManager {
                     nodeRPCMap.remove(node);
                 });
             } // close of synchronized context
+
+            deferredForNextRound.forEach(handler -> addRequestToNodeMap(handler.dlqPartitionLeaderNode(), handler));
 
             return requests;
         }
@@ -914,41 +948,108 @@ public class ShareGroupDLQStateManager {
     // Visibility for tests
     record CoalesceResults(
         AbstractRequest.Builder<? extends AbstractRequest> request,
-        List<ProduceRequestHandler> liveHandlers
+        List<ProduceRequestHandler> liveHandlers,
+        List<ProduceRequestHandler> deferredHandlers
     ) {
     }
 
     // Visibility for tests
     static CoalesceResults coalesceProduceRequests(List<ProduceRequestHandler> handlers) {
         // Above handlers are destined for the same broker node - it could be for different DLQ topics and partitions
-        // but the same broker node. Now the produce request requires each topic data request to be
-        // scoped to a specific topic/topicId and the partition data could have all the record information
-        // and the destination DLQ partition. To accomplish this, we will map handlers by DLQ topic id.
-        Map<Uuid, ProduceRequestData.TopicProduceData> produceHandlerMap = new HashMap<>();
+        // but the same broker node. The produce request requires each topic data request to be scoped to a
+        // specific topic/topicId, and within a topic each partition must appear at most once (the broker keys
+        // partitions by (topicId, index) and would otherwise drop all but one entry). So we first collect the
+        // records into a map keyed by DLQ topic id and then DLQ partition - merging the records of all handlers
+        // that target the same (topic, partition) - and then build a single produce request from that map.
+        Map<Uuid, String> topicNames = new HashMap<>();
+        Map<Uuid, Map<Integer, List<MemoryRecords>>> recordsByTopicAndPartition = new LinkedHashMap<>();
+        // Running merged-batch size per (topic, partition), used to defer handlers that would push a
+        // merged batch over dlqTopicMaxMessageBytes rather than sending an oversized request. Each
+        // handler's own batch is already <= the limit (see topicProduceData()), so this only ever needs
+        // to decide how many whole handlers fit - the first handler for a given partition is always
+        // admitted, guaranteeing progress even if it alone is at the limit.
+        Map<Uuid, Map<Integer, Integer>> runningSizeByTopicAndPartition = new HashMap<>();
         List<ProduceRequestHandler> liveHandlers = new ArrayList<>(handlers.size());
+        List<ProduceRequestHandler> deferredHandlers = new ArrayList<>();
         handlers.forEach(handler -> {
             try {
                 ProduceRequestData.TopicProduceData topicProduceData = handler.topicProduceData();
-                produceHandlerMap.computeIfAbsent(topicProduceData.topicId(), topicId ->
-                    new ProduceRequestData.TopicProduceData()
-                        .setName(topicProduceData.name())
-                        .setTopicId(topicId)
-                ).partitionData().addAll(topicProduceData.partitionData());
+                Uuid topicId = topicProduceData.topicId();
+                int maxMessageBytes = handler.lastMaxMessageBytes();
+                Map<Integer, Integer> runningSizeByPartition =
+                    runningSizeByTopicAndPartition.computeIfAbsent(topicId, k -> new HashMap<>());
+
+                boolean fits = topicProduceData.partitionData().stream().allMatch(partitionData -> {
+                    int runningSize = runningSizeByPartition.getOrDefault(partitionData.index(), 0);
+                    int recordsSize = partitionData.records().sizeInBytes();
+                    return runningSize == 0 || runningSize + recordsSize <= maxMessageBytes;
+                });
+
+                if (!fits) {
+                    deferredHandlers.add(handler);
+                    return;
+                }
+
+                topicNames.putIfAbsent(topicId, topicProduceData.name());
+                Map<Integer, List<MemoryRecords>> partitionRecords =
+                    recordsByTopicAndPartition.computeIfAbsent(topicId, k -> new LinkedHashMap<>());
+                topicProduceData.partitionData().forEach(partitionData -> {
+                    MemoryRecords records = (MemoryRecords) partitionData.records();
+                    partitionRecords.computeIfAbsent(partitionData.index(), k -> new ArrayList<>()).add(records);
+                    runningSizeByPartition.merge(partitionData.index(), records.sizeInBytes(), Integer::sum);
+                });
                 liveHandlers.add(handler);
+                // Only counted once the handler's data is actually admitted into the outgoing request -
+                // a handler that gets deferred here (see above) hasn't produced anything yet, so it
+                // must not be counted, however many times it gets re-evaluated across ticks.
+                handler.recordProduceMetric();
             } catch (Exception exception) {
                 log.error("Unable to coalesce ProduceRequestData for handler {}. It will be skipped from DLQ.", handler, exception);
                 handler.requestErrorResponse(exception);
             }
         });
 
+        ProduceRequestData.TopicProduceDataCollection topicData = new ProduceRequestData.TopicProduceDataCollection();
+        recordsByTopicAndPartition.forEach((topicId, partitionRecords) -> {
+            List<ProduceRequestData.PartitionProduceData> partitionData = new ArrayList<>(partitionRecords.size());
+            partitionRecords.forEach((partitionIndex, records) ->
+                partitionData.add(new ProduceRequestData.PartitionProduceData()
+                    .setIndex(partitionIndex)
+                    .setRecords(mergeRecords(records))));
+            topicData.add(new ProduceRequestData.TopicProduceData()
+                .setName(topicNames.get(topicId))
+                .setTopicId(topicId)
+                .setPartitionData(partitionData));
+        });
+
         ProduceRequestData data = new ProduceRequestData()
-            .setTopicData(new ProduceRequestData.TopicProduceDataCollection(produceHandlerMap.values().iterator()))
+            .setTopicData(topicData)
             .setAcks((short) -1)  // all replicas
             .setTimeoutMs(ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT);
 
         return new CoalesceResults(
             new ProduceRequest.Builder(ApiKeys.PRODUCE.latestVersion(), ApiKeys.PRODUCE.latestVersion(), data),
-            liveHandlers
+            liveHandlers,
+            deferredHandlers
         );
+    }
+
+    /**
+     * Merges the records of all handlers that target the same DLQ partition into a single {@link MemoryRecords}
+     * (one record batch). The partition must appear only once in the coalesced produce request, and a produce
+     * request is only allowed one record batch per partition - so when more than one handler contributes records
+     * for a partition, they are combined into a single batch.
+     */
+    private static MemoryRecords mergeRecords(List<MemoryRecords> recordsList) {
+        if (recordsList.size() == 1) {
+            return recordsList.get(0);
+        }
+        List<SimpleRecord> simpleRecords = new ArrayList<>();
+        for (MemoryRecords records : recordsList) {
+            for (Record record : records.records()) {
+                simpleRecords.add(new SimpleRecord(record.timestamp(), record.key(), record.value(), record.headers()));
+            }
+        }
+        return MemoryRecords.withRecords(Compression.NONE, simpleRecords.toArray(new SimpleRecord[0]));
     }
 }

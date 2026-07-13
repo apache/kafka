@@ -2178,7 +2178,7 @@ public final class QuorumController implements Controller {
         List<AclBinding> aclBindings
     ) {
         return appendWriteEvent("createAcls", context.deadlineNs(),
-            () -> aclControlManager.createAcls(aclBindings));
+            () -> aclControlManager.createAcls(aclBindings, featureControl.metadataVersionOrThrow()));
     }
 
     @Override

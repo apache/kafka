@@ -42,6 +42,11 @@ plugins {
   id 'org.scoverage' version '8.1' apply false
   id 'com.gradleup.shadow' version '9.4.1' apply false
   id 'com.diffplug.spotless' version "8.4.0"
+
+  // Pre-register the KIP-1265 checker so `apply plugin:` resolves it inside subprojects { }.
+  // The plugin itself ships from the `:api-checker` included build (see settings.gradle's
+  // pluginManagement block).
+  id 'org.apache.kafka.public-api-checker' apply false
 }
 
 ext {
@@ -335,6 +340,8 @@ subprojects {
 
   apply plugin: 'checkstyle'
   apply plugin: "com.github.spotbugs"
+  apply plugin: 'org.apache.kafka.public-api-checker'
+
 
   // We use the shadow plugin for the jmh-benchmarks module and the `-all` jar can get pretty large, so
   // don't publish it
@@ -734,6 +741,31 @@ subprojects {
 
   check.dependsOn('javadoc')
 
+kafkaPublicApiChecker {
+
+    // Jars produced by this project — the surface that's actually validated.
+    projectJarFiles.from(jar.archiveFile)
+
+    // Sibling Kafka modules this project depends on (direct or transitive). Their classes
+    // are merged into the scanned surface so cross-module @InterfaceAudience.Public references
+    // resolve, but they don't contribute to this module's MISSING_JAVADOC or cascade
+    // iteration — each module checks its own surface.
+    referenceJarFiles.from(
+        configurations.compileClasspath.incoming.artifactView {
+            // Resolve project deps to their assembled JAR (not the classes-dir variant Gradle
+            // picks by default for compile-classpath), so the scanner only sees real jars.
+            attributes {
+                attribute(org.gradle.api.attributes.LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE,
+                          objects.named(org.gradle.api.attributes.LibraryElements,
+                                        org.gradle.api.attributes.LibraryElements.JAR))
+            }
+            componentFilter { it instanceof org.gradle.api.artifacts.component.ProjectComponentIdentifier }
+        }.files
+    )
+
+    enabled = true
+    failOnViolation = true
+}
   task systemTestLibs(dependsOn: jar)
 
   if (!sourceSets.test.allSource.isEmpty()) {
@@ -1430,6 +1462,10 @@ project(':metadata') {
     implementation project(':server-common')
     implementation project(':clients')
     implementation project(':raft')
+    // commons-io is a transitive dependency not needed by SubnetUtils/SubnetUtils6
+    implementation(libs.commonsNet) {
+      exclude group: 'commons-io', module: 'commons-io'
+    }
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
     implementation libs.metrics
@@ -1441,7 +1477,6 @@ project(':metadata') {
     testFixturesImplementation libs.junitJupiter
 
     testImplementation libs.junitJupiter
-    testImplementation libs.jqwik
     testImplementation libs.mockitoCore
     testImplementation testFixtures(project(':clients'))
     testImplementation testFixtures(project(':raft'))
@@ -1951,28 +1986,6 @@ project(':clients') {
     shadowed
   }
 
-  // Rewire test fixtures dependencies to avoid depending on the shadow JAR:
-  // java-test-fixtures creates dependencies testImplementation -> testFixturesApi -> (main artifact)
-  // It prefers the main artifact over the raw main classpath so that dependents on fixtures get the same
-  // packaged artifact as production consumers. In this module the main artifact is the shadow JAR,
-  // so this creates a test dependency on createVersionFile breaking AppInfoParserTest, and worse:
-  // test code is compiled against the original packages, but the shadow JAR contains relocated bytecode,
-  // causing runtime errors for various tests. To fix this, we rewire the test fixtures dependency to the raw
-  // source set output, so tests continue to use compiled classes and original dependencies instead of the shadow JAR.
-  // https://github.com/gradle/gradle/blob/v9.4.1/platforms/jvm/plugins-jvm-test-fixtures/src/main/java/org/gradle/api/plugins/JavaTestFixturesPlugin.java#L89-L90
-  afterEvaluate {
-    configurations.testFixturesApi.dependencies.removeIf { dep ->
-      dep instanceof ProjectDependency && dep.name == project.name
-    }
-    dependencies {
-      testFixturesApi files(sourceSets.main.output.classesDirs)
-      testFixturesApi files(sourceSets.main.output.resourcesDir)
-    }
-    tasks.named('compileTestFixturesJava') {
-      dependsOn tasks.named('classes')
-    }
-  }
-
   dependencies {
     implementation libs.zstd
     implementation libs.lz4
@@ -2137,6 +2150,7 @@ project(':clients') {
     include "**/org/apache/kafka/common/annotation/*"
     include "**/org/apache/kafka/common/config/*"
     include "**/org/apache/kafka/common/config/provider/*"
+    include "**/org/apache/kafka/common/config/types/*"
     include "**/org/apache/kafka/common/errors/*"
     include "**/org/apache/kafka/common/header/*"
     include "**/org/apache/kafka/common/metrics/*"
@@ -2172,6 +2186,7 @@ project(':clients:clients-integration-tests') {
     testImplementation project(':raft')
     testImplementation project(':server')
     testImplementation project(':storage')
+    testImplementation testFixtures(project(':storage'))
     testImplementation project(':core').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
     implementation project(':server-common')
@@ -2215,7 +2230,6 @@ project(':raft') {
     testFixturesImplementation project(':clients')
     testFixturesImplementation testFixtures(project(':clients'))
     testFixturesImplementation project(':server-common')
-    testFixturesImplementation libs.jqwik
     testFixturesImplementation libs.junitJupiter
     testFixturesImplementation libs.mockitoCore
     testFixturesImplementation libs.slf4jApi
@@ -2227,7 +2241,6 @@ project(':raft') {
     testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    testImplementation libs.jqwik
     testImplementation testLog4j2Libs
 
     testRuntimeOnly runtimeTestLibs
@@ -2293,7 +2306,7 @@ project(':raft') {
 
   test {
     useJUnitPlatform {
-      includeEngines 'jqwik', 'junit-jupiter'
+      includeEngines 'junit-jupiter'
     }
   }
 
@@ -2676,6 +2689,7 @@ project(':tools') {
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
+    testImplementation project(':test-common:test-common-util')
     testImplementation project(':server-common')
     testImplementation testFixtures(project(':server-common'))
     testImplementation project(':connect:api')
@@ -3035,22 +3049,19 @@ project(':streams:streams-scala') {
   spotless {
     scala {
       target '**/*.scala'
-      scalafmt("$versions.scalafmt").configFile('../../checkstyle/.scalafmt.conf').scalaMajorVersion(versions.baseScala)
+      // Skip scalafmt while Spotless is affected by https://github.com/diffplug/spotless/issues/2850.
       licenseHeaderFile '../../checkstyle/java.header', 'package'
     }
   }
 }
 
 project(':streams:integration-tests') {
-  apply plugin: 'scala'
-
   base {
     archivesName = "kafka-streams-integration-tests"
   }
 
   dependencies {
     implementation libs.slf4jApi
-    implementation libs.scalaLibrary
 
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':group-coordinator')
@@ -3059,7 +3070,6 @@ project(':streams:integration-tests') {
     testImplementation testFixtures(project(':server-common'))
     testImplementation project(':storage')
     testImplementation project(':streams').sourceSets.test.output
-    testImplementation project(':streams:streams-scala')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':tools')
     testImplementation project(':transaction-coordinator')
@@ -3072,26 +3082,6 @@ project(':streams:integration-tests') {
     testImplementation project(':streams:test-utils')
 
     testRuntimeOnly runtimeTestLibs
-  }
-
-  sourceSets {
-    // Set java/scala source folders in the `scala` block to enable joint compilation
-    main {
-      java {
-        srcDirs = []
-      }
-      scala {
-        srcDirs = []
-      }
-    }
-    test {
-      java {
-        srcDirs = []
-      }
-      scala {
-        srcDirs = ["src/test/java", "src/test/scala"]
-      }
-    }
   }
 }
 

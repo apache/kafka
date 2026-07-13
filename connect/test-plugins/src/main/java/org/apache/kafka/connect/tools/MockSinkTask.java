@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.tools;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -29,6 +30,7 @@ import java.util.Map;
 /**
  * Task implementation for {@link MockSinkConnector}.
  */
+@InterfaceAudience.Public
 public class MockSinkTask extends SinkTask {
     private static final Logger log = LoggerFactory.getLogger(MockSinkTask.class);
 

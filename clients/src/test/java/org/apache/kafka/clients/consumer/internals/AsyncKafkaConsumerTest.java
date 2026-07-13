@@ -1664,7 +1664,7 @@ public class AsyncKafkaConsumerTest {
     public void testStreamRebalanceData() {
         final String groupId = "consumerGroupA";
         try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
-            StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of());
+            StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of, Map::of);
             consumer = newConsumerWithStreamRebalanceData(requiredConsumerConfigAndGroupId(groupId), streamsRebalanceData);
             final Optional<StreamsRebalanceData> groupMetadataUpdateListener = captureStreamRebalanceData(requestManagers);
             assertTrue(groupMetadataUpdateListener.isPresent());
@@ -2203,6 +2203,10 @@ public class AsyncKafkaConsumerTest {
         verify(applicationEventHandler, never()).add(ArgumentMatchers.isA(SyncCommitEvent.class));
         verify(applicationEventHandler, never()).add(ArgumentMatchers.isA(AsyncCommitEvent.class));
         verify(applicationEventHandler, never()).add(ArgumentMatchers.isA(CommitOnCloseEvent.class));
+
+        // Auto-commit is enabled, so close() will send a commit-on-close event and wait for it to
+        // complete. Mock the handler to complete the commit event so close() does not hang.
+        completeCommitSyncApplicationEventSuccessfully();
     }
 
     private static Stream<CompletableBackgroundEvent<?>> assignmentEventsSource() {
@@ -2342,7 +2346,7 @@ public class AsyncKafkaConsumerTest {
             new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
                 .setMemberId("")
                 .setMemberEpoch(0));
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        Node coordinator = new GroupCoordinatorNode(node.id(), node.host(), node.port());
         client.prepareResponseFrom(result, coordinator);
 
         SubscriptionState subscriptionState = mock(SubscriptionState.class);
@@ -2588,7 +2592,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testCloseInvokesStreamsRebalanceListenerOnTasksRevokedWhenMemberEpochPositive() {
         final String groupId = "streamsGroup";
-        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of());
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of, Map::of);
         
         try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
             consumer = newConsumerWithStreamRebalanceData(requiredConsumerConfigAndGroupId(groupId), streamsRebalanceData);
@@ -2608,7 +2612,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testCloseInvokesStreamsRebalanceListenerOnAllTasksLostWhenMemberEpochZeroOrNegative() {
         final String groupId = "streamsGroup";
-        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of());
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of, Map::of);
         
         try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
             consumer = newConsumerWithStreamRebalanceData(requiredConsumerConfigAndGroupId(groupId), streamsRebalanceData);
@@ -2628,7 +2632,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testCloseWrapsStreamsRebalanceListenerException() {
         final String groupId = "streamsGroup";
-        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of());
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of, Map::of);
         
         try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
             consumer = newConsumerWithStreamRebalanceData(requiredConsumerConfigAndGroupId(groupId), streamsRebalanceData);
@@ -2693,7 +2697,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testStreamsTasksAssignedEventSendsErrorWhenApplyAssignmentFails() {
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
-            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of());
+            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of, Map::of);
         final InterruptException applyAssignmentError = new InterruptException("Thread was interrupted");
 
         consumer = newConsumerWithStreamRebalanceData(
