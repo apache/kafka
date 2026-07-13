@@ -1214,8 +1214,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         return subscriptions.fetchablePartitions(tp -> true);
     }
 
-    public ShareSessionHandler sessionHandler(Integer nodeId) {
-        return sessionHandlers.get(nodeId);
+    public ShareSessionHandler sessionHandler(int node) {
+        return sessionHandlers.get(node);
     }
 
     boolean hasCompletedFetches() {

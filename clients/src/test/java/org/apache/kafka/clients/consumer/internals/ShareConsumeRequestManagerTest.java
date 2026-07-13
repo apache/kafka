@@ -2658,6 +2658,100 @@ public class ShareConsumeRequestManagerTest {
         assertEquals(1, fetchedRecords.size());
     }
 
+    /**
+     * When a topic is deleted and recreated, its topic ID changes. The request manager caches the mapping
+     * from topic-partition to topic ID (and leader). A partition-level UNKNOWN_TOPIC_ID error in a ShareFetch
+     * response must clear that cached mapping so that, once the metadata reflects the recreated topic, the stale
+     * topic ID is forgotten from the share session and the new one is fetched.
+     */
+    @Test
+    public void testFetchResponseWithUnknownTopicIdRefreshesTopicIdOnRecreation() {
+        buildRequestManager();
+
+        assignFromSubscribed(Set.of(tp0));
+
+        // Establish the share session and cache the topic ID and leader for tp0.
+        sendFetchAndVerifyResponse(records, acquiredRecords, Errors.NONE);
+        fetchRecords();
+
+        // A subsequent fetch returns a partition-level UNKNOWN_TOPIC_ID error, which causes the request
+        // manager to forget the cached topic ID and leader for the partition.
+        assertEquals(1, sendFetches());
+        client.prepareResponse(fullFetchResponse(tip0, records, emptyAcquiredRecords, Errors.UNKNOWN_TOPIC_ID));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+        fetchRecords();
+
+        // The topic is recreated with a new topic ID.
+        Uuid recreatedTopicId = Uuid.randomUuid();
+        client.updateMetadata(
+                RequestTestUtils.metadataUpdateWithIds(1, Map.of(topicName, 2),
+                        tp -> validLeaderEpoch, Map.of(topicName, recreatedTopicId), false));
+
+        // The next ShareFetch fetches the recreated topic ID and forgets the stale one from the share session.
+        NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
+        assertEquals(1, pollResult.unsentRequests.size());
+        ShareFetchRequest.Builder builder = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
+
+        // The recreated topic ID is fetched.
+        assertEquals(1, builder.data().topics().size());
+        assertEquals(recreatedTopicId, builder.data().topics().stream().findFirst().get().topicId());
+
+        // The stale topic ID is forgotten.
+        assertEquals(1, builder.data().forgottenTopicsData().size());
+        assertEquals(topicId, builder.data().forgottenTopicsData().get(0).topicId());
+        assertEquals(1, builder.data().forgottenTopicsData().get(0).partitions().size());
+        assertEquals(0, builder.data().forgottenTopicsData().get(0).partitions().get(0));
+    }
+
+    /**
+     * As {@link #testFetchResponseWithUnknownTopicIdRefreshesTopicIdOnRecreation()} but the UNKNOWN_TOPIC_ID
+     * error arrives in a ShareAcknowledge response rather than a ShareFetch response.
+     */
+    @Test
+    public void testAcknowledgeResponseWithUnknownTopicIdRefreshesTopicIdOnRecreation() {
+        buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        assignFromSubscribed(Set.of(tp0));
+
+        // Establish the share session and cache the topic ID and leader for tp0.
+        sendFetchAndVerifyResponse(records, acquiredRecords, Errors.NONE);
+        fetchRecords();
+
+        // Acknowledge some records and receive a partition-level UNKNOWN_TOPIC_ID error, which causes the request
+        // manager to forget the cached topic ID and leader for the partition.
+        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
+        shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)),
+                calculateDeadlineMs(time.timer(defaultApiTimeoutMs)));
+
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+        client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.UNKNOWN_TOPIC_ID));
+        networkClientDelegate.poll(time.timer(0));
+
+        // The acknowledgements are completed with the error rather than retried.
+        assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
+
+        // The topic is recreated with a new topic ID.
+        Uuid recreatedTopicId = Uuid.randomUuid();
+        client.updateMetadata(
+                RequestTestUtils.metadataUpdateWithIds(1, Map.of(topicName, 2),
+                        tp -> validLeaderEpoch, Map.of(topicName, recreatedTopicId), false));
+
+        // The next ShareFetch fetches the recreated topic ID and forgets the stale one from the share session.
+        NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
+        assertEquals(1, pollResult.unsentRequests.size());
+        ShareFetchRequest.Builder builder = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
+
+        assertEquals(1, builder.data().topics().size());
+        assertEquals(recreatedTopicId, builder.data().topics().stream().findFirst().get().topicId());
+
+        assertEquals(1, builder.data().forgottenTopicsData().size());
+        assertEquals(topicId, builder.data().forgottenTopicsData().get(0).topicId());
+        assertEquals(1, builder.data().forgottenTopicsData().get(0).partitions().size());
+        assertEquals(0, builder.data().forgottenTopicsData().get(0).partitions().get(0));
+    }
+
     @Test
     public void testFetchOneNodeAtATimeForRecordLimitMode() {
         // We will simulate two nodes, each with one partition. The first node will have more records
