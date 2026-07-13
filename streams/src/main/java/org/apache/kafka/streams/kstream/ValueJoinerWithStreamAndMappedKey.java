@@ -17,30 +17,31 @@
 package org.apache.kafka.streams.kstream;
 
 /**
- * The {@code ValueJoinerWithMappedAndStreamKey} interface for joining two values into a new value of
+ * The {@code ValueJoinerWithStreamAndMappedKey} interface for joining two values into a new value of
  * arbitrary type, with access to both the mapped join key and the original {@link KStream} record key.
  * Used by {@link KStream}-{@link GlobalKTable} joins, where the join key is produced by a
  * {@link KeyValueMapper} and does not necessarily equal the {@link KStream} record's key.
  *
- * @param <K1> the type of the mapped join key (the {@link GlobalKTable} lookup key)
- * @param <K2> the type of the original {@link KStream} record key
- * @param <V1> the type of the first (stream) value
- * @param <V2> the type of the second (table) value
- * @param <VR> the type of the joined result value
+ *
+ * @param <StreamKey> the type of the original {@link KStream} record key
+ * @param <TableKey> the type of the mapped join key (the {@link GlobalKTable} lookup key)
+ * @param <StreamValue> the type of the first (stream) value
+ * @param <TableValue> the type of the second (table) value
+ * @param <VOut> the type of the joined result value
  */
 @FunctionalInterface
-public interface ValueJoinerWithMappedAndStreamKey<K1, K2, V1, V2, VR> {
+public interface ValueJoinerWithStreamAndMappedKey<StreamKey, TableKey, StreamValue, TableValue, VOut> {
 
     /**
      * Return a joined value derived from {@code mappedKey}, {@code streamKey}, {@code value1} and {@code value2}.
      *
+     * @param streamKey the {@link KStream} record's key. Read-only.
      * @param mappedKey the join key produced by the {@link KeyValueMapper} (i.e. the {@link GlobalKTable}
      *                  lookup key); may be {@code null} for a left-join when the mapper returns {@code null}.
      *                  Read-only.
-     * @param streamKey the {@link KStream} record's key. Read-only.
      * @param value1    the {@link KStream} record's value
      * @param value2    the matching {@link GlobalKTable} value, or {@code null} for a left-join with no match
      * @return the joined value
      */
-    VR apply(final K1 mappedKey, final K2 streamKey, final V1 value1, final V2 value2);
+    VOut apply(final StreamKey streamKey, final TableKey mappedKey, final StreamValue value1, final TableValue value2);
 }

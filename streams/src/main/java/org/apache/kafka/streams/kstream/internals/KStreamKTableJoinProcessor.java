@@ -19,7 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
+import org.apache.kafka.streams.kstream.ValueJoinerWithStreamAndMappedKey;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -49,7 +49,7 @@ class KStreamKTableJoinProcessor<StreamKey, StreamValue, TableKey, TableValue, V
 
     private final KTableValueGetter<TableKey, TableValue> valueGetter;
     private final KeyValueMapper<? super StreamKey, ? super StreamValue, ? extends TableKey> keyMapper;
-    private final ValueJoinerWithKey<? super StreamKey, ? super StreamValue, ? super TableValue, ? extends VOut> joiner;
+    private final ValueJoinerWithStreamAndMappedKey<? super StreamKey, ? super TableKey, ? super StreamValue, ? super TableValue, ? extends VOut> joiner;
     private final boolean leftJoin;
     private Sensor droppedRecordsSensor;
     private final Optional<Duration> gracePeriod;
@@ -61,7 +61,7 @@ class KStreamKTableJoinProcessor<StreamKey, StreamValue, TableKey, TableValue, V
 
     KStreamKTableJoinProcessor(final KTableValueGetter<TableKey, TableValue> valueGetter,
                                final KeyValueMapper<? super StreamKey, ? super StreamValue, ? extends TableKey> keyMapper,
-                               final ValueJoinerWithKey<? super StreamKey, ? super StreamValue, ? super TableValue, ? extends VOut> joiner,
+                               final ValueJoinerWithStreamAndMappedKey<? super StreamKey, ? super TableKey, ? super StreamValue, ? super TableValue, ? extends VOut> joiner,
                                final boolean leftJoin,
                                final Optional<Duration> gracePeriod,
                                final Optional<String> storeName) {
@@ -128,7 +128,7 @@ class KStreamKTableJoinProcessor<StreamKey, StreamValue, TableKey, TableValue, V
         final TableKey mappedKey = keyMapper.apply(record.key(), record.value());
         final TableValue value2 = getTableValue(record, mappedKey);
         if (leftJoin || value2 != null) {
-            internalProcessorContext.forward(record.withValue(joiner.apply(record.key(), record.value(), value2)));
+            internalProcessorContext.forward(record.withValue(joiner.apply(record.key(), mappedKey, record.value(), value2)));
         }
     }
 
@@ -144,6 +144,7 @@ class KStreamKTableJoinProcessor<StreamKey, StreamValue, TableKey, TableValue, V
         // we do join iff the join keys are equal, thus, if {@code keyMapper} returns {@code null} we
         // cannot join and just ignore the record. For stream-KTable joins the {@code keyMapper} is the
         // identity, so a {@code null} mapped key is equivalent to a {@code null} stream record key.
+        // For stream-GlobalKTable joins, {@code keyMapper} is the user-supplied mapper instead.
         //
         // we also ignore the record if value is null, because in a key-value data model a null-value indicates
         // an empty message (ie, there is nothing to be joined) -- this contrast SQL NULL semantics

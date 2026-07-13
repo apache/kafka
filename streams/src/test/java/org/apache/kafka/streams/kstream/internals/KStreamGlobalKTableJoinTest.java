@@ -25,7 +25,14 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
-import org.apache.kafka.streams.kstream.*;
+import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.GlobalKTable;
+import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Named;
+import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
+import org.apache.kafka.streams.kstream.ValueJoinerWithStreamAndMappedKey;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
@@ -138,8 +145,8 @@ public class KStreamGlobalKTableJoinTest {
         }
     }
 
-    private void initWithMappedAndStreamKeyJoiner(
-        final ValueJoinerWithMappedAndStreamKey<String, Integer, String, String, String> joiner) {
+    private void initWithStreamAndMappedKeyJoiner(
+        final ValueJoinerWithStreamAndMappedKey<Integer, String, String, String, String> joiner) {
         driver.close();
         builder = new StreamsBuilder();
         final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
@@ -378,8 +385,8 @@ public class KStreamGlobalKTableJoinTest {
 
     @Test
     public void shouldPassMappedKeyAndStreamKeyToJoiner() {
-        initWithMappedAndStreamKeyJoiner(
-            (mappedKey, streamKey, streamValue, tableValue) ->
+        initWithStreamAndMappedKeyJoiner(
+            (streamKey, mappedKey, streamValue, tableValue) ->
                 mappedKey + "|" + streamKey + "|" + streamValue + "|" + tableValue);
 
         pushToGlobalTable(2, "Y");
@@ -393,8 +400,8 @@ public class KStreamGlobalKTableJoinTest {
 
     @Test
     public void shouldDropRecordAndRecordDroppedSensorWhenStreamValueIsNull() {
-        initWithMappedAndStreamKeyJoiner(
-            (mappedKey, streamKey, streamValue, tableValue) ->
+        initWithStreamAndMappedKeyJoiner(
+            (streamKey, mappedKey, streamValue, tableValue) ->
                 mappedKey + "|" + streamKey + "|" + streamValue + "|" + tableValue);
         pushToGlobalTable(2, "Y");
         inputStreamTopic.pipeInput(0, null);
@@ -429,7 +436,7 @@ public class KStreamGlobalKTableJoinTest {
         stream.join(
             table,
             (KeyValueMapper<Integer, String, String>) (k, v) -> v,
-            (ValueJoinerWithMappedAndStreamKey<String, Integer, String, String, String>)
+            (ValueJoinerWithStreamAndMappedKey<Integer, String, String, String, String>)
                 (mk, sk, v1, v2) -> v1 + v2,
             Named.as("join-table"));
         assertThat(builder.build().describe().toString(), containsString("Processor: join-table"));
