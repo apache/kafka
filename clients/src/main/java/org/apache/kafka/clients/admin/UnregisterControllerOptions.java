@@ -17,8 +17,11 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Options for {@link Admin#unregisterController(int, UnregisterControllerOptions)}.
  */
+@InterfaceAudience.Public
 public class UnregisterControllerOptions extends AbstractOptions<UnregisterControllerOptions> {
 }
