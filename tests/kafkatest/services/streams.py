@@ -26,6 +26,7 @@ from kafkatest.services.monitor.jmx import JmxMixin
 from .kafka.util import get_log4j_config_param, get_log4j_config_for_tools
 
 STATE_DIR = "state.dir"
+INMEMORY_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS = "org.apache.kafka.server.streams.InMemoryTopologyDescriptionPlugin"
 
 class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
     """Base class for Streams Test services providing some common settings and functionality"""
@@ -763,3 +764,47 @@ class CooperativeRebalanceUpgradeService(StreamsTestBaseService):
 
         cfg = KafkaConfig(**properties)
         return cfg.render()
+
+
+class StreamsTopologyDescriptionPluginService(StreamsTestBaseService):
+    def __init__(self, test_context, kafka, topology_description_push_enabled=True):
+        super(StreamsTopologyDescriptionPluginService, self).__init__(
+            test_context,
+            kafka,
+            "org.apache.kafka.streams.tests.TopologyDescriptionPluginSystemTest",
+            "")
+        self.topology_description_push_enabled = topology_description_push_enabled
+
+    @property
+    def expectedMessage(self):
+        return "STREAMS-STARTED"
+
+    def prop_file(self):
+        properties = {
+            streams_property.STATE_DIR: self.state_dir,
+            streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
+            streams_property.GROUP_PROTOCOL: "streams",
+            streams_property.TOPOLOGY_DESCRIPTION_PUSH_ENABLED: str(self.topology_description_push_enabled).lower(),
+            "replication.factor": 1,
+            "session.timeout.ms": "10000"
+        }
+        cfg = KafkaConfig(**properties)
+        return cfg.render()
+
+    def start_cmd(self, node):
+        args = self.args.copy()
+        args['config_file'] = self.CONFIG_FILE
+        args['stdout'] = self.STDOUT_FILE
+        args['stderr'] = self.STDERR_FILE
+        args['pidfile'] = self.PID_FILE
+        args['log4j_param'] = get_log4j_config_param(node)
+        args['log4j'] = get_log4j_config_for_tools(node)
+        args['kafka_run_class'] = self.path.script("kafka-run-class.sh", node)
+
+        cmd = "( export KAFKA_LOG4J_OPTS=\"%(log4j_param)s%(log4j)s\"; " \
+              "INCLUDE_TEST_JARS=true %(kafka_run_class)s %(streams_class_name)s " \
+              " %(config_file)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
+
+        self.logger.info("Executing: " + cmd)
+
+        return cmd
