@@ -78,7 +78,7 @@ class StagedMergeIterator<K extends Comparable<K>, V> implements ManagedKeyValue
     @Override
     public boolean hasNext() {
         if (closed) {
-            throw new InvalidStateStoreException("Store iterator for this transaction buffer has already been closed.");
+            throw new InvalidStateStoreException("Iterator has already been closed.");
         }
         if (prefetched != null) {
             return true;
