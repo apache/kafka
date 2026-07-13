@@ -1152,7 +1152,7 @@ public class ClusterControlManagerTest {
             build();
         featureControl.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
-            setFeatureLevel(MetadataVersion.IBP_4_4_IV1.featureLevel()));
+            setFeatureLevel(MetadataVersion.IBP_4_4_IV2.featureLevel()));
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setTime(new MockTime(0, 0, 0)).
             setSnapshotRegistry(snapshotRegistry).
@@ -1186,7 +1186,7 @@ public class ClusterControlManagerTest {
             build();
         featureControl.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
-            setFeatureLevel(MetadataVersion.IBP_4_4_IV1.featureLevel()));
+            setFeatureLevel(MetadataVersion.IBP_4_4_IV2.featureLevel()));
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setTime(new MockTime(0, 0, 0)).
             setSnapshotRegistry(snapshotRegistry).
