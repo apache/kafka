@@ -920,8 +920,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     if (partitionData.currentLeader().leaderId() != -1 && partitionData.currentLeader().leaderEpoch() != -1) {
                         partitionsWithUpdatedLeaderInfo.put(tip.topicPartition(), new Metadata.LeaderIdAndEpoch(
                             Optional.of(partitionData.currentLeader().leaderId()), Optional.of(partitionData.currentLeader().leaderEpoch())));
-                        partitionShareSessionLeaderMap.put(tip, new LeaderIdAndEpoch(partitionData.currentLeader().leaderId(),
-                            partitionData.currentLeader().leaderEpoch()));
+
+                        maybeUpdateLeaderCache(tip, partitionData.currentLeader().leaderId(), partitionData.currentLeader().leaderEpoch());
                     } else {
                         partitionShareSessionLeaderMap.remove(tip);
                     }
@@ -1192,9 +1192,23 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 new Metadata.LeaderIdAndEpoch(
                     Optional.of(partitionData.currentLeader().leaderId()),
                     Optional.of(partitionData.currentLeader().leaderEpoch())
-            ));
-            partitionShareSessionLeaderMap.put(tip, new LeaderIdAndEpoch(partitionData.currentLeader().leaderId(),
-                partitionData.currentLeader().leaderEpoch()));
+                ));
+
+            maybeUpdateLeaderCache(tip, partitionData.currentLeader().leaderId(), partitionData.currentLeader().leaderEpoch());
+        } else {
+            partitionShareSessionLeaderMap.remove(tip);
+        }
+    }
+
+    /**
+     * Update the cache leader for a partition in a share session, only if the new leader epoch is newer than the
+     * currently cached epoch. This mirrors the rules applied by {@link Metadata#updateLastSeenEpochIfNewer(TopicPartition, int)}.
+     * A stale entry is never overwritten by an older epoch.
+     */
+    private void maybeUpdateLeaderCache(TopicIdPartition tip, int leaderId, int leaderEpoch) {
+        LeaderIdAndEpoch oldLeader = partitionShareSessionLeaderMap.get(tip);
+        if ((oldLeader == null) || (leaderEpoch > oldLeader.epoch)) {
+            partitionShareSessionLeaderMap.put(tip, new LeaderIdAndEpoch(leaderId, leaderEpoch));
         }
     }
 

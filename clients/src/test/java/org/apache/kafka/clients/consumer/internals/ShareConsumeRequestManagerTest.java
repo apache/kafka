@@ -2752,6 +2752,51 @@ public class ShareConsumeRequestManagerTest {
         assertEquals(0, builder.data().forgottenTopicsData().get(0).partitions().get(0));
     }
 
+    /**
+     * The cached leader for a partition in the share session should only be replaced when the ShareFetch response
+     * carries a newer leader epoch, following the same rules as {@link Metadata#updateLastSeenEpochIfNewer}. A stale
+     * leader with an older epoch must not overwrite the cached leader, so subsequent fetches continue to go to the
+     * node with the newest known leader epoch.
+     */
+    @Test
+    public void testStaleLeaderEpochDoesNotDowngradeShareSessionLeader() {
+        buildRequestManager();
+
+        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.assignFromSubscribed(Set.of(tp0));
+
+        // tp0's leader is node0 with a high leader epoch.
+        client.updateMetadata(
+                RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 1),
+                        tp -> validLeaderEpoch + 5, topicIds, false));
+        Node nodeId0 = metadata.fetch().nodeById(0);
+        Node nodeId1 = metadata.fetch().nodeById(1);
+        assertEquals(nodeId0, metadata.fetch().leaderFor(tp0));
+
+        // The first fetch goes to node0 and caches the leader (node0, epoch + 5).
+        assertEquals(1, sendFetches());
+        assertEquals(nodeId0, metadata.fetch().leaderFor(tp0));
+
+        // node0 responds with a leadership error naming node1 as the new leader, but with an older leader epoch.
+        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> partitionData = new LinkedHashMap<>();
+        partitionData.put(tip0,
+                new ShareFetchResponseData.PartitionData()
+                        .setPartitionIndex(tip0.topicPartition().partition())
+                        .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code())
+                        .setCurrentLeader(new ShareFetchResponseData.LeaderIdAndEpoch()
+                                .setLeaderId(nodeId1.id())
+                                .setLeaderEpoch(validLeaderEpoch + 2)));
+        client.prepareResponseFrom(ShareFetchResponse.of(Errors.NONE, 0, partitionData, List.of(nodeId1), 0), nodeId0);
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+        fetchRecords();
+
+        // The stale leader must not have replaced the cached leader, so the next fetch still goes only to node0.
+        NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
+        assertEquals(1, pollResult.unsentRequests.size());
+        assertEquals(nodeId0, pollResult.unsentRequests.get(0).node().get());
+    }
+
     @Test
     public void testFetchOneNodeAtATimeForRecordLimitMode() {
         // We will simulate two nodes, each with one partition. The first node will have more records
