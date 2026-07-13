@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -52,6 +54,7 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.Iterator;
@@ -159,6 +162,45 @@ public class SuppressScenarioTest {
                     new KeyValueTimestamp<>("y", 1L, 4L)
                 )
             );
+        }
+    }
+
+    @Test
+    public void shouldPropagateHeadersThroughSuppression() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KTable<String, Long> valueCounts = builder
+            .table(
+                "input",
+                Consumed.with(STRING_SERDE, STRING_SERDE),
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>with(STRING_SERDE, STRING_SERDE)
+                    .withCachingDisabled()
+                    .withLoggingDisabled()
+            )
+            .groupBy((k, v) -> new KeyValue<>(v, k), Grouped.with(STRING_SERDE, STRING_SERDE))
+            .count();
+
+        valueCounts
+            .suppress(untilTimeLimit(ZERO, unbounded()))
+            .toStream()
+            .to("output-suppressed", Produced.with(STRING_SERDE, Serdes.Long()));
+
+        final Topology topology = builder.build();
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
+            final TestInputTopic<String, String> inputTopic =
+                    driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
+            final Headers headers = new RecordHeaders()
+                .add("k", "v".getBytes(StandardCharsets.UTF_8));
+            inputTopic.pipeInput(new TestRecord<>("k1", "v1", headers, 0L));
+
+            final List<TestRecord<String, Long>> output = driver
+                .createOutputTopic("output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER)
+                .readRecordsToList();
+
+            assertThat(output.size(), equalTo(1));
+            // the record's own headers must survive being buffered and evicted by suppress
+            assertThat(output.get(0).headers(), equalTo(headers));
         }
     }
 
