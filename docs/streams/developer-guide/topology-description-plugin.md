@@ -148,7 +148,21 @@ Every describe response that requested a topology description carries a `Streams
 
 When a streams group is deleted while a topology description plugin is configured, the broker calls the plugin's `deleteTopology` method before removing the group. If the plugin fails to delete its data, the `DeleteGroups` request returns the error code `GROUP_DELETION_FAILED` for that group, with the plugin's exception message in the per-group `ErrorMessage` field (available in `DeleteGroups` version 3 and higher), and the broker does **not** delete the group. Retrying the deletion re-invokes `deleteTopology` idempotently. Groups that expire through periodic cleanup are treated identically — their removal is deferred to a future cleanup cycle until the plugin deletion succeeds.
 
+# Observability
+
+The broker exposes metrics for every plugin interaction under the MBean group `kafka.server:type=group-coordinator-metrics`; the full list is in the [group coordinator monitoring reference](/{version}/operations/monitoring#group-coordinator-monitoring). Each sensor is published as both a `-rate` (per-second) and a `-count` (cumulative) metric, so `streams-group-topology-description-set-success` becomes `streams-group-topology-description-set-success-rate` and `streams-group-topology-description-set-success-count`.
+
+  * `streams-group-topology-description-set-success` / `streams-group-topology-description-set-error`: outcomes of `setTopology` calls, driven by client pushes.
+  * `streams-group-topology-description-get-success` / `streams-group-topology-description-get-error`: outcomes of `getTopology` calls, driven by describe requests.
+  * `streams-group-topology-description-delete-success` / `streams-group-topology-description-delete-error`: outcomes of `deleteTopology` calls, driven by group deletion and cleanup.
+  * `streams-group-topology-description-cleanup-cycle`: number of periodic cleanup cycles the coordinator has run.
+  * `streams-group-topology-description-cleanup-eligible`: number of groups the cleanup scan found eligible for plugin-state deletion.
+
+Watch the `-error` sensors first: a rising `get-error` rate explains `ERROR` describe responses, a rising `set-error` rate explains descriptions that never appear, and a rising `delete-error` rate explains `GROUP_DELETION_FAILED`.
+
 # Troubleshooting
+
+Before reading broker logs, check the `streams-group-topology-description-*-error` metrics described under [Observability](#observability) — they pinpoint which plugin call (`set`, `get`, or `delete`) is failing.
 
 **`--topology` reports "No topology description is stored" (status `NOT_STORED`).**
 
@@ -156,6 +170,7 @@ When a streams group is deleted while a topology description plugin is configure
   * Verify that the application does not set `topology.description.push.enabled=false`.
   * If the group (or its topology epoch) is new, the clients may simply not have pushed yet — the broker solicits the push via the heartbeat, so the description typically appears within a few heartbeat intervals.
   * If the description still does not appear, check the broker logs for failed `setTopology` calls. After a permanent failure (for example, a description the plugin rejects), the broker stops soliciting until the topology epoch advances.
+  * If the description used to appear and has now vanished, the plugin may have lost its stored data. When the plugin's `getTopology` returns `null`, the broker surfaces the status as `NOT_STORED` (logged at `WARN`) and keeps returning `NOT_STORED` on subsequent describes. Because the broker only re-solicits a push when the topology epoch advances, restarting the application without bumping the topology will not recover the description — advance the topology epoch or clear the plugin state to trigger a fresh push.
 
 **Status `ERROR` when describing.**
 
