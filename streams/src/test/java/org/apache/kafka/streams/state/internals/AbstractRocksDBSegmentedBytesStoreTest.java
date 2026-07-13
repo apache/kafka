@@ -121,6 +121,11 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
                 Arguments.of(new WindowKeySchema()));
     }
 
+    /** Overridden by subclasses to exercise the transactional (staged-write) code path. */
+    boolean transactional() {
+        return false;
+    }
+
     public void before(final SegmentedBytesStore.KeySchema schema) {
         this.schema = schema;
         if (schema instanceof SessionKeySchema) {
@@ -159,13 +164,17 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
     }
 
     private InternalMockProcessorContext<?, ?> getProcessorContext() {
+        final Properties streamsProps = StreamsTestUtils.getStreamsConfig();
+        if (transactional()) {
+            streamsProps.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
+        }
         return new InternalMockProcessorContext<>(
             stateDir,
             Serdes.String(),
             Serdes.Long(),
             new MockRecordCollector(),
             new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
-            new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
+            new StreamsConfig(streamsProps));
     }
 
     private InternalMockProcessorContext<?, ?> getEOSProcessorContext() {
@@ -440,6 +449,9 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
         bytesStore.put(serializeKey(new Windowed<>(key, windows[3])), serializeValue(100L));
+        if (transactional()) {
+            bytesStore.commit(Collections.emptyMap());
+        }
         bytesStore.close();
 
         final String firstSegmentName = segments.segmentName(0);
@@ -478,6 +490,9 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
         bytesStore.put(serializeKey(new Windowed<>(key, windows[3])), serializeValue(100L));
+        if (transactional()) {
+            bytesStore.commit(Collections.emptyMap());
+        }
         bytesStore.close();
 
         final String firstSegmentName = segments.segmentName(0);
