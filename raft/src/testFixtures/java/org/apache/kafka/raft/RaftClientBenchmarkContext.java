@@ -21,6 +21,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.raft.RaftClientTestContext.RaftProtocol;
 import org.apache.kafka.server.common.KRaftVersion;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
@@ -44,11 +45,8 @@ public final class RaftClientBenchmarkContext {
     public static final int AVERAGE_TIME_MEASUREMENT_ITERATIONS = 10;
     public static final int AVERAGE_TIME_FORKS = 3;
 
-    // Default to the newest version of each (the highest-ordinal enum constant). Enum natural order
-    // is ordinal order, so this picks the last-declared constant; relies on the constants being
-    // declared oldest-to-newest, which avoids updating these when a new version is added.
-    public static final KRaftVersion DEFAULT_KRAFT_VERSION =
-        Arrays.stream(KRaftVersion.values()).max(Comparator.naturalOrder()).orElseThrow();
+    public static final KRaftVersion DEFAULT_KRAFT_VERSION = KRaftVersion.LATEST_PRODUCTION;
+    // Default to the newest version of each (the highest-ordinal enum constant).
     public static final RaftProtocol DEFAULT_RAFT_PROTOCOL =
         Arrays.stream(RaftProtocol.values()).max(Comparator.naturalOrder()).orElseThrow();
 
@@ -96,15 +94,11 @@ public final class RaftClientBenchmarkContext {
      * — an Unattached &rarr; Leader election, a path observers cannot take. A single-voter cluster is
      * rejected because such a node elects itself at initialization, before any measured poll.
      */
-    public static RaftClientBenchmarkContext unattachedVoter(int voterCount) throws Exception {
-        return unattachedVoter(voterCount, DEFAULT_KRAFT_VERSION, DEFAULT_RAFT_PROTOCOL);
-    }
-
     public static RaftClientBenchmarkContext unattachedVoter(
         int voterCount,
         KRaftVersion kraftVersion,
         RaftProtocol raftProtocol
-    ) throws Exception {
+    ) throws IOException {
         if (voterCount < 2) {
             throw new IllegalArgumentException("voterCount must be at least 2; a single voter self-elects at init");
         }
@@ -112,14 +106,6 @@ public final class RaftClientBenchmarkContext {
         ReplicaKey local = voterKeys.get(0);
         return new RaftClientBenchmarkContext(
             buildContext(local, voterKeys, kraftVersion, raftProtocol), local, voterKeys, List.of());
-    }
-
-    public static RaftClientBenchmarkContext leader(int voterCount) throws Exception {
-        return leader(voterCount, 0, DEFAULT_KRAFT_VERSION, DEFAULT_RAFT_PROTOCOL);
-    }
-
-    public static RaftClientBenchmarkContext leader(int voterCount, int observerCount) throws Exception {
-        return leader(voterCount, observerCount, DEFAULT_KRAFT_VERSION, DEFAULT_RAFT_PROTOCOL);
     }
 
     /**
@@ -167,7 +153,7 @@ public final class RaftClientBenchmarkContext {
         List<ReplicaKey> voterKeys,
         KRaftVersion kraftVersion,
         RaftProtocol raftProtocol
-    ) throws Exception {
+    ) throws IOException {
         VoterSet voters = VoterSetTestUtil.voterSet(voterKeys.stream());
 
         return new RaftClientTestContext.Builder(local.id(), local.directoryId().get())

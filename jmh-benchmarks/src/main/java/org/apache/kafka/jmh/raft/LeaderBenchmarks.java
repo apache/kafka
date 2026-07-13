@@ -63,7 +63,11 @@ public class LeaderBenchmarks {
 
         @Setup(Level.Trial)
         public void setup() throws Exception {
-            benchmark = RaftClientBenchmarkContext.leader(VOTER_COUNT);
+            benchmark = RaftClientBenchmarkContext.leader(
+                VOTER_COUNT,
+                0,
+                RaftClientBenchmarkContext.DEFAULT_KRAFT_VERSION,
+                RaftClientBenchmarkContext.DEFAULT_RAFT_PROTOCOL);
             context = benchmark.testContext();
             context.advanceLocalLeaderHighWatermarkToLogEndOffset();
             epoch = context.currentEpoch();
@@ -85,7 +89,7 @@ public class LeaderBenchmarks {
     public void handleNoWaitFetchFromCaughtUpFollower(
         LeaderWithHwmAtLogEnd state,
         KRaftBenchmarkingCounters counters
-    ) throws Exception {
+    ) throws InterruptedException {
         state.context.deliverRequest(
             state.context.fetchRequest(
                 state.epoch, state.benchmark.remoteVoters().get(0), state.endOffset, state.epoch, 0));

@@ -32,6 +32,7 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
+import java.io.IOException;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
@@ -61,8 +62,11 @@ public class ElectionBenchmarks {
         RaftClientTestContext context;
 
         @Setup(Level.Invocation)
-        public void setup() throws Exception {
-            benchmark = RaftClientBenchmarkContext.unattachedVoter(voterCount);
+        public void setup() throws IOException {
+            benchmark = RaftClientBenchmarkContext.unattachedVoter(
+                voterCount,
+                RaftClientBenchmarkContext.DEFAULT_KRAFT_VERSION,
+                RaftClientBenchmarkContext.DEFAULT_RAFT_PROTOCOL);
             context = benchmark.testContext();
             benchmark.zeroCountersOnSetup();
         }
