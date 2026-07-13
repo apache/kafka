@@ -1343,9 +1343,17 @@ public class NetworkClient implements KafkaClient {
         if (maybeProcessBootstrapResolutionResult(currentTimeMs))
             return;
 
+        // Enforce the timeout BEFORE possibly triggering a new resolution. This allows
+        // bootstrap.resolve.timeout.ms=0 to mean "attempt bootstrap but don't wait for it":
+        // the first poll starts the resolution, the next poll observes the result (or fails
+        // here if the timer has expired and the resolution has not produced a bootstrapped
+        // cluster). maybeStartBootstrapResolution skips if bootstrapException is set, so we
+        // don't kick off a fresh resolution after the failure has been recorded.
+        if (bootstrapTimer != null) {
+            bootstrapTimer.update(currentTimeMs);
+            checkBootstrapTimeout();
+        }
         maybeStartBootstrapResolution(currentTimeMs);
-        bootstrapTimer.update(currentTimeMs);
-        checkBootstrapTimeout();
     }
 
     /**
@@ -1368,6 +1376,9 @@ public class NetworkClient implements KafkaClient {
      * Trigger a new async DNS resolution if none is in progress and the retry backoff has elapsed.
      */
     private void maybeStartBootstrapResolution(final long currentTimeMs) {
+        if (bootstrapException != null)
+            return;
+
         if (pendingBootstrapResolution != null)
             return;
 

@@ -436,7 +436,7 @@ public class ConsumerConfig extends AbstractConfig {
                                 .define(BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG,
                                         Type.LONG,
                                         CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
-                                        atLeast(1L),
+                                        atLeast(0L),
                                         Importance.HIGH,
                                         CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC)
                                 .define(GROUP_ID_CONFIG, Type.STRING, null, Importance.HIGH, GROUP_ID_DOC)
