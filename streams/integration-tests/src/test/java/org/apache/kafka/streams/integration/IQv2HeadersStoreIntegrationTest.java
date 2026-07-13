@@ -92,9 +92,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * IQv2 integration tests for KIP-1271/KIP-1356 headers-aware state stores.
  *
  * <p>It builds a KIP-1271 {@code WithHeaders} store, writes records (with headers) into it through a processor,
- * and queries it through IQv2. Covers {@link TimestampedKeyWithHeadersQuery} and
- * {@link TimestampedRangeWithHeadersQuery}; the remaining KIP-1356 headers query types (window/session) are
- * expected to extend this class as they land.
+ * and queries it through IQv2. Covers {@link TimestampedKeyWithHeadersQuery},
+ * {@link TimestampedRangeWithHeadersQuery}, and {@link TimestampedWindowKeyWithHeadersQuery}; the remaining
+ * KIP-1356 headers query type (window range / session) is expected to extend this class as it lands.
  */
 @Tag("integration")
 public class IQv2HeadersStoreIntegrationTest {
@@ -109,6 +109,9 @@ public class IQv2HeadersStoreIntegrationTest {
 
     // Window-store test parameters (used by the window headers query tests).
     private static final long WINDOW_SIZE_MS = 10L;
+    // Stored event-time is offset a few ms into the window so tests can tell ReadOnlyRecord.timestamp()
+    // (the event-time) apart from the window's start and end. Must satisfy 0 < offset < WINDOW_SIZE_MS.
+    private static final long EVENT_TIME_OFFSET_MS = 3L;
     private static final Duration WINDOW_SIZE = Duration.ofMillis(WINDOW_SIZE_MS);
     private static final Duration RETENTION = Duration.ofMinutes(1);
 
@@ -404,48 +407,88 @@ public class IQv2HeadersStoreIntegrationTest {
 
     @Test
     public void shouldHandleTimestampedWindowKeyWithHeadersQuery() throws Exception {
-        // Caching disabled: the window key query reads the underlying store directly.
         startStreamsWithWindowHeadersStore();
 
         final long window0 = baseTimestamp;
         final long window1 = baseTimestamp + 100;
         final long window2 = baseTimestamp + 200;
+        final long window3 = baseTimestamp + 300;
+        final long window4 = baseTimestamp + 400;
 
-        // A single key across three window starts: window0 (headers), window1 (empty headers),
-        // window2 written then tombstone.
+        // Queried key 1 across four window starts: headers, empty headers, tombstoned, headers.
         produceDataToTopicWithHeaders(inputStream, window0, HEADERS, KeyValue.pair(1, "v0"));
         produceDataToTopicWithHeaders(inputStream, window1, new RecordHeaders(), KeyValue.pair(1, "v1"));
         produceDataToTopicWithHeaders(inputStream, window2, HEADERS, KeyValue.pair(1, "v2"), KeyValue.pair(1, null));
+        produceDataToTopicWithHeaders(inputStream, window3, HEADERS, KeyValue.pair(1, "v3"));
 
+        // Noise key 2 must never leak into a query for key 1: a tombstone at window0 (which must not remove
+        // key 1's window0), a live entry at the shared window1, and a live entry at window4 (a window key 1
+        // never uses).
+        produceDataToTopicWithHeaders(inputStream, window0, HEADERS, KeyValue.pair(2, "o0"), KeyValue.pair(2, null));
+        produceDataToTopicWithHeaders(inputStream, window1, HEADERS, KeyValue.pair(2, "o1"));
+        produceDataToTopicWithHeaders(inputStream, window4, HEADERS, KeyValue.pair(2, "o4"));
+
+        // Full range over key 1: window0, window1, window3 in window-start order. window2 is tombstoned;
+        // key 2's entries are excluded; and key 2's window0 tombstone did not drop key 1's window0.
         final List<ReadOnlyRecord<Windowed<Integer>, String>> records =
-                windowKeyQuery(1, Instant.ofEpochMilli(window0), Instant.ofEpochMilli(window2));
+                windowKeyQuery(1, Instant.ofEpochMilli(window0), Instant.ofEpochMilli(window4));
+        assertEquals(
+                List.of(window0, window1, window3),
+                records.stream().map(r -> r.key().window().start()).collect(Collectors.toList()),
+                "expected window0, window1, window3 in order (window2 tombstoned, key 2 excluded)");
+        assertWindowedRecord(records.get(0), 1, window0, "v0", HEADERS);
+        assertWindowedRecord(records.get(1), 1, window1, "v1", new RecordHeaders());
+        assertWindowedRecord(records.get(2), 1, window3, "v3", HEADERS);
 
-        // window2 tombstone -> omitted; window0 and window1 returned in window-start order.
-        assertEquals(2, records.size());
+        // Sub-range [window1, window2]: only window1 (window0 is below the lower bound, window2 is
+        // tombstoned, window3 is above the upper bound).
+        final List<ReadOnlyRecord<Windowed<Integer>, String>> subRange =
+                windowKeyQuery(1, Instant.ofEpochMilli(window1), Instant.ofEpochMilli(window2));
+        assertEquals(1, subRange.size());
+        assertWindowedRecord(subRange.get(0), 1, window1, "v1", new RecordHeaders());
 
-        // window0: windowed key + value + timestamp + headers round-trip, with the window in the key.
-        final ReadOnlyRecord<Windowed<Integer>, String> r0 = records.get(0);
-        assertEquals(Integer.valueOf(1), r0.key().key());
-        assertEquals(window0, r0.key().window().start());
-        assertEquals(window0 + WINDOW_SIZE_MS, r0.key().window().end());
-        assertEquals("v0", r0.value());
-        assertEquals(window0, r0.timestamp());
-        assertEquals(HEADERS, r0.headers());
-        // returned headers are a read-only snapshot: no mutation (add or remove) is allowed
-        assertThrows(IllegalStateException.class, () -> r0.headers().add("x", new byte[0]));
-        assertThrows(IllegalStateException.class, () -> r0.headers().remove("source"));
+        // A never-written key -> empty result.
+        assertTrue(windowKeyQuery(999, Instant.ofEpochMilli(window0), Instant.ofEpochMilli(window4)).isEmpty(),
+                "expected no records for a never-written key");
+        // key 1, a window-start range entirely after its last window -> empty result.
+        assertTrue(windowKeyQuery(1, Instant.ofEpochMilli(window3 + WINDOW_SIZE_MS), Instant.ofEpochMilli(window4)).isEmpty(),
+                "expected no records for a window-start range that excludes all of key 1's windows");
 
-        // window1: written without headers -> empty (never null) headers.
-        final ReadOnlyRecord<Windowed<Integer>, String> r1 = records.get(1);
-        assertEquals(Integer.valueOf(1), r1.key().key());
-        assertEquals(window1, r1.key().window().start());
-        assertEquals(window1 + WINDOW_SIZE_MS, r1.key().window().end());
-        assertEquals("v1", r1.value());
-        assertEquals(window1, r1.timestamp());
-        assertEquals(new RecordHeaders(), r1.headers());
-        // even the empty headers are a read-only snapshot: no mutation (add or remove) is allowed
-        assertThrows(IllegalStateException.class, () -> r1.headers().add("x", new byte[0]));
-        assertThrows(IllegalStateException.class, () -> r1.headers().remove("source"));
+        // Querying key 2 returns only its live entries (window1, window4; window0 tombstoned) -- isolation is
+        // bidirectional and key 2's own tombstone is key-scoped.
+        final List<ReadOnlyRecord<Windowed<Integer>, String>> key2Records =
+                windowKeyQuery(2, Instant.ofEpochMilli(window0), Instant.ofEpochMilli(window4));
+        assertEquals(
+                List.of(window1, window4),
+                key2Records.stream().map(r -> r.key().window().start()).collect(Collectors.toList()),
+                "expected key 2's window1 and window4 (window0 tombstoned)");
+        assertWindowedRecord(key2Records.get(0), 2, window1, "o1", HEADERS);
+        assertWindowedRecord(key2Records.get(1), 2, window4, "o4", HEADERS);
+    }
+
+    @Test
+    public void shouldNotSeeUnflushedWriteInWindowKeyQueryWhenCachingEnabled() throws Exception {
+        // A window key query bypasses the record cache: CachingWindowStore does not intercept IQv2 queries
+        // (unlike CachingKeyValueStore), so WrappedStateStore.query() forwards straight to the persistent
+        // store. That store's Position is only advanced by writes that actually reach it, so a query bound on
+        // the input position never catches up while the write lives only in the cache -- it fails
+        // NOT_UP_TO_BOUND, rather than returning a result. Use a very large commit interval so the record is
+        // never flushed during the test.
+        commitIntervalMs = Duration.ofMinutes(10).toMillis();
+        startStreamsWithWindowHeadersStore(true);
+
+        produceDataToTopicWithHeaders(inputStream, baseTimestamp, HEADERS, KeyValue.pair(1, "v0"));
+
+        final StateQueryRequest<ReadOnlyRecordIterator<Windowed<Integer>, String>> request =
+                inStore(STORE_NAME)
+                        .withQuery(TimestampedWindowKeyWithHeadersQuery.<Integer, String>withKeyAndWindowStartRange(
+                                1, Instant.ofEpochMilli(baseTimestamp), Instant.ofEpochMilli(baseTimestamp)))
+                        .withPositionBound(PositionBound.at(inputPosition));
+        final StateQueryResult<ReadOnlyRecordIterator<Windowed<Integer>, String>> result = kafkaStreams.query(request);
+
+        final QueryResult<ReadOnlyRecordIterator<Windowed<Integer>, String>> onlyResult = result.getOnlyPartitionResult();
+        assertTrue(onlyResult.isFailure(), "A window key query bound on the input position must not catch up while the write is cache-only");
+        assertEquals(FailureReason.NOT_UP_TO_BOUND, onlyResult.getFailureReason());
     }
 
     @Test
@@ -474,7 +517,9 @@ public class IQv2HeadersStoreIntegrationTest {
         final QueryResult<ReadOnlyRecordIterator<Windowed<Integer>, String>> onlyResult = result.getOnlyPartitionResult();
         assertTrue(onlyResult.isSuccess());
         try (ReadOnlyRecordIterator<Windowed<Integer>, String> iterator = onlyResult.getResult()) {
-            assertThrows(StreamsException.class, iterator::next);
+            final StreamsException e = assertThrows(StreamsException.class, iterator::next);
+            assertTrue(e.getMessage().contains("as a ReadOnlyRecord") && e.getMessage().contains("is negative"),
+                "unexpected message: " + e.getMessage());
         }
     }
 
@@ -543,13 +588,18 @@ public class IQv2HeadersStoreIntegrationTest {
 
     private void startStreamsWithWindowHeadersStore() throws Exception {
         // Caching disabled: every IQv2 query is forced down to the persistent
-        // RocksDBTimestampedWindowStoreWithHeaders layer, exercising its inherited WindowKeyQuery
-        // handling (rather than being short-circuited by a cache hit).
-        startStreams(
+        // RocksDBTimestampedWindowStoreWithHeaders layer.
+        startStreamsWithWindowHeadersStore(false);
+    }
+
+    private void startStreamsWithWindowHeadersStore(final boolean cachingEnabled) throws Exception {
+        final StoreBuilder<TimestampedWindowStoreWithHeaders<Integer, String>> storeBuilder =
             Stores.timestampedWindowStoreWithHeadersBuilder(
                 Stores.persistentTimestampedWindowStoreWithHeaders(STORE_NAME, RETENTION, WINDOW_SIZE, false),
                 Serdes.Integer(),
-                Serdes.String()).withCachingDisabled(),
+                Serdes.String());
+        startStreams(
+            cachingEnabled ? storeBuilder.withCachingEnabled() : storeBuilder.withCachingDisabled(),
             WindowHeadersStoreWriterProcessor::new);
     }
 
@@ -569,6 +619,18 @@ public class IQv2HeadersStoreIntegrationTest {
         startStreams(
             Stores.timestampedWindowStoreWithHeadersBuilder(
                 Stores.persistentWindowStore(STORE_NAME, RETENTION, WINDOW_SIZE, false),
+                Serdes.Integer(),
+                Serdes.String()).withCachingDisabled(),
+            WindowHeadersStoreWriterProcessor::new);
+    }
+
+    private void startStreamsWithWindowAdapterStore() throws Exception {
+        // A WithHeaders window builder over a plain *timestamped* window supplier: the adapter keeps
+        // timestamps but cannot persist headers, so window key results carry value + timestamp with empty
+        // headers.
+        startStreams(
+            Stores.timestampedWindowStoreWithHeadersBuilder(
+                Stores.persistentTimestampedWindowStore(STORE_NAME, RETENTION, WINDOW_SIZE, false),
                 Serdes.Integer(),
                 Serdes.String()).withCachingDisabled(),
             WindowHeadersStoreWriterProcessor::new);
@@ -648,6 +710,23 @@ public class IQv2HeadersStoreIntegrationTest {
             }
         }
         return records;
+    }
+
+    private void assertWindowedRecord(final ReadOnlyRecord<Windowed<Integer>, String> record,
+                                      final int key,
+                                      final long windowStart,
+                                      final String value,
+                                      final Headers expectedHeaders) {
+        assertEquals(Integer.valueOf(key), record.key().key());
+        assertEquals(windowStart, record.key().window().start());
+        assertEquals(windowStart + WINDOW_SIZE_MS, record.key().window().end());
+        // timestamp() is the stored event-time, distinct from the window's start and end.
+        assertEquals(windowStart + EVENT_TIME_OFFSET_MS, record.timestamp());
+        assertEquals(value, record.value());
+        assertEquals(expectedHeaders, record.headers());
+        // The IQ result is a read-only snapshot: neither add nor remove is allowed.
+        assertThrows(IllegalStateException.class, () -> record.headers().add("x", new byte[0]));
+        assertThrows(IllegalStateException.class, () -> record.headers().remove("source"));
     }
 
     private static List<Integer> keys(final List<ReadOnlyRecord<Integer, String>> records) {
@@ -751,13 +830,15 @@ public class IQv2HeadersStoreIntegrationTest {
 
         @Override
         public void process(final Record<Integer, String> record) {
-            // The record timestamp doubles as the window start; a null value tombstones that window.
+            // The record timestamp is the window start; a null value tombstones that window. The value's
+            // event-time is stored a few ms into the window (EVENT_TIME_OFFSET_MS) so tests can tell
+            // ReadOnlyRecord.timestamp() apart from the window start/end.
             if (record.value() == null) {
                 store.put(record.key(), null, record.timestamp());
             } else {
                 store.put(
                     record.key(),
-                    ValueTimestampHeaders.make(record.value(), record.timestamp(), record.headers()),
+                    ValueTimestampHeaders.make(record.value(), record.timestamp() + EVENT_TIME_OFFSET_MS, record.headers()),
                     record.timestamp());
             }
             context.forward(record);
