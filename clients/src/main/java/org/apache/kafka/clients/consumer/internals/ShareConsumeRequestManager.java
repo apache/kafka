@@ -71,6 +71,15 @@ import java.util.stream.Collectors;
  * {@code ShareConsumeRequestManager} is responsible for generating {@link ShareFetchRequest} and
  * {@link ShareAcknowledgeRequest} to fetch and acknowledge records being delivered for a consumer
  * in a share group.
+ *
+ * <p>The request manager keeps track of which share sessions contain which topic-partitions. This information will
+ * generally match the leaders in the metadata, but when the fetchable partitions or leadership change, there can be
+ * short-lived differences. This is intentional to ensure that topic-partitions which are no longer being
+ * fetched and topic-partitions which have changed leaders are cleanly removed from their former share sessions.
+ * It is all slightly complicated by the fact that the fetchable partitions are represented by TopicPartition
+ * (without topic ID) and, when a topic is recreated, its topic ID changes. All state in share sessions is tracked by
+ * topic ID so the current mapping from topic name to topic ID as represented in the share sessions is also maintained
+ * in the request manager, and again there can be short-lived differences between this and the cluster metadata.
  */
 @SuppressWarnings({"NPathComplexity", "CyclomaticComplexity"})
 public class ShareConsumeRequestManager implements RequestManager, MemberStateListener, Closeable {
@@ -83,15 +92,15 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     private final ShareFetchConfig shareFetchConfig;
     protected final ShareFetchBuffer shareFetchBuffer;
     private final ShareAcknowledgementEventHandler acknowledgeEventHandler;
-    private final Map<Node, ShareSessionHandler> sessionHandlers;
+    private final Map<Integer, ShareSessionHandler> sessionHandlers;
     private final Set<Integer> nodesWithPendingRequests;
     private final ShareFetchMetricsManager metricsManager;
     private final IdempotentCloser idempotentCloser = new IdempotentCloser();
     private Uuid memberId;
     private boolean fetchMoreRecords = false;
     private final AtomicInteger fetchRecordsNodeId = new AtomicInteger(-1);
-    private final Map<TopicIdPartition, Node> partitionShareSessionNodeMap;
-    private final Map<Node, List<TopicIdPartition>> partitionShareSessionPendingRemovals;
+    private final Map<TopicPartition, TopicIdPartition> partitionShareSessionTopicIdMap;
+    private final Map<TopicIdPartition, LeaderIdAndEpoch> partitionShareSessionLeaderMap;
     private final Map<Integer, Map<TopicIdPartition, Acknowledgements>> fetchAcknowledgementsToSend;
     private final Map<Integer, Map<TopicIdPartition, Acknowledgements>> fetchAcknowledgementsInFlight;
     private final Map<Integer, Tuple<AcknowledgeRequestState>> acknowledgeRequestStates;
@@ -129,8 +138,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         this.sessionHandlers = new HashMap<>();
         this.nodesWithPendingRequests = new HashSet<>();
         this.acknowledgeRequestStates = new HashMap<>();
-        this.partitionShareSessionNodeMap = new HashMap<>();
-        this.partitionShareSessionPendingRemovals = new HashMap<>();
+        this.partitionShareSessionTopicIdMap = new HashMap<>();
+        this.partitionShareSessionLeaderMap = new HashMap<>();
         this.fetchAcknowledgementsToSend = new HashMap<>();
         this.fetchAcknowledgementsInFlight = new HashMap<>();
         this.closeFuture = new CompletableFuture<>();
@@ -157,39 +166,57 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
         // Iterate over the partitions to fetch, building a map from partition to leader node ID
         Map<Node, ShareSessionHandler> handlerMap = new HashMap<>();
+        Cluster cluster = metadata.fetch();
         Map<String, Uuid> topicIds = metadata.topicIds();
         for (TopicPartition partition : partitionsToFetch()) {
-            Uuid topicId = topicIds.get(partition.topic());
-            if (topicId == null) {
-                log.debug("Requesting metadata update for partition {} since topic ID is missing", partition);
-                metadata.requestUpdate(false);
-                continue;
+            TopicIdPartition tip = partitionShareSessionTopicIdMap.get(partition);
+            if (tip == null) {
+                Uuid topicId = topicIds.get(partition.topic());
+                if (topicId == null) {
+                    log.debug("Requesting metadata update for partition {} since topic ID is missing", partition);
+                    metadata.requestUpdate(false);
+                    continue;
+                }
+
+                tip = new TopicIdPartition(topicId, partition);
+                partitionShareSessionTopicIdMap.put(partition, tip);
             }
 
-            TopicIdPartition tip = new TopicIdPartition(topicId, partition);
-            Node node = partitionShareSessionNodeMap.get(tip);
-            if (node == null) {
-                Optional<Node> leaderOpt = metadata.currentLeader(partition).leader;
+            LeaderIdAndEpoch leader = partitionShareSessionLeaderMap.get(tip);
+            if (leader == null) {
+                Metadata.LeaderAndEpoch leaderOpt = metadata.currentLeader(partition);
 
-                if (leaderOpt.isEmpty()) {
+                if (leaderOpt.leader.isEmpty()) {
                     log.debug("Requesting metadata update for partition {} since current leader node is missing", partition);
                     metadata.requestUpdate(false);
                     continue;
                 }
 
-                node = leaderOpt.get();
-                partitionShareSessionNodeMap.put(tip, node);
+                partitionShareSessionLeaderMap.put(tip, new LeaderIdAndEpoch(leaderOpt.leader.get().id(), leaderOpt.epoch.orElse(-1)));
             }
+        }
 
-            final int nodeId = node.id();
+        for (TopicPartition partition : partitionsToFetch()) {
+            TopicIdPartition tip = partitionShareSessionTopicIdMap.get(partition);
+            if (tip == null) {
+                continue;
+            }
+            LeaderIdAndEpoch leader = partitionShareSessionLeaderMap.get(tip);
+            if (leader == null) {
+                continue;
+            }
+            int nodeId = leader.leaderId;
+            Node node = cluster.nodeById(nodeId);
+            if (node == null) {
+                continue;
+            }
             if (nodesWithPendingRequests.contains(nodeId)) {
                 log.trace("Skipping fetch for partition {} because previous request to {} has not been processed", partition, nodeId);
             } else {
                 ShareSessionHandler handler = handlerMap.computeIfAbsent(node,
-                    k -> sessionHandlers.computeIfAbsent(k, n -> new ShareSessionHandler(logContext, n.id(), memberId)));
+                    k -> sessionHandlers.computeIfAbsent(nodeId, n -> new ShareSessionHandler(logContext, n, memberId)));
 
                 Acknowledgements acknowledgementsToSend = null;
-                boolean canSendAcknowledgements = true;
 
                 Map<TopicIdPartition, Acknowledgements> nodeAcksFromFetchMap = fetchAcknowledgementsToSend.get(nodeId);
                 if (nodeAcksFromFetchMap != null) {
@@ -198,16 +225,12 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     if (acknowledgementsToSend != null) {
                         // Check if the share session epoch is valid for sending acknowledgements.
                         if (!maybeAddAcknowledgements(handler, node, tip, acknowledgementsToSend)) {
-                            canSendAcknowledgements = false;
+                            acknowledgementsToSend = null;
                         }
                     }
                 }
 
-                if (canSendAcknowledgements) {
-                    handler.addPartitionToFetch(tip, acknowledgementsToSend);
-                } else {
-                    handler.addPartitionToFetch(tip, null);
-                }
+                handler.addPartitionToFetch(tip, acknowledgementsToSend);
                 topicNamesMap.putIfAbsent(new IdAndPartition(tip.topicId(), tip.partition()), tip.topic());
 
                 // If we have not chosen a node for fetching records yet, choose now, and rotate the assigned partitions
@@ -221,9 +244,14 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         }
 
         // Iterate over the session handlers to see if there are acknowledgements to be sent for partitions
-        // which are no longer part of the current subscription.
-        sessionHandlers.forEach((node, sessionHandler) -> {
-            final int nodeId = node.id();
+        // which are no longer part of the current subscription or which have disappeared from the metadata.
+        // Also include session handlers which have no fetchable partitions so the share sessions can be
+        // brought up to date.
+        sessionHandlers.forEach((nodeId, sessionHandler) -> {
+            Node node = cluster.nodeById(nodeId);
+            if (node == null) {
+                return;
+            }
             if (nodesWithPendingRequests.contains(nodeId)) {
                 log.trace("Skipping fetch because previous request to {} has not been processed", nodeId);
             } else {
@@ -237,7 +265,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                             }
 
                             sessionHandler.addPartitionToAcknowledgeOnly(tip, acks);
-                            handlerMap.put(node, sessionHandler);
 
                             topicNamesMap.putIfAbsent(new IdAndPartition(tip.topicId(), tip.partition()), tip.topic());
                             log.debug("Added fetch request for previously subscribed partition {} to node {}", tip, nodeId);
@@ -249,27 +276,9 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     });
 
                     nodeAcksFromFetchMap.clear();
-                } else {
                     handlerMap.put(node, sessionHandler);
-                }
-            }
-        });
-
-        // Iterate over the session handlers again to remove any partitions which are no longer
-        // being fetched and which also have no acknowledgements to send. This handles the case
-        // where a node has not otherwise been picked up in this poll, but we need to send a
-        // ShareFetch to remove the stale partitions from the share session.
-        sessionHandlers.forEach((node, sessionHandler) -> {
-            final int nodeId = node.id();
-            if (!handlerMap.containsKey(node)) {
-                if (nodesWithPendingRequests.contains(nodeId)) {
-                    log.trace("Skipping fetch because previous request to {} has not been processed", nodeId);
                 } else {
-                    List<TopicIdPartition> pendingRemovals = partitionShareSessionPendingRemovals.remove(node);
-                    if (pendingRemovals != null) {
-                        handlerMap.put(node, sessionHandler);
-                        log.debug("Added fetch request for previously subscribed partitions without acknowledgements to node {}", nodeId);
-                    }
+                    handlerMap.putIfAbsent(node, sessionHandler);
                 }
             }
         });
@@ -279,10 +288,9 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             Node target = entry.getKey();
             ShareSessionHandler handler = entry.getValue();
 
-            // For record_limit mode, we only send a full ShareFetch to a single node at a time.
-            // We prepare to build ShareFetch requests for all nodes with session handlers to permit
-            // piggybacking of acknowledgements, and also to adjust the topic-partitions
-            // in the share session, but if the request would contain neither of those, it can be skipped.
+            // For record_limit mode, we only send a full ShareFetch to a single node at a time. We prepare to build ShareFetch
+            // requests for all nodes with session handlers to permit piggybacking of acknowledgements, and also to adjust the
+            // topic-partitions in the share session, but if the request would contain neither of those, it can be skipped.
             boolean canSkipIfRequestEmpty = isShareAcquireModeRecordLimit() && target.id() != fetchRecordsNodeId.get();
 
             ShareFetchRequest.Builder requestBuilder = handler.newShareFetchBuilder(groupId, shareFetchConfig, canSkipIfRequestEmpty);
@@ -592,8 +600,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
         resultCount.addAndGet(acknowledgementsMapCannotSend.size());
 
-        sessionHandlers.forEach((node, sessionHandler) -> {
-            final int nodeId = node.id();
+        sessionHandlers.forEach((nodeId, sessionHandler) -> {
             Map<TopicIdPartition, Acknowledgements> nodeAcknowledgements = acknowledgementsMapAllNodes.get(nodeId);
             if (nodeAcknowledgements == null)
                 return;
@@ -672,8 +679,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             }
         });
 
-        sessionHandlers.forEach((node, sessionHandler) -> {
-            final int nodeId = node.id();
+        sessionHandlers.forEach((nodeId, sessionHandler) -> {
             Map<TopicIdPartition, Acknowledgements> nodeAcknowledgements = acknowledgementsMapAllNodes.get(nodeId);
             if (nodeAcknowledgements == null)
                 return;
@@ -769,8 +775,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             })
         );
 
-        sessionHandlers.forEach((node, sessionHandler) -> {
-            final int nodeId = node.id();
+        sessionHandlers.forEach((nodeId, sessionHandler) -> {
             Map<TopicIdPartition, Acknowledgements> nodeAcknowledgements = acknowledgementsMapAllNodes.get(nodeId);
             if (nodeAcknowledgements != null) {
                 nodeAcknowledgements.forEach((tip, acknowledgements) -> {
@@ -844,7 +849,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         try {
             log.debug("Completed ShareFetch request from node {} successfully", fetchTarget.id());
             final ShareFetchResponse response = (ShareFetchResponse) resp.responseBody();
-            final ShareSessionHandler handler = sessionHandler(fetchTarget);
+            final ShareSessionHandler handler = sessionHandler(fetchTarget.id());
 
             if (handler == null) {
                 log.error("Unable to find ShareSessionHandler for node {}. Ignoring ShareFetch response.",
@@ -915,12 +920,14 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     if (partitionData.currentLeader().leaderId() != -1 && partitionData.currentLeader().leaderEpoch() != -1) {
                         partitionsWithUpdatedLeaderInfo.put(tip.topicPartition(), new Metadata.LeaderIdAndEpoch(
                             Optional.of(partitionData.currentLeader().leaderId()), Optional.of(partitionData.currentLeader().leaderEpoch())));
+                        partitionShareSessionLeaderMap.put(tip, new LeaderIdAndEpoch(partitionData.currentLeader().leaderId(),
+                            partitionData.currentLeader().leaderEpoch()));
+                    } else {
+                        partitionShareSessionLeaderMap.remove(tip);
                     }
-                    partitionShareSessionNodeMap.remove(tip);
-                    partitionShareSessionPendingRemovals.computeIfAbsent(fetchTarget, k -> new LinkedList<>()).add(tip);
                 } else if (partitionError == Errors.UNKNOWN_TOPIC_OR_PARTITION || partitionError == Errors.UNKNOWN_TOPIC_ID) {
-                    partitionShareSessionNodeMap.remove(tip);
-                    partitionShareSessionPendingRemovals.computeIfAbsent(fetchTarget, k -> new LinkedList<>()).add(tip);
+                    partitionShareSessionLeaderMap.remove(tip);
+                    partitionShareSessionTopicIdMap.remove(tip.topicPartition());
                 }
 
                 completedFetches.add(
@@ -975,10 +982,9 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                          Throwable error) {
         try {
             log.debug("Completed ShareFetch request from node {} unsuccessfully {}", fetchTarget.id(), Errors.forException(error));
-            final ShareSessionHandler handler = sessionHandler(fetchTarget);
+            final ShareSessionHandler handler = sessionHandler(fetchTarget.id());
             if (handler != null) {
                 handler.handleError(error);
-                // What do to about ShareSessionNodeMap and PendingRemovals?
             }
 
             requestData.topics().forEach(topic -> topic.partitions().forEach(partition -> {
@@ -1088,7 +1094,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
             if (acknowledgeRequestState.isCloseRequest()) {
                 log.debug("Removing node from ShareSession {}", fetchTarget.id());
-                sessionHandlers.remove(fetchTarget);
+                sessionHandlers.remove(fetchTarget.id());
             }
         }
     }
@@ -1120,7 +1126,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
             if (acknowledgeRequestState.isCloseRequest()) {
                 log.debug("Removing node from ShareSession {}", fetchTarget.id());
-                sessionHandlers.remove(fetchTarget);
+                sessionHandlers.remove(fetchTarget.id());
             }
         }
     }
@@ -1135,16 +1141,14 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                       Optional<Integer> acquisitionLockTimeoutMs) {
         if (partitionError.exception() != null) {
             boolean retry = false;
-            if (partitionError == Errors.NOT_LEADER_OR_FOLLOWER || partitionError == Errors.FENCED_LEADER_EPOCH ||
-                partitionError == Errors.UNKNOWN_TOPIC_OR_PARTITION || partitionError == Errors.UNKNOWN_TOPIC_ID) {
+            if (partitionError == Errors.NOT_LEADER_OR_FOLLOWER || partitionError == Errors.FENCED_LEADER_EPOCH) {
                 // If the leader has changed, there's no point in retrying the operation because the acquisition locks
                 // will have been released. Instead, these records will be re-delivered once they get timed out on the broker.
                 // If the topic or partition has been deleted, we do not retry the failed acknowledgements.
-                updateLeaderInfoMap(partitionData, partitionsWithUpdatedLeaderInfo, partitionError, tip.topicPartition());
-                Node node = partitionShareSessionNodeMap.remove(tip);
-                if (node != null) {
-                    partitionShareSessionPendingRemovals.computeIfAbsent(node, k -> new LinkedList<>()).add(tip);
-                }
+                updateLeaderInfoMap(partitionData, partitionsWithUpdatedLeaderInfo, partitionError, tip);
+            } else if (partitionError == Errors.UNKNOWN_TOPIC_OR_PARTITION || partitionError == Errors.UNKNOWN_TOPIC_ID) {
+                partitionShareSessionLeaderMap.remove(tip);
+                partitionShareSessionTopicIdMap.remove(tip.topicPartition());
             } else if (partitionError.exception() instanceof RetriableException) {
                 retry = true;
             }
@@ -1180,15 +1184,17 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     private void updateLeaderInfoMap(ShareAcknowledgeResponseData.PartitionData partitionData,
                                   Map<TopicPartition, Metadata.LeaderIdAndEpoch> partitionsWithUpdatedLeaderInfo,
                                   Errors partitionError,
-                                  TopicPartition tp) {
+                                  TopicIdPartition tip) {
 
-        log.debug("For {}, received error {}, with leaderIdAndEpoch {} in ShareAcknowledge", tp, partitionError, partitionData.currentLeader());
+        log.debug("For {}, received error {}, with leaderIdAndEpoch {} in ShareAcknowledge", tip, partitionError, partitionData.currentLeader());
         if (partitionData.currentLeader().leaderId() != -1 && partitionData.currentLeader().leaderEpoch() != -1) {
-            partitionsWithUpdatedLeaderInfo.put(tp,
+            partitionsWithUpdatedLeaderInfo.put(tip.topicPartition(),
                 new Metadata.LeaderIdAndEpoch(
                     Optional.of(partitionData.currentLeader().leaderId()),
                     Optional.of(partitionData.currentLeader().leaderEpoch())
             ));
+            partitionShareSessionLeaderMap.put(tip, new LeaderIdAndEpoch(partitionData.currentLeader().leaderId(),
+                partitionData.currentLeader().leaderEpoch()));
         }
     }
 
@@ -1208,8 +1214,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         return subscriptions.fetchablePartitions(tp -> true);
     }
 
-    public ShareSessionHandler sessionHandler(Node node) {
-        return sessionHandlers.get(node);
+    public ShareSessionHandler sessionHandler(Integer nodeId) {
+        return sessionHandlers.get(nodeId);
     }
 
     boolean hasCompletedFetches() {
@@ -1630,6 +1636,16 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             IdAndPartition that = (IdAndPartition) o;
             return Objects.equals(topicId, that.topicId) &&
                 partitionIndex == that.partitionIndex;
+        }
+    }
+
+    static class LeaderIdAndEpoch {
+        private final int leaderId;
+        private final int epoch;
+
+        LeaderIdAndEpoch(int leaderId, int epoch) {
+            this.leaderId = leaderId;
+            this.epoch = epoch;
         }
     }
 

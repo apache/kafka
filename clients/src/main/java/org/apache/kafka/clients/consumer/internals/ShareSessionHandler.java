@@ -174,14 +174,34 @@ public class ShareSessionHandler {
                     }
                     acknowledgementBatches.computeIfAbsent(tip, k -> new ArrayList<>()).add(ackBatch.toShareFetchRequest());
                 }
+
+                // If the partition is only being included in the request to send acknowledgements, we need to
+                // remove it so that it doesn't get added into the share session for fetching
+                TopicIdPartition sessionTip = sessionPartitions.get(tip.topicPartition());
+                if ((sessionTip == null) || !sessionTip.equals(tip)) {
+                    if (!removed.contains(tip)) {
+                        removed.add(tip);
+                    }
+                }
             }
         }
 
         nextPartitions = new LinkedHashMap<>();
         nextAcknowledgements = new LinkedHashMap<>();
 
-        if (canSkipIfRequestEmpty && added.isEmpty() && removed.isEmpty() && acknowledgementBatches.isEmpty()) {
-            return null;
+        // If there are no changes to the share session and no acknowledgements, we can sometimes skip sending an empty request
+        if (added.isEmpty() && removed.isEmpty() && acknowledgementBatches.isEmpty()) {
+            // If the share session is empty, there are no partitions to fetch from and we can always skip
+            if (sessionPartitions.isEmpty()) {
+                log.debug("Skipping sending empty ShareFetch because share partitions empty");
+                return null;
+            }
+
+            // If the share session is not empty, but we do not want to fetch records for this node, we can skip
+            if (canSkipIfRequestEmpty) {
+                log.debug("Skipping sending empty ShareFetch because no share session changes or acknowledgements");
+                return null;
+            }
         }
 
         if (log.isDebugEnabled()) {

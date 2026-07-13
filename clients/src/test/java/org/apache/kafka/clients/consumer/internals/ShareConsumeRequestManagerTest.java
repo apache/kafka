@@ -328,7 +328,7 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
-    public void testServerDisconnectedOnShareAcknowledge() throws InterruptedException {
+    public void testServerDisconnectedOnShareAcknowledge() {
         buildRequestManager();
         // Enabling the config so that background event is sent when the acknowledgement response is received.
         shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
@@ -643,7 +643,7 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
-    public void testRetryAcknowledgements() throws InterruptedException {
+    public void testRetryAcknowledgements() {
         buildRequestManager();
 
         assignFromSubscribed(Set.of(tp0));
@@ -1262,7 +1262,7 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
-    public void testCallbackHandlerConfig() throws InterruptedException {
+    public void testCallbackHandlerConfig() {
         buildRequestManager();
         shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
@@ -1437,7 +1437,7 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
-    public void testShareAcknowledgeInvalidResponse() throws InterruptedException {
+    public void testShareAcknowledgeInvalidResponse() {
         buildRequestManager();
         shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
@@ -1539,7 +1539,7 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
-    public void testPiggybackAcknowledgementsOnInitialShareSessionErrorSubscriptionChange() {
+    public void testPiggybackAcknowledgementsOnInitialShareSessionErrorTopicRemovedFromMetadata() {
         buildRequestManager();
         shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
@@ -1565,9 +1565,11 @@ public class ShareConsumeRequestManagerTest {
 
         assertEquals(0, completedAcknowledgements.size());
 
-        // Next fetch would not include any acknowledgements.
+        // Next fetch would not include any acknowledgements, but it will include tip-0 because it's a new share session.
         NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
-        assertEquals(0, pollResult.unsentRequests.size());
+        assertEquals(1, pollResult.unsentRequests.size());
+        ShareFetchRequest.Builder builder = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
+        assertEquals(1, builder.data().topics().size());
 
         // We should fail any waiting acknowledgements for tip-0 as it would have a share session epoch equal to 0.
         assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
@@ -1939,8 +1941,8 @@ public class ShareConsumeRequestManagerTest {
 
         assertNotEquals(startingClusterMetadata, metadata.fetch());
 
-        // And now the partitions are on the same leader so only one fetch is sent
-        assertEquals(1, sendFetches());
+        // And now the partitions are on the same leader but a fetch is still sent to the former leader to remove the partition from the share session
+        assertEquals(2, sendFetches());
         assertFalse(shareConsumeRequestManager.hasCompletedFetches());
 
         partitionData = buildPartitionDataMap(tip0, records, ShareCompletedFetchTest.acquiredRecords(2L, 1), Errors.NONE, Errors.NONE);
@@ -1951,6 +1953,11 @@ public class ShareConsumeRequestManagerTest {
                 .setAcquiredRecords(ShareCompletedFetchTest.acquiredRecords(1L, 1))
                 .setAcknowledgeErrorCode(Errors.NONE.code()));
         client.prepareResponseFrom(ShareFetchResponse.of(Errors.NONE, 0, partitionData, List.of(), 0), nodeId0);
+        partitionData = new LinkedHashMap<>();
+        partitionData.put(tip1,
+            new ShareFetchResponseData.PartitionData()
+                .setPartitionIndex(tip1.topicPartition().partition()));
+        client.prepareResponseFrom(ShareFetchResponse.of(Errors.NONE, 0, partitionData, List.of(), 0), nodeId1);
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
@@ -2024,8 +2031,8 @@ public class ShareConsumeRequestManagerTest {
         // Validate metadata update is still requested even though the current leader was returned
         assertTrue(metadata.updateRequested());
 
-        // And now the partitions are on the same leader so only one fetch is sent
-        assertEquals(1, sendFetches());
+        // And now the partitions are on the same leader but a fetch is still sent to the former leader to remove the partition from the share session
+        assertEquals(2, sendFetches());
         assertFalse(shareConsumeRequestManager.hasCompletedFetches());
 
         partitionData = buildPartitionDataMap(tip0, records, ShareCompletedFetchTest.acquiredRecords(2L, 1), Errors.NONE, Errors.NONE);
@@ -2037,6 +2044,11 @@ public class ShareConsumeRequestManagerTest {
                 .setAcknowledgeErrorCode(Errors.NONE.code()));
         client.prepareResponseFrom(ShareFetchResponse.of(Errors.NONE, 0, partitionData, List.of(), 0), nodeId0);
         networkClientDelegate.poll(time.timer(0));
+        partitionData = new LinkedHashMap<>();
+        partitionData.put(tip1,
+            new ShareFetchResponseData.PartitionData()
+                .setPartitionIndex(tip1.topicPartition().partition()));
+        client.prepareResponseFrom(ShareFetchResponse.of(Errors.NONE, 0, partitionData, List.of(), 0), nodeId1);
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         partitionRecords = fetchRecords();
@@ -2108,11 +2120,11 @@ public class ShareConsumeRequestManagerTest {
         assertNotEquals(startingClusterMetadata, metadata.fetch());
 
         // Even though the partitions are on the same leader, records were fetched on the previous leader.
-        // We do not send those acknowledgements to the previous leader, we fail them with NOT_LEADER_OR_FOLLOWER exception.
-        assertEquals(1, sendFetches());
+        // Since we need to remove the partition from the previous leader, we still send those acknowledgement to the previous leader
+        // with the partition in the list of partitions to forget.
+        assertEquals(2, sendFetches());
         assertFalse(shareConsumeRequestManager.hasCompletedFetches());
-        assertEquals(acknowledgements, completedAcknowledgements.get(0).get(tip0));
-        assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.exception(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
+        assertTrue(completedAcknowledgements.isEmpty());
 
         partitionData.clear();
         partitionData.put(tip0,
@@ -2131,6 +2143,8 @@ public class ShareConsumeRequestManagerTest {
         client.prepareResponseFrom(ShareFetchResponse.of(Errors.NONE, 0, partitionData, List.of(), 0), nodeId1);
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+        assertEquals(acknowledgements, completedAcknowledgements.get(0).get(tip0));
+        assertEquals(error.exception(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
 
         partitionRecords = fetchRecords();
         assertTrue(partitionRecords.containsKey(tp0));
@@ -2569,13 +2583,9 @@ public class ShareConsumeRequestManagerTest {
         List<ConsumerRecord<byte[], byte[]>> fetchedRecords = partitionRecords.get(tp0);
         assertEquals(1, fetchedRecords.size());
 
-        Acknowledgements acknowledgements = Acknowledgements.empty();
-        acknowledgements.add(1, AcknowledgeType.ACCEPT);
-        shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
-
         assertEquals(startingClusterMetadata, metadata.fetch());
 
-        acknowledgements = Acknowledgements.empty();
+        Acknowledgements acknowledgements = Acknowledgements.empty();
         acknowledgements.add(1, AcknowledgeType.ACCEPT);
         shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
 
@@ -2600,7 +2610,7 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
-        // The node was disconnected, so the acknowledgement failed
+        // The node was disconnected, so the acknowledgements for tp0 failed
         assertInstanceOf(DisconnectException.class, completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
         completedAcknowledgements.clear();
 
@@ -2618,7 +2628,7 @@ public class ShareConsumeRequestManagerTest {
 
         shareConsumeRequestManager.fetch(Map.of(tip1, new NodeAcknowledgements(1, acknowledgements)));
 
-        assertEquals(1, sendFetches());
+        assertEquals(2, sendFetches());
         assertFalse(shareConsumeRequestManager.hasCompletedFetches());
 
         partitionData.clear();
@@ -2633,6 +2643,8 @@ public class ShareConsumeRequestManagerTest {
             new ShareFetchResponseData.PartitionData()
                 .setPartitionIndex(tip1.topicPartition().partition()));
         client.prepareResponseFrom(ShareFetchResponse.of(Errors.NONE, 0, partitionData, List.of(), 0), nodeId1);
+        partitionData.clear();
+        client.prepareResponseFrom(ShareFetchResponse.of(Errors.SHARE_SESSION_NOT_FOUND, 0, partitionData, List.of(), 0), nodeId0);
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
@@ -2731,7 +2743,7 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
-    public void testCloseInternalClosesShareFetchMetricsManager() throws Exception {
+    public void testCloseInternalClosesShareFetchMetricsManager() {
         buildRequestManager();
 
         // Define all sensor names that should be created and removed
