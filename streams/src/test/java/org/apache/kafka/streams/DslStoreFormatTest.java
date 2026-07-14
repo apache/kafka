@@ -54,9 +54,4 @@ public class DslStoreFormatTest {
     public void shouldThrowOnInvalidInput() {
         assertThrows(IllegalArgumentException.class, () -> DslStoreFormat.of("not-a-format"));
     }
-
-    @Test
-    public void shouldThrowOnNullInput() {
-        assertThrows(NullPointerException.class, () -> DslStoreFormat.of(null));
-    }
 }

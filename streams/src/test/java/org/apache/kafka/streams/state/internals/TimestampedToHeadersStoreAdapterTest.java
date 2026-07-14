@@ -50,6 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -71,7 +72,9 @@ public class TimestampedToHeadersStoreAdapterTest {
     @BeforeEach
     public void setUp() {
         mockStore = mock(KeyValueStore.class, withSettings().extraInterfaces(TimestampedBytesStore.class));
-        when(mockStore.persistent()).thenReturn(true);
+        // lenient: this fixture stub is consumed by the adapter constructor for most tests, but the
+        // constructor-validation tests build their own store and never touch this one.
+        lenient().when(mockStore.persistent()).thenReturn(true);
         adapter = new TimestampedToHeadersStoreAdapter(mockStore);
     }
 
