@@ -35,7 +35,7 @@ public class MetadataQuorumCommandErrorTest {
     public void testPropertiesFileDoesNotExist() {
         assertEquals(1,
             MetadataQuorumCommand.mainNoExit("--bootstrap-server", "localhost:9092", "--command-config", "admin.properties", "describe"));
-        assertEquals("Properties file admin.properties does not exist!",
+        assertEquals("Properties file admin.properties does not exist.",
             ToolsTestUtils.captureStandardErr(() ->
                 MetadataQuorumCommand.mainNoExit("--bootstrap-server", "localhost:9092", "--command-config", "admin.properties", "describe")));
     }
