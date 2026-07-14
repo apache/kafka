@@ -78,6 +78,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
 
 /**
@@ -183,6 +185,23 @@ public class PersisterStateManager {
         this.generateCallback = generateCallback;
     }
 
+    // Groups a combined response's results into topicId -> partition -> result for O(1) per-partition lookup.
+    private static <T, P> Map<Uuid, Map<Integer, P>> indexByTopicPartition(
+        List<T> results,
+        Function<T, Uuid> topicId,
+        Function<T, List<P>> partitions,
+        ToIntFunction<P> partition
+    ) {
+        Map<Uuid, Map<Integer, P>> index = new HashMap<>();
+        for (T result : results) {
+            Map<Integer, P> byPartition = index.computeIfAbsent(topicId.apply(result), t -> new HashMap<>());
+            for (P p : partitions.apply(result)) {
+                byPartition.put(partition.applyAsInt(p), p);
+            }
+        }
+        return index;
+    }
+
     /**
      * Parent class of all RPCs. Uses template pattern to implement core methods.
      * Various child classes can extend this class to define how to handle RPC specific
@@ -196,6 +215,8 @@ public class PersisterStateManager {
         private final ExponentialBackoffManager findCoordBackoff;
         private Consumer<ClientResponse> onCompleteCallback;
         protected final SharePartitionKey partitionKey;
+        // Combined-response index shared across handlers; set before onComplete, read-and-cleared in lookupPartitionResult (KAFKA-20803).
+        protected Object sharedResultIndex;
 
         public PersisterStateManagerHandler(
             String groupId,
@@ -237,6 +258,24 @@ public class PersisterStateManager {
          * @param response - Client response
          */
         protected abstract void handleRequestResponse(ClientResponse response);
+
+        // Overridden per RPC to index the combined response as topicId -> partition -> result; null when no usable body.
+        protected Object buildResultIndex(ClientResponse response) {
+            return null;
+        }
+
+        @SuppressWarnings("unchecked")
+        protected final <R> R lookupPartitionResult(ClientResponse response) {
+            Object index = sharedResultIndex;
+            sharedResultIndex = null;
+            Map<Uuid, Map<Integer, R>> resultIndex =
+                (Map<Uuid, Map<Integer, R>>) (index != null ? index : buildResultIndex(response));
+            if (resultIndex == null) {
+                return null;
+            }
+            Map<Integer, R> byPartition = resultIndex.get(partitionKey().topicId());
+            return byPartition == null ? null : byPartition.get(partitionKey().partition());
+        }
 
         /**
          * Returns true if the response is valid for the respective child class.
@@ -776,6 +815,18 @@ public class PersisterStateManager {
         }
 
         @Override
+        protected Object buildResultIndex(ClientResponse response) {
+            if (!response.hasResponse()) {
+                return null;
+            }
+            return indexByTopicPartition(
+                ((WriteShareGroupStateResponse) response.responseBody()).data().results(),
+                WriteShareGroupStateResponseData.WriteStateResult::topicId,
+                WriteShareGroupStateResponseData.WriteStateResult::partitions,
+                WriteShareGroupStateResponseData.PartitionResult::partition);
+        }
+
+        @Override
         protected void handleRequestResponse(ClientResponse response) {
             log().debug("Write state response received - {}", response);
             writeStateBackoff.incrementAttempt();
@@ -783,55 +834,44 @@ public class PersisterStateManager {
             String clientResponseErrorMessage = clientResponseError.message();
             switch (clientResponseError) {
                 case NONE:
-                    // response can be a combined one for large number of requests
-                    // we need to deconstruct it
-                    WriteShareGroupStateResponse combinedResponse = (WriteShareGroupStateResponse) response.responseBody();
+                    WriteShareGroupStateResponseData.PartitionResult partitionResult = lookupPartitionResult(response);
+                    if (partitionResult != null) {
+                        Errors error = Errors.forCode(partitionResult.errorCode());
+                        String errorMessage = partitionResult.errorMessage();
+                        if (errorMessage == null || errorMessage.isEmpty()) {
+                            errorMessage = error.message();
+                        }
 
-                    for (WriteShareGroupStateResponseData.WriteStateResult writeStateResult : combinedResponse.data().results()) {
-                        if (writeStateResult.topicId().equals(partitionKey().topicId())) {
-                            Optional<WriteShareGroupStateResponseData.PartitionResult> partitionStateData =
-                                writeStateResult.partitions().stream().filter(partitionResult -> partitionResult.partition() == partitionKey().partition())
-                                    .findFirst();
+                        switch (error) {
+                            case NONE:
+                                writeStateBackoff.resetAttempts();
+                                WriteShareGroupStateResponseData.WriteStateResult result = WriteShareGroupStateResponse.toResponseWriteStateResult(
+                                    partitionKey().topicId(),
+                                    List.of(partitionResult)
+                                );
+                                this.result.complete(new WriteShareGroupStateResponse(
+                                    new WriteShareGroupStateResponseData().setResults(List.of(result))));
+                                return;
 
-                            if (partitionStateData.isPresent()) {
-                                Errors error = Errors.forCode(partitionStateData.get().errorCode());
-                                String errorMessage = partitionStateData.get().errorMessage();
-                                if (errorMessage == null || errorMessage.isEmpty()) {
-                                    errorMessage = error.message();
+                            // check retriable errors
+                            case COORDINATOR_NOT_AVAILABLE:
+                            case COORDINATOR_LOAD_IN_PROGRESS:
+                            case NOT_COORDINATOR:
+                            case UNKNOWN_TOPIC_OR_PARTITION:
+                                log().debug("Received retriable error in write state RPC for key {}: {}", partitionKey(), errorMessage);
+                                if (!writeStateBackoff.canAttempt()) {
+                                    log().error("Exhausted max retries for write state RPC for key {} without success.", partitionKey());
+                                    requestErrorResponse(error, new Exception("Exhausted max retries to complete write state RPC without success."));
+                                    return;
                                 }
+                                super.resetCoordinatorNode();
+                                timer.add(new PersisterTimerTask(writeStateBackoff.backOff(), this));
+                                return;
 
-                                switch (error) {
-                                    case NONE:
-                                        writeStateBackoff.resetAttempts();
-                                        WriteShareGroupStateResponseData.WriteStateResult result = WriteShareGroupStateResponse.toResponseWriteStateResult(
-                                            partitionKey().topicId(),
-                                            List.of(partitionStateData.get())
-                                        );
-                                        this.result.complete(new WriteShareGroupStateResponse(
-                                            new WriteShareGroupStateResponseData().setResults(List.of(result))));
-                                        return;
-
-                                    // check retriable errors
-                                    case COORDINATOR_NOT_AVAILABLE:
-                                    case COORDINATOR_LOAD_IN_PROGRESS:
-                                    case NOT_COORDINATOR:
-                                    case UNKNOWN_TOPIC_OR_PARTITION:
-                                        log().debug("Received retriable error in write state RPC for key {}: {}", partitionKey(), errorMessage);
-                                        if (!writeStateBackoff.canAttempt()) {
-                                            log().error("Exhausted max retries for write state RPC for key {} without success.", partitionKey());
-                                            requestErrorResponse(error, new Exception("Exhausted max retries to complete write state RPC without success."));
-                                            return;
-                                        }
-                                        super.resetCoordinatorNode();
-                                        timer.add(new PersisterTimerTask(writeStateBackoff.backOff(), this));
-                                        return;
-
-                                    default:
-                                        log().error("Unable to perform write state RPC for key {}: {}", partitionKey(), errorMessage);
-                                        requestErrorResponse(error, new Exception(errorMessage));
-                                        return;
-                                }
-                            }
+                            default:
+                                log().error("Unable to perform write state RPC for key {}: {}", partitionKey(), errorMessage);
+                                requestErrorResponse(error, new Exception(errorMessage));
+                                return;
                         }
                     }
 
@@ -1553,10 +1593,14 @@ public class PersisterStateManager {
                                             oldVal.remove(coordNode);
                                             return oldVal;
                                         });
-                                        // now the combined request has completed
-                                        // we need to create responses for individual
-                                        // requests which composed the combined request
-                                        handlersPerGroup.forEach(handler1 -> handler1.onComplete(response));
+                                        // Demux the combined response once and share it across handlers (KAFKA-20803).
+                                        Object sharedResultIndex = handlersPerGroup.isEmpty()
+                                            ? null
+                                            : handlersPerGroup.get(0).buildResultIndex(response);
+                                        handlersPerGroup.forEach(handler1 -> {
+                                            handler1.sharedResultIndex = sharedResultIndex;
+                                            handler1.onComplete(response);
+                                        });
                                         wakeup();
                                     }));
                                 sending.computeIfAbsent(rpcType, key -> new HashSet<>()).add(coordNode);
