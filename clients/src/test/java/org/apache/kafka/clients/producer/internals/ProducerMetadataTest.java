@@ -48,7 +48,7 @@ public class ProducerMetadataTest {
     private final long refreshBackoffMaxMs = 1000;
     private final long metadataExpireMs = 1000;
     private final ProducerMetadata metadata = new ProducerMetadata(refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, METADATA_IDLE_MS,
-            new LogContext(), new ClusterResourceListeners(), Time.SYSTEM);
+            new LogContext(), new ClusterResourceListeners());
     private final AtomicReference<Exception> backgroundError = new AtomicReference<>();
 
     @AfterEach
@@ -131,7 +131,7 @@ public class ProducerMetadataTest {
     }
 
     /**
-     * Tests that {@link org.apache.kafka.clients.producer.internals.ProducerMetadata#awaitUpdate(int, long)} doesn't
+     * Tests that {@link org.apache.kafka.clients.producer.internals.ProducerMetadata#awaitUpdate(int, org.apache.kafka.common.utils.Timer)} doesn't
      * wait forever with a max timeout value of 0
      *
      * @throws Exception
@@ -144,7 +144,7 @@ public class ProducerMetadataTest {
         assertTrue(metadata.timeToNextUpdate(time) > 0, "No update needed.");
         // first try with a max wait time of 0 and ensure that this returns back without waiting forever
         try {
-            metadata.awaitUpdate(metadata.requestUpdate(true), 0);
+            metadata.awaitUpdate(metadata.requestUpdate(true), Time.SYSTEM.timer(0));
             fail("Wait on metadata update was expected to timeout, but it didn't");
         } catch (TimeoutException te) {
             // expected
@@ -152,7 +152,7 @@ public class ProducerMetadataTest {
         // now try with a higher timeout value once
         final long twoSecondWait = 2000;
         try {
-            metadata.awaitUpdate(metadata.requestUpdate(true), twoSecondWait);
+            metadata.awaitUpdate(metadata.requestUpdate(true), Time.SYSTEM.timer(twoSecondWait));
             fail("Wait on metadata update was expected to timeout, but it didn't");
         } catch (TimeoutException te) {
             // expected
@@ -215,7 +215,7 @@ public class ProducerMetadataTest {
     @Test
     public void testMetadataWaitAbortedOnFatalException() {
         metadata.fatalError(new AuthenticationException("Fatal exception from test"));
-        assertThrows(AuthenticationException.class, () -> metadata.awaitUpdate(0, 1000));
+        assertThrows(AuthenticationException.class, () -> metadata.awaitUpdate(0, Time.SYSTEM.timer(1000)));
     }
 
     @Test
@@ -323,7 +323,7 @@ public class ProducerMetadataTest {
         Thread thread = new Thread(() -> {
             try {
                 while (metadata.fetch().partitionsForTopic(topic).isEmpty())
-                    metadata.awaitUpdate(metadata.requestUpdate(false), maxWaitMs);
+                    metadata.awaitUpdate(metadata.requestUpdate(false), Time.SYSTEM.timer(maxWaitMs));
             } catch (Exception e) {
                 backgroundError.set(e);
             }

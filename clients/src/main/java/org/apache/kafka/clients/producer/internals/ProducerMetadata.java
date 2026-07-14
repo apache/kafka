@@ -18,11 +18,12 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
@@ -44,7 +45,6 @@ public class ProducerMetadata extends Metadata {
     private final Map<String, Long> topics = new HashMap<>();
     private final Set<String> newTopics = new HashSet<>();
     private final Logger log;
-    private final Time time;
     private Map<String, Errors> errors = null;
 
     public ProducerMetadata(long refreshBackoffMs,
@@ -52,12 +52,10 @@ public class ProducerMetadata extends Metadata {
                             long metadataExpireMs,
                             long metadataIdleMs,
                             LogContext logContext,
-                            ClusterResourceListeners clusterResourceListeners,
-                            Time time) {
+                            ClusterResourceListeners clusterResourceListeners) {
         super(refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, logContext, clusterResourceListeners);
         this.metadataIdleMs = metadataIdleMs;
         this.log = logContext.logger(ProducerMetadata.class);
-        this.time = time;
     }
 
     @Override
@@ -138,14 +136,19 @@ public class ProducerMetadata extends Metadata {
     /**
      * Wait for metadata update until the current version is larger than the last version we know of
      */
-    public synchronized void awaitUpdate(final int lastVersion, final long timeoutMs) throws InterruptedException {
-        long currentTimeMs = time.milliseconds();
-        long deadlineMs = currentTimeMs + timeoutMs < 0 ? Long.MAX_VALUE : currentTimeMs + timeoutMs;
-        time.waitObject(this, () -> {
+    public synchronized void awaitUpdate(final int lastVersion, final Timer timer) throws InterruptedException {
+        while (true) {
             // Throw fatal exceptions, if there are any. Recoverable topic errors will be handled by the caller.
             maybeThrowFatalException();
-            return updateVersion() > lastVersion || isClosed();
-        }, deadlineMs);
+            if (updateVersion() > lastVersion || isClosed())
+                break;
+
+            timer.update();
+            if (timer.isExpired())
+                throw new TimeoutException("Failed to update metadata after " + timer.timeoutMs() + " ms.");
+
+            wait(timer.remainingMs());
+        }
 
         if (isClosed())
             throw new KafkaException("Requested metadata update after close");
