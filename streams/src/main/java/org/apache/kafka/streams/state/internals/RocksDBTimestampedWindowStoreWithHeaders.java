@@ -16,12 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.query.Position;
-import org.apache.kafka.streams.query.PositionBound;
-import org.apache.kafka.streams.query.Query;
-import org.apache.kafka.streams.query.QueryConfig;
-import org.apache.kafka.streams.query.QueryResult;
-import org.apache.kafka.streams.query.WindowKeyQuery;
 import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 
@@ -52,35 +46,5 @@ class RocksDBTimestampedWindowStoreWithHeaders extends RocksDBWindowStore implem
                                              final boolean retainDuplicates,
                                              final long windowSize) {
         super(bytesStore, retainDuplicates, windowSize);
-    }
-
-    @Override
-    public <R> QueryResult<R> query(final Query<R> query,
-                                    final PositionBound positionBound,
-                                    final QueryConfig config) {
-        // KIP-1356 (window key query only): the headers-aware TimestampedWindowKeyWithHeadersQuery
-        // forwards a raw WindowKeyQuery to this native store, so enable WindowKeyQuery via the inherited
-        // RocksDBWindowStore handling (StoreQueryUtils). Every other query type (e.g. WindowRangeQuery)
-        // stays UNKNOWN_QUERY_TYPE here, unchanged from before; those are enabled by their own KIP-1356
-        // follow-ups.
-        if (query instanceof WindowKeyQuery) {
-            return super.query(query, positionBound, config);
-        }
-
-        final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
-        final QueryResult<R> result;
-        final Position position = getPosition();
-
-        synchronized (position) {
-            result = QueryResult.forUnknownQueryType(query, this);
-
-            if (config.isCollectExecutionInfo()) {
-                result.addExecutionInfo(
-                    "Handled in " + this.getClass() + " in " + (System.nanoTime() - start) + "ns"
-                );
-            }
-            result.setPosition(position.copy());
-        }
-        return result;
     }
 }
