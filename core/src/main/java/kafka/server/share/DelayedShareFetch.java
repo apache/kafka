@@ -768,6 +768,12 @@ public class DelayedShareFetch extends DelayedOperation {
                     "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
                 sharePartitions.keySet());
             releasePartitionLocks(topicPartitionData.keySet());
+            // Clear the per-request state so that a subsequent tryComplete()/onComplete() re-acquires the
+            // partitions afresh. In the pending-async path topicPartitionData is partitionsAcquired, so
+            // leaving it populated would make onComplete() assume the (already released) locks are still
+            // held and process/release them again.
+            partitionsAcquired.clear();
+            localPartitionsAlreadyFetched.clear();
             return false;
         }
     }
