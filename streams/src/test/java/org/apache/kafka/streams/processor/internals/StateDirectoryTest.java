@@ -394,6 +394,38 @@ public class StateDirectoryTest {
     }
 
     @Test
+    public void shouldNotCleanupTaskDirectoryThatRecentlyCommittedOffsets() {
+        // Reproduces the KIP-1035 regression with StateStore-managed changelog
+        // offsets, the per-commit .checkpoint file (a direct child of the task directory) is no
+        // longer written, so the task directory's filesystem mtime is not refreshed during normal
+        // processing - RocksDB writes land in subdirectories and do not bump the parent's mtime.
+        // The directory can therefore look arbitrarily stale even while the task is actively
+        // committing. When the owning thread dies and releases the lock, the cleanup thread must
+        // not treat such a directory as obsolete and delete the still-valid local state (which
+        // would force a from-scratch restore).
+        final TaskId task = new TaskId(1, 2);
+        final File dir = directory.getOrCreateDirectoryForTask(task);
+        assertTrue(new File(dir, "store").mkdir());
+
+        final int cleanupDelayMs = 60000;
+
+        // Simulate a stale directory mtime: a lot of time has elapsed since the directory was
+        // created (its file mtime was last set at creation time).
+        time.sleep(cleanupDelayMs * 10L);
+
+        // The task commits its changelog offsets "now" - well within the cleanup delay.
+        directory.updateTaskOffsets(task, Collections.singletonMap(new TopicPartition("changelog", 2), 100L));
+
+        // A short time later - still within the cleanup delay of the last commit - the owning
+        // thread dies (lock released) and the cleanup thread runs.
+        time.sleep(cleanupDelayMs / 2);
+        directory.cleanRemovedTasks(cleanupDelayMs);
+
+        assertTrue(dir.exists(), "state directory for a task that committed within the cleanup delay must not be deleted");
+        assertEquals(1, directory.listAllTaskDirectories().size());
+    }
+
+    @Test
     public void shouldNotRemoveNonTaskDirectoriesAndFiles() {
         final File otherDir = TestUtils.tempDirectory(stateDir.toPath(), "foo");
         directory.cleanRemovedTasks(0);

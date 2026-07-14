@@ -128,6 +128,11 @@ public class StateDirectory implements AutoCloseable {
     private final StreamsConfig config;
     private final Set<TaskId> tasksInLocalState = new ConcurrentSkipListSet<>();
     private final Map<TaskId, Long> taskOffsetSums = new ConcurrentHashMap<>();
+    // Wall-clock time of the last committed changelog offsets per task. Used by the cleanup thread
+    // to decide directory obsolescence: with KIP-1035 (StateStore-managed changelog offsets) the
+    // per-commit .checkpoint file is no longer written, so the task directory's filesystem mtime is
+    // not refreshed during normal processing and cannot be relied upon to reflect recent activity.
+    private final Map<TaskId, Long> taskLastCommitMs = new ConcurrentHashMap<>();
 
     /**
      * Ensures that the state base directory as well as the application's sub-directory are created.
@@ -317,11 +322,13 @@ public class StateDirectory implements AutoCloseable {
     public void updateTaskOffsets(final TaskId taskId, final Map<TopicPartition, Long> changelogOffsets) {
         if (!changelogOffsets.isEmpty()) {
             taskOffsetSums.put(taskId, sumOfChangelogOffsets(taskId, changelogOffsets));
+            taskLastCommitMs.put(taskId, time.milliseconds());
         }
     }
 
     public void removeTaskOffsets(final TaskId taskId) {
         taskOffsetSums.remove(taskId);
+        taskLastCommitMs.remove(taskId);
     }
 
     private long sumOfChangelogOffsets(final TaskId taskId, final Map<TopicPartition, Long> changelogOffsets) {
@@ -547,6 +554,7 @@ public class StateDirectory implements AutoCloseable {
         if (hasPersistentStores) {
             unlockStartupStores();
             taskOffsetSums.clear();
+            taskLastCommitMs.clear();
             try {
                 stateDirLock.release();
                 stateDirLockChannel.close();
@@ -656,7 +664,15 @@ public class StateDirectory implements AutoCloseable {
                 try {
                     if (lock(id)) {
                         final long now = time.milliseconds();
-                        final long lastModifiedMs = taskDir.file().lastModified();
+                        // Prefer the last-commit time when known: under KIP-1035 the directory's
+                        // filesystem mtime is no longer refreshed on commit, so a directory can look
+                        // stale while its task is actively committing. Fall back to the file mtime for
+                        // orphan directories this instance has no in-memory record of (e.g. left over
+                        // from a previous run or a task that migrated away).
+                        final Long lastCommitMs = taskLastCommitMs.get(id);
+                        final long lastModifiedMs = lastCommitMs == null
+                            ? taskDir.file().lastModified()
+                            : Math.max(taskDir.file().lastModified(), lastCommitMs);
                         if (now - cleanupDelayMs > lastModifiedMs) {
                             removeTaskOffsets(id);
                             log.info("{} Deleting obsolete state directory {} for task {} as {}ms has elapsed (cleanup delay is {}ms).",
@@ -793,6 +809,7 @@ public class StateDirectory implements AutoCloseable {
                 + "since Streams is not running any more these will be ignored to complete the cleanup");
         }
         taskOffsetSums.clear();
+        taskLastCommitMs.clear();
         final AtomicReference<Exception> firstException = new AtomicReference<>();
         for (final TaskDirectory taskDir : listAllTaskDirectories()) {
             final String dirName = taskDir.file().getName();
