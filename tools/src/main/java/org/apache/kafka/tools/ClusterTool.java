@@ -20,7 +20,7 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DescribeClusterOptions;
 import org.apache.kafka.clients.admin.DescribeFeaturesOptions;
-import org.apache.kafka.clients.admin.internals.InternalDescribeFeaturesResult;
+import org.apache.kafka.clients.admin.DescribeFeaturesResult;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.utils.Utils;
@@ -225,9 +225,9 @@ public class ClusterTool {
 
     static void apiVersionsCommand(PrintStream stream, Admin adminClient) throws Exception {
         Collection<Node> nodes = adminClient.describeCluster().nodes().get();
-        Map<Node, InternalDescribeFeaturesResult> nodeApiVersions = new TreeMap<>(Comparator.comparingInt(Node::id));
+        Map<Node, DescribeFeaturesResult.Internal> nodeApiVersions = new TreeMap<>(Comparator.comparingInt(Node::id));
         nodes.forEach(node -> {
-            InternalDescribeFeaturesResult result = (InternalDescribeFeaturesResult) adminClient.describeFeatures(
+            DescribeFeaturesResult.Internal result = (DescribeFeaturesResult.Internal) adminClient.describeFeatures(
                     new DescribeFeaturesOptions().nodeId(node.id()));
             nodeApiVersions.put(node, result);
         });

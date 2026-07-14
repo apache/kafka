@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.clients.admin.internals.InternalDescribeFeaturesResult;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
@@ -44,12 +43,12 @@ public class DescribeFeaturesTest {
     @ClusterTest(types = {Type.KRAFT})
     public void testApiVersions(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
         try (Admin admin = clusterInstance.admin()) {
-            var versions = ((InternalDescribeFeaturesResult) admin.describeFeatures()).nodeApiVersions().get();
+            var versions = ((DescribeFeaturesResult.Internal) admin.describeFeatures()).nodeApiVersions().get();
             versions.allSupportedApiVersions().forEach((key, version) -> assertTrue(key.inScope(ApiMessageType.ListenerType.BROKER)));
         }
 
         try (Admin admin = clusterInstance.admin(Map.of(), true)) {
-            var versions = ((InternalDescribeFeaturesResult) admin.describeFeatures()).nodeApiVersions().get();
+            var versions = ((DescribeFeaturesResult.Internal) admin.describeFeatures()).nodeApiVersions().get();
             versions.allSupportedApiVersions().forEach((key, version) -> assertTrue(key.inScope(ApiMessageType.ListenerType.CONTROLLER)));
         }
     }
