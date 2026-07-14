@@ -513,7 +513,11 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
                 printJson(new OffsetResetStrategySet(offsetResetStrategy.type().toString()));
             }
 
-            consumer.subscribe(Set.of(this.topic));
+            // --topic accepts a comma-separated list so a single share consumer can subscribe to
+            // multiple topics with one process, keeping the group's subscription homogeneous
+            // across members (every member subscribed to the same topic set) instead of splitting
+            // topics across separate consumer processes/members with different subscriptions.
+            consumer.subscribe(Set.of(this.topic.split(",")));
             consumer.setAcknowledgementCommitCallback(this);
             while (!(maxMessages >= 0 && totalAcknowledged >= maxMessages)) {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(5000));
@@ -602,7 +606,8 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             .required(true)
             .type(String.class)
             .metavar("TOPIC")
-            .help("Consumes messages from this topic.");
+            .help("Consumes messages from this topic. Accepts a comma-separated list of topics to " +
+                "subscribe to more than one topic from a single process.");
 
         parser.addArgument("--group-id")
             .action(store())
