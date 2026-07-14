@@ -2650,6 +2650,144 @@ public class DelayedShareFetchTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testAsyncReadMinBytesNotSatisfiedClearsAcquiredStateForRetry() throws Exception {
+        String groupId = "grp";
+        Uuid topicId = Uuid.randomUuid();
+        LogReader logReader = mock(LogReader.class);
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        PartitionMetadataProvider metadataProvider = mock(PartitionMetadataProvider.class);
+        TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
+
+        SharePartition sp0 = mock(SharePartition.class);
+        LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
+        sharePartitions.put(tp0, sp0);
+
+        // Set a high minBytes so that the async read result does not satisfy minBytes and the request
+        // is returned to the purgatory.
+        FetchParams fetchParams = new FetchParams(FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS, 5000, 10000,
+            FetchIsolation.HIGH_WATERMARK, Optional.empty());
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future = new CompletableFuture<>();
+        ShareFetch shareFetch = new ShareFetch(fetchParams, groupId, Uuid.randomUuid().toString(),
+            future, List.of(tp0), BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, BROKER_TOPIC_STATS);
+
+        CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> asyncReadFuture = mock(CompletableFuture.class);
+        when(logReader.readAsync(any(), any(), any(), any(), anyBoolean())).thenReturn(asyncReadFuture);
+        // isDone returns false for the first tryComplete (store pending fetch) and true for the second
+        // tryComplete (process the completed result).
+        when(asyncReadFuture.isDone()).thenReturn(false).thenReturn(true);
+        when(asyncReadFuture.get()).thenReturn(buildLogReadResultMap(List.of(tp0)));
+
+        when(sp0.maybeAcquireFetchLock(any())).thenReturn(true);
+        when(sp0.canAcquireRecords()).thenReturn(true);
+        when(sp0.nextFetchOffset()).thenReturn(0L);
+        when(sp0.fetchOffsetMetadata(anyLong()))
+            .thenReturn(Optional.empty())
+            .thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
+        when(metadataProvider.endOffsetMetadata(any(), any())).thenReturn(new LogOffsetMetadata(1, 1, 1));
+
+        PartitionMaxBytesStrategy partitionMaxBytesStrategy = mockPartitionMaxBytes(Set.of(tp0));
+
+        Uuid fetchId = Uuid.randomUuid();
+        DelayedShareFetch delayedShareFetch = DelayedShareFetchBuilder.builder()
+            .withShareFetchData(shareFetch)
+            .withLogReader(logReader)
+            .withMetadataProvider(metadataProvider)
+            .withPartitionMaxBytesStrategy(partitionMaxBytesStrategy)
+            .withSharePartitions(sharePartitions)
+            .withReplicaManager(replicaManager)
+            .withFetchId(fetchId)
+            .build();
+
+        // First tryComplete: async read not done, so a pending fetch is created and tp0 lock is held
+        // (partitionsAcquired is populated internally).
+        assertNull(delayedShareFetch.pendingFetch());
+        assertFalse(delayedShareFetch.tryComplete());
+        assertNotNull(delayedShareFetch.pendingFetch());
+        Mockito.verify(sp0, times(1)).maybeAcquireFetchLock(fetchId);
+
+        // Second tryComplete (purgatory re-check): async read is done but minBytes is not satisfied, so
+        // the lock is released, the pending fetch is cleared and the request returns to the purgatory.
+        assertFalse(delayedShareFetch.tryComplete());
+        assertNull(delayedShareFetch.pendingFetch());
+        Mockito.verify(sp0, times(1)).releaseFetchLock(fetchId);
+
+        // On next re-try, tryComplete() must not assume the released locks are still held. Since the acquired
+        // state was cleared, it re-acquires the partitions afresh (a second maybeAcquireFetchLock).
+        delayedShareFetch.tryComplete();
+        Mockito.verify(sp0, times(2)).maybeAcquireFetchLock(fetchId);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testAsyncReadMinBytesNotSatisfiedClearsAcquiredStateForOnComplete() throws Exception {
+        String groupId = "grp";
+        Uuid topicId = Uuid.randomUuid();
+        LogReader logReader = mock(LogReader.class);
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        PartitionMetadataProvider metadataProvider = mock(PartitionMetadataProvider.class);
+        TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
+
+        SharePartition sp0 = mock(SharePartition.class);
+        LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
+        sharePartitions.put(tp0, sp0);
+
+        // Set a high minBytes so that the async read result does not satisfy minBytes and the request
+        // is returned to the purgatory.
+        FetchParams fetchParams = new FetchParams(FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS, 5000, 10000,
+            FetchIsolation.HIGH_WATERMARK, Optional.empty());
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future = new CompletableFuture<>();
+        ShareFetch shareFetch = new ShareFetch(fetchParams, groupId, Uuid.randomUuid().toString(),
+            future, List.of(tp0), BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, BROKER_TOPIC_STATS);
+
+        CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> asyncReadFuture = mock(CompletableFuture.class);
+        when(logReader.readAsync(any(), any(), any(), any(), anyBoolean())).thenReturn(asyncReadFuture);
+        // isDone returns false for the first tryComplete (store pending fetch) and true for the second
+        // tryComplete (process the completed result).
+        when(asyncReadFuture.isDone()).thenReturn(false).thenReturn(true);
+        when(asyncReadFuture.get()).thenReturn(buildLogReadResultMap(List.of(tp0)));
+
+        when(sp0.maybeAcquireFetchLock(any())).thenReturn(true);
+        when(sp0.canAcquireRecords()).thenReturn(true);
+        when(sp0.nextFetchOffset()).thenReturn(0L);
+        when(sp0.fetchOffsetMetadata(anyLong()))
+            .thenReturn(Optional.empty())
+            .thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
+        when(metadataProvider.endOffsetMetadata(any(), any())).thenReturn(new LogOffsetMetadata(1, 1, 1));
+
+        PartitionMaxBytesStrategy partitionMaxBytesStrategy = mockPartitionMaxBytes(Set.of(tp0));
+
+        Uuid fetchId = Uuid.randomUuid();
+        DelayedShareFetch delayedShareFetch = DelayedShareFetchBuilder.builder()
+            .withShareFetchData(shareFetch)
+            .withLogReader(logReader)
+            .withMetadataProvider(metadataProvider)
+            .withPartitionMaxBytesStrategy(partitionMaxBytesStrategy)
+            .withSharePartitions(sharePartitions)
+            .withReplicaManager(replicaManager)
+            .withFetchId(fetchId)
+            .build();
+
+        // First tryComplete: async read not done, so a pending fetch is created and tp0 lock is held
+        // (partitionsAcquired is populated internally).
+        assertNull(delayedShareFetch.pendingFetch());
+        assertFalse(delayedShareFetch.tryComplete());
+        assertNotNull(delayedShareFetch.pendingFetch());
+        Mockito.verify(sp0, times(1)).maybeAcquireFetchLock(fetchId);
+
+        // Second tryComplete (purgatory re-check): async read is done but minBytes is not satisfied, so
+        // the lock is released, the pending fetch is cleared and the request returns to the purgatory.
+        assertFalse(delayedShareFetch.tryComplete());
+        assertNull(delayedShareFetch.pendingFetch());
+        Mockito.verify(sp0, times(1)).releaseFetchLock(fetchId);
+
+        // On timeout, onComplete() must not assume the released locks are still held. Since the acquired
+        // state was cleared, it re-acquires the partitions afresh (a second maybeAcquireFetchLock).
+        delayedShareFetch.forceComplete();
+        Mockito.verify(sp0, times(2)).maybeAcquireFetchLock(fetchId);
+    }
+
     static void mockTopicIdPartitionToReturnDataEqualToMinBytes(ReplicaManager replicaManager, TopicIdPartition topicIdPartition, int minBytes) {
         LogOffsetMetadata hwmOffsetMetadata = new LogOffsetMetadata(1, 1, minBytes);
         LogOffsetSnapshot endOffsetSnapshot = new LogOffsetSnapshot(1, mock(LogOffsetMetadata.class),
