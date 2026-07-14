@@ -66,7 +66,7 @@ public class RocksDBTimestampedWindowStoreWithHeadersTest {
                 new StreamsConfig(props)
         );
 
-        final SegmentedBytesStore segmentedBytesStore = new RocksDBSegmentedBytesStore(
+        final RocksDBSegmentedBytesStore segmentedBytesStore = new RocksDBSegmentedBytesStore(
                 STORE_NAME,
                 "test-metrics-scope",
                 RETENTION_PERIOD,

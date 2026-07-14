@@ -37,7 +37,7 @@ import org.apache.kafka.streams.state.HeadersBytesStore;
  */
 class RocksDBSessionStoreWithHeaders extends RocksDBSessionStore implements HeadersBytesStore {
 
-    RocksDBSessionStoreWithHeaders(final SegmentedBytesStore bytesStore) {
+    RocksDBSessionStoreWithHeaders(final AbstractRocksDBSegmentedBytesStore<?> bytesStore) {
         super(bytesStore);
     }
 
