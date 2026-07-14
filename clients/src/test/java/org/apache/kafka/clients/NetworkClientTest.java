@@ -20,6 +20,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.RebootstrapRequiredException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -76,6 +77,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.protocol.ApiKeys.PRODUCE;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -1756,5 +1758,69 @@ public class NetworkClientTest {
         // Subsequent polls should not fail even if already bootstrapped
         client.poll(1000, time.milliseconds());
         assertTrue(metadataUpdater.isBootstrapped());
+    }
+
+    @Test
+    public void testEnsureBootstrappedZeroTimeoutAllowsOneAttemptOnSuccess() throws InterruptedException {
+        // bootstrap.resolve.timeout.ms=0 must still allow one resolution attempt. If the
+        // attempt succeeds by the following poll, the client should become bootstrapped.
+        Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
+        NetworkClient.BootstrapConfiguration config = NetworkClient.BootstrapConfiguration.enabled(
+                BOOTSTRAP_ADDRESSES,
+                ClientDnsLookup.USE_ALL_DNS_IPS,
+                0,
+                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS);
+        NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
+                reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
+                time, false, new ApiVersions(), new LogContext(),
+                MetadataRecoveryStrategy.NONE, config, false);
+
+        // First poll triggers the resolution (timer isn't yet initialised, so the timeout check is a no-op).
+        client.poll(1000, time.milliseconds());
+        assertDoesNotThrow(metadata::maybeThrowAnyException,
+                "Bootstrap should not fail on the first poll before resolution has had a chance to run");
+
+        // Wait for the async DNS resolution to complete and poll again to process the result.
+        MetadataUpdater metadataUpdater = TestUtils.fieldValue(client, NetworkClient.class, "metadataUpdater");
+        TestUtils.waitForCondition(() -> {
+            client.poll(100, time.milliseconds());
+            return metadataUpdater.isBootstrapped();
+        }, "Bootstrap should complete on the next poll after resolution succeeds");
+        assertDoesNotThrow(metadata::maybeThrowAnyException);
+    }
+
+    @Test
+    public void testEnsureBootstrappedZeroTimeoutFailsOnNextPollWhenResolutionFails() throws InterruptedException {
+        // bootstrap.resolve.timeout.ms=0 must still allow one resolution attempt. If the
+        // attempt fails, the next poll must record the BootstrapResolutionException.
+        Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
+        List<String> invalidAddresses = List.of("unresolvable.invalid:9092");
+        NetworkClient.BootstrapConfiguration config = NetworkClient.BootstrapConfiguration.enabled(
+                invalidAddresses,
+                ClientDnsLookup.USE_ALL_DNS_IPS,
+                0,
+                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS);
+        NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
+                reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
+                time, false, new ApiVersions(), new LogContext(),
+                MetadataRecoveryStrategy.NONE, config, false);
+
+        // First poll triggers the resolution (timeout check is a no-op with no timer yet).
+        client.poll(1000, time.milliseconds());
+        assertDoesNotThrow(metadata::maybeThrowAnyException,
+                "Bootstrap should not fail before the resolution attempt has had a chance to run");
+
+        // Once the failing resolution completes, the next poll must surface the timeout on metadata.
+        TestUtils.waitForCondition(() -> {
+            client.poll(100, time.milliseconds());
+            try {
+                metadata.maybeThrowAnyException();
+                return false;
+            } catch (BootstrapResolutionException e) {
+                return true;
+            }
+        }, "BootstrapResolutionException should be recorded on metadata after the first attempt fails");
     }
 }
