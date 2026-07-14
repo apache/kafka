@@ -115,11 +115,8 @@ public class SubscriptionState {
     /* Default offset reset strategy */
     private final AutoOffsetResetStrategy defaultResetStrategy;
 
-    /* User-provided listener to be invoked when assignment changes */
-    private final AtomicReference<RebalanceListener> rebalanceListener = new AtomicReference<>();
-
-    /** The consumer that last registered a RebalanceListener via {@link Consumer#setRebalanceListener(RebalanceListener)}. */
-    private final AtomicReference<Consumer<?, ?>> rebalanceConsumer = new AtomicReference<>();
+    /* Current listener context to trigger rebalance listener callbacks. */
+    private final AtomicReference<ListenerContext> listenerContext = new AtomicReference<>();
 
     private int assignmentId = 0;
 
@@ -201,7 +198,7 @@ public class SubscriptionState {
      *            Use {@link #subscribe(Set)} and {@link #setRebalanceListener} instead.
      */
     public synchronized boolean subscribe(Set<String> topics, Optional<ConsumerRebalanceListener> listener) {
-        listener.ifPresent(rebalanceListener::set);
+        listener.ifPresent(l -> this.listenerContext.set(new ListenerContext(l)));
         setSubscriptionType(SubscriptionType.AUTO_TOPICS);
         return changeSubscription(topics);
     }
@@ -211,7 +208,7 @@ public class SubscriptionState {
      *            Use {@link #subscribe(Pattern)} and {@link #setRebalanceListener} instead.
      */
     public synchronized void subscribe(Pattern pattern, Optional<ConsumerRebalanceListener> listener) {
-        listener.ifPresent(rebalanceListener::set);
+        listener.ifPresent(l -> this.listenerContext.set(new ListenerContext(l)));
         setSubscriptionType(SubscriptionType.AUTO_PATTERN);
         this.subscribedPattern = pattern;
     }
@@ -221,7 +218,7 @@ public class SubscriptionState {
      *            Use {@link #subscribe(SubscriptionPattern)} and {@link #setRebalanceListener} instead.
      */
     public synchronized void subscribe(SubscriptionPattern pattern, Optional<ConsumerRebalanceListener> listener) {
-        listener.ifPresent(rebalanceListener::set);
+        listener.ifPresent(l -> this.listenerContext.set(new ListenerContext(l)));
         setSubscriptionType(SubscriptionType.AUTO_PATTERN_RE2J);
         this.subscribedRe2JPattern = pattern;
     }
@@ -250,7 +247,7 @@ public class SubscriptionState {
     }
 
     public synchronized boolean subscribeToShareGroup(Set<String> topics) {
-        this.rebalanceListener.set(null);
+        this.listenerContext.set(null);
         setSubscriptionType(SubscriptionType.AUTO_TOPICS_SHARE);
         return changeSubscription(topics);
     }
@@ -369,7 +366,7 @@ public class SubscriptionState {
      */
     public synchronized void setRebalanceListener(RebalanceListener listener) {
         Objects.requireNonNull(listener, "Listener must not be null when setting a rebalance listener");
-        this.rebalanceListener.set(listener);
+        this.listenerContext.set(new ListenerContext(listener));
     }
 
     /**
@@ -380,11 +377,9 @@ public class SubscriptionState {
     public synchronized void setRebalanceListener(RebalanceListener listener, Consumer<?, ?> consumer) {
         if (listener != null) {
             Objects.requireNonNull(consumer, "Consumer must not be null when a listener is provided");
-            this.rebalanceListener.set(listener);
-            this.rebalanceConsumer.set(consumer);
+            this.listenerContext.set(new ListenerContext(listener, consumer));
         } else {
-            this.rebalanceListener.set(null);
-            this.rebalanceConsumer.set(null);
+            this.listenerContext.set(null);
         }
     }
 
@@ -407,8 +402,7 @@ public class SubscriptionState {
         this.assignedTopicIds = Collections.emptySet();
         this.subscribedPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
-        this.rebalanceListener.set(null);
-        this.rebalanceConsumer.set(null);
+        this.listenerContext.set(null);
         this.assignmentId++;
     }
 
@@ -1064,7 +1058,11 @@ public class SubscriptionState {
 
     /** @return true if a {@link RebalanceListener} has been registered with this subscription. */
     public synchronized boolean hasRebalanceListener() {
-        return rebalanceListener.get() != null;
+        return listenerContext.get().rebalanceListener != null;
+    }
+
+    private synchronized ListenerContext listenerContext() {
+        return listenerContext.get();
     }
 
     /** Invoke {@link RebalanceListener#onPartitionsAssigned(Collection, RebalanceConsumer)} on the given partitions.*/
@@ -1085,17 +1083,14 @@ public class SubscriptionState {
     private void dispatch(
             Collection<TopicPartition> partitions,
             TriConsumer<RebalanceListener, Collection<TopicPartition>, RebalanceConsumer> method) {
-        RebalanceListener rl;
-        Consumer<?, ?> rc;
-        synchronized (this) {
-            rl = rebalanceListener.get();
-            rc = rebalanceConsumer.get();
-        }
-        if (rl == null)
+        ListenerContext lc = listenerContext();
+
+        if (lc.rebalanceListener == null)
             return;
-        if (rc == null)
+        if (lc.consumer == null)
             throw new IllegalStateException("Rebalance consumer has not been initialized");
-        invokeRebalanceListener(partitions, rc, (parts, view) -> method.accept(rl, parts, view));
+        invokeRebalanceListener(
+                partitions, lc.consumer, (parts, view) -> method.accept(lc.rebalanceListener, parts, view));
     }
 
 
@@ -1111,6 +1106,23 @@ public class SubscriptionState {
     @FunctionalInterface
     private interface TriConsumer<A, B, C> {
         void accept(A a, B b, C c);
+    }
+
+    private static class ListenerContext {
+        /** User-provided listener to be invoked when assignment changes */
+        private final RebalanceListener rebalanceListener;
+        /** The consumer that last registered a RebalanceListener via {@link Consumer#setRebalanceListener(RebalanceListener)}. */
+        private final Consumer<?, ?> consumer;
+
+        private ListenerContext(RebalanceListener listener) {
+            this.rebalanceListener = listener;
+            this.consumer = null;
+        }
+
+        private ListenerContext(RebalanceListener listener, Consumer<?, ?> consumer) {
+            this.rebalanceListener = listener;
+            this.consumer = consumer;
+        }
     }
 
     private static class TopicPartitionState {
