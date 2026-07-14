@@ -393,9 +393,6 @@ public abstract class AbstractCoordinator implements Closeable {
             // if an exception occurs in the heartbeat thread, raise it.
             throw heartbeatThread.failureCause();
         }
-        // if the heartbeat thread died for some reason, we can't send a heartbeat, thus we return Long.MAX_VALUE
-        if (heartbeatThread == null)
-            return Long.MAX_VALUE;
         return heartbeat.timeToNextHeartbeat(now);
     }
 
