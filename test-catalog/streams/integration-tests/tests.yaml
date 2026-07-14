@@ -103,9 +103,14 @@ org.apache.kafka.streams.integration.IQv2EndpointToPartitionsIntegrationTest:
 - CLASSIC
 - STREAMS
 org.apache.kafka.streams.integration.IQv2HeadersStoreIntegrationTest:
-- shouldFailWithUnknownQueryTypeAgainstNonHeadersStore
+- shouldFailWithUnknownQueryTypeForKeyQueryAgainstNonHeadersStore
+- shouldFailWithUnknownQueryTypeForRangeQueryAgainstNonHeadersStore
 - shouldHandleTimestampedKeyWithHeadersQuery
+- shouldHandleTimestampedRangeWithHeadersQuery
+- shouldNotSeeUnflushedWriteInRangeQueryWhenCachingEnabled
+- shouldReturnEmptyHeadersForTimestampedRangeWithHeadersQueryOnAdapterStore
 - shouldServeCacheHitWhenCachingEnabledAndRecordNotYetFlushed
+- shouldThrowForTimestampedRangeWithHeadersQueryOnPlainSupplier
 org.apache.kafka.streams.integration.IQv2IntegrationTest:
 - CLASSIC
 - STREAMS
@@ -492,6 +497,16 @@ org.apache.kafka.streams.integration.TimestampedWindowStoreWithHeadersTest:
 - shouldPutFetchAndDelete
 - shouldRestore
 - shouldSetChangelogTopicProperties
+org.apache.kafka.streams.integration.TopologyDescriptionNoPluginIntegrationTest:
+- shouldRunStreamsApplicationAgainstBrokerWithoutTopologyDescriptionPlugin
+org.apache.kafka.streams.integration.TopologyDescriptionPluginExpirationIntegrationTest:
+- shouldDeleteStoredTopologyDescriptionWhenGroupExpires
+- shouldExpireGroupWithoutDeleteTopologyWhenPushPermanentlyFailed
+org.apache.kafka.streams.integration.TopologyDescriptionPluginIntegrationTest:
+- shouldInvokeDeleteTopologyOnDeleteGroups
+- shouldPushTopologyDescriptionOnlyOnceForTwoMembers
+- shouldPushTopologyDescriptionToPluginAfterJoin
+- shouldStopSolicitingPushAfterPermanentPluginFailure
 org.apache.kafka.streams.integration.VersionedKeyValueStoreIntegrationTest:
 - shouldAllowCustomIQv2ForCustomStoreImplementations
 - shouldManualUpgradeFromNonVersionedNonTimestampedToVersioned

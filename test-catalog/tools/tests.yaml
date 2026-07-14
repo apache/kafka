@@ -1017,6 +1017,7 @@ org.apache.kafka.tools.streams.DescribeStreamsGroupTest:
 - testDescribeStreamsGroupWithMembersOption
 - testDescribeStreamsGroupWithStateAndVerboseOptions
 - testDescribeStreamsGroupWithStateOption
+- testDescribeStreamsGroupWithTopologyOption
 - testDescribeStreamsGroupWithVerboseOption
 - testDescribeWithUnrecognizedOption
 - testDescribeWithoutGroupOption
