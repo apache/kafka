@@ -17,7 +17,6 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
@@ -31,30 +30,17 @@ public class DescribeFeaturesResult {
 
     private final KafkaFuture<FeatureMetadata> future;
 
-    DescribeFeaturesResult(KafkaFuture<FeatureMetadata> future) {
+    /**
+     * This constructor is {@code protected} only to allow internal subclasses (e.g.
+     * {@link org.apache.kafka.clients.admin.internals.InternalDescribeFeaturesResult}) to reuse it.
+     * It is not part of the public API contract, so binary/source compatibility for subclassing
+     * outside of the Kafka clients module is not guaranteed.
+     */
+    protected DescribeFeaturesResult(KafkaFuture<FeatureMetadata> future) {
         this.future = future;
     }
 
     public KafkaFuture<FeatureMetadata> featureMetadata() {
         return future;
-    }
-
-    /**
-     * This class is NOT part of the public API. It is only intended for internal Kafka tools that
-     * additionally need access to the raw node API versions returned in the {@code ApiVersionsResponse}.
-     */
-    @InterfaceAudience.Private
-    public static class Internal extends DescribeFeaturesResult {
-
-        private final KafkaFuture<NodeApiVersions> nodeApiVersions;
-
-        public Internal(KafkaFuture<FeatureMetadata> featureMetadata, KafkaFuture<NodeApiVersions> nodeApiVersions) {
-            super(featureMetadata);
-            this.nodeApiVersions = nodeApiVersions;
-        }
-
-        public KafkaFuture<NodeApiVersions> nodeApiVersions() {
-            return nodeApiVersions;
-        }
     }
 }

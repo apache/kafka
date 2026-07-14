@@ -60,6 +60,7 @@ import org.apache.kafka.clients.admin.internals.DescribeShareGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeStreamsGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeTransactionsHandler;
 import org.apache.kafka.clients.admin.internals.FenceProducersHandler;
+import org.apache.kafka.clients.admin.internals.InternalDescribeFeaturesResult;
 import org.apache.kafka.clients.admin.internals.ListConsumerGroupOffsetsHandler;
 import org.apache.kafka.clients.admin.internals.ListOffsetsHandler;
 import org.apache.kafka.clients.admin.internals.ListShareGroupOffsetsHandler;
@@ -4606,7 +4607,7 @@ public class KafkaAdminClient extends AdminClient {
         };
 
         runnable.call(call, now);
-        return new DescribeFeaturesResult.Internal(future, nodeApiVersionsFuture);
+        return new InternalDescribeFeaturesResult(future, nodeApiVersionsFuture);
     }
 
     @Override
