@@ -21,6 +21,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,6 +35,7 @@ import static org.apache.kafka.streams.state.HeadersBytesStore.convertToHeaderFo
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
@@ -45,6 +47,7 @@ public class MappingKeyValueIteratorAdapterTest {
 
     private static final Bytes KEY = Bytes.wrap("key".getBytes());
     private static final byte[] RAW_VALUE = "value".getBytes();
+    private static final long TIMESTAMP = 42L;
     private static final Windowed<Bytes> SESSION_KEY =
         new Windowed<>(KEY, new SessionWindow(10L, 20L));
 
@@ -53,6 +56,9 @@ public class MappingKeyValueIteratorAdapterTest {
 
     @Mock
     private KeyValueIterator<Windowed<Bytes>, byte[]> sessionInner;
+
+    @Mock
+    private KeyValueIterator<Long, byte[]> windowInner;
 
     @Test
     public void plainToHeadersShouldConvertValueOnNext() {
@@ -93,6 +99,36 @@ public class MappingKeyValueIteratorAdapterTest {
         assertTrue(adapter.hasNext());
         final KeyValue<Windowed<Bytes>, byte[]> result = adapter.next();
         assertEquals(SESSION_KEY, result.key);
+        assertArrayEquals(convertToHeaderFormat(RAW_VALUE), result.value);
+    }
+
+    @Test
+    public void plainToHeadersWindowShouldConvertValueOnNext() {
+        when(windowInner.hasNext()).thenReturn(true);
+        when(windowInner.next()).thenReturn(KeyValue.pair(TIMESTAMP, RAW_VALUE));
+
+        final WindowStoreIterator<byte[]> adapter =
+            MappingKeyValueIteratorAdapter.plainToHeadersWindow(windowInner);
+
+        assertInstanceOf(WindowStoreIterator.class, adapter);
+        assertTrue(adapter.hasNext());
+        final KeyValue<Long, byte[]> result = adapter.next();
+        assertEquals(TIMESTAMP, result.key);
+        assertArrayEquals(convertFromPlainToHeaderFormat(RAW_VALUE), result.value);
+    }
+
+    @Test
+    public void timestampedToHeadersWindowShouldConvertValueOnNext() {
+        when(windowInner.hasNext()).thenReturn(true);
+        when(windowInner.next()).thenReturn(KeyValue.pair(TIMESTAMP, RAW_VALUE));
+
+        final WindowStoreIterator<byte[]> adapter =
+            MappingKeyValueIteratorAdapter.timestampedToHeadersWindow(windowInner);
+
+        assertInstanceOf(WindowStoreIterator.class, adapter);
+        assertTrue(adapter.hasNext());
+        final KeyValue<Long, byte[]> result = adapter.next();
+        assertEquals(TIMESTAMP, result.key);
         assertArrayEquals(convertToHeaderFormat(RAW_VALUE), result.value);
     }
 
