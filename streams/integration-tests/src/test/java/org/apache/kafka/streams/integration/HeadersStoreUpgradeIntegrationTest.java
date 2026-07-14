@@ -136,6 +136,7 @@ public class HeadersStoreUpgradeIntegrationTest {
     }
 
     private void assertDowngradeThrowsProcessorStateException(
+            final String downgradeTarget,
             final StoreBuilder<?> storeBuilder,
             final ProcessorSupplier<String, String, Void, Void> processorSupplier,
             final String storeName,
@@ -157,7 +158,8 @@ public class HeadersStoreUpgradeIntegrationTest {
             }
             if (!exceptionThrown) {
                 throw new AssertionError(
-                    "Expected ProcessorStateException about downgrade not being supported, but got: " + e.getMessage(), e);
+                    "Expected ProcessorStateException about downgrade " + downgradeTarget
+                        + " not being supported, but got: " + e.getMessage(), e);
             }
         } finally {
             if (kafkaStreams != null) {
@@ -166,7 +168,8 @@ public class HeadersStoreUpgradeIntegrationTest {
         }
         if (!exceptionThrown) {
             throw new AssertionError(
-                "Expected ProcessorStateException to be thrown when attempting to downgrade from headers-aware store");
+                "Expected ProcessorStateException to be thrown when attempting to downgrade "
+                    + downgradeTarget + " from headers-aware store");
         }
     }
 
@@ -1131,6 +1134,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         kafkaStreams = null;
 
         assertDowngradeThrowsProcessorStateException(
+            "to plain key-value store",
             Stores.keyValueStoreBuilder(
                 Stores.persistentKeyValueStore(STORE_NAME),
                 Serdes.String(),
@@ -1166,6 +1170,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         kafkaStreams = null;
 
         assertDowngradeThrowsProcessorStateException(
+            "to timestamped key-value store",
             Stores.timestampedKeyValueStoreBuilder(
                 Stores.persistentTimestampedKeyValueStore(STORE_NAME),
                 Serdes.String(),
@@ -1206,6 +1211,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         kafkaStreams = null;
 
         assertDowngradeThrowsProcessorStateException(
+            "to plain window store",
             Stores.windowStoreBuilder(
                 Stores.persistentWindowStore(WINDOW_STORE_NAME,
                     Duration.ofMillis(RETENTION_MS),
@@ -1223,6 +1229,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         kafkaStreams = null;
 
         assertDowngradeThrowsProcessorStateException(
+            "to timestamped window store",
             Stores.timestampedWindowStoreBuilder(
                 Stores.persistentTimestampedWindowStore(WINDOW_STORE_NAME,
                     Duration.ofMillis(RETENTION_MS),
