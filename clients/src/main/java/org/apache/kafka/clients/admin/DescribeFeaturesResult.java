@@ -42,8 +42,6 @@ public class DescribeFeaturesResult {
     /**
      * This class is NOT part of the public API. It is only intended for internal Kafka tools that
      * additionally need access to the raw node API versions returned in the {@code ApiVersionsResponse}.
-     *
-     * @hidden this type is intentionally excluded from the generated javadoc.
      */
     @InterfaceAudience.Private
     public static class Internal extends DescribeFeaturesResult {
