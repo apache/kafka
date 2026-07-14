@@ -70,11 +70,11 @@ import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.AfterEach;
@@ -121,6 +121,8 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -1608,6 +1610,22 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
+    public void testRecordLatencyOnFetchResponseLevelError() {
+        // Latency is recorded on response-level errors (ex: SHARE_SESSION_NOT_FOUND) since the round-trip completed.
+        buildRequestManager();
+
+        assignFromSubscribed(Set.of(tp0));
+        sendFetchAndVerifyResponse(records, acquiredRecords, Errors.NONE);
+        verify(metricsManager, times(1)).recordLatency(anyString(), anyLong());
+
+        assertEquals(1, sendFetches());
+        client.prepareResponse(fetchResponseWithTopLevelError(tip0, Errors.SHARE_SESSION_NOT_FOUND));
+        networkClientDelegate.poll(time.timer(0));
+
+        verify(metricsManager, times(2)).recordLatency(anyString(), anyLong());
+    }
+
+    @Test
     public void testInvalidDefaultRecordBatch() {
         buildRequestManager();
 
@@ -3013,7 +3031,7 @@ public class ShareConsumeRequestManagerTest {
         client = new MockClient(time, metadata);
         metrics = new Metrics(metricConfig, time);
         shareFetchMetricsRegistry = new ShareFetchMetricsRegistry(metricConfig.tags().keySet(), "consumer-share" + groupId);
-        metricsManager = new ShareFetchMetricsManager(metrics, shareFetchMetricsRegistry);
+        metricsManager = spy(new ShareFetchMetricsManager(metrics, shareFetchMetricsRegistry));
 
         Properties properties = new Properties();
         properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);

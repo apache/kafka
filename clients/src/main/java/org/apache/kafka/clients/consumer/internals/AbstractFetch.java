@@ -155,6 +155,8 @@ public abstract class AbstractFetch implements Closeable {
             final FetchResponse response = (FetchResponse) resp.responseBody();
             final FetchSessionHandler handler = sessionHandler(fetchTarget.id());
 
+            metricsManager.recordLatency(resp.destination(), resp.requestLatencyMs());
+
             if (handler == null) {
                 log.error("Unable to find FetchSessionHandler for node {}. Ignoring fetch response.",
                         fetchTarget.id());
@@ -249,8 +251,6 @@ public abstract class AbstractFetch implements Closeable {
                     }
                 );
             }
-
-            metricsManager.recordLatency(resp.destination(), resp.requestLatencyMs());
         } finally {
             removePendingFetchRequest(fetchTarget, data.metadata().sessionId());
         }

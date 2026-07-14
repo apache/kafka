@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.header.Headers;
@@ -47,6 +48,7 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.test.KeyValueIteratorStub;
 
@@ -1038,6 +1040,33 @@ public class MeteredSessionStoreWithHeadersTest {
 
         final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator =
             store.backwardFindSessions(KEY, KEY, 0, 100);
+
+        assertTrue(iterator.hasNext());
+        assertEquals(KEY, iterator.peekNextKey().key());
+        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> result = iterator.next();
+        assertEquals(KEY, result.key.key());
+        assertEquals(AGG_WITH_HEADERS, result.value);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        verify(keySerde.deserializer()).deserialize(any(), eq(HEADERS), eq(KEY.getBytes()));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldUseHeadersFromValueToDeserializeKeyInReadOnlyFindSessions() {
+        setUp();
+        final Serde<String> keySerde = mock(Serde.class);
+        final MeteredSessionStoreWithHeaders<String, String> store = createStoreWithMockSerdes(keySerde);
+
+        final ReadOnlySessionStore<Bytes, byte[]> readOnlyInner = mock(ReadOnlySessionStore.class);
+        when(innerStore.readOnly(IsolationLevel.READ_COMMITTED)).thenReturn(readOnlyInner);
+        when(readOnlyInner.findSessions(any(Bytes.class), eq(0L), eq(100L)))
+            .thenReturn(new KeyValueIteratorStub<>(
+                List.of(KeyValue.pair(WINDOWED_KEY_BYTES, SERIALIZED_VALUE)).iterator()));
+
+        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator =
+            store.readOnly(IsolationLevel.READ_COMMITTED).findSessions(KEY, 0L, 100L);
 
         assertTrue(iterator.hasNext());
         assertEquals(KEY, iterator.peekNextKey().key());

@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.internals.Exit;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -75,6 +76,12 @@ public class DescribeStreamsGroupTest {
     public static void setup() throws Exception {
         // start the cluster and create the input topic
         final Properties props = new Properties();
+        // Configure the topology description plugin explicitly rather than relying on
+        // EmbeddedKafkaCluster's default: testDescribeStreamsGroupWithTopologyOption
+        // depends on it, and without a plugin the --topology option would time out
+        // with nothing stored on the broker.
+        props.put(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
+            "org.apache.kafka.server.streams.InMemoryTopologyDescriptionPlugin");
         cluster = new EmbeddedKafkaCluster(1, props);
         cluster.start();
         cluster.createTopic(INPUT_TOPIC, 2, 1);
@@ -245,6 +252,25 @@ public class DescribeStreamsGroupTest {
             streams2.close();
             streams2.cleanUp();
         }
+    }
+
+    @Test
+    public void testDescribeStreamsGroupWithTopologyOption() throws Exception {
+        final List<String> args = List.of("--bootstrap-server", bootstrapServers, "--describe", "--topology", "--group", APP_ID);
+        final AtomicReference<String> out = new AtomicReference<>("");
+        // The streams client pushes the topology description when the broker solicits it on
+        // a heartbeat, so retry until the broker-side plugin has it stored. Until then the
+        // command reports that no description is stored and exits non-zero, so the exit code
+        // is not asserted inside the retry loop. The solicit -> push -> store round trip can
+        // take a couple of heartbeat intervals (5s each on this cluster), so allow a timeout
+        // well above that.
+        TestUtils.waitForCondition(() -> {
+            String output = ToolsTestUtils.grabConsoleOutput(() -> StreamsGroupCommand.execute(args.toArray(new String[0])));
+            out.set(output);
+            return output.contains("Topologies:") && output.contains(INPUT_TOPIC);
+        }, 60_000L, () -> String.format("Expected the topology description with source topic %s, but found:%n%s", INPUT_TOPIC, out.get()));
+
+        assertTrue(out.get().contains("Sub-topology: 0"), "Expected a sub-topology in the output, but found:\n" + out.get());
     }
 
     @Test

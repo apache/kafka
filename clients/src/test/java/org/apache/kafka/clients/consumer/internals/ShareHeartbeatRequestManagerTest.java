@@ -461,9 +461,17 @@ public class ShareHeartbeatRequestManagerTest
     protected ClientResponse createHeartbeatResponse(
             final NetworkClientDelegate.UnsentRequest request,
             final Errors error) {
+        return createHeartbeatResponse(request, error, DEFAULT_HEARTBEAT_INTERVAL_MS);
+    }
+
+    @Override
+    protected ClientResponse createHeartbeatResponse(
+            final NetworkClientDelegate.UnsentRequest request,
+            final Errors error,
+            final int heartbeatIntervalMs) {
         ShareGroupHeartbeatResponseData data = new ShareGroupHeartbeatResponseData()
                 .setErrorCode(error.code())
-                .setHeartbeatIntervalMs(DEFAULT_HEARTBEAT_INTERVAL_MS)
+                .setHeartbeatIntervalMs(heartbeatIntervalMs)
                 .setMemberId(DEFAULT_MEMBER_ID)
                 .setMemberEpoch(DEFAULT_MEMBER_EPOCH);
         if (error != Errors.NONE) {
