@@ -65,8 +65,7 @@ public class CommonClientConfigs {
     public static final String BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC = "Maximum amount of time clients can spend trying to" +
         " resolve for the bootstrap server address. If the resolution cannot be completed within this timeframe, a " +
         "<code>BootstrapResolutionException</code> will be thrown. Setting this to <code>0</code> means the client" +
-        " attempts resolution once without waiting for it to complete: the resolution is triggered on the first" +
-        " poll and its result is checked on the next; if the address is not resolved by then, a" +
+        " attempts resolution once and checks the result right after — if the bootstrap did not complete by then, a" +
         " <code>BootstrapResolutionException</code> is thrown.";
 
     public static final String METADATA_MAX_AGE_CONFIG = "metadata.max.age.ms";

@@ -290,6 +290,12 @@ public class PlaintextConsumerCommitTest {
         try (var consumer = createConsumer(groupProtocol, false)) {
             consumer.assign(List.of(tp));
 
+            // Warm up: force bootstrap DNS resolution and group coordinator discovery before
+            // issuing async commits. Without this, KIP-909's deferred bootstrap can push
+            // coordinator discovery past the first commitAsync attempt, yielding a
+            // RetriableCommitFailedException that this test does not tolerate.
+            consumer.commitSync(Map.of(tp, new OffsetAndMetadata(0L)));
+
             var callback = new CountConsumerCommitCallback();
             var count = 5;
             for (var i = 1; i <= count; i++)
