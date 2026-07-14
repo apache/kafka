@@ -29,6 +29,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -478,6 +479,81 @@ public class DefaultRecordTest {
         DefaultRecord record = DefaultRecord.readFrom(buffer, baseOffset, baseTimestamp, RecordBatch.NO_SEQUENCE, null);
         assertNotNull(record);
         assertEquals(RecordBatch.NO_SEQUENCE, record.sequence());
+    }
+
+    @Test
+    public void testRawSerializedHeadersProduceIdenticalBytesToHeaderArray() throws IOException {
+        // The raw-header optimization rests on the pre-serialized header bytes being byte-identical
+        // to what the Header[] path writes. Write the same records both ways and assert equality.
+        Header[][] headerSets = new Header[][] {
+            new Header[0],
+            new Header[] {new RecordHeader("k", "v".getBytes())},
+            new Header[] {
+                new RecordHeader("foo", "value".getBytes()),
+                new RecordHeader("bar", null),
+                new RecordHeader("\"A\\u00ea\\u00f1\\u00fcC\"", "value".getBytes())
+            }
+        };
+
+        SimpleRecord[] bodies = new SimpleRecord[] {
+            new SimpleRecord("hi".getBytes(), "there".getBytes()),
+            new SimpleRecord(null, "there".getBytes()),
+            new SimpleRecord("hi".getBytes(), null),
+            new SimpleRecord(null, null)
+        };
+
+        int offsetDelta = 10;
+        long timestampDelta = 323;
+
+        for (Header[] headers : headerSets) {
+            byte[] rawHeaders = serializeHeaders(headers);
+            for (SimpleRecord body : bodies) {
+                ByteBufferOutputStream headerArrayOut = new ByteBufferOutputStream(1024);
+                int sizeFromArray = DefaultRecord.writeTo(new DataOutputStream(headerArrayOut),
+                        offsetDelta, timestampDelta, body.key(), body.value(), headers);
+
+                ByteBufferOutputStream rawOut = new ByteBufferOutputStream(1024);
+                int sizeFromRaw = DefaultRecord.writeTo(new DataOutputStream(rawOut),
+                        offsetDelta, timestampDelta, body.key(), body.value(), rawHeaders);
+
+                ByteBuffer fromArray = headerArrayOut.buffer();
+                fromArray.flip();
+                ByteBuffer fromRaw = rawOut.buffer();
+                fromRaw.flip();
+
+                assertEquals(sizeFromArray, sizeFromRaw, "reported sizes must match");
+                assertEquals(fromArray, fromRaw, "record bytes written via raw headers must be byte-identical to the Header[] path");
+            }
+        }
+    }
+
+    /**
+     * Serialize headers into the on-wire header section format
+     * {@code [count(varint)][keyLen(varint)][key][valueLen(varint)|-1][value]...} that the raw
+     * {@code DefaultRecord.writeTo(..., byte[])} overload expects.
+     */
+    private static byte[] serializeHeaders(Header[] headers) throws IOException {
+        ByteBufferOutputStream out = new ByteBufferOutputStream(64);
+        DataOutputStream dos = new DataOutputStream(out);
+        ByteUtils.writeVarint(headers.length, dos);
+        for (Header header : headers) {
+            byte[] key = header.key().getBytes(StandardCharsets.UTF_8);
+            ByteUtils.writeVarint(key.length, dos);
+            dos.write(key);
+            byte[] value = header.value();
+            if (value == null) {
+                ByteUtils.writeVarint(-1, dos);
+            } else {
+                ByteUtils.writeVarint(value.length, dos);
+                dos.write(value);
+            }
+        }
+        dos.flush();
+        ByteBuffer buffer = out.buffer();
+        buffer.flip();
+        byte[] result = new byte[buffer.remaining()];
+        buffer.get(result);
+        return result;
     }
 
     @Test

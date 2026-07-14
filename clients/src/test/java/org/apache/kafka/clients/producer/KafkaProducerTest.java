@@ -51,7 +51,9 @@ import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.PreSerializedHeaders;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -94,6 +96,7 @@ import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch;
 import org.apache.kafka.test.MockMetricsReporter;
@@ -115,6 +118,7 @@ import org.mockito.Mockito;
 import org.mockito.internal.stubbing.answers.CallsRealMethods;
 
 import java.lang.management.ManagementFactory;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -2907,6 +2911,171 @@ public class KafkaProducerTest {
             assertFalse(future.isDone());
             verify(ctx.transactionManager).maybeAddPartition(topicPartition);
         }
+    }
+
+    @Test
+    public void testSendTakesRawAppendFastPathForUnreadPreSerializedHeaders() throws Exception {
+        StringSerializer serializer = new StringSerializer();
+        KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
+
+        String topic = "foo";
+        TopicPartition topicPartition = new TopicPartition(topic, 0);
+        Cluster cluster = TestUtils.singletonCluster(topic, 1);
+
+        when(ctx.sender.isRunning()).thenReturn(true);
+        when(ctx.metadata.fetch()).thenReturn(cluster);
+
+        long timestamp = ctx.time.milliseconds();
+        byte[] rawHeaders = serializePreSerializedHeaders(new RecordHeader("h", "v".getBytes()));
+        // A PreSerializedHeaders carrier that is never read/mutated before send.
+        ProducerRecord<String, String> record = new ProducerRecord<>(
+            topic, null, timestamp, "key", "value", new PreSerializedHeaders(rawHeaders));
+
+        FutureRecordMetadata future = expectAppendWithRawHeaders(ctx, record, rawHeaders, topicPartition, cluster);
+
+        try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
+            assertEquals(future, producer.send(record));
+            // Fast path taken: raw bytes handed straight to the accumulator, no Header[] append.
+            verify(ctx.accumulator, never()).append(
+                any(), anyInt(), anyLong(), any(), any(), any(Header[].class),
+                any(RecordAccumulator.AppendCallbacks.class), anyLong(), anyLong(), any());
+        }
+    }
+
+    @Test
+    public void testSendFallsBackToHeaderArrayWhenPreSerializedHeadersMaterialized() throws Exception {
+        StringSerializer serializer = new StringSerializer();
+        KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
+
+        String topic = "foo";
+        TopicPartition topicPartition = new TopicPartition(topic, 0);
+        Cluster cluster = TestUtils.singletonCluster(topic, 1);
+
+        when(ctx.sender.isRunning()).thenReturn(true);
+        when(ctx.metadata.fetch()).thenReturn(cluster);
+
+        long timestamp = ctx.time.milliseconds();
+        byte[] rawHeaders = serializePreSerializedHeaders(new RecordHeader("h", "v".getBytes()));
+        PreSerializedHeaders carrier = new PreSerializedHeaders(rawHeaders);
+        ProducerRecord<String, String> record = new ProducerRecord<>(
+            topic, null, timestamp, "key", "value", carrier);
+
+        // Reading the headers materializes the carrier, so rawIfUnmodified() now returns null.
+        Header[] materialized = record.headers().toArray();
+        assertNull(carrier.rawIfUnmodified());
+
+        FutureRecordMetadata future = expectAppend(ctx, record, materialized, topicPartition, cluster);
+
+        try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
+            assertEquals(future, producer.send(record));
+            // Fallback path taken: normal Header[] append, never the raw-bytes path.
+            verify(ctx.accumulator, never()).appendWithRawHeaders(
+                any(), anyInt(), anyLong(), any(), any(), any(byte[].class),
+                any(RecordAccumulator.AppendCallbacks.class), anyLong(), anyLong(), any());
+        }
+    }
+
+    private static byte[] serializePreSerializedHeaders(Header... headers) {
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        ByteUtils.writeVarint(headers.length, buffer);
+        for (Header header : headers) {
+            byte[] key = header.key().getBytes(StandardCharsets.UTF_8);
+            ByteUtils.writeVarint(key.length, buffer);
+            buffer.put(key);
+            byte[] value = header.value();
+            if (value == null) {
+                ByteUtils.writeVarint(-1, buffer);
+            } else {
+                ByteUtils.writeVarint(value.length, buffer);
+                buffer.put(value);
+            }
+        }
+        buffer.flip();
+        byte[] result = new byte[buffer.remaining()];
+        buffer.get(result);
+        return result;
+    }
+
+    private <T> FutureRecordMetadata expectAppendWithRawHeaders(
+        KafkaProducerTestContext<T> ctx,
+        ProducerRecord<T, T> record,
+        byte[] rawHeaders,
+        TopicPartition initialSelectedPartition,
+        Cluster cluster
+    ) throws InterruptedException {
+        byte[] serializedKey = ctx.serializer.serialize(topic, record.key());
+        byte[] serializedValue = ctx.serializer.serialize(topic, record.value());
+        long timestamp = record.timestamp() == null ? ctx.time.milliseconds() : record.timestamp();
+
+        ProduceRequestResult requestResult = new ProduceRequestResult(initialSelectedPartition);
+        FutureRecordMetadata futureRecordMetadata = new FutureRecordMetadata(
+            requestResult, 5, timestamp, serializedKey.length, serializedValue.length, ctx.time);
+
+        when(ctx.partitioner.partition(
+            initialSelectedPartition.topic(), record.key(), serializedKey,
+            record.value(), serializedValue, cluster
+        )).thenReturn(initialSelectedPartition.partition());
+
+        when(ctx.accumulator.appendWithRawHeaders(
+            eq(initialSelectedPartition.topic()),
+            eq(initialSelectedPartition.partition()),
+            eq(timestamp),
+            eq(serializedKey),
+            eq(serializedValue),
+            eq(rawHeaders),
+            any(RecordAccumulator.AppendCallbacks.class),
+            anyLong(),
+            anyLong(),
+            any()
+        )).thenAnswer(invocation -> {
+            RecordAccumulator.AppendCallbacks callbacks =
+                (RecordAccumulator.AppendCallbacks) invocation.getArguments()[6];
+            callbacks.setPartition(initialSelectedPartition.partition());
+            return new RecordAccumulator.RecordAppendResult(futureRecordMetadata, false, false, 0);
+        });
+
+        return futureRecordMetadata;
+    }
+
+    private <T> FutureRecordMetadata expectAppend(
+        KafkaProducerTestContext<T> ctx,
+        ProducerRecord<T, T> record,
+        Header[] expectedHeaders,
+        TopicPartition initialSelectedPartition,
+        Cluster cluster
+    ) throws InterruptedException {
+        byte[] serializedKey = ctx.serializer.serialize(topic, record.key());
+        byte[] serializedValue = ctx.serializer.serialize(topic, record.value());
+        long timestamp = record.timestamp() == null ? ctx.time.milliseconds() : record.timestamp();
+
+        ProduceRequestResult requestResult = new ProduceRequestResult(initialSelectedPartition);
+        FutureRecordMetadata futureRecordMetadata = new FutureRecordMetadata(
+            requestResult, 5, timestamp, serializedKey.length, serializedValue.length, ctx.time);
+
+        when(ctx.partitioner.partition(
+            initialSelectedPartition.topic(), record.key(), serializedKey,
+            record.value(), serializedValue, cluster
+        )).thenReturn(initialSelectedPartition.partition());
+
+        when(ctx.accumulator.append(
+            eq(initialSelectedPartition.topic()),
+            eq(initialSelectedPartition.partition()),
+            eq(timestamp),
+            eq(serializedKey),
+            eq(serializedValue),
+            eq(expectedHeaders),
+            any(RecordAccumulator.AppendCallbacks.class),
+            anyLong(),
+            anyLong(),
+            any()
+        )).thenAnswer(invocation -> {
+            RecordAccumulator.AppendCallbacks callbacks =
+                (RecordAccumulator.AppendCallbacks) invocation.getArguments()[6];
+            callbacks.setPartition(initialSelectedPartition.partition());
+            return new RecordAccumulator.RecordAppendResult(futureRecordMetadata, false, false, 0);
+        });
+
+        return futureRecordMetadata;
     }
 
     private <T> FutureRecordMetadata expectAppend(

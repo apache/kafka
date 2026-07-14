@@ -270,6 +270,7 @@ public class RecordCollectorImpl implements RecordCollector {
                             final String processorNodeId,
                             final InternalProcessorContext<?, ?> context,
                             final ProducerRecord<byte[], byte[]> serializedRecord) {
+        checkForException();
 
         streamsProducer.send(serializedRecord, (metadata, exception) -> {
             try {

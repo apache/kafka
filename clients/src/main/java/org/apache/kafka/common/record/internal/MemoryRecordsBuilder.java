@@ -920,6 +920,9 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     }
 
     public boolean hasRoomFor(long timestamp, ByteBuffer key, ByteBuffer value, byte[] rawSerializedHeaders) {
+        if (magic < RecordBatch.MAGIC_VALUE_V2)
+            throw new IllegalArgumentException("Raw serialized headers are only supported for magic >= V2");
+
         if (isFull())
             return false;
 
