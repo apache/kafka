@@ -109,11 +109,16 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
     private static final String PROCESS_REAPER_THREAD_PREFIX = "process reaper";
     private static final String RMI_THREAD_PREFIX = "RMI";
     private static final String JDK_INTERNAL_CLEANERIMPL_THREAD_PREFIX = "Cleaner-";
+    // KIP-909 executor thread; daemon, per-client lifecycle. May briefly outlive the client's
+    // close() when a native DNS call cannot be interrupted, but the JVM will reap it as soon as
+    // the resolution returns. Not a real leak.
+    private static final String BOOTSTRAP_DNS_RESOLVER_THREAD_PREFIX = "kafka-bootstrap-dns-resolver";
 
     private static final String DETECT_THREAD_LEAK_KEY = "detectThreadLeak";
     private static final Set<String> SKIPPED_THREAD_PREFIX = Set.of(METRICS_METER_TICK_THREAD_PREFIX, SCALA_THREAD_PREFIX,
             FORK_JOIN_POOL_THREAD_PREFIX, JUNIT_THREAD_PREFIX, ATTACH_LISTENER_THREAD_PREFIX, PROCESS_REAPER_THREAD_PREFIX,
-            RMI_THREAD_PREFIX, SystemTimer.SYSTEM_TIMER_THREAD_PREFIX, JDK_INTERNAL_CLEANERIMPL_THREAD_PREFIX);
+            RMI_THREAD_PREFIX, SystemTimer.SYSTEM_TIMER_THREAD_PREFIX, JDK_INTERNAL_CLEANERIMPL_THREAD_PREFIX,
+            BOOTSTRAP_DNS_RESOLVER_THREAD_PREFIX);
 
     @Override
     public boolean supportsTestTemplate(ExtensionContext context) {
