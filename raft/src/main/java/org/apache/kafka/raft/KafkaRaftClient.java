@@ -2659,7 +2659,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             return Optional.of(true);
         } else if (epoch == quorum.epoch()
             && leaderId.isPresent()
-            && !quorum.hasLeader()) {
+            && (!quorum.hasLeader() || quorum.isUnattached())) {
 
             // Since we are transitioning to Follower, we will only forward the
             // request to the handler if there is no error. Otherwise, we will let
