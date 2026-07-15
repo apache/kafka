@@ -1198,6 +1198,10 @@ public class DelayedShareFetch extends DelayedOperation {
             // Handle synchronous exception from readFromLog()
             log.error("Error initiating async fetch in remote completion for group {}, member {}",
                 shareFetch.groupId(), shareFetch.memberId(), e);
+            // processFetchResultAndComplete won't be invoked in this error path, so it won't release the
+            // locks for partitionsToFetch. Release them here to avoid leaking the local partition locks
+            // before completing with just the remote data.
+            releasePartitionLocksAndAddToActionQueue(partitionsToFetch.keySet(), Set.of());
             // Continue to complete with just remote data.
             completionConsumer.accept(List.of());
             return;
@@ -1210,6 +1214,10 @@ public class DelayedShareFetch extends DelayedOperation {
             if (throwable != null) {
                 log.error("Async fetch failed in remote completion for group {}, member {}",
                     shareFetch.groupId(), shareFetch.memberId(), throwable);
+                // processFetchResultAndComplete won't be invoked in this error path, so it won't release
+                // the locks for partitionsToFetch. Release them here to avoid leaking the local partition
+                // locks before completing with just the remote data.
+                releasePartitionLocksAndAddToActionQueue(partitionsToFetch.keySet(), Set.of());
                 // Continue to complete with just remote data.
                 completionConsumer.accept(List.of());
                 return;
