@@ -589,15 +589,15 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
     ) {
         Objects.requireNonNull(prefix, "prefix cannot be null");
         Objects.requireNonNull(prefixKeySerializer, "prefixKeySerializer cannot be null");
-        final byte[] keyBytes = prefixKeySerializer.serialize(null, internalContext.headers(), prefix);
-        return prefixScanInternal(wrapped(), keyBytes, BYTE_ARRAY_SERIALIZER);
+        return prefixScanInternal(wrapped(), prefix, prefixKeySerializer);
     }
 
     private <PS extends Serializer<P>, P> KeyValueIterator<K, ValueTimestampHeaders<V>> prefixScanInternal(
         final ReadOnlyKeyValueStore<Bytes, byte[]> store, final P prefix, final PS prefixKeySerializer
     ) {
+        final byte[] keyBytes = prefixKeySerializer.serialize(null, internalContext.headers(), prefix);
         return new MeteredTimestampedKeyValueStoreWithHeadersIterator(
-            store.prefixScan(prefix, prefixKeySerializer), prefixScanSensor
+            store.prefixScan(keyBytes, BYTE_ARRAY_SERIALIZER), prefixScanSensor
         );
     }
 
