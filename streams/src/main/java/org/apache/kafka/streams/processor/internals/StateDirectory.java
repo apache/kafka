@@ -257,6 +257,7 @@ public class StateDirectory implements AutoCloseable {
                         eosEnabled,
                         logContext,
                         this,
+                        time,
                         subTopology.storeToChangelogTopic(),
                         inputPartitions
                     );
