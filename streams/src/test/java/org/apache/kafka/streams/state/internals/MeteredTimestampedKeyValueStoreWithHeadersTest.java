@@ -880,7 +880,7 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
         reset(inner);
         when(context.headers()).thenReturn(HEADERS);
 
-        inner = new InMemoryKeyValueStore(STORE_NAME);
+        final InMemoryKeyValueStore inMemoryStore = new InMemoryKeyValueStore(STORE_NAME);
 
         final Serializer<String> headerDependentSerializer = new Serializer<>() {
             @Override
@@ -899,7 +899,7 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
         };
 
         final MeteredTimestampedKeyValueStoreWithHeaders<String, String> store = new MeteredTimestampedKeyValueStoreWithHeaders<>(
-             inner,
+            inMemoryStore,
             "scope",
             new MockTime(),
             Serdes.serdeFrom(headerDependentSerializer, Serdes.String().deserializer()),
