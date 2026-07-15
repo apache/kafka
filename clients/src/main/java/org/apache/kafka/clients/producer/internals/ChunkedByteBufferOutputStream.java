@@ -87,6 +87,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
 
     @Override
     public void write(int b) {
+        ensureNotDeallocated();
         ensureWritable();
         ensureChunkCapacity(1);
         currentChunk.put((byte) b);
@@ -94,6 +95,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
 
     @Override
     public void write(byte[] bytes, int off, int len) {
+        ensureNotDeallocated();
         ensureWritable();
         while (len > 0) {
             ensureChunkCapacity(1);
@@ -106,6 +108,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
 
     @Override
     public void write(ByteBuffer sourceBuffer) {
+        ensureNotDeallocated();
         ensureWritable();
         while (sourceBuffer.hasRemaining()) {
             ensureChunkCapacity(1);
@@ -123,6 +126,14 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     private void ensureWritable() {
         if (finalized)
             throw new IllegalStateException("cannot write after buffer() has been called");
+    }
+
+    /**
+     * Guards against any use after {@link #deallocate()} has returned the chunks.
+     */
+    private void ensureNotDeallocated() {
+        if (currentChunk == null)
+            throw new IllegalStateException("operation not allowed after the stream has been deallocated");
     }
 
     private void ensureChunkCapacity(int needed) {
@@ -148,6 +159,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
      * the stream; they will be returned to the pool via {@link #deallocate()}.
      */
     public void addBuffers(List<ByteBuffer> newChunks) {
+        ensureNotDeallocated();
         chunks.addAll(newChunks);
     }
 
@@ -159,6 +171,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
      */
     @Override
     public ByteBuffer buffer() {
+        ensureNotDeallocated();
         finalized = true;
         if (flattenedBuffer == null)
             flattenedBuffer = flatten();
@@ -218,6 +231,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
      */
     @Override
     public int position() {
+        ensureNotDeallocated();
         // Written bytes only live in chunks up to currentChunk; later chunks are untouched.
         int lastDataChunk = Math.min(currentChunkIndex, chunks.size() - 1);
         int total = 0;
@@ -233,6 +247,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
      */
     @Override
     public void position(int position) {
+        ensureNotDeallocated();
         if (currentChunkIndex != 0 || currentChunk.position() != 0) {
             throw new IllegalStateException("position() can only be called before any writes");
         }
@@ -259,6 +274,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
      * Every chunk has the same size, so this equals {@code position() + remaining()} without walking the list.
      */
     int attachedCapacity() {
+        ensureNotDeallocated();
         return chunks.size() * chunkSize;
     }
 
@@ -267,8 +283,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
      */
     @Override
     public int remaining() {
-        if (currentChunk == null)  // after deallocate no chunks attached, no free capacity
-            return 0;
+        ensureNotDeallocated();
         int total = currentChunk.remaining();
         for (int i = currentChunkIndex + 1; i < chunks.size(); i++)
             total += chunks.get(i).remaining();
@@ -287,6 +302,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
 
     @Override
     public void ensureRemaining(int remainingBytesRequired) {
+        ensureNotDeallocated();
         // A single call can guarantee at most `chunkSize` of space (the stream advances one chunk
         // at a time). Callers needing more attach chunks via addBuffers first. write(byte[]) loops
         // across chunks, so contiguous capacity isn't required.

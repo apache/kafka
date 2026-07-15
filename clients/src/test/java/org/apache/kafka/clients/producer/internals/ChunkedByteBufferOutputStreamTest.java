@@ -27,6 +27,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -65,6 +66,35 @@ public class ChunkedByteBufferOutputStreamTest {
         List<ByteBuffer> wrongSize = Collections.singletonList(ByteBuffer.allocate(chunkSize + 1));
         assertThrows(IllegalArgumentException.class,
             () -> new ChunkedByteBufferOutputStream(wrongSize, chunkSize, p));
+    }
+
+    @Test
+    public void testOperationsRejectedAfterDeallocate() throws Exception {
+        int chunkSize = 8;
+        ChunkedBufferPool p = pool(64, chunkSize);
+        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 2), chunkSize, p)) {
+            stream.write(new byte[]{1, 2, 3}, 0, 3);
+
+            stream.deallocate();
+
+            // Every query/write operation must reject use after deallocation.
+            assertThrows(IllegalStateException.class, stream::remaining);
+            assertThrows(IllegalStateException.class, stream::position);
+            assertThrows(IllegalStateException.class, stream::buffer);
+            assertThrows(IllegalStateException.class, stream::attachedCapacity);
+            assertThrows(IllegalStateException.class, () -> stream.position(1));
+            assertThrows(IllegalStateException.class, () -> stream.ensureRemaining(1));
+            assertThrows(IllegalStateException.class, () -> stream.write(1));
+            assertThrows(IllegalStateException.class, () -> stream.write(new byte[]{4}, 0, 1));
+            assertThrows(IllegalStateException.class, () -> stream.write(ByteBuffer.wrap(new byte[]{5})));
+            assertThrows(IllegalStateException.class, () -> stream.addBuffers(Collections.singletonList(ByteBuffer.allocate(chunkSize))));
+
+            // Lifecycle calls stay idempotent no-ops: a second close()/deallocate() must not throw.
+            assertDoesNotThrow(() -> {
+                stream.close();
+                stream.deallocate();
+            });
+        }
     }
 
     @Test
