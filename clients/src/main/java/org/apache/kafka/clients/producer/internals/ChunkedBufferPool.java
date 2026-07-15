@@ -59,11 +59,11 @@ public class ChunkedBufferPool extends BufferPool {
     public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
         if (totalSize <= 0)
             throw new IllegalArgumentException("totalSize must be positive: " + totalSize);
-        throwIfChunksNeededExceedsPool(totalSize);
 
         int chunkSize = poolableSize();
         int numChunks = (int) (((long) totalSize + chunkSize - 1L) / chunkSize);
         long memoryRequired = (long) numChunks * chunkSize;
+        throwIfChunksNeededExceedsPool(totalSize, numChunks, chunkSize, memoryRequired);
 
         // Chunks taken from the free list. The remaining bytes are reserved against
         // nonPooledAvailableMemory and materialized as raw allocations after the lock is released.
@@ -190,12 +190,9 @@ public class ChunkedBufferPool extends BufferPool {
     }
 
     /**
-     * Throw if rounding {@code totalSize} up to whole chunks would exceed the pool.
+     * Throw if the request memory rounded up to whole chunks would exceed the pool.
      */
-    private void throwIfChunksNeededExceedsPool(int totalSize) {
-        int chunkSize = poolableSize();
-        int numChunks = (int) (((long) totalSize + chunkSize - 1L) / chunkSize);
-        long memoryRequired = (long) numChunks * chunkSize;
+    private void throwIfChunksNeededExceedsPool(int totalSize, int numChunks, int chunkSize, long memoryRequired) {
         if (memoryRequired > totalMemory())
             throw new IllegalArgumentException("Attempt to allocate " + totalSize + " bytes ("
                 + numChunks + " chunks of " + chunkSize + " = " + memoryRequired + " bytes), but the "
