@@ -2515,7 +2515,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
     }
 
     @Test
-    public void testStreamsRebalanceDataHeartbeatIntervalMsUpdatedOnSuccess() {
+    public void testStreamsRebalanceDataUpdatedOnSuccess() {
         try (
                 final MockedConstruction<HeartbeatRequestState> ignored = mockConstruction(
                         HeartbeatRequestState.class,
@@ -2530,6 +2530,11 @@ class StreamsGroupHeartbeatRequestManagerTest {
 
             // Initially, heartbeatIntervalMs should be -1
             assertEquals(-1, streamsRebalanceData.heartbeatIntervalMs());
+            // The broker returns task.offset.interval.ms and acceptable.recovery.lag (KAFKA-18652)
+            // so the client knows how often to report task changelog offsets;
+            // the client must store it in StreamsRebalanceData.
+            assertEquals(-1, streamsRebalanceData.taskOffsetIntervalMs());
+            assertEquals(-1, streamsRebalanceData.acceptableRecoveryLag());
 
             final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
             assertEquals(1, result.unsentRequests.size());
@@ -2540,57 +2545,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
 
             // After successful response, heartbeatIntervalMs should be updated
             assertEquals(RECEIVED_HEARTBEAT_INTERVAL_MS, streamsRebalanceData.heartbeatIntervalMs());
-        }
-    }
-
-    @Test
-    public void testStreamsRebalanceDataTaskOffsetIntervalMsUpdatedOnSuccess() {
-        try (final MockedConstruction<HeartbeatRequestState> ignored = mockConstruction(
-            HeartbeatRequestState.class,
-            (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true)
-        )) {
-            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
-            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
-            when(membershipManager.groupId()).thenReturn(GROUP_ID);
-            when(membershipManager.memberId()).thenReturn(MEMBER_ID);
-            when(membershipManager.memberEpoch()).thenReturn(MEMBER_EPOCH);
-            when(membershipManager.groupInstanceId()).thenReturn(Optional.of(INSTANCE_ID));
-
-            // The broker returns task.offset.interval.ms (KAFKA-18652) so the client knows how often to report
-            // task changelog offsets; the client must store it in StreamsRebalanceData.
-            assertEquals(-1, streamsRebalanceData.taskOffsetIntervalMs());
-
-            final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
-            assertEquals(1, result.unsentRequests.size());
-
-            result.unsentRequests.get(0).handler().onComplete(buildClientResponse());
-
             assertEquals(RECEIVED_TASK_OFFSET_INTERVAL_MS, streamsRebalanceData.taskOffsetIntervalMs());
-        }
-    }
-
-    @Test
-    public void testStreamsRebalanceDataAcceptableRecoveryLagUpdatedOnSuccess() {
-        try (final MockedConstruction<HeartbeatRequestState> ignored = mockConstruction(
-            HeartbeatRequestState.class,
-            (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true)
-        )) {
-            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
-            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
-            when(membershipManager.groupId()).thenReturn(GROUP_ID);
-            when(membershipManager.memberId()).thenReturn(MEMBER_ID);
-            when(membershipManager.memberEpoch()).thenReturn(MEMBER_EPOCH);
-            when(membershipManager.groupInstanceId()).thenReturn(Optional.of(INSTANCE_ID));
-
-            // The broker returns acceptable.recovery.lag (KAFKA-18652) so the client can decide when a warm-up is
-            // caught up; the client must store it in StreamsRebalanceData.
-            assertEquals(-1, streamsRebalanceData.acceptableRecoveryLag());
-
-            final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
-            assertEquals(1, result.unsentRequests.size());
-
-            result.unsentRequests.get(0).handler().onComplete(buildClientResponse());
-
             assertEquals(RECEIVED_ACCEPTABLE_RECOVERY_LAG, streamsRebalanceData.acceptableRecoveryLag());
         }
     }
