@@ -220,6 +220,14 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                         // ProducerBatch), which can't take extension chunks. Only attach to a
                         // writable chunked batch; otherwise refund the chunks and re-evaluate.
                         if (last instanceof ChunkedProducerBatch && last.isWritable()) {
+                            // Attach the chunks we sized off-lock without re-checking whether a
+                            // concurrent appender already grew the batch enough to fit our record.
+                            // This optimizes for the common (uncontended) case. Under concurrency it
+                            // can temporarily over-allocate: two appenders each sizing their own gap
+                            // against the same observed capacity both attach, so the batch ends up
+                            // with more capacity than the records need (one appender's chunks could
+                            // have sufficed for both). The surplus is fully unused and returned to
+                            // the pool when the batch is closed for appends.
                             ((ChunkedProducerBatch) last).addBuffers(extensionChunks);
                             extensionChunks = null;
                             RecordAppendResult retryResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
