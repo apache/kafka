@@ -2659,6 +2659,186 @@ public class ShareConsumeRequestManagerTest {
     }
 
     /**
+     * When a broker is fenced, it is dropped from the {@code brokers} list of subsequent MetadataResponses,
+     * so {@code Cluster.nodeById()} returns null for it, while leadership for its partitions fails over to
+     * another live broker. This test checks that once the cached leader node disappears from the metadata
+     * and leadership moves to a still-present node, the next fetch is routed to the new leader.
+     */
+    @Test
+    public void testFetchRecoversWhenCachedLeaderNodeDisappearsFromMetadata() {
+        buildRequestManager();
+
+        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.assignFromSubscribed(List.of(tp0));
+
+        // Two-node cluster; tp0 is led by node 0, so the share session and the cached leader are on node 0.
+        client.updateMetadata(
+                RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 2),
+                        tp -> validLeaderEpoch, topicIds, false));
+        Node nodeId0 = metadata.fetch().nodeById(0);
+        Node nodeId1 = metadata.fetch().nodeById(1);
+        assertEquals(nodeId0, metadata.fetch().leaderFor(tp0));
+
+        // Establish the share session and cache the leader (node 0) for tp0.
+        assertEquals(1, sendFetches());
+        client.prepareResponseFrom(
+                ShareFetchResponse.of(Errors.NONE, 0,
+                        buildPartitionDataMap(tip0, records, acquiredRecords, Errors.NONE, Errors.NONE),
+                        List.of(), 0),
+                nodeId0);
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+        fetchRecords();
+
+        // Node 0 is fenced: it disappears from the brokers list of the next MetadataResponse and leadership
+        // for tp0 fails over to node 1 with a higher leader epoch.
+        MetadataResponse.PartitionMetadata tp0Metadata = new MetadataResponse.PartitionMetadata(
+                Errors.NONE, tp0, Optional.of(nodeId1.id()), Optional.of(validLeaderEpoch + 1),
+                List.of(nodeId1.id()), List.of(nodeId1.id()), List.of());
+        MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(
+                Errors.NONE, topicName, topicId, false, List.of(tp0Metadata),
+                MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
+        MetadataResponse metadataWithoutNode0 = RequestTestUtils.metadataResponse(
+                List.of(nodeId1), "kafka-cluster", 1, List.of(topicMetadata));
+        metadata.updateWithCurrentRequestVersion(metadataWithoutNode0, false, time.milliseconds());
+
+        // Node 0 is gone from the cluster; node 1 is now the leader for tp0.
+        assertNull(metadata.fetch().nodeById(0));
+        assertEquals(nodeId1, metadata.fetch().leaderFor(tp0));
+
+        // The next fetch should be routed to the new leader (node 1), not silently skipped.
+        NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
+        assertEquals(1, pollResult.unsentRequests.size(),
+                "Expected a fetch to the new leader after the cached leader node disappeared from metadata");
+        assertEquals(nodeId1, pollResult.unsentRequests.get(0).node().get());
+        ShareFetchRequest.Builder builder = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
+        assertEquals(1, builder.data().topics().size());
+        assertEquals(tip0.topicId(), builder.data().topics().stream().findFirst().get().topicId());
+    }
+
+    /**
+     * When the node backing a share session disappears from the cluster metadata, the stale session handler
+     * must be removed and any acknowledgements that were queued to be piggybacked on a fetch to that node
+     * must be failed with NOT_LEADER_OR_FOLLOWER.
+     */
+    @Test
+    public void testSessionHandlerRemovedAndPiggybackAcksFailedWhenNodeDisappears() {
+        buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.assignFromSubscribed(List.of(tp0));
+
+        // Two-node cluster; tp0 is led by node 0, so the share session and the cached leader are on node 0.
+        client.updateMetadata(
+                RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 2),
+                        tp -> validLeaderEpoch, topicIds, false));
+        Node nodeId0 = metadata.fetch().nodeById(0);
+        Node nodeId1 = metadata.fetch().nodeById(1);
+        assertEquals(nodeId0, metadata.fetch().leaderFor(tp0));
+
+        // Establish the share session on node 0 and fetch records.
+        assertEquals(1, sendFetches());
+        client.prepareResponseFrom(
+                ShareFetchResponse.of(Errors.NONE, 0,
+                        buildPartitionDataMap(tip0, records, acquiredRecords, Errors.NONE, Errors.NONE),
+                        List.of(), 0),
+                nodeId0);
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+        fetchRecords();
+        assertNotNull(shareConsumeRequestManager.sessionHandler(nodeId0.id()));
+
+        // Queue acknowledgements to be piggybacked on the next fetch to node 0.
+        Acknowledgements acknowledgements = getAcknowledgements(1,
+                AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
+        shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
+
+        // Node 0 is fenced: it disappears from the metadata and leadership for tp0 fails over to node 1.
+        MetadataResponse.PartitionMetadata tp0Metadata = new MetadataResponse.PartitionMetadata(
+                Errors.NONE, tp0, Optional.of(nodeId1.id()), Optional.of(validLeaderEpoch + 1),
+                List.of(nodeId1.id()), List.of(nodeId1.id()), List.of());
+        MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(
+                Errors.NONE, topicName, topicId, false, List.of(tp0Metadata),
+                MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
+        MetadataResponse metadataWithoutNode0 = RequestTestUtils.metadataResponse(
+                List.of(nodeId1), "kafka-cluster", 1, List.of(topicMetadata));
+        metadata.updateWithCurrentRequestVersion(metadataWithoutNode0, false, time.milliseconds());
+        assertNull(metadata.fetch().nodeById(0));
+
+        // The next poll re-routes the fetch to node 1, removes the stale session handler for node 0, and fails
+        // the piggyback acknowledgements that could no longer be sent to node 0.
+        assertEquals(1, sendFetches());
+        assertNull(shareConsumeRequestManager.sessionHandler(nodeId0.id()),
+                "Session handler for the disappeared node should have been removed");
+        assertNotNull(shareConsumeRequestManager.sessionHandler(nodeId1.id()));
+
+        assertEquals(1, completedAcknowledgements.size());
+        assertEquals(acknowledgements, completedAcknowledgements.get(0).get(tip0));
+        assertInstanceOf(NotLeaderOrFollowerException.class,
+                completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
+    }
+
+    /**
+     * An acknowledge request state is created for the node that led the partition at the time of the commit.
+     * If that node then disappears from the cluster metadata before the request is sent, the acknowledgements must be failed with
+     * NOT_LEADER_OR_FOLLOWER.
+     */
+    @Test
+    public void testAcknowledgeRequestFailedWhenNodeDisappearsBeforeSend() {
+        buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        subscriptions.subscribeToShareGroup(Set.of(topicName));
+        subscriptions.assignFromSubscribed(List.of(tp0));
+
+        client.updateMetadata(
+                RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 2),
+                        tp -> validLeaderEpoch, topicIds, false));
+        Node nodeId0 = metadata.fetch().nodeById(0);
+        Node nodeId1 = metadata.fetch().nodeById(1);
+
+        // Establish the share session on node 0 and fetch records.
+        assertEquals(1, sendFetches());
+        client.prepareResponseFrom(
+                ShareFetchResponse.of(Errors.NONE, 0,
+                        buildPartitionDataMap(tip0, records, acquiredRecords, Errors.NONE, Errors.NONE),
+                        List.of(), 0),
+                nodeId0);
+        networkClientDelegate.poll(time.timer(0));
+        fetchRecords();
+
+        // commitSync enqueues an acknowledge request state for node 0, which is still the leader at this point.
+        Acknowledgements acknowledgements = getAcknowledgements(1,
+                AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
+        CompletableFuture<Map<TopicIdPartition, Acknowledgements>> future =
+                shareConsumeRequestManager.commitSync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)),
+                        calculateDeadlineMs(time.timer(defaultApiTimeoutMs)));
+        assertFalse(future.isDone());
+
+        // Node 0 is fenced: it disappears from the metadata and leadership for tp0 fails over to node 1.
+        MetadataResponse.PartitionMetadata tp0Metadata = new MetadataResponse.PartitionMetadata(
+                Errors.NONE, tp0, Optional.of(nodeId1.id()), Optional.of(validLeaderEpoch + 1),
+                List.of(nodeId1.id()), List.of(nodeId1.id()), List.of());
+        MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(
+                Errors.NONE, topicName, topicId, false, List.of(tp0Metadata),
+                MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
+        MetadataResponse metadataWithoutNode0 = RequestTestUtils.metadataResponse(
+                List.of(nodeId1), "kafka-cluster", 1, List.of(topicMetadata));
+        metadata.updateWithCurrentRequestVersion(metadataWithoutNode0, false, time.milliseconds());
+        assertNull(metadata.fetch().nodeById(0));
+
+        // No request is sent to the vanished node, and the commit completes with NOT_LEADER_OR_FOLLOWER
+        // rather than hanging.
+        assertEquals(0, shareConsumeRequestManager.sendAcknowledgements());
+        assertTrue(future.isDone());
+        assertEquals(1, completedAcknowledgements.size());
+        assertEquals(acknowledgements, completedAcknowledgements.get(0).get(tip0));
+        assertInstanceOf(NotLeaderOrFollowerException.class,
+                completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
+    }
+
+    /**
      * When a topic is deleted and recreated, its topic ID changes. The request manager caches the mapping
      * from topic-partition to topic ID (and leader). A partition-level UNKNOWN_TOPIC_ID error in a ShareFetch
      * response must clear that cached mapping so that, once the metadata reflects the recreated topic, the stale
