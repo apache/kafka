@@ -1348,6 +1348,214 @@ Total number of Streams Group Rebalances
 <tr>  
 <td>
 
+Topology Description Set Success Rate
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-set-success-rate
+</td>  
+<td>
+
+The rate of successful setTopology plugin calls (driven by client topology-description pushes)
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Set Success Count
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-set-success-count
+</td>  
+<td>
+
+The total number of successful setTopology plugin calls
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Set Error Rate
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-set-error-rate
+</td>  
+<td>
+
+The rate of failed setTopology plugin calls
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Set Error Count
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-set-error-count
+</td>  
+<td>
+
+The total number of failed setTopology plugin calls
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Get Success Rate
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-get-success-rate
+</td>  
+<td>
+
+The rate of successful getTopology plugin calls (driven by describe requests)
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Get Success Count
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-get-success-count
+</td>  
+<td>
+
+The total number of successful getTopology plugin calls
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Get Error Rate
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-get-error-rate
+</td>  
+<td>
+
+The rate of failed getTopology plugin calls
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Get Error Count
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-get-error-count
+</td>  
+<td>
+
+The total number of failed getTopology plugin calls
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Delete Success Rate
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-delete-success-rate
+</td>  
+<td>
+
+The rate of successful deleteTopology plugin calls (driven by group deletion and cleanup)
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Delete Success Count
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-delete-success-count
+</td>  
+<td>
+
+The total number of successful deleteTopology plugin calls
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Delete Error Rate
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-delete-error-rate
+</td>  
+<td>
+
+The rate of failed deleteTopology plugin calls
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Delete Error Count
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-delete-error-count
+</td>  
+<td>
+
+The total number of failed deleteTopology plugin calls
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Cleanup Cycle Rate
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-cleanup-cycle-rate
+</td>  
+<td>
+
+The rate of periodic topology-description cleanup cycles run by the coordinator
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Cleanup Cycle Count
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-cleanup-cycle-count
+</td>  
+<td>
+
+The total number of periodic topology-description cleanup cycles run by the coordinator
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Cleanup Eligible Rate
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-cleanup-eligible-rate
+</td>  
+<td>
+
+The rate of groups found eligible for plugin-state deletion by the cleanup scan
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Cleanup Eligible Count
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-cleanup-eligible-count
+</td>  
+<td>
+
+The total number of groups found eligible for plugin-state deletion by the cleanup scan
+</td> </tr>  
+<tr>  
+<td>
+
 Classic Group Count
 </td>  
 <td>

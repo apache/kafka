@@ -838,6 +838,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             final ShareFetchResponse response = (ShareFetchResponse) resp.responseBody();
             final ShareSessionHandler handler = sessionHandler(fetchTarget.id());
 
+            metricsManager.recordLatency(resp.destination(), resp.requestLatencyMs());
+
             if (handler == null) {
                 log.error("Unable to find ShareSessionHandler for node {}. Ignoring ShareFetch response.",
                         fetchTarget.id());
@@ -946,8 +948,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     .collect(Collectors.toList());
                 metadata.updatePartitionLeadership(partitionsWithUpdatedLeaderInfo, leaderNodes);
             }
-
-            metricsManager.recordLatency(resp.destination(), resp.requestLatencyMs());
         } finally {
             log.debug("Removing pending request for node {} - success", fetchTarget.id());
             if (isShareAcquireModeRecordLimit()) {
@@ -1066,9 +1066,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 metadata.updatePartitionLeadership(partitionsWithUpdatedLeaderInfo, leaderNodes);
             }
 
-            if (acknowledgeRequestState.isProcessed) {
-                metricsManager.recordLatency(resp.destination(), resp.requestLatencyMs());
-            }
         } finally {
             log.debug("Removing pending request for node {} - success", fetchTarget.id());
             nodesWithPendingRequests.remove(fetchTarget.id());

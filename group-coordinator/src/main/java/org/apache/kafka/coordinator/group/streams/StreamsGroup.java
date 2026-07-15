@@ -76,6 +76,25 @@ public class StreamsGroup implements Group {
      */
     private static final String PROTOCOL_TYPE = "streams";
 
+    /** Stored topology epoch meaning the plugin definitely holds no topology for this group. */
+    public static final int STORED_TOPOLOGY_EPOCH_NONE = -1;
+    /**
+     * Stored topology epoch meaning the plugin may or may not hold a topology: written durably
+     * before any plugin-disturbing operation. Treated like {@link #STORED_TOPOLOGY_EPOCH_NONE}
+     * for the "solicit a push" decision and like a real (>= 0) epoch for "delete-eligible".
+     */
+    public static final int STORED_TOPOLOGY_EPOCH_UNCERTAIN = -2;
+
+    /**
+     * @return true when {@code storedEpoch} is a real, reliably-stored topology epoch — i.e. the
+     *         plugin definitely holds exactly that topology. Real epochs are non-negative; every
+     *         sentinel ({@link #STORED_TOPOLOGY_EPOCH_NONE}, {@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN},
+     *         and any added later) is negative and therefore not reliably stored.
+     */
+    public static boolean isReliablyStoredTopologyEpoch(int storedEpoch) {
+        return storedEpoch >= 0;
+    }
+
     public enum StreamsGroupState {
         EMPTY("Empty"),
         NOT_READY("NotReady"),
@@ -159,8 +178,11 @@ public class StreamsGroup implements Group {
     private final TimelineInteger validatedTopologyEpoch;
 
     /**
-     * The topology epoch most recently accepted by the topology description plugin (KIP-1331). -1 if none stored.
-     * Drives the heartbeat-side decision to set TopologyDescriptionRequired=true.
+     * The broker's record of which topology the group's plugin entry holds (KIP-1331): a real epoch
+     * ({@code >= 0}) when the plugin definitely holds that topology, {@link #STORED_TOPOLOGY_EPOCH_NONE}
+     * when it definitely holds nothing, or {@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN} when a barrier was
+     * written before a plugin operation that may not have completed. Drives the heartbeat-side decision
+     * to set TopologyDescriptionRequired=true and the eligibility for plugin deletion.
      */
     private final TimelineInteger storedDescriptionTopologyEpoch;
 
@@ -268,7 +290,7 @@ public class StreamsGroup implements Group {
         // group.validatedTopologyEpoch()` comparison reads 0 here vs. -1 after replay.
         this.validatedTopologyEpoch.set(-1);
         this.storedDescriptionTopologyEpoch = new TimelineInteger(snapshotRegistry);
-        this.storedDescriptionTopologyEpoch.set(-1);
+        this.storedDescriptionTopologyEpoch.set(STORED_TOPOLOGY_EPOCH_NONE);
         this.failedDescriptionTopologyEpoch = new TimelineInteger(snapshotRegistry);
         this.failedDescriptionTopologyEpoch.set(-1);
         this.metadataHash = new TimelineLong(snapshotRegistry);
@@ -757,7 +779,8 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * @return The topology epoch most recently successfully stored by the topology description plugin, or -1 if none.
+     * @return The stored topology epoch: a real epoch ({@code >= 0}), {@link #STORED_TOPOLOGY_EPOCH_NONE},
+     *         or {@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN}.
      */
     public int storedDescriptionTopologyEpoch() {
         return storedDescriptionTopologyEpoch.get();
@@ -766,7 +789,9 @@ public class StreamsGroup implements Group {
     /**
      * Defer tombstoning of an empty streams group while the broker-level topology-description
      * cleanup cycle still has work to do for it: a plugin is configured and the persisted
-     * {@code StoredDescriptionTopologyEpoch} is not the {@code -1} default. The cycle drives
+     * {@code StoredDescriptionTopologyEpoch} is not {@link #STORED_TOPOLOGY_EPOCH_NONE}. Both a
+     * real epoch and {@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN} defer — an UNCERTAIN group may
+     * still hold plugin data, so it must stay reclaimable by the cycle. The cycle drives
      * {@code plugin.deleteTopology} and clears the stored epoch; the next sweep then proceeds
      * with tombstoning. When no plugin is configured the gate never holds, so deferring
      * indefinitely is not possible.
@@ -778,13 +803,13 @@ public class StreamsGroup implements Group {
     @Override
     public boolean shouldExpire(GroupCoordinatorConfig config) {
         return !(config.isStreamsGroupTopologyDescriptionPluginConfigured()
-            && storedDescriptionTopologyEpoch() != -1);
+            && storedDescriptionTopologyEpoch() != STORED_TOPOLOGY_EPOCH_NONE);
     }
 
     /**
      * @param committedOffset A committed offset corresponding to the desired snapshot.
-     * @return The topology epoch most recently successfully stored by the topology description plugin at the given
-     *         committed offset, or -1 if none.
+     * @return The stored topology epoch at the given committed offset: a real epoch ({@code >= 0}),
+     *         {@link #STORED_TOPOLOGY_EPOCH_NONE}, or {@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN}.
      */
     public int storedDescriptionTopologyEpoch(long committedOffset) {
         return storedDescriptionTopologyEpoch.get(committedOffset);
