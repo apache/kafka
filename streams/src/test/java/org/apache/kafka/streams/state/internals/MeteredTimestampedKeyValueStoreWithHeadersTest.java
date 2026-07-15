@@ -15,7 +15,10 @@
  * limitations under the License.
  */
 package org.apache.kafka.streams.state.internals;
+
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
@@ -23,12 +26,10 @@ import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
@@ -65,6 +66,7 @@ import org.mockito.quality.Strictness;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -83,6 +85,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -872,19 +875,56 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
     }
 
     @Test
-    public void shouldUseHeadersFromContextForPrefixSerialization() {
+    public void shouldReturnRightEntriesForHeaderDependentSerdeInPrefixScan() {
         setUp();
-        metered = createStoreWithMockSerdes();
+        reset(inner);
         when(context.headers()).thenReturn(HEADERS);
 
-        final String prefix = "prefixString";
-        final byte[] serializedPrefix = prefix.getBytes();
-        final Serializer<String> prefixSerializer = mock(StringSerializer.class);
-        when(prefixSerializer.serialize(null, HEADERS, prefix)).thenReturn(serializedPrefix);
+        inner = new InMemoryKeyValueStore(STORE_NAME);
 
-        metered.prefixScan(prefix, prefixSerializer);
+        final Serializer<String> headerDependentSerializer = new Serializer<>() {
+            @Override
+            public byte[] serialize(final String topic, final String data) {
+                return serialize(topic, null, data);
+            }
 
-        verify(prefixSerializer).serialize(null, HEADERS, prefix);
-        verify(inner).prefixScan(eq(serializedPrefix), any(ByteArraySerializer.class));
+            @Override
+            public byte[] serialize(final String topic, final Headers headers, final String data) {
+                final byte[] bytes = data.getBytes(StandardCharsets.UTF_8);
+                final byte[] result = new byte[bytes.length + 1];
+                result[0] = headers == null ? (byte) 1 : (byte) 2;
+                System.arraycopy(bytes, 0, result, 1, bytes.length);
+                return result;
+            }
+        };
+
+        final MeteredTimestampedKeyValueStoreWithHeaders<String, String> store = new MeteredTimestampedKeyValueStoreWithHeaders<>(
+             inner,
+            "scope",
+            new MockTime(),
+            Serdes.serdeFrom(headerDependentSerializer, Serdes.String().deserializer()),
+            new ValueTimestampHeadersSerde<>(Serdes.String())
+        );
+
+        store.init(context, store);
+
+        store.put("key1", ValueTimestampHeaders.make("value1", 100L, HEADERS));
+        store.put("key2", ValueTimestampHeaders.make("value2", 100L, HEADERS));
+
+        // 1. Test default prefixScan
+        try (final KeyValueIterator<String, ValueTimestampHeaders<String>> iterator = store.prefixScan("key", headerDependentSerializer)) {
+            assertTrue(iterator.hasNext());
+            assertTrue(iterator.next().key.endsWith("key1"));
+            assertTrue(iterator.hasNext());
+            assertTrue(iterator.next().key.endsWith("key2"));
+        }
+
+        // 2. Test readOnly prefixScan
+        try (final KeyValueIterator<String, ValueTimestampHeaders<String>> iterator = store.readOnly(IsolationLevel.READ_UNCOMMITTED).prefixScan("key", headerDependentSerializer)) {
+            assertTrue(iterator.hasNext());
+            assertTrue(iterator.next().key.endsWith("key1"));
+            assertTrue(iterator.hasNext());
+            assertTrue(iterator.next().key.endsWith("key2"));
+        }
     }
 }
