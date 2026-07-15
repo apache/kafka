@@ -699,7 +699,7 @@ public class ProcessorStateManager implements StateManager {
             // Refresh the task directory's modification time so the state directory cleaner does
             // not treat the just-released directory as obsolete before it can be reassigned.
             if (!startupTask && baseDir.exists() && !baseDir.setLastModified(time.milliseconds())) {
-                log.debug("{}Failed to update modification time of state directory {} for task {}",
+                log.warn("{}Failed to update modification time of state directory {} for task {}",
                     logPrefix, baseDir, taskId);
             }
         }
