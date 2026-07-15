@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.FixedOrderMap;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
@@ -184,6 +185,9 @@ public class ProcessorStateManager implements StateManager {
     private final StateDirectory stateDirectory;
     private final File baseDir;
     private final UpgradeFromValues upgradeFrom;
+    private final Time time;
+
+    private boolean startupTask = false;
 
     private TaskType taskType;
     private Logger log;
@@ -205,6 +209,7 @@ public class ProcessorStateManager implements StateManager {
                                  final boolean eosEnabled,
                                  final LogContext logContext,
                                  final StateDirectory stateDirectory,
+                                 final Time time,
                                  final Map<String, String> storeToChangelogTopic,
                                  final Collection<TopicPartition> sourcePartitions,
                                  final UpgradeFromValues upgradeFrom) throws ProcessorStateException {
@@ -216,6 +221,7 @@ public class ProcessorStateManager implements StateManager {
         this.eosEnabled = eosEnabled;
         this.sourcePartitions = sourcePartitions;
         this.upgradeFrom = upgradeFrom;
+        this.time = time;
 
         this.baseDir = stateDirectory.getOrCreateDirectoryForTask(taskId);
         this.stateDirectory = stateDirectory;
@@ -233,9 +239,10 @@ public class ProcessorStateManager implements StateManager {
                                  final boolean eosEnabled,
                                  final LogContext logContext,
                                  final StateDirectory stateDirectory,
+                                 final Time time,
                                  final Map<String, String> storeToChangelogTopic,
                                  final Collection<TopicPartition> sourcePartitions) throws ProcessorStateException {
-        this(taskId, taskType, eosEnabled, logContext, stateDirectory, storeToChangelogTopic, sourcePartitions, null);
+        this(taskId, taskType, eosEnabled, logContext, stateDirectory, time, storeToChangelogTopic, sourcePartitions, null);
     }
 
     /**
@@ -247,9 +254,13 @@ public class ProcessorStateManager implements StateManager {
                                                                final boolean eosEnabled,
                                                                final LogContext logContext,
                                                                final StateDirectory stateDirectory,
+                                                               final Time time,
                                                                final Map<String, String> storeToChangelogTopic,
                                                                final Set<TopicPartition> sourcePartitions) {
-        return new ProcessorStateManager(taskId, TaskType.STANDBY, eosEnabled, logContext, stateDirectory, storeToChangelogTopic, sourcePartitions);
+        final ProcessorStateManager stateManager =
+            new ProcessorStateManager(taskId, TaskType.STANDBY, eosEnabled, logContext, stateDirectory, time, storeToChangelogTopic, sourcePartitions);
+        stateManager.startupTask = true;
+        return stateManager;
     }
 
     void registerStateStores(final List<StateStore> allStores, final InternalProcessorContext<?, ?> processorContext) {
@@ -646,6 +657,13 @@ public class ProcessorStateManager implements StateManager {
             }
 
             stores.clear();
+
+            // Refresh the task directory's modification time so the state directory cleaner does
+            // not treat the just-released directory as obsolete before it can be reassigned.
+            if (!startupTask && baseDir.exists() && !baseDir.setLastModified(time.milliseconds())) {
+                log.debug("{}Failed to update modification time of state directory {} for task {}",
+                    logPrefix, baseDir, taskId);
+            }
         }
 
         LegacyCheckpointingStateStore.maybeDowngradeOffsets(logPrefix, upgradeFrom, stateDirectory, taskId, allOffsets);

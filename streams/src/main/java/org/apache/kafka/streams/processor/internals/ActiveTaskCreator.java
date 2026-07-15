@@ -151,6 +151,7 @@ class ActiveTaskCreator {
                 eosEnabled(applicationConfig),
                 logContext,
                 stateDirectory,
+                time,
                 topology.storeToChangelogTopic(),
                 partitions,
                 upgradeFrom);

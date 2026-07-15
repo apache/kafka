@@ -131,6 +131,7 @@ public class ProcessorStateManagerTest {
     private File checkpointFile;
     private OffsetCheckpoint checkpoint;
     private StateDirectory stateDirectory;
+    private final MockTime time = new MockTime();
 
     @Mock
     private StateStoreMetadata storeMetadata;
@@ -147,7 +148,7 @@ public class ProcessorStateManagerTest {
                 put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
                 put(StreamsConfig.STATE_DIR_CONFIG, baseDir.getPath());
             }
-        }), new MockTime(), true, true);
+        }), time, true, true);
         checkpointFile = new File(stateDirectory.getOrCreateDirectoryForTask(taskId), CHECKPOINT_FILE_NAME);
         checkpoint = new OffsetCheckpoint(checkpointFile);
     }
@@ -205,6 +206,7 @@ public class ProcessorStateManagerTest {
             false,
             logContext,
             stateDirectory,
+            time,
             mkMap(
                 mkEntry(persistentStoreName, persistentStoreTopicName),
                 mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),
@@ -225,6 +227,7 @@ public class ProcessorStateManagerTest {
             false,
             logContext,
             stateDirectory,
+            time,
             mkMap(
                 mkEntry(persistentStoreName, persistentStoreTopicName),
                 mkEntry(persistentStoreTwoName, persistentStoreTopicName)
@@ -323,6 +326,50 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
+    public void shouldRefreshTaskDirectoryModificationTimeOnClose() {
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
+        final StateStore store = mock(StateStore.class);
+        when(store.name()).thenReturn(persistentStoreName);
+
+        stateMgr.registerStateStores(singletonList(store), context);
+        stateMgr.registerStore(store, noopStateRestoreCallback, null);
+
+        final File taskDir = stateDirectory.getOrCreateDirectoryForTask(taskId);
+        final long staleTime = time.milliseconds() - 60_000L;
+        assertTrue(taskDir.setLastModified(staleTime));
+        assertThat(taskDir.lastModified(), is(staleTime));
+
+        stateMgr.close();
+
+        assertThat(taskDir.lastModified(), is(time.milliseconds()));
+    }
+
+    @Test
+    public void shouldNotRefreshTaskDirectoryModificationTimeWhenClosingStartupTask() {
+        final ProcessorStateManager stateMgr = ProcessorStateManager.createStartupTaskStateManager(
+            taskId,
+            false,
+            logContext,
+            stateDirectory,
+            time,
+            mkMap(mkEntry(persistentStoreName, persistentStoreTopicName)),
+            emptySet());
+        final StateStore store = mock(StateStore.class);
+        when(store.name()).thenReturn(persistentStoreName);
+
+        stateMgr.registerStateStores(singletonList(store), context);
+        stateMgr.registerStore(store, noopStateRestoreCallback, null);
+
+        final File taskDir = stateDirectory.getOrCreateDirectoryForTask(taskId);
+        final long staleTime = time.milliseconds() - 60_000L;
+        assertTrue(taskDir.setLastModified(staleTime));
+
+        stateMgr.close();
+
+        assertThat(taskDir.lastModified(), is(staleTime));
+    }
+
+    @Test
     public void shouldRecycleAndReinitializeStore() {
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
         final StateStore store = mock(StateStore.class);
@@ -400,6 +447,7 @@ public class ProcessorStateManagerTest {
             false,
             logContext,
             stateDirectory,
+            time,
             emptyMap(),
             emptySet()
         );
@@ -685,6 +733,7 @@ public class ProcessorStateManagerTest {
             false,
             logContext,
             stateDirectory,
+            time,
             emptyMap(),
             emptySet());
 
@@ -1268,6 +1317,7 @@ public class ProcessorStateManagerTest {
             eosEnabled,
             logContext,
             stateDirectory,
+            time,
             mkMap(
                 mkEntry(persistentStoreName, persistentStoreTopicName),
                 mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),

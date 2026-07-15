@@ -657,6 +657,7 @@ public class StreamThreadStateStoreProviderTest {
             StreamsConfigUtils.eosEnabled(streamsConfig),
             logContext,
             stateDirectory,
+            new MockTime(),
             topology.storeToChangelogTopic(),
             partitions);
         final RecordCollector recordCollector = new RecordCollectorImpl(
