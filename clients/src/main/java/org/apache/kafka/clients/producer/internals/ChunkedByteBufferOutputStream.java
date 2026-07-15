@@ -304,6 +304,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
         }
         chunks.clear();
         currentChunk = null;
+        currentChunkIndex = 0;
         flattenedBuffer = null;
     }
 
