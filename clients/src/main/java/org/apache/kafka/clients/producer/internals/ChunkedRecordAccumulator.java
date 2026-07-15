@@ -208,11 +208,8 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                         // were sized against the previous partition's open batch, so they must not be
                         // attached to a different partition's open batch — refund them and let the next
                         // iteration re-check the new partition from scratch.
-                        if (extensionChunks != null) {
-                            for (ByteBuffer chunk : extensionChunks)
-                                chunkedFree.deallocate(chunk);
-                            extensionChunks = null;
-                        }
+                        deallocateExtensionChunks(extensionChunks);
+                        extensionChunks = null;
                         continue;
                     }
 
@@ -238,8 +235,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                             continue;
                         }
                         // The open batch is gone, closed, or non-chunked (e.g., a split batch). Return chunks to pool.
-                        for (ByteBuffer chunk : extensionChunks)
-                            chunkedFree.deallocate(chunk);
+                        deallocateExtensionChunks(extensionChunks);
                         extensionChunks = null;
                         continue;
                     }
@@ -274,12 +270,19 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
         } finally {
             if (bufferStream != null)
                 bufferStream.deallocate();
-            if (extensionChunks != null) {
-                for (ByteBuffer chunk : extensionChunks)
-                    chunkedFree.deallocate(chunk);
-            }
+            deallocateExtensionChunks(extensionChunks);
             appendsInProgress.decrementAndGet();
         }
+    }
+
+    /**
+     * Return any held extension chunks to the pool. No-op when none are held.
+     */
+    private void deallocateExtensionChunks(List<ByteBuffer> extensionChunks) {
+        if (extensionChunks == null)
+            return;
+        for (ByteBuffer chunk : extensionChunks)
+            chunkedFree.deallocate(chunk);
     }
 
     /**
