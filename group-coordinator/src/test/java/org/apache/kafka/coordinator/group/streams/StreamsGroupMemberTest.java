@@ -451,6 +451,51 @@ public class StreamsGroupMemberTest {
     }
 
     @Test
+    public void testAsStreamsGroupDescribeMemberSortsTaskOffsetsByTaskId() {
+        final StreamsGroupMember member = createStreamsGroupMember();
+
+        // The reported offsets are inserted in a deliberately scrambled order (across both subtopology and
+        // partition) so that a missing sort would surface: the describe response must return them ordered by
+        // TaskId, i.e. by subtopologyId then partition, for a deterministic response.
+        MemberTaskOffsets taskOffsets = new MemberTaskOffsets(
+            mkMap(
+                mkEntry(new TaskId(SUBTOPOLOGY2, 1), 200L),
+                mkEntry(new TaskId(SUBTOPOLOGY1, 2), 120L),
+                mkEntry(new TaskId(SUBTOPOLOGY2, 0), 190L),
+                mkEntry(new TaskId(SUBTOPOLOGY1, 0), 100L)
+            ),
+            mkMap(
+                mkEntry(new TaskId(SUBTOPOLOGY2, 0), 290L),
+                mkEntry(new TaskId(SUBTOPOLOGY1, 0), 150L),
+                mkEntry(new TaskId(SUBTOPOLOGY2, 1), 250L),
+                mkEntry(new TaskId(SUBTOPOLOGY1, 2), 170L)
+            )
+        );
+
+        StreamsGroupDescribeResponseData.Member actual =
+            member.asStreamsGroupDescribeMember(TasksTuple.EMPTY, taskOffsets);
+
+        assertEquals(
+            List.of(
+                new StreamsGroupDescribeResponseData.TaskOffset().setSubtopologyId(SUBTOPOLOGY1).setPartition(0).setOffset(100L),
+                new StreamsGroupDescribeResponseData.TaskOffset().setSubtopologyId(SUBTOPOLOGY1).setPartition(2).setOffset(120L),
+                new StreamsGroupDescribeResponseData.TaskOffset().setSubtopologyId(SUBTOPOLOGY2).setPartition(0).setOffset(190L),
+                new StreamsGroupDescribeResponseData.TaskOffset().setSubtopologyId(SUBTOPOLOGY2).setPartition(1).setOffset(200L)
+            ),
+            actual.taskOffsets()
+        );
+        assertEquals(
+            List.of(
+                new StreamsGroupDescribeResponseData.TaskOffset().setSubtopologyId(SUBTOPOLOGY1).setPartition(0).setOffset(150L),
+                new StreamsGroupDescribeResponseData.TaskOffset().setSubtopologyId(SUBTOPOLOGY1).setPartition(2).setOffset(170L),
+                new StreamsGroupDescribeResponseData.TaskOffset().setSubtopologyId(SUBTOPOLOGY2).setPartition(0).setOffset(290L),
+                new StreamsGroupDescribeResponseData.TaskOffset().setSubtopologyId(SUBTOPOLOGY2).setPartition(1).setOffset(250L)
+            ),
+            actual.taskEndOffsets()
+        );
+    }
+
+    @Test
     public void testHasAssignedTasksChanged() {
         TasksTupleWithEpochs assignedTasks1 = new TasksTupleWithEpochs(
             mkTasksPerSubtopologyWithCommonEpoch(MEMBER_EPOCH, mkEntry(SUBTOPOLOGY1, new HashSet<>(TASKS1))),
