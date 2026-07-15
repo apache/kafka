@@ -321,9 +321,11 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
     }
 
     /**
-     * Build a {@link MemoryRecordsBuilder} backed by the chunked stream. Its {@code writeLimit}
-     * bounds when the batch is full (the same batch-size limit as the full path), while chunk
-     * capacity grows on demand via {@link ChunkedByteBufferOutputStream#addBuffers(List)}.
+     * Build a {@link MemoryRecordsBuilder} backed by the chunked stream.
+     *
+     * @param bufferStream    the chunked stream backing the batch
+     * @param firstRecordSize the first record's uncompressed size upper bound. Used to set the
+     *                        builder's write limit used by {@code hasRoomFor}/{@code isFull}
      */
     private MemoryRecordsBuilder chunkedRecordsBuilder(ChunkedByteBufferOutputStream bufferStream,
                                                        int firstRecordSize) {
