@@ -111,6 +111,22 @@ public class HeartbeatTest {
     }
 
     @Test
+    public void testFailHeartbeatResetsTimerWithBackoff() {
+        // Simulate: heartbeat was sent, then auth failure after interval elapsed
+        heartbeat.sentHeartbeat(time.milliseconds());
+        time.sleep(heartbeatIntervalMs + 50);
+
+        // Timer expired, timeToNextHeartbeat returns 0 (would cause busy loop)
+        assertEquals(0, heartbeat.timeToNextHeartbeat(time.milliseconds()));
+
+        // failHeartbeat should reset the timer with a backoff, preventing 0-timeout spin
+        heartbeat.failHeartbeat();
+        long nextHeartbeat = heartbeat.timeToNextHeartbeat(time.milliseconds());
+        assertTrue(nextHeartbeat > 0,
+            "After failHeartbeat(), timeToNextHeartbeat should return a positive backoff value, got " + nextHeartbeat);
+    }
+
+    @Test
     public void testPollTimeout() {
         assertFalse(heartbeat.pollTimeoutExpired(time.milliseconds()));
         time.sleep(maxPollIntervalMs / 2);

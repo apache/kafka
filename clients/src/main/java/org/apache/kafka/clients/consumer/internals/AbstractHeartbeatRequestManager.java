@@ -256,8 +256,17 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
         if (membershipManager().state() == MemberState.UNSUBSCRIBED) {
             return Long.MAX_VALUE;
         }
-        if (pollTimer.isExpired() || (membershipManager().shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight())) {
+        if (pollTimer.isExpired()) {
             return 0L;
+        }
+        if (membershipManager().shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight()) {
+            // Only return 0 if the heartbeat can actually be sent now. If the request is
+            // in backoff (e.g., after re-authentication failure), return the remaining backoff
+            // time to avoid a busy-wait loop in the network thread.
+            if (heartbeatRequestState.canSendRequest(currentTimeMs)) {
+                return 0L;
+            }
+            return heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs);
         }
         return Math.min(pollTimer.remainingMs() / 2, heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));
     }
