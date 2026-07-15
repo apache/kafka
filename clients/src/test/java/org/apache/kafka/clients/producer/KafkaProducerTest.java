@@ -2953,7 +2953,7 @@ public class KafkaProducerTest {
             RecordAccumulator.AppendCallbacks callbacks =
                 (RecordAccumulator.AppendCallbacks) invocation.getArguments()[6];
             callbacks.setPartition(initialSelectedPartition.partition());
-            return new RecordAccumulator.RecordAppendResult(
+            return RecordAccumulator.RecordAppendResult.appended(
                 futureRecordMetadata,
                 false,
                 false,

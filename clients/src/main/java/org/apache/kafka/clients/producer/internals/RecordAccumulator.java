@@ -402,7 +402,7 @@ public class RecordAccumulator {
         assert partition != RecordMetadata.UNKNOWN_PARTITION;
 
         RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
-        if (!appendResult.needsNewBatch) {
+        if (!appendResult.needsNewBatch()) {
             // Propagate without creating a new batch: either another thread already made us a batch
             // (success), or — incremental strategy — a concurrent appender created an extendable open batch
             // (needsBufferExtension), so the caller releases its pre-allocated buffer and retries via
@@ -418,7 +418,7 @@ public class RecordAccumulator {
         dq.addLast(batch);
         incomplete.add(batch);
 
-        return new RecordAppendResult(future, dq.size() > 1 || batch.isFull(), true, batch.estimatedSizeInBytes());
+        return RecordAppendResult.appended(future, dq.size() > 1 || batch.isFull(), true, batch.estimatedSizeInBytes());
     }
 
     /**
@@ -458,7 +458,7 @@ public class RecordAccumulator {
                 last.closeForRecordAppends();
             } else {
                 int appendedBytes = last.estimatedSizeInBytes() - initialBytes;
-                return new RecordAppendResult(future, deque.size() > 1 || last.isFull(), false, appendedBytes);
+                return RecordAppendResult.appended(future, deque.size() > 1 || last.isFull(), false, appendedBytes);
             }
         }
         return RecordAppendResult.NEEDS_NEW_BATCH;
@@ -1270,68 +1270,82 @@ public class RecordAccumulator {
     }
 
     /*
-     * Result of an attempt to append a record to the accumulator. Exactly one of three states:
-     * the record was appended ({@link RecordAppendResult#appended()}, {@code future} is set), the
-     * open batch needs more chunk capacity first ({@code needsBufferExtension}), or a new batch
-     * must be created for the record ({@code needsNewBatch}).
+     * Result of an attempt to append a record to the accumulator. Carries exactly one of three
+     * mutually-exclusive outcomes: the record was appended ({@link RecordAppendResult#appended()}, {@code future} is set),
+     * the open batch needs more chunk capacity first ({@link RecordAppendResult#needsBufferExtension()}),
+     * or a new batch must be created for the record ({@link RecordAppendResult#needsNewBatch()}).
      */
     public static final class RecordAppendResult {
+        /**
+         * The three mutually-exclusive outcomes of an append attempt.
+         */
+        public enum Outcome { APPENDED, NEEDS_BUFFER_EXTENSION, NEEDS_NEW_BATCH }
+
+        public final Outcome outcome;
         public final FutureRecordMetadata future;
         public final boolean batchIsFull;
         public final boolean newBatchCreated;
         /**
-         * Signal (incremental strategy) that the open batch is within its batch-size limit but its
-         * chunks lack capacity. The append was NOT attempted; the caller allocates
-         * {@link #extensionBytesNeeded} bytes of chunk capacity, attaches them via
-         * {@link ChunkedProducerBatch#addBuffers}, and retries. When {@code true}, {@code future} is null.
+         * Bytes of chunk capacity the open batch needs before the record fits (incremental
+         * strategy). Meaningful only for {@link Outcome#NEEDS_BUFFER_EXTENSION}: the append was NOT
+         * attempted ({@code future} is null); the caller allocates this many bytes, attaches them
+         * via {@link ChunkedProducerBatch#addBuffers}, and retries.
          */
-        public final boolean needsBufferExtension;
         public final int extensionBytesNeeded;
-        /**
-         * Signal that the record was not appended because there is no open batch that can take it
-         * (the batch is full, closed, or absent). The caller must create a new batch for the
-         * record. When {@code true}, {@code future} is null.
-         */
-        public final boolean needsNewBatch;
         public final int appendedBytes;
 
-        /** The shared signal-only result for {@link #needsNewBatch}; carries no per-append state. */
-        static final RecordAppendResult NEEDS_NEW_BATCH = new RecordAppendResult(null, false, false, false, 0, true, 0);
+        /** The shared signal-only result for {@link Outcome#NEEDS_NEW_BATCH}; carries no per-append state. */
+        public static final RecordAppendResult NEEDS_NEW_BATCH =
+                new RecordAppendResult(Outcome.NEEDS_NEW_BATCH, null, false, false, 0, 0);
 
-        public RecordAppendResult(FutureRecordMetadata future,
-                                  boolean batchIsFull,
-                                  boolean newBatchCreated,
-                                  int appendedBytes) {
-            this(future, batchIsFull, newBatchCreated, false, 0, false, appendedBytes);
-        }
-
-        private RecordAppendResult(FutureRecordMetadata future,
+        private RecordAppendResult(Outcome outcome,
+                                   FutureRecordMetadata future,
                                    boolean batchIsFull,
                                    boolean newBatchCreated,
-                                   boolean needsBufferExtension,
                                    int extensionBytesNeeded,
-                                   boolean needsNewBatch,
                                    int appendedBytes) {
+            this.outcome = outcome;
             this.future = future;
             this.batchIsFull = batchIsFull;
             this.newBatchCreated = newBatchCreated;
-            this.needsBufferExtension = needsBufferExtension;
             this.extensionBytesNeeded = extensionBytesNeeded;
-            this.needsNewBatch = needsNewBatch;
             this.appendedBytes = appendedBytes;
         }
 
-        /** A signal-only result indicating the caller must allocate more chunk capacity. */
-        static RecordAppendResult needsExtension(int extensionBytesNeeded) {
-            return new RecordAppendResult(null, false, false, true, extensionBytesNeeded, false, 0);
+        /** Result of a successful append to an open batch */
+        public static RecordAppendResult appended(FutureRecordMetadata future,
+                                                  boolean batchIsFull,
+                                                  boolean newBatchCreated,
+                                                  int appendedBytes) {
+            Objects.requireNonNull(future, "future must be non-null for an appended result");
+            return new RecordAppendResult(Outcome.APPENDED, future, batchIsFull, newBatchCreated, 0, appendedBytes);
         }
 
         /**
-         * @return {@code true} if the record was appended to the open batch ({@link #future} is then non-null),
-         * {@code false} if it wasn't ({@link #needsBufferExtension} and {@link #needsNewBatch} results).
+         * Signal-only result (incremental strategy): the open batch is within its batch-size limit
+         * but its chunks lack capacity, so the caller must allocate {@code extensionBytesNeeded}
+         * bytes of chunk capacity and retry. The append was not attempted.
+         */
+        public static RecordAppendResult needsExtension(int extensionBytesNeeded) {
+            return new RecordAppendResult(Outcome.NEEDS_BUFFER_EXTENSION, null, false, false, extensionBytesNeeded, 0);
+        }
+
+        /**
+         * @return {@code true} if the record was appended to the open batch ({@link #future} is then
+         * non-null), {@code false} for the {@link #needsBufferExtension()} and {@link #needsNewBatch()} results.
          */
         public boolean appended() {
-            return !needsBufferExtension && !needsNewBatch;
+            return outcome == Outcome.APPENDED;
+        }
+
+        /** @return {@code true} if the open batch needs more chunk capacity before the record fits. */
+        public boolean needsBufferExtension() {
+            return outcome == Outcome.NEEDS_BUFFER_EXTENSION;
+        }
+
+        /** @return {@code true} if there is no open batch that can take the record, so a new one must be created. */
+        public boolean needsNewBatch() {
+            return outcome == Outcome.NEEDS_NEW_BATCH;
         }
     }
 

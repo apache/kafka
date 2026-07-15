@@ -151,7 +151,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     }
                 }
 
-                if (appendResult.needsBufferExtension) {
+                if (appendResult.needsBufferExtension()) {
                     // Mid-batch extension: the open batch can still take this record so grow it in
                     // place. The acquire is non-blocking to fail fast when the pool is exhausted:
                     // close the batch and let the record block once on the new-batch path.
@@ -176,7 +176,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                         continue;
                     }
                     nowMs = time.milliseconds();
-                } else if (appendResult.needsNewBatch && bufferStream == null) {
+                } else if (appendResult.needsNewBatch() && bufferStream == null) {
                     // The open batch is done (e.g., full, closed) so start a new one.
                     // Block on the pool for enough chunks to fit this record, sized with the
                     // same cumulative estimator used mid-batch (header + record bytes for NONE,
@@ -221,13 +221,10 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                         // writable chunked batch; otherwise refund the chunks and re-evaluate.
                         if (last instanceof ChunkedProducerBatch && last.isWritable()) {
                             // Attach the chunks we sized off-lock without re-checking whether a
-                            // concurrent appender already grew the batch enough to fit our record.
-                            // This optimizes for the common (uncontended) case. Under concurrency it
-                            // can temporarily over-allocate: two appenders each sizing their own gap
-                            // against the same observed capacity both attach, so the batch ends up
-                            // with more capacity than the records need (one appender's chunks could
-                            // have sufficed for both). The surplus is fully unused and returned to
-                            // the pool when the batch is closed for appends.
+                            // concurrent appender already grew the batch enough. Optimizes for the
+                            // uncontended case; under concurrency two appenders can each attach their
+                            // own gap (temporary over-allocation, one could have been enough for both).
+                            // The unused chunks returns to the pool when the batch closes for appends.
                             ((ChunkedProducerBatch) last).addBuffers(extensionChunks);
                             extensionChunks = null;
                             RecordAppendResult retryResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
@@ -257,7 +254,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     final ChunkedByteBufferOutputStream batchStream = bufferStream;
                     appendResult = appendNewBatch(topic, effectivePartition, dq, timestamp, key, value, headers, callbacks,
                             () -> chunkedRecordsBuilder(batchStream, firstRecordSize), nowMs);
-                    if (appendResult.needsBufferExtension) {
+                    if (appendResult.needsBufferExtension()) {
                         // A concurrent appender created an open batch we should extend rather
                         // than start a new one (detected by appendNewBatch's in-lock tryAppend).
                         // Our bufferStream was sized for a fresh batch — release it and loop so
@@ -266,7 +263,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                         bufferStream = null;
                         continue;
                     }
-                    if (appendResult.needsNewBatch)
+                    if (appendResult.needsNewBatch())
                         throw new IllegalStateException("appendNewBatch must not return a needsNewBatch result");
                     if (appendResult.newBatchCreated)
                         bufferStream = null;
