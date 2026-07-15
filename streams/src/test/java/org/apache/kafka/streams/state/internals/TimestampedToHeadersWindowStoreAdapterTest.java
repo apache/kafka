@@ -48,6 +48,8 @@ import java.time.Instant;
 import java.util.Properties;
 
 import static java.time.Duration.ofMillis;
+import static org.apache.kafka.streams.state.HeadersBytesStore.convertToHeaderFormat;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -98,6 +100,55 @@ public class TimestampedToHeadersWindowStoreAdapterTest {
     public void tearDown() {
         if (adapter != null) {
             adapter.close();
+        }
+    }
+
+    @Test
+    public void shouldConvertValueOnFetch() {
+        final Bytes key = new Bytes("key".getBytes());
+        final byte[] timestampedValue = "value".getBytes();
+        underlyingStore.put(key, timestampedValue, 1000L);
+
+        try (final WindowStoreIterator<byte[]> iterator = adapter.fetch(key, 0L, 10000L)) {
+            assertTrue(iterator.hasNext(), "Expected fetch to return the stored window");
+            final KeyValue<Long, byte[]> kv = iterator.next();
+            assertEquals(1000L, kv.key, "Expected the window start timestamp");
+            assertArrayEquals(convertToHeaderFormat(timestampedValue), kv.value,
+                "Expected fetch to convert the timestamped value to the headers format");
+            assertFalse(iterator.hasNext(), "Expected no more results");
+        }
+    }
+
+    @Test
+    public void shouldConvertValueOnBackwardFetch() {
+        final Bytes key = new Bytes("key".getBytes());
+        final byte[] timestampedValue = "value".getBytes();
+        underlyingStore.put(key, timestampedValue, 1000L);
+
+        try (final WindowStoreIterator<byte[]> iterator = adapter.backwardFetch(key, 0L, 10000L)) {
+            assertTrue(iterator.hasNext(), "Expected backwardFetch to return the stored window");
+            final KeyValue<Long, byte[]> kv = iterator.next();
+            assertEquals(1000L, kv.key, "Expected the window start timestamp");
+            assertArrayEquals(convertToHeaderFormat(timestampedValue), kv.value,
+                "Expected backwardFetch to convert the timestamped value to the headers format");
+            assertFalse(iterator.hasNext(), "Expected no more results");
+        }
+    }
+
+    @Test
+    public void shouldConvertValueOnFetchAll() {
+        final Bytes key = new Bytes("key".getBytes());
+        final byte[] timestampedValue = "value".getBytes();
+        underlyingStore.put(key, timestampedValue, 1000L);
+
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = adapter.fetchAll(0L, 10000L)) {
+            assertTrue(iterator.hasNext(), "Expected fetchAll to return the stored window");
+            final KeyValue<Windowed<Bytes>, byte[]> kv = iterator.next();
+            assertEquals(key, kv.key.key(), "Expected the stored key");
+            assertEquals(1000L, kv.key.window().start(), "Expected the window start timestamp");
+            assertArrayEquals(convertToHeaderFormat(timestampedValue), kv.value,
+                "Expected fetchAll to convert the timestamped value to the headers format");
+            assertFalse(iterator.hasNext(), "Expected no more results");
         }
     }
 
