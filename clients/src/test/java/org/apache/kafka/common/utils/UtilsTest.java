@@ -17,7 +17,7 @@
 package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -253,7 +253,7 @@ public class UtilsTest {
     private void doTestWriteToByteBuffer(ByteBuffer source, ByteBuffer dest) throws IOException {
         int numBytes = source.remaining();
         int position = source.position();
-        DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(dest));
+        DataOutputStream out = new DataOutputStream(new SingleByteBufferOutputStream(dest));
         Utils.writeTo(out, source, source.remaining());
         dest.flip();
         assertEquals(numBytes, dest.remaining());

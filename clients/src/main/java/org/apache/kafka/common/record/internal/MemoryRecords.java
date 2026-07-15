@@ -32,6 +32,7 @@ import org.apache.kafka.common.utils.internals.AbstractIterator;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.internals.CloseableIterator;
+import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -147,7 +148,7 @@ public class MemoryRecords extends AbstractRecords {
     private static FilterResult filterTo(Iterable<MutableRecordBatch> batches, RecordFilter filter,
                                          ByteBuffer destinationBuffer, BufferSupplier decompressionBufferSupplier) {
         FilterResult filterResult = new FilterResult(destinationBuffer);
-        ByteBufferOutputStream bufferOutputStream = new ByteBufferOutputStream(destinationBuffer);
+        ByteBufferOutputStream bufferOutputStream = new SingleByteBufferOutputStream(destinationBuffer);
         for (MutableRecordBatch batch : batches) {
             final BatchRetentionResult batchRetentionResult = filter.checkBatchRetention(batch);
             final boolean containsMarkerForEmptyTxn = batchRetentionResult.containsMarkerForEmptyTxn;
@@ -667,7 +668,7 @@ public class MemoryRecords extends AbstractRecords {
         if (records.length == 0)
             return MemoryRecords.EMPTY;
         int sizeEstimate = AbstractRecords.estimateSizeInBytes(magic, compression.type(), Arrays.asList(records));
-        ByteBufferOutputStream bufferStream = new ByteBufferOutputStream(sizeEstimate);
+        ByteBufferOutputStream bufferStream = new SingleByteBufferOutputStream(sizeEstimate);
         long logAppendTime = RecordBatch.NO_TIMESTAMP;
         if (timestampType == TimestampType.LOG_APPEND_TIME)
             logAppendTime = System.currentTimeMillis();
