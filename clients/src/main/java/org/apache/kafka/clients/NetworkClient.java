@@ -391,11 +391,14 @@ public class NetworkClient implements KafkaClient {
         this.metadataRecoveryStrategy = metadataRecoveryStrategy;
         this.metadataClusterCheckEnable = metadataClusterCheckEnable;
         this.bootstrapConfiguration = bootstrapConfiguration;
-        // Bootstrap timer is lazily initialized on first poll to ensure timeout starts when polling begins
         this.bootstrapTimer = null;
         // Create executor for async DNS resolution if bootstrap is enabled
         if (bootstrapConfiguration != BootstrapConfiguration.DISABLED) {
             this.bootstrapExecutor = Executors.newSingleThreadExecutor(ThreadUtils.createThreadFactory("kafka-bootstrap-dns-resolver", true));
+            // Kick off resolution eagerly so DNS work overlaps with the caller finishing
+            // construction. poll() remains the driver — it observes the result, enforces the
+            // timer, propagates errors, and retries as needed.
+            maybeStartBootstrapResolution(time.milliseconds());
         } else {
             this.bootstrapExecutor = null;
         }

@@ -109,16 +109,18 @@ public class NetworkClientTest {
     protected final long connectionSetupTimeoutMsTest = 5 * 1000;
     protected final long connectionSetupTimeoutMaxMsTest = 127 * 1000;
     private final TestMetadataUpdater metadataUpdater = new TestMetadataUpdater(Collections.singletonList(node));
-    private final NetworkClient client = createNetworkClient(reconnectBackoffMaxMsTest);
-    private final NetworkClient clientWithNoExponentialBackoff = createNetworkClient(reconnectBackoffMsTest);
-    private final NetworkClient clientWithStaticNodes = createNetworkClientWithStaticNodes();
-    private final NetworkClient clientWithNoVersionDiscovery = createNetworkClientWithNoVersionDiscovery();
+    // Declared before the NetworkClient fields because NetworkClient's constructor now eagerly
+    // triggers bootstrap resolution and dereferences bootstrapConfiguration during construction.
     private NetworkClient.BootstrapConfiguration bootstrapConfiguration =
         NetworkClient.BootstrapConfiguration.enabled(
             BOOTSTRAP_ADDRESSES,
             ClientDnsLookup.USE_ALL_DNS_IPS,
             10 * 1000,
             CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS);
+    private final NetworkClient client = createNetworkClient(reconnectBackoffMaxMsTest);
+    private final NetworkClient clientWithNoExponentialBackoff = createNetworkClient(reconnectBackoffMsTest);
+    private final NetworkClient clientWithStaticNodes = createNetworkClientWithStaticNodes();
+    private final NetworkClient clientWithNoVersionDiscovery = createNetworkClientWithNoVersionDiscovery();
 
     static {
         try {
@@ -1762,8 +1764,9 @@ public class NetworkClientTest {
 
     @Test
     public void testEnsureBootstrappedZeroTimeoutAllowsOneAttemptOnSuccess() throws InterruptedException {
-        // bootstrap.resolve.timeout.ms=0 must still allow one resolution attempt. If the
-        // attempt succeeds by the following poll, the client should become bootstrapped.
+        // bootstrap.resolve.timeout.ms=0 must still allow one resolution attempt (kicked off
+        // eagerly in the constructor). If it succeeds, the client should become bootstrapped
+        // without any fatal error on the metadata layer.
         Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
         NetworkClient.BootstrapConfiguration config = NetworkClient.BootstrapConfiguration.enabled(
                 BOOTSTRAP_ADDRESSES,
@@ -1776,24 +1779,19 @@ public class NetworkClientTest {
                 time, false, new ApiVersions(), new LogContext(),
                 MetadataRecoveryStrategy.NONE, config, false);
 
-        // First poll triggers the resolution (timer isn't yet initialised, so the timeout check is a no-op).
-        client.poll(1000, time.milliseconds());
-        assertDoesNotThrow(metadata::maybeThrowAnyException,
-                "Bootstrap should not fail on the first poll before resolution has had a chance to run");
-
-        // Wait for the async DNS resolution to complete and poll again to process the result.
         MetadataUpdater metadataUpdater = TestUtils.fieldValue(client, NetworkClient.class, "metadataUpdater");
         TestUtils.waitForCondition(() -> {
             client.poll(100, time.milliseconds());
             return metadataUpdater.isBootstrapped();
-        }, "Bootstrap should complete on the next poll after resolution succeeds");
+        }, "Bootstrap should complete via the eager resolution attempt");
         assertDoesNotThrow(metadata::maybeThrowAnyException);
     }
 
     @Test
-    public void testEnsureBootstrappedZeroTimeoutFailsOnNextPollWhenResolutionFails() throws InterruptedException {
-        // bootstrap.resolve.timeout.ms=0 must still allow one resolution attempt. If the
-        // attempt fails, the next poll must record the BootstrapResolutionException.
+    public void testEnsureBootstrappedZeroTimeoutFailsAfterOneAttemptWhenResolutionFails() throws InterruptedException {
+        // bootstrap.resolve.timeout.ms=0 must still allow one resolution attempt (kicked off
+        // eagerly in the constructor). If it fails, the next poll must record the
+        // BootstrapResolutionException on the metadata layer.
         Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
         List<String> invalidAddresses = List.of("unresolvable.invalid:9092");
         NetworkClient.BootstrapConfiguration config = NetworkClient.BootstrapConfiguration.enabled(
@@ -1807,12 +1805,6 @@ public class NetworkClientTest {
                 time, false, new ApiVersions(), new LogContext(),
                 MetadataRecoveryStrategy.NONE, config, false);
 
-        // First poll triggers the resolution (timeout check is a no-op with no timer yet).
-        client.poll(1000, time.milliseconds());
-        assertDoesNotThrow(metadata::maybeThrowAnyException,
-                "Bootstrap should not fail before the resolution attempt has had a chance to run");
-
-        // Once the failing resolution completes, the next poll must surface the timeout on metadata.
         TestUtils.waitForCondition(() -> {
             client.poll(100, time.milliseconds());
             try {
@@ -1821,6 +1813,6 @@ public class NetworkClientTest {
             } catch (BootstrapResolutionException e) {
                 return true;
             }
-        }, "BootstrapResolutionException should be recorded on metadata after the first attempt fails");
+        }, "BootstrapResolutionException should be recorded on metadata after the resolution attempt fails");
     }
 }
