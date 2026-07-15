@@ -21,6 +21,7 @@ import org.apache.kafka.server.storage.log.FetchParams;
 import org.apache.kafka.storage.internals.log.LogReadResult;
 
 import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
@@ -45,6 +46,11 @@ public interface LogReader {
      * allowing callers to use whatever records were retrieved (via {@link LogReadResult#info()}) and skip
      * the rest based on {@link LogReadResult#error()}.
      *
+     * <p>If the order of the fetched partitions matters to the caller, it should pass order-preserving
+     * {@link Set} and {@link Map} implementations (for example {@link java.util.LinkedHashSet} and
+     * {@link LinkedHashMap}). LogReader implementations must then honour that iteration order and return
+     * the partitions in the same order in the resulting {@link LinkedHashMap}.
+     *
      * @param fetchParams                The fetch parameters (isolation level, maxBytes, etc.)
      * @param partitionsToFetch          The set of partitions to fetch
      * @param topicPartitionFetchOffsets The fetch offset per partition
@@ -56,7 +62,7 @@ public interface LogReader {
     CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> readAsync(
         FetchParams fetchParams,
         Set<TopicIdPartition> partitionsToFetch,
-        LinkedHashMap<TopicIdPartition, Long> topicPartitionFetchOffsets,
-        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes,
+        Map<TopicIdPartition, Long> topicPartitionFetchOffsets,
+        Map<TopicIdPartition, Integer> partitionMaxBytes,
         boolean readRemote);
 }
