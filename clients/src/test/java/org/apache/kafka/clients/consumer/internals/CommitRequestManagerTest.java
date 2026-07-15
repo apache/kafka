@@ -1279,8 +1279,8 @@ public class CommitRequestManagerTest {
         assertFalse(firstResult.isDone());
         assertFalse(secondResult.isDone());
 
-        // The retried request should be sent after the backoff, with the latest member ID and epoch.
-        time.sleep(retryBackoffMs);
+        // The deduplicated retry is chained onto the original as a fresh request, so it is sent on
+        // the next poll with no backoff, carrying the latest member ID and epoch.
         res = commitRequestManager.poll(time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
         OffsetFetchRequestData reqData =

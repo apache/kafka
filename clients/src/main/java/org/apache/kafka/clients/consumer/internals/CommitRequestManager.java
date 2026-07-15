@@ -554,10 +554,12 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         currentResult.whenComplete((res, error) -> {
             boolean inflightRemoved = pendingRequests.inflightOffsetFetches.remove(fetchRequest);
             if (!inflightRemoved) {
-                // Requests deduplicated onto another pending request are never added to the
-                // buffers, so there is nothing to remove for them here.
-                log.debug("Completed request not found in the in-flight buffer (it was " +
-                    "deduplicated and chained onto an existing request): {}", fetchRequest);
+                // A completed request may legitimately not be in the in-flight buffer for a few
+                // reasons: it was deduplicated and chained onto an existing request (so it was never
+                // added to the buffers), or it completed before it was ever sent (e.g. while there
+                // was no coordinator available). In all these cases there is nothing to remove here.
+                log.debug("Completed offset fetch request was not found in the in-flight buffer: {}",
+                    fetchRequest);
             }
 
             // Group-level error
@@ -1227,7 +1229,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             } else if (responseError == Errors.STALE_MEMBER_EPOCH) {
                 if (memberInfo.memberEpoch.isPresent()) {
                     log.debug("OffsetFetch failed with {}. The member has a newer epoch, so the " +
-                        "request will be retried with it.", responseError);
+                        "request can be retried with it as long as it has not expired.", responseError);
                 } else {
                     log.error("OffsetFetch failed with {} and the consumer is not part " +
                         "of the group anymore (it probably left the group, got fenced" +
