@@ -45,8 +45,11 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     private final BufferPool pool;
     private ByteBuffer currentChunk;
     private int currentChunkIndex;
+    // Set once the content has been read for send via buffer().
+    private boolean finalized;
+    // Single-buffer view produced by flatten() and cached here so repeat buffer() calls
+    // return the same instance. To be removed once scatter-gather (KAFKA-20580) is implemented.
     private ByteBuffer flattenedBuffer;
-    private boolean dirty;
 
     /**
      * Constructs a chunked output stream backed by the given pre-allocated chunks. Ownership of
@@ -65,7 +68,6 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
         this.chunks = new ArrayList<>(initialChunks);
         this.currentChunk = this.chunks.get(0);
         this.currentChunkIndex = 0;
-        this.dirty = true;
     }
 
     /**
@@ -85,13 +87,14 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
 
     @Override
     public void write(int b) {
+        ensureWritable();
         ensureChunkCapacity(1);
         currentChunk.put((byte) b);
-        dirty = true;
     }
 
     @Override
     public void write(byte[] bytes, int off, int len) {
+        ensureWritable();
         while (len > 0) {
             ensureChunkCapacity(1);
             int toWrite = Math.min(len, currentChunk.remaining());
@@ -99,11 +102,11 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
             off += toWrite;
             len -= toWrite;
         }
-        dirty = true;
     }
 
     @Override
     public void write(ByteBuffer sourceBuffer) {
+        ensureWritable();
         while (sourceBuffer.hasRemaining()) {
             ensureChunkCapacity(1);
             int toWrite = Math.min(sourceBuffer.remaining(), currentChunk.remaining());
@@ -112,7 +115,14 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
             currentChunk.put(sourceBuffer);
             sourceBuffer.limit(oldLimit);
         }
-        dirty = true;
+    }
+
+    /**
+     * Guards against writes after the stream has been finalized with a call to {@link #buffer()}.
+     */
+    private void ensureWritable() {
+        if (finalized)
+            throw new IllegalStateException("cannot write after buffer() has been called");
     }
 
     private void ensureChunkCapacity(int needed) {
@@ -141,28 +151,41 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
         chunks.addAll(newChunks);
     }
 
+    /**
+     * Returns the written bytes as a single contiguous buffer. Calling this finalizes the stream: no
+     * further writes are allowed (see {@link #ensureWritable()}) and later calls return the same
+     * instance, which callers such as {@code MemoryRecordsBuilder#writeDefaultBatchHeader} rely on
+     * when they write the batch header directly into the returned buffer.
+     */
     @Override
     public ByteBuffer buffer() {
-        if (flattenedBuffer != null && !dirty) {
-            return flattenedBuffer;
-        }
-        // Written bytes only live in chunks up to currentChunk; later chunks are untouched.
+        finalized = true;
+        if (flattenedBuffer == null)
+            flattenedBuffer = flatten();
+        return flattenedBuffer;
+    }
+
+    /**
+     * Flattens the written bytes across the data-bearing chunks into a single new buffer (an extra
+     * copy). This will be removed once scatter-gather send (KAFKA-20580) is implemented.
+     */
+    private ByteBuffer flatten() {
+        // Written bytes only live in chunks up to currentChunk, later chunks are untouched.
         int lastDataChunk = Math.min(currentChunkIndex, chunks.size() - 1);
         int totalSize = 0;
         for (int i = 0; i <= lastDataChunk; i++) {
             totalSize += chunks.get(i).position();
         }
-        flattenedBuffer = ByteBuffer.allocate(totalSize);
+        ByteBuffer flattened = ByteBuffer.allocate(totalSize);
         for (int i = 0; i <= lastDataChunk; i++) {
             ByteBuffer chunk = chunks.get(i);
             int chunkPos = chunk.position();
             chunk.flip();
-            flattenedBuffer.put(chunk);
+            flattened.put(chunk);
             chunk.limit(chunk.capacity());
             chunk.position(chunkPos);
         }
-        dirty = false;
-        return flattenedBuffer;
+        return flattened;
     }
 
     /**
@@ -229,7 +252,6 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
         }
         currentChunkIndex = idx;
         currentChunk = chunks.get(idx);
-        dirty = true;
     }
 
     /**

@@ -28,6 +28,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ChunkedByteBufferOutputStreamTest {
@@ -50,6 +51,7 @@ public class ChunkedByteBufferOutputStreamTest {
     }
 
     @Test
+    @SuppressWarnings({"try", "resource"}) // Each constructor call throws, so no stream is ever created
     public void testConstructorRejectsInvalidChunks() {
         int chunkSize = 16;
         ChunkedBufferPool p = pool(64, chunkSize);
@@ -63,6 +65,26 @@ public class ChunkedByteBufferOutputStreamTest {
         List<ByteBuffer> wrongSize = Collections.singletonList(ByteBuffer.allocate(chunkSize + 1));
         assertThrows(IllegalArgumentException.class,
             () -> new ChunkedByteBufferOutputStream(wrongSize, chunkSize, p));
+    }
+
+    @Test
+    public void testWritesDisallowedAfterBuffer() throws Exception {
+        int chunkSize = 16;
+        ChunkedBufferPool p = pool(64, chunkSize);
+        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 2), chunkSize, p)) {
+            stream.write(new byte[]{1, 2, 3}, 0, 3);
+
+            // buffer() finalizes the stream: it may be called repeatedly (returning the same
+            // instance), but any subsequent write must fail.
+            ByteBuffer first = stream.buffer();
+            assertSame(first, stream.buffer(), "buffer() must return the same cached instance once built");
+
+            assertThrows(IllegalStateException.class, () -> stream.write(1));
+            assertThrows(IllegalStateException.class, () -> stream.write(new byte[]{4}, 0, 1));
+            assertThrows(IllegalStateException.class, () -> stream.write(ByteBuffer.wrap(new byte[]{5})));
+
+            stream.deallocate();
+        }
     }
 
     @Test
