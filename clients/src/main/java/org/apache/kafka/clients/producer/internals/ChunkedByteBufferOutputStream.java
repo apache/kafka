@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
