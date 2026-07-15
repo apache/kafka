@@ -4485,6 +4485,54 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @Test
+  def testDescribeStreamsGroupsWithTopologyDescription(): Unit = {
+    val streamsGroupId = "stream_group_id"
+    val testTopicName = "test_topic"
+    val testNumPartitions = 1
+
+    val config = createConfig
+    client = Admin.create(config)
+
+    prepareTopics(List(testTopicName), testNumPartitions)
+    prepareRecords(testTopicName)
+
+    val streams = createStreamsGroup(
+      inputTopics = Set(testTopicName),
+      changelogTopics = Set(testTopicName + "-changelog"),
+      streamsGroupId = streamsGroupId
+    )
+    streams.poll(JDuration.ofMillis(500L))
+
+    try {
+      TestUtils.waitUntilTrue(() => {
+        val firstGroup = client.listGroups().all().get().stream()
+          .filter(g => g.groupId() == streamsGroupId).findFirst().orElse(null)
+        firstGroup != null && firstGroup.groupState().orElse(null) == GroupState.STABLE
+      }, "Streams group did not transition to STABLE before timeout")
+
+      // Without IncludeTopologyDescription the status stays at its NOT_REQUESTED default
+      // and no topology description is attached.
+      val groupWithoutTopology = client.describeStreamsGroups(util.List.of(streamsGroupId)).all().get().get(streamsGroupId)
+      assertNotNull(groupWithoutTopology)
+      assertEquals(StreamsGroupTopologyDescriptionStatus.NOT_REQUESTED, groupWithoutTopology.topologyDescriptionStatus())
+      assertTrue(groupWithoutTopology.topologyDescription().isEmpty)
+
+      // With IncludeTopologyDescription the brokers of this cluster have no topology
+      // description plugin configured, so there is no description to serve: NOT_STORED.
+      val groupWithTopology = client.describeStreamsGroups(
+        util.List.of(streamsGroupId),
+        new DescribeStreamsGroupsOptions().includeTopologyDescription(true)
+      ).all().get().get(streamsGroupId)
+      assertNotNull(groupWithTopology)
+      assertEquals(StreamsGroupTopologyDescriptionStatus.NOT_STORED, groupWithTopology.topologyDescriptionStatus())
+      assertTrue(groupWithTopology.topologyDescription().isEmpty)
+    } finally {
+      Utils.closeQuietly(streams, "streams")
+      Utils.closeQuietly(client, "adminClient")
+    }
+  }
+
+  @Test
   def testDescribeStreamsGroupsNotReady(): Unit = {
     val streamsGroupId = "stream_group_id"
     val testTopicName = "test_topic"

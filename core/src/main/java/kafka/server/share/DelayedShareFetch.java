@@ -63,6 +63,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -476,6 +477,13 @@ public class DelayedShareFetch extends DelayedOperation {
                     TopicIdPartition topicIdPartition = topicPartitionData.keySet().iterator().next();
                     readFuture.whenComplete((result, throwable) -> {
                         if (throwable != null) {
+                            if (throwable instanceof CancellationException) {
+                                // The completion handler execution has been cancelled due to the operation
+                                // being completed in onComplete.
+                                log.trace("Async read was cancelled for group {}, member {}",
+                                    shareFetch.groupId(), shareFetch.memberId());
+                                return;
+                            }
                             log.error("Async read failed for group {}, member {}",
                                 shareFetch.groupId(), shareFetch.memberId(), throwable);
                             // Error is handled in maybeCompleteAsyncFetch() via get() exception handling
@@ -760,6 +768,12 @@ public class DelayedShareFetch extends DelayedOperation {
                     "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
                 sharePartitions.keySet());
             releasePartitionLocks(topicPartitionData.keySet());
+            // Clear the per-request state so that a subsequent tryComplete()/onComplete() re-acquires the
+            // partitions afresh. In the pending-async path topicPartitionData is partitionsAcquired, so
+            // leaving it populated would make onComplete() assume the (already released) locks are still
+            // held and process/release them again.
+            partitionsAcquired.clear();
+            localPartitionsAlreadyFetched.clear();
             return false;
         }
     }
@@ -774,6 +788,8 @@ public class DelayedShareFetch extends DelayedOperation {
         try {
             log.warn("Completing async fetch for group {}, member {}, partitions {} with empty response",
                 shareFetch.groupId(), shareFetch.memberId(), topicPartitionData.keySet());
+            // Cancel the future invocation of pending fetch.
+            pendingFetch.cancel(true);
             pendingFetch = null;
             // Update fetch ratio metric and complete the request with empty response.
             recordTopicPartitionsFetchRatioMetric(topicPartitionData);
@@ -884,10 +900,10 @@ public class DelayedShareFetch extends DelayedOperation {
 
     private boolean maybeRegisterCallbackPendingRemoteFetch() {
         log.trace("Registering callback pending remote fetch");
-        PendingRemoteFetches pendingFetch = pendingRemoteFetchesOpt.get();
-        if (!pendingFetch.isDone() && shareFetch.fetchParams().maxWaitMs < remoteFetchMaxWaitMs) {
+        PendingRemoteFetches pendingRemoteFetches = pendingRemoteFetchesOpt.get();
+        if (!pendingRemoteFetches.isDone() && shareFetch.fetchParams().maxWaitMs < remoteFetchMaxWaitMs) {
             TimerTask timerTask = new PendingRemoteFetchTimerTask();
-            pendingFetch.invokeCallbackOnCompletion(((ignored, throwable) -> {
+            pendingRemoteFetches.invokeCallbackOnCompletion(((ignored, throwable) -> {
                 timerTask.cancel();
                 log.trace("Invoked remote storage fetch callback for group {}, member {}, "
                         + "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
@@ -1182,6 +1198,10 @@ public class DelayedShareFetch extends DelayedOperation {
             // Handle synchronous exception from readFromLog()
             log.error("Error initiating async fetch in remote completion for group {}, member {}",
                 shareFetch.groupId(), shareFetch.memberId(), e);
+            // processFetchResultAndComplete won't be invoked in this error path, so it won't release the
+            // locks for partitionsToFetch. Release them here to avoid leaking the local partition locks
+            // before completing with just the remote data.
+            releasePartitionLocksAndAddToActionQueue(partitionsToFetch.keySet(), Set.of());
             // Continue to complete with just remote data.
             completionConsumer.accept(List.of());
             return;
@@ -1194,6 +1214,10 @@ public class DelayedShareFetch extends DelayedOperation {
             if (throwable != null) {
                 log.error("Async fetch failed in remote completion for group {}, member {}",
                     shareFetch.groupId(), shareFetch.memberId(), throwable);
+                // processFetchResultAndComplete won't be invoked in this error path, so it won't release
+                // the locks for partitionsToFetch. Release them here to avoid leaking the local partition
+                // locks before completing with just the remote data.
+                releasePartitionLocksAndAddToActionQueue(partitionsToFetch.keySet(), Set.of());
                 // Continue to complete with just remote data.
                 completionConsumer.accept(List.of());
                 return;

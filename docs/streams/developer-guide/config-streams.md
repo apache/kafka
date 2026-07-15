@@ -1131,6 +1131,23 @@ The maximum amount of time in milliseconds a task might stall due to internal er
 <tr>  
 <td>
 
+topology.description.push.enabled
+</td>  
+<td>
+
+Medium
+</td>  
+<td>
+
+Controls whether the Kafka Streams client sends topology descriptions to the broker when requested. When set to `false`, the client will not prepare or push topology descriptions. See [Topology Description Plugin](/{version}/streams/developer-guide/topology-description-plugin/).
+</td>  
+<td>
+
+`true`
+</td> </tr>  
+<tr>  
+<td>
+
 topology.optimization
 </td>  
 <td>
@@ -1690,6 +1707,12 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
  #### task.assignor.class
 
 > A task assignor class or class name implementing the `org.apache.kafka.streams.processor.assignment.TaskAssignor` interface. Defaults to the high-availability task assignor. One possible alternative implementation provided in Apache Kafka is the `org.apache.kafka.streams.processor.assignment.assignors.StickyTaskAssignor`, which was the default task assignor before KIP-441 and minimizes task movement at the cost of stateful task availability. Alternative implementations of the task assignment algorithm can be plugged into the application by implementing a custom `TaskAssignor` and setting this config to the name of the custom task assignor class. 
+ 
+ #### topology.description.push.enabled
+
+> Controls whether the Kafka Streams client sends topology descriptions to the broker when requested. When set to `false`, the client will not prepare or push topology descriptions. Enabled by default.
+
+This configuration only has an effect for streams groups (`group.protocol=streams`) on clusters where the broker configuration `group.streams.topology.description.plugin.class` is set; otherwise, the broker never requests topology descriptions. See [Topology Description Plugin](/{version}/streams/developer-guide/topology-description-plugin/) for details.
  
  #### topology.optimization
 

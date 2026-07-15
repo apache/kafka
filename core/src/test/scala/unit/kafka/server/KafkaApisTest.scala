@@ -88,7 +88,7 @@ import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorTes
 import org.apache.kafka.coordinator.transaction.{InitProducerIdResult, TransactionLogConfig}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.{ConfigRepository, KRaftMetadataCache, MetadataCache, MetadataCacheFixtures, MockConfigRepository}
-import org.apache.kafka.network.{Request, Session}
+import org.apache.kafka.network.{Request, SendResponse, Session}
 import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
 import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
 import org.apache.kafka.security.authorizer.AclEntry
@@ -127,7 +127,6 @@ import java.util.function.Consumer
 import java.util.{Comparator, Optional, OptionalInt, OptionalLong, Properties}
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters._
 
 class KafkaApisTest extends Logging {
   private val requestChannel: RequestChannel = mock(classOf[RequestChannel])
@@ -10412,13 +10411,13 @@ class KafkaApisTest extends Logging {
       request.context.header.apiVersion
     )
 
-    // Create the RequestChannel.Response that is created when sendResponse is called in order to update the metrics.
-    val sendResponse = new RequestChannel.SendResponse(
+    // Create the Response that is created when sendResponse is called in order to update the metrics.
+    val sendResponse = new SendResponse(
       request,
       request.buildResponseSend(response),
-      request.responseNode(response).toScala
+      request.responseNode(response)
     )
-    request.updateRequestMetrics(time.milliseconds(), sendResponse.responseLog.toJava)
+    request.updateRequestMetrics(time.milliseconds(), sendResponse.responseLog)
 
     AbstractResponse.parseResponse(
       request.context.header.apiKey,
@@ -12309,8 +12308,8 @@ class KafkaApisTest extends Logging {
       verify(metadataCache, never).getAllTopics
       verify(groupConfigManager, never).groupIds
       verify(metadataCache, never).getBrokerNodes(any)
-      assertTrue(requestMetrics.apply(ApiKeys.LIST_CONFIG_RESOURCES.name).requestQueueTimeHist.count > 0)
-      assertTrue(requestMetrics.apply(RequestMetrics.LIST_CLIENT_METRICS_RESOURCES_METRIC_NAME).requestQueueTimeHist.count > 0)
+      assertTrue(requestMetrics.get(ApiKeys.LIST_CONFIG_RESOURCES.name).requestQueueTimeHist.count > 0)
+      assertTrue(requestMetrics.get(RequestMetrics.LIST_CLIENT_METRICS_RESOURCES_METRIC_NAME).requestQueueTimeHist.count > 0)
     } finally {
       requestMetrics.close()
     }
@@ -12357,8 +12356,8 @@ class KafkaApisTest extends Logging {
             ).toList
           ).flatMap(s => s.stream).collect(util.stream.Collectors.toList[ListConfigResourcesResponseData.ConfigResource]))
       assertEquals(expectedResponseData, response.data)
-      assertTrue(requestMetrics.apply(ApiKeys.LIST_CONFIG_RESOURCES.name).requestQueueTimeHist.count > 0)
-      assertEquals(0, requestMetrics.apply(RequestMetrics.LIST_CLIENT_METRICS_RESOURCES_METRIC_NAME).requestQueueTimeHist.count)
+      assertTrue(requestMetrics.get(ApiKeys.LIST_CONFIG_RESOURCES.name).requestQueueTimeHist.count > 0)
+      assertEquals(0, requestMetrics.get(RequestMetrics.LIST_CLIENT_METRICS_RESOURCES_METRIC_NAME).requestQueueTimeHist.count)
     } finally {
       requestMetrics.close()
     }
