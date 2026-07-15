@@ -1042,6 +1042,7 @@ project(':server') {
     // To prevent a UniqueResourceException due the same resource existing in both
     // org.apache.directory.api/api-all and org.apache.directory.api/api-ldap-schema-data
     testImplementation.exclude module: 'api-ldap-schema-data'
+    testFixturesImplementation.exclude module: 'api-ldap-schema-data'
   }
 
   dependencies {
@@ -1063,21 +1064,6 @@ project(':server') {
     implementation log4j2Libs
 
     testImplementation testFixtures(project(':clients'))
-
-    testImplementation(libs.apacheda) {
-      exclude group: 'xml-apis', module: 'xml-apis'
-      // `mina-core` is a transitive dependency for `apacheds` and `apacheda`.
-      // It is safer to use from `apacheds` since that is the implementation.
-      exclude module: 'mina-core'
-    }
-    testImplementation libs.apachedsCoreApi
-    testImplementation libs.apachedsInterceptorKerberos
-    testImplementation libs.apachedsProtocolShared
-    testImplementation libs.apachedsProtocolKerberos
-    testImplementation libs.apachedsProtocolLdap
-    testImplementation libs.apachedsLdifPartition
-    testImplementation libs.apachedsMavibotPartition
-    testImplementation libs.apachedsJdbmPartition
     testImplementation libs.mockitoCore
     testImplementation libs.junitJupiter
     testImplementation testLog4j2Libs
@@ -1093,6 +1079,20 @@ project(':server') {
     testFixturesImplementation project(':server-common')
     testFixturesImplementation testFixtures(project(':server-common'))
     testFixturesImplementation libs.junitJupiter
+    testFixturesImplementation(libs.apacheda) {
+      exclude group: 'xml-apis', module: 'xml-apis'
+      // `mina-core` is a transitive dependency for `apacheds` and `apacheda`.
+      // It is safer to use from `apacheds` since that is the implementation.
+      exclude module: 'mina-core'
+    }
+    testFixturesImplementation libs.apachedsCoreApi
+    testFixturesImplementation libs.apachedsInterceptorKerberos
+    testFixturesImplementation libs.apachedsProtocolShared
+    testFixturesImplementation libs.apachedsProtocolKerberos
+    testFixturesImplementation libs.apachedsProtocolLdap
+    testFixturesImplementation libs.apachedsLdifPartition
+    testFixturesImplementation libs.apachedsMavibotPartition
+    testFixturesImplementation libs.apachedsJdbmPartition
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -2506,7 +2506,6 @@ project(':storage') {
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':test-common:test-common-util')
     testImplementation project(':server')
-    testImplementation project(':server').sourceSets.test.output
     testImplementation project(':server-common')
     testImplementation testFixtures(project(':server-common'))
     testImplementation testFixtures(project(':metadata'))
