@@ -91,17 +91,17 @@ public class ChunkedBufferPool extends BufferPool {
                 // Same as in BufferPool.allocate, but wait to acquire the memory needed for all the chunks.
                 // A single Condition is added to the waiter's list to ensure FIFO fairness at the request level.
                 //
-                // `accumulated` tracks bytes drawn from nonPooledAvailableMemory only (pool chunks
+                // `nonPoolAccumulated` tracks bytes drawn from nonPooledAvailableMemory only (pool chunks
                 // already taken live in `pooled`), and is always a whole-chunk multiple. If the wait
                 // does not complete (timeout / close / interrupt), the finally refunds the whole
-                // reservation: `accumulated` back to non-pooled memory, `pooled` back to the free chunks list.
-                long accumulated = 0;
+                // reservation: `nonPoolAccumulated` back to non-pooled memory, `pooled` back to the free chunks list.
+                long nonPoolAccumulated = 0;
                 boolean allocationCompleted = false;
                 Condition moreMemory = lock.newCondition();
                 try {
                     long remainingTimeToBlockNs = TimeUnit.MILLISECONDS.toNanos(maxTimeToBlockMs);
                     waiters.addLast(moreMemory);
-                    while ((long) pooled.size() * chunkSize + accumulated < memoryRequired) {
+                    while ((long) pooled.size() * chunkSize + nonPoolAccumulated < memoryRequired) {
                         long startWaitNs = time.nanoseconds();
                         long timeNs;
                         boolean waitingTimeElapsed;
@@ -135,24 +135,24 @@ public class ChunkedBufferPool extends BufferPool {
                         // iteration, hand that raw reservation back to the pool.
                         while (pooled.size() < numChunks && !free.isEmpty()) {
                             pooled.add(free.pollFirst());
-                            if (accumulated >= chunkSize) { // accumulated is always chunk-aligned
-                                accumulated -= chunkSize;
+                            if (nonPoolAccumulated >= chunkSize) { // nonPoolAccumulated is always chunk-aligned
+                                nonPoolAccumulated -= chunkSize;
                                 this.nonPooledAvailableMemory += chunkSize;
                             }
                         }
                         // Reserve non-pooled memory for the still-uncovered chunks, in whole chunks
                         // (the buffers themselves are allocated after the lock is released).
-                        while (pooled.size() + (int) (accumulated / chunkSize) < numChunks
+                        while (pooled.size() + (int) (nonPoolAccumulated / chunkSize) < numChunks
                                 && this.nonPooledAvailableMemory >= chunkSize) {
                             this.nonPooledAvailableMemory -= chunkSize;
-                            accumulated += chunkSize;
+                            nonPoolAccumulated += chunkSize;
                         }
                     }
                     allocationCompleted = true;
                 } finally {
                     if (!allocationCompleted) {
                         // Refund all that was reserved (pooled chunks and non-pooled bytes)
-                        this.nonPooledAvailableMemory += accumulated;
+                        this.nonPooledAvailableMemory += nonPoolAccumulated;
                         for (ByteBuffer chunk : pooled)
                             free.addFirst(chunk);
                         pooled.clear();
