@@ -35,12 +35,8 @@ import java.util.List;
  */
 public class ChunkedProducerBatch extends ProducerBatch {
 
-    // The parent's builder reference is private; keep our own to access stream capacity state.
-    private final MemoryRecordsBuilder recordsBuilder;
-
     public ChunkedProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs) {
         super(tp, recordsBuilder, createdMs);
-        this.recordsBuilder = recordsBuilder;
     }
 
     /**
