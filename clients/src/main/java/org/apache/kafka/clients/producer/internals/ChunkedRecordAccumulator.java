@@ -246,7 +246,8 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
 
                     // needsNewBatch path: extensionChunks == null here implies needsNewBatch,
                     // so bufferStream was allocated (this iteration or carried from a prior one).
-                    assert bufferStream != null;
+                    if (bufferStream == null)
+                        throw new IllegalStateException("needsNewBatch path reached without an allocated buffer stream");
                     int firstRecordSize = AbstractRecords.estimateSizeInBytesUpperBound(
                             RecordBatch.CURRENT_MAGIC_VALUE, compression.type(), key, value, headers);
                     final ChunkedByteBufferOutputStream batchStream = bufferStream;
@@ -261,6 +262,8 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                         bufferStream = null;
                         continue;
                     }
+                    if (appendResult.needsNewBatch)
+                        throw new IllegalStateException("appendNewBatch must not return a needsNewBatch result");
                     if (appendResult.newBatchCreated)
                         bufferStream = null;
                     boolean enableSwitch = allBatchesFull(dq);

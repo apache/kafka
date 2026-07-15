@@ -62,17 +62,20 @@ public class ChunkedProducerBatch extends ProducerBatch {
     }
 
     /**
-     * Appends the record after asserting there's capacity for it.
+     * Appends the record after checking there's chunk capacity for it.
      * At this point it's expected that the allocated chunks have
      * capacity for the record because the accumulator never routes an
      * append here without ensuring chunk capacity first: the first-record path pre-sizes the
      * stream for the record and the mid-batch path attaches extension chunks before retrying.
+     *
+     * @throws IllegalStateException if the attached chunks lack capacity for the record
      */
     @Override
     public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, Callback callback, long now) {
-        assert extensionBytesNeeded(timestamp, key, value, headers) == 0 :
-                "Unexpected append to a chunked batch whose chunks lack capacity for the record; " +
-                        "the accumulator should have attached extension chunks first";
+        if (extensionBytesNeeded(timestamp, key, value, headers) != 0)
+            throw new IllegalStateException(
+                    "Unexpected append to a chunked batch whose chunks lack capacity for the record; " +
+                            "the accumulator should have attached extension chunks first");
         return super.tryAppend(timestamp, key, value, headers, callback, now);
     }
 

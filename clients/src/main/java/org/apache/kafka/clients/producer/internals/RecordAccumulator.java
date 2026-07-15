@@ -384,17 +384,21 @@ public class RecordAccumulator {
      *        subclass passes a supplier that produces a builder backed by a
      *        {@link ChunkedByteBufferOutputStream}.
      * @param nowMs The current time, in milliseconds
+     * @return the append result, which never has {@code needsNewBatch=true}: the method either
+     *         propagates a non-{@code needsNewBatch} result from an open batch created concurrently
+     *         (a success, or — incremental strategy — a {@code needsBufferExtension} signal), or it
+     *         creates the new batch here and returns the successful append to it.
      */
     protected RecordAppendResult appendNewBatch(String topic,
-                                              int partition,
-                                              Deque<ProducerBatch> dq,
-                                              long timestamp,
-                                              byte[] key,
-                                              byte[] value,
-                                              Header[] headers,
-                                              AppendCallbacks callbacks,
-                                              Supplier<MemoryRecordsBuilder> recordsBuilderSupplier,
-                                              long nowMs) {
+                                                int partition,
+                                                Deque<ProducerBatch> dq,
+                                                long timestamp,
+                                                byte[] key,
+                                                byte[] value,
+                                                Header[] headers,
+                                                AppendCallbacks callbacks,
+                                                Supplier<MemoryRecordsBuilder> recordsBuilderSupplier,
+                                                long nowMs) {
         assert partition != RecordMetadata.UNKNOWN_PARTITION;
 
         RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
