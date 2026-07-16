@@ -391,14 +391,24 @@ public class NetworkClient implements KafkaClient {
         this.metadataRecoveryStrategy = metadataRecoveryStrategy;
         this.metadataClusterCheckEnable = metadataClusterCheckEnable;
         this.bootstrapConfiguration = bootstrapConfiguration;
+        // Bootstrap timer is lazily initialized on the first poll so its budget represents
+        // "time we spend on bootstrap once polling begins" — an idle gap between construction
+        // and the first poll should not eat into that budget.
         this.bootstrapTimer = null;
         // Create executor for async DNS resolution if bootstrap is enabled
         if (bootstrapConfiguration != BootstrapConfiguration.DISABLED) {
             this.bootstrapExecutor = Executors.newSingleThreadExecutor(ThreadUtils.createThreadFactory("kafka-bootstrap-dns-resolver", true));
-            // Kick off resolution eagerly so DNS work overlaps with the caller finishing
-            // construction. poll() remains the driver — it observes the result, enforces the
-            // timer, propagates errors, and retries as needed.
-            maybeStartBootstrapResolution(time.milliseconds());
+            // Kick off the first DNS resolution eagerly so it overlaps with the caller finishing
+            // construction. We deliberately don't start the timer here (see field comment);
+            // poll() remains the driver — it starts the timer, observes the result, propagates
+            // errors, and drives retries.
+            this.pendingBootstrapResolution = CompletableFuture.supplyAsync(
+                () -> ClientUtils.parseAddresses(
+                    bootstrapConfiguration.bootstrapServers,
+                    bootstrapConfiguration.clientDnsLookup
+                ),
+                bootstrapExecutor
+            );
         } else {
             this.bootstrapExecutor = null;
         }
@@ -1341,6 +1351,12 @@ public class NetworkClient implements KafkaClient {
             throw new InterruptException(new InterruptedException());
         }
 
+        // Start the timer on the first poll so its budget represents "time we spend on
+        // bootstrap since polling began" — the caller may have created the client well before
+        // its first API call, and we don't want that idle gap to eat into the budget.
+        if (bootstrapTimer == null)
+            bootstrapTimer = time.timer(bootstrapConfiguration.bootstrapResolveTimeoutMs);
+
         // Check if a pending resolution completed before checking the timeout, so that a
         // result arriving at the same time as the deadline is not incorrectly rejected.
         if (maybeProcessBootstrapResolutionResult(currentTimeMs))
@@ -1352,10 +1368,8 @@ public class NetworkClient implements KafkaClient {
         // here if the timer has expired and the resolution has not produced a bootstrapped
         // cluster). maybeStartBootstrapResolution skips if bootstrapException is set, so we
         // don't kick off a fresh resolution after the failure has been recorded.
-        if (bootstrapTimer != null) {
-            bootstrapTimer.update(currentTimeMs);
-            checkBootstrapTimeout();
-        }
+        bootstrapTimer.update(currentTimeMs);
+        checkBootstrapTimeout();
         maybeStartBootstrapResolution(currentTimeMs);
     }
 
