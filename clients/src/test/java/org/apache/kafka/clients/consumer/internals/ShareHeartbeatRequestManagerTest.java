@@ -166,6 +166,24 @@ public class ShareHeartbeatRequestManagerTest {
                 backgroundEventHandler);
     }
 
+    /**
+     * ShareConsumerImpl runs on the same ConsumerNetworkThread as the AsyncKafkaConsumer, thus we also test to ensure
+     * we don't enter a CPU spin state. Refer to KAFKA-20253
+     */
+    @Test
+    public void testMaximumTimeToWaitWhenHeartbeatShouldBeSkippedDoesNotSpin() {
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
+        when(membershipManager.state()).thenReturn(MemberState.FATAL);
+        when(membershipManager.shouldSkipHeartbeat()).thenReturn(true);
+        when(heartbeatRequestState.timeToNextHeartbeatMs(anyLong())).thenReturn(0L);
+
+        long result = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
+
+        assertTrue(result > 0,
+            "maximumTimeToWait must be > 0 while heartbeats are skipped to avoid a busy-spin; got " + result);
+        assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, result);
+    }
+
     @Test
     public void testHeartbeatOnStartup() {
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
