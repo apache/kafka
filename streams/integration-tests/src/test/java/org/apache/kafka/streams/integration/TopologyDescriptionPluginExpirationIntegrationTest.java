@@ -49,14 +49,15 @@ import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Tests of the topology description plugin behavior when a streams group expires naturally
  * (KIP-1331): the periodic broker-side cleanup cycle calls {@code plugin.deleteTopology} and
  * clears the stored topology epoch for empty groups without offsets, after which the regular
- * expiration sweep tombstones the group. Groups whose push permanently failed have no stored
- * plugin state, so they are tombstoned directly without a {@code deleteTopology} call.
+ * expiration sweep tombstones the group. Groups whose push permanently failed are left at
+ * UNCERTAIN(-2) — the non-atomic plugin call and epoch write mean the broker cannot rule out a
+ * residual plugin entry — so the cleanup cycle still issues {@code plugin.deleteTopology}
+ * defensively before the tombstone.
  *
  * <p>The tests avoid producing any input data, so the groups never commit offsets and become
  * eligible for expiration as soon as their last member leaves.
@@ -119,7 +120,7 @@ public class TopologyDescriptionPluginExpirationIntegrationTest {
     }
 
     @Test
-    public void shouldExpireGroupWithoutDeleteTopologyWhenPushPermanentlyFailed() throws Exception {
+    public void shouldReclaimUncertainPluginStateWhenPushPermanentlyFailed() throws Exception {
         final String appId = "topology-description-failed-expiration-app";
         final String inputTopic = "topology-description-failed-expiration-input";
         cluster.createTopic(inputTopic, 1, 1);
@@ -133,11 +134,16 @@ public class TopologyDescriptionPluginExpirationIntegrationTest {
                     "Expected a setTopology call for group " + appId);
             }
 
-            // The push permanently failed, so no topology description is stored for the
-            // group: the tombstone fires directly, without any deleteTopology call.
+            // The permanent push failure leaves the group at UNCERTAIN(-2): the barrier written
+            // before the plugin call remains, because the failed-epoch write only advances the
+            // failed epoch. UNCERTAIN is delete-eligible, so the cleanup cycle must call
+            // plugin.deleteTopology defensively to reclaim any residual entry before the
+            // expiration sweep tombstones the group.
+            TestUtils.waitForCondition(
+                () -> TrackingTopologyDescriptionPlugin.deleteTopologyCalls(appId) >= 1,
+                "Expected the cleanup cycle to invoke deleteTopology for group " + appId
+                    + " left at UNCERTAIN by the permanent push failure");
             waitForGroupToBeDeleted(admin, appId);
-            assertEquals(0, TrackingTopologyDescriptionPlugin.deleteTopologyCalls(appId),
-                "Expected no deleteTopology call for group " + appId + " whose push permanently failed");
         }
     }
 
