@@ -122,7 +122,8 @@ Note: Apache Kafka 4.2 only supports KRaft mode - ZooKeeper mode has been remove
       * `kafka-consumer-perf-test.sh` and `kafka-share-consumer-perf-test.sh` gain the `--command-property` option to bring all performance testing tools in line 
     * The option `--command-config` is used for all command-line tools which accept a file of configuration properties. The tools affected are: 
       * `kafka-cluster.sh` (`--config` is deprecated in favor of `--command-config`) 
-      * `kafka-console-consumer.sh`, `kafka-console-producer.sh` and `kafka-console-share-consumer.sh` (`--consumer.config` and `--producer.config` are deprecated in favor of `--command-config`) 
+      * `kafka-console-consumer.sh` and `kafka-console-producer.sh` (`--consumer.config` and `--producer.config` are deprecated in favor of `--command-config`)
+      * `kafka-console-share-consumer.sh` (`--consumer-config` is deprecated in favor of `--command-config`)
       * `kafka-consumer-perf-test.sh`, `kafka-producer-perf-test.sh` and `kafka-share-consumer-perf-test.sh` (`--consumer.config` and `--producer.config` are deprecated in favor of `--command-config`) 
       * `kafka-verifiable-consumer.sh` and `kafka-verifiable-producer.sh` (`--consumer.config` and `--producer.config` are deprecated in favor of `--command-config`) 
       * `kafka-leader-election.sh` (`--admin.config` is deprecated in favor of `--command-config`) 
