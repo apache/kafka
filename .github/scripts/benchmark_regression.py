@@ -21,9 +21,12 @@ The baseline lives on the ``benchmark-results`` orphan branch as one JSON file p
 record (a record = benchmark method x @Param combination). Each file holds:
 
   * ``counters``: the deterministic per-operation values (the ``*PerOp`` @AuxCounters). These are
-    pure protocol logic, so they are the HARD GATE: in compare mode a mismatch fails the check (unless overridden).
-  * ``history``: a rolling window of the machine-dependent metrics. These are ADVISORY only: compare averages the window and
-    warns on drift, never failing.
+    pure protocol logic, so they form the HARD GATE: in compare mode a mismatch fails the check
+    (unless overridden).
+  * ``history``: a rolling window of the machine-dependent metrics (clock time and GC). Clock time
+    is ADVISORY: compare averages the window and warns on drift, but never fails. GC metrics are
+    recorded here but are currently informational only, shown for the current run rather than
+    compared or gated.
 
 Markdown is written to stdout (the workflow redirects it to $GITHUB_STEP_SUMMARY); logs go to
 stderr.
@@ -33,7 +36,6 @@ import argparse
 import json
 import logging
 import os
-import re
 import sys
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -46,10 +48,7 @@ logger.addHandler(handler)
 
 # JMH prefixes profiler ("-prof") secondary metrics with a middle dot, e.g. "·gc.alloc.rate.norm".
 GC_PREFIX = "·"
-# gc.alloc.rate.norm (allocated bytes/op) is advisory, not gated: it is only near-deterministic
-# (JIT escape-analysis and warmup drift it across the runner pool), so hard-gating it would flake.
-# Only the *PerOp counters (pure logic) are hard-gated.
-ADVISORY_GC_KEYS = ("gc.alloc.rate.norm", "gc.alloc.rate", "gc.count", "gc.time")
+GC_KEYS = ("gc.alloc.rate.norm", "gc.alloc.rate", "gc.count", "gc.time")
 SCORE_KEY = "score_ns_op"
 
 PASS = "PASSED ✅"
@@ -62,6 +61,14 @@ Record = Dict[str, Any]
 Row = Tuple[str, str, Optional[float], Optional[float], bool]
 
 
+def positive_int(value: str) -> int:
+    # Guards --history-window: a window of 0 would make history[-0:] keep the whole list (no trim),
+    number = int(value)
+    if number < 1:
+        raise argparse.ArgumentTypeError(f"must be a positive integer, got {value!r}")
+    return number
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="KRaft JMH benchmark regression gate")
     parser.add_argument("--result", required=True,
@@ -71,17 +78,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--mode", required=True, choices=["compare", "update"])
     parser.add_argument("--override", default="false",
                         help="'true' downgrades a hard-gate failure to a warning (compare mode)")
-    parser.add_argument("--history-window", type=int, default=30,
-                        help="Max number of noisy-metric samples to retain per benchmark")
+    parser.add_argument("--history-window", type=positive_int, default=30,
+                        help="Max number of noisy-metric samples to retain per benchmark (>= 1)")
     parser.add_argument("--counter-abs-tol", type=float, default=1e-6,
                         help="Absolute tolerance for the deterministic per-op counters")
     parser.add_argument("--noisy-rel-tol", type=float, default=0.20,
-                        help="Relative tolerance before an advisory (time/GC) drift is flagged")
+                        help="Relative tolerance before an advisory timing drift is flagged")
     return parser.parse_args()
 
 
 def as_bool(value: str) -> bool:
-    return str(value).strip().lower() in ("1", "true", "yes", "on")
+    return value.strip().lower() == "true"
 
 
 def short_name(benchmark: str) -> str:
@@ -93,7 +100,7 @@ def record_filename(benchmark: str, params: Dict[str, str]) -> str:
     suffix = ""
     if params:
         suffix = "__" + "_".join(f"{key}-{params[key]}" for key in sorted(params))
-    return re.sub(r"[^A-Za-z0-9._-]", "_", short_name(benchmark) + suffix) + ".json"
+    return short_name(benchmark) + suffix + ".json"
 
 
 def secondary_scores(record: Record) -> Dict[str, Optional[float]]:
@@ -106,12 +113,14 @@ def secondary_scores(record: Record) -> Dict[str, Optional[float]]:
 
 
 def extract(record: Record) -> Tuple[Dict[str, float], Dict[str, float], Optional[float]]:
-    """Split one JMH record into (deterministic counters, advisory GC metrics, timing score)."""
+    """Split one JMH record into (deterministic counters, informational GC metrics, timing score)."""
     scores = secondary_scores(record)
     # The @AuxCounters values are the ones named "*PerOp"; this auto-includes any future counter
-    # and excludes the raw "operations" count (which is noisy under AverageTime).
-    counters = {k: v for k, v in scores.items() if k.endswith("PerOp")}
-    gc = {k: scores[k] for k in ADVISORY_GC_KEYS if scores.get(k) is not None}
+    # and excludes the raw "operations" count. A None score
+    # (metric present but with no data point) is dropped, so it never lands in the baseline or gets
+    # treated by within() as a real value to match against.
+    counters = {k: v for k, v in scores.items() if k.endswith("PerOp") and v is not None}
+    gc = {k: scores[k] for k in GC_KEYS if scores.get(k) is not None}
     score = (record.get("primaryMetric") or {}).get("score")
     return counters, gc, score
 
@@ -155,6 +164,7 @@ def mode_compare(records: List[Record], args: argparse.Namespace) -> int:
     override = as_bool(args.override)
     hard_rows: List[Row] = []
     soft_rows: List[Row] = []
+    gc_rows: List[Tuple[str, str, Optional[float]]] = []
     notes: List[str] = []
     failed = False
 
@@ -165,33 +175,34 @@ def mode_compare(records: List[Record], args: argparse.Namespace) -> int:
             " [" + ", ".join(f"{k}={params[k]}" for k in sorted(params)) + "]" if params else "")
 
         counters, gc, score = extract(record)
+
+        # GC is informational for now: collected and shown for the current run, never compared.
+        for key in GC_KEYS:
+            if gc.get(key) is not None:
+                gc_rows.append((label, key, gc[key]))
+
         baseline = load_baseline(args.baseline_dir, record_filename(benchmark, params))
         if baseline is None:
-            notes.append(f"`{label}`: no baseline yet — recorded on the next trunk update (not a failure).")
+            notes.append(f"`{label}`: no baseline yet (recorded on the next trunk update).")
             continue
 
         base_counters = {k: v for k, v in baseline.get("counters", {}).items() if k.endswith("PerOp")}
 
-        # Hard gate: the deterministic per-op counters only (exact; pure logic, VM-independent).
+        # Hard gate: the deterministic per-op counters only.
         for key in sorted(set(counters) | set(base_counters)):
             ok = within(counters.get(key), base_counters.get(key), args.counter_abs_tol, 0.0)
             failed = failed or not ok
             hard_rows.append((label, key, base_counters.get(key), counters.get(key), ok))
 
-        # Advisory: timing and GC (incl. gc.alloc.rate.norm) vs the mean of the stored window.
+        # Advisory: timing only, vs the mean of the stored window.
         history = baseline.get("history", [])
-        soft_current = {SCORE_KEY: score}
-        soft_current.update(gc)
-        for key in (SCORE_KEY,) + ADVISORY_GC_KEYS:
-            if key not in soft_current or soft_current[key] is None:
-                continue
-            mean = history_mean(history, key)
-            if mean is None:
-                continue
-            ok = within(soft_current[key], mean, 0.0, args.noisy_rel_tol)
-            soft_rows.append((label, key, mean, soft_current[key], ok))
+        if score is not None:
+            mean = history_mean(history, SCORE_KEY)
+            if mean is not None:
+                ok = within(score, mean, 0.0, args.noisy_rel_tol)
+                soft_rows.append((label, SCORE_KEY, mean, score, ok))
 
-    print(render(hard_rows, soft_rows, notes, failed, override))
+    print(render(hard_rows, soft_rows, gc_rows, notes, failed, override))
     if failed and not override:
         logger.error("Hard-gate counter mismatch detected; failing the check.")
         return 1
@@ -200,21 +211,25 @@ def mode_compare(records: List[Record], args: argparse.Namespace) -> int:
     return 0
 
 
-def render(hard_rows: List[Row], soft_rows: List[Row], notes: List[str],
+def render(hard_rows: List[Row], soft_rows: List[Row],
+           gc_rows: List[Tuple[str, str, Optional[float]]], notes: List[str],
            failed: bool, override: bool) -> str:
+
     lines = ["## KRaft benchmark regression report", ""]
+
     if not hard_rows:
-        lines.append("_No baseline to compare against yet — recorded on the next trunk update._")
+        lines.append("_No baseline to compare against yet. It gets recorded on the next trunk update._")
     elif failed and override:
         lines.append(f"> {WARN} **Counter change detected, but overridden** via the `benchmark-override` "
-                     "label — passing. The baseline self-updates when this merges to trunk.")
+                     "label, so the check passes. The baseline self-updates once this merges to trunk.")
     elif failed:
-        lines.append(f"> {FAIL} **Deterministic counter regression** — this is a behavioral change, not noise. "
+        lines.append(f"> {FAIL} **Deterministic counter regression.** This is a behavioral change, not noise. "
                      "Fix it, or add the `benchmark-override` label if the change is intentional.")
     else:
         lines.append(f"> {PASS} Deterministic counters match the baseline.")
     lines.append("")
 
+    # Hard gate
     if hard_rows:
         lines += ["### Deterministic counters (hard gate)", "",
                   "| Benchmark | Metric | Baseline | Current | |",
@@ -223,12 +238,22 @@ def render(hard_rows: List[Row], soft_rows: List[Row], notes: List[str],
             lines.append(f"| {label} | {metric} | {fmt(base)} | {fmt(cur)} | {PASS if ok else FAIL} |")
         lines.append("")
 
+    # Advisory tier: timing measured against the historical mean.
     if soft_rows:
-        lines += ["### Advisory metrics — time & GC (averaged over history; never fails)", "",
+        lines += ["### Advisory metric: time (averaged over history; never fails)", "",
                   "| Benchmark | Metric | Baseline avg | Current | |",
                   "|---|---|---:|---:|:--:|"]
         for label, metric, base, cur, ok in soft_rows:
             lines.append(f"| {label} | {metric} | {fmt(base)} | {fmt(cur)} | {PASS if ok else WARN} |")
+        lines.append("")
+
+    # GC numbers (informational for now)
+    if gc_rows:
+        lines += ["### GC metrics (current run, informational, not gated)", "",
+                  "| Benchmark | Metric | Current |",
+                  "|---|---|---:|"]
+        for label, metric, cur in gc_rows:
+            lines.append(f"| {label} | {metric} | {fmt(cur)} |")
         lines.append("")
 
     if notes:
@@ -264,16 +289,11 @@ def mode_update(records: List[Record], args: argparse.Namespace) -> int:
             "counters": baseline_counters,
             "history": history,
         }
-        # Deterministic serialization so commit-only-if-changed no-ops when nothing moved.
+        # Sorted keys keep the committed diff readable.
         content = json.dumps(payload, indent=2, sort_keys=True) + "\n"
         path = os.path.join(args.baseline_dir, filename)
-        existing_content = None
-        if os.path.exists(path):
-            with open(path, encoding="utf-8") as handle:
-                existing_content = handle.read()
-        if existing_content != content:
-            with open(path, "w", encoding="utf-8") as handle:
-                handle.write(content)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(content)
         updated.append((short_name(benchmark), filename, len(baseline_counters), len(history)))
 
     lines = ["## KRaft benchmark baseline update", "",
@@ -290,6 +310,9 @@ def main() -> int:
     args = parse_args()
     records = load_results(args.result)
     logger.info("Loaded %d benchmark record(s) from %s", len(records), args.result)
+    if not records:
+        logger.error("No benchmark records in %s (did the run match any benchmarks?)", args.result)
+        return 1
     if args.mode == "compare":
         return mode_compare(records, args)
     return mode_update(records, args)
