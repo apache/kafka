@@ -1043,6 +1043,9 @@ project(':server') {
     // org.apache.directory.api/api-all and org.apache.directory.api/api-ldap-schema-data
     testImplementation.exclude module: 'api-ldap-schema-data'
     testFixturesImplementation.exclude module: 'api-ldap-schema-data'
+    testFixturesImplementation.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
+    testCompileClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
+    testRuntimeClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
   }
 
   dependencies {
@@ -2506,6 +2509,7 @@ project(':storage') {
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':test-common:test-common-util')
     testImplementation project(':server')
+    testImplementation testFixtures(project(':server'))
     testImplementation project(':server-common')
     testImplementation testFixtures(project(':server-common'))
     testImplementation testFixtures(project(':metadata'))
