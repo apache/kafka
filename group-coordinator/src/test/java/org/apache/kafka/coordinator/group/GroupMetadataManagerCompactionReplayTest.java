@@ -77,6 +77,19 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
  *
  * <p>Each test exercises the real coordinator through a common use case, collecting the records it
  * writes (grouped by write), and hands them to {@link #assertCompactedVariantsLoadCleanly}.
+ *
+ * <p>The offset-commit and migration scenarios guard the "simple classic group" load path: when a
+ * compacted-forward offset-commit record is replayed before any group record, the coordinator
+ * creates a simple classic group to hold the offsets, and the surviving consumer/streams records
+ * must still load on top of it (the {@code isSimpleGroup()} branches of
+ * {@code getOrMaybeCreatePersisted{Consumer,Streams}Group}). The streams path is the fix for
+ * KSTREAMS-8756 (KAFKA-20254); the consumer path is the pre-existing counterpart it mirrors.
+ *
+ * <p>KCOORD-1232 (KAFKA-19862) — the "partition still owned at epoch" failure from a missed
+ * unassign during concurrent compaction — is out of scope here: the clean-prefix / dirty-suffix
+ * model keeps only the last record per key, so it cannot produce the cross-member double ownership
+ * that triggers that path. That fix is covered by the {@code testReplay*CurrentMemberAssignment*
+ * WithCompaction} tests in {@link GroupMetadataManagerTest}.
  */
 public class GroupMetadataManagerCompactionReplayTest {
 
@@ -104,7 +117,7 @@ public class GroupMetadataManagerCompactionReplayTest {
     /**
      * A coordinator over the shared metadata image, wired with both a consumer-group and a
      * streams-group assignor (and the classic-to-consumer migration policy, a no-op for groups that
-     * never start out classic) so a single setup serves every scenario.
+     * never start out classic).
      */
     private GroupMetadataManagerTestContext newContext(MockPartitionAssignor assignor, MockTaskAssignor streamsAssignor) {
         return new GroupMetadataManagerTestContext.Builder()
@@ -116,8 +129,7 @@ public class GroupMetadataManagerCompactionReplayTest {
     }
 
     /**
-     * A fresh, empty coordinator (same metadata image and config) used to replay compacted variants.
-     * Replay never invokes the assignors, so throwaway ones are fine.
+     * A new coordinator (same metadata image and config) used to replay compacted variants.
      */
     private GroupMetadataManagerTestContext freshContext() {
         return newContext(new MockPartitionAssignor("range"), new MockTaskAssignor("sticky"));
@@ -125,7 +137,7 @@ public class GroupMetadataManagerCompactionReplayTest {
 
     /**
      * Two members join a consumer group and rebalance, which exercises group creation, subscription
-     * metadata, target assignment, and current assignment records (and the churn between them).
+     * metadata, target assignment, and current assignment records.
      */
     @Test
     public void testRebalanceLoadsCleanlyUnderCompaction() {
@@ -221,7 +233,7 @@ public class GroupMetadataManagerCompactionReplayTest {
     /**
      * A member joins and then leaves the group. The leave writes tombstones for the member's
      * subscription, target assignment, and current assignment (and, as the last member leaves, the
-     * group itself), which is exactly the state the {@code dropTombstones} sweep variants stress.
+     * group itself).
      */
     @Test
     public void testMemberLeaveLoadsCleanlyUnderCompaction() {
@@ -252,7 +264,7 @@ public class GroupMetadataManagerCompactionReplayTest {
 
     /**
      * A static member (with a group instance id) leaves with the static-leave epoch and a new member
-     * id rejoins under the same instance id, replacing the static member. This exercises the
+     * id rejoins under the same instance id, replacing the static member. Tests the
      * static-member replacement records, which carry tombstones for the old member id.
      */
     @Test
@@ -304,9 +316,9 @@ public class GroupMetadataManagerCompactionReplayTest {
      * A classic group with one member is upgraded to the consumer protocol when a second member
      * joins with the new protocol (migration policy UPGRADE). The captured log starts with the
      * classic {@code GroupMetadata} record and is followed by the upgrade batch, which tombstones
-     * the classic group and writes the full set of consumer-group records. This is the scenario the
-     * ticket calls out by name and the one most prone to load failures, because compaction can drop
-     * the classic group record independently of the consumer-group records that replace it.
+     * the classic group and writes the full set of consumer-group records. This scenario is
+     * vulnerable to load failures because compaction can drop the classic group record independently
+     * of the consumer-group records that replace it.
      */
     @Test
     public void testClassicToConsumerUpgradeLoadsCleanlyUnderCompaction() {
@@ -360,11 +372,84 @@ public class GroupMetadataManagerCompactionReplayTest {
     }
 
     /**
-     * KCOORD-1232: a consumer group commits an offset and then rewrites all of its group records (by
-     * changing its subscription), so after full compaction the offset-commit record sorts before the
-     * surviving group records. On replay the offset commit creates a simple classic group, and the
-     * consumer group records must still load on top of it rather than failing with "not a consumer
-     * group".
+     * The combined upgrade-with-offsets path: a classic group that holds a committed offset is
+     * upgraded to the consumer protocol. After full compaction the classic {@code GroupMetadata}
+     * tombstone written by the upgrade is dropped and the offset-commit record sorts before the
+     * surviving consumer-group records. On replay the offset commit creates a simple classic group,
+     * and the consumer-group records written by the upgrade must still load on top of it rather than
+     * failing with "not a consumer group". This is the most faithful reproduction of the real-world
+     * shape behind the simple-classic-group bug: a group that started classic, holds committed
+     * offsets, and migrates to a modern protocol. It exercises the consumer counterpart of the
+     * KSTREAMS-8756 (KAFKA-20254) streams fix.
+     */
+    @Test
+    public void testClassicToConsumerUpgradeWithOffsetCommitLoadsCleanlyUnderCompaction() {
+        String groupId = "upgrade-offset-commit-group";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+        List<List<CoordinatorRecord>> batches = new ArrayList<>();
+
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols =
+            new JoinGroupRequestData.JoinGroupRequestProtocolCollection(1);
+        protocols.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
+                List.of("foo"),
+                null,
+                List.of(new TopicPartition("foo", 0)))))));
+        Map<String, byte[]> assignments = Map.of(memberId1,
+            Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(
+                List.of(new TopicPartition("foo", 0))))));
+
+        // Build a stable classic group with member 1 and persist its GroupMetadata record.
+        ClassicGroup group = context.createClassicGroup(groupId);
+        group.setProtocolName(Optional.of("range"));
+        group.add(new ClassicGroupMember(
+            memberId1, Optional.empty(), "client-id", "client-host", 10000, 5000, "consumer",
+            protocols, assignments.get(memberId1)));
+        group.transitionTo(PREPARING_REBALANCE);
+        group.transitionTo(COMPLETING_REBALANCE);
+        group.transitionTo(STABLE);
+
+        CoordinatorRecord classicGroupRecord = newGroupMetadataRecord(group, assignments);
+        context.replay(classicGroupRecord);
+        context.commit();
+        batches.add(List.of(classicGroupRecord));
+
+        // The classic group commits an offset for foo-0. Offset commits are not rewritten by the
+        // upgrade, so after compaction this record still sorts ahead of the consumer-group records.
+        batches.add(List.of(GroupCoordinatorRecordHelpers.newOffsetCommitRecord(
+            groupId, "foo", 0,
+            new OffsetAndMetadata(10L, OptionalInt.empty(), "", context.time.milliseconds(), OptionalLong.empty(), fooTopicId))));
+
+        // Member 2 joins with the new protocol, triggering the upgrade. This tombstones the classic
+        // GroupMetadata record and writes the full set of consumer-group records. Under full
+        // compaction the classic record and its tombstone are dropped, so replaying the surviving
+        // offset commit first creates a simple classic group that the consumer-group records must
+        // then load on top of.
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of(
+            memberId1, new MemberAssignmentImpl(mkAssignment(mkTopicAssignment(fooTopicId, 0))),
+            memberId2, new MemberAssignmentImpl(mkAssignment(mkTopicAssignment(fooTopicId, 1, 2)))
+        )));
+        batches.add(context.consumerGroupHeartbeat(new ConsumerGroupHeartbeatRequestData()
+            .setGroupId(groupId)
+            .setMemberId(memberId2)
+            .setMemberEpoch(0)
+            .setRebalanceTimeoutMs(5000)
+            .setServerAssignor("range")
+            .setSubscribedTopicNames(List.of("foo"))
+            .setTopicPartitions(List.of())).records());
+
+        assertCompactedVariantsLoadCleanly(batches, this::freshContext);
+    }
+
+    /**
+     * A consumer group commits an offset and then rewrites all of its group records (by changing its
+     * membership), so after full compaction the offset-commit record sorts before the surviving group
+     * records. On replay the offset commit creates a simple classic group, and the consumer-group
+     * records must still load on top of it rather than failing with "not a consumer group". This
+     * guards the consumer {@code isSimpleGroup()} branch — the pre-existing counterpart that the
+     * KSTREAMS-8756 (KAFKA-20254) streams fix mirrored.
      */
     @Test
     public void testConsumerGroupWithOffsetCommitLoadsCleanlyUnderCompaction() {
@@ -416,10 +501,13 @@ public class GroupMetadataManagerCompactionReplayTest {
     }
 
     /**
-     * KSTREAMS-8756: the streams-group counterpart of the scenario above. A streams group commits an
-     * offset and is then deleted and recreated, so after full compaction the offset-commit record
-     * sorts before the streams group records. On replay the offset commit creates a simple classic
-     * group, and the streams group records must still load on top of it.
+     * A streams group commits an offset and is then deleted and recreated, so after full compaction
+     * the offset-commit record sorts before the streams group records. On replay the offset commit
+     * creates a simple classic group, and the streams-group records must still load on top of it
+     * rather than failing with "not a streams group". This guards the streams {@code isSimpleGroup()}
+     * branch — the fix for KSTREAMS-8756 (KAFKA-20254). The delete-and-recreate sequence mirrors the
+     * offline classic-to-streams migration that motivated the ticket, since streams groups have no
+     * in-coordinator upgrade path.
      */
     @Test
     public void testStreamsGroupWithOffsetCommitLoadsCleanlyUnderCompaction() {
@@ -462,6 +550,86 @@ public class GroupMetadataManagerCompactionReplayTest {
         batches.add(context.streamsGroupHeartbeat(new StreamsGroupHeartbeatRequestData()
             .setGroupId(groupId)
             .setMemberId(memberId)
+            .setMemberEpoch(0)
+            .setRebalanceTimeoutMs(1500)
+            .setTopology(topology)
+            .setActiveTasks(List.of())
+            .setStandbyTasks(List.of())
+            .setWarmupTasks(List.of())).records());
+
+        assertCompactedVariantsLoadCleanly(batches, this::freshContext);
+    }
+
+    /**
+     * KSTREAMS-8756 (KAFKA-20254) in its native shape: a classic group holding a committed offset is
+     * migrated offline to the streams protocol. The captured log starts with the classic
+     * {@code GroupMetadata} record, then the offset commit, then a delete that tombstones the classic
+     * group, then the streams-group records from the recreated group. After full compaction the
+     * classic record and its tombstone are dropped and the offset commit sorts before the
+     * streams-group records, so replaying the offset commit first creates a simple classic group that
+     * the streams-group records must then load on top of rather than failing with "not a streams
+     * group". Unlike {@link #testStreamsGroupWithOffsetCommitLoadsCleanlyUnderCompaction}, this
+     * scenario starts from a real classic {@code GroupMetadata} record, matching the offline
+     * classic-to-streams migration described in the ticket.
+     */
+    @Test
+    public void testClassicToStreamsMigrationWithOffsetCommitLoadsCleanlyUnderCompaction() {
+        String groupId = "migration-offset-commit-streams-group";
+        String classicMemberId = Uuid.randomUuid().toString();
+        String streamsMemberId = Uuid.randomUuid().toString();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId("subtopology-1").setSourceTopics(List.of("foo"))));
+        List<List<CoordinatorRecord>> batches = new ArrayList<>();
+
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols =
+            new JoinGroupRequestData.JoinGroupRequestProtocolCollection(1);
+        protocols.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
+                List.of("foo"),
+                null,
+                List.of(new TopicPartition("foo", 0)))))));
+        Map<String, byte[]> assignments = Map.of(classicMemberId,
+            Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(
+                List.of(new TopicPartition("foo", 0))))));
+
+        // A Kafka Streams application first runs on the classic protocol: build a stable classic
+        // group and persist its GroupMetadata record.
+        ClassicGroup group = context.createClassicGroup(groupId);
+        group.setProtocolName(Optional.of("range"));
+        group.add(new ClassicGroupMember(
+            classicMemberId, Optional.empty(), "client-id", "client-host", 10000, 5000, "consumer",
+            protocols, assignments.get(classicMemberId)));
+        group.transitionTo(PREPARING_REBALANCE);
+        group.transitionTo(COMPLETING_REBALANCE);
+        group.transitionTo(STABLE);
+
+        CoordinatorRecord classicGroupRecord = newGroupMetadataRecord(group, assignments);
+        context.replay(classicGroupRecord);
+        context.commit();
+        batches.add(List.of(classicGroupRecord));
+
+        // The classic group commits an offset for foo-0.
+        batches.add(List.of(GroupCoordinatorRecordHelpers.newOffsetCommitRecord(
+            groupId, "foo", 0,
+            new OffsetAndMetadata(10L, OptionalInt.empty(), "", context.time.milliseconds(), OptionalLong.empty(), fooTopicId))));
+
+        // Offline migration: the classic group is deleted, tombstoning its GroupMetadata record. The
+        // offset commit records are left behind.
+        List<CoordinatorRecord> deletion = new ArrayList<>();
+        context.groupMetadataManager.createGroupTombstoneRecordsAndCancelTimers(groupId, deletion);
+        deletion.forEach(context::replay);
+        batches.add(deletion);
+
+        // The application restarts on the streams protocol, recreating the group. Its records are all
+        // written after the offset commit, so full compaction drops the classic record and tombstone
+        // and sorts the offset commit first; replaying it creates a simple classic group before the
+        // streams group records are replayed.
+        streamsAssignor.prepareGroupAssignment(Map.of(
+            streamsMemberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks("subtopology-1", 0, 1, 2))));
+        batches.add(context.streamsGroupHeartbeat(new StreamsGroupHeartbeatRequestData()
+            .setGroupId(groupId)
+            .setMemberId(streamsMemberId)
             .setMemberEpoch(0)
             .setRebalanceTimeoutMs(1500)
             .setTopology(topology)
