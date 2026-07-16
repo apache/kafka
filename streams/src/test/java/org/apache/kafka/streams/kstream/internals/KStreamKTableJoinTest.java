@@ -24,8 +24,8 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.KeyValue;
@@ -323,11 +323,6 @@ public class KStreamKTableJoinTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldDeserializeBufferedValueWithPutTimeHeadersDuringEviction(final boolean withHeaders) {
-        // End-to-end guard for the eviction-header fix in RocksDBTimeOrderedKeyValueBuffer. A stream-table join WITH
-        // grace parks each stream record in that buffer and only joins it once stream time advances past its grace
-        // window. By then the processor has moved on to a later record, so the *live* processor context holds that
-        // later record's headers. The buffer must deserialize each evicted value with the headers captured at put
-        // time (snapshotted in the BufferValue), not the live context's headers.
         builder = new StreamsBuilder();
         final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
         final KStream<Integer, String> stream = builder.stream(streamTopic, consumed);
@@ -335,14 +330,9 @@ public class KStreamKTableJoinTest {
             Stores.persistentVersionedKeyValueStore("V-grace", Duration.ofMinutes(5))));
         stream.join(table,
             MockValueJoiner.TOSTRING_JOINER,
-            // The left (stream-side) value serde is the one the join buffer uses to (de)serialize buffered values.
-            // We deliberately use a *header-aware* serde here: the fix only changes which headers are passed to the
-            // buffer's value deserializer, and those headers only alter the result for a serde whose deserialization
-            // depends on them. With a plain serde the headers argument is ignored, so this bug is invisible
-            // end-to-end (note also that emit() sources the output record's headers from the same put-time snapshot
-            // and was never broken -- asserting on output headers would pass with or without the fix). The
-            // deserializer below appends the "v" header value to the string, so the joined output value reveals
-            // exactly which record's headers reached the deserializer at eviction time.
+            // The built-in leaf serdes (String, primitives, …) ignore the `headers` argument, so with any of them the test would pass identically
+            // with and without the fix (a false green). The HeaderValueAppendingSerde is the minimal serde whose deserializer reflects the `headers`
+            // argument into the value
             Joined.with(Serdes.Integer(), new HeaderValueAppendingSerde(), Serdes.String(), "Grace", Duration.ofMillis(2))
         ).process(supplier);
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
