@@ -181,7 +181,7 @@ public class SuppressScenarioTest {
             .count();
 
         valueCounts
-            .suppress(untilTimeLimit(ZERO, unbounded()))
+            .suppress(untilTimeLimit(Duration.ofSeconds(1), unbounded())) // ***** UPDATE to one second here *****
             .toStream()
             .to("output-suppressed", Produced.with(STRING_SERDE, Serdes.Long()));
 
@@ -189,10 +189,12 @@ public class SuppressScenarioTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
             final TestInputTopic<String, String> inputTopic =
-                    driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
-            final Headers headers = new RecordHeaders()
-                .add("k", "v".getBytes(StandardCharsets.UTF_8));
-            inputTopic.pipeInput(new TestRecord<>("k1", "v1", headers, 0L));
+                driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
+            final Headers headers1 = new RecordHeaders().add("hk1", "hv1".getBytes(StandardCharsets.UTF_8));
+            inputTopic.pipeInput(new TestRecord<>("k", "v", headers1, 0L));
+
+            final Headers headers2 = new RecordHeaders().add("hk2", "hv2".getBytes(StandardCharsets.UTF_8));
+            inputTopic.pipeInput(new TestRecord<>("k", "v", headers2, 120_000L));
 
             final List<TestRecord<String, Long>> output = driver
                 .createOutputTopic("output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER)
@@ -200,7 +202,7 @@ public class SuppressScenarioTest {
 
             assertThat(output.size(), equalTo(1));
             // the record's own headers must survive being buffered and evicted by suppress
-            assertThat(output.get(0).headers(), equalTo(headers));
+            assertThat(output.get(0).headers(), equalTo(headers1));
         }
     }
 
