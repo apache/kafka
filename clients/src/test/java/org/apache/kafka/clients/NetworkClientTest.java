@@ -20,7 +20,6 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.RebootstrapRequiredException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -77,7 +76,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.protocol.ApiKeys.PRODUCE;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -1762,57 +1760,4 @@ public class NetworkClientTest {
         assertTrue(metadataUpdater.isBootstrapped());
     }
 
-    @Test
-    public void testEnsureBootstrappedZeroTimeoutAllowsOneAttemptOnSuccess() throws InterruptedException {
-        // bootstrap.resolve.timeout.ms=0 must still allow one resolution attempt (kicked off
-        // eagerly in the constructor). If it succeeds, the client should become bootstrapped
-        // without any fatal error on the metadata layer.
-        Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
-        NetworkClient.BootstrapConfiguration config = NetworkClient.BootstrapConfiguration.enabled(
-                BOOTSTRAP_ADDRESSES,
-                ClientDnsLookup.USE_ALL_DNS_IPS,
-                0,
-                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS);
-        NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
-                reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
-                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
-                time, false, new ApiVersions(), new LogContext(),
-                MetadataRecoveryStrategy.NONE, config, false);
-
-        MetadataUpdater metadataUpdater = TestUtils.fieldValue(client, NetworkClient.class, "metadataUpdater");
-        TestUtils.waitForCondition(() -> {
-            client.poll(100, time.milliseconds());
-            return metadataUpdater.isBootstrapped();
-        }, "Bootstrap should complete via the eager resolution attempt");
-        assertDoesNotThrow(metadata::maybeThrowAnyException);
-    }
-
-    @Test
-    public void testEnsureBootstrappedZeroTimeoutFailsAfterOneAttemptWhenResolutionFails() throws InterruptedException {
-        // bootstrap.resolve.timeout.ms=0 must still allow one resolution attempt (kicked off
-        // eagerly in the constructor). If it fails, the next poll must record the
-        // BootstrapResolutionException on the metadata layer.
-        Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
-        List<String> invalidAddresses = List.of("unresolvable.invalid:9092");
-        NetworkClient.BootstrapConfiguration config = NetworkClient.BootstrapConfiguration.enabled(
-                invalidAddresses,
-                ClientDnsLookup.USE_ALL_DNS_IPS,
-                0,
-                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS);
-        NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
-                reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
-                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
-                time, false, new ApiVersions(), new LogContext(),
-                MetadataRecoveryStrategy.NONE, config, false);
-
-        TestUtils.waitForCondition(() -> {
-            client.poll(100, time.milliseconds());
-            try {
-                metadata.maybeThrowAnyException();
-                return false;
-            } catch (BootstrapResolutionException e) {
-                return true;
-            }
-        }, "BootstrapResolutionException should be recorded on metadata after the resolution attempt fails");
-    }
 }

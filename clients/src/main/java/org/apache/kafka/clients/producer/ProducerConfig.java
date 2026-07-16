@@ -449,7 +449,7 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG,
                                         Type.LONG,
                                         CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
-                                        atLeast(0L),
+                                        atLeast(1L),
                                         Importance.HIGH,
                                         CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC)
                                 .define(ENABLE_METRICS_PUSH_CONFIG,
@@ -589,10 +589,10 @@ public class ProducerConfig extends AbstractConfig {
                                         Importance.LOW,
                                         CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_DOC)
                                 .define(CONFIG_PROVIDERS_CONFIG,
-                                        ConfigDef.Type.LIST,
+                                        Type.LIST,
                                         List.of(),
                                         ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                                        ConfigDef.Importance.LOW,
+                                        Importance.LOW,
                                         CONFIG_PROVIDERS_DOC);
     }
 

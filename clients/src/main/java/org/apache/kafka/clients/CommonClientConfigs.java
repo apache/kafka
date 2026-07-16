@@ -64,9 +64,7 @@ public class CommonClientConfigs {
     public static final long DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS = 2 * 60 * 1000L;
     public static final String BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC = "Maximum amount of time clients can spend trying to" +
         " resolve for the bootstrap server address. If the resolution cannot be completed within this timeframe, a " +
-        "<code>BootstrapResolutionException</code> will be thrown. Setting this to <code>0</code> means the client" +
-        " attempts resolution once and checks the result right after — if the bootstrap did not complete by then, a" +
-        " <code>BootstrapResolutionException</code> is thrown.";
+        "<code>BootstrapResolutionException</code> will be thrown.";
 
     public static final String METADATA_MAX_AGE_CONFIG = "metadata.max.age.ms";
     public static final String METADATA_MAX_AGE_DOC = "The period of time in milliseconds after which we force a refresh of metadata even if we haven't seen any partition leadership changes to proactively discover any new brokers or partitions.";
