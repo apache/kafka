@@ -512,6 +512,8 @@ org.apache.kafka.streams.integration.TopologyDescriptionPluginIntegrationTest:
 - shouldPushTopologyDescriptionOnlyOnceForTwoMembers
 - shouldPushTopologyDescriptionToPluginAfterJoin
 - shouldStopSolicitingPushAfterPermanentPluginFailure
+org.apache.kafka.streams.integration.TransactionalPositionRestartIntegrationTest:
+- verifyStore
 org.apache.kafka.streams.integration.VersionedKeyValueStoreIntegrationTest:
 - shouldAllowCustomIQv2ForCustomStoreImplementations
 - shouldManualUpgradeFromNonVersionedNonTimestampedToVersioned
