@@ -45,6 +45,8 @@ org.apache.kafka.tools.ClientMetricsCommandTest:
 - testOptionsListSucceeds
 - testOptionsNoActionFails
 org.apache.kafka.tools.ClusterToolTest:
+- testApiVersionsCommandOutputUsingBrokerServer
+- testApiVersionsCommandOutputUsingController
 - testClusterId
 - testClusterIdWithBootstrapController
 - testClusterTooOldToHaveId
