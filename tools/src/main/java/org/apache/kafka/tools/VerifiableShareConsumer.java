@@ -647,9 +647,8 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
                 "via AcknowledgeType, selected by (record offset % pattern length). RENEW re-delivers the " +
                 "same record, so its next delivery advances to the following pattern entry instead of " +
                 "renewing again (a pattern of only 'renew' is rejected, since it could never resolve). " +
-                "When set, the share consumer is switched to explicit acknowledgement mode and requires " +
-                "--acknowledgement-mode to be 'sync' or 'async'. When empty (the default), acknowledgement " +
-                "is implicit via commit (existing behavior, unchanged).");
+                "When set, the share consumer uses explicit acknowledgement and requires " +
+                "--acknowledgement-mode to be 'sync' or 'async'.");
 
         parser.addArgument("--offset-reset-strategy")
             .action(store())

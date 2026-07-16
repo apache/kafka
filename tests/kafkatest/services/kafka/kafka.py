@@ -790,12 +790,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             override_configs[config_property.UNSTABLE_API_VERSIONS_ENABLE] = str(True)
             override_configs[config_property.UNSTABLE_FEATURE_VERSIONS_ENABLE] = str(True)
 
-        if self.share_version is not None and int(self.share_version) > 1:
-            # share.version=2 (KIP-1191 DLQ) is above ShareVersion.LATEST_PRODUCTION (SV_1), so both
-            # the storage format tool and the broker need unstable feature versions enabled to
-            # accept it -- kafka-storage.sh format reads this same properties file via --config.
-            override_configs[config_property.UNSTABLE_FEATURE_VERSIONS_ENABLE] = str(True)
-
         if self.enable_assignment_batching:
             # Assignment batching is enabled by default in Kafka
             pass
