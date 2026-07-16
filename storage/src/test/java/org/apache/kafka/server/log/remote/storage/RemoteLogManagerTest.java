@@ -216,7 +216,7 @@ public class RemoteLogManagerTest {
     private UnifiedLog mockLog = mock(UnifiedLog.class);
 
     private final MockScheduler scheduler = new MockScheduler(time);
-    private final Properties brokerConfig = kafka.utils.TestUtils.createDummyBrokerConfig();
+    private final Properties brokerConfig = new Properties();
 
     private final String host = "localhost";
     private final int port = 1234;

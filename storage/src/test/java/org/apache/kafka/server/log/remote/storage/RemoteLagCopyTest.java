@@ -85,7 +85,7 @@ public class RemoteLagCopyTest {
     private final UnifiedLog mockLog = mock(UnifiedLog.class);
 
     private final Metrics metrics = new Metrics(time);
-    private final Properties brokerConfig = kafka.utils.TestUtils.createDummyBrokerConfig();
+    private final Properties brokerConfig = new Properties();
     private final TopicIdPartition leaderTopicIdPartition =
             new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("Leader", 0));
     private final Optional<Endpoint> endPoint =
