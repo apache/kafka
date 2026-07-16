@@ -37,6 +37,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.ReadOnlyRecord;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -45,9 +46,11 @@ import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.TimestampedWindowRangeWithHeadersQuery;
 import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlyRecordIterator;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.test.KeyValueIteratorStub;
@@ -63,6 +66,7 @@ import org.mockito.quality.Strictness;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -795,6 +799,168 @@ public class MeteredSessionStoreWithHeadersTest {
 
         assertTrue(result.isFailure());
         assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, result.getFailureReason());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldHandleTimestampedWindowRangeWithHeadersQueryWithKey() {
+        setUp();
+        init();
+
+        final Headers headers = new RecordHeaders();
+        headers.add("key1", "value1".getBytes());
+        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
+        final AggregationWithHeadersSerializer<String> serializer = new AggregationWithHeadersSerializer<>(Serdes.String().serializer());
+        final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
+
+        // A non-degenerate session window (unlike the file's default WINDOWED_KEY_BYTES, whose
+        // SessionWindow(0, 0) would make a timestamp-from-window-end assertion trivially true).
+        final Windowed<Bytes> windowedKeyBytes = new Windowed<>(KEY_BYTES, new SessionWindow(START_TIMESTAMP, END_TIMESTAMP));
+        final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult =
+            QueryResult.forResult(new KeyValueIteratorStub<>(
+                Collections.singleton(KeyValue.pair(windowedKeyBytes, serializedValue)).iterator()));
+        when(innerStore.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) rawResult);
+
+        final QueryResult<ReadOnlyRecordIterator<Windowed<String>, String>> result = store.query(
+            TimestampedWindowRangeWithHeadersQuery.<String, String>withKey(KEY),
+            PositionBound.unbounded(),
+            new QueryConfig(false));
+
+        assertTrue(result.isSuccess());
+        try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = result.getResult()) {
+            assertTrue(iterator.hasNext());
+            final ReadOnlyRecord<Windowed<String>, String> record = iterator.next();
+            assertEquals(KEY, record.key().key());
+            assertEquals(START_TIMESTAMP, record.key().window().start());
+            assertEquals(END_TIMESTAMP, record.key().window().end());
+            assertEquals(VALUE, record.value());
+            // The timestamp is sourced from the session window's end, not any per-record field
+            // (AggregationWithHeaders carries no timestamp of its own).
+            assertEquals(END_TIMESTAMP, record.timestamp());
+            assertEquals(headers, record.headers());
+            // returned headers are a read-only snapshot: neither add nor remove is allowed
+            assertThrows(IllegalStateException.class, () -> record.headers().add("x", new byte[0]));
+            assertThrows(IllegalStateException.class, () -> record.headers().remove("key1"));
+            assertFalse(iterator.hasNext());
+        }
+    }
+
+    @Test
+    public void shouldRejectWithWindowStartRangeFormForTimestampedWindowRangeWithHeadersQuery() {
+        setUp();
+        init();
+
+        final QueryResult<ReadOnlyRecordIterator<Windowed<String>, String>> result = store.query(
+            TimestampedWindowRangeWithHeadersQuery.<String, String>withWindowStartRange(
+                java.time.Instant.ofEpochMilli(0L), java.time.Instant.ofEpochMilli(0L)),
+            PositionBound.unbounded(),
+            new QueryConfig(false));
+
+        assertTrue(result.isFailure());
+        assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, result.getFailureReason());
+        assertTrue(
+            result.getFailureMessage().contains("SessionStores only support TimestampedWindowRangeWithHeadersQuery.withKey"),
+            "unexpected message: " + result.getFailureMessage());
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    public void shouldForwardRawKeyQueryForTimestampedWindowRangeWithHeadersQuery() {
+        setUp();
+        init();
+
+        when(innerStore.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) QueryResult.forResult(
+                new KeyValueIteratorStub<>(Collections.<KeyValue<Windowed<Bytes>, byte[]>>emptyList().iterator())));
+
+        store.query(
+            TimestampedWindowRangeWithHeadersQuery.<String, String>withKey(KEY),
+            PositionBound.unbounded(),
+            new QueryConfig(false));
+
+        // The typed withKey query is translated into a raw byte-level WindowRangeQuery.withKey carrying
+        // the serialized key (and no window-start range), forwarded to the wrapped store.
+        final ArgumentCaptor<WindowRangeQuery> captor = ArgumentCaptor.forClass(WindowRangeQuery.class);
+        verify(innerStore).query(captor.capture(), any(PositionBound.class), any(QueryConfig.class));
+        final WindowRangeQuery<?, ?> rawQuery = captor.getValue();
+        assertEquals(Optional.of(KEY_BYTES), rawQuery.getKey());
+        assertEquals(Optional.empty(), rawQuery.getTimeFrom());
+        assertEquals(Optional.empty(), rawQuery.getTimeTo());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldPropagateWrappedStoreFailureForTimestampedWindowRangeWithHeadersQuery() {
+        setUp();
+        init();
+        when(innerStore.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) QueryResult.forFailure(FailureReason.STORE_EXCEPTION, "boom"));
+
+        final QueryResult<ReadOnlyRecordIterator<Windowed<String>, String>> result = store.query(
+            TimestampedWindowRangeWithHeadersQuery.<String, String>withKey(KEY),
+            PositionBound.unbounded(),
+            new QueryConfig(false));
+
+        assertFalse(result.isSuccess());
+        assertEquals(FailureReason.STORE_EXCEPTION, result.getFailureReason());
+        assertEquals("boom", result.getFailureMessage());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldTrackNumOpenIteratorsForTimestampedWindowRangeWithHeadersQuery() {
+        setUp();
+        init();
+
+        final AggregationWithHeadersSerializer<String> serializer = new AggregationWithHeadersSerializer<>(Serdes.String().serializer());
+        final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, AggregationWithHeaders.make(VALUE, new RecordHeaders()));
+        final Windowed<Bytes> windowedKeyBytes = new Windowed<>(KEY_BYTES, new SessionWindow(START_TIMESTAMP, END_TIMESTAMP));
+        when(innerStore.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) QueryResult.forResult(new KeyValueIteratorStub<>(
+                Collections.singleton(KeyValue.pair(windowedKeyBytes, serializedValue)).iterator())));
+
+        final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+
+        final QueryResult<ReadOnlyRecordIterator<Windowed<String>, String>> result = store.query(
+            TimestampedWindowRangeWithHeadersQuery.<String, String>withKey(KEY),
+            PositionBound.unbounded(),
+            new QueryConfig(false));
+        assertTrue(result.isSuccess());
+
+        try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = result.getResult()) {
+            assertThat((Long) openIteratorsMetric.metricValue(), equalTo(1L));
+        }
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldDecrementOpenIteratorsTwiceWhenClosedTwiceForTimestampedWindowRangeWithHeadersQuery() {
+        setUp();
+        init();
+
+        final AggregationWithHeadersSerializer<String> serializer = new AggregationWithHeadersSerializer<>(Serdes.String().serializer());
+        final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, AggregationWithHeaders.make(VALUE, new RecordHeaders()));
+        final Windowed<Bytes> windowedKeyBytes = new Windowed<>(KEY_BYTES, new SessionWindow(START_TIMESTAMP, END_TIMESTAMP));
+        when(innerStore.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) QueryResult.forResult(new KeyValueIteratorStub<>(
+                Collections.singleton(KeyValue.pair(windowedKeyBytes, serializedValue)).iterator())));
+
+        final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
+        final ReadOnlyRecordIterator<Windowed<String>, String> iterator = store.query(
+            TimestampedWindowRangeWithHeadersQuery.<String, String>withKey(KEY),
+            PositionBound.unbounded(),
+            new QueryConfig(false)).getResult();
+
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(1L));
+        iterator.close();
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+        // close() is intentionally not idempotent (matching the sibling metered iterators): each call
+        // decrements, so a repeated close drives the gauge below zero. Callers must close exactly once.
+        iterator.close();
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(-1L));
     }
 
     @SuppressWarnings("unchecked")

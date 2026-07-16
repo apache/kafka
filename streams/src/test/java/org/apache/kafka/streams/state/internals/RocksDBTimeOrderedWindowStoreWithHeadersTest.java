@@ -20,7 +20,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
@@ -119,16 +119,34 @@ public class RocksDBTimeOrderedWindowStoreWithHeadersTest {
     }
 
     @Test
-    public void shouldReturnUnknownQueryTypeForWindowRangeQuery() {
+    public void shouldHandleWindowRangeQuery() {
+        // KIP-1356: the withWindowStartRange form of the headers-aware
+        // TimestampedWindowRangeWithHeadersQuery forwards a raw WindowRangeQuery to this native store,
+        // so enable WindowRangeQuery via the inherited RocksDBTimeOrderedWindowStore handling
+        // (StoreQueryUtils), returning the raw stored header-format bytes (previously
+        // UNKNOWN_QUERY_TYPE); the metered store does the header-aware deserialization. This matches
+        // the adapter build path, and also fixes the same pre-existing gap for the plain (non-headers)
+        // WindowRangeQuery.
+        final Bytes key = new Bytes("test-key".getBytes());
+        final byte[] storedBytes = "headers+timestamp+value".getBytes();
+        final long windowStart = 1_000L;
+        windowStore.put(key, storedBytes, windowStart);
+
         final WindowRangeQuery<Bytes, byte[]> query = WindowRangeQuery.withWindowStartRange(
             Instant.ofEpochMilli(0),
-            Instant.ofEpochMilli(Long.MAX_VALUE)
+            Instant.ofEpochMilli(RETENTION_PERIOD)
         );
-        final QueryResult<KeyValueIterator<org.apache.kafka.streams.kstream.Windowed<Bytes>, byte[]>> result =
+        final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> result =
             windowStore.query(query, PositionBound.unbounded(), new QueryConfig(false));
 
-        assertFalse(result.isSuccess());
-        assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, result.getFailureReason());
+        assertTrue(result.isSuccess(), "Expected WindowRangeQuery to succeed");
+        try (KeyValueIterator<Windowed<Bytes>, byte[]> iterator = result.getResult()) {
+            assertTrue(iterator.hasNext(), "Expected the stored entry in the window range result");
+            final KeyValue<Windowed<Bytes>, byte[]> keyValue = iterator.next();
+            assertEquals(key, keyValue.key.key());
+            assertArrayEquals(storedBytes, keyValue.value, "Expected the raw stored bytes to be returned");
+            assertFalse(iterator.hasNext(), "Expected exactly one entry in the window range result");
+        }
         assertNotNull(result.getPosition());
     }
 
