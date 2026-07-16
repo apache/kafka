@@ -117,8 +117,8 @@ public final class RaftClientBenchmarkContext {
         KRaftVersion kraftVersion,
         RaftProtocol raftProtocol
     ) throws Exception {
-        if (voterCount < 1) {
-            throw new IllegalArgumentException("voterCount must be at least 1 (the local leader is a voter)");
+        if (voterCount < 2) {
+            throw new IllegalArgumentException("voterCount must be at least 2; a single voter self-elects at init");
         }
         List<ReplicaKey> voterKeys = replicaKeys(randomReplicaId(), voterCount);
         ReplicaKey local = voterKeys.get(0);
