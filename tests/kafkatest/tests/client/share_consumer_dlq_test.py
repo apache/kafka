@@ -74,28 +74,50 @@ class ShareConsumerDLQTest(VerifiableShareConsumerTest):
             "configs": {"errors.deadletterqueue.group.enable": "true"}
         })
 
-    def assert_dlq_routing(self, dlq_records, num_dlq_partitions, source_topic=None):
-        """Assert each DLQ record's __dlq.errors.partition header maps to the DLQ partition it was
-        actually read from via (source_partition % num_dlq_partitions), and optionally that the
-        __dlq.errors.topic header matches source_topic.
+    def dlq_partition_counts(self, dlq_topic):
+        """Return {partition: record_count} for dlq_topic, from each partition's latest offset
+        (these DLQ topics are freshly created for each test, so offset == record count).
         """
-        for record in dlq_records:
-            headers = record["headers"]
-            source_partition = int(headers["__dlq.errors.partition"])
-            expected_dlq_partition = source_partition % num_dlq_partitions
-            assert expected_dlq_partition == record["partition"], \
-                "DLQ record for source partition %d landed in DLQ partition %d, expected %d" % \
-                (source_partition, record["partition"], expected_dlq_partition)
-            if source_topic is not None:
-                assert headers["__dlq.errors.topic"] == source_topic, \
-                    "Expected __dlq.errors.topic header %s, got %s" % (source_topic, headers["__dlq.errors.topic"])
+        counts = {}
+        for line in self.kafka.get_offset_shell(topic=dlq_topic, time="latest").strip().split("\n"):
+            if not line:
+                continue
+            _, partition, offset = line.rsplit(":", 2)
+            counts[int(partition)] = int(offset)
+        return counts
 
-    def group_dlq_records_by_topic(self, dlq_records):
-        records_by_topic = {}
-        for record in dlq_records:
-            source_topic = record["headers"]["__dlq.errors.topic"]
-            records_by_topic.setdefault(source_topic, []).append(record)
-        return records_by_topic
+    def expected_dlq_partition_counts(self, dlq_counts_by_source_partition, num_dlq_partitions):
+        """Compute the expected number of DLQ records per DLQ partition from the number of records
+        actually DLQ'd on each source partition and the source_partition % num_dlq_partitions
+        routing rule.
+        """
+        counts = {}
+        for source_partition, dlq_count in dlq_counts_by_source_partition.items():
+            dlq_partition = source_partition % num_dlq_partitions
+            counts[dlq_partition] = counts.get(dlq_partition, 0) + dlq_count
+        return counts
+
+    def assert_dlq_partition_counts(self, dlq_topic, expected_counts_by_dlq_partition):
+        """Assert the number of records that actually landed in each DLQ partition matches
+        expected_counts_by_dlq_partition, validating source_partition % num_dlq_partitions routing
+        purely from observable per-partition record counts (no per-record header access needed).
+        """
+        actual_counts = self.dlq_partition_counts(dlq_topic)
+        for partition in set(expected_counts_by_dlq_partition) | set(actual_counts):
+            expected = expected_counts_by_dlq_partition.get(partition, 0)
+            actual = actual_counts.get(partition, 0)
+            assert actual == expected, \
+                "DLQ topic %s partition %d has %d records, expected %d" % \
+                (dlq_topic, partition, actual, expected)
+
+    def merge_partition_counts(self, *count_dicts):
+        """Sum multiple {partition: count} dicts (e.g. one per source topic sharing a DLQ topic)
+        into a single combined {partition: count} dict."""
+        merged = {}
+        for counts in count_dicts:
+            for partition, count in counts.items():
+                merged[partition] = merged.get(partition, 0) + count
+        return merged
 
     def expected_mixed_dlq_outcome(self, producer):
         """For a producer whose consumer uses the reject/release/accept-cycling ack pattern, compute
@@ -275,7 +297,10 @@ class ShareConsumerDLQTest(VerifiableShareConsumerTest):
 
         dlq_records = self.read_dlq_topic(dlq_topic, self.total_messages)
         assert len(dlq_records) == self.total_messages
-        self.assert_dlq_routing(dlq_records, num_dlq_partitions, source_topic=self.TOPIC_MULTI["name"])
+
+        dlq_counts_by_source_partition = {tp.partition: len(values) for tp, values in producer.acked_values_by_partition.items()}
+        expected_counts = self.expected_dlq_partition_counts(dlq_counts_by_source_partition, num_dlq_partitions)
+        self.assert_dlq_partition_counts(dlq_topic, expected_counts)
 
     @cluster(num_nodes=10)
     @matrix(metadata_quorum=[quorum.isolated_kraft, quorum.combined_kraft])
@@ -303,7 +328,10 @@ class ShareConsumerDLQTest(VerifiableShareConsumerTest):
 
         dlq_records = self.read_dlq_topic(dlq_topic, self.total_messages, timeout_sec=self.default_timeout_sec * 2)
         assert len(dlq_records) == self.total_messages
-        self.assert_dlq_routing(dlq_records, num_dlq_partitions, source_topic=self.TOPIC_MULTI["name"])
+
+        dlq_counts_by_source_partition = {tp.partition: len(values) for tp, values in producer.acked_values_by_partition.items()}
+        expected_counts = self.expected_dlq_partition_counts(dlq_counts_by_source_partition, num_dlq_partitions)
+        self.assert_dlq_partition_counts(dlq_topic, expected_counts)
 
         consumer.stop_all()
 
@@ -345,7 +373,13 @@ class ShareConsumerDLQTest(VerifiableShareConsumerTest):
         actual_dlq_values = {int(record["value"]) for record in dlq_records}
         assert actual_dlq_values == expected_dlq_values, \
             "DLQ record values did not match the original produced values (copy-record enabled)"
-        self.assert_dlq_routing(dlq_records, num_dlq_partitions, source_topic=self.TOPIC_MULTI["name"])
+
+        dlq_counts_by_source_partition = {
+            tp.partition: sum(1 for offset in range(len(values)) if offset % 3 != 2)
+            for tp, values in producer.acked_values_by_partition.items()
+        }
+        expected_counts = self.expected_dlq_partition_counts(dlq_counts_by_source_partition, num_dlq_partitions)
+        self.assert_dlq_partition_counts(dlq_topic, expected_counts)
 
         consumer.stop_all()
 
@@ -353,47 +387,50 @@ class ShareConsumerDLQTest(VerifiableShareConsumerTest):
     @matrix(metadata_quorum=[quorum.isolated_kraft, quorum.combined_kraft])
     def test_multi_topic_dlq_reject(self, metadata_quorum=quorum.isolated_kraft):
         """Two source topics share one share group and one DLQ topic; every record on both is
-        REJECTed. A single VerifiableShareConsumer member subscribes to BOTH topics at once
-        (comma-separated --topic). Verifies DLQ content is correctly attributed to its source
+        REJECTed. Two separate VerifiableShareConsumer members join the group, each subscribed to
+        just one of the two topics. Verifies DLQ content is correctly attributed to its source
         topic via the __dlq.errors.topic header."""
         dlq_topic = "dlq.reject-multi-topic"
         num_dlq_partitions = 3
-        both_topics = "%s,%s" % (self.TOPIC_MULTI_A["name"], self.TOPIC_MULTI_B["name"])
         self.create_dlq_topic(dlq_topic, partitions=num_dlq_partitions, replication_factor=3)
         self.setup_dlq_group_config(dlq_topic)
 
         producer_a = self.setup_producer(self.TOPIC_MULTI_A["name"], max_messages=self.total_messages)
         producer_b = self.setup_producer(self.TOPIC_MULTI_B["name"], max_messages=self.total_messages)
-        consumer = self.setup_share_group(both_topics, group_id=self.share_group_id,
-                                           acknowledgement_mode="sync", ack_pattern=["reject"])
+        consumer_a = self.setup_share_group(self.TOPIC_MULTI_A["name"], group_id=self.share_group_id,
+                                             acknowledgement_mode="sync", ack_pattern=["reject"])
+        consumer_b = self.setup_share_group(self.TOPIC_MULTI_B["name"], group_id=self.share_group_id,
+                                             acknowledgement_mode="sync", ack_pattern=["reject"])
 
         producer_a.start()
         producer_b.start()
         self.await_produced_messages(producer_a, min_messages=self.total_messages, timeout_sec=self.default_timeout_sec)
         self.await_produced_messages(producer_b, min_messages=self.total_messages, timeout_sec=self.default_timeout_sec)
 
-        consumer.start()
-        self.await_all_members(consumer, timeout_sec=self.default_timeout_sec)
+        consumer_a.start()
+        consumer_b.start()
+        self.await_all_members(consumer_a, timeout_sec=self.default_timeout_sec)
+        self.await_all_members(consumer_b, timeout_sec=self.default_timeout_sec)
 
-        wait_until(lambda: consumer.total_rejected() >= 2 * self.total_messages,
-                   timeout_sec=self.default_timeout_sec, err_msg="Timed out waiting for all records to be rejected")
+        wait_until(lambda: consumer_a.total_rejected() >= self.total_messages,
+                   timeout_sec=self.default_timeout_sec, err_msg="Timed out waiting for all records on topic A to be rejected")
+        wait_until(lambda: consumer_b.total_rejected() >= self.total_messages,
+                   timeout_sec=self.default_timeout_sec, err_msg="Timed out waiting for all records on topic B to be rejected")
 
         producer_a.stop()
         producer_b.stop()
-        consumer.stop_all()
+        consumer_a.stop_all()
+        consumer_b.stop_all()
 
         dlq_records = self.read_dlq_topic(dlq_topic, 2 * self.total_messages)
         assert len(dlq_records) == 2 * self.total_messages
 
-        records_by_topic = self.group_dlq_records_by_topic(dlq_records)
-        assert set(records_by_topic.keys()) == {self.TOPIC_MULTI_A["name"], self.TOPIC_MULTI_B["name"]}
-        assert len(records_by_topic[self.TOPIC_MULTI_A["name"]]) == self.total_messages
-        assert len(records_by_topic[self.TOPIC_MULTI_B["name"]]) == self.total_messages
-
-        self.assert_dlq_routing(records_by_topic[self.TOPIC_MULTI_A["name"]], num_dlq_partitions,
-                                 source_topic=self.TOPIC_MULTI_A["name"])
-        self.assert_dlq_routing(records_by_topic[self.TOPIC_MULTI_B["name"]], num_dlq_partitions,
-                                 source_topic=self.TOPIC_MULTI_B["name"])
+        counts_a = {tp.partition: len(values) for tp, values in producer_a.acked_values_by_partition.items()}
+        counts_b = {tp.partition: len(values) for tp, values in producer_b.acked_values_by_partition.items()}
+        expected_counts = self.merge_partition_counts(
+            self.expected_dlq_partition_counts(counts_a, num_dlq_partitions),
+            self.expected_dlq_partition_counts(counts_b, num_dlq_partitions))
+        self.assert_dlq_partition_counts(dlq_topic, expected_counts)
 
     @cluster(num_nodes=11)
     @matrix(metadata_quorum=[quorum.isolated_kraft, quorum.combined_kraft])
@@ -403,7 +440,6 @@ class ShareConsumerDLQTest(VerifiableShareConsumerTest):
         dlq_topic = "dlq.release-multi-topic"
         num_dlq_partitions = 3
         delivery_count_limit = 2
-        both_topics = "%s,%s" % (self.TOPIC_MULTI_A["name"], self.TOPIC_MULTI_B["name"])
         self.create_dlq_topic(dlq_topic, partitions=num_dlq_partitions, replication_factor=3)
         self.setup_dlq_group_config(dlq_topic)
         wait_until(lambda: self.kafka.set_share_group_delivery_count_limit(group=self.share_group_id, limit=delivery_count_limit),
@@ -411,30 +447,35 @@ class ShareConsumerDLQTest(VerifiableShareConsumerTest):
 
         producer_a = self.setup_producer(self.TOPIC_MULTI_A["name"], max_messages=self.total_messages)
         producer_b = self.setup_producer(self.TOPIC_MULTI_B["name"], max_messages=self.total_messages)
-        consumer = self.setup_share_group(both_topics, group_id=self.share_group_id,
-                                           acknowledgement_mode="sync", ack_pattern=["release"])
+        consumer_a = self.setup_share_group(self.TOPIC_MULTI_A["name"], group_id=self.share_group_id,
+                                             acknowledgement_mode="sync", ack_pattern=["release"])
+        consumer_b = self.setup_share_group(self.TOPIC_MULTI_B["name"], group_id=self.share_group_id,
+                                             acknowledgement_mode="sync", ack_pattern=["release"])
 
         producer_a.start()
         producer_b.start()
         self.await_produced_messages(producer_a, min_messages=self.total_messages, timeout_sec=self.default_timeout_sec)
         self.await_produced_messages(producer_b, min_messages=self.total_messages, timeout_sec=self.default_timeout_sec)
 
-        consumer.start()
-        self.await_all_members(consumer, timeout_sec=self.default_timeout_sec)
+        consumer_a.start()
+        consumer_b.start()
+        self.await_all_members(consumer_a, timeout_sec=self.default_timeout_sec)
+        self.await_all_members(consumer_b, timeout_sec=self.default_timeout_sec)
 
         producer_a.stop()
         producer_b.stop()
 
+        # Both consumers must stay running while we wait: it's what drives the redelivery cycles
+        # that eventually push each record over the delivery count limit and into the DLQ.
         dlq_records = self.read_dlq_topic(dlq_topic, 2 * self.total_messages, timeout_sec=self.default_timeout_sec * 2)
         assert len(dlq_records) == 2 * self.total_messages
 
-        records_by_topic = self.group_dlq_records_by_topic(dlq_records)
-        assert len(records_by_topic.get(self.TOPIC_MULTI_A["name"], [])) == self.total_messages
-        assert len(records_by_topic.get(self.TOPIC_MULTI_B["name"], [])) == self.total_messages
+        counts_a = {tp.partition: len(values) for tp, values in producer_a.acked_values_by_partition.items()}
+        counts_b = {tp.partition: len(values) for tp, values in producer_b.acked_values_by_partition.items()}
+        expected_counts = self.merge_partition_counts(
+            self.expected_dlq_partition_counts(counts_a, num_dlq_partitions),
+            self.expected_dlq_partition_counts(counts_b, num_dlq_partitions))
+        self.assert_dlq_partition_counts(dlq_topic, expected_counts)
 
-        self.assert_dlq_routing(records_by_topic[self.TOPIC_MULTI_A["name"]], num_dlq_partitions,
-                                 source_topic=self.TOPIC_MULTI_A["name"])
-        self.assert_dlq_routing(records_by_topic[self.TOPIC_MULTI_B["name"]], num_dlq_partitions,
-                                 source_topic=self.TOPIC_MULTI_B["name"])
-
-        consumer.stop_all()
+        consumer_a.stop_all()
+        consumer_b.stop_all()
