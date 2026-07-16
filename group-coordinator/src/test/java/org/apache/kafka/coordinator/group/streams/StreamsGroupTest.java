@@ -1433,6 +1433,18 @@ public class StreamsGroupTest {
     }
 
     @Test
+    public void testShouldExpireFalseWhenStoredEpochUncertain() {
+        // UNCERTAIN (-2) also defers the tombstone: the plugin may still hold data for this
+        // group, so it must stay reclaimable by the cleanup cycle until the epoch is cleared.
+        StreamsGroup streamsGroup = createStreamsGroup("group-id");
+        streamsGroup.setStoredDescriptionTopologyEpoch(StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN);
+        GroupCoordinatorConfig config = mock(GroupCoordinatorConfig.class);
+        when(config.isStreamsGroupTopologyDescriptionPluginConfigured()).thenReturn(true);
+
+        assertFalse(streamsGroup.shouldExpire(config));
+    }
+
+    @Test
     public void testShouldExpireTrueWhenStoredEpochIsDefault() {
         // storedDescriptionTopologyEpoch == -1: no plugin row exists for this group (either the
         // topology cleanup cycle has already cleared it on a previous tick, or one was never
