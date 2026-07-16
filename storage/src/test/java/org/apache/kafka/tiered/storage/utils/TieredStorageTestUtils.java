@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.tiered.storage.utils;
 
-import org.apache.kafka.test.TestUtils;
-
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
@@ -29,6 +27,7 @@ import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMe
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorage;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
+import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 
 import org.junit.jupiter.api.Assertions;
