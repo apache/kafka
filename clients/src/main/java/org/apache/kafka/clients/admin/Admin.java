@@ -1702,7 +1702,7 @@ public interface Admin extends AutoCloseable {
      * returned {@link UnregisterControllerResult}:
      * <ul>
      *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
-     *   If the request timed out before the describe operation could finish.</li>
+     *   If the request timed out before the unregister operation could finish.</li>
      *   <li>{@link org.apache.kafka.common.errors.UnsupportedVersionException}
      *   If the software is too old to support the unregistration API.
      * </ul>

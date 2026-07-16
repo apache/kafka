@@ -232,6 +232,26 @@ When using controller endpoints use the --bootstrap-controller flag:
 $ bin/kafka-metadata-quorum.sh --bootstrap-controller localhost:9093 remove-controller --controller-id <id> --controller-directory-id <directory-id>
 ```
 
+To also unregister the controller from the cluster metadata after it has been removed from the voter set, pass the `--unregister` flag: 
+
+```bash
+$ bin/kafka-metadata-quorum.sh --bootstrap-server localhost:9092 remove-controller --controller-id <id> --controller-directory-id <directory-id> --unregister
+```
+
+### Unregister Controller
+
+A controller that has already been removed from the voter set can be unregistered from the cluster metadata using the `bin/kafka-cluster.sh unregister-controller` command. The controller must be removed from the voter set (and should be shut down) first — a running controller will re-register itself. When using broker endpoints use the --bootstrap-server flag: 
+
+```bash
+$ bin/kafka-cluster.sh unregister-controller --bootstrap-server localhost:9092 --id <id>
+```
+
+When using controller endpoints use the --bootstrap-controller flag: 
+
+```bash
+$ bin/kafka-cluster.sh unregister-controller --bootstrap-controller localhost:9093 --id <id>
+```
+
 ## Debugging
 
 ### Metadata Quorum Tool
