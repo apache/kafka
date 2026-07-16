@@ -35,12 +35,12 @@ public interface LogReader {
      * and - when {@code readRemote} is true and the requested data has been tiered off the local log - the
      * follow-up remote read into a single call.
      *
-     * <p>This is the asynchronous, remote-aware counterpart to {@link #read}: it returns a single future
-     * holding one {@link LogReadResult} per requested partition. The future completes once every partition
-     * has resolved - partitions available locally (or whose local read failed) resolve immediately, while
-     * partitions whose data is in remote storage resolve later, once the remote read finishes on the remote
-     * storage reader pool, so the caller's thread is never blocked on remote IO. When {@code readRemote} is
-     * false, tiered offsets are simply omitted from the result rather than fetched.
+     * <p>The read is asynchronous and remote-aware: it returns a single future holding one {@link LogReadResult}
+     * per requested partition. The future completes once every partition has resolved - partitions
+     * available locally (or whose local read failed) resolve immediately, while partitions whose data
+     * is in remote storage resolve later, once the remote read finishes on the remote storage reader
+     * pool, so the caller's thread is never blocked on remote IO. When {@code readRemote} is false,
+     * tiered offsets are simply omitted from the result rather than fetched.
      *
      * <p>Each per-partition {@link LogReadResult} is partial-data tolerant: the read never fails as a whole,
      * allowing callers to use whatever records were retrieved (via {@link LogReadResult#info()}) and skip
