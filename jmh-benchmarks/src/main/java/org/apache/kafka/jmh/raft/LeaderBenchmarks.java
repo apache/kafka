@@ -57,7 +57,6 @@ public class LeaderBenchmarks {
 
         RaftClientBenchmarkContext benchmark;
         RaftClientTestContext context;
-
         int epoch;
         long endOffset;
 
