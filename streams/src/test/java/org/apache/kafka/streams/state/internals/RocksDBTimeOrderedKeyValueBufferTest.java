@@ -225,8 +225,13 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         final RecordHeaders putHeaders = new RecordHeaders(new Header[]{
             new RecordHeader("at-put", "first".getBytes(StandardCharsets.UTF_8))
         });
+        // Give the record its own headers, distinct from the context headers, so the assertions below prove that
+        // eviction deserialization reads from the stored recordContext snapshot rather than from record.headers().
+        final RecordHeaders recordHeaders = new RecordHeaders(new Header[]{
+            new RecordHeader("on-record", "rec".getBytes(StandardCharsets.UTF_8))
+        });
         context.setRecordContext(new ProcessorRecordContext(0L, offset++, 0, "testing", putHeaders));
-        buffer.put(0L, new Record<>("k", "v", 0L, putHeaders), context.recordContext());
+        buffer.put(0L, new Record<>("k", "v", 0L, recordHeaders), context.recordContext());
 
         // Simulate the processor moving on to another record with different headers before eviction runs.
         final RecordHeaders laterHeaders = new RecordHeaders(new Header[]{
@@ -251,17 +256,25 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         final RecordHeaders putHeaders = new RecordHeaders(new Header[]{
             new RecordHeader("at-put", "first".getBytes(StandardCharsets.UTF_8))
         });
+        // Give the record its own headers, distinct from the context headers, so the assertions below prove that
+        // eviction deserialization reads from the stored recordContext snapshot rather than from record.headers().
+        final RecordHeaders recordHeaders = new RecordHeaders(new Header[]{
+            new RecordHeader("on-record", "rec".getBytes(StandardCharsets.UTF_8))
+        });
         context.setRecordContext(new ProcessorRecordContext(0L, offset++, 0, "testing", putHeaders));
-        buffer.put(0L, new Record<>("k", "v", 0L, putHeaders), context.recordContext());
+        buffer.put(0L, new Record<>("k", "v", 0L, recordHeaders), context.recordContext());
 
         // Simulate the processor moving on to handle a different record with different headers
         // before the grace period expires and eviction runs.
         final RecordHeaders laterHeaders = new RecordHeaders(new Header[]{
             new RecordHeader("at-evict", "second".getBytes(StandardCharsets.UTF_8))
         });
+        final RecordHeaders triggerRecordHeaders = new RecordHeaders(new Header[]{
+            new RecordHeader("on-trigger-record", "trig".getBytes(StandardCharsets.UTF_8))
+        });
         context.setRecordContext(new ProcessorRecordContext(10L, offset++, 0, "testing", laterHeaders));
         // Advance stream time past the grace period for the original record.
-        buffer.put(10L, new Record<>("trigger", "v", 10L, laterHeaders), context.recordContext());
+        buffer.put(10L, new Record<>("trigger", "v", 10L, triggerRecordHeaders), context.recordContext());
 
         final List<TimeOrderedKeyValueBuffer.Eviction<String, String>> evicted = new ArrayList<>();
         buffer.evictWhile(() -> true, evicted::add);
