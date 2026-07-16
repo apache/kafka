@@ -1398,6 +1398,7 @@ org.apache.kafka.clients.consumer.internals.ConsumerHeartbeatRequestManagerTest:
 - testHeartbeatResponseOnErrorHandling
 - testHeartbeatState
 - testLogsHeartbeatIntervalReceivedFromCoordinatorOnlyWhenChanged
+- testMaximumTimeToWaitWhenCoordinatorUnavailableDoesNotSpin
 - testMaximumTimeToWaitWhenHeartbeatShouldBeSkipped
 - testNetworkTimeout
 - testNoCoordinator
@@ -1741,6 +1742,7 @@ org.apache.kafka.clients.consumer.internals.CoordinatorRequestManagerTest:
 - testMarkCoordinatorUnknown
 - testMarkCoordinatorUnknownLoggingAccuracy
 - testNetworkTimeout
+- testNoBusyPollWhileFindCoordinatorRequestInFlight
 - testNullGroupIdShouldThrow
 - testSuccessfulResponse
 org.apache.kafka.clients.consumer.internals.DelegatingRebalanceConsumerTest:
@@ -2455,6 +2457,7 @@ org.apache.kafka.clients.consumer.internals.ShareHeartbeatRequestManagerTest:
 - testHeartbeatResponseOnErrorHandling
 - testHeartbeatState
 - testLogsHeartbeatIntervalReceivedFromCoordinatorOnlyWhenChanged
+- testMaximumTimeToWaitWhenHeartbeatShouldBeSkippedDoesNotSpin
 - testNetworkTimeout
 - testNoCoordinator
 - testPollTimerExpiration
