@@ -247,7 +247,7 @@ def render(hard_rows: List[Row], soft_rows: List[Row],
             lines.append(f"| {label} | {metric} | {fmt(base)} | {fmt(cur)} | {PASS if ok else WARN} |")
         lines.append("")
 
-    # GC numbers (informational for now)
+    # GC numbers (informational for now).
     if gc_rows:
         lines += ["### GC metrics (current run, informational, not gated)", "",
                   "| Benchmark | Metric | Current |",
