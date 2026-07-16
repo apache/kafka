@@ -201,7 +201,7 @@ public class SuppressScenarioTest {
                 .readRecordsToList();
 
             assertThat(output.size(), equalTo(1));
-            // the record's own headers must survive being buffered and evicted by suppress
+            // Ensure record headers survive buffering and eviction by suppress
             assertThat(output.get(0).headers(), equalTo(headers1));
         }
     }
