@@ -75,9 +75,7 @@ public class OuterJoinStoreWrapper<K, VLeft, VRight> {
                     final LeftOrRightValue<VLeft, VRight> value,
                     final Headers headers) {
         if (headersStore != null) {
-            headersStore.put(key, value == null
-                ? null
-                : AggregationWithHeaders.makeAllowNullable(value, headers));
+            headersStore.put(key, AggregationWithHeaders.make(value, headers));
         } else {
             plainStore.put(key, value);
         }
@@ -87,9 +85,7 @@ public class OuterJoinStoreWrapper<K, VLeft, VRight> {
                             final LeftOrRightValue<VLeft, VRight> value,
                             final Headers headers) {
         if (headersStore != null) {
-            headersStore.putIfAbsent(key, value == null
-                ? null
-                : AggregationWithHeaders.makeAllowNullable(value, headers));
+            headersStore.putIfAbsent(key, AggregationWithHeaders.make(value, headers));
         } else {
             plainStore.putIfAbsent(key, value);
         }
@@ -132,9 +128,7 @@ public class OuterJoinStoreWrapper<K, VLeft, VRight> {
         @Override
         public KeyValue<TimestampedKeyAndJoinSide<K>, AggregationWithHeaders<V>> next() {
             final KeyValue<TimestampedKeyAndJoinSide<K>, V> kv = inner.next();
-            final AggregationWithHeaders<V> lifted = kv.value == null
-                ? null
-                : AggregationWithHeaders.makeAllowNullable(kv.value, new RecordHeaders());
+            final AggregationWithHeaders<V> lifted = AggregationWithHeaders.make(kv.value, new RecordHeaders());
             return KeyValue.pair(kv.key, lifted);
         }
     }

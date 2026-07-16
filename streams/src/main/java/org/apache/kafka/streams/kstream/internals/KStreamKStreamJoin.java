@@ -149,9 +149,7 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
 
             // Emit all non-joined records which window has closed
             if (inputRecordTimestamp == sharedTimeTracker.streamTime) {
-                if (outerJoinStoreWrapper.isPresent()) {
-                    emitNonJoinedOuterRecords(record);
-                }
+                outerJoinStoreWrapper.ifPresent(wrapper -> emitNonJoinedOuterRecords(wrapper, record));
             }
 
             final long timeFrom = Math.max(0L, inputRecordTimestamp - joinBeforeMs);
@@ -202,7 +200,8 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
 
         protected abstract VOther otherValue(final LeftOrRightValue<? extends VLeft, ? extends VRight> leftOrRightValue);
 
-        private void emitNonJoinedOuterRecords(final Record<K, VThis> record) {
+        private void emitNonJoinedOuterRecords(final OuterJoinStoreWrapper<K, VLeft, VRight> wrapper,
+                                               final Record<K, VThis> record) {
 
             // calling `store.all()` creates an iterator what is an expensive operation on RocksDB;
             // to reduce runtime cost, we try to avoid paying those cost
@@ -226,7 +225,6 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
             // reset to MAX_VALUE in case the store is empty
             sharedTimeTracker.minTime = Long.MAX_VALUE;
 
-            final OuterJoinStoreWrapper<K, VLeft, VRight> wrapper = outerJoinStoreWrapper.get();
             try (final KeyValueIterator<TimestampedKeyAndJoinSide<K>, AggregationWithHeaders<LeftOrRightValue<VLeft, VRight>>> it = wrapper.all()) {
                 TimestampedKeyAndJoinSide<K> prevKey = null;
 
@@ -308,15 +306,15 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
 
         private void emitInnerJoin(final Record<K, VThis> thisRecord, final KeyValue<Long, VOther> otherRecord,
                                    final long inputRecordTimestamp) {
-            if (outerJoinStoreWrapper.isPresent()) {
+            outerJoinStoreWrapper.ifPresent(wrapper -> {
                 // use putIfAbsent to first read and see if there's any values for the key,
                 // if yes delete the key, otherwise do not issue a put;
                 // we may delete some values with the same key early but since we are going
                 // range over all values of the same key even after failure, since the other window-store
                 // is only cleaned up by stream time, so this is okay for at-least-once.
                 final TimestampedKeyAndJoinSide<K> otherKey = makeOtherKey(thisRecord.key(), otherRecord.key);
-                outerJoinStoreWrapper.get().putIfAbsent(otherKey, null, null);
-            }
+                wrapper.putIfAbsent(otherKey, null, null);
+            });
 
             context().forward(
                     thisRecord.withValue(joiner.apply(thisRecord.key(), thisRecord.value(), otherRecord.value))
@@ -324,12 +322,11 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
         }
 
         private void putInOuterJoinStore(final Record<K, VThis> thisRecord) {
-            if (outerJoinStoreWrapper.isEmpty()) {
-                return;
-            }
-            final TimestampedKeyAndJoinSide<K> thisKey = makeThisKey(thisRecord.key(), thisRecord.timestamp());
-            final LeftOrRightValue<VLeft, VRight> thisValue = makeThisValue(thisRecord.value());
-            outerJoinStoreWrapper.get().put(thisKey, thisValue, thisRecord.headers());
+            outerJoinStoreWrapper.ifPresent(wrapper -> {
+                final TimestampedKeyAndJoinSide<K> thisKey = makeThisKey(thisRecord.key(), thisRecord.timestamp());
+                final LeftOrRightValue<VLeft, VRight> thisValue = makeThisValue(thisRecord.value());
+                wrapper.put(thisKey, thisValue, thisRecord.headers());
+            });
         }
 
         @Override
