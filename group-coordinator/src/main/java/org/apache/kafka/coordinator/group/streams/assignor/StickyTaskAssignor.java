@@ -86,7 +86,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             if (isActive || topologyDescriber.isStateful(subtopology)) {
                 final int numberOfPartitions = topologyDescriber.maxNumInputPartitions(subtopology);
                 for (int i = 0; i < numberOfPartitions; i++) {
-                    ret.add(new TaskId(subtopology, i));
+                    ret.add(new TaskIdImpl(subtopology, i));
                 }
             }
         }
@@ -130,7 +130,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             for (final Map.Entry<String, Set<Integer>> entry : memberAssignmentState.activeTasks().entrySet()) {
                 final Set<Integer> partitionNoSet = entry.getValue();
                 for (final int partitionNo : partitionNoSet) {
-                    localState.activeTaskToPrevMember.put(new TaskId(entry.getKey(), partitionNo), member);
+                    localState.activeTaskToPrevMember.put(new TaskIdImpl(entry.getKey(), partitionNo), member);
                 }
             }
 
@@ -138,7 +138,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             for (final Map.Entry<String, Set<Integer>> entry : memberAssignmentState.standbyTasks().entrySet()) {
                 final Set<Integer> partitionNoSet = entry.getValue();
                 for (final int partitionNo : partitionNoSet) {
-                    final TaskId taskId = new TaskId(entry.getKey(), partitionNo);
+                    final TaskId taskId = new TaskIdImpl(entry.getKey(), partitionNo);
                     localState.standbyTaskToPrevMember.putIfAbsent(taskId, new ArrayList<>(localState.numStandbyReplicas));
                     localState.standbyTaskToPrevMember.get(taskId).add(member);
                 }

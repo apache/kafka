@@ -14,35 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.api.assignor.streams;
+package org.apache.kafka.coordinator.group.streams.assignor;
 
-import org.apache.kafka.common.annotation.InterfaceAudience;
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.coordinator.group.api.assignor.streams.TaskId;
 
-import java.util.Comparator;
+import java.util.Objects;
 
 /**
- * The identifier for a task.
+ * Implementation of the {@link TaskId} interface.
+ *
+ * @param subtopologyId The unique identifier of the subtopology.
+ * @param partition     The partition of the input topics this task is processing.
  */
-@InterfaceAudience.Public
-@InterfaceStability.Evolving
-public interface TaskId extends Comparable<TaskId> {
+public record TaskIdImpl(String subtopologyId, int partition) implements TaskId {
 
-    /**
-     * @return The unique identifier of the subtopology.
-     */
-    String subtopologyId();
-
-    /**
-     * @return The partition of the input topics this task is processing.
-     */
-    int partition();
+    public TaskIdImpl {
+        Objects.requireNonNull(subtopologyId);
+    }
 
     @Override
-    default int compareTo(final TaskId other) {
-        return Comparator.comparing(TaskId::subtopologyId)
-            .thenComparingInt(TaskId::partition)
-            .compare(this, other);
+    public String toString() {
+        return subtopologyId + '_' + partition;
     }
 
 }

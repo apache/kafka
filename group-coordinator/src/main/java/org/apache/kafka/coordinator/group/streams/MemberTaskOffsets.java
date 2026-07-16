@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.streams;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.coordinator.group.api.assignor.streams.TaskId;
+import org.apache.kafka.coordinator.group.streams.assignor.TaskIdImpl;
 
 import java.util.HashMap;
 import java.util.List;
@@ -60,7 +61,7 @@ public record MemberTaskOffsets(Map<TaskId, Long> taskOffsets, Map<TaskId, Long>
     private static Map<TaskId, Long> toTaskIdMap(final List<StreamsGroupHeartbeatRequestData.TaskOffset> taskOffsets) {
         final Map<TaskId, Long> result = new HashMap<>(taskOffsets.size());
         for (final StreamsGroupHeartbeatRequestData.TaskOffset taskOffset : taskOffsets) {
-            final TaskId taskId = new TaskId(taskOffset.subtopologyId(), taskOffset.partition());
+            final TaskId taskId = new TaskIdImpl(taskOffset.subtopologyId(), taskOffset.partition());
             // The reported values come straight from the client heartbeat and the protocol does not enforce uniqueness
             // of (subtopologyId, partition). Reject a duplicate with a clear client error rather than silently picking
             // one of the values.

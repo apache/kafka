@@ -31,6 +31,7 @@ import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.TaskRol
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.MemberAssignmentImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.MemberSubscriptionAndAssignmentImpl;
+import org.apache.kafka.coordinator.group.streams.assignor.TaskIdImpl;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 
@@ -136,8 +137,8 @@ public class TargetAssignmentBuilderTest {
             .setClientTags(Map.of())
             .build();
 
-        Map<TaskId, Long> taskOffsets = Map.of(new TaskId(fooSubtopologyId, 0), 10L);
-        Map<TaskId, Long> taskEndOffsets = Map.of(new TaskId(fooSubtopologyId, 0), 20L);
+        Map<TaskId, Long> taskOffsets = Map.of(new TaskIdImpl(fooSubtopologyId, 0), 10L);
+        Map<TaskId, Long> taskEndOffsets = Map.of(new TaskIdImpl(fooSubtopologyId, 0), 20L);
 
         MemberSubscriptionAndAssignmentImpl memberSubscription = createMemberSubscriptionAndAssignment(
             member,

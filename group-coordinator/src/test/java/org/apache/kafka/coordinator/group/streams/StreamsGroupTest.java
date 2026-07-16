@@ -38,7 +38,6 @@ import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.OffsetAndMetadata;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
-import org.apache.kafka.coordinator.group.api.assignor.streams.TaskId;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
@@ -49,6 +48,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.TaskRole;
+import org.apache.kafka.coordinator.group.streams.assignor.TaskIdImpl;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -120,8 +120,8 @@ public class StreamsGroupTest {
         assertEquals(Map.of(), streamsGroup.taskOffsets());
 
         MemberTaskOffsets offsets = new MemberTaskOffsets(
-            Map.of(new TaskId("sub-1", 0), 10L),
-            Map.of(new TaskId("sub-1", 0), 20L)
+            Map.of(new TaskIdImpl("sub-1", 0), 10L),
+            Map.of(new TaskIdImpl("sub-1", 0), 20L)
         );
         streamsGroup.updateTaskOffsets("member-id", offsets);
 
@@ -130,8 +130,8 @@ public class StreamsGroupTest {
 
         // A new report replaces the previous one.
         MemberTaskOffsets newerOffsets = new MemberTaskOffsets(
-            Map.of(new TaskId("sub-1", 0), 15L),
-            Map.of(new TaskId("sub-1", 0), 25L)
+            Map.of(new TaskIdImpl("sub-1", 0), 15L),
+            Map.of(new TaskIdImpl("sub-1", 0), 25L)
         );
         streamsGroup.updateTaskOffsets("member-id", newerOffsets);
         assertEquals(newerOffsets, streamsGroup.taskOffsets("member-id"));
@@ -142,8 +142,8 @@ public class StreamsGroupTest {
         StreamsGroup streamsGroup = createStreamsGroup("foo");
         streamsGroup.updateMember(new StreamsGroupMember.Builder("member-id").build());
         streamsGroup.updateTaskOffsets("member-id", new MemberTaskOffsets(
-            Map.of(new TaskId("sub-1", 0), 10L),
-            Map.of(new TaskId("sub-1", 0), 20L)
+            Map.of(new TaskIdImpl("sub-1", 0), 10L),
+            Map.of(new TaskIdImpl("sub-1", 0), 20L)
         ));
 
         streamsGroup.removeMember("member-id");
