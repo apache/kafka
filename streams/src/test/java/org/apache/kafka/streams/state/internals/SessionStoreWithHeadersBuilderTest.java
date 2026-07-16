@@ -481,8 +481,6 @@ public class SessionStoreWithHeadersBuilderTest {
             }
         }
 
-        // Drains the (header-stripped) plain WindowRangeQuery.withKey, which yields plain values --
-        // used to compare native and adapter build paths.
         // Drains the (header-stripped) plain WindowRangeQuery.withKey, keeping the full windowed key and
         // value -- used to compare native and adapter build paths.
         private List<KeyValue<Windowed<String>, String>> plainWindowRangeResults(final SessionStoreWithHeaders<String, String> store) {
