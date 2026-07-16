@@ -438,5 +438,3 @@ class ShareConsumerDLQTest(VerifiableShareConsumerTest):
                                  source_topic=self.TOPIC_MULTI_B["name"])
 
         consumer.stop_all()
-
-        consumer.stop_all()
