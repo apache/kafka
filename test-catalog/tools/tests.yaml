@@ -445,7 +445,7 @@ org.apache.kafka.tools.LogDirsCommandTest:
 - testLogDirsWithoutBrokers
 org.apache.kafka.tools.MetadataQuorumCommandErrorTest:
 - testDescribeOptions
-- testPropertiesFileDoesNotExists
+- testPropertiesFileDoesNotExist
 - testRelativeTimeMs
 - testRemoveControllerRequiresControllerDirectoryId
 - testRemoveControllerRequiresControllerId

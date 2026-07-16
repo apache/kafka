@@ -2028,6 +2028,7 @@ org.apache.kafka.clients.consumer.internals.FetchRequestManagerTest:
 - testReadCommittedLagMetric
 - testReadCommittedWithCommittedAndAbortedTransactions
 - testReadCommittedWithCompactedTopic
+- testRecordLatencyOnFetchResponseLevelError
 - testReturnAbortedTransactionsInUncommittedMode
 - testReturnCommittedTransactions
 - testSeekBeforeException
@@ -2119,6 +2120,7 @@ org.apache.kafka.clients.consumer.internals.FetcherTest:
 - testReadCommittedLagMetric
 - testReadCommittedWithCommittedAndAbortedTransactions
 - testReadCommittedWithCompactedTopic
+- testRecordLatencyOnFetchResponseLevelError
 - testReturnAbortedTransactionsInUncommittedMode
 - testReturnCommittedTransactions
 - testSeekBeforeException
@@ -2357,6 +2359,7 @@ org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManagerTest:
 - testPiggybackAcknowledgementsOnInitialShareSessionError
 - testPiggybackAcknowledgementsOnInitialShareSessionErrorSubscriptionChange
 - testPiggybackAcknowledgementsOnInitialShareSession_ShareSessionNotFound
+- testRecordLatencyOnFetchResponseLevelError
 - testResultHandlerCompleteIfEmpty
 - testResultHandlerOnCommitAsync
 - testResultHandlerOnCommitSync

@@ -2308,6 +2308,7 @@ org.apache.kafka.streams.processor.internals.ProcessorStateManagerTest:
 - shouldInitializeOffsetsFromCheckpointFileAndDeleteIfEOSEnabled
 - shouldLoadMissingFileAsEmptyPosition
 - shouldLogAWarningIfCheckpointThrowsAnIOException
+- shouldNotRefreshTaskDirectoryModificationTimeWhenClosingStartupTask
 - shouldNotThrowTaskCorruptedExceptionAfterCheckpointing
 - shouldNotThrowTaskCorruptedWithoutCheckpointAndNonEmptyDirWhenTransactional
 - shouldNotThrowTaskCorruptedWithoutInMemoryStoreCheckpointAndNonEmptyDir
@@ -2317,6 +2318,7 @@ org.apache.kafka.streams.processor.internals.ProcessorStateManagerTest:
 - shouldPreserveStreamsExceptionOnCloseIfStoreThrows
 - shouldPreserveStreamsExceptionOnCommitIfStoreThrows
 - shouldRecycleAndReinitializeStore
+- shouldRefreshTaskDirectoryModificationTimeOnClose
 - shouldRegisterNonPersistentStore
 - shouldRegisterPersistentStores
 - shouldRegisterPersistentUnloggedStore
@@ -5301,6 +5303,7 @@ org.apache.kafka.streams.state.internals.MeteredSessionStoreWithHeadersTest:
 - shouldUseHeadersFromValueToDeserializeKeyInFindSessions
 - shouldUseHeadersFromValueToDeserializeKeyInFindSessionsByTime
 - shouldUseHeadersFromValueToDeserializeKeyInFindSessionsRange
+- shouldUseHeadersFromValueToDeserializeKeyInReadOnlyFindSessions
 - shouldWriteBytesToInnerStoreAndRecordPutMetric
 - testMetrics
 org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStoreTest:
@@ -5384,6 +5387,7 @@ org.apache.kafka.streams.state.internals.MeteredTimestampedWindowStoreWithHeader
 - shouldUseHeadersFromValueToDeserializeKeyInBackwardFetchRange
 - shouldUseHeadersFromValueToDeserializeKeyInFetchAll
 - shouldUseHeadersFromValueToDeserializeKeyInFetchRange
+- shouldUseHeadersFromValueToDeserializeKeyInReadOnlyFetchAll
 org.apache.kafka.streams.state.internals.MeteredVersionedKeyValueStoreTest:
 - shouldDelegateAndAddExecutionInfoOnCustomQuery
 - shouldDelegateAndRecordMetricsOnCommit
@@ -5661,6 +5665,10 @@ org.apache.kafka.streams.state.internals.RocksDBRangeIteratorTest:
 - shouldReturnTheCurrentKeyOnInvokingPeekNextKeyInForwardDirection
 - shouldReturnTheCurrentKeyOnInvokingPeekNextKeyInReverseDirection
 org.apache.kafka.streams.state.internals.RocksDBSegmentedBytesStoreTest:
+- approximateNumUncommittedBytesShouldReflectStagedWrites
+- commitShouldMakeStagedWritesVisibleToReadCommitted
+- nonTransactionalStoreShouldReadIdenticallyAcrossIsolationLevels
+- readCommittedShouldHideStagedWritesUntilCommit
 - shouldBeAbleToWriteToReInitializedStore
 - shouldCreateWriteBatches
 - shouldFetchAllSegments
@@ -5683,6 +5691,7 @@ org.apache.kafka.streams.state.internals.RocksDBSegmentedBytesStoreTest:
 - shouldRestoreToByteStoreForStandbyTask
 - shouldRollSegments
 - shouldThrowTaskCorruptedExceptionIfSegmentIsInInvalidState
+- stagedWritesShouldNotAdvanceCommittedPositionUntilCommit
 org.apache.kafka.streams.state.internals.RocksDBSessionStoreTest:
 - shouldBackwardFetchAllSessionsWithSameRecordKey
 - shouldBackwardFetchAllSessionsWithinKeyRange
@@ -5831,6 +5840,10 @@ org.apache.kafka.streams.state.internals.RocksDBTimeOrderedKeyValueBytesStoreTes
 - shouldCreateEmptyWriteBatches
 - shouldCreateWriteBatches
 org.apache.kafka.streams.state.internals.RocksDBTimeOrderedSessionSchemaWithIndexSegmentedBytesStoreTest:
+- approximateNumUncommittedBytesShouldReflectStagedWrites
+- commitShouldMakeStagedWritesVisibleToReadCommitted
+- nonTransactionalStoreShouldReadIdenticallyAcrossIsolationLevels
+- readCommittedShouldHideStagedWritesUntilCommit
 - shouldBeAbleToWriteToReInitializedStore
 - shouldCreateWriteBatches
 - shouldFetchAllSegments
@@ -5862,7 +5875,12 @@ org.apache.kafka.streams.state.internals.RocksDBTimeOrderedSessionSchemaWithInde
 - shouldRestoreToByteStoreForStandbyTask
 - shouldRollSegments
 - shouldSkipAndRemoveDanglingIndex
+- stagedWritesShouldNotAdvanceCommittedPositionUntilCommit
 org.apache.kafka.streams.state.internals.RocksDBTimeOrderedSessionSchemaWithoutIndexSegmentedBytesStoreTest:
+- approximateNumUncommittedBytesShouldReflectStagedWrites
+- commitShouldMakeStagedWritesVisibleToReadCommitted
+- nonTransactionalStoreShouldReadIdenticallyAcrossIsolationLevels
+- readCommittedShouldHideStagedWritesUntilCommit
 - shouldBeAbleToWriteToReInitializedStore
 - shouldCreateWriteBatches
 - shouldFetchAllSegments
@@ -5894,6 +5912,7 @@ org.apache.kafka.streams.state.internals.RocksDBTimeOrderedSessionSchemaWithoutI
 - shouldRestoreToByteStoreForStandbyTask
 - shouldRollSegments
 - shouldSkipAndRemoveDanglingIndex
+- stagedWritesShouldNotAdvanceCommittedPositionUntilCommit
 org.apache.kafka.streams.state.internals.RocksDBTimeOrderedSessionStoreWithHeadersTest:
 - shouldCollectExecutionInfoWhenRequested
 - shouldNotCollectExecutionInfoWhenNotRequested
@@ -5969,6 +5988,10 @@ org.apache.kafka.streams.state.internals.RocksDBTimeOrderedSessionStoreWithoutIn
 - testIteratorPeek
 - testIteratorPeekBackward
 org.apache.kafka.streams.state.internals.RocksDBTimeOrderedWindowSchemaWithIndexSegmentedBytesStoreTest:
+- approximateNumUncommittedBytesShouldReflectStagedWrites
+- commitShouldMakeStagedWritesVisibleToReadCommitted
+- nonTransactionalStoreShouldReadIdenticallyAcrossIsolationLevels
+- readCommittedShouldHideStagedWritesUntilCommit
 - shouldBeAbleToWriteToReInitializedStore
 - shouldCreateWriteBatches
 - shouldFetchAllSegments
@@ -6000,7 +6023,12 @@ org.apache.kafka.streams.state.internals.RocksDBTimeOrderedWindowSchemaWithIndex
 - shouldRestoreToByteStoreForStandbyTask
 - shouldRollSegments
 - shouldSkipAndRemoveDanglingIndex
+- stagedWritesShouldNotAdvanceCommittedPositionUntilCommit
 org.apache.kafka.streams.state.internals.RocksDBTimeOrderedWindowSchemaWithoutIndexSegmentedBytesStoreTest:
+- approximateNumUncommittedBytesShouldReflectStagedWrites
+- commitShouldMakeStagedWritesVisibleToReadCommitted
+- nonTransactionalStoreShouldReadIdenticallyAcrossIsolationLevels
+- readCommittedShouldHideStagedWritesUntilCommit
 - shouldBeAbleToWriteToReInitializedStore
 - shouldCreateWriteBatches
 - shouldFetchAllSegments
@@ -6032,6 +6060,7 @@ org.apache.kafka.streams.state.internals.RocksDBTimeOrderedWindowSchemaWithoutIn
 - shouldRestoreToByteStoreForStandbyTask
 - shouldRollSegments
 - shouldSkipAndRemoveDanglingIndex
+- stagedWritesShouldNotAdvanceCommittedPositionUntilCommit
 org.apache.kafka.streams.state.internals.RocksDBTimeOrderedWindowStoreWithHeadersTest:
 - shouldCollectExecutionInfoWhenRequested
 - shouldNotCollectExecutionInfoWhenNotRequested
@@ -6178,6 +6207,10 @@ org.apache.kafka.streams.state.internals.RocksDBTimeOrderedWindowStoreWithoutInd
 - testValueIteratorPeek
 - testWindowIteratorPeek
 org.apache.kafka.streams.state.internals.RocksDBTimestampedSegmentedBytesStoreTest:
+- approximateNumUncommittedBytesShouldReflectStagedWrites
+- commitShouldMakeStagedWritesVisibleToReadCommitted
+- nonTransactionalStoreShouldReadIdenticallyAcrossIsolationLevels
+- readCommittedShouldHideStagedWritesUntilCommit
 - shouldBeAbleToWriteToReInitializedStore
 - shouldCreateWriteBatches
 - shouldFetchAllSegments
@@ -6200,7 +6233,12 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedSegmentedBytesStoreTe
 - shouldRestoreToByteStoreForStandbyTask
 - shouldRollSegments
 - shouldThrowTaskCorruptedExceptionIfSegmentIsInInvalidState
+- stagedWritesShouldNotAdvanceCommittedPositionUntilCommit
 org.apache.kafka.streams.state.internals.RocksDBTimestampedSegmentedBytesStoreWithHeadersTest:
+- approximateNumUncommittedBytesShouldReflectStagedWrites
+- commitShouldMakeStagedWritesVisibleToReadCommitted
+- nonTransactionalStoreShouldReadIdenticallyAcrossIsolationLevels
+- readCommittedShouldHideStagedWritesUntilCommit
 - shouldBeAbleToWriteToReInitializedStore
 - shouldCreateWriteBatches
 - shouldFetchAllSegments
@@ -6223,6 +6261,7 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedSegmentedBytesStoreWi
 - shouldRestoreToByteStoreForStandbyTask
 - shouldRollSegments
 - shouldThrowTaskCorruptedExceptionIfSegmentIsInInvalidState
+- stagedWritesShouldNotAdvanceCommittedPositionUntilCommit
 org.apache.kafka.streams.state.internals.RocksDBTimestampedStoreTest:
 - commitShouldMergePendingIntoCommittedPosition
 - committedPositionShouldExcludeStagedWritesUntilCommit
