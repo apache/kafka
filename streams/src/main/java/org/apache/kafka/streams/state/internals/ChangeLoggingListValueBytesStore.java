@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueStore;
 
@@ -39,10 +40,18 @@ public class ChangeLoggingListValueBytesStore extends ChangeLoggingKeyValueBytes
         // we need to log the full new list and thus call get() on the inner store below
         // if the value is a tombstone, we delete the whole list and thus can save the get call
         if (value == null) {
-            log(key, null, internalContext.recordContext().timestamp(), internalContext.recordContext().headers());
+            log(key, null, internalContext.recordContext().timestamp(), changelogHeaders());
         } else {
-            log(key, wrapped().get(key), internalContext.recordContext().timestamp(), internalContext.recordContext().headers());
+            log(key, wrapped().get(key), internalContext.recordContext().timestamp(), changelogHeaders());
         }
+    }
+
+    /**
+     * The headers to attach to the changelog record. Defaults to the current record's headers; the
+     * headers-aware subclass overrides this to also stamp the list-value format marker.
+     */
+    protected Headers changelogHeaders() {
+        return internalContext.recordContext().headers();
     }
 
     @Override

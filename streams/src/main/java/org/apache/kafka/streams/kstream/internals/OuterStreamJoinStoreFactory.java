@@ -29,6 +29,8 @@ import org.apache.kafka.streams.state.internals.AggregationWithHeadersSerde;
 import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.LeftOrRightValueSerde;
 import org.apache.kafka.streams.state.internals.ListValueStoreBuilder;
+import org.apache.kafka.streams.state.internals.RocksDBKeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDBListValueHeadersBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSideSerde;
 
@@ -123,11 +125,20 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
 
         final StoreBuilder<?> builder;
         if (dslStoreFormat() == DslStoreFormat.HEADERS) {
+            // For a persistent RocksDB store, use the dual-column-family variant so an existing store
+            // that was written by a pre-headers (PLAIN) version can be upgraded in place without
+            // corrupting old data. In-memory and user-supplied stores keep their supplier; their
+            // upgrade is handled on restore by the list-aware RecordConverter.
+            final KeyValueBytesStoreSupplier headersSupplier =
+                supplier instanceof RocksDBKeyValueBytesStoreSupplier
+                    ? new RocksDBListValueHeadersBytesStoreSupplier(name)
+                    : supplier;
             builder = new ListValueStoreBuilder<>(
-                supplier,
+                headersSupplier,
                 timestampedKeyAndJoinSideSerde,
                 new AggregationWithHeadersSerde<>(leftOrRightValueSerde),
-                Time.SYSTEM
+                Time.SYSTEM,
+                true
             );
         } else {
             builder = new ListValueStoreBuilder<>(

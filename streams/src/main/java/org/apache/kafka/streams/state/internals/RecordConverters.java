@@ -105,6 +105,37 @@ public final class RecordConverters {
         return RAW_TO_SESSION_WITH_HEADERS_INSTANCE;
     }
 
+    private static final RecordConverter RAW_LIST_TO_HEADERS_LIST_INSTANCE = record -> {
+        // The outer-join ListValueStore changelog stores the whole list blob. Records written in
+        // HEADERS format carry a marker header and are already in the on-disk format (identity).
+        // Legacy PLAIN records (written before the upgrade) lack the marker and must have every
+        // element lifted to the empty-headers format. A tombstone (null value) is passed through.
+        if (record.value() == null || ListValueStoreUpgradeUtils.hasHeadersFormatMarker(record.headers())) {
+            return record;
+        }
+
+        final byte[] convertedValue =
+            ListValueStoreUpgradeUtils.convertPlainListBlobToHeadersListBlob(record.value());
+
+        return new ConsumerRecord<>(
+            record.topic(),
+            record.partition(),
+            record.offset(),
+            record.timestamp(),
+            record.timestampType(),
+            record.serializedKeySize(),
+            convertedValue.length,
+            record.key(),
+            convertedValue,
+            record.headers(),
+            record.leaderEpoch()
+        );
+    };
+
+    public static RecordConverter rawListValueToHeadersListValue() {
+        return RAW_LIST_TO_HEADERS_LIST_INSTANCE;
+    }
+
     // privatize the constructor so the class cannot be instantiated (only used for its static members)
     private RecordConverters() {}
 
