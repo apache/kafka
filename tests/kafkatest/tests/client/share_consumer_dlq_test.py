@@ -41,9 +41,6 @@ class ShareConsumerDLQTest(VerifiableShareConsumerTest):
 
     share_group_id = "dlq-test-group"
     total_messages = 50
-    # Multi-topic tests run two producers/consumers concurrently (heavier than the other scenarios
-    # here); keep this at least as small as total_messages to avoid timeouts under load.
-    multi_topic_messages = 50
 
     default_timeout_sec = 180
 
@@ -365,33 +362,33 @@ class ShareConsumerDLQTest(VerifiableShareConsumerTest):
         self.create_dlq_topic(dlq_topic, partitions=num_dlq_partitions, replication_factor=3)
         self.setup_dlq_group_config(dlq_topic)
 
-        producer_a = self.setup_producer(self.TOPIC_MULTI_A["name"], max_messages=self.multi_topic_messages)
-        producer_b = self.setup_producer(self.TOPIC_MULTI_B["name"], max_messages=self.multi_topic_messages)
+        producer_a = self.setup_producer(self.TOPIC_MULTI_A["name"], max_messages=self.total_messages)
+        producer_b = self.setup_producer(self.TOPIC_MULTI_B["name"], max_messages=self.total_messages)
         consumer = self.setup_share_group(both_topics, group_id=self.share_group_id,
                                            acknowledgement_mode="sync", ack_pattern=["reject"])
 
         producer_a.start()
         producer_b.start()
-        self.await_produced_messages(producer_a, min_messages=self.multi_topic_messages, timeout_sec=self.default_timeout_sec)
-        self.await_produced_messages(producer_b, min_messages=self.multi_topic_messages, timeout_sec=self.default_timeout_sec)
+        self.await_produced_messages(producer_a, min_messages=self.total_messages, timeout_sec=self.default_timeout_sec)
+        self.await_produced_messages(producer_b, min_messages=self.total_messages, timeout_sec=self.default_timeout_sec)
 
         consumer.start()
         self.await_all_members(consumer, timeout_sec=self.default_timeout_sec)
 
-        wait_until(lambda: consumer.total_rejected() >= 2 * self.multi_topic_messages,
+        wait_until(lambda: consumer.total_rejected() >= 2 * self.total_messages,
                    timeout_sec=self.default_timeout_sec, err_msg="Timed out waiting for all records to be rejected")
 
         producer_a.stop()
         producer_b.stop()
         consumer.stop_all()
 
-        dlq_records = self.read_dlq_topic(dlq_topic, 2 * self.multi_topic_messages)
-        assert len(dlq_records) == 2 * self.multi_topic_messages
+        dlq_records = self.read_dlq_topic(dlq_topic, 2 * self.total_messages)
+        assert len(dlq_records) == 2 * self.total_messages
 
         records_by_topic = self.group_dlq_records_by_topic(dlq_records)
         assert set(records_by_topic.keys()) == {self.TOPIC_MULTI_A["name"], self.TOPIC_MULTI_B["name"]}
-        assert len(records_by_topic[self.TOPIC_MULTI_A["name"]]) == self.multi_topic_messages
-        assert len(records_by_topic[self.TOPIC_MULTI_B["name"]]) == self.multi_topic_messages
+        assert len(records_by_topic[self.TOPIC_MULTI_A["name"]]) == self.total_messages
+        assert len(records_by_topic[self.TOPIC_MULTI_B["name"]]) == self.total_messages
 
         self.assert_dlq_routing(records_by_topic[self.TOPIC_MULTI_A["name"]], num_dlq_partitions,
                                  source_topic=self.TOPIC_MULTI_A["name"])
@@ -412,15 +409,15 @@ class ShareConsumerDLQTest(VerifiableShareConsumerTest):
         wait_until(lambda: self.kafka.set_share_group_delivery_count_limit(group=self.share_group_id, limit=delivery_count_limit),
                    timeout_sec=20, backoff_sec=2, err_msg="share.delivery.count.limit not set")
 
-        producer_a = self.setup_producer(self.TOPIC_MULTI_A["name"], max_messages=self.multi_topic_messages)
-        producer_b = self.setup_producer(self.TOPIC_MULTI_B["name"], max_messages=self.multi_topic_messages)
+        producer_a = self.setup_producer(self.TOPIC_MULTI_A["name"], max_messages=self.total_messages)
+        producer_b = self.setup_producer(self.TOPIC_MULTI_B["name"], max_messages=self.total_messages)
         consumer = self.setup_share_group(both_topics, group_id=self.share_group_id,
                                            acknowledgement_mode="sync", ack_pattern=["release"])
 
         producer_a.start()
         producer_b.start()
-        self.await_produced_messages(producer_a, min_messages=self.multi_topic_messages, timeout_sec=self.default_timeout_sec)
-        self.await_produced_messages(producer_b, min_messages=self.multi_topic_messages, timeout_sec=self.default_timeout_sec)
+        self.await_produced_messages(producer_a, min_messages=self.total_messages, timeout_sec=self.default_timeout_sec)
+        self.await_produced_messages(producer_b, min_messages=self.total_messages, timeout_sec=self.default_timeout_sec)
 
         consumer.start()
         self.await_all_members(consumer, timeout_sec=self.default_timeout_sec)
@@ -428,12 +425,12 @@ class ShareConsumerDLQTest(VerifiableShareConsumerTest):
         producer_a.stop()
         producer_b.stop()
 
-        dlq_records = self.read_dlq_topic(dlq_topic, 2 * self.multi_topic_messages, timeout_sec=self.default_timeout_sec * 2)
-        assert len(dlq_records) == 2 * self.multi_topic_messages
+        dlq_records = self.read_dlq_topic(dlq_topic, 2 * self.total_messages, timeout_sec=self.default_timeout_sec * 2)
+        assert len(dlq_records) == 2 * self.total_messages
 
         records_by_topic = self.group_dlq_records_by_topic(dlq_records)
-        assert len(records_by_topic.get(self.TOPIC_MULTI_A["name"], [])) == self.multi_topic_messages
-        assert len(records_by_topic.get(self.TOPIC_MULTI_B["name"], [])) == self.multi_topic_messages
+        assert len(records_by_topic.get(self.TOPIC_MULTI_A["name"], [])) == self.total_messages
+        assert len(records_by_topic.get(self.TOPIC_MULTI_B["name"], [])) == self.total_messages
 
         self.assert_dlq_routing(records_by_topic[self.TOPIC_MULTI_A["name"]], num_dlq_partitions,
                                  source_topic=self.TOPIC_MULTI_A["name"])
