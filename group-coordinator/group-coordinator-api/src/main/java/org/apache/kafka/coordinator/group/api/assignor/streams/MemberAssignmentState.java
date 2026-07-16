@@ -29,6 +29,13 @@ import java.util.Set;
  * to compute a new, sticky target assignment. Note that the assignor does not assign warm-up
  * tasks itself (they are decided during reconciliation), but the currently-assigned warm-up
  * tasks are exposed here so that the assignor can take them into account.
+ *
+ * <p>The task-set accessors ({@link #activeTasks()}, {@link #standbyTasks()},
+ * {@link #warmupTasks()}) are keyed by subtopology ID, mirroring the grouped {@code TaskIds}
+ * wire format ({@code subtopologyId, [partitions]}). In contrast, {@link #taskOffsets()} and
+ * {@link #taskEndOffsets()} are keyed by {@link TaskId}, mirroring the flat {@code TaskOffset}
+ * wire format ({@code subtopologyId, partition, offset}). The two shapes differ because the
+ * underlying wire representations differ.
  */
 @InterfaceAudience.Public
 @InterfaceStability.Evolving
