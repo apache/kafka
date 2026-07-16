@@ -307,7 +307,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
     /**
      * Add acknowledgements for a topic-partition to the node's in-flight acknowledgements.
-     * If we cannot add acknowledgements, they are completed with {@link Errors#NOT_LEADER_OR_FOLLOWER} exception.
+     * If we cannot add acknowledgements, they are completed with {@link Errors#NETWORK_EXCEPTION} exception.
      * This probably indicates the connection to the leader broker was lost, but then re-established without a
      * leadership change, in which case the acknowledgements fail.
      *
@@ -320,7 +320,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         if (handler.isNewSession()) {
             // Failing the acknowledgements as we cannot have piggybacked acknowledgements in the initial ShareFetchRequest.
             log.debug("Cannot send acknowledgements on initial epoch for ShareSession for partition {}", tip);
-            acknowledgements.complete(Errors.NOT_LEADER_OR_FOLLOWER.exception());
+            acknowledgements.complete(Errors.NETWORK_EXCEPTION.exception());
             maybeSendShareAcknowledgementEvent(Map.of(tip, acknowledgements), true, Optional.empty());
             return false;
         } else {
@@ -352,7 +352,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     log.debug("Added fetch request for previously subscribed partition {} to node {}", tip, node.id());
                 } else {
                     log.debug("Leader for the partition is down or has changed, failing acknowledgements for partition {}", tip);
-                    acks.complete(Errors.NOT_LEADER_OR_FOLLOWER.exception());
+                    acks.complete(Errors.NETWORK_EXCEPTION.exception());
                     maybeSendShareAcknowledgementEvent(Map.of(tip, acks), true, Optional.empty());
                 }
             });
@@ -367,7 +367,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     /**
      * Remove session handlers for nodes which are now missing from the cluster metadata. Only nodes with no
      * in-flight requests are removed, since those requests will complete. Piggyback acknowledgements for the
-     * missing nodes are completed with {@link Errors#NOT_LEADER_OR_FOLLOWER}.
+     * missing nodes are completed with {@link Errors#NETWORK_EXCEPTION}.
      */
     private void removeSessionHandlersForMissingNodes(Set<Integer> missingNodes) {
         Cluster cluster = metadata.fetch();
@@ -378,7 +378,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 if (nodeAcksFromFetchMap != null) {
                     nodeAcksFromFetchMap.forEach((tip, acks) -> {
                         log.debug("Node {} is no longer in the cluster metadata, failing acknowledgements for partition {}", nodeId, tip);
-                        acks.complete(Errors.NOT_LEADER_OR_FOLLOWER.exception());
+                        acks.complete(Errors.NETWORK_EXCEPTION.exception());
                         maybeSendShareAcknowledgementEvent(Map.of(tip, acks), true, Optional.empty());
                     });
                 }
@@ -627,11 +627,14 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
         Map<Integer, Map<TopicIdPartition, Acknowledgements>> acknowledgementsMapAllNodes = new HashMap<>();
         Map<TopicIdPartition, Acknowledgements> acknowledgementsMapCannotSend = new HashMap<>();
+        Map<TopicIdPartition, Errors> acknowledgementsMapCannotSendErrors = new HashMap<>();
         acknowledgementsMap.forEach((tip, nodeAcks) -> {
             if ((cluster.nodeById(nodeAcks.nodeId()) == null) || isLeaderKnownToHaveChanged(nodeAcks.nodeId(), tip)) {
                 Acknowledgements prevAcks = acknowledgementsMapCannotSend.putIfAbsent(tip, nodeAcks.acknowledgements());
                 if (prevAcks != null) {
                     prevAcks.merge(nodeAcks.acknowledgements());
+                } else {
+                    acknowledgementsMapCannotSendErrors.put(tip, acknowledgementsCannotBeSentError(nodeAcks.nodeId(), tip));
                 }
             } else {
                 Map<TopicIdPartition, Acknowledgements> acksMap = acknowledgementsMapAllNodes.computeIfAbsent(nodeAcks.nodeId(), k -> new HashMap<>());
@@ -687,7 +690,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         });
 
         acknowledgementsMapCannotSend.forEach((tip, acks) -> {
-            acks.complete(Errors.NOT_LEADER_OR_FOLLOWER.exception());
+            acks.complete(acknowledgementsMapCannotSendErrors.get(tip).exception());
             resultHandler.complete(tip, acks, AcknowledgeRequestType.COMMIT_SYNC, true, Optional.empty());
         });
 
@@ -712,7 +715,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         acknowledgementsMap.forEach((tip, nodeAcks) -> {
             if ((cluster.nodeById(nodeAcks.nodeId()) == null) || isLeaderKnownToHaveChanged(nodeAcks.nodeId(), tip)) {
                 log.debug("Leader for the partition is down or has changed, failing acknowledgements for partition {}", tip);
-                nodeAcks.acknowledgements().complete(Errors.NOT_LEADER_OR_FOLLOWER.exception());
+                nodeAcks.acknowledgements().complete(acknowledgementsCannotBeSentError(nodeAcks.nodeId(), tip).exception());
                 maybeSendShareAcknowledgementEvent(Map.of(tip, nodeAcks.acknowledgements()), true, Optional.empty());
             } else {
                 Map<TopicIdPartition, Acknowledgements> acksMap = acknowledgementsMapAllNodes.computeIfAbsent(nodeAcks.nodeId(), k -> new HashMap<>());
@@ -792,7 +795,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         Map<Integer, Map<TopicIdPartition, Acknowledgements>> acknowledgementsMapAllNodes = new HashMap<>();
         acknowledgementsMap.forEach((tip, nodeAcks) -> {
             if ((cluster.nodeById(nodeAcks.nodeId()) == null) || isLeaderKnownToHaveChanged(nodeAcks.nodeId(), tip)) {
-                nodeAcks.acknowledgements().complete(Errors.NOT_LEADER_OR_FOLLOWER.exception());
+                nodeAcks.acknowledgements().complete(acknowledgementsCannotBeSentError(nodeAcks.nodeId(), tip).exception());
                 maybeSendShareAcknowledgementEvent(Map.of(tip, nodeAcks.acknowledgements()), true, Optional.empty());
             } else {
                 Map<TopicIdPartition, Acknowledgements> acksMap = acknowledgementsMapAllNodes.computeIfAbsent(nodeAcks.nodeId(), k -> new HashMap<>());
@@ -807,7 +810,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         fetchAcknowledgementsToSend.forEach((nodeId, nodeAcks) ->
             nodeAcks.forEach((tip, acks) -> {
                 if ((cluster.nodeById(nodeId) == null) || isLeaderKnownToHaveChanged(nodeId, tip)) {
-                    acks.complete(Errors.NOT_LEADER_OR_FOLLOWER.exception());
+                    acks.complete(acknowledgementsCannotBeSentError(nodeId, tip).exception());
                     maybeSendShareAcknowledgementEvent(Map.of(tip, acks), true, Optional.empty());
                 } else {
                     Map<TopicIdPartition, Acknowledgements> acksMap = acknowledgementsMapAllNodes.computeIfAbsent(nodeId, k -> new HashMap<>());
@@ -907,11 +910,18 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 if (response.error() == Errors.UNKNOWN_TOPIC_ID) {
                     metadata.requestUpdate(false);
                 }
-                // Complete any in-flight acknowledgements with the error code from the response.
+                // Complete any in-flight acknowledgements with the error code from the response, unless the share session was lost,
+                // in which case they are failed with NETWORK_EXCEPTION reflecting a loss of connectivity.
+                final Errors ackError;
+                if (response.error() == Errors.SHARE_SESSION_NOT_FOUND || response.error() == Errors.INVALID_SHARE_SESSION_EPOCH) {
+                    ackError = Errors.NETWORK_EXCEPTION;
+                } else {
+                    ackError = response.error();
+                }
                 Map<TopicIdPartition, Acknowledgements> nodeAcknowledgementsInFlight = fetchAcknowledgementsInFlight.remove(fetchTarget.id());
                 if (nodeAcknowledgementsInFlight != null && !nodeAcknowledgementsInFlight.isEmpty()) {
                     nodeAcknowledgementsInFlight.forEach((tip, acks) -> {
-                        acks.complete(Errors.forCode(response.error().code()).exception());
+                        acks.complete(ackError.exception());
                         metricsManager.recordFailedAcknowledgements(acks.size());
                     });
                     maybeSendShareAcknowledgementEvent(nodeAcknowledgementsInFlight, requestData.isRenewAck(), Optional.empty());
@@ -1256,6 +1266,15 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         }
     }
 
+    /**
+     * Chooses the error used to fail acknowledgements which could not be sent to the node hosting the share session.
+     * If leadership has moved to a different live broker, the error is {@link Errors#NOT_LEADER_OR_FOLLOWER}.
+     * Otherwise, the error is {@link Errors#NETWORK_EXCEPTION}.
+     */
+    private Errors acknowledgementsCannotBeSentError(int nodeId, TopicIdPartition tip) {
+        return isLeaderKnownToHaveChanged(nodeId, tip) ? Errors.NOT_LEADER_OR_FOLLOWER : Errors.NETWORK_EXCEPTION;
+    }
+
     private TopicIdPartition lookupTopicId(Uuid topicId, int partitionIndex) {
         String topicName = metadata.topicNames().get(topicId);
         if (topicName == null) {
@@ -1374,7 +1393,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             // If the node is no longer is the cluster metadata, we can never send to it
             Node nodeToSend = metadata.fetch().nodeById(nodeId);
             if (nodeToSend == null) {
-                failPendingAcknowledgementsNotLeaderOrFollower();
+                failPendingAcknowledgementsCannotBeSent();
                 return null;
             }
 
@@ -1395,7 +1414,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             isProcessed = false;
 
             if (requestBuilder == null) {
-                failPendingAcknowledgementsNotLeaderOrFollower();
+                failPendingAcknowledgementsCannotBeSent();
                 return null;
             }
 
@@ -1494,17 +1513,17 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         }
 
         /**
-         * Fail all remaining acknowledgements with {@link Errors#NOT_LEADER_OR_FOLLOWER} when they cannot be sent.
-         * This happens either because a new share session needs to be started or because the target node has disappeared
-         * from the cluster metadata.
+         * Fail all remaining acknowledgements when they cannot be sent. This can happen when network connectivity
+         * is lost with the leader and the share session is lost, they are failed with {@link Errors#NETWORK_EXCEPTION}.
+         * If the leader has moved to a different live broker, they are failed with {@link Errors#NOT_LEADER_OR_FOLLOWER}.
          */
-        void failPendingAcknowledgementsNotLeaderOrFollower() {
+        void failPendingAcknowledgementsCannotBeSent() {
             Map<TopicIdPartition, Acknowledgements> acknowledgementsMapToClear =
                 incompleteAcknowledgements.isEmpty() ? acknowledgementsToSend : incompleteAcknowledgements;
 
             acknowledgementsMapToClear.forEach((tip, acks) -> {
                 if (acks != null) {
-                    acks.complete(Errors.NOT_LEADER_OR_FOLLOWER.exception());
+                    acks.complete(acknowledgementsCannotBeSentError(nodeId, tip).exception());
                 }
                 // We do not know whether this is a renew ack, but handling the error as if it were, will ensure
                 // that we do not leave dangling acknowledgements

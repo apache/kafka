@@ -40,6 +40,7 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
+import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnknownServerException;
@@ -369,7 +370,7 @@ public class ShareConsumeRequestManagerTest {
         assertNull(shareConsumeRequestManager.requestStates(0));
         // The callback for these unsent acknowledgements will be invoked with an error code.
         assertEquals(Map.of(tip0, acknowledgements2), completedAcknowledgements.get(0));
-        assertInstanceOf(NotLeaderOrFollowerException.class, completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
+        assertInstanceOf(NetworkException.class, completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
 
         // Attempt a normal fetch to check if nodesWithPendingRequests is empty.
         assertEquals(1, sendFetches());
@@ -1535,7 +1536,7 @@ public class ShareConsumeRequestManagerTest {
         assertEquals(0, builder.data().topics().find(tip0.topicId()).partitions().find(0).acknowledgementBatches().size());
 
         assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
-        assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.exception(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
+        assertEquals(Errors.NETWORK_EXCEPTION.exception(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
     }
 
     @Test
@@ -1573,7 +1574,7 @@ public class ShareConsumeRequestManagerTest {
 
         // We should fail any waiting acknowledgements for tip-0 as it would have a share session epoch equal to 0.
         assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
-        assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.exception(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
+        assertEquals(Errors.NETWORK_EXCEPTION.exception(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
     }
 
     @Test
@@ -1600,7 +1601,7 @@ public class ShareConsumeRequestManagerTest {
 
         // We would complete these acknowledgements with the error code from the response.
         assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
-        assertEquals(Errors.SHARE_SESSION_NOT_FOUND.exception(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
+        assertEquals(Errors.NETWORK_EXCEPTION.exception(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
 
         // Next fetch would proceed as expected and would not include any acknowledgements.
         NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
@@ -2719,7 +2720,7 @@ public class ShareConsumeRequestManagerTest {
     /**
      * When the node backing a share session disappears from the cluster metadata, the stale session handler
      * must be removed and any acknowledgements that were queued to be piggybacked on a fetch to that node
-     * must be failed with NOT_LEADER_OR_FOLLOWER.
+     * must be failed with NETWORK_EXCEPTION.
      */
     @Test
     public void testSessionHandlerRemovedAndPiggybackAcksFailedWhenNodeDisappears() {
@@ -2775,8 +2776,7 @@ public class ShareConsumeRequestManagerTest {
 
         assertEquals(1, completedAcknowledgements.size());
         assertEquals(acknowledgements, completedAcknowledgements.get(0).get(tip0));
-        assertInstanceOf(NotLeaderOrFollowerException.class,
-                completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
+        assertInstanceOf(NetworkException.class, completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
     }
 
     /**
@@ -2834,8 +2834,7 @@ public class ShareConsumeRequestManagerTest {
         assertTrue(future.isDone());
         assertEquals(1, completedAcknowledgements.size());
         assertEquals(acknowledgements, completedAcknowledgements.get(0).get(tip0));
-        assertInstanceOf(NotLeaderOrFollowerException.class,
-                completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
+        assertInstanceOf(NotLeaderOrFollowerException.class, completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
     }
 
     /**
