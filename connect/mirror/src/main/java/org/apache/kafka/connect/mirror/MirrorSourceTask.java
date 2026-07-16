@@ -19,6 +19,7 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -42,6 +43,7 @@ import java.util.Set;
 import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.METRIC_NAMES_LEGACY;
 import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.METRIC_NAMES_NEW;
 
@@ -59,6 +61,9 @@ public class MirrorSourceTask extends SourceTask {
     private boolean stopping = false;
     private Semaphore consumerAccess;
     private OffsetSyncWriter offsetSyncWriter;
+    // When true, the task fails fast on OffsetOutOfRangeException instead of silently
+    // resetting to the earliest offset (see DataLossException / TopicResetException).
+    private boolean detectOffsetOutOfRange = false;
 
     public MirrorSourceTask() {}
 
@@ -66,12 +71,21 @@ public class MirrorSourceTask extends SourceTask {
     MirrorSourceTask(KafkaConsumer<byte[], byte[]> consumer, MirrorSourceLegacyMetrics metrics, String sourceClusterAlias,
                      ReplicationPolicy replicationPolicy,
                      OffsetSyncWriter offsetSyncWriter) {
+        this(consumer, metrics, sourceClusterAlias, replicationPolicy, offsetSyncWriter, false);
+    }
+
+    // for testing
+    MirrorSourceTask(KafkaConsumer<byte[], byte[]> consumer, MirrorSourceLegacyMetrics metrics, String sourceClusterAlias,
+                     ReplicationPolicy replicationPolicy,
+                     OffsetSyncWriter offsetSyncWriter,
+                     boolean detectOffsetOutOfRange) {
         this.consumer = consumer;
         this.legacyMetrics = metrics;
         this.sourceClusterAlias = sourceClusterAlias;
         this.replicationPolicy = replicationPolicy;
         consumerAccess = new Semaphore(1);
         this.offsetSyncWriter = offsetSyncWriter;
+        this.detectOffsetOutOfRange = detectOffsetOutOfRange;
     }
 
     @Override
@@ -87,7 +101,14 @@ public class MirrorSourceTask extends SourceTask {
         if (config.emitOffsetSyncsEnabled()) {
             offsetSyncWriter = new OffsetSyncWriter(config);
         }
-        consumer = MirrorUtils.newConsumer(config.sourceConsumerConfig("replication-consumer"));
+        detectOffsetOutOfRange = config.detectOffsetOutOfRangeEnabled();
+        Map<String, Object> consumerConfig = config.sourceConsumerConfig("replication-consumer");
+        if (detectOffsetOutOfRange) {
+            // Force the consumer to surface OffsetOutOfRangeException instead of silently
+            // seeking to the earliest offset, so we can fail fast on data loss / topic reset.
+            consumerConfig.put(AUTO_OFFSET_RESET_CONFIG, "none");
+        }
+        consumer = MirrorUtils.newConsumer(consumerConfig);
         Set<TopicPartition> taskTopicPartitions = config.taskTopicPartitions();
         initializeConsumer(taskTopicPartitions);
 
@@ -164,6 +185,10 @@ public class MirrorSourceTask extends SourceTask {
             }
         } catch (WakeupException e) {
             return null;
+        } catch (OffsetOutOfRangeException e) {
+            // Only reached when auto.offset.reset=none, i.e. when detectOffsetOutOfRange is enabled.
+            // Translate the low-level exception into an explicit, fail-fast MM2 exception.
+            throw handleOffsetOutOfRange(e);
         } catch (KafkaException e) {
             log.warn("Failure during poll.", e);
             return null;
@@ -230,6 +255,14 @@ public class MirrorSourceTask extends SourceTask {
         topicPartitionOffsets.forEach((topicPartition, offset) -> {
             // Do not call seek on partitions that don't have an existing offset committed.
             if (isUncommitted(offset)) {
+                if (detectOffsetOutOfRange) {
+                    // With auto.offset.reset=none the consumer has no fallback for partitions without a
+                    // committed offset, so we must position it explicitly. Preserve MM2's default behavior
+                    // of starting from the beginning of the topic on first replication.
+                    log.trace("Seeking to beginning for uncommitted topicPartition: {}", topicPartition);
+                    consumer.seekToBeginning(Set.of(topicPartition));
+                    return;
+                }
                 log.trace("Skipping seeking offset for topicPartition: {}", topicPartition);
                 return;
             }
@@ -237,6 +270,46 @@ public class MirrorSourceTask extends SourceTask {
             log.trace("Seeking to offset {} for topicPartition: {}", nextOffsetToCommittedOffset, topicPartition);
             consumer.seek(topicPartition, nextOffsetToCommittedOffset);
         });
+    }
+
+    /**
+     * Translate an {@link OffsetOutOfRangeException} raised by the replication consumer into an explicit,
+     * fail-fast MirrorMaker 2 exception. For each affected partition we inspect the earliest available
+     * offset on the source cluster:
+     * <ul>
+     *     <li>earliest offset {@code == 0}: the topic was deleted and recreated, so a
+     *     {@link TopicResetException} is thrown.</li>
+     *     <li>earliest offset {@code > 0}: earlier records were purged (e.g. by a retention policy)
+     *     before they could be replicated, so a {@link DataLossException} is thrown.</li>
+     * </ul>
+     */
+    // visible for testing
+    RuntimeException handleOffsetOutOfRange(OffsetOutOfRangeException e) {
+        Map<TopicPartition, Long> outOfRangeOffsets = e.offsetOutOfRangePartitions();
+        Map<TopicPartition, Long> beginningOffsets = consumer.beginningOffsets(outOfRangeOffsets.keySet());
+        boolean topicReset = false;
+        StringBuilder details = new StringBuilder();
+        for (Map.Entry<TopicPartition, Long> entry : outOfRangeOffsets.entrySet()) {
+            TopicPartition tp = entry.getKey();
+            long requestedOffset = entry.getValue();
+            long earliestOffset = beginningOffsets.getOrDefault(tp, 0L);
+            details.append(String.format("[topic=%s, partition=%d, requestedOffset=%d, earliestAvailableOffset=%d] ",
+                    tp.topic(), tp.partition(), requestedOffset, earliestOffset));
+            if (earliestOffset == 0L) {
+                topicReset = true;
+            }
+        }
+        if (topicReset) {
+            String message = "Detected source topic reset (topic deleted and recreated). The previously tracked "
+                    + "offset is no longer valid: " + details.toString().trim();
+            log.error(message);
+            return new TopicResetException(message, e);
+        } else {
+            String message = "Detected data loss: source records were purged before they could be replicated. "
+                    + "The requested offset is no longer available: " + details.toString().trim();
+            log.error(message);
+            return new DataLossException(message, e);
+        }
     }
 
     // visible for testing 

@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
@@ -41,9 +42,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
@@ -339,6 +338,113 @@ public class MirrorSourceTaskTest {
         // No more syncs should take place; we've been able to publish all of them so far
         verify(offsetSyncWriter, times(1)).promoteDelayedOffsetSyncs();
         verify(offsetSyncWriter, times(2)).firePendingOffsetSyncs();
+    }
+
+    @Test
+    public void testPollDetectsDataLossWhenRecordsPurged() {
+        String topicName = "test";
+        TopicPartition tp = new TopicPartition(topicName, 0);
+        long requestedOffset = 5L;
+        // earliest available offset > 0 indicates records were purged (data loss)
+        long earliestOffset = 10L;
+
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
+        when(consumer.poll(any())).thenThrow(new OffsetOutOfRangeException(Map.of(tp, requestedOffset)));
+        when(consumer.beginningOffsets(Set.of(tp))).thenReturn(Map.of(tp, earliestOffset));
+
+        MirrorSourceLegacyMetrics metrics = mock(MirrorSourceLegacyMetrics.class);
+        MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(consumer, metrics, "cluster1",
+                new DefaultReplicationPolicy(), null, true);
+
+        DataLossException e = assertThrows(DataLossException.class, mirrorSourceTask::poll);
+        assertTrue(e.getMessage().contains(topicName), "message should mention the topic");
+        assertTrue(e.getMessage().contains("partition=0"), "message should mention the partition");
+        assertTrue(e.getMessage().contains("requestedOffset=" + requestedOffset), "message should mention the requested offset");
+    }
+
+    @Test
+    public void testPollDetectsTopicResetWhenLogEndOffsetIsZero() {
+        String topicName = "test";
+        TopicPartition tp = new TopicPartition(topicName, 3);
+        long requestedOffset = 42L;
+        // earliest available offset == 0 indicates the topic was deleted and recreated (reset)
+        long earliestOffset = 0L;
+
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
+        when(consumer.poll(any())).thenThrow(new OffsetOutOfRangeException(Map.of(tp, requestedOffset)));
+        when(consumer.beginningOffsets(Set.of(tp))).thenReturn(Map.of(tp, earliestOffset));
+
+        MirrorSourceLegacyMetrics metrics = mock(MirrorSourceLegacyMetrics.class);
+        MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(consumer, metrics, "cluster1",
+                new DefaultReplicationPolicy(), null, true);
+
+        TopicResetException e = assertThrows(TopicResetException.class, mirrorSourceTask::poll);
+        assertTrue(e.getMessage().contains(topicName), "message should mention the topic");
+        assertTrue(e.getMessage().contains("partition=3"), "message should mention the partition");
+        assertTrue(e.getMessage().contains("requestedOffset=" + requestedOffset), "message should mention the requested offset");
+    }
+
+    @Test
+    public void testHandleOffsetOutOfRangePrefersTopicResetWhenAnyPartitionReset() {
+        String topicName = "test";
+        TopicPartition purged = new TopicPartition(topicName, 0);
+        TopicPartition reset = new TopicPartition(topicName, 1);
+
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
+        Map<TopicPartition, Long> beginningOffsets = new HashMap<>();
+        beginningOffsets.put(purged, 10L);
+        beginningOffsets.put(reset, 0L);
+        when(consumer.beginningOffsets(Set.of(purged, reset))).thenReturn(beginningOffsets);
+
+        MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(consumer, null, "cluster1",
+                new DefaultReplicationPolicy(), null, true);
+
+        Map<TopicPartition, Long> outOfRange = new HashMap<>();
+        outOfRange.put(purged, 5L);
+        outOfRange.put(reset, 7L);
+        RuntimeException e = mirrorSourceTask.handleOffsetOutOfRange(new OffsetOutOfRangeException(outOfRange));
+        assertInstanceOf(TopicResetException.class, e, "a topic reset should take precedence over data loss");
+    }
+
+    @Test
+    public void testSeekToBeginningForUncommittedPartitionsWhenDetectionEnabled() {
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> mockConsumer = mock(KafkaConsumer.class);
+
+        SourceTaskContext mockSourceTaskContext = mock(SourceTaskContext.class);
+        OffsetStorageReader mockOffsetStorageReader = mock(OffsetStorageReader.class);
+        when(mockSourceTaskContext.offsetStorageReader()).thenReturn(mockOffsetStorageReader);
+
+        TopicPartition previouslyReplicated = new TopicPartition("previouslyReplicatedTopic", 0);
+        TopicPartition newTopic = new TopicPartition("newTopicToReplicate", 0);
+        Set<TopicPartition> topicPartitions = Set.of(previouslyReplicated, newTopic);
+
+        long committedOffset = 4L;
+        when(mockOffsetStorageReader.offset(anyMap())).thenAnswer(testInvocation -> {
+            Map<String, Object> topicPartitionOffsetMap = testInvocation.getArgument(0);
+            String topicName = topicPartitionOffsetMap.get("topic").toString();
+            if (topicName.startsWith("previouslyReplicatedTopic")) {
+                topicPartitionOffsetMap.put("offset", committedOffset);
+            }
+            return topicPartitionOffsetMap;
+        });
+
+        MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(mockConsumer, null, null,
+                new DefaultReplicationPolicy(), null, true);
+        mirrorSourceTask.initialize(mockSourceTaskContext);
+
+        mirrorSourceTask.initializeConsumer(topicPartitions);
+
+        verify(mockConsumer, times(1)).assign(topicPartitions);
+        // Committed partition uses an explicit seek to committedOffset + 1
+        verify(mockConsumer, times(1)).seek(previouslyReplicated, committedOffset + 1L);
+        // Uncommitted partition seeks to the beginning (rather than being skipped) because
+        // auto.offset.reset=none has no fallback when detection is enabled.
+        verify(mockConsumer, times(1)).seekToBeginning(Set.of(newTopic));
+        verifyNoMoreInteractions(mockConsumer);
     }
 
     private void compareHeaders(List<Header> expectedHeaders, List<org.apache.kafka.connect.header.Header> taskHeaders) {
