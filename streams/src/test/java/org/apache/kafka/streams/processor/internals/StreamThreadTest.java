@@ -4639,6 +4639,7 @@ public class StreamThreadTest {
             config,
             streamsMetrics,
             stateDirectory,
+            mockTime,
             CLIENT_ID,
             logContext);
         return standbyTaskCreator.createTasks(singletonMap(new TaskId(1, 2), emptySet()));
