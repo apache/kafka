@@ -36,6 +36,10 @@ final class DrainableCounter {
 
     int drainDelta() {
         int current = source.getAsInt();
+        if (current < baseline) {
+            throw new IllegalStateException(
+                "Counter source is not monotonically increasing: read " + current + " after " + baseline);
+        }
         int delta = current - baseline;
         baseline = current;
         return delta;

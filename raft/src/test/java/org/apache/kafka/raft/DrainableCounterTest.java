@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public final class DrainableCounterTest {
 
@@ -88,11 +89,11 @@ public final class DrainableCounterTest {
     }
 
     @Test
-    public void testDrainDeltaIsCorrectWhenSourceOverflows() {
-        AtomicInteger source = new AtomicInteger(Integer.MAX_VALUE);
+    public void testDrainDeltaThrowsWhenSourceDecreases() {
+        AtomicInteger source = new AtomicInteger(10);
         DrainableCounter counter = new DrainableCounter(source::get);
 
-        source.incrementAndGet();
-        assertEquals(1, counter.drainDelta());
+        source.set(4);
+        assertThrows(IllegalStateException.class, counter::drainDelta);
     }
 }
