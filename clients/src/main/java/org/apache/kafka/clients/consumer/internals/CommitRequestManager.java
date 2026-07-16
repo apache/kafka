@@ -1228,8 +1228,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 future.completeExceptionally(exception);
             } else if (responseError == Errors.STALE_MEMBER_EPOCH) {
                 if (memberInfo.memberEpoch.isPresent()) {
-                    log.debug("OffsetFetch failed with {}. The member has a newer epoch, so the " +
-                        "request can be retried with it as long as it has not expired.", responseError);
+                    log.debug("OffsetFetch failed with {}. The member is still in the group, so the " +
+                        "request can be retried with the latest member epoch as long as it has not expired.", responseError);
                 } else {
                     log.error("OffsetFetch failed with {} and the consumer is not part " +
                         "of the group anymore (it probably left the group, got fenced" +
