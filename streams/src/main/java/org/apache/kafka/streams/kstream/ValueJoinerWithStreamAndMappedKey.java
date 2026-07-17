@@ -20,7 +20,7 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * The {@code ValueJoinerWithStreamAndMappedKey} interface for joining two values into a new value of
- * arbitrary type, with access to both the mapped join key and the original {@link KStream} record key.
+ * arbitrary type, with access to both the original {@link KStream} record and the mapped join key.
  * Used by {@link KStream}-{@link GlobalKTable} joins, where the join key is produced by a
  * {@link KeyValueMapper} and does not necessarily equal the {@link KStream} record's key.
  *
