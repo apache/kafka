@@ -652,9 +652,24 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         heartbeatRequestState.updateHeartbeatIntervalMs(data.heartbeatIntervalMs());
         heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
         heartbeatState.setEndpointInformationEpoch(data.endpointInformationEpoch());
-        streamsRebalanceData.setHeartbeatIntervalMs(data.heartbeatIntervalMs());
-        streamsRebalanceData.setTaskOffsetIntervalMs(data.taskOffsetIntervalMs());
-        streamsRebalanceData.setAcceptableRecoveryLag(data.acceptableRecoveryLag());
+        // A leaving member's response carries no group configuration (the fields hold protocol defaults), so do not
+        // log or store it while shutting down. Normal responses have memberEpoch >= 0; leave responses use the
+        // negative leave sentinels (fenced members take the error path instead). Log only when a value changes, to
+        // avoid repeating it on every heartbeat: this fires on first receipt (values start unset) and on any later change.
+        if (data.memberEpoch() >= 0) {
+            if (data.heartbeatIntervalMs() != streamsRebalanceData.heartbeatIntervalMs()
+                    || data.taskOffsetIntervalMs() != streamsRebalanceData.taskOffsetIntervalMs()
+                    || data.acceptableRecoveryLag() != streamsRebalanceData.acceptableRecoveryLag()) {
+                logger.info("Received Streams group configuration from the group coordinator: "
+                        + "heartbeatIntervalMs={}, taskOffsetIntervalMs={}, acceptableRecoveryLag={}",
+                    describeConfig(data.heartbeatIntervalMs(), 1),
+                    describeConfig(data.taskOffsetIntervalMs(), 1),
+                    describeConfig(data.acceptableRecoveryLag(), 0));
+            }
+            streamsRebalanceData.setHeartbeatIntervalMs(data.heartbeatIntervalMs());
+            streamsRebalanceData.setTaskOffsetIntervalMs(data.taskOffsetIntervalMs());
+            streamsRebalanceData.setAcceptableRecoveryLag(data.acceptableRecoveryLag());
+        }
 
         if (data.topologyDescriptionRequired() && streamsRebalanceData.wireTopologyDescription() != null) {
             logger.info("Broker requested topology description push");
@@ -694,6 +709,13 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         }
 
         membershipManager.onHeartbeatSuccess(response);
+    }
+
+    // Renders a coordinator-provided config value for logging, or a note when the broker did not provide it. An older
+    // broker leaves these at their protocol defaults (intervals 0, acceptableRecoveryLag -1); a value below minValid
+    // means "not provided".
+    private static String describeConfig(final long value, final long minValid) {
+        return value < minValid ? "not provided (older broker)" : Long.toString(value);
     }
 
     private void onErrorResponse(final StreamsGroupHeartbeatResponse response, final long currentTimeMs) {

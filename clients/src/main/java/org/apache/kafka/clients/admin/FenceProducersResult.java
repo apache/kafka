@@ -20,7 +20,7 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceAudience;
-import org.apache.kafka.common.utils.ProducerIdAndEpoch;
+import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch;
 
 import java.util.Collection;
 import java.util.Map;

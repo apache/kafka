@@ -190,6 +190,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -6832,40 +6833,67 @@ public class GroupMetadataManager {
     /**
      * Handle a JoinGroupRequest.
      *
-     * @param context        The request context.
-     * @param request        The actual JoinGroup request.
-     * @param responseFuture The join group response future.
+     * @param context                The request context.
+     * @param request                The actual JoinGroup request.
+     * @param responseFuture         The join group response future.
+     * @param topologyCleanupHandled Whether streams-topology cleanup has already run (or is not
+     *                               needed), so an empty streams group with a stored topology may be
+     *                               converted directly instead of signalling for cleanup.
      *
-     * @return The result that contains records to append if the join group phase completes.
+     * @return A result whose response is {@code true} when the join must be deferred for
+     *         streams-topology cleanup before conversion, and {@code false} otherwise; the records,
+     *         if any, are those produced by the join.
      */
-    public CoordinatorResult<Void, CoordinatorRecord> classicGroupJoin(
+    public CoordinatorResult<Boolean, CoordinatorRecord> classicGroupJoin(
         AuthorizableRequestContext context,
         JoinGroupRequestData request,
-        CompletableFuture<JoinGroupResponseData> responseFuture
+        CompletableFuture<JoinGroupResponseData> responseFuture,
+        boolean topologyCleanupHandled
     ) {
         Group group = groups.get(request.groupId(), Long.MAX_VALUE);
+        if (!topologyCleanupHandled
+            && group != null
+            && group.type() == STREAMS
+            && group.isEmpty()
+            && ((StreamsGroup) group).storedDescriptionTopologyEpoch() != StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE) {
+            // Converting this empty streams group to classic would tombstone its streams metadata and
+            // orphan any topology the description plugin still holds. Signal the caller to run the
+            // plugin cleanup first; the conversion happens on the re-invocation with the flag set.
+            return new CoordinatorResult<>(List.of(), Boolean.TRUE);
+        }
         if (group != null) {
             if (group.type() == CONSUMER && !group.isEmpty()) {
                 // classicGroupJoinToConsumerGroup takes the join requests to non-empty consumer groups.
                 // The empty consumer groups should be converted to classic groups in classicGroupJoinToClassicGroup.
-                return classicGroupJoinToConsumerGroup((ConsumerGroup) group, context, request, responseFuture);
+                return cleanupNotNeeded(classicGroupJoinToConsumerGroup((ConsumerGroup) group, context, request, responseFuture));
             } else if (group.type() == CONSUMER || group.type() == CLASSIC || group.type() == STREAMS && group.isEmpty()) {
                 // classicGroupJoinToClassicGroup accepts:
                 // - classic groups
                 // - empty streams groups
                 // - empty consumer groups
-                return classicGroupJoinToClassicGroup(context, request, responseFuture);
+                return cleanupNotNeeded(classicGroupJoinToClassicGroup(context, request, responseFuture));
             } else {
                 // Group exists but it's not a consumer group
                 responseFuture.complete(new JoinGroupResponseData()
                     .setMemberId(UNKNOWN_MEMBER_ID)
                     .setErrorCode(Errors.INCONSISTENT_GROUP_PROTOCOL.code())
                 );
-                return EMPTY_RESULT;
+                return new CoordinatorResult<>(List.of(), Boolean.FALSE);
             }
         } else {
-            return classicGroupJoinToClassicGroup(context, request, responseFuture);
+            return cleanupNotNeeded(classicGroupJoinToClassicGroup(context, request, responseFuture));
         }
+    }
+
+    /**
+     * Re-wrap a classic-join result as a {@code Boolean}-typed result whose response signals that no
+     * streams-topology cleanup is needed, preserving the records, append future, replay flag and
+     * atomicity of the wrapped result.
+     */
+    private static CoordinatorResult<Boolean, CoordinatorRecord> cleanupNotNeeded(
+        CoordinatorResult<Void, CoordinatorRecord> r
+    ) {
+        return new CoordinatorResult<>(r.records(), Boolean.FALSE, r.appendFuture(), r.replayRecords(), r.isAtomic());
     }
 
     /**
@@ -8543,9 +8571,10 @@ public class GroupMetadataManager {
         for (String groupId : groupIds) {
             // Non-throwing lookup + type check: silently skip absent or non-streams groups.
             Group group = groups.get(groupId, committedOffset);
+            // -2 (UNCERTAIN) is intentionally included: the plugin may hold data we must be able to delete.
             if (group != null
                 && group.type() == STREAMS
-                && ((StreamsGroup) group).storedDescriptionTopologyEpoch(committedOffset) != -1) {
+                && ((StreamsGroup) group).storedDescriptionTopologyEpoch(committedOffset) != StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE) {
                 withStored.add(groupId);
             }
         }
@@ -8593,9 +8622,19 @@ public class GroupMetadataManager {
 
         // Only advance these epochs, never regress them: a stale push committing after the group
         // advanced (or after a concurrent higher-epoch push) must not move stored/failed back.
-        int newStored = permanentFailure
-            ? group.storedDescriptionTopologyEpoch()
-            : Math.max(group.storedDescriptionTopologyEpoch(), pushedEpoch);
+        int stored = group.storedDescriptionTopologyEpoch();
+        int newStored;
+        if (permanentFailure) {
+            newStored = stored;
+        } else if (stored == StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE) {
+            // The UNCERTAIN barrier this push wrote before its plugin op is gone: only a delete's
+            // finalize clears UNCERTAIN to NONE, so a plugin.deleteTopology raced this push and,
+            // the plugin op order being unknown, may have wiped the topology just stored. Re-arm
+            // UNCERTAIN to re-solicit a push rather than record an epoch over an empty plugin.
+            newStored = StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN;
+        } else {
+            newStored = Math.max(stored, pushedEpoch);
+        }
         int newFailed = permanentFailure
             ? Math.max(group.failedDescriptionTopologyEpoch(), pushedEpoch)
             : group.failedDescriptionTopologyEpoch();
@@ -8613,23 +8652,103 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Clear {@code StoredDescriptionTopologyEpoch} to {@code -1} only when the group's stored
-     * epoch still equals {@code expectedStoredEpoch} (the value observed at the start of the
-     * cleanup cycle). A concurrent {@code setTopology} that advanced the epoch in the
-     * meantime is preserved — the next cycle will pick up the new state. Missing groups,
-     * non-streams groups, and mismatched epochs all yield an empty record list so the cycle's
-     * downstream tombstone pass treats them as no-ops rather than errors.
+     * Finalize the stored topology epoch after a {@code plugin.deleteTopology} on a UNCERTAIN(-2)
+     * group. Closes the in-flight-delete-vs-push race: {@code plugin.deleteTopology} and a racing
+     * {@code plugin.setTopology} have no mutual ordering, so a push that advanced the epoch while
+     * our delete was in flight may have been wiped.
+     *
+     * <ul>
+     *   <li>Stored still UNCERTAIN: no push epoch write raced -> clear to NONE. Residual window:
+     *       a raced push whose plugin {@code setTopology} landed after our delete but reported a
+     *       transient failure writes no epoch record, so the plugin may still hold data at NONE.
+     *       That heals through the re-push the transient failure's back-off solicits, but leaks
+     *       the plugin entry if the group empties and is tombstoned first.</li>
+     *   <li>Stored advanced past UNCERTAIN: a push raced; the pushed topology may be orphaned over
+     *       an empty plugin, so force UNCERTAIN to re-solicit rather than leave a real epoch.</li>
+     *   <li>Stored already NONE (e.g. a concurrent path cleared it): no-op.</li>
+     * </ul>
      */
-    public CoordinatorResult<Void, CoordinatorRecord> clearStoredDescriptionTopologyEpoch(
-        String groupId,
-        int expectedStoredEpoch
+    public CoordinatorResult<Void, CoordinatorRecord> finalizeStoredDescriptionTopologyEpochAfterDelete(
+        String groupId
     ) {
         Group group = groups.get(groupId);
         if (!(group instanceof StreamsGroup streamsGroup)) {
             return new CoordinatorResult<>(List.of());
         }
-        if (streamsGroup.storedDescriptionTopologyEpoch() != expectedStoredEpoch) {
+        int stored = streamsGroup.storedDescriptionTopologyEpoch();
+        if (stored == StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE) {
             return new CoordinatorResult<>(List.of());
+        }
+        int newStored = stored == StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN
+            ? StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE
+            : StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN;
+        CoordinatorRecord record = newStreamsGroupMetadataRecord(
+            groupId,
+            streamsGroup.groupEpoch(),
+            streamsGroup.metadataHash(),
+            streamsGroup.validatedTopologyEpoch(),
+            streamsGroup.lastAssignmentConfigs(),
+            newStored,
+            streamsGroup.failedDescriptionTopologyEpoch()
+        );
+        return new CoordinatorResult<>(List.of(record), null);
+    }
+
+    /**
+     * Batched form of {@link #finalizeStoredDescriptionTopologyEpochAfterDelete}: folds the
+     * per-group smart finalize for every group in {@code groupIds} into one record list so the
+     * cleanup cycle issues a single write per shard.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> finalizeStoredDescriptionTopologyEpochAfterDeleteBatch(
+        Set<String> groupIds
+    ) {
+        List<CoordinatorRecord> records = new ArrayList<>(groupIds.size());
+        for (String groupId : groupIds) {
+            records.addAll(finalizeStoredDescriptionTopologyEpochAfterDelete(groupId).records());
+        }
+        // Non-atomic: the per-group records are independent, so the runtime may split them
+        // across log batches instead of failing a large shard's write on the batch-size limit.
+        return new CoordinatorResult<>(records, null, null, true, false);
+    }
+
+    /**
+     * Mark the group's {@code StoredDescriptionTopologyEpoch} as UNCERTAIN (-2), the durable
+     * barrier written before any plugin-disturbing operation. UNCERTAIN means "the plugin may or
+     * may not hold a topology": it solicits a fresh push from the client and is delete-eligible,
+     * so any failure after this write self-heals (re-push) or is reclaimable (delete) instead of
+     * leaking or getting stuck.
+     *
+     * <p>{@code markWhenNone} controls the {@code NONE} pre-state. Push callers pass {@code true}
+     * (we are about to put data in the plugin, so mark even from NONE). Delete callers pass
+     * {@code false} (a NONE group has nothing in the plugin, so skip the plugin op entirely);
+     * for them the group must also still be empty at the latest state — a group revived since
+     * the caller's committed read drops out so its plugin data is not deleted underneath the
+     * active members.
+     *
+     * @return records carrying the {@code -2} write (empty if already UNCERTAIN or skipped), and a
+     *         response of {@code true} iff the caller should run its plugin op for this group.
+     */
+    public CoordinatorResult<Boolean, CoordinatorRecord> markStoredDescriptionTopologyEpochUncertain(
+        String groupId,
+        boolean markWhenNone
+    ) {
+        Group group = groups.get(groupId);
+        if (!(group instanceof StreamsGroup streamsGroup)) {
+            return new CoordinatorResult<>(List.of(), Boolean.FALSE);
+        }
+        if (!markWhenNone && !streamsGroup.isEmpty()) {
+            // Delete callers only ever target empty groups (the cleanup scan requires emptiness
+            // and a DeleteGroups tombstone fails a non-empty group with NON_EMPTY_GROUP anyway).
+            // Re-checking here closes the window between the caller's committed read and this
+            // write in which a member may have revived the group.
+            return new CoordinatorResult<>(List.of(), Boolean.FALSE);
+        }
+        int stored = streamsGroup.storedDescriptionTopologyEpoch();
+        if (stored == StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN) {
+            return new CoordinatorResult<>(List.of(), Boolean.TRUE);
+        }
+        if (stored == StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE && !markWhenNone) {
+            return new CoordinatorResult<>(List.of(), Boolean.FALSE);
         }
         CoordinatorRecord record = newStreamsGroupMetadataRecord(
             groupId,
@@ -8637,10 +8756,37 @@ public class GroupMetadataManager {
             streamsGroup.metadataHash(),
             streamsGroup.validatedTopologyEpoch(),
             streamsGroup.lastAssignmentConfigs(),
-            -1,
+            StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN,
             streamsGroup.failedDescriptionTopologyEpoch()
         );
-        return new CoordinatorResult<>(List.of(record), null);
+        return new CoordinatorResult<>(List.of(record), Boolean.TRUE);
+    }
+
+    /**
+     * Batched UNCERTAIN(-2) barrier write: folds {@link #markStoredDescriptionTopologyEpochUncertain}
+     * with {@code markWhenNone=false} over every group in {@code groupIds}. The response is the
+     * subset that the per-group mark reported eligible for a plugin op (still an <em>empty</em>
+     * streams group at the latest state and now UNCERTAIN); revived or converted groups drop out
+     * so the cleanup cycle does not run {@code plugin.deleteTopology} against them.
+     */
+    public CoordinatorResult<Set<String>, CoordinatorRecord> markStoredDescriptionTopologyEpochUncertainBatch(
+        Set<String> groupIds
+    ) {
+        List<CoordinatorRecord> records = new ArrayList<>(groupIds.size());
+        Set<String> eligible = new LinkedHashSet<>(groupIds.size());
+        for (String groupId : groupIds) {
+            CoordinatorResult<Boolean, CoordinatorRecord> one =
+                markStoredDescriptionTopologyEpochUncertain(groupId, false);
+            if (Boolean.TRUE.equals(one.response())) {
+                eligible.add(groupId);
+                records.addAll(one.records());
+            }
+        }
+        // Non-atomic: the per-group records are independent, so the runtime may split them
+        // across log batches instead of failing a large shard's write on the batch-size limit.
+        // A failed append still fails the whole operation, so the eligible set never reaches the
+        // plugin-delete step; any group whose UNCERTAIN record did commit retries next cycle.
+        return new CoordinatorResult<>(records, eligible, null, true, false);
     }
 
     /**
