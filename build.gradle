@@ -1196,6 +1196,7 @@ project(':core') {
     testImplementation testFixtures(project(':raft'))
     testImplementation testFixtures(project(':server-common'))
     testImplementation testFixtures(project(':storage:storage-api'))
+    testImplementation testFixtures(project(':storage'))
     testImplementation testFixtures(project(':server'))
     testImplementation project(':streams')
     testImplementation project(':test-common:test-common-runtime')
