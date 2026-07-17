@@ -86,6 +86,8 @@ public class ProducerPerformance {
             SplittableRandom random = new SplittableRandom(config.randomSeed);
             ProducerRecord<byte[], byte[]> record;
 
+            byte[][] preAllocatedKeys = preAllocateKeys(config.recordKeyRange);
+
             if (config.warmupRecords > 0) {
                 System.out.println("Warmup first " + config.warmupRecords + " records. Steady state results will print after the complete test summary.");
             }
@@ -106,7 +108,7 @@ public class ProducerPerformance {
                     transactionStartTime = System.currentTimeMillis();
                 }
 
-                byte[] key = generateKey(config.keyDistribution, config.recordKeyRange, i, random);
+                byte[] key = generateKey(config.keyDistribution, preAllocatedKeys, i, random);
                 record = new ProducerRecord<>(config.topicName, null, key, payload);
 
                 long sendStartMs = System.currentTimeMillis();
@@ -177,15 +179,28 @@ public class ProducerPerformance {
     Stats stats;
     Stats steadyStateStats;
 
-    static byte[] generateKey(KeyDistribution keyDistribution, Integer keyRange, long recordIndex, SplittableRandom random) {
-        switch (keyDistribution) {
-            case RANGE:
-                return Integer.toString((int) (recordIndex % keyRange)).getBytes(StandardCharsets.UTF_8);
-            case RANDOM:
-                return Integer.toString(random.nextInt(keyRange)).getBytes(StandardCharsets.UTF_8);
-            default:
-                return null;
+    static byte[][] preAllocateKeys(Integer keyRange) {
+        if (keyRange == null) {
+            return null;
         }
+        byte[][] keys = new byte[keyRange][];
+        for (int i = 0; i < keyRange; i++) {
+            keys[i] = Integer.toString(i).getBytes(StandardCharsets.UTF_8);
+        }
+        return keys;
+    }
+
+    static byte[] generateKey(
+        KeyDistribution keyDistribution,
+        byte[][] preAllocatedKeys,
+        long recordIndex,
+        SplittableRandom random
+    ) {
+        return switch (keyDistribution) {
+            case RANGE -> preAllocatedKeys[(int) (recordIndex % preAllocatedKeys.length)];
+            case RANDOM -> preAllocatedKeys[random.nextInt(preAllocatedKeys.length)];
+            default -> null;
+        };
     }
 
     static byte[] generateRandomPayload(Integer recordSize, List<byte[]> payloadByteList, byte[] payload,
