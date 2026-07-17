@@ -19,8 +19,6 @@ package org.apache.kafka.coordinator.group.api.assignor.streams;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.Comparator;
-
 /**
  * The identifier for a task.
  */
@@ -37,12 +35,5 @@ public interface TaskId extends Comparable<TaskId> {
      * @return The partition of the input topics this task is processing.
      */
     int partition();
-
-    @Override
-    default int compareTo(final TaskId other) {
-        return Comparator.comparing(TaskId::subtopologyId)
-            .thenComparingInt(TaskId::partition)
-            .compare(this, other);
-    }
 
 }

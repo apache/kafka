@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.streams.assignor;
 
 import org.apache.kafka.coordinator.group.api.assignor.streams.TaskId;
 
+import java.util.Comparator;
 import java.util.Objects;
 
 /**
@@ -30,6 +31,13 @@ public record TaskIdImpl(String subtopologyId, int partition) implements TaskId 
 
     public TaskIdImpl {
         Objects.requireNonNull(subtopologyId);
+    }
+
+    @Override
+    public int compareTo(final TaskId other) {
+        return Comparator.comparing(TaskId::subtopologyId)
+            .thenComparingInt(TaskId::partition)
+            .compare(this, other);
     }
 
     @Override
