@@ -1297,12 +1297,16 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
 
         final AuthenticationException authError = new AuthenticationException("test auth failure");
+        // A matcher exception leaves the response queued, so fail only the first heartbeat.
+        final AtomicBoolean authErrorThrown = new AtomicBoolean(false);
 
         mockClient.prepareResponse(body -> {
-            if (body instanceof HeartbeatRequest)
+            if (!(body instanceof HeartbeatRequest))
+                return false;
+            if (authErrorThrown.compareAndSet(false, true))
                 throw authError;
-            return false;
-        }, heartbeatResponse(Errors.UNKNOWN_SERVER_ERROR));
+            return true;
+        }, heartbeatResponse(Errors.NONE));
 
         coordinator.ensureActiveGroup();
         assertFalse(coordinator.rejoinNeededOrPending(),
@@ -1323,6 +1327,26 @@ public class AbstractCoordinatorTest {
         assertTrue(coordinator.rejoinNeededOrPending(),
             "Expected the heartbeat thread to request a rejoin after an AuthenticationException " +
                 "so the next poll() restarts the heartbeat machinery via ensureActiveGroup()");
+
+        mockClient.prepareResponse(joinGroupFollowerResponse(2, memberId, leaderId, Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+
+        coordinator.ensureActiveGroup();
+
+        assertFalse(coordinator.rejoinNeededOrPending(), "Coordinator should have rejoined the group");
+        assertEquals(2, coordinator.generation().generationId);
+
+        mockClient.prepareResponse(body -> body instanceof HeartbeatRequest, heartbeatResponse(Errors.NONE));
+        mockTime.sleep(HEARTBEAT_INTERVAL_MS);
+
+        // Ensure the response was consumed instead of passing before a heartbeat was sent.
+        TestUtils.waitForCondition(() -> {
+            coordinator.pollHeartbeat(mockTime.milliseconds());
+            return !mockClient.hasPendingResponses() && !coordinator.heartbeat().hasInflight();
+        }, 3000, "Heartbeat was not sent and completed after recovering from the authentication error");
+
+        assertFalse(coordinator.rejoinNeededOrPending(),
+            "A successful post-recovery heartbeat should not trigger another rejoin");
     }
 
     @Test
