@@ -30,6 +30,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -225,6 +226,7 @@ import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
  * @see TestInputTopic
  * @see TestOutputTopic
  */
+@InterfaceAudience.Public
 public class TopologyTestDriver implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(TopologyTestDriver.class);
@@ -500,6 +502,7 @@ public class TopologyTestDriver implements Closeable {
                 streamsConfig.getBoolean(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG),
                 logContext,
                 stateDirectory,
+                mockWallClockTime,
                 processorTopology.storeToChangelogTopic(),
                 new HashSet<>(partitionsByInputTopic.values()));
             final RecordCollector recordCollector = new RecordCollectorImpl(

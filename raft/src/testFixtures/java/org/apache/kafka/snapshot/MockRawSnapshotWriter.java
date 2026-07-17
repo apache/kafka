@@ -18,7 +18,7 @@ package org.apache.kafka.snapshot;
 
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.UnalignedMemoryRecords;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 
 import java.nio.ByteBuffer;

@@ -29,13 +29,13 @@ type: docs
 
 
 
-Any Java or Scala application that makes use of the Kafka Streams library is considered a Kafka Streams application. The computational logic of a Kafka Streams application is defined as a [processor topology](../core-concepts#streams_topology), which is a graph of stream processors (nodes) and streams (edges).
+Any Java or Scala application that makes use of the Kafka Streams library is considered a Kafka Streams application. The computational logic of a Kafka Streams application is defined as a [processor topology](../../core-concepts#streams_topology), which is a graph of stream processors (nodes) and streams (edges).
 
 You can define the processor topology with the Kafka Streams APIs:
 
-[Kafka Streams DSL](dsl-api.html#streams-developer-guide-dsl)
-    A high-level API that provides the most common data transformation operations such as `map`, `filter`, `join`, and `aggregations` out of the box. The DSL is the recommended starting point for developers new to Kafka Streams, and should cover many use cases and stream processing needs. If you're writing a Scala application then you can use the [Kafka Streams DSL for Scala](dsl-api.html#scala-dsl) library which removes much of the Java/Scala interoperability boilerplate as opposed to working directly with the Java DSL.
-[Processor API](processor-api.html#streams-developer-guide-processor-api)
+[Kafka Streams DSL](../dsl-api#streams-developer-guide-dsl)
+    A high-level API that provides the most common data transformation operations such as `map`, `filter`, `join`, and `aggregations` out of the box. The DSL is the recommended starting point for developers new to Kafka Streams, and should cover many use cases and stream processing needs. If you're writing a Scala application then you can use the [Kafka Streams DSL for Scala](../dsl-api#scala-dsl) library which removes much of the Java/Scala interoperability boilerplate as opposed to working directly with the Java DSL.
+[Processor API](../processor-api#streams-developer-guide-processor-api)
     A low-level API that lets you add and connect processors as well as interact directly with state stores. The Processor API provides you with even more flexibility than the DSL but at the expense of requiring more manual work on the side of the application developer (e.g., more lines of code).
 
 # Libraries and Maven artifacts
@@ -116,7 +116,7 @@ Description
 
 **Tip**
 
-See the section [Data Types and Serialization](datatypes.html#streams-developer-guide-serdes) for more information about Serializers/Deserializers.
+See the section [Data Types and Serialization](../datatypes#streams-developer-guide-serdes) for more information about Serializers/Deserializers.
 
 Example `pom.xml` snippet when using Maven:
     
@@ -143,7 +143,7 @@ You can call Kafka Streams from anywhere in your application code, but usually t
 
 First, you must create an instance of `KafkaStreams`.
 
-  * The first argument of the `KafkaStreams` constructor takes a topology (either `StreamsBuilder#build()` for the [DSL](dsl-api.html#streams-developer-guide-dsl) or `Topology` for the [Processor API](processor-api.html#streams-developer-guide-processor-api)) that is used to define a topology.
+  * The first argument of the `KafkaStreams` constructor takes a topology (either `StreamsBuilder#build()` for the [DSL](../dsl-api#streams-developer-guide-dsl) or `Topology` for the [Processor API](../processor-api#streams-developer-guide-processor-api)) that is used to define a topology.
   * The second argument is an instance of `java.util.Properties`, which defines the configuration for this specific topology.
 
 
@@ -180,7 +180,7 @@ At this point, internal structures are initialized, but the processing is not st
     // Start the Kafka Streams threads
     streams.start();
 
-If there are other instances of this stream processing application running elsewhere (e.g., on another machine), Kafka Streams transparently re-assigns tasks from the existing instances to the new instance that you just started. For more information, see [Stream Partitions and Tasks](../architecture.html#streams_architecture_tasks) and [Threading Model](../architecture.html#streams_architecture_threads).
+If there are other instances of this stream processing application running elsewhere (e.g., on another machine), Kafka Streams transparently re-assigns tasks from the existing instances to the new instance that you just started. For more information, see [Stream Partitions and Tasks](../../architecture#streams_architecture_tasks) and [Threading Model](../../architecture#streams_architecture_threads).
 
 To catch any unexpected exceptions, you can set an `java.lang.Thread.UncaughtExceptionHandler` before you start the application. This handler is called whenever a stream thread is terminated by an unexpected exception:
     
@@ -209,7 +209,7 @@ After an application is stopped, Kafka Streams will migrate any tasks that had b
 
 # Testing a Streams application
 
-Kafka Streams comes with a `test-utils` module to help you test your application [here](testing.html). 
+Kafka Streams comes with a `test-utils` module to help you test your application [here](../testing). 
 
   * [Documentation](/documentation)
   * [Kafka Streams](/documentation/streams)
