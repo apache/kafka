@@ -1774,7 +1774,6 @@ project(':transaction-coordinator') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation testFixtures(project(':clients'))
-    testImplementation testFixtures(project(':server-common'))
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':test-common:test-common-internal-api')
 
