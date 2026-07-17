@@ -66,7 +66,7 @@ $ bin/kafka-topics.sh --bootstrap-server localhost:9092 --alter --topic my_topic
 
     Size `<duration>` to cover the worst-case partition-discovery latency for the group protocol in use:
 
-    | Group protocol       | Discovery mechanism                            | Governing config (default)                                      | Recommended <duration>                                |
+    | Group protocol       | Discovery mechanism                            | Governing config (default)                                      | Recommended by_duration value                         |
     |----------------------|------------------------------------------------|-----------------------------------------------------------------|-------------------------------------------------------|
     | `consumer` (KIP-848) | Server pushes assignment on the next heartbeat | `group.consumer.heartbeat.interval.ms` (`5000` ms, server-side) | `PT5S` or slightly higher than the heartbeat interval |
     | `classic`            | Client-side periodic metadata refresh          | `metadata.max.age.ms` (`300000` ms, client-side)                | `PT5M` or slightly higher than `metadata.max.age.ms`  |
