@@ -218,10 +218,10 @@ public class TargetAssignmentBuilder {
      * @throws TaskAssignorException if the target assignment cannot be computed.
      */
     public TargetAssignmentResult build() throws TaskAssignorException {
-        Map<String, MemberMetadataAndAssignmentImpl> memberSpecs = new HashMap<>();
+        Map<String, MemberMetadataAndAssignmentImpl> memberMetadataMap = new HashMap<>();
 
-        // Prepare the member spec for all members.
-        members.forEach((memberId, member) -> memberSpecs.put(memberId, createMemberMetadataAndAssignment(
+        // Prepare the member metadata for all members.
+        members.forEach((memberId, member) -> memberMetadataMap.put(memberId, createMemberMetadataAndAssignment(
             member,
             targetAssignment.getOrDefault(memberId, org.apache.kafka.coordinator.group.streams.TasksTuple.EMPTY),
             taskOffsets.getOrDefault(memberId, MemberTaskOffsets.EMPTY)
@@ -235,14 +235,14 @@ public class TargetAssignmentBuilder {
             }
             newGroupAssignment = assignor.assign(
                 new GroupSpecImpl(
-                    Collections.unmodifiableMap(memberSpecs),
+                    Collections.unmodifiableMap(memberMetadataMap),
                     assignmentConfigs
                 ),
                 new TopologyMetadata(metadataImage, topology.subtopologies().get())
             );
         } else {
             newGroupAssignment = new GroupAssignment(
-                memberSpecs.keySet().stream().collect(Collectors.toMap(x -> x, x -> (MemberAssignment) MemberAssignmentImpl.empty())));
+                memberMetadataMap.keySet().stream().collect(Collectors.toMap(x -> x, x -> (MemberAssignment) MemberAssignmentImpl.empty())));
         }
 
         // Compute delta from previous to new target assignment and create the
@@ -250,7 +250,7 @@ public class TargetAssignmentBuilder {
         List<CoordinatorRecord> records = new ArrayList<>();
         Map<String, org.apache.kafka.coordinator.group.streams.TasksTuple> newTargetAssignment = new HashMap<>();
 
-        memberSpecs.keySet().forEach(memberId -> {
+        memberMetadataMap.keySet().forEach(memberId -> {
             org.apache.kafka.coordinator.group.streams.TasksTuple oldMemberAssignment = targetAssignment.get(memberId);
             org.apache.kafka.coordinator.group.streams.TasksTuple newMemberAssignment = newMemberAssignment(newGroupAssignment, memberId);
 

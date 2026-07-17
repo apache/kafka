@@ -435,9 +435,9 @@ public class TargetAssignmentBuilderTest {
 
         public org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult build() {
             // Prepare expected member specs.
-            Map<String, MemberMetadataAndAssignmentImpl> memberSpecs = new HashMap<>();
+            Map<String, MemberMetadataAndAssignmentImpl> memberMetadataMap = new HashMap<>();
             members.forEach((memberId, member) ->
-                memberSpecs.put(memberId, createMemberMetadataAndAssignment(
+                memberMetadataMap.put(memberId, createMemberMetadataAndAssignment(
                         member,
                         targetAssignment.getOrDefault(memberId, TasksTuple.EMPTY),
                         MemberTaskOffsets.EMPTY
@@ -450,7 +450,7 @@ public class TargetAssignmentBuilderTest {
             TopologyMetadata topologyMetadata = new TopologyMetadata(metadataImage, subtopologies);
 
             // Prepare the expected assignment spec.
-            GroupSpecImpl groupSpec = new GroupSpecImpl(memberSpecs, new HashMap<>());
+            GroupSpecImpl groupSpec = new GroupSpecImpl(memberMetadataMap, new HashMap<>());
 
             // We use `any` here to always return an assignment but use `verify` later on
             // to ensure that the input was correct.

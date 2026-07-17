@@ -57,13 +57,13 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignOneActiveTaskToEachProcessWhenTaskCountSameAsProcessCount() {
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1");
-        final MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2");
-        final MemberMetadataAndAssignmentImpl memberSpec3 = createMemberMetadata("process3");
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1");
+        final MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2");
+        final MemberMetadataAndAssignmentImpl memberMetadata3 = createMemberMetadata("process3");
 
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(
-                mkMap(mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2), mkEntry("member3", memberSpec3)),
+                mkMap(mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3)),
                 new HashMap<>()
             ),
             new TopologyDescriberImpl(3, false, List.of("test-subtopology"))
@@ -82,15 +82,15 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignTopicGroupIdEvenlyAcrossClientsWithNoStandByTasks() {
-        final MemberMetadataAndAssignmentImpl memberSpec11 = createMemberMetadata("process1");
-        final MemberMetadataAndAssignmentImpl memberSpec12 = createMemberMetadata("process1");
-        final MemberMetadataAndAssignmentImpl memberSpec21 = createMemberMetadata("process2");
-        final MemberMetadataAndAssignmentImpl memberSpec22 = createMemberMetadata("process2");
-        final MemberMetadataAndAssignmentImpl memberSpec31 = createMemberMetadata("process3");
-        final MemberMetadataAndAssignmentImpl memberSpec32 = createMemberMetadata("process3");
-        final Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(mkEntry("member1_1", memberSpec11), mkEntry("member1_2", memberSpec12),
-            mkEntry("member2_1", memberSpec21), mkEntry("member2_2", memberSpec22),
-            mkEntry("member3_1", memberSpec31), mkEntry("member3_2", memberSpec32));
+        final MemberMetadataAndAssignmentImpl memberMetadata11 = createMemberMetadata("process1");
+        final MemberMetadataAndAssignmentImpl memberMetadata12 = createMemberMetadata("process1");
+        final MemberMetadataAndAssignmentImpl memberMetadata21 = createMemberMetadata("process2");
+        final MemberMetadataAndAssignmentImpl memberMetadata22 = createMemberMetadata("process2");
+        final MemberMetadataAndAssignmentImpl memberMetadata31 = createMemberMetadata("process3");
+        final MemberMetadataAndAssignmentImpl memberMetadata32 = createMemberMetadata("process3");
+        final Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(mkEntry("member1_1", memberMetadata11), mkEntry("member1_2", memberMetadata12),
+            mkEntry("member2_1", memberMetadata21), mkEntry("member2_2", memberMetadata22),
+            mkEntry("member3_1", memberMetadata31), mkEntry("member3_2", memberMetadata32));
 
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members, new HashMap<>()),
@@ -110,15 +110,15 @@ public class StickyTaskAssignorTest {
     @Test
     public void shouldAssignTopicGroupIdEvenlyAcrossClientsWithStandByTasks() {
         final Map<String, Set<Integer>> tasks = mkMap(mkEntry("test-subtopology1", Sets.newSet(0, 1, 2)), mkEntry("test-subtopology2", Sets.newSet(0, 1, 2)));
-        final MemberMetadataAndAssignmentImpl memberSpec11 = createMemberMetadata("process1");
-        final MemberMetadataAndAssignmentImpl memberSpec12 = createMemberMetadata("process1");
-        final MemberMetadataAndAssignmentImpl memberSpec21 = createMemberMetadata("process2");
-        final MemberMetadataAndAssignmentImpl memberSpec22 = createMemberMetadata("process2");
-        final MemberMetadataAndAssignmentImpl memberSpec31 = createMemberMetadata("process3");
-        final MemberMetadataAndAssignmentImpl memberSpec32 = createMemberMetadata("process3");
-        final Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(mkEntry("member1_1", memberSpec11), mkEntry("member1_2", memberSpec12),
-            mkEntry("member2_1", memberSpec21), mkEntry("member2_2", memberSpec22),
-            mkEntry("member3_1", memberSpec31), mkEntry("member3_2", memberSpec32));
+        final MemberMetadataAndAssignmentImpl memberMetadata11 = createMemberMetadata("process1");
+        final MemberMetadataAndAssignmentImpl memberMetadata12 = createMemberMetadata("process1");
+        final MemberMetadataAndAssignmentImpl memberMetadata21 = createMemberMetadata("process2");
+        final MemberMetadataAndAssignmentImpl memberMetadata22 = createMemberMetadata("process2");
+        final MemberMetadataAndAssignmentImpl memberMetadata31 = createMemberMetadata("process3");
+        final MemberMetadataAndAssignmentImpl memberMetadata32 = createMemberMetadata("process3");
+        final Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(mkEntry("member1_1", memberMetadata11), mkEntry("member1_2", memberMetadata12),
+            mkEntry("member2_1", memberMetadata21), mkEntry("member2_2", memberMetadata22),
+            mkEntry("member3_1", memberMetadata31), mkEntry("member3_2", memberMetadata32));
 
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members,
@@ -139,9 +139,9 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldNotMigrateActiveTaskToOtherProcess() {
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of());
-        MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of());
-        Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2));
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of());
+        MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of());
+        Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2));
 
         GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members, new HashMap<>()),
@@ -158,9 +158,9 @@ public class StickyTaskAssignorTest {
             testMember1.activeTasks().get("test-subtopology").size() + testMember2.activeTasks().get("test-subtopology").size());
 
         // flip the previous active tasks assignment around.
-        memberSpec2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of());
-        final MemberMetadataAndAssignmentImpl memberSpec3 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Set.of(2))), Map.of());
-        members = mkMap(mkEntry("member2", memberSpec2), mkEntry("member3", memberSpec3));
+        memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of());
+        final MemberMetadataAndAssignmentImpl memberMetadata3 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Set.of(2))), Map.of());
+        members = mkMap(mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3));
 
         result = assignor.assign(
             new GroupSpecImpl(members, new HashMap<>()),
@@ -179,11 +179,11 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldMigrateActiveTasksToNewProcessWithoutChangingAllAssignments() {
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 2))), Map.of());
-        final MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of());
-        final MemberMetadataAndAssignmentImpl memberSpec3 = createMemberMetadata("process3");
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 2))), Map.of());
+        final MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of());
+        final MemberMetadataAndAssignmentImpl memberMetadata3 = createMemberMetadata("process3");
         Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2), mkEntry("member3", memberSpec3));
+            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3));
 
         GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members, new HashMap<>()),
@@ -207,11 +207,11 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignBasedOnCapacity() {
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1");
-        final MemberMetadataAndAssignmentImpl memberSpec21 = createMemberMetadata("process2");
-        final MemberMetadataAndAssignmentImpl memberSpec22 = createMemberMetadata("process2");
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1");
+        final MemberMetadataAndAssignmentImpl memberMetadata21 = createMemberMetadata("process2");
+        final MemberMetadataAndAssignmentImpl memberMetadata22 = createMemberMetadata("process2");
         Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2_1", memberSpec21), mkEntry("member2_2", memberSpec22));
+            mkEntry("member1", memberMetadata1), mkEntry("member2_1", memberMetadata21), mkEntry("member2_2", memberMetadata22));
 
         GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members, new HashMap<>()),
@@ -234,10 +234,10 @@ public class StickyTaskAssignorTest {
         final Map<String, Set<Integer>> activeTasks = mkMap(
             mkEntry("test-subtopology1", Sets.newSet(0, 1, 2, 3, 4, 5)),
             mkEntry("test-subtopology2", Sets.newSet(0)));
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1", activeTasks, Map.of());
-        final MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2");
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1", activeTasks, Map.of());
+        final MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2");
         Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2));
+            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2));
 
         GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members, new HashMap<>()),
@@ -261,14 +261,14 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldKeepActiveTaskStickinessWhenMoreClientThanActiveTasks() {
-        MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of());
-        MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(2))), Map.of());
-        MemberMetadataAndAssignmentImpl memberSpec3 = createMemberMetadata("process3", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of());
-        MemberMetadataAndAssignmentImpl memberSpec4 = createMemberMetadata("process4");
-        MemberMetadataAndAssignmentImpl memberSpec5 = createMemberMetadata("process5");
+        MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of());
+        MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(2))), Map.of());
+        MemberMetadataAndAssignmentImpl memberMetadata3 = createMemberMetadata("process3", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of());
+        MemberMetadataAndAssignmentImpl memberMetadata4 = createMemberMetadata("process4");
+        MemberMetadataAndAssignmentImpl memberMetadata5 = createMemberMetadata("process5");
         Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2),
-            mkEntry("member3", memberSpec3), mkEntry("member4", memberSpec4), mkEntry("member5", memberSpec5));
+            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2),
+            mkEntry("member3", memberMetadata3), mkEntry("member4", memberMetadata4), mkEntry("member5", memberMetadata5));
 
         GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members, new HashMap<>()),
@@ -295,14 +295,14 @@ public class StickyTaskAssignorTest {
         assertNull(testMember5.activeTasks().get("test-subtopology"));
 
         // change up the assignment and make sure it is still sticky
-        memberSpec1 = createMemberMetadata("process1");
-        memberSpec2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of());
-        memberSpec3 = createMemberMetadata("process3");
-        memberSpec4 = createMemberMetadata("process4", mkMap(mkEntry("test-subtopology", Set.of(2))), Map.of());
-        memberSpec5 = createMemberMetadata("process5", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of());
+        memberMetadata1 = createMemberMetadata("process1");
+        memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of());
+        memberMetadata3 = createMemberMetadata("process3");
+        memberMetadata4 = createMemberMetadata("process4", mkMap(mkEntry("test-subtopology", Set.of(2))), Map.of());
+        memberMetadata5 = createMemberMetadata("process5", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of());
         members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2),
-            mkEntry("member3", memberSpec3), mkEntry("member4", memberSpec4), mkEntry("member5", memberSpec5));
+            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2),
+            mkEntry("member3", memberMetadata3), mkEntry("member4", memberMetadata4), mkEntry("member5", memberMetadata5));
 
         result = assignor.assign(
             new GroupSpecImpl(members, new HashMap<>()),
@@ -331,11 +331,11 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignTasksToClientWithPreviousStandbyTasks() {
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1", Map.of(), mkMap(mkEntry("test-subtopology", Set.of(2))));
-        final MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2", Map.of(), mkMap(mkEntry("test-subtopology", Set.of(1))));
-        final MemberMetadataAndAssignmentImpl memberSpec3 = createMemberMetadata("process3", Map.of(), mkMap(mkEntry("test-subtopology", Set.of(0))));
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1", Map.of(), mkMap(mkEntry("test-subtopology", Set.of(2))));
+        final MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2", Map.of(), mkMap(mkEntry("test-subtopology", Set.of(1))));
+        final MemberMetadataAndAssignmentImpl memberMetadata3 = createMemberMetadata("process3", Map.of(), mkMap(mkEntry("test-subtopology", Set.of(0))));
         Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2), mkEntry("member3", memberSpec3));
+            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3));
 
         GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members, new HashMap<>()),
@@ -358,10 +358,10 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldNotAssignStandbyTasksToClientWithPreviousStandbyTasksAndCurrentActiveTasks() {
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1", Map.of(), mkMap(mkEntry("test-subtopology", Set.of(0))));
-        final MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2", Map.of(), mkMap(mkEntry("test-subtopology", Set.of(1))));
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1", Map.of(), mkMap(mkEntry("test-subtopology", Set.of(0))));
+        final MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2", Map.of(), mkMap(mkEntry("test-subtopology", Set.of(1))));
         Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2));
+            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2));
 
         GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members, mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, "1"))),
@@ -384,17 +384,17 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignBasedOnCapacityWhenMultipleClientHaveStandbyTasks() {
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1",
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1",
             mkMap(mkEntry("test-subtopology", Set.of(0))),
             mkMap(mkEntry("test-subtopology", Set.of(1))));
-        final MemberMetadataAndAssignmentImpl memberSpec21 = createMemberMetadata("process2",
+        final MemberMetadataAndAssignmentImpl memberMetadata21 = createMemberMetadata("process2",
             mkMap(mkEntry("test-subtopology", Set.of(2))),
             mkMap(mkEntry("test-subtopology", Set.of(1))));
-        final MemberMetadataAndAssignmentImpl memberSpec22 = createMemberMetadata("process2",
+        final MemberMetadataAndAssignmentImpl memberMetadata22 = createMemberMetadata("process2",
             Map.of(), Map.of());
         Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1),
-            mkEntry("member2_1", memberSpec21), mkEntry("member2_2", memberSpec22));
+            mkEntry("member1", memberMetadata1),
+            mkEntry("member2_1", memberMetadata21), mkEntry("member2_2", memberMetadata22));
 
         GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members, new HashMap<>()),
@@ -418,13 +418,13 @@ public class StickyTaskAssignorTest {
     @Test
     public void shouldAssignStandbyTasksToDifferentClientThanCorrespondingActiveTaskIsAssignedTo() {
         final Map<String, Set<Integer>> tasks = mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1, 2, 3)));
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of());
-        final MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of());
-        final MemberMetadataAndAssignmentImpl memberSpec3 = createMemberMetadata("process3", mkMap(mkEntry("test-subtopology", Set.of(2))), Map.of());
-        final MemberMetadataAndAssignmentImpl memberSpec4 = createMemberMetadata("process4", mkMap(mkEntry("test-subtopology", Set.of(3))), Map.of());
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of());
+        final MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of());
+        final MemberMetadataAndAssignmentImpl memberMetadata3 = createMemberMetadata("process3", mkMap(mkEntry("test-subtopology", Set.of(2))), Map.of());
+        final MemberMetadataAndAssignmentImpl memberMetadata4 = createMemberMetadata("process4", mkMap(mkEntry("test-subtopology", Set.of(3))), Map.of());
         Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2),
-            mkEntry("member3", memberSpec3), mkEntry("member4", memberSpec4));
+            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2),
+            mkEntry("member3", memberMetadata3), mkEntry("member4", memberMetadata4));
 
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members,
@@ -455,12 +455,12 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignMultipleReplicasOfStandbyTask() {
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of());
-        final MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of());
-        final MemberMetadataAndAssignmentImpl memberSpec3 = createMemberMetadata("process3", mkMap(mkEntry("test-subtopology", Set.of(2))), Map.of());
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of());
+        final MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of());
+        final MemberMetadataAndAssignmentImpl memberMetadata3 = createMemberMetadata("process3", mkMap(mkEntry("test-subtopology", Set.of(2))), Map.of());
         Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2),
-            mkEntry("member3", memberSpec3));
+            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2),
+            mkEntry("member3", memberMetadata3));
 
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members,
@@ -475,9 +475,9 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldNotAssignStandbyTaskReplicasWhenNoClientAvailableWithoutHavingTheTaskAssigned() {
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1");
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1");
         Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1));
+            mkEntry("member1", memberMetadata1));
 
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members,
@@ -490,12 +490,12 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignActiveAndStandbyTasks() {
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1");
-        final MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2");
-        final MemberMetadataAndAssignmentImpl memberSpec3 = createMemberMetadata("process3");
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1");
+        final MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2");
+        final MemberMetadataAndAssignmentImpl memberMetadata3 = createMemberMetadata("process3");
         Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1),
-            mkEntry("member2", memberSpec2), mkEntry("member3", memberSpec3));
+            mkEntry("member1", memberMetadata1),
+            mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3));
 
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members,
@@ -509,14 +509,14 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignAtLeastOneTaskToEachClientIfPossible() {
-        final MemberMetadataAndAssignmentImpl memberSpec11 = createMemberMetadata("process1");
-        final MemberMetadataAndAssignmentImpl memberSpec12 = createMemberMetadata("process1");
-        final MemberMetadataAndAssignmentImpl memberSpec13 = createMemberMetadata("process1");
-        final MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2");
-        final MemberMetadataAndAssignmentImpl memberSpec3 = createMemberMetadata("process3");
+        final MemberMetadataAndAssignmentImpl memberMetadata11 = createMemberMetadata("process1");
+        final MemberMetadataAndAssignmentImpl memberMetadata12 = createMemberMetadata("process1");
+        final MemberMetadataAndAssignmentImpl memberMetadata13 = createMemberMetadata("process1");
+        final MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2");
+        final MemberMetadataAndAssignmentImpl memberMetadata3 = createMemberMetadata("process3");
         Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1_1", memberSpec11), mkEntry("member1_2", memberSpec12), mkEntry("member1_3", memberSpec13),
-            mkEntry("member2", memberSpec2), mkEntry("member3", memberSpec3));
+            mkEntry("member1_1", memberMetadata11), mkEntry("member1_2", memberMetadata12), mkEntry("member1_3", memberMetadata13),
+            mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3));
 
         GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members, new HashMap<>()),
@@ -530,15 +530,15 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignEachActiveTaskToOneClientWhenMoreClientsThanTasks() {
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1");
-        final MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2");
-        final MemberMetadataAndAssignmentImpl memberSpec3 = createMemberMetadata("process3");
-        final MemberMetadataAndAssignmentImpl memberSpec4 = createMemberMetadata("process4");
-        final MemberMetadataAndAssignmentImpl memberSpec5 = createMemberMetadata("process5");
-        final MemberMetadataAndAssignmentImpl memberSpec6 = createMemberMetadata("process6");
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1");
+        final MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2");
+        final MemberMetadataAndAssignmentImpl memberMetadata3 = createMemberMetadata("process3");
+        final MemberMetadataAndAssignmentImpl memberMetadata4 = createMemberMetadata("process4");
+        final MemberMetadataAndAssignmentImpl memberMetadata5 = createMemberMetadata("process5");
+        final MemberMetadataAndAssignmentImpl memberMetadata6 = createMemberMetadata("process6");
         Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2), mkEntry("member3", memberSpec3),
-            mkEntry("member4", memberSpec4), mkEntry("member5", memberSpec5), mkEntry("member6", memberSpec6));
+            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3),
+            mkEntry("member4", memberMetadata4), mkEntry("member5", memberMetadata5), mkEntry("member6", memberMetadata6));
 
         GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members, new HashMap<>()),
@@ -551,15 +551,15 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldBalanceActiveAndStandbyTasksAcrossAvailableClients() {
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1");
-        final MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2");
-        final MemberMetadataAndAssignmentImpl memberSpec3 = createMemberMetadata("process3");
-        final MemberMetadataAndAssignmentImpl memberSpec4 = createMemberMetadata("process4");
-        final MemberMetadataAndAssignmentImpl memberSpec5 = createMemberMetadata("process5");
-        final MemberMetadataAndAssignmentImpl memberSpec6 = createMemberMetadata("process6");
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1");
+        final MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2");
+        final MemberMetadataAndAssignmentImpl memberMetadata3 = createMemberMetadata("process3");
+        final MemberMetadataAndAssignmentImpl memberMetadata4 = createMemberMetadata("process4");
+        final MemberMetadataAndAssignmentImpl memberMetadata5 = createMemberMetadata("process5");
+        final MemberMetadataAndAssignmentImpl memberMetadata6 = createMemberMetadata("process6");
         Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2), mkEntry("member3", memberSpec3),
-            mkEntry("member4", memberSpec4), mkEntry("member5", memberSpec5), mkEntry("member6", memberSpec6));
+            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3),
+            mkEntry("member4", memberMetadata4), mkEntry("member5", memberMetadata5), mkEntry("member6", memberMetadata6));
 
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members,
@@ -574,11 +574,11 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignMoreTasksToClientWithMoreCapacity() {
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1");
-        final MemberMetadataAndAssignmentImpl memberSpec21 = createMemberMetadata("process2");
-        final MemberMetadataAndAssignmentImpl memberSpec22 = createMemberMetadata("process2");
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1");
+        final MemberMetadataAndAssignmentImpl memberMetadata21 = createMemberMetadata("process2");
+        final MemberMetadataAndAssignmentImpl memberMetadata22 = createMemberMetadata("process2");
         Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2_1", memberSpec21), mkEntry("member2_2", memberSpec22));
+            mkEntry("member1", memberMetadata1), mkEntry("member2_1", memberMetadata21), mkEntry("member2_2", memberMetadata22));
 
         GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members, new HashMap<>()),
@@ -591,12 +591,12 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldReBalanceTasksAcrossAllClientsWhenCapacityAndTaskCountTheSame() {
-        final MemberMetadataAndAssignmentImpl memberSpec3 = createMemberMetadata("process3", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1, 2, 3))), Map.of());
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1");
-        final MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2");
-        final MemberMetadataAndAssignmentImpl memberSpec4 = createMemberMetadata("process4");
+        final MemberMetadataAndAssignmentImpl memberMetadata3 = createMemberMetadata("process3", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1, 2, 3))), Map.of());
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1");
+        final MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2");
+        final MemberMetadataAndAssignmentImpl memberMetadata4 = createMemberMetadata("process4");
         Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2), mkEntry("member3", memberSpec3), mkEntry("member4", memberSpec4));
+            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3), mkEntry("member4", memberMetadata4));
 
         GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members, new HashMap<>()),
@@ -611,11 +611,11 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldReBalanceTasksAcrossClientsWhenCapacityLessThanTaskCount() {
-        final MemberMetadataAndAssignmentImpl memberSpec3 = createMemberMetadata("process3", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1, 2, 3))), Map.of());
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1");
-        final MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2");
+        final MemberMetadataAndAssignmentImpl memberMetadata3 = createMemberMetadata("process3", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1, 2, 3))), Map.of());
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1");
+        final MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2");
         Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2), mkEntry("member3", memberSpec3));
+            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3));
 
         GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members, new HashMap<>()),
@@ -629,11 +629,11 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldRebalanceTasksToClientsBasedOnCapacity() {
-        final MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 3, 2))), Map.of());
-        final MemberMetadataAndAssignmentImpl memberSpec31 = createMemberMetadata("process3");
-        final MemberMetadataAndAssignmentImpl memberSpec32 = createMemberMetadata("process3");
+        final MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 3, 2))), Map.of());
+        final MemberMetadataAndAssignmentImpl memberMetadata31 = createMemberMetadata("process3");
+        final MemberMetadataAndAssignmentImpl memberMetadata32 = createMemberMetadata("process3");
         Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member2", memberSpec2), mkEntry("member3_1", memberSpec31), mkEntry("member3_2", memberSpec32));
+            mkEntry("member2", memberMetadata2), mkEntry("member3_1", memberMetadata31), mkEntry("member3_2", memberMetadata32));
 
         GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members, new HashMap<>()),
@@ -648,11 +648,11 @@ public class StickyTaskAssignorTest {
     public void shouldMoveMinimalNumberOfTasksWhenPreviouslyAboveCapacityAndNewClientAdded() {
         final Set<Integer> p1PrevTasks = Sets.newSet(0, 2);
         final Set<Integer> p2PrevTasks = Sets.newSet(1, 3);
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", p1PrevTasks)), Map.of());
-        final MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", p2PrevTasks)), Map.of());
-        final MemberMetadataAndAssignmentImpl memberSpec3 = createMemberMetadata("process3");
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", p1PrevTasks)), Map.of());
+        final MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", p2PrevTasks)), Map.of());
+        final MemberMetadataAndAssignmentImpl memberMetadata3 = createMemberMetadata("process3");
         final Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2), mkEntry("member3", memberSpec3));
+            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3));
 
         GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members, new HashMap<>()),
@@ -670,10 +670,10 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldNotMoveAnyTasksWhenNewTasksAdded() {
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1))), Map.of());
-        final MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Sets.newSet(2, 3))), Map.of());
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1))), Map.of());
+        final MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Sets.newSet(2, 3))), Map.of());
         final Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2));
+            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2));
 
         GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members, new HashMap<>()),
@@ -690,11 +690,11 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignNewTasksToNewClientWhenPreviousTasksAssignedToOldClients() {
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Sets.newSet(2, 1))), Map.of());
-        final MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 3))), Map.of());
-        final MemberMetadataAndAssignmentImpl memberSpec3 = createMemberMetadata("process3");
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Sets.newSet(2, 1))), Map.of());
+        final MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 3))), Map.of());
+        final MemberMetadataAndAssignmentImpl memberMetadata3 = createMemberMetadata("process3");
         final Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2), mkEntry("member3", memberSpec3));
+            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3));
 
         GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members, new HashMap<>()),
@@ -714,20 +714,20 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignTasksNotPreviouslyActiveToNewClient() {
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1",
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1",
             mkMap(mkEntry("test-subtopology0", Sets.newSet(1)), mkEntry("test-subtopology1", Sets.newSet(2, 3))),
             mkMap(mkEntry("test-subtopology0", Sets.newSet(0)), mkEntry("test-subtopology1", Sets.newSet(1)), mkEntry("test-subtopology2", Sets.newSet(0, 1, 3))));
-        final MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2",
+        final MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2",
             mkMap(mkEntry("test-subtopology0", Sets.newSet(0)), mkEntry("test-subtopology1", Sets.newSet(1)), mkEntry("test-subtopology2", Sets.newSet(2))),
             mkMap(mkEntry("test-subtopology0", Sets.newSet(1, 2, 3)), mkEntry("test-subtopology1", Sets.newSet(0, 2, 3)), mkEntry("test-subtopology2", Sets.newSet(0, 1, 3))));
-        final MemberMetadataAndAssignmentImpl memberSpec3 = createMemberMetadata("process3",
+        final MemberMetadataAndAssignmentImpl memberMetadata3 = createMemberMetadata("process3",
             mkMap(mkEntry("test-subtopology2", Sets.newSet(0, 1, 3))),
             mkMap(mkEntry("test-subtopology0", Sets.newSet(2)), mkEntry("test-subtopology1", Sets.newSet(2))));
         final MemberMetadataAndAssignmentImpl newMemberSpec = createMemberMetadata("process4",
             Map.of(),
             mkMap(mkEntry("test-subtopology0", Sets.newSet(0, 1, 2, 3)), mkEntry("test-subtopology1", Sets.newSet(0, 1, 2, 3)), mkEntry("test-subtopology2", Sets.newSet(0, 1, 2, 3))));
         final Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2), mkEntry("member3", memberSpec3), mkEntry("newMember", newMemberSpec));
+            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3), mkEntry("newMember", newMemberSpec));
 
         GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members, new HashMap<>()),
@@ -746,10 +746,10 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignTasksNotPreviouslyActiveToMultipleNewClients() {
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1",
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1",
             mkMap(mkEntry("test-subtopology0", Sets.newSet(1)), mkEntry("test-subtopology1", Sets.newSet(2, 3))),
             mkMap(mkEntry("test-subtopology0", Sets.newSet(0)), mkEntry("test-subtopology1", Sets.newSet(1)), mkEntry("test-subtopology2", Sets.newSet(0, 1, 3))));
-        final MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2",
+        final MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2",
             mkMap(mkEntry("test-subtopology0", Sets.newSet(0)), mkEntry("test-subtopology1", Sets.newSet(1)), mkEntry("test-subtopology2", Sets.newSet(2))),
             mkMap(mkEntry("test-subtopology0", Sets.newSet(1, 2, 3)), mkEntry("test-subtopology1", Sets.newSet(0, 2, 3)), mkEntry("test-subtopology2", Sets.newSet(0, 1, 3))));
         final MemberMetadataAndAssignmentImpl bounce1 = createMemberMetadata("bounce1",
@@ -759,7 +759,7 @@ public class StickyTaskAssignorTest {
             Map.of(),
             mkMap(mkEntry("test-subtopology0", Sets.newSet(2, 3)), mkEntry("test-subtopology1", Sets.newSet(0))));
         final Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2), mkEntry("bounce_member1", bounce1), mkEntry("bounce_member2", bounce2));
+            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("bounce_member1", bounce1), mkEntry("bounce_member2", bounce2));
 
         GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members, new HashMap<>()),
@@ -778,10 +778,10 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignTasksToNewClient() {
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Sets.newSet(1, 2))), Map.of());
-        final MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2");
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Sets.newSet(1, 2))), Map.of());
+        final MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2");
         final Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2));
+            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2));
 
         GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members, new HashMap<>()),
@@ -793,11 +793,11 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignTasksToNewClientWithoutFlippingAssignmentBetweenExistingClients() {
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1, 2))), Map.of());
-        final MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Sets.newSet(3, 4, 5))), Map.of());
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1, 2))), Map.of());
+        final MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2", mkMap(mkEntry("test-subtopology", Sets.newSet(3, 4, 5))), Map.of());
         final MemberMetadataAndAssignmentImpl newMemberSpec = createMemberMetadata("process3");
         final Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2), mkEntry("newMember", newMemberSpec));
+            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("newMember", newMemberSpec));
 
         GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members, new HashMap<>()),
@@ -819,11 +819,11 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignTasksToNewClientWithoutFlippingAssignmentBetweenExistingAndBouncedClients() {
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1, 2, 6))), Map.of());
-        final MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2", Map.of(), mkMap(mkEntry("test-subtopology", Sets.newSet(3, 4, 5))));
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1", mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1, 2, 6))), Map.of());
+        final MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2", Map.of(), mkMap(mkEntry("test-subtopology", Sets.newSet(3, 4, 5))));
         final MemberMetadataAndAssignmentImpl newMemberSpec = createMemberMetadata("newProcess");
         final Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2), mkEntry("newMember", newMemberSpec));
+            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("newMember", newMemberSpec));
 
         GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members, new HashMap<>()),
@@ -1105,19 +1105,19 @@ public class StickyTaskAssignorTest {
     public void shouldReassignTasksWhenNewNodeJoinsWithExistingActiveAndStandbyAssignments() {
         // Initial setup: Node 1 has active tasks 0,1 and standby tasks 2,3
         // Node 2 has active tasks 2,3 and standby tasks 0,1
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1",
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1",
             mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1))),
             mkMap(mkEntry("test-subtopology", Sets.newSet(2, 3))));
 
-        final MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2",
+        final MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2",
             mkMap(mkEntry("test-subtopology", Sets.newSet(2, 3))),
             mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1))));
 
         // Node 3 joins as new client
-        final MemberMetadataAndAssignmentImpl memberSpec3 = createMemberMetadata("process3");
+        final MemberMetadataAndAssignmentImpl memberMetadata3 = createMemberMetadata("process3");
 
         final Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2), mkEntry("member3", memberSpec3));
+            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2), mkEntry("member3", memberMetadata3));
 
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members, mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, "1"))),
@@ -1152,12 +1152,12 @@ public class StickyTaskAssignorTest {
     @Test
     public void shouldRangeAssignTasksWhenScalingUp() {
         // Two clients, the second one is new
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1",
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1",
             Map.of("test-subtopology1", Set.of(0, 1), "test-subtopology2", Set.of(0, 1)),
             Map.of());
-        final MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2");
+        final MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2");
         final Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2));
+            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2));
 
         // Two subtopologies with 2 tasks each (4 tasks total) with standby replicas enabled
         final GroupAssignment result = assignor.assign(
@@ -1200,10 +1200,10 @@ public class StickyTaskAssignorTest {
     @Test
     public void shouldRangeAssignTasksWhenStartingEmpty() {
         // Two clients starting empty (no previous tasks)
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1");
-        final MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2");
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1");
+        final MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2");
         final Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2));
+            mkEntry("member1", memberMetadata1), mkEntry("member2", memberMetadata2));
 
         // Two subtopologies with 2 tasks each (4 tasks total) with standby replicas enabled
         final GroupAssignment result = assignor.assign(
@@ -1261,18 +1261,18 @@ public class StickyTaskAssignorTest {
         // Process1: active=[0], standby=[1] (previously had both active and standby tasks)
         // Process2: active=[1] (had the active task that process1 had as standby)
         // Process3: no previous tasks
-        final MemberMetadataAndAssignmentImpl memberSpec1 = createMemberMetadata("process1", 
+        final MemberMetadataAndAssignmentImpl memberMetadata1 = createMemberMetadata("process1", 
             mkMap(mkEntry("test-subtopology", Sets.newSet(0))), 
             mkMap(mkEntry("test-subtopology", Sets.newSet(1))));
-        final MemberMetadataAndAssignmentImpl memberSpec2 = createMemberMetadata("process2",
+        final MemberMetadataAndAssignmentImpl memberMetadata2 = createMemberMetadata("process2",
             mkMap(mkEntry("test-subtopology", Sets.newSet(1))), 
             Map.of());
-        final MemberMetadataAndAssignmentImpl memberSpec3 = createMemberMetadata("process3");
+        final MemberMetadataAndAssignmentImpl memberMetadata3 = createMemberMetadata("process3");
 
         final Map<String, MemberMetadataAndAssignmentImpl> members = mkMap(
-            mkEntry("member1", memberSpec1), 
-            mkEntry("member2", memberSpec2), 
-            mkEntry("member3", memberSpec3));
+            mkEntry("member1", memberMetadata1), 
+            mkEntry("member2", memberMetadata2), 
+            mkEntry("member3", memberMetadata3));
 
         // We have 2 active tasks + 1 standby replica = 4 total tasks
         // Quota per process = 4 tasks / 3 processes = 1.33 -> 2 tasks per process
