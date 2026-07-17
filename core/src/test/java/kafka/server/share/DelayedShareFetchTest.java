@@ -2378,8 +2378,9 @@ public class DelayedShareFetchTest {
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         sharePartitions.put(tp0, sp0);
 
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future = new CompletableFuture<>();
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
-            new CompletableFuture<>(), List.of(tp0), BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, BROKER_TOPIC_STATS);
+            future, List.of(tp0), BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, BROKER_TOPIC_STATS);
 
         CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> asyncReadFuture = new CompletableFuture<>();
         when(logReader.readAsync(any(), any(), any(), any(), anyBoolean())).thenReturn(asyncReadFuture);
@@ -2416,6 +2417,8 @@ public class DelayedShareFetchTest {
         // Invoke tryComplete again to simulate async read completion but should return false as future
         // is not yet completed.
         assertFalse(delayedShareFetch.tryComplete());
+        // The result future should still not be completed.
+        assertFalse(shareFetch.isCompleted());
         // Complete future to simulate async read completion. The registered callback should trigger a
         // purgatory check rather than completing the request directly on the completing thread.
         asyncReadFuture.complete(buildLogReadResultMap(List.of(tp0)));
@@ -2431,6 +2434,410 @@ public class DelayedShareFetchTest {
         // Verify readFromLog was called (which is used by async readAsync internally)
         Mockito.verify(logReader).readAsync(any(), any(), any(), any(), anyBoolean());
         Mockito.verify(sp0).releaseFetchLock(fetchId);
+        // The future of shareFetch completes.
+        assertTrue(shareFetch.isCompleted());
+        assertEquals(Set.of(tp0), future.join().keySet());
+    }
+
+    /**
+     * Tests that when async read encounters an exception, request completes with error.
+     */
+    @Test
+    public void testAsyncReadExceptionReleasesLocks() {
+        String groupId = "grp";
+        Uuid topicId = Uuid.randomUuid();
+        LogReader logReader = mock(LogReader.class);
+        PartitionMetadataProvider metadataProvider = mock(PartitionMetadataProvider.class);
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
+
+        SharePartition sp0 = mock(SharePartition.class);
+        LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
+        sharePartitions.put(tp0, sp0);
+
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future = new CompletableFuture<>();
+        ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
+            future, List.of(tp0), BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, BROKER_TOPIC_STATS);
+
+        CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> asyncReadFuture = new CompletableFuture<>();
+        when(logReader.readAsync(any(), any(), any(), any(), anyBoolean())).thenReturn(asyncReadFuture);
+
+        when(sp0.maybeAcquireFetchLock(any())).thenReturn(true);
+        when(sp0.canAcquireRecords()).thenReturn(true);
+        when(sp0.nextFetchOffset()).thenReturn(0L);
+        when(sp0.fetchOffsetMetadata(anyLong()))
+            .thenReturn(Optional.empty())
+            .thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
+        when(metadataProvider.endOffsetMetadata(any(), any())).thenReturn(new LogOffsetMetadata(1, 1, 1));
+
+        PartitionMaxBytesStrategy partitionMaxBytesStrategy = mockPartitionMaxBytes(Set.of(tp0));
+
+        Uuid fetchId = Uuid.randomUuid();
+        DelayedShareFetch delayedShareFetch = DelayedShareFetchBuilder.builder()
+            .withShareFetchData(shareFetch)
+            .withReplicaManager(replicaManager)
+            .withLogReader(logReader)
+            .withMetadataProvider(metadataProvider)
+            .withPartitionMaxBytesStrategy(partitionMaxBytesStrategy)
+            .withSharePartitions(sharePartitions)
+            .withFetchId(fetchId)
+            .build();
+
+        // Initially no pending fetch
+        assertNull(delayedShareFetch.pendingFetch());
+        // First tryComplete triggers async read
+        assertFalse(delayedShareFetch.tryComplete());
+        assertNotNull(delayedShareFetch.pendingFetch());
+        // Complete with exception.
+        asyncReadFuture.completeExceptionally(new RuntimeException("Simulated read failure"));
+        Mockito.verify(replicaManager).completeDelayedShareFetchRequest(any());
+        // The request should not be completed yet as the purgatory check (mocked) is a no-op here.
+        assertFalse(delayedShareFetch.isCompleted());
+
+        // Simulate the purgatory re-invoking tryComplete. get() throws, so the request is force-completed
+        // with an error and the partition locks are released.
+        assertTrue(delayedShareFetch.tryComplete());
+        assertTrue(delayedShareFetch.isCompleted());
+        Map<TopicIdPartition, ShareFetchResponseData.PartitionData> response = future.join();
+        assertEquals(Set.of(tp0), response.keySet());
+        assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), response.get(tp0).errorCode());
+        assertTrue(response.get(tp0).errorMessage().contains("Simulated read failure"));
+        Mockito.verify(sp0).releaseFetchLock(fetchId);
+    }
+
+    /**
+     * Tests that onComplete handles the case where async fetch is still pending.
+     * This simulates timeout scenario where async read hasn't completed yet.
+     */
+    @Test
+    public void testOnCompleteWithPendingAsyncFetch() {
+        String groupId = "grp";
+        Uuid topicId = Uuid.randomUuid();
+        LogReader logReader = mock(LogReader.class);
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        PartitionMetadataProvider metadataProvider = mock(PartitionMetadataProvider.class);
+        TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
+
+        SharePartition sp0 = mock(SharePartition.class);
+        LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
+        sharePartitions.put(tp0, sp0);
+
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future = new CompletableFuture<>();
+        ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
+            future, List.of(tp0), BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, BROKER_TOPIC_STATS);
+
+        CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> asyncReadFuture = new CompletableFuture<>();
+        when(logReader.readAsync(any(), any(), any(), any(), anyBoolean())).thenReturn(asyncReadFuture);
+
+        when(sp0.maybeAcquireFetchLock(any())).thenReturn(true);
+        when(sp0.canAcquireRecords()).thenReturn(true);
+        when(sp0.nextFetchOffset()).thenReturn(0L);
+        when(sp0.fetchOffsetMetadata(anyLong()))
+            .thenReturn(Optional.empty())
+            .thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
+        when(metadataProvider.endOffsetMetadata(any(), any())).thenReturn(new LogOffsetMetadata(1, 1, 1));
+
+        PartitionMaxBytesStrategy partitionMaxBytesStrategy = mockPartitionMaxBytes(Set.of(tp0));
+
+        Uuid fetchId = Uuid.randomUuid();
+        DelayedShareFetch delayedShareFetch = DelayedShareFetchBuilder.builder()
+            .withShareFetchData(shareFetch)
+            .withLogReader(logReader)
+            .withMetadataProvider(metadataProvider)
+            .withPartitionMaxBytesStrategy(partitionMaxBytesStrategy)
+            .withSharePartitions(sharePartitions)
+            .withReplicaManager(replicaManager)
+            .withFetchId(fetchId)
+            .build();
+
+        // Initially no pending fetch
+        assertNull(delayedShareFetch.pendingFetch());
+        // First tryComplete triggers async read
+        assertFalse(delayedShareFetch.tryComplete());
+        assertNotNull(delayedShareFetch.pendingFetch());
+        // Simulate timeout: onComplete is invoked while the async read is still in-flight (not done).
+        delayedShareFetch.forceComplete();
+        // As the async read had not completed, the request is completed with an empty response, the
+        // pending fetch is cleared and the partition locks are released.
+        assertNull(delayedShareFetch.pendingFetch());
+        assertTrue(shareFetch.isCompleted());
+        assertTrue(future.isDone());
+        assertEquals(Set.of(), future.join().keySet());
+        Mockito.verify(sp0).releaseFetchLock(fetchId);
+        // Pending fetch is marked to null.
+        assertNull(delayedShareFetch.pendingFetch());
+
+        // Complete the pending fetch successfully to validate that it doesn't invoke the callback.
+        asyncReadFuture.complete(buildLogReadResultMap(List.of(tp0)));
+        // Verify the callback handler should not be executed on the request completion now.
+        Mockito.verify(replicaManager, times(0)).completeDelayedShareFetchRequest(any());
+    }
+
+    /**
+     * Tests that onComplete handles the case where async fetch is just completed, on timeout.
+     */
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testOnCompleteWithCompletedAsyncFetch() throws Exception {
+        String groupId = "grp";
+        Uuid topicId = Uuid.randomUuid();
+        LogReader logReader = mock(LogReader.class);
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        PartitionMetadataProvider metadataProvider = mock(PartitionMetadataProvider.class);
+        TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
+
+        SharePartition sp0 = mock(SharePartition.class);
+        LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
+        sharePartitions.put(tp0, sp0);
+
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future = new CompletableFuture<>();
+        ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
+            future, List.of(tp0), BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, BROKER_TOPIC_STATS);
+
+        CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> asyncReadFuture = mock(CompletableFuture.class);
+        when(logReader.readAsync(any(), any(), any(), any(), anyBoolean())).thenReturn(asyncReadFuture);
+
+        when(sp0.maybeAcquireFetchLock(any())).thenReturn(true);
+        when(sp0.canAcquireRecords()).thenReturn(true);
+        when(sp0.nextFetchOffset()).thenReturn(0L);
+        when(sp0.fetchOffsetMetadata(anyLong()))
+            .thenReturn(Optional.empty())
+            .thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
+        when(metadataProvider.endOffsetMetadata(any(), any())).thenReturn(new LogOffsetMetadata(1, 1, 1));
+
+        PartitionMaxBytesStrategy partitionMaxBytesStrategy = mockPartitionMaxBytes(Set.of(tp0));
+
+        // Run false for tryComplete and true for onComplete.
+        when(asyncReadFuture.isDone()).thenReturn(false).thenReturn(true);
+        // Teurn successful response when fetched in onComplete.
+        when(asyncReadFuture.get()).thenReturn(buildLogReadResultMap(List.of(tp0)));
+
+        Uuid fetchId = Uuid.randomUuid();
+        DelayedShareFetch delayedShareFetch = DelayedShareFetchBuilder.builder()
+            .withShareFetchData(shareFetch)
+            .withLogReader(logReader)
+            .withMetadataProvider(metadataProvider)
+            .withPartitionMaxBytesStrategy(partitionMaxBytesStrategy)
+            .withSharePartitions(sharePartitions)
+            .withReplicaManager(replicaManager)
+            .withFetchId(fetchId)
+            .build();
+
+        // Initially no pending fetch
+        assertNull(delayedShareFetch.pendingFetch());
+        // First tryComplete triggers async read
+        assertFalse(delayedShareFetch.tryComplete());
+        assertNotNull(delayedShareFetch.pendingFetch());
+        try (MockedStatic<ShareFetchUtils> mockedShareFetchUtils = Mockito.mockStatic(ShareFetchUtils.class, Mockito.CALLS_REAL_METHODS)) {
+            mockedShareFetchUtils.when(
+                    () -> ShareFetchUtils.processFetchResponse(any(), any(), any(), any(), any()))
+                .thenReturn(Map.of(tp0, mock(ShareFetchResponseData.PartitionData.class)));
+            // Simulate timeout: onComplete is invoked while the async read is still in-flight (not done).
+            delayedShareFetch.forceComplete();
+            // As the async read has completed now since second invocation to isDone returns true from
+            // mocked response, the request is completed with data.
+            assertNull(delayedShareFetch.pendingFetch());
+            assertTrue(shareFetch.isCompleted());
+            assertTrue(future.isDone());
+            Map<TopicIdPartition, ShareFetchResponseData.PartitionData> response = future.join();
+            assertEquals(Set.of(tp0), response.keySet());
+            // Request should be completed without any error. Do not validate the response as it's returned
+            // from mocked ShareFetchUtils.
+            assertEquals(Errors.NONE.code(), response.get(tp0).errorCode());
+            Mockito.verify(sp0).releaseFetchLock(fetchId);
+            // Pending fetch is marked to null.
+            assertNull(delayedShareFetch.pendingFetch());
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testAsyncReadMinBytesNotSatisfiedClearsAcquiredStateForRetry() throws Exception {
+        // On next re-try, tryComplete() must not assume the released locks are still held. Since the acquired
+        // state was cleared, it re-acquires the partitions afresh (a second maybeAcquireFetchLock).
+        verifyAsyncReadMinBytesNotSatisfiedClearsAcquiredState(false);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testAsyncReadMinBytesNotSatisfiedClearsAcquiredStateForOnComplete() throws Exception {
+        // On timeout, onComplete() must not assume the released locks are still held. Since the acquired
+        // state was cleared, it re-acquires the partitions afresh (a second maybeAcquireFetchLock).
+        verifyAsyncReadMinBytesNotSatisfiedClearsAcquiredState(true);
+    }
+
+    private void verifyAsyncReadMinBytesNotSatisfiedClearsAcquiredState(boolean requestTimedOut) throws Exception {
+        String groupId = "grp";
+        Uuid topicId = Uuid.randomUuid();
+        LogReader logReader = mock(LogReader.class);
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        PartitionMetadataProvider metadataProvider = mock(PartitionMetadataProvider.class);
+        TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
+
+        SharePartition sp0 = mock(SharePartition.class);
+        LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
+        sharePartitions.put(tp0, sp0);
+
+        // Set a high minBytes so that the async read result does not satisfy minBytes and the request
+        // is returned to the purgatory.
+        FetchParams fetchParams = new FetchParams(FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS, 5000, 10000,
+            FetchIsolation.HIGH_WATERMARK, Optional.empty());
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future = new CompletableFuture<>();
+        ShareFetch shareFetch = new ShareFetch(fetchParams, groupId, Uuid.randomUuid().toString(),
+            future, List.of(tp0), BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, BROKER_TOPIC_STATS);
+
+        CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> asyncReadFuture = mock(CompletableFuture.class);
+        when(logReader.readAsync(any(), any(), any(), any(), anyBoolean())).thenReturn(asyncReadFuture);
+        // isDone returns false for the first tryComplete (store pending fetch) and true for the second
+        // tryComplete (process the completed result).
+        when(asyncReadFuture.isDone()).thenReturn(false).thenReturn(true);
+        when(asyncReadFuture.get()).thenReturn(buildLogReadResultMap(List.of(tp0)));
+
+        when(sp0.maybeAcquireFetchLock(any())).thenReturn(true);
+        when(sp0.canAcquireRecords()).thenReturn(true);
+        when(sp0.nextFetchOffset()).thenReturn(0L);
+        when(sp0.fetchOffsetMetadata(anyLong()))
+            .thenReturn(Optional.empty())
+            .thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
+        when(metadataProvider.endOffsetMetadata(any(), any())).thenReturn(new LogOffsetMetadata(1, 1, 1));
+
+        PartitionMaxBytesStrategy partitionMaxBytesStrategy = mockPartitionMaxBytes(Set.of(tp0));
+
+        Uuid fetchId = Uuid.randomUuid();
+        DelayedShareFetch delayedShareFetch = DelayedShareFetchBuilder.builder()
+            .withShareFetchData(shareFetch)
+            .withLogReader(logReader)
+            .withMetadataProvider(metadataProvider)
+            .withPartitionMaxBytesStrategy(partitionMaxBytesStrategy)
+            .withSharePartitions(sharePartitions)
+            .withReplicaManager(replicaManager)
+            .withFetchId(fetchId)
+            .build();
+
+        // First tryComplete: async read not done, so a pending fetch is created and tp0 lock is held
+        // (partitionsAcquired is populated internally).
+        assertNull(delayedShareFetch.pendingFetch());
+        assertFalse(delayedShareFetch.tryComplete());
+        assertNotNull(delayedShareFetch.pendingFetch());
+        Mockito.verify(sp0, times(1)).maybeAcquireFetchLock(fetchId);
+
+        // Second tryComplete (purgatory re-check): async read is done but minBytes is not satisfied, so
+        // the lock is released, the pending fetch is cleared and the request returns to the purgatory.
+        assertFalse(delayedShareFetch.tryComplete());
+        assertNull(delayedShareFetch.pendingFetch());
+        Mockito.verify(sp0, times(1)).releaseFetchLock(fetchId);
+
+        // Trigger onComplete() if requestTimedOut else tryComplete(). The re-try must not assume the
+        // released locks are still held. Since the acquired state was cleared, it re-acquires the
+        // partitions afresh (a second maybeAcquireFetchLock).
+        if (requestTimedOut) {
+            delayedShareFetch.forceComplete();
+        } else {
+            delayedShareFetch.tryComplete();
+        }
+        Mockito.verify(sp0, times(2)).maybeAcquireFetchLock(fetchId);
+    }
+
+    @Test
+    public void testRemoteStorageFetchLocalReadFailureReleasesLocks() {
+        verifyRemoteStorageFetchLocalReadFailureReleasesLocks(true);
+    }
+
+    @Test
+    public void testRemoteStorageFetchLocalReadCompletionFailureReleasesLocks() {
+        verifyRemoteStorageFetchLocalReadFailureReleasesLocks(false);
+    }
+
+    private void verifyRemoteStorageFetchLocalReadFailureReleasesLocks(boolean syncFailure) {
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        LogReader logReader = mock(LogReader.class);
+        PartitionMetadataProvider metadataProvider = mock(PartitionMetadataProvider.class);
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
+        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 2));
+
+        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp2 = mock(SharePartition.class);
+        when(sp0.canAcquireRecords()).thenReturn(true);
+        when(sp1.canAcquireRecords()).thenReturn(true);
+        when(sp2.canAcquireRecords()).thenReturn(true);
+
+        LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
+        sharePartitions.put(tp0, sp0);
+        sharePartitions.put(tp1, sp1);
+        sharePartitions.put(tp2, sp2);
+
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future = new CompletableFuture<>();
+        ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, "grp", Uuid.randomUuid().toString(),
+            future, List.of(tp0, tp1, tp2), BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS, BROKER_TOPIC_STATS);
+
+        when(sp0.nextFetchOffset()).thenReturn(10L);
+        when(sp1.nextFetchOffset()).thenReturn(20L);
+        when(sp2.nextFetchOffset()).thenReturn(30L);
+        when(sp0.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
+        when(sp1.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
+        when(sp2.fetchOffsetMetadata(anyLong())).thenReturn(Optional.empty());
+
+        // First read (tryComplete): tp0, tp1 local and tp2 remote fetch. The second read (additional local
+        // read in onComplete) fails, exercising an error path in readAndProcessFetchResultCompletion:
+        // either synchronously (readAsync throws) or asynchronously (an exceptionally-completed future).
+        LinkedHashMap<TopicIdPartition, LogReadResult> firstReadResult = buildLocalAndRemoteFetchResultMap(Set.of(tp0, tp1), Set.of(tp2));
+        if (syncFailure) {
+            when(logReader.readAsync(any(), any(), any(), any(), anyBoolean()))
+                .thenReturn(CompletableFuture.completedFuture(firstReadResult))
+                .thenThrow(new RuntimeException("sync local read failure"));
+        } else {
+            when(logReader.readAsync(any(), any(), any(), any(), anyBoolean()))
+                .thenReturn(CompletableFuture.completedFuture(firstReadResult))
+                .thenReturn(CompletableFuture.failedFuture(new RuntimeException("async local read failure")));
+        }
+
+        try (MockedStatic<ShareFetchUtils> mockedShareFetchUtils = Mockito.mockStatic(ShareFetchUtils.class)) {
+            mockedShareFetchUtils.when(() -> ShareFetchUtils.processFetchResponse(any(), any(), any(), any(), any()))
+                .thenReturn(Map.of(tp2, mock(ShareFetchResponseData.PartitionData.class)));
+
+            // Remote fetch for tp2 completes within tryComplete so the request moves on to
+            // onComplete where the additional local read is attempted.
+            RemoteLogReadResult remoteFetchResult = new RemoteLogReadResult(Optional.of(REMOTE_FETCH_INFO), Optional.empty());
+            RemoteLogManager remoteLogManager = mock(RemoteLogManager.class);
+            doAnswer(invocationOnMock -> {
+                Consumer<RemoteLogReadResult> callback = invocationOnMock.getArgument(1);
+                callback.accept(remoteFetchResult);
+                return CompletableFuture.completedFuture(remoteFetchResult);
+            }).when(remoteLogManager).asyncRead(any(), any());
+            when(replicaManager.remoteLogManager()).thenReturn(Option.apply(remoteLogManager));
+
+            // maybeCompletePendingRemoteFetch checks partition leadership for the remote fetch partition.
+            Partition p2 = mock(Partition.class);
+            when(p2.isLeader()).thenReturn(true);
+            when(replicaManager.getPartitionOrException(tp2.topicPartition())).thenReturn(p2);
+
+            Uuid fetchId = Uuid.randomUuid();
+            DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
+                .withShareFetchData(shareFetch)
+                .withReplicaManager(replicaManager)
+                .withLogReader(logReader)
+                .withMetadataProvider(metadataProvider)
+                .withSharePartitions(sharePartitions)
+                .withPartitionMaxBytesStrategy(mockPartitionMaxBytes(Set.of(tp0, tp1, tp2)))
+                .withFetchId(fetchId)
+                .build());
+
+            when(sp0.maybeAcquireFetchLock(fetchId)).thenReturn(true);
+            when(sp1.maybeAcquireFetchLock(fetchId)).thenReturn(true);
+            when(sp2.maybeAcquireFetchLock(fetchId)).thenReturn(true);
+
+            assertTrue(delayedShareFetch.tryComplete());
+            assertTrue(delayedShareFetch.isCompleted());
+            assertTrue(shareFetch.isCompleted());
+
+            // tp0 and tp1 (local partitions being fetched) locks must be released even though the
+            // additional local read failed: once when the remote fetch is prepared (as non-remote
+            // partitions) and once in the error path. tp2 (remote fetch) lock is released once.
+            Mockito.verify(delayedShareFetch, times(2)).releasePartitionLocks(Set.of(tp0, tp1));
+            Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(Set.of(tp2));
+        }
     }
 
     static void mockTopicIdPartitionToReturnDataEqualToMinBytes(ReplicaManager replicaManager, TopicIdPartition topicIdPartition, int minBytes) {
@@ -2487,6 +2894,18 @@ public class DelayedShareFetchTest {
             Errors.NONE
         ))));
         return CollectionConverters.asScala(logReadResults).toSeq();
+    }
+
+    private LinkedHashMap<TopicIdPartition, LogReadResult> buildLocalAndRemoteFetchResultMap(
+        Set<TopicIdPartition> localLogReadTopicIdPartitions,
+        Set<TopicIdPartition> remoteReadTopicIdPartitions) {
+        return CollectionConverters.asJava(buildLocalAndRemoteFetchResult(localLogReadTopicIdPartitions, remoteReadTopicIdPartitions)).stream()
+            .collect(Collectors.toMap(
+                Tuple2::_1,
+                Tuple2::_2,
+                (oldValue, newValue) -> oldValue,
+                LinkedHashMap::new
+            ));
     }
 
     @SuppressWarnings("unchecked")

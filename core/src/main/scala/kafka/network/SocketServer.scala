@@ -26,7 +26,7 @@ import java.util.Optional
 import java.util.concurrent._
 import java.util.concurrent.atomic._
 import kafka.network.Processor._
-import kafka.network.RequestChannel.{CloseConnectionResponse, EndThrottlingResponse, NoOpResponse, SendResponse, StartThrottlingResponse}
+import org.apache.kafka.network.{CloseConnectionResponse, EndThrottlingResponse, NoOpResponse, Response, SendResponse, StartThrottlingResponse}
 import kafka.server.{BrokerReconfigurable, KafkaConfig}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import kafka.utils._
@@ -58,7 +58,6 @@ import org.slf4j.event.Level
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters._
 import scala.util.control.ControlThrowable
 
 /**
@@ -829,8 +828,8 @@ private[kafka] class Processor(
   val thread: KafkaThread = KafkaThread.nonDaemon(threadName, this)
 
   private val newConnections = new ArrayBlockingQueue[SocketChannel](connectionQueueSize)
-  private val inflightResponses = mutable.Map[String, RequestChannel.Response]()
-  private val responseQueue = new LinkedBlockingDeque[RequestChannel.Response]()
+  private val inflightResponses = mutable.Map[String, Response]()
+  private val responseQueue = new LinkedBlockingDeque[Response]()
 
   private[kafka] val metricTags = mutable.LinkedHashMap(
     ListenerMetricTag -> listenerName.value,
@@ -935,7 +934,7 @@ private[kafka] class Processor(
   }
 
   private def processNewResponses(): Unit = {
-    var currentResponse: RequestChannel.Response = null
+    var currentResponse: Response = null
     while ({currentResponse = dequeueResponse(); currentResponse != null}) {
       val channelId = currentResponse.request.context.connectionId
       try {
@@ -964,8 +963,6 @@ private[kafka] class Processor(
             // the client.
             handleChannelMuteEvent(channelId, ChannelMuteEvent.THROTTLE_ENDED)
             tryUnmuteChannel(channelId)
-          case _ =>
-            throw new IllegalArgumentException(s"Unknown response type: ${currentResponse.getClass}")
         }
       } catch {
         case e: Throwable =>
@@ -975,13 +972,13 @@ private[kafka] class Processor(
   }
 
   // `protected` for test usage
-  protected[network] def sendResponse(response: RequestChannel.Response, responseSend: Send): Unit = {
+  protected[network] def sendResponse(response: Response, responseSend: Send): Unit = {
     val connectionId = response.request.context.connectionId
     trace(s"Socket server received response to send to $connectionId, registering for write and sending data: $response")
     // `channel` can be None if the connection was closed remotely or if selector closed it for being idle for too long
     if (channel(connectionId).isEmpty) {
       warn(s"Attempting to send response via channel for which there is no open connection, connection id $connectionId")
-      response.request.updateRequestMetrics(0L, response.responseLog.toJava)
+      response.request.updateRequestMetrics(0L, response.responseLog)
     }
     // Invoke send for closingChannel as well so that the send is failed and the channel closed properly and
     // removed from the Selector after discarding any pending staged receives.
@@ -1083,10 +1080,10 @@ private[kafka] class Processor(
     selector.clearCompletedSends()
   }
 
-  private def updateRequestMetrics(response: RequestChannel.Response): Unit = {
+  private def updateRequestMetrics(response: Response): Unit = {
     val request = response.request
     val networkThreadTimeNanos = openOrClosingChannel(request.context.connectionId).fold(0L)(_.getAndResetNetworkThreadTimeNanos())
-    request.updateRequestMetrics(networkThreadTimeNanos, response.responseLog.toJava)
+    request.updateRequestMetrics(networkThreadTimeNanos, response.responseLog)
   }
 
   private def processDisconnected(): Unit = {
@@ -1205,12 +1202,12 @@ private[kafka] class Processor(
     connId
   }
 
-  private[network] def enqueueResponse(response: RequestChannel.Response): Unit = {
+  private[network] def enqueueResponse(response: Response): Unit = {
     responseQueue.put(response)
     wakeup()
   }
 
-  private def dequeueResponse(): RequestChannel.Response = {
+  private def dequeueResponse(): Response = {
     val response = responseQueue.poll()
     if (response != null)
       response.request.responseDequeueTimeNanos(Time.SYSTEM.nanoseconds)
