@@ -1196,6 +1196,8 @@ project(':core') {
     testImplementation testFixtures(project(':raft'))
     testImplementation testFixtures(project(':server-common'))
     testImplementation testFixtures(project(':storage:storage-api'))
+    // No source need - added for scala flattening/classpath presence so LocalTieredStorage lands in
+    // core/build/dependant-testlibs/ for ducktape system tests.
     testImplementation testFixtures(project(':storage'))
     testImplementation testFixtures(project(':server'))
     testImplementation project(':streams')
