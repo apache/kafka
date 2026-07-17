@@ -20,23 +20,21 @@ import java.util.Comparator;
 import java.util.Objects;
 
 /**
- * The identifier for a task, consisting of the subtopology ID and the partition. This is an internal
- * helper used by the built-in assignors; the public assignor API addresses tasks by subtopology ID
- * and partition directly.
+ * The identifier for a task, consisting of the subtopology ID and the partition.
  *
  * @param subtopologyId The unique identifier of the subtopology.
  * @param partition     The partition of the input topics this task is processing.
  */
-public record TaskIdImpl(String subtopologyId, int partition) implements Comparable<TaskIdImpl> {
+public record TaskId(String subtopologyId, int partition) implements Comparable<TaskId> {
 
-    public TaskIdImpl {
+    public TaskId {
         Objects.requireNonNull(subtopologyId);
     }
 
     @Override
-    public int compareTo(final TaskIdImpl other) {
-        return Comparator.comparing(TaskIdImpl::subtopologyId)
-            .thenComparingInt(TaskIdImpl::partition)
+    public int compareTo(final TaskId other) {
+        return Comparator.comparing(TaskId::subtopologyId)
+            .thenComparingInt(TaskId::partition)
             .compare(this, other);
     }
 

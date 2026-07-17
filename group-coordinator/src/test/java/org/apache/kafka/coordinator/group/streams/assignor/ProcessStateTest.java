@@ -32,7 +32,7 @@ public class ProcessStateTest {
     void shouldAddActiveTaskToMember() {
         ProcessState processState = new ProcessState("process1");
         processState.addMember("member1");
-        TaskIdImpl taskId = new TaskIdImpl("id1", 0);
+        TaskId taskId = new TaskId("id1", 0);
 
         processState.addTask("member1", taskId, true);
 
@@ -44,7 +44,7 @@ public class ProcessStateTest {
     void shouldAddStandbyTaskToMember() {
         ProcessState processState = new ProcessState("process1");
         processState.addMember("member1");
-        TaskIdImpl taskId = new TaskIdImpl("id1", 0);
+        TaskId taskId = new TaskId("id1", 0);
 
         processState.addTask("member1", taskId, false);
 
@@ -73,7 +73,7 @@ public class ProcessStateTest {
     void shouldReturnFalseWhenCapacityIsFull() {
         ProcessState processState = new ProcessState("process1");
         processState.addMember("member1");
-        processState.addTask("member1", new TaskIdImpl("id1", 0), true);
+        processState.addTask("member1", new TaskId("id1", 0), true);
 
         assertFalse(processState.hasCapacity());
     }
@@ -84,7 +84,7 @@ public class ProcessStateTest {
         ProcessState processState2 = new ProcessState("process2");
         processState1.addMember("member1");
         processState2.addMember("member2");
-        processState1.addTask("member1", new TaskIdImpl("id1", 0), true);
+        processState1.addTask("member1", new TaskId("id1", 0), true);
 
         assertTrue(processState1.compareTo(processState2) > 0);
     }
@@ -93,7 +93,7 @@ public class ProcessStateTest {
     void shouldReturnTrueIfTaskIsAssigned() {
         ProcessState processState = new ProcessState("process1");
         processState.addMember("member1");
-        TaskIdImpl taskId = new TaskIdImpl("id1", 0);
+        TaskId taskId = new TaskId("id1", 0);
         processState.addTask("member1", taskId, true);
 
         assertTrue(processState.hasTask(taskId));
@@ -103,7 +103,7 @@ public class ProcessStateTest {
     void shouldReturnFalseIfTaskIsNotAssigned() {
         ProcessState processState = new ProcessState("process1");
         processState.addMember("member1");
-        TaskIdImpl taskId = new TaskIdImpl("id1", 0);
+        TaskId taskId = new TaskId("id1", 0);
 
         assertFalse(processState.hasTask(taskId));
     }
@@ -112,12 +112,12 @@ public class ProcessStateTest {
     void shouldReturnAllAssignedTasks() {
         ProcessState processState = new ProcessState("process1");
         processState.addMember("member1");
-        TaskIdImpl activeTaskId = new TaskIdImpl("id1", 0);
-        TaskIdImpl standbyTaskId = new TaskIdImpl("id1", 1);
+        TaskId activeTaskId = new TaskId("id1", 0);
+        TaskId standbyTaskId = new TaskId("id1", 1);
         processState.addTask("member1", activeTaskId, true);
         processState.addTask("member1", standbyTaskId, false);
 
-        Set<TaskIdImpl> assignedTasks = processState.assignedTasks();
+        Set<TaskId> assignedTasks = processState.assignedTasks();
 
         assertTrue(assignedTasks.contains(activeTaskId));
         assertTrue(assignedTasks.contains(standbyTaskId));
