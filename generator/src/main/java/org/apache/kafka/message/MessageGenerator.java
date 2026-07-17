@@ -57,6 +57,8 @@ public final class MessageGenerator {
 
     static final String API_SCOPE_JAVA = "ApiScope.java";
 
+    static final String GENERATED_REQUEST_CONVERT_TO_JSON_JAVA = "GeneratedRequestConvertToJson.java";
+
     static final String COORDINATOR_RECORD_TYPE_JAVA = "CoordinatorRecordType.java";
 
     static final String COORDINATOR_RECORD_JSON_CONVERTERS_JAVA = "CoordinatorRecordJsonConverters.java";
@@ -205,6 +207,9 @@ public final class MessageGenerator {
                     break;
                 case "CoordinatorRecordJsonConvertersGenerator":
                     generators.add(new CoordinatorRecordJsonConvertersGenerator(packageName));
+                    break;
+                case "GeneratedRequestConvertToJsonGenerator":
+                    generators.add(new GeneratedRequestConvertToJsonGenerator(packageName));
                     break;
                 default:
                     throw new RuntimeException("Unknown type class generator type '" + type + "'");
