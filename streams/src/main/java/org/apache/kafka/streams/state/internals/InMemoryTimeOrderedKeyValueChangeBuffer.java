@@ -474,8 +474,6 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
         requireNonNull(record.value(), "value cannot be null");
         requireNonNull(recordContext, "recordContext cannot be null");
 
-        // Locate any existing buffered entry for this key first. The key serde is header-independent
-        // in practice, so serializing the lookup key with the incoming record's headers is safe.
         final RecordHeaders incomingHeaders = new RecordHeaders(record.headers());
         final Bytes serializedKey = Bytes.wrap(keySerde.serializer().serialize(changelogTopic, incomingHeaders, record.key()));
         final BufferValue buffered = getBuffered(serializedKey);
@@ -483,8 +481,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
         // The headers emitted on eviction must correspond to the record's key, which is anchored to
         // the record that first created this buffer slot (the same record that anchors the buffer-time
         // and the prior value). So on an in-place update we keep the original entry's headers rather
-        // than adopting the newer record's, and serialize the value with those same headers to stay
-        // round-trip consistent with eviction (which deserializes using the stored context's headers).
+        // than adopting the newer record's headers
         final RecordHeaders bufferedHeaders =
             buffered == null ? incomingHeaders : new RecordHeaders(buffered.context().headers());
         final ProcessorRecordContext effectiveContext = new ProcessorRecordContext(

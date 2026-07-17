@@ -169,21 +169,19 @@ public class SuppressScenarioTest {
     public void shouldPropagateHeadersThroughSuppression() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KTable<String, Long> valueCounts = builder
+        final KTable<String, String> valueCounts = builder
             .table(
                 "input",
                 Consumed.with(STRING_SERDE, STRING_SERDE),
                 Materialized.<String, String, KeyValueStore<Bytes, byte[]>>with(STRING_SERDE, STRING_SERDE)
                     .withCachingDisabled()
                     .withLoggingDisabled()
-            )
-            .groupBy((k, v) -> new KeyValue<>(v, k), Grouped.with(STRING_SERDE, STRING_SERDE))
-            .count();
+            );
 
         valueCounts
-            .suppress(untilTimeLimit(Duration.ofSeconds(1), unbounded())) // ***** UPDATE to one second here *****
+            .suppress(untilTimeLimit(Duration.ofSeconds(1), unbounded()))
             .toStream()
-            .to("output-suppressed", Produced.with(STRING_SERDE, Serdes.Long()));
+            .to("output-suppressed", Produced.with(STRING_SERDE, STRING_SERDE));
 
         final Topology topology = builder.build();
 
@@ -196,8 +194,8 @@ public class SuppressScenarioTest {
             final Headers headers2 = new RecordHeaders().add("hk2", "hv2".getBytes(StandardCharsets.UTF_8));
             inputTopic.pipeInput(new TestRecord<>("k", "v", headers2, 120_000L));
 
-            final List<TestRecord<String, Long>> output = driver
-                .createOutputTopic("output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER)
+            final List<TestRecord<String, String>> output = driver
+                .createOutputTopic("output-suppressed", STRING_DESERIALIZER, STRING_DESERIALIZER)
                 .readRecordsToList();
 
             assertThat(output.size(), equalTo(1));
