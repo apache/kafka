@@ -40,7 +40,7 @@ import java.util.Set;
  * @param taskOffsets   The last received cumulative task offsets of assigned tasks or dormant tasks.
  * @param taskEndOffsets The last received cumulative task end offsets of assigned tasks or dormant tasks.
  */
-public record MemberSubscriptionAndAssignmentImpl(Optional<String> instanceId,
+public record MemberMetadataAndAssignmentImpl(Optional<String> instanceId,
                                                   Optional<String> rackId,
                                                   Map<String, Set<Integer>> activeTasks,
                                                   Map<String, Set<Integer>> standbyTasks,
@@ -51,7 +51,7 @@ public record MemberSubscriptionAndAssignmentImpl(Optional<String> instanceId,
                                                   Map<TaskId, Long> taskEndOffsets
 ) implements MemberAssignmentMetadata, MemberAssignmentState {
 
-    public MemberSubscriptionAndAssignmentImpl {
+    public MemberMetadataAndAssignmentImpl {
         Objects.requireNonNull(instanceId);
         Objects.requireNonNull(rackId);
         activeTasks = Collections.unmodifiableMap(Objects.requireNonNull(activeTasks));

@@ -32,7 +32,7 @@ import java.util.Objects;
  * @param configs Any configurations passed to the assignor.
  */
 public record GroupSpecImpl(
-    Map<String, MemberSubscriptionAndAssignmentImpl> members,
+    Map<String, MemberMetadataAndAssignmentImpl> members,
     Map<String, String> configs
 ) implements GroupSpec {
 
@@ -48,7 +48,7 @@ public record GroupSpecImpl(
 
     @Override
     public MemberAssignmentMetadata memberMetadata(String memberId) {
-        MemberSubscriptionAndAssignmentImpl member = members.get(memberId);
+        MemberMetadataAndAssignmentImpl member = members.get(memberId);
         if (member == null) {
             throw new IllegalArgumentException("Member Id " + memberId + " not found.");
         }
@@ -57,7 +57,7 @@ public record GroupSpecImpl(
 
     @Override
     public MemberAssignmentState memberAssignmentState(String memberId) {
-        MemberSubscriptionAndAssignmentImpl member = members.get(memberId);
+        MemberMetadataAndAssignmentImpl member = members.get(memberId);
         if (member == null) {
             throw new IllegalArgumentException("Member Id " + memberId + " not found.");
         }

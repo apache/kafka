@@ -30,15 +30,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class GroupSpecImplTest {
 
-    private Map<String, MemberSubscriptionAndAssignmentImpl> members;
-    private MemberSubscriptionAndAssignmentImpl member;
+    private Map<String, MemberMetadataAndAssignmentImpl> members;
+    private MemberMetadataAndAssignmentImpl member;
     private GroupSpecImpl groupSpec;
 
     @BeforeEach
     void setUp() {
         members = new HashMap<>();
 
-        member = new MemberSubscriptionAndAssignmentImpl(
+        member = new MemberMetadataAndAssignmentImpl(
             Optional.of("test-instance"),
             Optional.of("test-rack"),
             Map.of(),

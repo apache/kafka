@@ -25,7 +25,7 @@ import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignorException;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.MemberAssignmentImpl;
-import org.apache.kafka.coordinator.group.streams.assignor.MemberSubscriptionAndAssignmentImpl;
+import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndAssignmentImpl;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 
 import java.util.ArrayList;
@@ -117,12 +117,12 @@ public class TargetAssignmentBuilder {
         this.assignmentConfigs = Objects.requireNonNull(assignmentConfigs);
     }
 
-    static MemberSubscriptionAndAssignmentImpl createMemberSubscriptionAndAssignment(
+    static MemberMetadataAndAssignmentImpl createMemberMetadataAndAssignment(
         StreamsGroupMember member,
         TasksTuple targetAssignment,
         MemberTaskOffsets taskOffsets
     ) {
-        return new MemberSubscriptionAndAssignmentImpl(
+        return new MemberMetadataAndAssignmentImpl(
             member.instanceId(),
             member.rackId(),
             targetAssignment.activeTasks(),
@@ -218,10 +218,10 @@ public class TargetAssignmentBuilder {
      * @throws TaskAssignorException if the target assignment cannot be computed.
      */
     public TargetAssignmentResult build() throws TaskAssignorException {
-        Map<String, MemberSubscriptionAndAssignmentImpl> memberSpecs = new HashMap<>();
+        Map<String, MemberMetadataAndAssignmentImpl> memberSpecs = new HashMap<>();
 
         // Prepare the member spec for all members.
-        members.forEach((memberId, member) -> memberSpecs.put(memberId, createMemberSubscriptionAndAssignment(
+        members.forEach((memberId, member) -> memberSpecs.put(memberId, createMemberMetadataAndAssignment(
             member,
             targetAssignment.getOrDefault(memberId, org.apache.kafka.coordinator.group.streams.TasksTuple.EMPTY),
             taskOffsets.getOrDefault(memberId, MemberTaskOffsets.EMPTY)

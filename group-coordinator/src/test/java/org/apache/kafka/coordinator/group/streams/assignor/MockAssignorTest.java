@@ -65,7 +65,7 @@ public class MockAssignorTest {
     @Test
     public void testDoubleAssignment() {
 
-        final MemberSubscriptionAndAssignmentImpl memberSpec1 = new MemberSubscriptionAndAssignmentImpl(
+        final MemberMetadataAndAssignmentImpl memberSpec1 = new MemberMetadataAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
             Map.of("test-subtopology", Set.of(0)),
@@ -77,7 +77,7 @@ public class MockAssignorTest {
             Map.of()
         );
 
-        final MemberSubscriptionAndAssignmentImpl memberSpec2 = new MemberSubscriptionAndAssignmentImpl(
+        final MemberMetadataAndAssignmentImpl memberSpec2 = new MemberMetadataAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
             Map.of("test-subtopology", Set.of(0)),
@@ -118,7 +118,7 @@ public class MockAssignorTest {
     @Test
     public void testSingleMember() {
 
-        final MemberSubscriptionAndAssignmentImpl memberSpec = new MemberSubscriptionAndAssignmentImpl(
+        final MemberMetadataAndAssignmentImpl memberSpec = new MemberMetadataAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
             Map.of(),
@@ -150,7 +150,7 @@ public class MockAssignorTest {
     @Test
     public void testTwoMembersTwoSubtopologies() {
 
-        final MemberSubscriptionAndAssignmentImpl memberSpec1 = new MemberSubscriptionAndAssignmentImpl(
+        final MemberMetadataAndAssignmentImpl memberSpec1 = new MemberMetadataAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
             Map.of(),
@@ -162,7 +162,7 @@ public class MockAssignorTest {
             Map.of()
         );
 
-        final MemberSubscriptionAndAssignmentImpl memberSpec2 = new MemberSubscriptionAndAssignmentImpl(
+        final MemberMetadataAndAssignmentImpl memberSpec2 = new MemberMetadataAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
             Map.of(),
@@ -203,7 +203,7 @@ public class MockAssignorTest {
     @Test
     public void testTwoMembersTwoSubtopologiesStickiness() {
 
-        final MemberSubscriptionAndAssignmentImpl memberSpec1 = new MemberSubscriptionAndAssignmentImpl(
+        final MemberMetadataAndAssignmentImpl memberSpec1 = new MemberMetadataAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
             mkMap(
@@ -218,7 +218,7 @@ public class MockAssignorTest {
             Map.of()
         );
 
-        final MemberSubscriptionAndAssignmentImpl memberSpec2 = new MemberSubscriptionAndAssignmentImpl(
+        final MemberMetadataAndAssignmentImpl memberSpec2 = new MemberMetadataAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
             mkMap(
