@@ -48,15 +48,15 @@ public record GroupSpecImpl(
 
     @Override
     public MemberAssignmentMetadata memberMetadata(String memberId) {
-        MemberMetadataAndAssignmentImpl member = members.get(memberId);
-        if (member == null) {
-            throw new IllegalArgumentException("Member Id " + memberId + " not found.");
-        }
-        return member;
+        return requireMember(memberId);
     }
 
     @Override
     public MemberAssignmentState memberAssignmentState(String memberId) {
+        return requireMember(memberId);
+    }
+
+    private MemberMetadataAndAssignmentImpl requireMember(String memberId) {
         MemberMetadataAndAssignmentImpl member = members.get(memberId);
         if (member == null) {
             throw new IllegalArgumentException("Member Id " + memberId + " not found.");
