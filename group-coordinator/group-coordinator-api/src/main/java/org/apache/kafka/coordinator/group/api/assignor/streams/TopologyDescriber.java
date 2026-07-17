@@ -30,9 +30,9 @@ import java.util.NoSuchElementException;
 public interface TopologyDescriber {
 
     /**
-     * Map of topic names to topic metadata.
+     * The IDs of all subtopologies in the group's topology.
      *
-     * @return The list of subtopologies IDs.
+     * @return The list of subtopology IDs.
      */
     List<String> subtopologies();
 

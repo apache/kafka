@@ -27,7 +27,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 public interface TaskAssignor {
 
     /**
-     * Unique name for this assignor.
+     * Unique name for this assignor. Used in configuration to select this assignor.
      */
     String name();
 
@@ -38,7 +38,7 @@ public interface TaskAssignor {
      * @param topologyDescriber The task metadata describer.
      * @return The new assignment for the group.
      *
-     * @throws TaskAssignorException For empty groups
+     * @throws TaskAssignorException If the assignment cannot be computed.
      */
     GroupAssignment assign(
         GroupSpec groupSpec,

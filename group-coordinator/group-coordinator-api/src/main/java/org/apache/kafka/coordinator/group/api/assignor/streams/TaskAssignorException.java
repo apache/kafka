@@ -21,7 +21,9 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.errors.ApiException;
 
 /**
- * Exception thrown by {@link TaskAssignor#assign(GroupSpec, TopologyDescriber)}}. The exception is only used internally.
+ * Exception thrown by {@link TaskAssignor#assign(GroupSpec, TopologyDescriber)} when the group's tasks
+ * cannot be assigned. Custom {@link TaskAssignor} implementations should throw this exception to signal
+ * an assignment failure.
  */
 @InterfaceAudience.Public
 @InterfaceStability.Evolving
