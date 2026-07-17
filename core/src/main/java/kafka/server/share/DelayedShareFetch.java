@@ -768,6 +768,12 @@ public class DelayedShareFetch extends DelayedOperation {
                     "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
                 sharePartitions.keySet());
             releasePartitionLocks(topicPartitionData.keySet());
+            // Clear the per-request state so that a subsequent tryComplete()/onComplete() re-acquires the
+            // partitions afresh. In the pending-async path topicPartitionData is partitionsAcquired, so
+            // leaving it populated would make onComplete() assume the (already released) locks are still
+            // held and process/release them again.
+            partitionsAcquired.clear();
+            localPartitionsAlreadyFetched.clear();
             return false;
         }
     }
@@ -1192,6 +1198,10 @@ public class DelayedShareFetch extends DelayedOperation {
             // Handle synchronous exception from readFromLog()
             log.error("Error initiating async fetch in remote completion for group {}, member {}",
                 shareFetch.groupId(), shareFetch.memberId(), e);
+            // processFetchResultAndComplete won't be invoked in this error path, so it won't release the
+            // locks for partitionsToFetch. Release them here to avoid leaking the local partition locks
+            // before completing with just the remote data.
+            releasePartitionLocksAndAddToActionQueue(partitionsToFetch.keySet(), Set.of());
             // Continue to complete with just remote data.
             completionConsumer.accept(List.of());
             return;
@@ -1204,6 +1214,10 @@ public class DelayedShareFetch extends DelayedOperation {
             if (throwable != null) {
                 log.error("Async fetch failed in remote completion for group {}, member {}",
                     shareFetch.groupId(), shareFetch.memberId(), throwable);
+                // processFetchResultAndComplete won't be invoked in this error path, so it won't release
+                // the locks for partitionsToFetch. Release them here to avoid leaking the local partition
+                // locks before completing with just the remote data.
+                releasePartitionLocksAndAddToActionQueue(partitionsToFetch.keySet(), Set.of());
                 // Continue to complete with just remote data.
                 completionConsumer.accept(List.of());
                 return;

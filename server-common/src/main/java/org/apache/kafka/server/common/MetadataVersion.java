@@ -131,8 +131,7 @@ public enum MetadataVersion {
     // Please move this comment when updating the LATEST_PRODUCTION constant.
     //
 
-    // IBP_4_4_IV0 enables dead-letter queue support for share groups (KIP-1191). When this version
-    // is finalized, so will the DLQ support.
+    // IBP_4_4_IV0 enables dead-letter queue support for share groups (KIP-1191).
     IBP_4_4_IV0(31, "4.4", "IV0", false),
 
     // Add support for CIDR-based ACL host patterns (KIP-1276).

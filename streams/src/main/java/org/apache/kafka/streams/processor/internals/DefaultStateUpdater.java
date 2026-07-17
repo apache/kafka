@@ -492,8 +492,8 @@ public class DefaultStateUpdater implements StateUpdater {
                     tasksAndActionsCondition.await();
                 }
             } catch (final InterruptedException ignored) {
-                // we never interrupt the thread, but only signal the condition
-                // and hence this exception should never be thrown
+                Thread.currentThread().interrupt();
+                log.warn("State updater thread was interrupted while waiting for changelogs");
             } finally {
                 tasksAndActionsLock.unlock();
                 isIdle.set(false);
@@ -922,6 +922,8 @@ public class DefaultStateUpdater implements StateUpdater {
                 }
                 stateUpdaterThread = null;
             } catch (final InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+                log.warn("Interrupted while waiting for state updater thread to shut down");
             }
         }
     }
@@ -999,7 +1001,9 @@ public class DefaultStateUpdater implements StateUpdater {
                 now = time.milliseconds();
             }
             return result;
-        } catch (final InterruptedException ignored) {
+        } catch (final InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("StateUpdaterThread was interrupted while waiting", e);
         }
         return result;
     }

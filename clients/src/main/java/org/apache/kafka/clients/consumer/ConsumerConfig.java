@@ -38,6 +38,9 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Utils;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -60,6 +63,7 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  */
 @InterfaceAudience.Public
 public class ConsumerConfig extends AbstractConfig {
+    private static final Logger log = LoggerFactory.getLogger(ConsumerConfig.class);
     private static final ConfigDef CONFIG;
 
     // a list contains all the assignor names that only assign subscribed topics to consumer. Should be updated when new assignor added.
@@ -738,7 +742,24 @@ public class ConsumerConfig extends AbstractConfig {
         maybeOverrideClientId(refinedConfigs);
         maybeOverrideEnableAutoCommit(refinedConfigs);
         checkUnsupportedConfigsPostProcess();
+        warnIfConnectionsMaxIdleMsLowerThanMaxPollIntervalMs();
         return refinedConfigs;
+    }
+
+    private void warnIfConnectionsMaxIdleMsLowerThanMaxPollIntervalMs() {
+        String groupProtocol = getString(GROUP_PROTOCOL_CONFIG);
+        if (!GroupProtocol.CLASSIC.name().equalsIgnoreCase(groupProtocol)) {
+            return;
+        }
+        long connectionsMaxIdleMs = getLong(CONNECTIONS_MAX_IDLE_MS_CONFIG);
+        int maxPollIntervalMs = getInt(MAX_POLL_INTERVAL_MS_CONFIG);
+        if (connectionsMaxIdleMs >= 0 && connectionsMaxIdleMs < maxPollIntervalMs) {
+            log.warn("Configuration '{}' with value '{}' is lower than configuration '{}' with value '{}'. " +
+                    "This may cause the connection to the group coordinator to be closed during an ongoing rebalance, " +
+                    "which can prolong or disrupt group rejoin.",
+                CONNECTIONS_MAX_IDLE_MS_CONFIG, connectionsMaxIdleMs,
+                MAX_POLL_INTERVAL_MS_CONFIG, maxPollIntervalMs);
+        }
     }
 
     private void maybeOverrideClientId(Map<String, Object> configs) {
