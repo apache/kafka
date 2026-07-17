@@ -452,8 +452,8 @@ final class CascadeValidator {
                 : original.getClassName();
         String description = "Suppressed " + original.getViolationType() + " in "
                 + location
-                + " — " + original.getDescription()
-                + " — reason: " + prettyReason;
+                + " - " + original.getDescription()
+                + " - reason: " + prettyReason;
         return new PublicApiViolation(original.getClassName(), "SUPPRESSED",
                 description, original.getMemberName(), noReason);
     }
