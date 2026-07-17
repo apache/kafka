@@ -711,6 +711,8 @@ org.apache.kafka.raft.internals.ChangeVoterHandlerStateTest:
 - testMaybeResetPendingVoterHandlerState
 - testRemoveVoterLifecycle
 org.apache.kafka.raft.internals.KRaftControlRecordStateMachineTest:
+- testBufferSupplierCreatedAndClosedOnLogRead
+- testBufferSupplierCreatedOnSnapshotRead
 - testEmptyPartition
 - testEmptyPartitionWithNoStaticVoters
 - testTrimPrefixTo
