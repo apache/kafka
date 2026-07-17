@@ -4969,6 +4969,7 @@ org.apache.kafka.streams.state.internals.KeyValueSegmentsTest:
 - shouldGetSegmentsWithinTimeRange
 - shouldGetSegmentsWithinTimeRangeOutOfOrder
 - shouldNotCreateSegmentThatIsAlreadyExpired
+- shouldNotRetainFailedSegmentSoRecoveryStaysRecoverable
 - shouldOpenExistingSegments
 - shouldRollSegments
 - shouldThrowTaskCorruptedExceptionIfSegmentIsInInvalidState
@@ -5107,6 +5108,7 @@ org.apache.kafka.streams.state.internals.LogicalKeyValueSegmentsTest:
 - shouldNotCreateReservedSegmentFromRegularMethod
 - shouldNotCreateReservedSegmentWithNonNegativeId
 - shouldNotCreateSegmentThatIsAlreadyExpired
+- shouldNotRetainFailedSegmentSoRecoveryStaysRecoverable
 - shouldThrowTaskCorruptedExceptionIfSegmentIsInInvalidState
 org.apache.kafka.streams.state.internals.MaybeTest:
 - shouldAnswerIsDefined
@@ -6656,6 +6658,7 @@ org.apache.kafka.streams.state.internals.SessionSegmentsWithHeadersTest:
 - shouldGetSegmentNameFromId
 - shouldGetSegmentsWithinTimeRange
 - shouldNotCreateSegmentThatIsAlreadyExpired
+- shouldNotRetainFailedSegmentSoRecoveryStaysRecoverable
 - shouldOpenExistingSegments
 - shouldThrowTaskCorruptedExceptionIfSegmentIsInInvalidState
 org.apache.kafka.streams.state.internals.SessionStoreBuilderTest:
@@ -7034,6 +7037,7 @@ org.apache.kafka.streams.state.internals.TimestampedSegmentsTest:
 - shouldGetSegmentsWithinTimeRange
 - shouldGetSegmentsWithinTimeRangeOutOfOrder
 - shouldNotCreateSegmentThatIsAlreadyExpired
+- shouldNotRetainFailedSegmentSoRecoveryStaysRecoverable
 - shouldOpenExistingSegments
 - shouldRollSegments
 - shouldThrowTaskCorruptedExceptionIfSegmentIsInInvalidState
@@ -7050,6 +7054,7 @@ org.apache.kafka.streams.state.internals.TimestampedSegmentsWithHeadersTest:
 - shouldGetSegmentNameFromId
 - shouldGetSegmentsWithinTimeRange
 - shouldNotCreateSegmentThatIsAlreadyExpired
+- shouldNotRetainFailedSegmentSoRecoveryStaysRecoverable
 - shouldOpenExistingSegments
 - shouldThrowTaskCorruptedExceptionIfSegmentIsInInvalidState
 org.apache.kafka.streams.state.internals.TimestampedToHeadersWindowStoreAdapterTest:
