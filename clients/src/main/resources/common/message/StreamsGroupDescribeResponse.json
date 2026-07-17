@@ -17,7 +17,8 @@
   "apiKey": 89,
   "type": "response",
   "name": "StreamsGroupDescribeResponse",
-  "validVersions": "0",
+  // Version 1 adds TopologyDescription and TopologyDescriptionStatus (KIP-1331).
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   // Supported errors:
   // - GROUP_AUTHORIZATION_FAILED (version 0+)
@@ -106,7 +107,12 @@
               "about": "True for classic members that have not been upgraded yet." }
           ]},
         { "name": "AuthorizedOperations", "type": "int32", "versions": "0+", "default": "-2147483648",
-          "about": "32-bit bitfield to represent authorized operations for this group." }
+          "about": "32-bit bitfield to represent authorized operations for this group." },
+        { "name": "TopologyDescription", "type": "TopologyDescription", "versions": "1+",
+          "nullableVersions": "1+", "default": "null",
+          "about": "The full topology description for this group. Non-null if and only if TopologyDescriptionStatus is AVAILABLE (3); null otherwise." },
+        { "name": "TopologyDescriptionStatus", "type": "int8", "versions": "1+", "default": "0",
+          "about": "The status of the topology description for this group, paired with TopologyDescription: 0=NOT_REQUESTED (client did not set IncludeTopologyDescription; TopologyDescription is null); 1=NOT_STORED (no description recorded for this group; TopologyDescription is null); 2=ERROR (broker failed to fetch the description, see broker logs; TopologyDescription is null); 3=AVAILABLE (TopologyDescription is non-null and carries the description)." }
       ]
     }
   ],
@@ -155,6 +161,39 @@
       { "name": "TopicConfigs", "type": "[]KeyValue", "versions": "0+",
         "about": "Topic-level configurations as key-value pairs."
       }
+    ]},
+    { "name": "TopologyDescription", "versions": "1+", "fields": [
+      { "name": "Subtopologies", "type": "[]TopologyDescriptionSubtopology", "versions": "1+",
+        "about": "The subtopologies that make up this topology." },
+      { "name": "GlobalStores", "type": "[]TopologyDescriptionGlobalStore", "versions": "1+",
+        "about": "Global state stores used by this topology." }
+    ]},
+    { "name": "TopologyDescriptionSubtopology", "versions": "1+", "fields": [
+      { "name": "SubtopologyId", "type": "string", "versions": "1+",
+        "about": "The subtopology identifier, unique within the topology." },
+      { "name": "Nodes", "type": "[]TopologyDescriptionNode", "versions": "1+",
+        "about": "The processing nodes in this subtopology." }
+    ]},
+    { "name": "TopologyDescriptionNode", "versions": "1+", "fields": [
+      { "name": "Name", "type": "string", "versions": "1+",
+        "about": "The name of this node (e.g., KSTREAM-SOURCE-0000000000)." },
+      { "name": "NodeType", "type": "int8", "versions": "1+",
+        "about": "The type of this node: 1=SOURCE, 2=PROCESSOR, 3=SINK." },
+      { "name": "SourceTopics", "type": "[]string", "versions": "1+", "entityType": "topicName",
+        "about": "The source topics this node reads from. Defined only for source nodes, may be empty if source topics are dynamically determined." },
+      { "name": "SinkTopic", "type": "string", "versions": "1+", "entityType": "topicName",
+        "nullableVersions": "1+", "default": "null",
+        "about": "The topic this node writes to. Defined only for sink nodes, may be null if sink topic is dynamically determined." },
+      { "name": "Stores", "type": "[]string", "versions": "1+",
+        "about": "The state store names accessed by this node. Defined only for processor nodes." },
+      { "name": "Successors", "type": "[]string", "versions": "1+",
+        "about": "The names of successor nodes in the processing graph. Predecessor relationships are reconstructed from this field." }
+    ]},
+    { "name": "TopologyDescriptionGlobalStore", "versions": "1+", "fields": [
+      { "name": "Source", "type": "TopologyDescriptionNode", "versions": "1+",
+        "about": "The source node providing data to the global store." },
+      { "name": "Processor", "type": "TopologyDescriptionNode", "versions": "1+",
+        "about": "The processor node that populates the global store." }
     ]}
   ]
 }

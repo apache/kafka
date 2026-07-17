@@ -34,6 +34,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.CommitPartitionValidator;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.OffsetAndMetadata;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
@@ -47,6 +48,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.TaskRole;
+import org.apache.kafka.coordinator.group.streams.assignor.TaskId;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -108,6 +110,46 @@ public class StreamsGroupTest {
 
         assertEquals(updatedMember, streamsGroup.getOrCreateUninitializedMember("member-id"));
         assertNotEquals(uninitializedMember, streamsGroup.getOrCreateUninitializedMember("member-id"));
+    }
+
+    @Test
+    public void testUpdateAndRetrieveTaskOffsets() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+
+        assertEquals(MemberTaskOffsets.EMPTY, streamsGroup.taskOffsets("member-id"));
+        assertEquals(Map.of(), streamsGroup.taskOffsets());
+
+        MemberTaskOffsets offsets = new MemberTaskOffsets(
+            Map.of(new TaskId("sub-1", 0), 10L),
+            Map.of(new TaskId("sub-1", 0), 20L)
+        );
+        streamsGroup.updateTaskOffsets("member-id", offsets);
+
+        assertEquals(offsets, streamsGroup.taskOffsets("member-id"));
+        assertEquals(Map.of("member-id", offsets), streamsGroup.taskOffsets());
+
+        // A new report replaces the previous one.
+        MemberTaskOffsets newerOffsets = new MemberTaskOffsets(
+            Map.of(new TaskId("sub-1", 0), 15L),
+            Map.of(new TaskId("sub-1", 0), 25L)
+        );
+        streamsGroup.updateTaskOffsets("member-id", newerOffsets);
+        assertEquals(newerOffsets, streamsGroup.taskOffsets("member-id"));
+    }
+
+    @Test
+    public void testRemoveMemberClearsTaskOffsets() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        streamsGroup.updateMember(new StreamsGroupMember.Builder("member-id").build());
+        streamsGroup.updateTaskOffsets("member-id", new MemberTaskOffsets(
+            Map.of(new TaskId("sub-1", 0), 10L),
+            Map.of(new TaskId("sub-1", 0), 20L)
+        ));
+
+        streamsGroup.removeMember("member-id");
+
+        assertEquals(MemberTaskOffsets.EMPTY, streamsGroup.taskOffsets("member-id"));
+        assertEquals(Map.of(), streamsGroup.taskOffsets());
     }
 
     @Test
@@ -480,6 +522,39 @@ public class StreamsGroupTest {
         assertNull(streamsGroup.currentActiveTaskProcessId(zarSubtopology, 7));
         assertEquals(Set.of(), streamsGroup.currentStandbyTaskProcessIds(zarSubtopology, 8));
         assertEquals(Set.of(), streamsGroup.currentWarmupTaskProcessIds(zarSubtopology, 9));
+    }
+
+    @Test
+    public void testTopologyDescriptionPluginEpochs() {
+        StreamsGroup group = createStreamsGroup("foo");
+
+        // KIP-1331: both fields default to -1, meaning "no topology description ever stored / failed".
+        assertEquals(-1, group.storedDescriptionTopologyEpoch());
+        assertEquals(-1, group.failedDescriptionTopologyEpoch());
+
+        group.setStoredDescriptionTopologyEpoch(7);
+        group.setFailedDescriptionTopologyEpoch(5);
+        assertEquals(7, group.storedDescriptionTopologyEpoch());
+        assertEquals(5, group.failedDescriptionTopologyEpoch());
+
+        group.setStoredDescriptionTopologyEpoch(-1);
+        group.setFailedDescriptionTopologyEpoch(-1);
+        assertEquals(-1, group.storedDescriptionTopologyEpoch());
+        assertEquals(-1, group.failedDescriptionTopologyEpoch());
+    }
+
+    @Test
+    public void testCurrentTopologyEpochReflectsLatestTopology() {
+        StreamsGroup group = createStreamsGroup("foo");
+
+        // No topology yet → -1.
+        assertEquals(-1, group.currentTopologyEpoch());
+
+        group.setTopology(new StreamsTopology(3, Map.of()));
+        assertEquals(3, group.currentTopologyEpoch());
+
+        group.setTopology(new StreamsTopology(4, Map.of()));
+        assertEquals(4, group.currentTopologyEpoch());
     }
 
     @Test
@@ -1341,5 +1416,56 @@ public class StreamsGroupTest {
         // All cache entries should be cleared
         assertTrue(streamsGroup.cachedEndpointToPartitions("member-1").isEmpty());
         assertTrue(streamsGroup.cachedEndpointToPartitions("member-2").isEmpty());
+    }
+
+    @Test
+    public void testShouldExpireFalseWhenPluginConfiguredAndEpochStored() {
+        // Defer holds: a topology plugin is configured on this broker and the group has a
+        // non-default stored epoch — the natural-expiration sweep must wait for the broker-level
+        // topology-cleanup cycle to drive plugin.deleteTopology and clear the field before the
+        // group is tombstoned.
+        StreamsGroup streamsGroup = createStreamsGroup("group-id");
+        streamsGroup.setStoredDescriptionTopologyEpoch(4);
+        GroupCoordinatorConfig config = mock(GroupCoordinatorConfig.class);
+        when(config.isStreamsGroupTopologyDescriptionPluginConfigured()).thenReturn(true);
+
+        assertFalse(streamsGroup.shouldExpire(config));
+    }
+
+    @Test
+    public void testShouldExpireFalseWhenStoredEpochUncertain() {
+        // UNCERTAIN (-2) also defers the tombstone: the plugin may still hold data for this
+        // group, so it must stay reclaimable by the cleanup cycle until the epoch is cleared.
+        StreamsGroup streamsGroup = createStreamsGroup("group-id");
+        streamsGroup.setStoredDescriptionTopologyEpoch(StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN);
+        GroupCoordinatorConfig config = mock(GroupCoordinatorConfig.class);
+        when(config.isStreamsGroupTopologyDescriptionPluginConfigured()).thenReturn(true);
+
+        assertFalse(streamsGroup.shouldExpire(config));
+    }
+
+    @Test
+    public void testShouldExpireTrueWhenStoredEpochIsDefault() {
+        // storedDescriptionTopologyEpoch == -1: no plugin row exists for this group (either the
+        // topology cleanup cycle has already cleared it on a previous tick, or one was never
+        // pushed). The tombstone proceeds.
+        StreamsGroup streamsGroup = createStreamsGroup("group-id");
+        GroupCoordinatorConfig config = mock(GroupCoordinatorConfig.class);
+        when(config.isStreamsGroupTopologyDescriptionPluginConfigured()).thenReturn(true);
+
+        assertTrue(streamsGroup.shouldExpire(config));
+    }
+
+    @Test
+    public void testShouldExpireTrueWhenNoPluginConfigured() {
+        // No plugin configured on this broker: no topology cleanup cycle will ever run to clear
+        // the field, so blocking the tombstone would prevent natural expiration indefinitely.
+        // The stored epoch value is irrelevant in this branch.
+        StreamsGroup streamsGroup = createStreamsGroup("group-id");
+        streamsGroup.setStoredDescriptionTopologyEpoch(4);
+        GroupCoordinatorConfig config = mock(GroupCoordinatorConfig.class);
+        when(config.isStreamsGroupTopologyDescriptionPluginConfigured()).thenReturn(false);
+
+        assertTrue(streamsGroup.shouldExpire(config));
     }
 }

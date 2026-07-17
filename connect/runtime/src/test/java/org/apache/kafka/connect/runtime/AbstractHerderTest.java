@@ -43,6 +43,7 @@ import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.isolation.VersionedPluginLoadingException;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
@@ -403,6 +404,37 @@ public class AbstractHerderTest {
         assertErrorForKey(configInfos, "testKey");
         assertErrorForKey(configInfos, "secondTestKey");
         verifyValidationIsolation();
+    }
+
+    @Test
+    public void testRepeatedConfigValidationOfInvalidVersionSurfacesAvailableVersions() {
+        Class<? extends Connector> connectorClass = SampleSourceConnector.class;
+        String requestedVersion = "2.0.0";
+        List<String> availableVersions = List.of("1.0.0");
+
+        when(worker.getPlugins()).thenReturn(plugins);
+        when(plugins.newConnector(anyString(), any()))
+            .thenThrow(new VersionedPluginLoadingException("no matching version", availableVersions));
+
+        AbstractHerder herder = testHerder();
+
+        Map<String, String> config = new HashMap<>();
+        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connectorClass.getName());
+        config.put(ConnectorConfig.CONNECTOR_VERSION, requestedVersion);
+
+        ConfigInfos first = herder.validateConnectorConfig(config, s -> null, false);
+        ConfigInfos second = herder.validateConnectorConfig(config, s -> null, false);
+
+        ConfigInfo firstVersionInfo = findInfo(first, ConnectorConfig.CONNECTOR_VERSION);
+        assertNotNull(firstVersionInfo);
+        assertEquals(availableVersions, firstVersionInfo.configValue().recommendedValues());
+
+        ConfigInfo secondVersionInfo = findInfo(second, ConnectorConfig.CONNECTOR_VERSION);
+        assertNotNull(secondVersionInfo);
+        assertEquals(availableVersions, secondVersionInfo.configValue().recommendedValues());
+
+        // The second validation comes from the cache, so the loader is only invoked once.
+        verify(plugins, times(1)).newConnector(eq(connectorClass.getName()), any());
     }
 
     @Test

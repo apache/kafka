@@ -1,6 +1,6 @@
 ---
 title: Protocol
-description: 
+description: Kafka communication protocol, request formats, API versions, and client implementation details.
 weight: 2
 tags: ['kafka', 'docs']
 aliases: 
