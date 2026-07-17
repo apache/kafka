@@ -50,7 +50,8 @@ public class CachedConnectors {
 
         String version = range == null ? LATEST_VERSION : range.toString();
         if (invalidVersions.containsKey(connectorName) && invalidVersions.get(connectorName).containsKey(version)) {
-            throw new VersionedPluginLoadingException(invalidVersions.get(connectorName).get(version).getMessage());
+            VersionedPluginLoadingException exception = invalidVersions.get(connectorName).get(version);
+            throw new VersionedPluginLoadingException(exception.getMessage(), exception.availableVersions());
         }
     }
 

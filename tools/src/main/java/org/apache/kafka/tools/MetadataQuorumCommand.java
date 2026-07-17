@@ -173,7 +173,7 @@ public class MetadataQuorumCommand {
             return new Properties();
         } else {
             if (!optionalCommandConfig.exists())
-                throw new TerseException("Properties file " + optionalCommandConfig.getPath() + " does not exists!");
+                throw new TerseException("Properties file " + optionalCommandConfig.getPath() + " does not exist.");
             return Utils.loadProps(optionalCommandConfig.getPath());
         }
     }

@@ -21,7 +21,9 @@ import org.apache.kafka.server.storage.log.FetchParams;
 import org.apache.kafka.storage.internals.log.LogReadResult;
 
 import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Abstraction for reading records from log.
@@ -29,17 +31,38 @@ import java.util.Set;
 public interface LogReader {
 
     /**
-     * Read records for the given partitions starting at the specified offsets.
+     * Read records for the given partitions starting at the specified offsets, combining the local read
+     * and - when {@code readRemote} is true and the requested data has been tiered off the local log - the
+     * follow-up remote read into a single call.
      *
-     * @param fetchParams             The fetch parameters (isolation level, maxBytes, etc.)
-     * @param partitionsToFetch       The set of partitions to actually fetch (after filtering erroneous ones)
+     * <p>The read is asynchronous and remote-aware: it returns a single future holding one {@link LogReadResult}
+     * per requested partition. The future completes once every partition has resolved - partitions
+     * available locally (or whose local read failed) resolve immediately, while partitions whose data
+     * is in remote storage resolve later, once the remote read finishes on the remote storage reader
+     * pool, so the caller's thread is never blocked on remote IO. When {@code readRemote} is false,
+     * tiered offsets are simply omitted from the result rather than fetched.
+     *
+     * <p>Each per-partition {@link LogReadResult} is partial-data tolerant: the read never fails as a whole,
+     * allowing callers to use whatever records were retrieved (via {@link LogReadResult#info()}) and skip
+     * the rest based on {@link LogReadResult#error()}.
+     *
+     * <p>If the order of the fetched partitions matters to the caller, it should pass order-preserving
+     * {@link Set} and {@link Map} implementations (for example {@link java.util.LinkedHashSet} and
+     * {@link LinkedHashMap}). LogReader implementations must then honour that iteration order and return
+     * the partitions in the same order in the resulting {@link LinkedHashMap}.
+     *
+     * @param fetchParams                The fetch parameters (isolation level, maxBytes, etc.)
+     * @param partitionsToFetch          The set of partitions to fetch
      * @param topicPartitionFetchOffsets The fetch offset per partition
-     * @param partitionMaxBytes       The max bytes per partition
-     * @return A map of partition to log read result
+     * @param partitionMaxBytes          The max bytes per partition
+     * @param readRemote                 Whether to follow tiered offsets to the remote tier; when false,
+     *                                   tiered offsets are skipped.
+     * @return A future of a map from partition to that partition's {@link LogReadResult}.
      */
-    LinkedHashMap<TopicIdPartition, LogReadResult> read(
+    CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> readAsync(
         FetchParams fetchParams,
         Set<TopicIdPartition> partitionsToFetch,
-        LinkedHashMap<TopicIdPartition, Long> topicPartitionFetchOffsets,
-        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes);
+        Map<TopicIdPartition, Long> topicPartitionFetchOffsets,
+        Map<TopicIdPartition, Integer> partitionMaxBytes,
+        boolean readRemote);
 }

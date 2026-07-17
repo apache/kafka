@@ -118,7 +118,6 @@ trait KafkaBroker extends Logging {
   private val linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", Time.SYSTEM)
 
   if (linuxIoMetricsCollector.usable()) {
-    metricsGroup.newGauge("linux-disk-read-bytes", () => linuxIoMetricsCollector.readBytes())
-    metricsGroup.newGauge("linux-disk-write-bytes", () => linuxIoMetricsCollector.writeBytes())
+    linuxIoMetricsCollector.registerMetrics(metricsGroup)
   }
 }

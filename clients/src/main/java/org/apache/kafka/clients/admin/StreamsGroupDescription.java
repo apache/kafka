@@ -20,6 +20,7 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.acl.AclOperation;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
@@ -32,6 +33,7 @@ import java.util.stream.Collectors;
  * A detailed description of a single streams group in the cluster.
  */
 @InterfaceStability.Evolving
+@InterfaceAudience.Public
 public class StreamsGroupDescription {
 
     private final String groupId;

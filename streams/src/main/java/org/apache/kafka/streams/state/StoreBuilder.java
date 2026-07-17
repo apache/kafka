@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.processor.StateStore;
 
 import java.util.Map;
@@ -24,6 +25,7 @@ import java.util.Map;
  * Build a {@link StateStore} wrapped with optional caching and logging.
  * @param <T>  the type of store to build
  */
+@InterfaceAudience.Public
 public interface StoreBuilder<T extends StateStore> {
 
     /**
