@@ -85,7 +85,6 @@ public class RemoteLagCopyTest {
     private final UnifiedLog mockLog = mock(UnifiedLog.class);
 
     private final Metrics metrics = new Metrics(time);
-    private final Properties brokerConfig = new Properties();
     private final TopicIdPartition leaderTopicIdPartition =
             new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("Leader", 0));
     private final Optional<Endpoint> endPoint =
@@ -97,7 +96,7 @@ public class RemoteLagCopyTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        Properties props = brokerConfig;
+        Properties props = new Properties();
         props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true");
         props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP, "100");
         appendRLMConfig(props);

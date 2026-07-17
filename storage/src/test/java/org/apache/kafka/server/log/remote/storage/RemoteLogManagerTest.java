@@ -216,7 +216,7 @@ public class RemoteLogManagerTest {
     private UnifiedLog mockLog = mock(UnifiedLog.class);
 
     private final MockScheduler scheduler = new MockScheduler(time);
-    private final Properties brokerConfig = new Properties();
+    private final Properties remoteLogManagerProps = new Properties();
 
     private final String host = "localhost";
     private final int port = 1234;
@@ -228,7 +228,7 @@ public class RemoteLogManagerTest {
         checkpoint = new LeaderEpochCheckpointFile(TestUtils.tempFile(), new LogDirFailureChannel(1));
         topicIds.put(leaderTopicIdPartition.topicPartition().topic(), leaderTopicIdPartition.topicId());
         topicIds.put(followerTopicIdPartition.topicPartition().topic(), followerTopicIdPartition.topicId());
-        Properties props = brokerConfig;
+        Properties props = remoteLogManagerProps;
         props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true");
         props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP, "100");
         appendRLMConfig(props);
@@ -353,7 +353,7 @@ public class RemoteLogManagerTest {
         String key = "key";
         String configPrefix = "config.prefix";
         Properties props = new Properties();
-        props.putAll(brokerConfig);
+        props.putAll(remoteLogManagerProps);
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP, configPrefix);
         props.put(configPrefix + key, "world");
         props.put("remote.log.metadata.y", "z");
@@ -370,7 +370,7 @@ public class RemoteLogManagerTest {
         String key = "key";
         String configPrefix = "config.prefix";
         Properties props = new Properties();
-        props.putAll(brokerConfig);
+        props.putAll(remoteLogManagerProps);
         props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP, configPrefix);
         props.put(configPrefix + key, "world");
         props.put("remote.storage.manager.y", "z");
@@ -397,7 +397,7 @@ public class RemoteLogManagerTest {
     @Test
     void testRemoteLogMetadataManagerWithEndpointConfigOverridden() throws IOException {
         Properties props = new Properties();
-        props.putAll(brokerConfig);
+        props.putAll(remoteLogManagerProps);
         // override common security.protocol by adding "RLMM prefix" and "remote log metadata common client prefix"
         props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "security.protocol", "SSL");
         appendRLMConfig(props);
@@ -3789,7 +3789,7 @@ public class RemoteLogManagerTest {
     @Test
     public void testCopyQuotaManagerConfig() {
         Properties defaultProps = new Properties();
-        defaultProps.putAll(brokerConfig);
+        defaultProps.putAll(remoteLogManagerProps);
         appendRLMConfig(defaultProps);
         RemoteLogManagerConfig defaultRlmConfig = configs(defaultProps);
         RLMQuotaManagerConfig defaultConfig = RemoteLogManager.copyQuotaManagerConfig(defaultRlmConfig);
@@ -3798,7 +3798,7 @@ public class RemoteLogManagerTest {
         assertEquals(DEFAULT_REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_SIZE_SECONDS, defaultConfig.quotaWindowSizeSeconds());
 
         Properties customProps = new Properties();
-        customProps.putAll(brokerConfig);
+        customProps.putAll(remoteLogManagerProps);
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP, 100);
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_NUM_PROP, 31);
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_SIZE_SECONDS_PROP, 1);
@@ -3814,7 +3814,7 @@ public class RemoteLogManagerTest {
     @Test
     public void testFetchQuotaManagerConfig() {
         Properties defaultProps = new Properties();
-        defaultProps.putAll(brokerConfig);
+        defaultProps.putAll(remoteLogManagerProps);
         appendRLMConfig(defaultProps);
         RemoteLogManagerConfig defaultRlmConfig = configs(defaultProps);
 
@@ -3824,7 +3824,7 @@ public class RemoteLogManagerTest {
         assertEquals(DEFAULT_REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS, defaultConfig.quotaWindowSizeSeconds());
 
         Properties customProps = new Properties();
-        customProps.putAll(brokerConfig);
+        customProps.putAll(remoteLogManagerProps);
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP, 100);
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_NUM_PROP, 31);
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS_PROP, 1);
@@ -4207,7 +4207,7 @@ public class RemoteLogManagerTest {
         // 100ms, the test will fail.
         remoteLogManager.close();
         clearInvocations(remoteLogMetadataManager, remoteStorageManager);
-        Properties props = brokerConfig;
+        Properties props = remoteLogManagerProps;
         props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true");
         props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP, "30000");
         appendRLMConfig(props);
@@ -4281,7 +4281,7 @@ public class RemoteLogManagerTest {
     @Test
     public void testMonitorableRemoteLogStorageManager() throws IOException {
         Properties props = new Properties();
-        props.putAll(brokerConfig);
+        props.putAll(remoteLogManagerProps);
         appendRLMConfig(props);
         props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, MonitorableNoOpRemoteStorageManager.class.getName());
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, MonitorableNoOpRemoteLogMetadataManager.class.getName());
