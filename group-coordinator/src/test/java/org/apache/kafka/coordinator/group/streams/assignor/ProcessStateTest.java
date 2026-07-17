@@ -17,7 +17,6 @@
 
 package org.apache.kafka.coordinator.group.streams.assignor;
 
-
 import org.junit.jupiter.api.Test;
 
 import java.util.Set;
