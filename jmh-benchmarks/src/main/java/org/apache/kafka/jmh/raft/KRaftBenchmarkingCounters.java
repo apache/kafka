@@ -55,11 +55,9 @@ public class KRaftBenchmarkingCounters {
     private long quorumStateWritesTotal;
     private long quorumStateReadsTotal;
 
-    // Reported: the number of operations (i.e. @Benchmark method invocations) measured in the
-    // iteration, and the divisor for the per-operation values below. Being a public @AuxCounters
-    // field, JMH zeroes it automatically at the start of every iteration (which is why, unlike the
-    // private totals above, it is not reset in reset()).
-    public long operations;
+    // The number of operations (i.e. @Benchmark method invocations) measured in the iteration, and the
+    // divisor for the per-operation values below.
+    private long operations;
 
     // The divisor for the per-op methods below: (forks x measurement iterations). Set once per fork
     // by captureRunShape().
@@ -94,6 +92,7 @@ public class KRaftBenchmarkingCounters {
         rpcResponsesSentTotal = 0;
         quorumStateWritesTotal = 0;
         quorumStateReadsTotal = 0;
+        operations = 0;
     }
 
     /**
