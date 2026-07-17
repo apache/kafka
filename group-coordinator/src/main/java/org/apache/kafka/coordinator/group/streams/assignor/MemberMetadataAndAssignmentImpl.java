@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.group.streams.assignor;
 
 import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignmentMetadata;
 import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignmentState;
-import org.apache.kafka.coordinator.group.api.assignor.streams.TaskId;
 
 import java.util.Collections;
 import java.util.Map;
@@ -47,8 +46,8 @@ public record MemberMetadataAndAssignmentImpl(Optional<String> instanceId,
                                                   Map<String, Set<Integer>> warmupTasks,
                                                   String processId,
                                                   Map<String, String> clientTags,
-                                                  Map<TaskId, Long> taskOffsets,
-                                                  Map<TaskId, Long> taskEndOffsets
+                                                  Map<String, Map<Integer, Long>> taskOffsets,
+                                                  Map<String, Map<Integer, Long>> taskEndOffsets
 ) implements MemberAssignmentMetadata, MemberAssignmentState {
 
     public MemberMetadataAndAssignmentImpl {

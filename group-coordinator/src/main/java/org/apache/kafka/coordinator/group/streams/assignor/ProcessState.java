@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.group.streams.assignor;
 
 import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignorException;
-import org.apache.kafka.coordinator.group.api.assignor.streams.TaskId;
 
 import java.util.AbstractMap;
 import java.util.HashMap;
@@ -38,9 +37,9 @@ public class ProcessState {
     private double load;
     private int taskCount;
     private final Map<String, Integer> memberToTaskCounts;
-    private final Map<String, Set<TaskId>> assignedActiveTasks;
-    private final Map<String, Set<TaskId>> assignedStandbyTasks;
-    private final Set<TaskId> assignedTasks;
+    private final Map<String, Set<TaskIdImpl>> assignedActiveTasks;
+    private final Map<String, Set<TaskIdImpl>> assignedStandbyTasks;
+    private final Set<TaskIdImpl> assignedTasks;
     private PriorityQueue<Map.Entry<String, Integer>> membersByLoad;
 
     ProcessState(final String processId) {
@@ -70,23 +69,23 @@ public class ProcessState {
         return memberToTaskCounts;
     }
 
-    public Set<TaskId> assignedActiveTasks() {
+    public Set<TaskIdImpl> assignedActiveTasks() {
         return assignedActiveTasks.values().stream()
             .flatMap(Set::stream)
             .collect(Collectors.toSet());
     }
 
-    public Map<String, Set<TaskId>> assignedActiveTasksByMember() {
+    public Map<String, Set<TaskIdImpl>> assignedActiveTasksByMember() {
         return assignedActiveTasks;
     }
 
-    public Set<TaskId> assignedStandbyTasks() {
+    public Set<TaskIdImpl> assignedStandbyTasks() {
         return assignedStandbyTasks.values().stream()
             .flatMap(Set::stream)
             .collect(Collectors.toSet());
     }
 
-    public Map<String, Set<TaskId>> assignedStandbyTasksByMember() {
+    public Map<String, Set<TaskIdImpl>> assignedStandbyTasksByMember() {
         return assignedStandbyTasks;
     }
 
@@ -98,7 +97,7 @@ public class ProcessState {
      * @param isActive Whether the task is an active task (true) or a standby task (false).
      * @return the number of tasks that `memberId` has assigned after adding the new task.
      */
-    public int addTask(final String memberId, final TaskId taskId, final boolean isActive) {
+    public int addTask(final String memberId, final TaskIdImpl taskId, final boolean isActive) {
         int newTaskCount = addTaskInternal(memberId, taskId, isActive);
         // We cannot efficiently add a task to a specific member and keep the memberByLoad ordered correctly.
         // So we just drop the heap here.
@@ -109,7 +108,7 @@ public class ProcessState {
         return newTaskCount;
     }
 
-    private int addTaskInternal(final String memberId, final TaskId taskId, final boolean isActive) {
+    private int addTaskInternal(final String memberId, final TaskIdImpl taskId, final boolean isActive) {
         taskCount += 1;
         assignedTasks.add(taskId);
         if (isActive) {
@@ -133,7 +132,7 @@ public class ProcessState {
      * @return the number of tasks that `memberId` has assigned after adding the new task, or -1 if the
      *         task was not assigned to any member.
      */
-    public int addTaskToLeastLoadedMember(final TaskId taskId, final boolean isActive) {
+    public int addTaskToLeastLoadedMember(final TaskIdImpl taskId, final boolean isActive) {
         if (memberToTaskCounts.isEmpty()) {
             return -1;
         }
@@ -191,11 +190,11 @@ public class ProcessState {
         return loadCompare;
     }
 
-    public boolean hasTask(final TaskId taskId) {
+    public boolean hasTask(final TaskIdImpl taskId) {
         return assignedTasks.contains(taskId);
     }
 
-    Set<TaskId> assignedTasks() {
+    Set<TaskIdImpl> assignedTasks() {
         return assignedTasks;
     }
 }

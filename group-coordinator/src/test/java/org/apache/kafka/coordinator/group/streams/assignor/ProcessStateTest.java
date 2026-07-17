@@ -17,7 +17,6 @@
 
 package org.apache.kafka.coordinator.group.streams.assignor;
 
-import org.apache.kafka.coordinator.group.api.assignor.streams.TaskId;
 
 import org.junit.jupiter.api.Test;
 
@@ -33,7 +32,7 @@ public class ProcessStateTest {
     void shouldAddActiveTaskToMember() {
         ProcessState processState = new ProcessState("process1");
         processState.addMember("member1");
-        TaskId taskId = new TaskIdImpl("id1", 0);
+        TaskIdImpl taskId = new TaskIdImpl("id1", 0);
 
         processState.addTask("member1", taskId, true);
 
@@ -45,7 +44,7 @@ public class ProcessStateTest {
     void shouldAddStandbyTaskToMember() {
         ProcessState processState = new ProcessState("process1");
         processState.addMember("member1");
-        TaskId taskId = new TaskIdImpl("id1", 0);
+        TaskIdImpl taskId = new TaskIdImpl("id1", 0);
 
         processState.addTask("member1", taskId, false);
 
@@ -94,7 +93,7 @@ public class ProcessStateTest {
     void shouldReturnTrueIfTaskIsAssigned() {
         ProcessState processState = new ProcessState("process1");
         processState.addMember("member1");
-        TaskId taskId = new TaskIdImpl("id1", 0);
+        TaskIdImpl taskId = new TaskIdImpl("id1", 0);
         processState.addTask("member1", taskId, true);
 
         assertTrue(processState.hasTask(taskId));
@@ -104,7 +103,7 @@ public class ProcessStateTest {
     void shouldReturnFalseIfTaskIsNotAssigned() {
         ProcessState processState = new ProcessState("process1");
         processState.addMember("member1");
-        TaskId taskId = new TaskIdImpl("id1", 0);
+        TaskIdImpl taskId = new TaskIdImpl("id1", 0);
 
         assertFalse(processState.hasTask(taskId));
     }
@@ -113,12 +112,12 @@ public class ProcessStateTest {
     void shouldReturnAllAssignedTasks() {
         ProcessState processState = new ProcessState("process1");
         processState.addMember("member1");
-        TaskId activeTaskId = new TaskIdImpl("id1", 0);
-        TaskId standbyTaskId = new TaskIdImpl("id1", 1);
+        TaskIdImpl activeTaskId = new TaskIdImpl("id1", 0);
+        TaskIdImpl standbyTaskId = new TaskIdImpl("id1", 1);
         processState.addTask("member1", activeTaskId, true);
         processState.addTask("member1", standbyTaskId, false);
 
-        Set<TaskId> assignedTasks = processState.assignedTasks();
+        Set<TaskIdImpl> assignedTasks = processState.assignedTasks();
 
         assertTrue(assignedTasks.contains(activeTaskId));
         assertTrue(assignedTasks.contains(standbyTaskId));

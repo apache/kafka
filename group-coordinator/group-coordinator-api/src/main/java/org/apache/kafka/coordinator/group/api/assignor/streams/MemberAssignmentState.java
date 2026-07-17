@@ -30,12 +30,10 @@ import java.util.Set;
  * tasks itself (they are decided during reconciliation), but the currently-assigned warm-up
  * tasks are exposed here so that the assignor can take them into account.
  *
- * <p>The task-set accessors ({@link #activeTasks()}, {@link #standbyTasks()},
- * {@link #warmupTasks()}) are keyed by subtopology ID, mirroring the grouped {@code TaskIds}
- * wire format ({@code subtopologyId, [partitions]}). In contrast, {@link #taskOffsets()} and
- * {@link #taskEndOffsets()} are keyed by {@link TaskId}, mirroring the flat {@code TaskOffset}
- * wire format ({@code subtopologyId, partition, offset}). The two shapes differ because the
- * underlying wire representations differ.
+ * <p>All accessors are keyed by subtopology ID. The task-set accessors ({@link #activeTasks()},
+ * {@link #standbyTasks()}, {@link #warmupTasks()}) map each subtopology ID to its set of
+ * partitions, while {@link #taskOffsets()} and {@link #taskEndOffsets()} map each subtopology ID
+ * to a map from partition to offset.
  */
 @InterfaceAudience.Public
 @InterfaceStability.Evolving
@@ -58,12 +56,14 @@ public interface MemberAssignmentState {
 
     /**
      * @return The last received cumulative task offsets of assigned tasks or dormant tasks.
+     *         The outer map is keyed by subtopology ID and the inner map by partition.
      */
-    Map<TaskId, Long> taskOffsets();
+    Map<String, Map<Integer, Long>> taskOffsets();
 
     /**
      * @return The last received cumulative task end offsets of assigned tasks or dormant tasks.
+     *         The outer map is keyed by subtopology ID and the inner map by partition.
      */
-    Map<TaskId, Long> taskEndOffsets();
+    Map<String, Map<Integer, Long>> taskEndOffsets();
 
 }

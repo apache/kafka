@@ -25,13 +25,11 @@ import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.api.assignor.streams.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignor;
-import org.apache.kafka.coordinator.group.api.assignor.streams.TaskId;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.TaskRole;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.MemberAssignmentImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndAssignmentImpl;
-import org.apache.kafka.coordinator.group.streams.assignor.TaskIdImpl;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 
@@ -137,8 +135,8 @@ public class TargetAssignmentBuilderTest {
             .setClientTags(Map.of())
             .build();
 
-        Map<TaskId, Long> taskOffsets = Map.of(new TaskIdImpl(fooSubtopologyId, 0), 10L);
-        Map<TaskId, Long> taskEndOffsets = Map.of(new TaskIdImpl(fooSubtopologyId, 0), 20L);
+        Map<String, Map<Integer, Long>> taskOffsets = Map.of(fooSubtopologyId, Map.of(0, 10L));
+        Map<String, Map<Integer, Long>> taskEndOffsets = Map.of(fooSubtopologyId, Map.of(0, 20L));
 
         MemberMetadataAndAssignmentImpl memberMetadata = createMemberMetadataAndAssignment(
             member,
