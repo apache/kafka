@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import org.junit.jupiter.api.Test;
@@ -85,6 +86,23 @@ public class StagedMergeIteratorTest {
             assertEquals("staged-a", str(entry.value));
             assertFalse(iter.hasNext());
         }
+    }
+
+    @Test
+    public void shouldThrowInvalidStateStoreExceptionOnHasNextAfterClose() {
+        final NavigableMap<Bytes, Optional<byte[]>> staging = new TreeMap<>();
+        staging.put(key("a"), Optional.of(val("staged-a")));
+
+        final KeyValueIterator<Bytes, byte[]> iter =
+            new StagedMergeIterator(staging, new ListIterator(List.of()));
+        iter.close();
+
+        // A closed store iterator must signal via InvalidStateStoreException -- the type
+        // SegmentIterator catches to close open iterators gracefully -- not a bare
+        // IllegalStateException, which would escape that handling.
+        assertThrows(InvalidStateStoreException.class, iter::hasNext);
+        assertThrows(InvalidStateStoreException.class, iter::next);
+        assertThrows(InvalidStateStoreException.class, iter::peekNextKey);
     }
 
     @Test

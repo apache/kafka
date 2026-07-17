@@ -151,7 +151,7 @@ my-topic                       2          2               3               1     
 
 ## Managing groups
 
-With the GroupCommand tool, we can list groups of all types, including consumer groups, share groups and streams groups. Each type of group has its own tool for administering groups of that type. For example, to list all groups in the cluster: 
+With the GroupCommand tool, we can list groups of all types, including consumer groups, share groups and streams groups. Each type of group has its own tool for administering groups of that type. For streams groups, use the [bin/kafka-streams-groups.sh](/{version}/streams/developer-guide/kafka-streams-group-sh/) tool to list, describe (including the group's processing topology via `--describe --topology`, when a [topology description plugin](/{version}/streams/developer-guide/topology-description-plugin/) is configured on the brokers), and delete streams groups. For example, to list all groups in the cluster: 
 
 ```bash
 $ bin/kafka-groups.sh --bootstrap-server localhost:9092 --list

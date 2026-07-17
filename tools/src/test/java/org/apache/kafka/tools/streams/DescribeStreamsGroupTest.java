@@ -56,6 +56,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -69,6 +70,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         @ClusterConfigProperty(key = GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "0"),
         @ClusterConfigProperty(key = STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, value = "100"),
         @ClusterConfigProperty(key = STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, value = "100"),
+        // Configure the topology description plugin explicitly rather than relying on
+        // EmbeddedKafkaCluster's default: testDescribeStreamsGroupWithTopologyOption
+        // depends on it, and without a plugin the --topology option would time out
+        // with nothing stored on the broker.
+        @ClusterConfigProperty(key = STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG, value = "org.apache.kafka.server.streams.InMemoryTopologyDescriptionPlugin")
     }
 )
 public class DescribeStreamsGroupTest {
@@ -238,6 +244,29 @@ public class DescribeStreamsGroupTest {
             validateDescribeOutput(
                 List.of("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--verbose", "--members", "--all-groups"),
                 expectedHeader, expectedRowsMap, dontCares);
+        }
+    }
+
+    @ClusterTest
+    public void testDescribeStreamsGroupWithTopologyOption(ClusterInstance cluster) throws Exception {
+        final List<String> args = List.of("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--topology", "--group", APP_ID);
+        final AtomicReference<String> out = new AtomicReference<>("");
+
+        cluster.createTopic(INPUT_TOPIC, 2, (short) 1);
+        try (KafkaStreams ignored = startStreamsApp(cluster, APP_ID, INPUT_TOPIC, OUTPUT_TOPIC)) {
+            // The streams client pushes the topology description when the broker solicits it on
+            // a heartbeat, so retry until the broker-side plugin has it stored. Until then the
+            // command reports that no description is stored and exits non-zero, so the exit code
+            // is not asserted inside the retry loop. The solicit -> push -> store round trip can
+            // take a couple of heartbeat intervals (5s each on this cluster), so allow a timeout
+            // well above that.
+            TestUtils.waitForCondition(() -> {
+                String output = ToolsTestUtils.grabConsoleOutput(() -> StreamsGroupCommand.execute(args.toArray(new String[0])));
+                out.set(output);
+                return output.contains("Topologies:") && output.contains(INPUT_TOPIC);
+            }, 60_000L, () -> String.format("Expected the topology description with source topic %s, but found:%n%s", INPUT_TOPIC, out.get()));
+
+            assertTrue(out.get().contains("Sub-topology: 0"), "Expected a sub-topology in the output, but found:\n" + out.get());
         }
     }
 
