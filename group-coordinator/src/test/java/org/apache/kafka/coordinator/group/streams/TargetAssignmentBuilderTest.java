@@ -87,7 +87,9 @@ public class TargetAssignmentBuilderTest {
     }
 
     @ParameterizedTest
-    @EnumSource(TaskRole.class)
+    // Warm-up tasks are sourced from the member's current assignment (set during reconciliation),
+    // not from the target assignment, so this test only varies the target's active and standby tasks.
+    @EnumSource(value = TaskRole.class, names = {"ACTIVE", "STANDBY"})
     public void testCreateMemberMetadataAndAssignment(TaskRole taskRole) {
         String fooSubtopologyId = Uuid.randomUuid().toString();
         String barSubtopologyId = Uuid.randomUuid().toString();
@@ -98,6 +100,7 @@ public class TargetAssignmentBuilderTest {
             .setInstanceId("instanceId")
             .setProcessId("processId")
             .setClientTags(clientTags)
+            .setAssignedTasks(TasksTupleWithEpochs.EMPTY)
             .build();
 
         TasksTuple assignment = mkTasksTuple(taskRole,
@@ -116,7 +119,7 @@ public class TargetAssignmentBuilderTest {
             Optional.of("rackId"),
             assignment.activeTasks(),
             assignment.standbyTasks(),
-            assignment.warmupTasks(),
+            Map.of(),
             "processId",
             clientTags,
             Map.of(),
@@ -133,6 +136,7 @@ public class TargetAssignmentBuilderTest {
             .setInstanceId("instanceId")
             .setProcessId("processId")
             .setClientTags(Map.of())
+            .setAssignedTasks(TasksTupleWithEpochs.EMPTY)
             .build();
 
         Map<String, Map<Integer, Long>> taskOffsets = Map.of(fooSubtopologyId, Map.of(0, 10L));
@@ -146,6 +150,30 @@ public class TargetAssignmentBuilderTest {
 
         assertEquals(taskOffsets, memberMetadata.taskOffsets());
         assertEquals(taskEndOffsets, memberMetadata.taskEndOffsets());
+    }
+
+    @Test
+    public void testCreateMemberMetadataAndAssignmentSourcesWarmupTasksFromCurrentAssignment() {
+        String fooSubtopologyId = Uuid.randomUuid().toString();
+
+        // Warm-up tasks are decided during reconciliation and stored in the member's current
+        // assignment; they must be sourced from there, not from the target assignment.
+        StreamsGroupMember member = new StreamsGroupMember.Builder("member-id")
+            .setInstanceId("instanceId")
+            .setRackId("rackId")
+            .setProcessId("processId")
+            .setClientTags(Map.of())
+            .setAssignedTasks(new TasksTupleWithEpochs(Map.of(), Map.of(), Map.of(fooSubtopologyId, Set.of(1, 2, 3))))
+            .build();
+
+        MemberMetadataAndAssignmentImpl memberMetadata = createMemberMetadataAndAssignment(
+            member,
+            // The target assignment never carries warm-up tasks; even if it did, it must be ignored.
+            mkTasksTuple(TaskRole.WARMUP, mkTasks(fooSubtopologyId, 7, 8, 9)),
+            MemberTaskOffsets.EMPTY
+        );
+
+        assertEquals(Map.of(fooSubtopologyId, Set.of(1, 2, 3)), memberMetadata.warmupTasks());
     }
 
     @Test
@@ -410,6 +438,7 @@ public class TargetAssignmentBuilderTest {
             memberBuilder.setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host").setPort(9090));
             memberBuilder.setInstanceId(null);
             memberBuilder.setRackId(null);
+            memberBuilder.setAssignedTasks(TasksTupleWithEpochs.EMPTY);
             members.put(memberId, memberBuilder.build());
             targetAssignment.put(memberId, targetTasks);
         }

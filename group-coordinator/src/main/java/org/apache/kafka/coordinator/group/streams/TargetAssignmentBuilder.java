@@ -127,7 +127,9 @@ public class TargetAssignmentBuilder {
             member.rackId(),
             targetAssignment.activeTasks(),
             targetAssignment.standbyTasks(),
-            targetAssignment.warmupTasks(),
+            // Warm-up tasks are decided during reconciliation and recorded in the member's current
+            // assignment, not in the target assignment, so they are sourced from there.
+            member.assignedTasks().warmupTasks(),
             member.processId(),
             member.clientTags(),
             taskOffsets.taskOffsets(),
