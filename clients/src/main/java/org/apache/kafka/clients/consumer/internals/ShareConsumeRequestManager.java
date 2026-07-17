@@ -1390,7 +1390,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         }
 
         UnsentRequest buildRequest() {
-            // If the node is no longer is the cluster metadata, we can never send to it
+            // If the node is no longer in the cluster metadata, we can never send to it
             Node nodeToSend = metadata.fetch().nodeById(nodeId);
             if (nodeToSend == null) {
                 failPendingAcknowledgementsCannotBeSent();
