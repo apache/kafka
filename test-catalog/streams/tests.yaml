@@ -1176,6 +1176,7 @@ org.apache.kafka.streams.kstream.internals.KStreamKTableJoinTest:
 - shouldClearTableEntryOnNullValueUpdates
 - shouldCreateRepartitionTopicsWithUserProvidedName
 - shouldDelayJoinByGracePeriod
+- shouldDeserializeBufferedValueWithPutTimeHeadersDuringEviction
 - shouldFailIfGracePeriodIsLongerThanHistoryRetention
 - shouldFailIfGracePeriodIsLongerThanHistoryRetentionAndInheritedStore
 - shouldFailIfTableIsNotVersioned
@@ -5836,9 +5837,11 @@ org.apache.kafka.streams.state.internals.RocksDBTimeOrderedKeyValueBufferTest:
 - shouldAddAndEvictRecordTwice
 - shouldAddAndEvictRecordTwiceWithNonZeroGrace
 - shouldAddRecordsTwiceAndEvictRecordsOnce
+- shouldDeserializeWithPutTimeHeadersEvenAfterContextMutation
 - shouldDropLateRecords
 - shouldDropLateRecordsWithNonZeroGrace
 - shouldHandleCollidingKeys
+- shouldNotBeAffectedByProcessorContextHeaderMutationBetweenPutAndEvict
 - shouldPutInBufferAndUpdateFields
 - shouldReturnIfRecordWasAdded
 org.apache.kafka.streams.state.internals.RocksDBTimeOrderedKeyValueBytesStoreTest:
