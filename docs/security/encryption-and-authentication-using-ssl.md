@@ -270,10 +270,11 @@ ssl.truststore.password=test1234
 Note: ssl.truststore.password is technically optional but highly recommended. If a password is not set access to the truststore is still available, but integrity checking is disabled. Optional settings that are worth considering: 
 1. ssl.client.auth=none ("required" => client authentication is required, "requested" => client authentication is requested and client without certs can still connect. The usage of "requested" is discouraged as it provides a false sense of security and misconfigured clients will still connect successfully.)
 2. ssl.cipher.suites (Optional). A cipher suite is a named combination of authentication, encryption, MAC and key exchange algorithm used to negotiate the security settings for a network connection using TLS or SSL network protocol. (Default is an empty list)
-3. ssl.enabled.protocols=TLSv1.2,TLSv1.1,TLSv1 (list out the SSL protocols that you are going to accept from clients. Do note that SSL is deprecated in favor of TLS and using SSL in production is not recommended)
-4. ssl.keystore.type=JKS
-5. ssl.truststore.type=JKS
-6. ssl.secure.random.implementation=SHA1PRNG
+3. ssl.named.groups (Optional). An ordered list of key exchange named groups, with the most preferred group first. By default, the SSL provider's default named groups are used. An explicitly empty list disables named groups.
+4. ssl.enabled.protocols=TLSv1.2,TLSv1.3 (list out the TLS protocols that you are going to accept from clients)
+5. ssl.keystore.type=JKS
+6. ssl.truststore.type=JKS
+7. ssl.secure.random.implementation=SHA1PRNG
 If you want to enable SSL for inter-broker communication, add the following to the server.properties file (it defaults to PLAINTEXT):
 
 ```java-properties
@@ -330,9 +331,18 @@ ssl.key.password=test1234
 Other configuration settings that may also be needed depending on our requirements and the broker configuration: 
 1. ssl.provider (Optional). The name of the security provider used for SSL connections. Default value is the default security provider of the JVM.
 2. ssl.cipher.suites (Optional). A cipher suite is a named combination of authentication, encryption, MAC and key exchange algorithm used to negotiate the security settings for a network connection using TLS or SSL network protocol.
-3. ssl.enabled.protocols=TLSv1.2,TLSv1.1,TLSv1. It should list at least one of the protocols configured on the broker side
-4. ssl.truststore.type=JKS
-5. ssl.keystore.type=JKS
+3. ssl.named.groups (Optional). An ordered list of key exchange named groups, with the most preferred group first. By default, the SSL provider's default named groups are used. An explicitly empty list disables named groups.
+4. ssl.enabled.protocols=TLSv1.2,TLSv1.3. It should list at least one of the protocols configured on the broker side
+5. ssl.truststore.type=JKS
+6. ssl.keystore.type=JKS
+
+The available named groups depend on the SSL provider and Java runtime. Configuring `ssl.named.groups` requires Java 20 or later. An explicit list overrides the provider defaults, so deployments should include any required fallback groups. For example, a Java runtime that supports post-quantum hybrid TLS key exchange can be configured with:
+
+```java-properties
+ssl.named.groups=X25519MLKEM768,x25519,secp256r1
+```
+
+On JDK 27, the default JSSE configuration already prefers `X25519MLKEM768`, so this setting is typically not required. Post-quantum hybrid key exchange requires TLS 1.3 and support from the SSL provider; support for the ML-KEM cryptographic algorithm alone does not imply support for ML-KEM TLS named groups.
   
 Examples using console-producer and console-consumer: 
 
@@ -340,6 +350,4 @@ Examples using console-producer and console-consumer:
 $ bin/kafka-console-producer.sh --bootstrap-server localhost:9093 --topic test --command-config client-ssl.properties
 $ bin/kafka-console-consumer.sh --bootstrap-server localhost:9093 --topic test --command-config client-ssl.properties
 ```
-
-
 

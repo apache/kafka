@@ -33,6 +33,8 @@ import org.slf4j.LoggerFactory;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
@@ -76,6 +78,7 @@ import javax.net.ssl.TrustManagerFactory;
 public class DefaultSslEngineFactory implements SslEngineFactory {
 
     private static final Logger log = LoggerFactory.getLogger(DefaultSslEngineFactory.class);
+    private static final Method SET_NAMED_GROUPS_METHOD = findSetNamedGroupsMethod();
     public static final String PEM_TYPE = "PEM";
 
     private Map<String, ?> configs;
@@ -86,6 +89,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
     private SecurityStore keystore;
     private SecurityStore truststore;
     private String[] cipherSuites;
+    private String[] namedGroups;
     private String[] enabledProtocols;
     private SecureRandom secureRandomImplementation;
     private SSLContext sslContext;
@@ -150,6 +154,9 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
             this.enabledProtocols = null;
         }
 
+        List<String> namedGroupsList = (List<String>) configs.get(SslConfigs.SSL_NAMED_GROUPS_CONFIG);
+        this.namedGroups = namedGroupsList == null ? null : namedGroupsList.toArray(new String[0]);
+
         this.secureRandomImplementation = createSecureRandom((String)
                 configs.get(SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG));
 
@@ -189,8 +196,16 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
         if (cipherSuites != null) sslEngine.setEnabledCipherSuites(cipherSuites);
         if (enabledProtocols != null) sslEngine.setEnabledProtocols(enabledProtocols);
 
+        SSLParameters sslParams = sslEngine.getSSLParameters();
+        if (namedGroups != null) {
+            setNamedGroups(sslParams, namedGroups);
+        }
+
         if (connectionMode == ConnectionMode.SERVER) {
             sslEngine.setUseClientMode(false);
+            if (namedGroups != null) {
+                sslEngine.setSSLParameters(sslParams);
+            }
             switch (sslClientAuth) {
                 case REQUIRED:
                     sslEngine.setNeedClientAuth(true);
@@ -203,13 +218,37 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
             }
         } else {
             sslEngine.setUseClientMode(true);
-            SSLParameters sslParams = sslEngine.getSSLParameters();
             // SSLParameters#setEndpointIdentificationAlgorithm enables endpoint validation
             // only in client mode. Hence, validation is enabled only for clients.
             sslParams.setEndpointIdentificationAlgorithm(endpointIdentification);
             sslEngine.setSSLParameters(sslParams);
         }
         return sslEngine;
+    }
+
+    private static void setNamedGroups(SSLParameters sslParameters, String[] namedGroups) {
+        if (SET_NAMED_GROUPS_METHOD == null) {
+            throw new InvalidConfigurationException(
+                    "The configuration " + SslConfigs.SSL_NAMED_GROUPS_CONFIG + " requires Java 20 or later");
+        }
+
+        try {
+            SET_NAMED_GROUPS_METHOD.invoke(sslParameters, (Object) namedGroups);
+        } catch (IllegalAccessException e) {
+            throw new InvalidConfigurationException(
+                    "Unable to configure " + SslConfigs.SSL_NAMED_GROUPS_CONFIG, e);
+        } catch (InvocationTargetException e) {
+            throw new InvalidConfigurationException(
+                    "Invalid value for " + SslConfigs.SSL_NAMED_GROUPS_CONFIG, e.getCause());
+        }
+    }
+
+    private static Method findSetNamedGroupsMethod() {
+        try {
+            return SSLParameters.class.getMethod("setNamedGroups", String[].class);
+        } catch (NoSuchMethodException e) {
+            return null;
+        }
     }
     private static SslClientAuth createSslClientAuth(String key) {
         SslClientAuth auth = SslClientAuth.forConfig(key);

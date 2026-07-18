@@ -930,6 +930,7 @@ class KafkaConfigTest {
         case SslConfigs.SSL_PROTOCOL_CONFIG => // ignore string
         case SslConfigs.SSL_PROVIDER_CONFIG => // ignore string
         case SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG =>
+        case SslConfigs.SSL_NAMED_GROUPS_CONFIG => // ignore list
         case SslConfigs.SSL_KEYSTORE_TYPE_CONFIG => // ignore string
         case SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG => // ignore string
         case SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG => // ignore string
