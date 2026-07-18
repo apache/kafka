@@ -18,6 +18,7 @@ package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.record.internal.DefaultRecordBatch;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.raft.Batch;
@@ -34,46 +35,108 @@ import java.util.Optional;
 import java.util.function.BiFunction;
 
 /**
- * Decides which records {@link RecordsIterator} decodes when turning a batch into a {@link Batch}:
- * {@link ControlAndDataDecodingStrategy} decodes both, {@link ControlOnlyDecodingStrategy} decodes
- * only the control records (used by the kraft partition listener, which needs no serde), and
- * {@link DataOnlyDecodingStrategy} decodes only the data records. Skipped records are returned as a
- * {@link Batch#notDecoded} batch carrying only the offset information. The static helpers are shared
- * by the implementations.
+ * Decides which records {@link RecordsIterator} decodes when turning a batch into a {@link Batch}.
+ * A batch's records are decoded only when this strategy is interested in them; otherwise the batch
+ * is returned as a {@link Batch#notDecoded} batch carrying only the offset information.
+ *
+ * <p>Use one of the factory methods to select the behavior:
+ * <ul>
+ *   <li>{@link #dataAndControl} decodes both the control and data records.</li>
+ *   <li>{@link #controlOnly} decodes only the control records and skips the data records. Used by
+ *       the internal kraft partition listener, which needs no serde.</li>
+ *   <li>{@link #dataOnly} decodes only the data records and skips the control records.</li>
+ *   <li>{@link #none} skips both.</li>
+ * </ul>
  */
-public interface DecodingStrategy<T> {
+public final class RecordsDecodingStrategy<T> {
+    private final boolean decodeControlRecords;
+    private final boolean decodeDataRecords;
+    private final Optional<RecordSerde<T>> serde;
 
-    Batch<T> readBatch(DefaultRecordBatch batch, InputStream input, BufferSupplier bufferSupplier, int numRecords);
-
-    static <T> Batch<T> readControlBatch(DefaultRecordBatch batch, InputStream input, BufferSupplier bufferSupplier, int numRecords) {
-        List<ControlRecord> records = new ArrayList<>(numRecords);
-        for (int i = 0; i < numRecords; i++) {
-            records.add(readRecord(input, batch.sizeInBytes(), bufferSupplier, DecodingStrategy::decodeControlRecord));
-        }
-        return Batch.control(
-            batch.baseOffset(),
-            batch.partitionLeaderEpoch(),
-            batch.maxTimestamp(),
-            batch.sizeInBytes(),
-            records
-        );
+    private RecordsDecodingStrategy(boolean decodeControlRecords, boolean decodeDataRecords, Optional<RecordSerde<T>> serde) {
+        this.decodeControlRecords = decodeControlRecords;
+        this.decodeDataRecords = decodeDataRecords;
+        this.serde = serde;
     }
 
-    static <T> Batch<T> readDataBatch(DefaultRecordBatch batch, InputStream input, BufferSupplier bufferSupplier, int numRecords, RecordSerde<T> serde) {
-        List<T> records = new ArrayList<>(numRecords);
-        for (int i = 0; i < numRecords; i++) {
-            records.add(readRecord(input, batch.sizeInBytes(), bufferSupplier, (key, value) -> decodeDataRecord(key, value, serde)));
-        }
-        return Batch.data(
-            batch.baseOffset(),
-            batch.partitionLeaderEpoch(),
-            batch.maxTimestamp(),
-            batch.sizeInBytes(),
-            records
-        );
+    /**
+     * Decodes both the control and data records of a batch.
+     */
+    public static <T> RecordsDecodingStrategy<T> dataAndControl(RecordSerde<T> serde) {
+        return new RecordsDecodingStrategy<>(true, true, Optional.of(serde));
     }
 
-    static <T> Batch<T> notDecodedBatch(DefaultRecordBatch batch, int numRecords) {
+    /**
+     * Decodes only the data records of a batch and skips the control records.
+     */
+    public static <T> RecordsDecodingStrategy<T> dataOnly(RecordSerde<T> serde) {
+        return new RecordsDecodingStrategy<>(false, true, Optional.of(serde));
+    }
+
+    /**
+     * Decodes only the control records of a batch and skips the data records.
+     */
+    public static <T> RecordsDecodingStrategy<T> controlOnly() {
+        return new RecordsDecodingStrategy<>(true, false, Optional.empty());
+    }
+
+    /**
+     * Skips both the control and data records of a batch.
+     */
+    public static <T> RecordsDecodingStrategy<T> none() {
+        return new RecordsDecodingStrategy<>(false, false, Optional.empty());
+    }
+
+    Batch<T> readBatch(DefaultRecordBatch batch, BufferSupplier bufferSupplier, int numRecords) {
+        if (batch.isControlBatch()) {
+            return decodeControlRecords ? readControlBatch(batch, bufferSupplier, numRecords) : notDecodedBatch(batch, numRecords);
+        } else {
+            return decodeDataRecords ? readDataBatch(batch, bufferSupplier, numRecords) : notDecodedBatch(batch, numRecords);
+        }
+    }
+
+    private Batch<T> readControlBatch(DefaultRecordBatch batch, BufferSupplier bufferSupplier, int numRecords) {
+        InputStream input = batch.recordInputStream(bufferSupplier);
+        try {
+            List<ControlRecord> records = new ArrayList<>(numRecords);
+            for (int i = 0; i < numRecords; i++) {
+                records.add(readRecord(input, batch.sizeInBytes(), bufferSupplier, RecordsDecodingStrategy::decodeControlRecord));
+            }
+            return Batch.control(
+                batch.baseOffset(),
+                batch.partitionLeaderEpoch(),
+                batch.maxTimestamp(),
+                batch.sizeInBytes(),
+                records
+            );
+        } finally {
+            Utils.closeQuietly(input, "BytesStream for input containing records");
+        }
+    }
+
+    private Batch<T> readDataBatch(DefaultRecordBatch batch, BufferSupplier bufferSupplier, int numRecords) {
+        RecordSerde<T> recordSerde = serde.orElseThrow(
+            () -> new IllegalStateException("A serde is required to decode data records")
+        );
+        InputStream input = batch.recordInputStream(bufferSupplier);
+        try {
+            List<T> records = new ArrayList<>(numRecords);
+            for (int i = 0; i < numRecords; i++) {
+                records.add(readRecord(input, batch.sizeInBytes(), bufferSupplier, (key, value) -> decodeDataRecord(key, value, recordSerde)));
+            }
+            return Batch.data(
+                batch.baseOffset(),
+                batch.partitionLeaderEpoch(),
+                batch.maxTimestamp(),
+                batch.sizeInBytes(),
+                records
+            );
+        } finally {
+            Utils.closeQuietly(input, "BytesStream for input containing records");
+        }
+    }
+
+    private Batch<T> notDecodedBatch(DefaultRecordBatch batch, int numRecords) {
         return Batch.notDecoded(
             batch.baseOffset(),
             batch.partitionLeaderEpoch(),

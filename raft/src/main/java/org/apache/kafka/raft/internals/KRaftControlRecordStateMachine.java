@@ -232,7 +232,7 @@ public final class KRaftControlRecordStateMachine {
                 );
                 try (RecordsIterator<?> iterator = new RecordsIterator<>(
                         info.records,
-                        new ControlOnlyDecodingStrategy<>(),
+                        RecordsDecodingStrategy.controlOnly(),
                         bufferSupplier,
                         maxBatchSizeBytes,
                         true, // Validate batch CRC
@@ -264,7 +264,7 @@ public final class KRaftControlRecordStateMachine {
             try (BufferSupplier bufferSupplier = BufferSupplier.create();
                  SnapshotReader<?> reader = RecordsSnapshotReader.of(
                     rawSnapshot,
-                    new ControlOnlyDecodingStrategy<>(),
+                    RecordsDecodingStrategy.controlOnly(),
                     bufferSupplier,
                     maxBatchSizeBytes,
                     true, // Validate batch CRC

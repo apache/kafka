@@ -37,7 +37,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.utils.internals.ConfigUtils
 import org.apache.kafka.network.SocketServer
 import org.apache.kafka.raft.KafkaRaftClient
-import org.apache.kafka.raft.internals.ControlAndDataDecodingStrategy
+import org.apache.kafka.raft.internals.RecordsDecodingStrategy
 import org.apache.kafka.server.{DynamicThreadPool, ProcessRole}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler}
 import org.apache.kafka.server.config.{BrokerReconfigurable => JBrokerReconfigurable, DynamicConfig, DynamicProducerStateManagerConfig, ServerConfigs, ServerLogConfigs, DynamicBrokerConfig => JDynamicBrokerConfig}
@@ -107,7 +107,7 @@ object DynamicBrokerConfig {
         Using.resource(
           RecordsSnapshotReader.of(
             rawSnapshotReader,
-            new ControlAndDataDecodingStrategy(raftManager.recordSerde),
+            RecordsDecodingStrategy.dataAndControl(raftManager.recordSerde),
             BufferSupplier.create(),
             KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
             true,

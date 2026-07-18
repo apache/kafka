@@ -42,7 +42,7 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.LogContext;
-import org.apache.kafka.raft.internals.ControlAndDataDecodingStrategy;
+import org.apache.kafka.raft.internals.RecordsDecodingStrategy;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
@@ -120,7 +120,7 @@ public class KafkaRaftClientReconfigTest {
         assertEquals(BOOTSTRAP_SNAPSHOT_ID, context.log.latestSnapshotId().get());
         try (SnapshotReader<?> reader = RecordsSnapshotReader.of(
                 context.log.latestSnapshot().get(),
-                new ControlAndDataDecodingStrategy<>(context.serde),
+                RecordsDecodingStrategy.dataAndControl(context.serde),
                 BufferSupplier.NO_CACHING,
                 KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
                 false,

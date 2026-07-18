@@ -21,7 +21,6 @@ import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.MutableRecordBatch;
 import org.apache.kafka.common.record.internal.Records;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.Batch;
@@ -29,7 +28,6 @@ import org.apache.kafka.raft.Batch;
 import org.slf4j.Logger;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -40,7 +38,7 @@ import java.util.Optional;
 public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseable {
     private final Logger logger;
     private final Records records;
-    private final DecodingStrategy<T> decodingStrategy;
+    private final RecordsDecodingStrategy<T> decodingStrategy;
     private final BufferSupplier bufferSupplier;
     private final int batchSize;
     // Setting to true will make the RecordsIterator perform a CRC Validation
@@ -64,7 +62,7 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
      */
     public RecordsIterator(
         Records records,
-        DecodingStrategy<T> decodingStrategy,
+        RecordsDecodingStrategy<T> decodingStrategy,
         BufferSupplier bufferSupplier,
         int batchSize,
         boolean doCrcValidation,
@@ -211,11 +209,6 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
             throw new IllegalStateException("Expected a record count for the records batch");
         }
 
-        InputStream input = batch.recordInputStream(bufferSupplier);
-        try {
-            return decodingStrategy.readBatch(batch, input, bufferSupplier, numRecords);
-        } finally {
-            Utils.closeQuietly(input, "BytesStream for input containing records");
-        }
+        return decodingStrategy.readBatch(batch, bufferSupplier, numRecords);
     }
 }
