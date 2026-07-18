@@ -17,10 +17,13 @@
 
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.connect.connector.Connector;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.isolation.PluginUtils;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.isolation.VersionedPluginLoadingException;
 
+import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException;
 import org.apache.maven.artifact.versioning.VersionRange;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,9 +33,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -42,6 +47,78 @@ public class CachedConnectorsTest {
 
     @Mock
     private Plugins plugins;
+
+    @Test
+    public void testCachesConnectorsByClassAndVersion() throws InvalidVersionSpecificationException {
+        String sinkConnectorClass = SampleSinkConnector.class.getName();
+        String sourceConnectorClass = SampleSourceConnector.class.getName();
+        VersionRange firstVersion = VersionRange.createFromVersionSpec("1.0.0");
+        VersionRange secondVersion = VersionRange.createFromVersionSpec("2.0.0");
+        // Distinct instances verify that the cache separates entries by connector class and version.
+        Connector latestSinkConnector = new SampleSinkConnector();
+        Connector firstSinkConnector = new SampleSinkConnector();
+        Connector secondSinkConnector = new SampleSinkConnector();
+        Connector firstSourceConnector = new SampleSourceConnector();
+        when(plugins.newConnector(sinkConnectorClass, null)).thenReturn(latestSinkConnector);
+        when(plugins.newConnector(sinkConnectorClass, firstVersion)).thenReturn(firstSinkConnector);
+        when(plugins.newConnector(sinkConnectorClass, secondVersion)).thenReturn(secondSinkConnector);
+        when(plugins.newConnector(sourceConnectorClass, firstVersion)).thenReturn(firstSourceConnector);
+
+        CachedConnectors cachedConnectors = new CachedConnectors(plugins);
+
+        assertSame(latestSinkConnector, cachedConnectors.getConnector(sinkConnectorClass, null));
+        assertSame(firstSinkConnector, cachedConnectors.getConnector(sinkConnectorClass, firstVersion));
+        assertSame(secondSinkConnector, cachedConnectors.getConnector(sinkConnectorClass, secondVersion));
+        assertSame(firstSourceConnector, cachedConnectors.getConnector(sourceConnectorClass, firstVersion));
+
+        assertSame(latestSinkConnector, cachedConnectors.getConnector(sinkConnectorClass, null));
+        assertSame(firstSinkConnector, cachedConnectors.getConnector(sinkConnectorClass, firstVersion));
+        assertSame(secondSinkConnector, cachedConnectors.getConnector(sinkConnectorClass, secondVersion));
+        assertSame(firstSourceConnector, cachedConnectors.getConnector(sourceConnectorClass, firstVersion));
+
+        verify(plugins, times(1)).newConnector(sinkConnectorClass, null);
+        verify(plugins, times(1)).newConnector(sinkConnectorClass, firstVersion);
+        verify(plugins, times(1)).newConnector(sinkConnectorClass, secondVersion);
+        verify(plugins, times(1)).newConnector(sourceConnectorClass, firstVersion);
+    }
+
+    @Test
+    public void testCachesInvalidConnectorAcrossVersions() throws InvalidVersionSpecificationException {
+        String connectorClass = "org.apache.kafka.connect.runtime.InvalidConnector";
+        VersionRange requestedVersion = VersionRange.createFromVersionSpec("1.0.0");
+        when(plugins.newConnector(connectorClass, null)).thenThrow(new ConnectException("unable to load connector"));
+
+        CachedConnectors cachedConnectors = new CachedConnectors(plugins);
+
+        // A loading failure that is not specific to a version is cached for the connector class and applies to all versions.
+        assertThrows(ConnectException.class, () -> cachedConnectors.getConnector(connectorClass, null));
+        assertThrows(ConnectException.class, () -> cachedConnectors.getConnector(connectorClass, requestedVersion));
+
+        verify(plugins, times(1)).newConnector(connectorClass, null);
+        verify(plugins, never()).newConnector(connectorClass, requestedVersion);
+    }
+
+    @Test
+    public void testVersionLoadingFailureDoesNotAffectOtherCachedVersions() throws InvalidVersionSpecificationException {
+        String connectorClass = SampleSinkConnector.class.getName();
+        VersionRange availableVersion = VersionRange.createFromVersionSpec("1.0.0");
+        VersionRange unavailableVersion = VersionRange.createFromVersionSpec("2.0.0");
+        Connector availableConnector = new SampleSinkConnector();
+        when(plugins.newConnector(connectorClass, availableVersion)).thenReturn(availableConnector);
+        when(plugins.newConnector(connectorClass, unavailableVersion)).thenThrow(new VersionedPluginLoadingException("unable to load connector version"));
+
+        CachedConnectors cachedConnectors = new CachedConnectors(plugins);
+
+        // Successful and failed version lookups are cached independently.
+        assertSame(availableConnector, cachedConnectors.getConnector(connectorClass, availableVersion));
+        assertThrows(VersionedPluginLoadingException.class, () -> cachedConnectors.getConnector(connectorClass, unavailableVersion));
+
+        assertSame(availableConnector, cachedConnectors.getConnector(connectorClass, availableVersion));
+        assertThrows(VersionedPluginLoadingException.class, () -> cachedConnectors.getConnector(connectorClass, unavailableVersion));
+
+        verify(plugins, times(1)).newConnector(connectorClass, availableVersion);
+        verify(plugins, times(1)).newConnector(connectorClass, unavailableVersion);
+    }
 
     @Test
     public void testCachedInvalidVersionFailurePreservesAvailableVersions() throws Exception {

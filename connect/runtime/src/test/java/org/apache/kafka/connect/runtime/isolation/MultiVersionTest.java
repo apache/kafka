@@ -103,6 +103,7 @@ public class MultiVersionTest {
     public static final String DEFAULT_ISOLATED_ARTIFACTS_LATEST_VERSION;
     public static final Map<Path, List<VersionedPluginBuilder.BuildInfo>> DEFAULT_ISOLATED_ARTIFACTS;
     public static final Map<Path, List<VersionedPluginBuilder.BuildInfo>> DEFAULT_COMBINED_ARTIFACT;
+    public static final Map<Path, List<VersionedPluginBuilder.BuildInfo>> MULTI_VERSION_ARTIFACTS;
     public static final Plugins MULTI_VERSION_PLUGINS;
     public static final Map<VersionedPluginBuilder.VersionedTestPlugin, String> DEFAULT_COMBINED_ARTIFACT_VERSIONS;
 
@@ -134,7 +135,8 @@ public class MultiVersionTest {
             Map<Path, List<VersionedPluginBuilder.BuildInfo>> artifacts = new HashMap<>();
             artifacts.putAll(DEFAULT_COMBINED_ARTIFACT);
             artifacts.putAll(DEFAULT_ISOLATED_ARTIFACTS);
-            MULTI_VERSION_PLUGINS = setUpPlugins(artifacts, PluginDiscoveryMode.SERVICE_LOAD);
+            MULTI_VERSION_ARTIFACTS = Map.copyOf(artifacts);
+            MULTI_VERSION_PLUGINS = setUpPlugins(MULTI_VERSION_ARTIFACTS, PluginDiscoveryMode.SERVICE_LOAD);
 
         } catch (IOException e) {
             throw new RuntimeException(e);

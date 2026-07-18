@@ -34,10 +34,12 @@ import org.apache.kafka.connect.runtime.SampleSinkConnector;
 import org.apache.kafka.connect.runtime.SampleSourceConnector;
 import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
 import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoaderTest;
+import org.apache.kafka.connect.runtime.isolation.MultiVersionTest;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.isolation.VersionedPluginBuilder;
 import org.apache.kafka.connect.runtime.rest.RestRequestTimeout;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
@@ -455,6 +457,37 @@ public class ConnectorPluginsResourceTest {
             Optional<ConfigKeyInfo> cki = connectorConfigDef.stream().filter(c -> c.name().equals(config)).findFirst();
             assertTrue(cki.isPresent());
         }
+    }
+
+    @Test
+    public void testListAllVersionsOfMultiVersionPlugins() {
+        when(herder.plugins()).thenReturn(MultiVersionTest.MULTI_VERSION_PLUGINS);
+        RestRequestTimeout requestTimeout = RestRequestTimeout.constant(
+            DEFAULT_REST_REQUEST_TIMEOUT_MS, DEFAULT_HEALTH_CHECK_TIMEOUT_MS
+        );
+        ConnectorPluginsResource multiVersionResource = new ConnectorPluginsResource(herder, requestTimeout);
+
+        // Each BuildInfo describes a plugin class and version that the REST resource is expected to return.
+        List<VersionedPluginBuilder.BuildInfo> artifacts = MultiVersionTest.MULTI_VERSION_ARTIFACTS.values().stream()
+            .flatMap(Collection::stream)
+            .toList();
+
+        Map<String, Set<String>> expectedPluginVersions = new HashMap<>();
+        for (VersionedPluginBuilder.BuildInfo artifact : artifacts) {
+            expectedPluginVersions.computeIfAbsent(artifact.plugin().className(), versions -> new HashSet<>())
+                .add(artifact.version());
+        }
+
+        Map<String, Set<String>> listedPluginVersions = new HashMap<>();
+        // The registry also contains classpath plugins outside this multi-version fixture.
+        // Restrict the comparison to plugin classes declared by the fixture.
+        for (PluginInfo plugin : multiVersionResource.listConnectorPlugins(false)) {
+            if (expectedPluginVersions.containsKey(plugin.className())) {
+                listedPluginVersions.computeIfAbsent(plugin.className(), versions -> new HashSet<>()).add(plugin.version());
+            }
+        }
+
+        assertEquals(expectedPluginVersions, listedPluginVersions);
     }
 
     /* Name here needs to be unique as we are testing the aliasing mechanism */
