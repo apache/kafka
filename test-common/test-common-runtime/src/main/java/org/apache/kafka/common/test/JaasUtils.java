@@ -30,22 +30,21 @@ import java.util.stream.Collectors;
 import javax.security.auth.login.Configuration;
 
 public class JaasUtils {
+    public static JaasModule plainLoginModule(String username, String password, boolean debug, Map<String, String> validUsers) {
+        String name = "org.apache.kafka.common.security.plain.PlainLoginModule";
+
+        Map<String, String> entries = new HashMap<>();
+        entries.put("username", username);
+        entries.put("password", password);
+        validUsers.forEach((user, pass) -> entries.put("user_" + user, pass));
+
+        return new JaasModule(
+            name,
+            debug,
+            entries
+        );
+    }
     public record JaasModule(String name, boolean debug, Map<String, String> entries) {
-       
-        public static JaasModule plainLoginModule(String username, String password, boolean debug, Map<String, String> validUsers) {
-            String name = "org.apache.kafka.common.security.plain.PlainLoginModule";
-
-            Map<String, String> entries = new HashMap<>();
-            entries.put("username", username);
-            entries.put("password", password);
-            validUsers.forEach((user, pass) -> entries.put("user_" + user, pass));
-
-            return new JaasModule(
-                name,
-                debug,
-                entries
-            );
-        }
         @Override
         public String toString() {
             return String.format("%s required%n  debug=%b%n  %s;%n", name, debug, entries.entrySet().stream()

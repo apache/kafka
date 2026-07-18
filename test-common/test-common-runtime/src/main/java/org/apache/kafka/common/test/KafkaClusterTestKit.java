@@ -260,7 +260,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 File file = JaasUtils.writeJaasContextsToFile(Set.of(
                     new JaasUtils.JaasSection(JaasUtils.KAFKA_SERVER_CONTEXT_NAME,
                         List.of(
-                            JaasUtils.JaasModule.plainLoginModule(
+                            JaasUtils.plainLoginModule(
                                 JaasUtils.KAFKA_PLAIN_ADMIN, 
                                 JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD,
                                 true,
