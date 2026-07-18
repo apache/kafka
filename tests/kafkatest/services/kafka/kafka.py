@@ -2079,6 +2079,18 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.debug(output)
         return output
 
+    def earliest_local_offset(self, topic, partition):
+        """ The earliest offset still held in local storage for the given topic-partition (KIP-405's
+        OffsetSpec.earliestLocal()) - offsets below this have been tiered to remote storage and removed
+        locally.
+        """
+        output = self.get_offset_shell(time="earliest-local", topic_partitions="%s:%d" % (topic, partition))
+        for line in output.strip().split("\n"):
+            if not line:
+                continue
+            return int(line.split(":")[-1])
+        raise Exception("No offset returned for %s:%d" % (topic, partition))
+
     def java_class_name(self):
         return "kafka\.Kafka"
 
