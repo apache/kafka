@@ -1196,6 +1196,9 @@ project(':core') {
     testImplementation testFixtures(project(':raft'))
     testImplementation testFixtures(project(':server-common'))
     testImplementation testFixtures(project(':storage:storage-api'))
+    // No source need - added for scala flattening/classpath presence so LocalTieredStorage lands in
+    // core/build/dependant-testlibs/ for ducktape system tests.
+    testImplementation testFixtures(project(':storage'))
     testImplementation testFixtures(project(':server'))
     testImplementation project(':streams')
     testImplementation project(':test-common:test-common-runtime')
@@ -2644,12 +2647,6 @@ project(':tools') {
 
   configurations {
     releaseOnly
-    // ApacheDS 2.0.0-M24 pulls in the stale bcprov-jdk15on:1.56, which ships the same
-    // RosstandartObjectIdentifiers class as the modern bcprov-jdk18on we already depend on
-    // but is missing fields referenced by bcpkix-jdk18on:1.84. When IntelliJ's test runner
-    // orders the old JAR first, BC provider registration fails with NoSuchFieldError. Drop it.
-    testCompileClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
-    testRuntimeClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
   }
 
   dependencies {
@@ -2707,12 +2704,6 @@ project(':tools') {
     testImplementation(libs.jfreechart) {
       exclude group: 'junit', module: 'junit'
     }
-    testImplementation libs.apachedsCoreApi
-    testImplementation libs.apachedsInterceptorKerberos
-    testImplementation libs.apachedsProtocolShared
-    testImplementation libs.apachedsProtocolKerberos
-    testImplementation libs.apachedsProtocolLdap
-    testImplementation libs.apachedsLdifPartition
     testImplementation testLog4j2Libs
 
     testRuntimeOnly runtimeTestLibs
