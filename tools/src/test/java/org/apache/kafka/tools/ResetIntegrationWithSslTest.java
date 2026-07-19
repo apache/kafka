@@ -16,73 +16,84 @@
  */
 package org.apache.kafka.tools;
 
-import org.apache.kafka.common.network.ConnectionMode;
-import org.apache.kafka.network.SocketServerConfigs;
-import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
-import org.apache.kafka.test.TestSslUtils;
-import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.Type;
 
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
 
-import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
 
-/**
- * Tests command line SSL setup for reset tool.
- */
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
+
+@ClusterTestDefaults(
+    types = {Type.CO_KRAFT},
+    serverProperties = {
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "0"),
+        @ClusterConfigProperty(key = GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, value = "0"),
+    }
+)
 public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
 
-    public static final EmbeddedKafkaCluster CLUSTER;
-
-    private static final Map<String, Object> SSL_CONFIG;
-
-    static {
-        final Properties brokerProps = new Properties();
-        // we double the value passed to `time.sleep` in each iteration in one of the map functions, so we disable
-        // expiration of connections by the brokers to avoid errors when `AdminClient` sends requests after potentially
-        // very long sleep times
-        brokerProps.put(SocketServerConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG, -1L);
-
-        try {
-            SSL_CONFIG = TestSslUtils.createSslConfig(false, true, ConnectionMode.SERVER, TestUtils.tempFile(), "testCert");
-            brokerProps.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "EXTERNAL:SSL,CONTROLLER:SSL,INTERNAL:SSL");
-            brokerProps.putAll(SSL_CONFIG);
-        } catch (final Exception e) {
-            throw new RuntimeException(e);
+    @ClusterTest(
+        brokerSecurityProtocol = SecurityProtocol.SSL, 
+        controllerSecurityProtocol = SecurityProtocol.SSL
+    )
+    public void testResetWhenInternalTopicsAreSpecified(ClusterInstance cluster) throws Exception {
+        final Map<String, Object> sslConfig = cluster.setClientSslConfig(new HashMap<>());
+        try (Admin admin = cluster.admin()) {
+            final String appId = generateAppId();
+            prepare(cluster, sslConfig, appId);
+            runResetWhenInternalTopicsAreSpecified(cluster, admin, sslConfig, appId);
         }
-
-        CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
     }
 
-    @BeforeAll
-    public static void startCluster() throws IOException {
-        CLUSTER.start();
+    @ClusterTest(
+        brokerSecurityProtocol = SecurityProtocol.SSL,
+        controllerSecurityProtocol = SecurityProtocol.SSL
+    )
+    public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic(ClusterInstance cluster) throws Exception {
+        final Map<String, Object> sslConfig = cluster.setClientSslConfig(new HashMap<>());
+        try (Admin admin = cluster.admin()) {
+            final String appId = generateAppId();
+            prepare(cluster, sslConfig, appId);
+            runReprocessingFromScratchWithoutIntermediateUserTopic(cluster, admin, sslConfig, appId);
+        }
     }
 
-    @AfterAll
-    public static void closeCluster() {
-        CLUSTER.stop();
+    @ClusterTest(
+        brokerSecurityProtocol = SecurityProtocol.SSL,
+        controllerSecurityProtocol = SecurityProtocol.SSL
+    )
+    public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic(ClusterInstance cluster) throws Exception {
+        final Map<String, Object> sslConfig = cluster.setClientSslConfig(new HashMap<>());
+        try (Admin admin = cluster.admin()) {
+            final String appId = generateAppId();
+            prepare(cluster, sslConfig, appId);
+            runReprocessingFromScratchWithIntermediateUserTopic(cluster, admin, sslConfig, false, appId);
+        }
     }
 
-    @Override
-    Map<String, Object> getClientSslConfig() {
-        return SSL_CONFIG;
+    @ClusterTest(
+        brokerSecurityProtocol = SecurityProtocol.SSL,
+        controllerSecurityProtocol = SecurityProtocol.SSL
+    )
+    public void testReprocessingFromScratchAfterResetWithIntermediateInternalTopic(ClusterInstance cluster) throws Exception {
+        final Map<String, Object> sslConfig = cluster.setClientSslConfig(new HashMap<>());
+        try (Admin admin = cluster.admin()) {
+            final String appId = generateAppId();
+            prepare(cluster, sslConfig, appId);
+            runReprocessingFromScratchWithIntermediateUserTopic(cluster, admin, sslConfig, true, appId);
+        }
     }
-
-    @BeforeEach
-    public void before(final TestInfo testInfo) throws Exception {
-        cluster = CLUSTER;
-        prepareTest(testInfo);
-    }
-
-    @AfterEach
-    public void after() throws Exception {
-        cleanupTest();
-    }
-
 }
