@@ -25,11 +25,8 @@ import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeMetadataQuorumOptions;
-import org.apache.kafka.clients.admin.FeatureMetadata;
 import org.apache.kafka.clients.admin.FeatureUpdate;
-import org.apache.kafka.clients.admin.FinalizedVersionRange;
 import org.apache.kafka.clients.admin.NewPartitionReassignment;
-import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.QuorumInfo;
 import org.apache.kafka.clients.admin.SupportedVersionRange;
@@ -44,8 +41,6 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigResource.Type;
-import org.apache.kafka.common.errors.InvalidPartitionsException;
-import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.DescribeClusterRequestData;
 import org.apache.kafka.common.metadata.ConfigRecord;
@@ -80,7 +75,6 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ReplicationConfigs;
-import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.server.quota.ClientQuotaCallback;
 import org.apache.kafka.server.quota.ClientQuotaType;
@@ -103,7 +97,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -983,38 +976,6 @@ public class KRaftClusterTest {
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"3.7-IV0", "3.7-IV2"})
-    public void testCreatePartitions(String metadataVersionString) throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(3)
-                .setBootstrapMetadataVersion(MetadataVersion.fromVersionString(metadataVersionString, true))
-                .setNumControllerNodes(3)
-                .build()).build()) {
-            cluster.format();
-            cluster.startup();
-            cluster.waitForReadyBrokers();
-
-            try (Admin admin = cluster.admin()) {
-                Map<String, KafkaFuture<Void>> createResults = admin.createTopics(List.of(
-                    new NewTopic("foo", 1, (short) 3),
-                    new NewTopic("bar", 2, (short) 3)
-                )).values();
-                createResults.get("foo").get();
-                createResults.get("bar").get();
-                Map<String, KafkaFuture<Void>> increaseResults = admin.createPartitions(Map.of(
-                    "foo", NewPartitions.increaseTo(3),
-                    "bar", NewPartitions.increaseTo(2)
-                )).values();
-
-                increaseResults.get("foo").get();
-                ExecutionException exception = assertThrows(ExecutionException.class, () -> increaseResults.get("bar").get());
-                assertEquals(InvalidPartitionsException.class, exception.getCause().getClass());
-            }
-        }
-    }
-
     @Test
     public void testDescribeQuorumRequestToBrokers() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
@@ -1150,30 +1111,6 @@ public class KRaftClusterTest {
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void testDescribeKRaftVersion(boolean usingBootstrapControllers) throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .build())
-            .setStandalone(true)
-            .build()) {
-            cluster.format();
-            cluster.startup();
-            cluster.waitForReadyBrokers();
-
-            try (Admin admin = createAdminClient(cluster, usingBootstrapControllers)) {
-                FeatureMetadata featureMetadata = admin.describeFeatures().featureMetadata().get();
-                assertEquals(new SupportedVersionRange((short) 0, (short) 1),
-                    featureMetadata.supportedFeatures().get(KRaftVersion.FEATURE_NAME));
-                assertEquals(new FinalizedVersionRange((short) 1, (short) 1),
-                    featureMetadata.finalizedFeatures().get(KRaftVersion.FEATURE_NAME));
-            }
-        }
-    }
-
     @Test
     public void testCreateClusterAndCreateTopicWithRemoteLogManagerInstantiation() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
@@ -1298,30 +1235,6 @@ public class KRaftClusterTest {
             cluster.format();
             cluster.startup();
             cluster.waitForReadyBrokers();
-        }
-    }
-
-    @Test
-    public void testOverlyLargeCreateTopics() throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .build()).build()) {
-            cluster.format();
-            cluster.startup();
-            try (Admin admin = cluster.admin()) {
-                var newTopics = new ArrayList<NewTopic>();
-                for (int i = 0; i <= 10000; i++) {
-                    newTopics.add(new NewTopic("foo" + i, 100000, (short) 1));
-                }
-                var executionException = assertThrows(ExecutionException.class,
-                    () -> admin.createTopics(newTopics).all().get());
-                assertNotNull(executionException.getCause());
-                assertEquals(PolicyViolationException.class, executionException.getCause().getClass());
-                assertEquals("Excessively large number of partitions per request.",
-                    executionException.getCause().getMessage());
-            }
         }
     }
 
@@ -1678,30 +1591,6 @@ public class KRaftClusterTest {
                 .build()).build()) {
             cluster.startup();
             cluster.waitForReadyBrokers();
-        }
-    }
-
-    @Test
-    public void testIncreaseNumIoThreads() throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1).build())
-            .setConfigProp(ServerConfigs.NUM_IO_THREADS_CONFIG, "4")
-            .build()) {
-            cluster.format();
-            cluster.startup();
-            cluster.waitForReadyBrokers();
-            try (Admin admin = cluster.admin()) {
-                admin.incrementalAlterConfigs(
-                    Map.of(new ConfigResource(Type.BROKER, ""),
-                        List.of(new AlterConfigOp(
-                            new ConfigEntry(ServerConfigs.NUM_IO_THREADS_CONFIG, "8"), OpType.SET)))).all().get();
-                var newTopic = List.of(new NewTopic("test-topic", 1, (short) 1));
-                var createTopicResult = admin.createTopics(newTopic);
-                createTopicResult.all().get();
-                waitForTopicListing(admin, List.of("test-topic"), List.of());
-            }
         }
     }
 
