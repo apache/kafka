@@ -59,19 +59,21 @@ class ExpiringErrorCache {
                 var entry = new Entry(topicName, errorMessage, expirationTimeMs);
                 byTopic.put(topicName, entry);
                 expiryQueue.add(entry);
+                evictExpiredOrOverCapacity(currentTimeMs);
             });
-
-            // Clean up expired entries and enforce capacity
-            while (!expiryQueue.isEmpty() &&
-                    (expiryQueue.peek().expirationTimeMs <= currentTimeMs || byTopic.size() > maxSize)) {
-                var evicted = expiryQueue.poll();
-                var current = byTopic.get(evicted.topicName);
-                if (current != null && current == evicted) {
-                    byTopic.remove(evicted.topicName);
-                }
-            }
         } finally {
             lock.unlock();
+        }
+    }
+
+    private void evictExpiredOrOverCapacity(long currentTimeMs) {
+        while (!expiryQueue.isEmpty() &&
+                (expiryQueue.peek().expirationTimeMs <= currentTimeMs || byTopic.size() > maxSize)) {
+            var evicted = expiryQueue.poll();
+            var current = byTopic.get(evicted.topicName);
+            if (current != null && current == evicted) {
+                byTopic.remove(evicted.topicName);
+            }
         }
     }
 
