@@ -37,7 +37,7 @@ public class DefaultStreamPartitioner<K, V> implements StreamPartitioner<K, V> {
     @SuppressWarnings({"removal"})
     @Override
     public Optional<Set<Integer>> partitions(final String topic, final K key, final V value, final int numPartitions) {
-        return partitions(topic, key, value, new RecordHeaders(), numPartitions);
+        throw new UnsupportedOperationException("This method is deprecated and should not be called.");
     }
 
     @Override

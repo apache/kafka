@@ -1452,7 +1452,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         @SuppressWarnings("removal")
         @Override
         public Optional<Set<Integer>> partitions(final String topic, final KO key, final SubscriptionWrapper<K> value, final int numPartitions) {
-            return partitions(topic, key, value, new RecordHeaders(), numPartitions);
+            throw new UnsupportedOperationException("This method is deprecated and should not be called.");
         }
 
         @Override
@@ -1480,7 +1480,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         @SuppressWarnings("removal")
         @Override
         public Optional<Set<Integer>> partitions(final String topic, final K key, final SubscriptionResponseWrapper<VO> value, final int numPartitions) {
-            return partitions(topic, key, value, new RecordHeaders(), numPartitions);
+            throw new UnsupportedOperationException("This method is deprecated and should not be called.");
         }
 
         @Override
@@ -1497,7 +1497,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         @SuppressWarnings("removal")
         @Override
         public Optional<Set<Integer>> partitions(final String topic, final K key, final SubscriptionResponseWrapper<VO> value, final int numPartitions) {
-            return partitions(topic, key, value, new RecordHeaders(), numPartitions);
+            throw new UnsupportedOperationException("This method is deprecated and should not be called.");
         }
 
         @Override

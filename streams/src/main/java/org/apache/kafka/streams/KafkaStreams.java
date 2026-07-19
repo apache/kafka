@@ -1786,9 +1786,7 @@ public class KafkaStreams implements AutoCloseable {
      * Finds the metadata containing the active hosts and standby hosts where the key being queried would reside,
      * without requiring record headers to be provided.
      * <p>
-     * If your partitioner or serializer makes use of headers, use the Headers overload, otherwise the returned metadata may not match where the key actually resides.
-     * <p>
-     * See {@link #queryMetadataForKey(String, Object, Headers, Serializer)} for more details.
+     * If your partitioner or serializer makes use of headers, use the {@link #queryMetadataForKey(String, Object, Headers, Serializer) Headers} overload, otherwise the returned metadata may not match where the key actually resides.
      */
     public <K> KeyQueryMetadata queryMetadataForKey(final String storeName,
                                                     final K key,
@@ -1819,9 +1817,7 @@ public class KafkaStreams implements AutoCloseable {
      * Finds the metadata containing the active hosts and standby hosts where the key being queried would reside,
      * using the supplied partitioner and without requiring record headers to be provided.
      * <p>
-     * If your partitioner or serializer makes use of headers, use the Headers overload, otherwise the returned metadata may not match where the key actually resides.
-     * <p>
-     * See {@link #queryMetadataForKey(String, Object, Headers, StreamPartitioner)} for more details.
+     * If your partitioner or serializer makes use of headers, use the {@link #queryMetadataForKey(String, Object, Headers, StreamPartitioner) Headers} overload, otherwise the returned metadata may not match where the key actually resides.
      */
     public <K> KeyQueryMetadata queryMetadataForKey(final String storeName,
                                                     final K key,

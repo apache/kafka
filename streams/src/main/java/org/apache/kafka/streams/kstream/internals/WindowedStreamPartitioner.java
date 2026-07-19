@@ -37,7 +37,7 @@ public class WindowedStreamPartitioner<K, V> implements StreamPartitioner<Window
     @SuppressWarnings({"removal"})
     @Override
     public Optional<Set<Integer>> partitions(final String topic, final Windowed<K> windowedKey, final V value, final int numPartitions) {
-        return partitions(topic, windowedKey, value, new RecordHeaders(), numPartitions);
+        throw new UnsupportedOperationException("This method is deprecated and should not be called.");
     }
 
     /**
