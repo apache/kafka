@@ -467,6 +467,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             config,
             streamsMetrics,
             stateDirectory,
+            time,
             threadId,
             logContext);
 

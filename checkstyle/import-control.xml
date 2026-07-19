@@ -422,6 +422,7 @@
       <allow class="org.apache.kafka.coordinator.transaction.TransactionLogConfig" />
       <allow pkg="org.apache.kafka.coordinator.group" />
       <allow pkg="org.apache.kafka.network" />
+      <allow pkg="org.apache.kafka.server.streams" />
     </subpackage>
 
     <subpackage name="test">

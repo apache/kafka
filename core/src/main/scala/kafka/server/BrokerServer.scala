@@ -755,7 +755,7 @@ class BrokerServer(
       if (klass.getName.equals(classOf[DefaultStatePersister].getName)) {
         DefaultStatePersister.instance(
           NetworkUtils.buildNetworkClient("Persister", config, metrics, Time.SYSTEM, new LogContext(s"[Persister broker=${config.brokerId}]")),
-          new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager),
+          new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager, () => config.messageMaxBytes),
           Time.SYSTEM,
           shareGroupTimer
         )
@@ -779,7 +779,7 @@ class BrokerServer(
       if (klass.getName.equals(classOf[DefaultShareGroupDLQManager].getName)) {
         DefaultShareGroupDLQManager.instance(
           NetworkUtils.buildNetworkClient("ShareGroupDLQManager", config, metrics, Time.SYSTEM, new LogContext(s"[ShareGroupDLQManager broker=${config.brokerId}]")),
-          new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager),
+          new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager, () => config.messageMaxBytes),
           Time.SYSTEM,
           shareGroupTimer,
           shareGroupMetrics,
