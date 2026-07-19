@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.transaction;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.server.common.TransactionVersion;
