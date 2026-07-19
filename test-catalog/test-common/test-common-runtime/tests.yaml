@@ -13,6 +13,7 @@ org.apache.kafka.common.test.KafkaClusterThreadFactoryTest:
 - testGetThreadIds
 org.apache.kafka.common.test.TestKitNodeTest:
 - testListenerName
+- testMixedSslSecurityProtocolIsNotSupported
 - testSecurityProtocol
 org.apache.kafka.common.test.junit.ClusterTestBeforeEachTest:
 - testDefault
@@ -36,6 +37,7 @@ org.apache.kafka.common.test.junit.ClusterTestExtensionsTest:
 - testSaslPlaintextWithController
 - testSaslSslWithController
 - testShutdownAndSyncMetadata
+- testSsl
 - testSupportedNewGroupProtocols
 - testVerifyTopicDeletion
 org.apache.kafka.common.test.junit.ClusterTestExtensionsUnitTest:
