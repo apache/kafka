@@ -66,6 +66,31 @@ public class DeleteTopicTest {
     private static final String DEFAULT_TOPIC = "topic";
     private final Map<Integer, List<Integer>> expectedReplicaAssignment = Map.of(0, List.of(0, 1, 2));
 
+    @ClusterTest(controllers = 3)
+    public void testCreateClusterAndCreateListDeleteTopic(ClusterInstance cluster) throws Exception {
+        String testTopic = "test-topic";
+        try (Admin admin = cluster.admin()) {
+            // Create a test topic
+            List<NewTopic> newTopic = List.of(new NewTopic(testTopic, 1, (short) 3));
+            CreateTopicsResult createTopicResult = admin.createTopics(newTopic);
+            createTopicResult.all().get();
+            TestUtils.waitForCondition(
+                () -> admin.listTopics().names().get().contains(testTopic),
+                "Failed to find topic " + testTopic
+            );
+
+            // Delete topic
+            DeleteTopicsResult deleteResult = admin.deleteTopics(List.of(testTopic));
+            deleteResult.all().get();
+
+            // List again
+            TestUtils.waitForCondition(
+                () -> !admin.listTopics().names().get().contains(testTopic),
+                "Topic " + testTopic + " was not deleted"
+            );
+        }
+    }
+
     @ClusterTest
     public void testDeleteTopicWithAllAliveReplicas(ClusterInstance cluster) throws Exception {
         try (Admin admin = cluster.admin()) {
