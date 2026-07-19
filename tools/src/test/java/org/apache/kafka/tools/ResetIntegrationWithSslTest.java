@@ -24,8 +24,6 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 
-import org.junit.jupiter.api.Timeout;
-
 import java.util.HashMap;
 import java.util.Map;
 

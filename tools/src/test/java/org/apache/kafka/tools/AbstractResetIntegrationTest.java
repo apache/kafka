@@ -203,8 +203,8 @@ public abstract class AbstractResetIntegrationTest {
 
     protected void waitForEmptyConsumerGroup(final Admin adminClient, final String appId) throws InterruptedException {
         TestUtils.waitForCondition(
-            () -> isEmptyConsumerGroup(adminClient, appId), 60000,
-            "Consumer group " + appId + " was not empty within " + 60000 + " ms.");
+            () -> isEmptyConsumerGroup(adminClient, appId), DEFAULT_TIMEOUT_MS,
+            "Consumer group " + appId + " was not empty within " + DEFAULT_TIMEOUT_MS + " ms.");
     }
 
     protected boolean isEmptyConsumerGroup(final Admin adminClient, final String appId) {
