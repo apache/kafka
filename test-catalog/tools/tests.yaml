@@ -763,6 +763,11 @@ org.apache.kafka.tools.consumer.TransactionLogMessageFormatterTest:
 - testMessageFormatter
 org.apache.kafka.tools.consumer.group.ConsumerGroupCommandAuthorizationTest:
 - testDescribeGroupCliWithGroupDescribe
+org.apache.kafka.tools.consumer.group.ConsumerGroupCommandSaslAuthenticationTest:
+- testConsumerGroupServiceWithAuthenticationFailureWithClassicGroupProtocol
+- testConsumerGroupServiceWithAuthenticationFailureWithConsumerGroupProtocol
+- testConsumerGroupServiceWithAuthenticationSuccessWithClassicGroupProtocol
+- testConsumerGroupServiceWithAuthenticationSuccessWithConsumerGroupProtocol
 org.apache.kafka.tools.consumer.group.ConsumerGroupCommandTest:
 - testValidateRegexCommandWithInvalidRegex
 - testValidateRegexCommandWithValidRegex
@@ -868,9 +873,6 @@ org.apache.kafka.tools.consumer.group.ResetConsumerGroupOffsetTest:
 - testResetOffsetsWithPartitionNoneLeader
 - testResetOffsetsWithPartitionNotExist
 - testResetWithUnrecognizedNewConsumerOption
-org.apache.kafka.tools.consumer.group.SaslClientsWithInvalidCredentialsTest:
-- testConsumerGroupServiceWithAuthenticationFailure
-- testConsumerGroupServiceWithAuthenticationSuccess
 org.apache.kafka.tools.consumer.group.ShareGroupCommandTest:
 - testDeleteShareGroupOffsets
 - testDeleteShareGroupOffsetsArgsWithoutGroup
