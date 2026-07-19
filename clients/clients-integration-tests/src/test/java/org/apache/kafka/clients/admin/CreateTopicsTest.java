@@ -21,18 +21,48 @@ import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.raft.KRaftConfigs;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+@ClusterTestDefaults(types = {Type.KRAFT})
 public class CreateTopicsTest {
+
+    @ClusterTest(brokers = 3, controllers = 3)
+    public void testCreateClusterAndCreateAndManyTopics(ClusterInstance cluster) throws Exception {
+        try (Admin admin = cluster.admin()) {
+            // Create many topics
+            List<NewTopic> newTopics = List.of(
+                new NewTopic("test-topic-1", 2, (short) 3),
+                new NewTopic("test-topic-2", 2, (short) 3),
+                new NewTopic("test-topic-3", 2, (short) 3)
+            );
+            CreateTopicsResult createTopicResult = admin.createTopics(newTopics);
+            createTopicResult.all().get();
+
+            // List created topics
+            Set<String> expectedTopics = Set.of(
+                "test-topic-1",
+                "test-topic-2",
+                "test-topic-3"
+            );
+
+            TestUtils.waitForCondition(
+                () -> admin.listTopics().names().get().containsAll(expectedTopics),
+                "Failed to find topics " + expectedTopics
+            );
+        }
+    }
 
     @ClusterTest(types = {Type.KRAFT})
     public void testOverlyLargeCreateTopics(ClusterInstance cluster) {
