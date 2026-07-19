@@ -1018,11 +1018,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     // Create topics
     val topic1 = "describe-alter-configs-topic-1"
     val topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
-    val topicConfig1 = new Properties
     val maxMessageBytes = "500000"
     val retentionMs = "60000000"
-    topicConfig1.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, maxMessageBytes)
-    topicConfig1.setProperty(TopicConfig.RETENTION_MS_CONFIG, retentionMs)
+    val topicConfig1 = util.Map.of(
+      TopicConfig.MAX_MESSAGE_BYTES_CONFIG, maxMessageBytes,
+      TopicConfig.RETENTION_MS_CONFIG, retentionMs
+    )
     createTopic(topic1, numPartitions = 1, replicationFactor = 1, topicConfig1)
 
     val topic2 = "describe-alter-configs-topic-2"
@@ -1621,9 +1622,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testDeleteRecordsAfterCorruptRecords(groupProtocol: String): Unit = {
-    val config = new Properties()
-    config.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, "200")
-    createTopic(topic, numPartitions = 1, replicationFactor = 1, config)
+    val configs = util.Map.of(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, "200")
+    createTopic(topic, numPartitions = 1, replicationFactor = 1, configs)
 
     client = createAdminClient
 
@@ -3521,9 +3521,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     // Create topics
     val topic1 = "incremental-alter-configs-topic-1"
     val topic1Resource = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
-    val topic1CreateConfigs = new Properties
-    topic1CreateConfigs.setProperty(TopicConfig.RETENTION_MS_CONFIG, "60000000")
-    topic1CreateConfigs.setProperty(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
+    val topic1CreateConfigs = util.Map.of(
+      TopicConfig.RETENTION_MS_CONFIG, "60000000",
+      TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT
+    )
     createTopic(topic1, numPartitions = 1, replicationFactor = 1, topic1CreateConfigs)
 
     val topic2 = "incremental-alter-configs-topic-2"
@@ -3640,8 +3641,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val subtractValues = brokers.tail.map(broker => s"0:${broker.config.brokerId}").mkString(",")
     assertNotEquals("", subtractValues)
 
-    val topicCreateConfigs = new Properties
-    topicCreateConfigs.setProperty(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, appendValues)
+    val topicCreateConfigs = util.Map.of(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, appendValues)
     createTopic(topic, numPartitions = 1, replicationFactor = 1, topicCreateConfigs)
 
     // Append value that is already present
@@ -3898,8 +3898,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     def validateLogConfig(compressionType: String): Unit = {
       ensureConsistentKRaftMetadata()
-      val topicProps = brokers.head.metadataCache.topicConfig(topic)
-      val logConfig = LogConfig.fromProps(util.Map.of[String, AnyRef], topicProps)
+      val topicConfigs = brokers.head.metadataCache.topicConfig(topic)
+      val logConfig = LogConfig.fromProps(util.Map.of[String, AnyRef], topicConfigs)
 
       assertEquals(compressionType, logConfig.originals.get(TopicConfig.COMPRESSION_TYPE_CONFIG))
       assertNull(logConfig.originals.get(TopicConfig.RETENTION_BYTES_CONFIG))
@@ -4130,14 +4130,13 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
   @Test
   def testAppendConfigToEmptyDefaultValue(): Unit = {
-    testAppendConfig(new Properties(), "0:0", "0:0")
+    testAppendConfig(util.Map.of(), "0:0", "0:0")
   }
 
   @Test
   def testAppendConfigToExistentValue(): Unit = {
-    val props = new Properties()
-    props.setProperty(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "1:1")
-    testAppendConfig(props, "0:0", "1:1,0:0")
+    val configs = util.Map.of(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "1:1")
+    testAppendConfig(configs, "0:0", "1:1,0:0")
   }
 
   private def disableEligibleLeaderReplicas(admin: Admin): Unit = {
@@ -4147,9 +4146,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
   }
 
-  private def testAppendConfig(props: Properties, append: String, expected: String): Unit = {
+  private def testAppendConfig(configs: util.Map[String, String], append: String, expected: String): Unit = {
     client = createAdminClient
-    createTopic(topic, topicConfig = props)
+    createTopic(topic, topicConfig = configs)
     val topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
     val topicAlterConfigs = util.List.of(
       new AlterConfigOp(new ConfigEntry(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, append), AlterConfigOp.OpType.APPEND),
@@ -4479,6 +4478,54 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       val describedNonExistingGroupResponse = client.describeStreamsGroups(util.List.of(nonExistingGroup))
       assertFutureThrows(classOf[GroupIdNotFoundException], describedNonExistingGroupResponse.all())
 
+    } finally {
+      Utils.closeQuietly(streams, "streams")
+      Utils.closeQuietly(client, "adminClient")
+    }
+  }
+
+  @Test
+  def testDescribeStreamsGroupsWithTopologyDescription(): Unit = {
+    val streamsGroupId = "stream_group_id"
+    val testTopicName = "test_topic"
+    val testNumPartitions = 1
+
+    val config = createConfig
+    client = Admin.create(config)
+
+    prepareTopics(List(testTopicName), testNumPartitions)
+    prepareRecords(testTopicName)
+
+    val streams = createStreamsGroup(
+      inputTopics = Set(testTopicName),
+      changelogTopics = Set(testTopicName + "-changelog"),
+      streamsGroupId = streamsGroupId
+    )
+    streams.poll(JDuration.ofMillis(500L))
+
+    try {
+      TestUtils.waitUntilTrue(() => {
+        val firstGroup = client.listGroups().all().get().stream()
+          .filter(g => g.groupId() == streamsGroupId).findFirst().orElse(null)
+        firstGroup != null && firstGroup.groupState().orElse(null) == GroupState.STABLE
+      }, "Streams group did not transition to STABLE before timeout")
+
+      // Without IncludeTopologyDescription the status stays at its NOT_REQUESTED default
+      // and no topology description is attached.
+      val groupWithoutTopology = client.describeStreamsGroups(util.List.of(streamsGroupId)).all().get().get(streamsGroupId)
+      assertNotNull(groupWithoutTopology)
+      assertEquals(StreamsGroupTopologyDescriptionStatus.NOT_REQUESTED, groupWithoutTopology.topologyDescriptionStatus())
+      assertTrue(groupWithoutTopology.topologyDescription().isEmpty)
+
+      // With IncludeTopologyDescription the brokers of this cluster have no topology
+      // description plugin configured, so there is no description to serve: NOT_STORED.
+      val groupWithTopology = client.describeStreamsGroups(
+        util.List.of(streamsGroupId),
+        new DescribeStreamsGroupsOptions().includeTopologyDescription(true)
+      ).all().get().get(streamsGroupId)
+      assertNotNull(groupWithTopology)
+      assertEquals(StreamsGroupTopologyDescriptionStatus.NOT_STORED, groupWithTopology.topologyDescriptionStatus())
+      assertTrue(groupWithTopology.topologyDescription().isEmpty)
     } finally {
       Utils.closeQuietly(streams, "streams")
       Utils.closeQuietly(client, "adminClient")

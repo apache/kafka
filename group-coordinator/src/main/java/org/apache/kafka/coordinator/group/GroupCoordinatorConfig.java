@@ -919,6 +919,15 @@ public class GroupCoordinatorConfig {
     }
 
     /**
+     * Whether a topology-description plugin class is set on this broker. Checked from per-shard
+     * paths (the {@code cleanupGroupMetadata} gate) that cannot reach the broker-level manager
+     * holding the plugin reference. Does not instantiate the plugin; just inspects the config.
+     */
+    public boolean isStreamsGroupTopologyDescriptionPluginConfigured() {
+        return config.getClass(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG) != null;
+    }
+
+    /**
      * The number of threads or event loops running.
      */
     public int numThreads() {

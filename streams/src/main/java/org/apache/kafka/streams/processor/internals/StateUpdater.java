@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.streams.processor.StandbyUpdateListener;
@@ -23,6 +24,7 @@ import org.apache.kafka.streams.processor.TaskId;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -246,4 +248,10 @@ public interface StateUpdater {
      * Get the restore consumer instance id for telemetry, and complete the given future to return it.
      */
     KafkaFutureImpl<Uuid> restoreConsumerInstanceId(final Duration timeout);
+
+    /**
+     * Returns the latest per-task changelog end-offset-sum snapshot for tasks currently
+     * being restored. Safe to invoke from any thread.
+     */
+    Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSumSnapshot();
 }

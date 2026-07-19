@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.IntegerSerializer;
@@ -43,6 +44,7 @@ import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
@@ -1219,7 +1221,8 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
             assertThat(
                 messages,
                 hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
-                    " This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
+                    " This may be due to range arguments set in the wrong order, " +
+                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
                     " Note that the built-in numerical serdes do not follow this for negative numbers")
             );
         }
@@ -1254,6 +1257,176 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
         doThrow(new RuntimeException("Simulating an error on close")).doNothing().when(underlyingStore).close();
         assertThrows(RuntimeException.class, cachingStore::close);
         verifyAndTearDownCloseTests();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldReadCommittedBypassesCache(final boolean hasIndex) {
+        setUp(hasIndex);
+        cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
+
+        try (final WindowStoreIterator<byte[]> it =
+                 cachingStore.readOnly(IsolationLevel.READ_COMMITTED)
+                     .fetch(bytesKey("a"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP))) {
+            assertFalse(it.hasNext());
+        }
+
+        cachingStore.commit(Map.of());
+
+        try (final WindowStoreIterator<byte[]> it =
+                 cachingStore.readOnly(IsolationLevel.READ_COMMITTED)
+                     .fetch(bytesKey("a"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP))) {
+            assertTrue(it.hasNext());
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldReadUncommittedViewFetchPointInTime(final boolean hasIndex) {
+        setUp(hasIndex);
+        cachingStore.put(bytesKey("a"), bytesValue("store"), DEFAULT_TIMESTAMP);
+        cachingStore.commit(Map.of());
+        cachingStore.put(bytesKey("b"), bytesValue("cache"), DEFAULT_TIMESTAMP);
+
+        final ReadOnlyWindowStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        assertArrayEquals(bytesValue("store"), view.fetch(bytesKey("a"), DEFAULT_TIMESTAMP));
+        assertArrayEquals(bytesValue("cache"), view.fetch(bytesKey("b"), DEFAULT_TIMESTAMP));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldReadUncommittedViewFetchSingleKeyMergesCacheAndStore(final boolean hasIndex) {
+        setUp(hasIndex);
+        cachingStore.put(bytesKey("a"), bytesValue("1"), DEFAULT_TIMESTAMP);
+        cachingStore.commit(Map.of());
+        cachingStore.put(bytesKey("a"), bytesValue("2"), DEFAULT_TIMESTAMP + 20);
+
+        final ReadOnlyWindowStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        try (final WindowStoreIterator<byte[]> it =
+                 view.fetch(bytesKey("a"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP + 20))) {
+            verifyKeyValue(it.next(), DEFAULT_TIMESTAMP, "1");
+            verifyKeyValue(it.next(), DEFAULT_TIMESTAMP + 20, "2");
+            assertFalse(it.hasNext());
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldReadUncommittedViewBackwardFetchSingleKeyMergesCacheAndStore(final boolean hasIndex) {
+        setUp(hasIndex);
+        cachingStore.put(bytesKey("a"), bytesValue("1"), DEFAULT_TIMESTAMP);
+        cachingStore.commit(Map.of());
+        cachingStore.put(bytesKey("a"), bytesValue("2"), DEFAULT_TIMESTAMP + 20);
+
+        final ReadOnlyWindowStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        try (final WindowStoreIterator<byte[]> it =
+                 view.backwardFetch(bytesKey("a"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP + 20))) {
+            verifyKeyValue(it.next(), DEFAULT_TIMESTAMP + 20, "2");
+            verifyKeyValue(it.next(), DEFAULT_TIMESTAMP, "1");
+            assertFalse(it.hasNext());
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldReadUncommittedViewFetchRangeMergesCacheAndStore(final boolean hasIndex) {
+        setUp(hasIndex);
+        cachingStore.put(bytesKey("a"), bytesValue("1"), DEFAULT_TIMESTAMP);
+        cachingStore.commit(Map.of());
+        cachingStore.put(bytesKey("b"), bytesValue("2"), DEFAULT_TIMESTAMP);
+
+        final ReadOnlyWindowStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final List<KeyValue<Windowed<Bytes>, byte[]>> results = toListAndCloseIterator(
+            view.fetch(bytesKey("a"), bytesKey("b"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP)));
+        assertEquals(2, results.size());
+        assertEquals(bytesKey("a"), results.get(0).key.key());
+        assertEquals(bytesKey("b"), results.get(1).key.key());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldReadUncommittedViewBackwardFetchRangeMergesCacheAndStore(final boolean hasIndex) {
+        setUp(hasIndex);
+        cachingStore.put(bytesKey("a"), bytesValue("1"), DEFAULT_TIMESTAMP);
+        cachingStore.commit(Map.of());
+        cachingStore.put(bytesKey("b"), bytesValue("2"), DEFAULT_TIMESTAMP);
+
+        final ReadOnlyWindowStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final List<KeyValue<Windowed<Bytes>, byte[]>> results = toListAndCloseIterator(
+            view.backwardFetch(bytesKey("a"), bytesKey("b"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP)));
+        assertEquals(2, results.size());
+        assertEquals(bytesKey("b"), results.get(0).key.key());
+        assertEquals(bytesKey("a"), results.get(1).key.key());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldReadUncommittedViewFetchAllMergesCacheAndStore(final boolean hasIndex) {
+        setUp(hasIndex);
+        cachingStore.put(bytesKey("a"), bytesValue("1"), DEFAULT_TIMESTAMP);
+        cachingStore.commit(Map.of());
+        cachingStore.put(bytesKey("b"), bytesValue("2"), DEFAULT_TIMESTAMP);
+
+        final ReadOnlyWindowStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final List<KeyValue<Windowed<Bytes>, byte[]>> results = toListAndCloseIterator(
+            view.fetchAll(ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP)));
+        assertEquals(2, results.size());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldReadUncommittedViewAllMergesCacheAndStore(final boolean hasIndex) {
+        setUp(hasIndex);
+        cachingStore.put(bytesKey("a"), bytesValue("1"), DEFAULT_TIMESTAMP);
+        cachingStore.commit(Map.of());
+        cachingStore.put(bytesKey("b"), bytesValue("2"), DEFAULT_TIMESTAMP);
+
+        final ReadOnlyWindowStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final List<KeyValue<Windowed<Bytes>, byte[]>> results = toListAndCloseIterator(view.all());
+        assertEquals(2, results.size());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldReadUncommittedViewBackwardAllMergesCacheAndStore(final boolean hasIndex) {
+        setUp(hasIndex);
+        cachingStore.put(bytesKey("a"), bytesValue("1"), DEFAULT_TIMESTAMP);
+        cachingStore.commit(Map.of());
+        cachingStore.put(bytesKey("b"), bytesValue("2"), DEFAULT_TIMESTAMP);
+
+        final ReadOnlyWindowStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final List<KeyValue<Windowed<Bytes>, byte[]>> results = toListAndCloseIterator(view.backwardAll());
+        assertEquals(2, results.size());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldReadUncommittedViewBackwardFetchAllMergesCacheAndStore(final boolean hasIndex) {
+        setUp(hasIndex);
+        cachingStore.put(bytesKey("a"), bytesValue("1"), DEFAULT_TIMESTAMP);
+        cachingStore.commit(Map.of());
+        cachingStore.put(bytesKey("b"), bytesValue("2"), DEFAULT_TIMESTAMP);
+
+        final ReadOnlyWindowStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final List<KeyValue<Windowed<Bytes>, byte[]>> results = toListAndCloseIterator(
+            view.backwardFetchAll(ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP)));
+        assertEquals(2, results.size());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldThrowOnNullInstantInViewFetch(final boolean hasIndex) {
+        setUp(hasIndex);
+        final ReadOnlyWindowStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        // underlying.fetch validates via ApiUtils.validateMillisecondInstant before toEpochMilli() is reached
+        assertThrows(IllegalArgumentException.class, () -> view.fetch(bytesKey("a"), null, ofEpochMilli(0)));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldThrowNpeOnNullIsolationLevel(final boolean hasIndex) {
+        setUp(hasIndex);
+        assertThrows(NullPointerException.class, () -> cachingStore.readOnly(null));
     }
 
     @SuppressWarnings("unchecked")

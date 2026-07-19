@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigException;
 
 import java.util.Map;
@@ -24,6 +25,7 @@ import java.util.Set;
 /**
  * Interface for reconfigurable classes that support dynamic configuration.
  */
+@InterfaceAudience.Public
 public interface Reconfigurable extends Configurable {
 
     /**

@@ -16,13 +16,18 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.StreamsTestUtils;
+import org.apache.kafka.test.TestUtils;
 
 import org.hamcrest.core.IsNull;
 import org.junit.jupiter.api.Test;
@@ -36,6 +41,8 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.state.internals.RocksDBStore.OFFSETS_COLUMN_FAMILY_NAME;
@@ -45,6 +52,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -498,6 +506,56 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
                 "To downgrade, you can delete the local state in the state directory, and rebuild the store as regular key-value store from the changelog."));
         } finally {
             kvStore.close();
+        }
+    }
+
+    /**
+     * Regression test for the null {@code dataColumnFamily} bug under EOS.
+     *
+     * <p>When {@code TRANSACTIONAL_STATE_STORES_CONFIG} is enabled, {@link RocksDBStore#openDB}
+     * wraps the underlying accessor in a {@link RocksDBStore.TransactionalDBAccessor}. The
+     * accessor's {@code get()} consults the staged-write buffer only when the request targets
+     * the distinguished data CF ({@code columnFamily.equals(cfHandle)}). Before the fix,
+     * {@link RocksDBTimestampedStore} never set {@code dataColumnFamily}, so {@code cfHandle}
+     * was {@code null} and the check was always false — staged writes were invisible to
+     * {@code get()}, breaking read-your-writes.
+     */
+    @Test
+    public void shouldReadYourWritesViaGetWhenTransactionalTimestampedStoreOpenedUnderEOS() {
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        props.setProperty(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, "true");
+        final File stateDir = TestUtils.tempDirectory();
+        final InternalMockProcessorContext<?, ?> txnContext =
+                new InternalMockProcessorContext<>(stateDir, new StreamsConfig(props));
+
+        final RocksDBStore txnStore = new RocksDBTimestampedStore(DB_NAME, METRICS_SCOPE);
+        try {
+            txnStore.init(txnContext, txnStore);
+
+            final Bytes key = new Bytes("k1".getBytes());
+            final byte[] value = "v1".getBytes();
+
+            // Put a value — this is staged in the transaction buffer but not yet committed to RocksDB.
+            txnStore.put(key, value);
+
+            // get() must see the staged write (read-your-writes).
+            assertArrayEquals(value, txnStore.get(key),
+                    "transactional TimestampedStore should return staged value via get() before commit");
+
+            // Commit and verify the value persists.
+            final TopicPartition tp = new TopicPartition("changelog", 0);
+            txnStore.commit(Map.of(tp, 1L));
+
+            assertArrayEquals(value, txnStore.get(key),
+                    "transactional TimestampedStore should return value via get() after commit");
+
+            // Delete should also be read-your-writes.
+            txnStore.put(key, null);
+            assertNull(txnStore.get(key),
+                    "transactional TimestampedStore should return null for a staged delete via get() before commit");
+        } finally {
+            txnStore.close();
         }
     }
 

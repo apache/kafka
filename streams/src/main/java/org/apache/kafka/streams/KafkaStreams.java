@@ -26,7 +26,9 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
+import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -156,6 +158,7 @@ import static org.apache.kafka.streams.processor.internals.TopologyMetadata.UNNA
  * @see org.apache.kafka.streams.StreamsBuilder
  * @see org.apache.kafka.streams.Topology
  */
+@InterfaceAudience.Public
 public class KafkaStreams implements AutoCloseable {
 
     private static final String JMX_PREFIX = "kafka.streams";
@@ -169,7 +172,9 @@ public class KafkaStreams implements AutoCloseable {
     protected final String clientId;
     private final Metrics metrics;
     protected final StreamsConfig applicationConfigs;
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected field's generic signature exposes internal StreamThread for subclass access — pending KIP review to promote the type or refactor")
     protected final List<StreamThread> threads;
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected field exposes internal StreamsMetadataState for subclass access — pending KIP review to promote the type or refactor")
     protected final StreamsMetadataState streamsMetadataState;
     private final ScheduledExecutorService stateDirCleaner;
     private final ScheduledExecutorService rocksDBMetricsRecordingService;
@@ -180,12 +185,14 @@ public class KafkaStreams implements AutoCloseable {
     private final DelegatingStateRestoreListener delegatingStateRestoreListener;
     private final UUID processId;
     private final KafkaClientSupplier clientSupplier;
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected field exposes internal TopologyMetadata for subclass access — pending KIP review to promote the type or refactor")
     protected final TopologyMetadata topologyMetadata;
     private final QueryableStoreProvider queryableStoreProvider;
     private final DelegatingStandbyUpdateListener delegatingStandbyUpdateListener;
     private final LogContext logContext;
 
     GlobalStreamThread globalStreamThread;
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected field exposes internal StateDirectory for subclass access — pending KIP review to promote the type or refactor")
     protected StateDirectory stateDirectory = null;
     private KafkaStreams.StateListener stateListener;
     private BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler;
@@ -848,6 +855,7 @@ public class KafkaStreams implements AutoCloseable {
      * @param time           {@code Time} implementation; cannot be null
      * @throws StreamsException if any fatal error occurs
      */
+    @SuppressKafkaInternalApiUsage("KIP-1265: ctor leaks internal Time for test injection — pending KIP review to promote Time or refactor")
     public KafkaStreams(final Topology topology,
                         final Properties props,
                         final Time time) {
@@ -867,6 +875,7 @@ public class KafkaStreams implements AutoCloseable {
      * @param time           {@code Time} implementation; cannot be null
      * @throws StreamsException if any fatal error occurs
      */
+    @SuppressKafkaInternalApiUsage("KIP-1265: ctor leaks internal Time for test injection — pending KIP review to promote Time or refactor")
     public KafkaStreams(final Topology topology,
                         final Properties props,
                         final KafkaClientSupplier clientSupplier,
@@ -918,6 +927,7 @@ public class KafkaStreams implements AutoCloseable {
      * @param time           {@code Time} implementation; cannot be null
      * @throws StreamsException if any fatal error occurs
      */
+    @SuppressKafkaInternalApiUsage("KIP-1265: ctor leaks internal Time for test injection — pending KIP review to promote Time or refactor")
     public KafkaStreams(final Topology topology,
                         final StreamsConfig applicationConfigs,
                         final Time time) {
@@ -931,6 +941,7 @@ public class KafkaStreams implements AutoCloseable {
         this(new TopologyMetadata(topology.internalTopologyBuilder, applicationConfigs), applicationConfigs, clientSupplier, time);
     }
 
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected ctor takes internal TopologyMetadata as a subclass extension point — pending KIP review to promote the type or refactor")
     protected KafkaStreams(final TopologyMetadata topologyMetadata,
                            final StreamsConfig applicationConfigs,
                            final KafkaClientSupplier clientSupplier) throws StreamsException {
@@ -1012,6 +1023,7 @@ public class KafkaStreams implements AutoCloseable {
         totalCacheSize = totalCacheSize(applicationConfigs);
         final int numStreamThreads = topologyMetadata.numStreamThreads(applicationConfigs);
         final long cacheSizePerThread = cacheSizePerThread(numStreamThreads);
+        final long maxUncommittedBytesPerThread = maxUncommittedBytesPerThread(numStreamThreads);
 
         GlobalStreamThread.State globalThreadState = null;
         if (hasGlobalTopology) {
@@ -1022,6 +1034,7 @@ public class KafkaStreams implements AutoCloseable {
                 clientSupplier.getGlobalConsumer(applicationConfigs.getGlobalConsumerConfigs(clientId)),
                 stateDirectory,
                 cacheSizePerThread,
+                maxUncommittedBytesPerThread,
                 streamsMetrics,
                 time,
                 globalThreadId,
@@ -1043,7 +1056,7 @@ public class KafkaStreams implements AutoCloseable {
             globalStateStoreProvider,
             applicationConfigs::defaultInteractiveQueryIsolationLevel);
         for (int i = 1; i <= numStreamThreads; i++) {
-            createAndAddStreamThread(cacheSizePerThread, i);
+            createAndAddStreamThread(cacheSizePerThread, maxUncommittedBytesPerThread, i);
         }
 
         stateDirCleaner = setupStateDirCleaner();
@@ -1066,7 +1079,9 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
-    private StreamThread createAndAddStreamThread(final long cacheSizePerThread, final int threadIdx) {
+    private StreamThread createAndAddStreamThread(final long cacheSizePerThread,
+                                                  final long maxUncommittedBytesPerThread,
+                                                  final int threadIdx) {
         final StreamThread streamThread = StreamThread.create(
             topologyMetadata,
             applicationConfigs,
@@ -1078,6 +1093,7 @@ public class KafkaStreams implements AutoCloseable {
             time,
             streamsMetadataState,
             cacheSizePerThread,
+            maxUncommittedBytesPerThread,
             stateDirectory,
             delegatingStateRestoreListener,
             delegatingStandbyUpdateListener,
@@ -1124,12 +1140,14 @@ public class KafkaStreams implements AutoCloseable {
                 final int threadIdx = nextThreadIndex();
                 final int numLiveThreads = numLiveStreamThreads();
                 final long cacheSizePerThread = cacheSizePerThread(numLiveThreads + 1);
+                final long maxUncommittedBytesPerThread = maxUncommittedBytesPerThread(numLiveThreads + 1);
                 log.info("Adding StreamThread-{}, there will now be {} live threads and the new cache size per thread is {}",
                          threadIdx, numLiveThreads + 1, cacheSizePerThread);
                 resizeThreadCache(cacheSizePerThread);
+                resizeMaxUncommittedBytes(maxUncommittedBytesPerThread);
                 // Creating thread should hold the lock in order to avoid duplicate thread index.
                 // If the duplicate index happen, the metadata of thread may be duplicate too.
-                streamThread = createAndAddStreamThread(cacheSizePerThread, threadIdx);
+                streamThread = createAndAddStreamThread(cacheSizePerThread, maxUncommittedBytesPerThread, threadIdx);
             }
 
             synchronized (stateLock) {
@@ -1143,6 +1161,7 @@ public class KafkaStreams implements AutoCloseable {
                     final long cacheSizePerThread = cacheSizePerThread(numLiveStreamThreads());
                     log.info("Resizing thread cache due to terminating added thread, new cache size per thread is {}", cacheSizePerThread);
                     resizeThreadCache(cacheSizePerThread);
+                    resizeMaxUncommittedBytes(maxUncommittedBytesPerThread(numLiveStreamThreads()));
                     return Optional.empty();
                 }
             }
@@ -1223,6 +1242,7 @@ public class KafkaStreams implements AutoCloseable {
                         final long cacheSizePerThread = cacheSizePerThread(numLiveStreamThreads());
                         log.info("Resizing thread cache due to thread removal, new cache size per thread is {}", cacheSizePerThread);
                         resizeThreadCache(cacheSizePerThread);
+                        resizeMaxUncommittedBytes(maxUncommittedBytesPerThread(numLiveStreamThreads()));
                         final long remainingTimeMs = timeoutMs - (time.milliseconds() - startMs);
                         if (remainingTimeMs <= 0) {
                             throw new TimeoutException("Thread " + streamThread.getName() + " did not stop in the allotted time");
@@ -1324,10 +1344,26 @@ public class KafkaStreams implements AutoCloseable {
         return totalCacheSize / (numStreamThreads + (topologyMetadata.hasGlobalTopology() ? 1 : 0));
     }
 
+    private long maxUncommittedBytesPerThread(final int numStreamThreads) {
+        final long totalMax = applicationConfigs.getLong(StreamsConfig.STATESTORE_UNCOMMITTED_MAX_BYTES_CONFIG);
+        if (totalMax <= 0) {
+            return -1;
+        }
+        final int divisor = Math.max(numStreamThreads, 0) + (topologyMetadata.hasGlobalTopology() ? 1 : 0);
+        return divisor == 0 ? totalMax : totalMax / divisor;
+    }
+
     private void resizeThreadCache(final long cacheSizePerThread) {
         processStreamThread(thread -> thread.resizeCache(cacheSizePerThread));
         if (globalStreamThread != null) {
             globalStreamThread.resize(cacheSizePerThread);
+        }
+    }
+
+    private void resizeMaxUncommittedBytes(final long maxUncommittedBytesPerThread) {
+        processStreamThread(thread -> thread.resizeMaxUncommittedBytes(maxUncommittedBytesPerThread));
+        if (globalStreamThread != null) {
+            globalStreamThread.resizeMaxUncommittedBytes(maxUncommittedBytesPerThread);
         }
     }
 
@@ -1690,6 +1726,15 @@ public class KafkaStreams implements AutoCloseable {
      * instance is {@link #close() closed}.
      * <p>
      * Calling this method triggers a restore of local {@link StateStore}s on the next {@link #start() application start}.
+     * <p>
+     * As a final step, this method attempts to delete the application's state directory.
+     * If only expected metadata files remain, such as {@code kafka-streams-process-metadata}
+     * and/or {@code .lock}, the directory itself may be retained. This is not considered
+     * a cleanup failure.
+     * 
+     * <p>
+     * If a full local reset is required, including removal of persisted process metadata,
+     * manually delete the application's state directory after this instance has been closed.
      *
      * @throws IllegalStateException if this {@code KafkaStreams} instance has been started and hasn't fully shut down
      * @throws StreamsException if cleanup failed
@@ -1852,6 +1897,7 @@ public class KafkaStreams implements AutoCloseable {
      * threads lock when looping threads.
      * @param consumer handler
      */
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected method's signature exposes internal StreamThread for subclass access — pending KIP review to promote the type or refactor")
     protected int processStreamThread(final Consumer<StreamThread> consumer) {
         final List<StreamThread> copy = new ArrayList<>(threads);
         for (final StreamThread thread : copy) consumer.accept(thread);
@@ -2024,6 +2070,7 @@ public class KafkaStreams implements AutoCloseable {
         return allLocalStorePartitionLags(allTasks);
     }
 
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected method's signature exposes internal Task for subclass access — pending KIP review to promote the type or refactor")
     protected Map<String, Map<Integer, LagInfo>> allLocalStorePartitionLags(final List<Task> tasksToCollectLagFor) {
         final Map<String, Map<Integer, LagInfo>> localStorePartitionLags = new TreeMap<>();
         final Collection<TopicPartition> allPartitions = new LinkedList<>();

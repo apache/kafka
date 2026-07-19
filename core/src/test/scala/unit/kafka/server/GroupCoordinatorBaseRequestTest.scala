@@ -26,12 +26,12 @@ import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment
 import org.apache.kafka.common.message.WriteTxnMarkersRequestData.{WritableTxnMarker, WritableTxnMarkerTopic}
-import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AddOffsetsToTxnResponseData, ConsumerGroupDescribeRequestData, ConsumerGroupDescribeResponseData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsRequestData, DeleteGroupsResponseData, DescribeGroupsRequestData, DescribeGroupsResponseData, EndTxnRequestData, HeartbeatRequestData, HeartbeatResponseData, InitProducerIdRequestData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, ShareGroupDescribeRequestData, ShareGroupDescribeResponseData, ShareGroupHeartbeatRequestData, ShareGroupHeartbeatResponseData, StreamsGroupDescribeRequestData, StreamsGroupDescribeResponseData, StreamsGroupHeartbeatRequestData, StreamsGroupHeartbeatResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData, WriteTxnMarkersRequestData}
+import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AddOffsetsToTxnResponseData, ConsumerGroupDescribeRequestData, ConsumerGroupDescribeResponseData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsRequestData, DeleteGroupsResponseData, DescribeGroupsRequestData, DescribeGroupsResponseData, EndTxnRequestData, HeartbeatRequestData, HeartbeatResponseData, InitProducerIdRequestData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, ShareGroupDescribeRequestData, ShareGroupDescribeResponseData, ShareGroupHeartbeatRequestData, ShareGroupHeartbeatResponseData, StreamsGroupDescribeRequestData, StreamsGroupDescribeResponseData, StreamsGroupHeartbeatRequestData, StreamsGroupHeartbeatResponseData, StreamsGroupTopologyDescriptionUpdateRequestData, StreamsGroupTopologyDescriptionUpdateResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData, WriteTxnMarkersRequestData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, AddOffsetsToTxnRequest, AddOffsetsToTxnResponse, ConsumerGroupDescribeRequest, ConsumerGroupDescribeResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse, DeleteGroupsRequest, DeleteGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, EndTxnRequest, EndTxnResponse, HeartbeatRequest, HeartbeatResponse, InitProducerIdRequest, InitProducerIdResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsRequest, ListGroupsResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetDeleteRequest, OffsetDeleteResponse, OffsetFetchRequest, OffsetFetchResponse, ShareGroupDescribeRequest, ShareGroupDescribeResponse, ShareGroupHeartbeatRequest, ShareGroupHeartbeatResponse, StreamsGroupDescribeRequest, StreamsGroupDescribeResponse, StreamsGroupHeartbeatRequest, StreamsGroupHeartbeatResponse, SyncGroupRequest, SyncGroupResponse, TxnOffsetCommitRequest, TxnOffsetCommitResponse, WriteTxnMarkersRequest, WriteTxnMarkersResponse}
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, AddOffsetsToTxnRequest, AddOffsetsToTxnResponse, ConsumerGroupDescribeRequest, ConsumerGroupDescribeResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse, DeleteGroupsRequest, DeleteGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, EndTxnRequest, EndTxnResponse, HeartbeatRequest, HeartbeatResponse, InitProducerIdRequest, InitProducerIdResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsRequest, ListGroupsResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetDeleteRequest, OffsetDeleteResponse, OffsetFetchRequest, OffsetFetchResponse, ShareGroupDescribeRequest, ShareGroupDescribeResponse, ShareGroupHeartbeatRequest, ShareGroupHeartbeatResponse, StreamsGroupDescribeRequest, StreamsGroupDescribeResponse, StreamsGroupHeartbeatRequest, StreamsGroupHeartbeatResponse, StreamsGroupTopologyDescriptionUpdateRequest, StreamsGroupTopologyDescriptionUpdateResponse, SyncGroupRequest, SyncGroupResponse, TxnOffsetCommitRequest, TxnOffsetCommitResponse, WriteTxnMarkersRequest, WriteTxnMarkersResponse}
 import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.common.test.ClusterInstance
-import org.apache.kafka.common.utils.ProducerIdAndEpoch
+import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.IntegrationTestUtils
@@ -39,7 +39,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 
 import java.net.Socket
 import java.util
-import java.util.{Comparator, Properties}
+import java.util.Comparator
 import java.util.stream.Collectors
 import scala.collection.Seq
 import scala.collection.mutable.ListBuffer
@@ -78,7 +78,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
         replicationFactor = brokers().head.config.getShort(TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG).toInt,
         brokers = brokers(),
         controllers = controllerServers(),
-        topicConfig = new Properties()
+        topicConfig = util.Map.of()
       )
     } finally {
       admin.close()
@@ -127,7 +127,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     topic: String,
     numPartitions: Int = 1,
     replicationFactor: Int = 1,
-    topicConfig: Properties = new Properties
+    topicConfig: util.Map[String, String] = util.Map.of()
   ): Map[TopicIdPartition, Int] = {
     val admin = cluster.admin()
     try {
@@ -777,16 +777,38 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   protected def streamsGroupDescribe(
     groupIds: List[String],
     includeAuthorizedOperations: Boolean = false,
+    includeTopologyDescription: Boolean = false,
     version: Short = ApiKeys.STREAMS_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled)
   ): List[StreamsGroupDescribeResponseData.DescribedGroup] = {
     val streamsGroupDescribeRequest = new StreamsGroupDescribeRequest.Builder(
       new StreamsGroupDescribeRequestData()
         .setGroupIds(groupIds.asJava)
         .setIncludeAuthorizedOperations(includeAuthorizedOperations)
+        .setIncludeTopologyDescription(includeTopologyDescription)
     ).build(version)
 
     val streamsGroupDescribeResponse = connectAndReceive[StreamsGroupDescribeResponse](streamsGroupDescribeRequest)
     streamsGroupDescribeResponse.data.groups.asScala.toList
+  }
+
+  protected def streamsGroupTopologyDescriptionUpdate(
+    groupId: String,
+    memberId: String,
+    topologyEpoch: Int,
+    topologyDescription: StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription,
+    version: Short = ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE.latestVersion(isUnstableApiEnabled)
+  ): StreamsGroupTopologyDescriptionUpdateResponseData = {
+    val streamsGroupTopologyDescriptionUpdateRequest = new StreamsGroupTopologyDescriptionUpdateRequest.Builder(
+      new StreamsGroupTopologyDescriptionUpdateRequestData()
+        .setGroupId(groupId)
+        .setMemberId(memberId)
+        .setTopologyEpoch(topologyEpoch)
+        .setTopologyDescription(topologyDescription)
+    ).build(version)
+
+    val streamsGroupTopologyDescriptionUpdateResponse =
+      connectAndReceive[StreamsGroupTopologyDescriptionUpdateResponse](streamsGroupTopologyDescriptionUpdateRequest)
+    streamsGroupTopologyDescriptionUpdateResponse.data
   }
 
   protected def heartbeat(

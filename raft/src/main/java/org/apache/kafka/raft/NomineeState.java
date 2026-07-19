@@ -18,7 +18,9 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.raft.internals.EpochElection;
 
-interface NomineeState extends EpochState {
+sealed interface NomineeState extends EpochState
+    permits ProspectiveState, CandidateState {
+
     EpochElection epochElection();
 
     /**

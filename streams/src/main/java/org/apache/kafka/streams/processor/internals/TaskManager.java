@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -105,6 +106,11 @@ public class TaskManager {
     private final Set<TaskId> lockedTaskDirectories = new HashSet<>();
 
     private final Map<TaskId, BackoffRecord> taskIdToBackoffRecord = new HashMap<>();
+
+    // Published by the stream thread (via maybeUpdateTaskOffsetSumSnapshot) and read lock-free by the
+    // streams-protocol heartbeat thread. Covers standby, warmup, restoring-active and dormant tasks; running-active
+    // tasks are omitted (their assignment is not offset-driven, and they are caught up by definition).
+    private final AtomicReference<Map<StreamsRebalanceData.TaskId, Long>> taskOffsetSumSnapshot = new AtomicReference<>(Map.of());
 
     private final ActiveTaskCreator activeTaskCreator;
     private final StandbyTaskCreator standbyTaskCreator;
@@ -1250,6 +1256,52 @@ public class TaskManager {
     }
 
     /**
+     * Returns the per-task changelog offset-sum snapshot for the streams-protocol rebalance. Safe to invoke from any
+     * thread; the snapshot is refreshed by the stream thread via {@link #maybeUpdateTaskOffsetSumSnapshot()}.
+     */
+    public Map<StreamsRebalanceData.TaskId, Long> taskOffsetSumSnapshot() {
+        return taskOffsetSumSnapshot.get();
+    }
+
+    /**
+     * Recomputes the offset-sum snapshot reported to the streams-group coordinator from the offset sums maintained in
+     * the {@link StateDirectory}, which already cover all stateful tasks with state on disk (standby, warmup,
+     * restoring-active and dormant) using a conservative (per-partition lower-bound) sum. Running-active tasks are
+     * excluded: their assignment is not offset-driven and they are caught up by definition.
+     */
+    public void maybeUpdateTaskOffsetSumSnapshot() {
+        final Set<TaskId> runningActiveTasks = new HashSet<>();
+        for (final Task task : allTasks().values()) {
+            if (task.isActive() && task.state() == State.RUNNING) {
+                runningActiveTasks.add(task.id());
+            }
+        }
+
+        final Map<TaskId, Long> offsetSums = stateDirectory.taskOffsetSums();
+        final Map<StreamsRebalanceData.TaskId, Long> snapshot = new HashMap<>(offsetSums.size());
+        for (final Map.Entry<TaskId, Long> entry : offsetSums.entrySet()) {
+            final TaskId taskId = entry.getKey();
+            if (runningActiveTasks.contains(taskId)) {
+                continue;
+            }
+            snapshot.put(
+                new StreamsRebalanceData.TaskId(String.valueOf(taskId.subtopology()), taskId.partition()),
+                entry.getValue()
+            );
+        }
+
+        taskOffsetSumSnapshot.set(Collections.unmodifiableMap(snapshot));
+    }
+
+    /**
+     * Returns the per-task changelog end-offset-sum snapshot published by the state updater.
+     * Safe to invoke from any thread.
+     */
+    public Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSumSnapshot() {
+        return stateUpdater.taskEndOffsetSumSnapshot();
+    }
+
+    /**
      * Compute the offset total summed across all stores in a task. Includes offset sum for any tasks we own the
      * lock for, which includes assigned and unassigned tasks we locked in {@link #tryToLockAllNonEmptyTaskDirectories()}.
      * Does not include stateless or non-logged tasks.
@@ -1688,6 +1740,14 @@ public class TaskManager {
         // not bothering with an unmodifiable map, since the tasks themselves are mutable, but
         // if any outside code modifies the map or the tasks, it would be a severe transgression.
         return tasks.allInitializedTasksPerId();
+    }
+
+    long totalUncommittedBytes() {
+        long total = 0;
+        for (final Task task : allRunningTasks().values()) {
+            total += task.approximateNumUncommittedBytes();
+        }
+        return total;
     }
 
     Set<Task> readOnlyAllTasks() {
