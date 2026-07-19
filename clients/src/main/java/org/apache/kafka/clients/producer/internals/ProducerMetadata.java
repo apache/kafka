@@ -29,19 +29,20 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ProducerMetadata extends Metadata {
     // If a topic hasn't been accessed for this many milliseconds, it is removed from the cache.
     private final long metadataIdleMs;
 
     /* Topics with expiry time */
-    private final Map<String, Long> topics = new HashMap<>();
+    private final Map<String, Long> topics = new ConcurrentHashMap<>();
     private final Set<String> newTopics = new HashSet<>();
     private final Logger log;
     private final Time time;
@@ -70,31 +71,59 @@ public class ProducerMetadata extends Metadata {
         return new MetadataRequest.Builder(new ArrayList<>(newTopics), true);
     }
 
-    public synchronized void add(String topic, long nowMs) {
+    /**
+     * Add a topic to the working set, refreshing its expiry. Already-known topics are updated
+     * lock-free via {@link ConcurrentHashMap#replace}; only topics that are new (or were concurrently
+     * evicted) fall back to a synchronized block so the map insert and {@code newTopics} bookkeeping
+     * happen atomically with {@link #retainTopic}. Called on every {@code send()}.
+     */
+    public void add(String topic, long nowMs) {
         Objects.requireNonNull(topic, "topic cannot be null");
-        if (topics.put(topic, nowMs + metadataIdleMs) == null) {
-            newTopics.add(topic);
-            requestUpdateForNewTopics();
+        // Fast path: topic already known - update expiry without acquiring the instance lock.
+        if (topics.replace(topic, nowMs + metadataIdleMs) != null) {
+            return;
+        }
+        // Slow path: topic is new (or was concurrently evicted). Enter the lock so the map
+        // insert and newTopics bookkeeping happen atomically with retainTopic().
+        synchronized (this) {
+            if (topics.put(topic, nowMs + metadataIdleMs) == null) {
+                newTopics.add(topic);
+                requestUpdateForNewTopics();
+            }
         }
     }
 
     /**
-     * Atomically add a batch of topics to the working set, refreshing the
-     * expiry for those already present. If any of the topics was newly added,
-     * a partial metadata refresh is requested and the current updateVersion is
-     * returned so the caller can pass it to {@link #awaitUpdate(int, long)} to
-     * wait for the next response. Returns an empty {@code OptionalInt} when no
-     * topic was newly added (no refresh requested, nothing to wait for).
+     * Add a batch of topics to the working set, refreshing the expiry for those already present.
+     * Already-known topics are updated lock-free via {@link ConcurrentHashMap#replace}; only topics
+     * that are new (or were concurrently evicted) fall back to a synchronized block so the map insert
+     * and {@code newTopics} bookkeeping happen atomically with {@link #retainTopic}.
+     * If any topic was newly added, a partial metadata refresh is requested and the current
+     * updateVersion is returned so the caller can pass it to {@link #awaitUpdate(int, long)} to
+     * wait for the next response. Returns an empty {@code OptionalInt} when no topic was newly added.
      */
-    public synchronized OptionalInt add(Collection<String> topics, long nowMs) {
-        boolean anyNew = false;
+    public OptionalInt add(Collection<String> topics, long nowMs) {
+        // Fast path: refresh expiry for all already-known topics without acquiring the lock.
+        List<String> newOrEvicted = null;
         for (String topic : topics) {
-            if (this.topics.put(topic, nowMs + metadataIdleMs) == null) {
-                newTopics.add(topic);
-                anyNew = true;
+            if (this.topics.replace(topic, nowMs + metadataIdleMs) == null) {
+                if (newOrEvicted == null) newOrEvicted = new ArrayList<>();
+                newOrEvicted.add(topic);
             }
         }
-        return anyNew ? OptionalInt.of(requestUpdateForNewTopics()) : OptionalInt.empty();
+        if (newOrEvicted == null) return OptionalInt.empty();
+
+        // Slow path: enter the lock once for the whole batch of truly-new topics.
+        synchronized (this) {
+            boolean anyNew = false;
+            for (String topic : newOrEvicted) {
+                if (this.topics.put(topic, nowMs + metadataIdleMs) == null) {
+                    newTopics.add(topic);
+                    anyNew = true;
+                }
+            }
+            return anyNew ? OptionalInt.of(requestUpdateForNewTopics()) : OptionalInt.empty();
+        }
     }
 
     public synchronized int requestUpdateForTopic(String topic) {
@@ -119,6 +148,11 @@ public class ProducerMetadata extends Metadata {
         return topics.containsKey(topic);
     }
 
+    /**
+     * Returns whether the given topic should be retained in the metadata cache. Idle topics
+     * (whose expiry has passed) are evicted via a conditional {@link ConcurrentHashMap#remove(Object, Object)}
+     * so that a concurrent {@link #add} that refreshed the expiry just before this call is not undone.
+     */
     @Override
     public synchronized boolean retainTopic(String topic, boolean isInternal, long nowMs) {
         Long expireMs = topics.get(topic);
@@ -128,7 +162,9 @@ public class ProducerMetadata extends Metadata {
             return true;
         } else if (expireMs <= nowMs) {
             log.debug("Removing unused topic {} from the metadata list, expiryMs {} now {}", topic, expireMs, nowMs);
-            topics.remove(topic);
+            // Use conditional remove so a concurrent add() that refreshed the expiry after
+            // our get() above is not accidentally undone.
+            topics.remove(topic, expireMs);
             return false;
         } else {
             return true;

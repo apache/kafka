@@ -29,10 +29,15 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.OptionalInt;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -302,6 +307,174 @@ public class ProducerMetadataTest {
         now += 1000;
         metadata.updateWithCurrentRequestVersion(responseWithTopics(Set.of(topic1, topic2)), false, now);
         assertFalse(metadata.updateRequested());
+    }
+
+    /**
+     * Verifies the fast path in {@code add(String, long)}: re-adding an already-known topic
+     * refreshes its expiry but does NOT add it to {@code newTopics} or trigger an update request.
+     */
+    @Test
+    public void testAddKnownTopicFastPathDoesNotAddToNewTopics() {
+        long now = 0;
+        String topic = "known-topic";
+
+        // First add: topic is new, update should be requested.
+        metadata.add(topic, now);
+        assertTrue(metadata.newTopics().contains(topic));
+        assertTrue(metadata.updateRequested());
+
+        // Simulate metadata response so the topic is no longer "new".
+        metadata.updateWithCurrentRequestVersion(responseWithTopics(Collections.singleton(topic)), true, now);
+        assertFalse(metadata.newTopics().contains(topic));
+        assertFalse(metadata.updateRequested());
+
+        // Second add: topic is already known — fast path via replace(), must not touch newTopics or request an update.
+        now += 1000;
+        metadata.add(topic, now);
+        assertFalse(metadata.newTopics().contains(topic), "Known topic must not be re-added to newTopics");
+        assertFalse(metadata.updateRequested(), "Re-adding a known topic must not trigger an update request");
+    }
+
+    /**
+     * Verifies that {@code add(Collection, long)} returns {@code OptionalInt.empty()} when all
+     * supplied topics are already known (fast path only, no lock contention).
+     */
+    @Test
+    public void testBatchAddAllKnownTopicsReturnsEmptyOptional() {
+        long now = 0;
+        List<String> topics = List.of("topic-a", "topic-b", "topic-c");
+
+        // Seed the topics as known.
+        for (String t : topics) metadata.add(t, now);
+        metadata.updateWithCurrentRequestVersion(responseWithTopics(Set.copyOf(topics)), true, now);
+        assertFalse(metadata.updateRequested());
+
+        // Batch-add with all known topics — no new topic, so OptionalInt must be empty.
+        now += 1000;
+        OptionalInt result = metadata.add(topics, now);
+        assertFalse(result.isPresent(), "Batch add of all-known topics must return OptionalInt.empty()");
+        assertFalse(metadata.updateRequested());
+    }
+
+    /**
+     * Verifies that {@code add(Collection, long)} returns a present {@code OptionalInt} and
+     * triggers an update request when at least one topic in the batch is new.
+     */
+    @Test
+    public void testBatchAddWithNewTopicReturnsPresentOptional() {
+        long now = 0;
+        String knownTopic = "known";
+        String newTopic = "new";
+
+        metadata.add(knownTopic, now);
+        metadata.updateWithCurrentRequestVersion(responseWithTopics(Collections.singleton(knownTopic)), true, now);
+        assertFalse(metadata.updateRequested());
+
+        now += 1000;
+        OptionalInt result = metadata.add(List.of(knownTopic, newTopic), now);
+        assertTrue(result.isPresent(), "Batch add with a new topic must return a present OptionalInt");
+        assertTrue(metadata.newTopics().contains(newTopic));
+        assertTrue(metadata.updateRequested());
+    }
+
+    /**
+     * Verifies that multiple threads racing to add the same brand-new topic result in the topic
+     * being recorded in {@code newTopics} exactly once. The synchronized slow path must ensure
+     * idempotent insertion even under high concurrency.
+     */
+    @Test
+    public void testConcurrentAddOfSameNewTopicIsIdempotent() throws InterruptedException {
+        int threadCount = 20;
+        String topic = "concurrent-topic";
+        CountDownLatch ready = new CountDownLatch(threadCount);
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicBoolean error = new AtomicBoolean(false);
+        List<Thread> threads = new ArrayList<>();
+
+        for (int i = 0; i < threadCount; i++) {
+            Thread t = new Thread(() -> {
+                ready.countDown();
+                try {
+                    start.await();
+                    metadata.add(topic, 0);
+                } catch (Exception e) {
+                    error.set(true);
+                }
+            });
+            t.start();
+            threads.add(t);
+        }
+
+        ready.await();
+        start.countDown();
+        for (Thread t : threads) t.join();
+
+        assertFalse(error.get(), "No thread should throw during concurrent add");
+        assertTrue(metadata.topics().contains(topic));
+        assertEquals(1, metadata.newTopics().size(), "Topic must appear in newTopics exactly once");
+        assertTrue(metadata.newTopics().contains(topic));
+    }
+
+    /**
+     * Verifies that a concurrent {@code add()} refreshing a topic's expiry is not undone by a
+     * concurrent {@code retainTopic()} that decided to evict based on the old (stale) expiry.
+     * The conditional {@code remove(topic, expireMs)} in {@code retainTopic()} must lose the CAS
+     * when {@code add()} has already replaced the value, leaving the topic in the map.
+     */
+    @Test
+    public void testRetainTopicConditionalRemovePreservesRefreshedTopic() throws InterruptedException {
+        int iterations = 200;
+        for (int i = 0; i < iterations; i++) {
+            ProducerMetadata m = new ProducerMetadata(refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs,
+                    METADATA_IDLE_MS, new LogContext(), new ClusterResourceListeners(), Time.SYSTEM);
+            String topic = "topic";
+            m.add(topic, 0);
+            m.updateWithCurrentRequestVersion(responseWithTopics(Collections.singleton(topic)), false, 0);
+
+            // At nowMs = METADATA_IDLE_MS the topic is exactly at its expiry boundary.
+            long nowMs = METADATA_IDLE_MS;
+
+            CountDownLatch start = new CountDownLatch(1);
+            CountDownLatch done = new CountDownLatch(2);
+            AtomicBoolean threadError = new AtomicBoolean(false);
+
+            // Thread 1: refresh the topic expiry (fast path — no lock).
+            Thread adder = new Thread(() -> {
+                try {
+                    start.await();
+                    m.add(topic, nowMs);  // replaces expiry to nowMs + METADATA_IDLE_MS
+                } catch (Exception e) {
+                    threadError.set(true);
+                } finally {
+                    done.countDown();
+                }
+            });
+
+            // Thread 2: attempt to evict the topic at the same time.
+            Thread retainer = new Thread(() -> {
+                try {
+                    start.await();
+                    m.retainTopic(topic, false, nowMs);
+                } catch (Exception e) {
+                    threadError.set(true);
+                } finally {
+                    done.countDown();
+                }
+            });
+
+            adder.start();
+            retainer.start();
+            start.countDown();
+            done.await();
+
+            assertFalse(threadError.get(), "No thread should throw");
+            // After add() refreshes the expiry, the topic must still be present regardless of
+            // which thread won the race: either retainTopic saw the new expiry and kept it, or
+            // its conditional remove(topic, oldExpiry) lost the CAS because add() had already
+            // replaced the value.
+            assertTrue(m.containsTopic(topic),
+                    "Topic must remain after concurrent add() refresh and retainTopic() eviction attempt (iteration " + i + ")");
+        }
     }
 
     private MetadataResponse responseWithCurrentTopics() {
