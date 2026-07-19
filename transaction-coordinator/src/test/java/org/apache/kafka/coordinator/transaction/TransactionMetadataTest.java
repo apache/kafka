@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.transaction;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.MockTime;
@@ -731,9 +732,9 @@ public class TransactionMetadataTest {
             time.milliseconds(),
             TV_0);
 
-        assertThrows(Errors.PRODUCER_FENCED.exception().getClass(), () ->
-            txnMetadata.prepareIncrementProducerEpoch(30000, Optional.of((short) (lastProducerEpoch - 1)),
-                time.milliseconds())
+        assertThrows(
+            ProducerFencedException.class, 
+            () -> txnMetadata.prepareIncrementProducerEpoch(30000, Optional.of((short) (lastProducerEpoch - 1)), time.milliseconds())
         );
     }
 
