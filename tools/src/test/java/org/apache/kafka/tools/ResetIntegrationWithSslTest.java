@@ -34,6 +34,9 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MI
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
 
+/**
+ * Tests command line SSL setup for reset tool.
+ */
 @ClusterTestDefaults(
     types = {Type.CO_KRAFT},
     serverProperties = {

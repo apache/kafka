@@ -254,10 +254,6 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         assertEquals(1, exitCode);
     }
 
-    // ---------------------------------------------------------------------------------------------
-    // Argument parsing tests that mock the Admin client (no cluster interaction required)
-    // ---------------------------------------------------------------------------------------------
-
     @ClusterTest
     public void testDeprecatedConfig(ClusterInstance cluster) throws IOException {
         File configFile = TestUtils.tempFile("client.id=my-client");
