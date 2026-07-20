@@ -41,6 +41,7 @@ final class RecordsDecodingStrategyTest {
     private static final long CONTROL_BASE_OFFSET = 0L;
     private static final long DATA_BASE_OFFSET = 1L;
     private static final List<String> DATA_RECORDS = List.of("a", "b", "c");
+    private static final long DATA_LAST_OFFSET = DATA_BASE_OFFSET + DATA_RECORDS.size() - 1;
     private static final List<ControlRecord> CONTROL_RECORDS = List.of(ControlRecord.of(new KRaftVersionRecord()));
     private static final MemoryRecords RECORDS = controlBatchThenDataBatch();
 
@@ -58,68 +59,57 @@ final class RecordsDecodingStrategyTest {
     @Test
     void testDataAndControl() {
         try (RecordsIterator<String> iterator = iterator(RecordsDecodingStrategy.dataAndControl(STRING_SERDE))) {
-            // The control batch is decoded.
-            Batch<String> controlBatch = iterator.next();
-            assertEquals(CONTROL_RECORDS, controlBatch.controlRecords());
-            assertEquals(CONTROL_BASE_OFFSET, controlBatch.baseOffset());
-            assertEquals(CONTROL_BASE_OFFSET, controlBatch.lastOffset());
-
-            // The data batch is decoded.
-            Batch<String> dataBatch = iterator.next();
-            assertEquals(DATA_RECORDS, dataBatch.records());
-            assertEquals(DATA_BASE_OFFSET, dataBatch.baseOffset());
-            assertEquals(DATA_BASE_OFFSET + DATA_RECORDS.size() - 1, dataBatch.lastOffset());
+            assertControlBatchDecoded(iterator.next());
+            assertDataBatchDecoded(iterator.next());
         }
     }
 
     @Test
     void testControlOnly() {
         try (RecordsIterator<String> iterator = iterator(RecordsDecodingStrategy.controlOnly())) {
-            // The control batch is decoded.
-            Batch<String> controlBatch = iterator.next();
-            assertEquals(CONTROL_RECORDS, controlBatch.controlRecords());
-            assertEquals(CONTROL_BASE_OFFSET, controlBatch.baseOffset());
-            assertEquals(CONTROL_BASE_OFFSET, controlBatch.lastOffset());
-
-            // The data records are skipped, but the offset information is preserved.
-            Batch<String> dataBatch = iterator.next();
-            assertTrue(dataBatch.records().isEmpty());
-            assertEquals(DATA_BASE_OFFSET, dataBatch.baseOffset());
-            assertEquals(DATA_BASE_OFFSET + DATA_RECORDS.size() - 1, dataBatch.lastOffset());
+            assertControlBatchDecoded(iterator.next());
+            assertDataBatchSkipped(iterator.next());
         }
     }
 
     @Test
     void testDataOnly() {
         try (RecordsIterator<String> iterator = iterator(RecordsDecodingStrategy.dataOnly(STRING_SERDE))) {
-            // The control records are skipped, but the offset information is preserved.
-            Batch<String> controlBatch = iterator.next();
-            assertTrue(controlBatch.controlRecords().isEmpty());
-            assertEquals(CONTROL_BASE_OFFSET, controlBatch.baseOffset());
-            assertEquals(CONTROL_BASE_OFFSET, controlBatch.lastOffset());
-
-            // The data batch is decoded.
-            Batch<String> dataBatch = iterator.next();
-            assertEquals(DATA_RECORDS, dataBatch.records());
-            assertEquals(DATA_BASE_OFFSET, dataBatch.baseOffset());
-            assertEquals(DATA_BASE_OFFSET + DATA_RECORDS.size() - 1, dataBatch.lastOffset());
+            assertControlBatchSkipped(iterator.next());
+            assertDataBatchDecoded(iterator.next());
         }
     }
 
     @Test
     void testNone() {
         try (RecordsIterator<String> iterator = iterator(RecordsDecodingStrategy.none())) {
-            // Both the control and data records are skipped, but the offset information is preserved.
-            Batch<String> controlBatch = iterator.next();
-            assertTrue(controlBatch.controlRecords().isEmpty());
-            assertEquals(CONTROL_BASE_OFFSET, controlBatch.baseOffset());
-            assertEquals(CONTROL_BASE_OFFSET, controlBatch.lastOffset());
-
-            Batch<String> dataBatch = iterator.next();
-            assertTrue(dataBatch.records().isEmpty());
-            assertEquals(DATA_BASE_OFFSET, dataBatch.baseOffset());
-            assertEquals(DATA_BASE_OFFSET + DATA_RECORDS.size() - 1, dataBatch.lastOffset());
+            assertControlBatchSkipped(iterator.next());
+            assertDataBatchSkipped(iterator.next());
         }
+    }
+
+    private static void assertControlBatchDecoded(Batch<String> batch) {
+        assertEquals(CONTROL_RECORDS, batch.controlRecords());
+        assertEquals(CONTROL_BASE_OFFSET, batch.baseOffset());
+        assertEquals(CONTROL_BASE_OFFSET, batch.lastOffset());
+    }
+
+    private static void assertControlBatchSkipped(Batch<String> batch) {
+        assertTrue(batch.controlRecords().isEmpty());
+        assertEquals(CONTROL_BASE_OFFSET, batch.baseOffset());
+        assertEquals(CONTROL_BASE_OFFSET, batch.lastOffset());
+    }
+
+    private static void assertDataBatchDecoded(Batch<String> batch) {
+        assertEquals(DATA_RECORDS, batch.records());
+        assertEquals(DATA_BASE_OFFSET, batch.baseOffset());
+        assertEquals(DATA_LAST_OFFSET, batch.lastOffset());
+    }
+
+    private static void assertDataBatchSkipped(Batch<String> batch) {
+        assertTrue(batch.records().isEmpty());
+        assertEquals(DATA_BASE_OFFSET, batch.baseOffset());
+        assertEquals(DATA_LAST_OFFSET, batch.lastOffset());
     }
 
     // Builds records containing a control batch at CONTROL_BASE_OFFSET followed by a data batch at DATA_BASE_OFFSET.

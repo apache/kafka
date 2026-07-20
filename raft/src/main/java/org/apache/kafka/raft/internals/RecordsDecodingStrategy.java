@@ -50,12 +50,11 @@ import java.util.function.BiFunction;
  */
 public final class RecordsDecodingStrategy<T> {
     private final boolean decodeControlRecords;
-    private final boolean decodeDataRecords;
+    // When present, data records are decoded with this serde; when empty, they are skipped.
     private final Optional<RecordSerde<T>> serde;
 
-    private RecordsDecodingStrategy(boolean decodeControlRecords, boolean decodeDataRecords, Optional<RecordSerde<T>> serde) {
+    private RecordsDecodingStrategy(boolean decodeControlRecords, Optional<RecordSerde<T>> serde) {
         this.decodeControlRecords = decodeControlRecords;
-        this.decodeDataRecords = decodeDataRecords;
         this.serde = serde;
     }
 
@@ -63,35 +62,35 @@ public final class RecordsDecodingStrategy<T> {
      * Decodes both the control and data records of a batch.
      */
     public static <T> RecordsDecodingStrategy<T> dataAndControl(RecordSerde<T> serde) {
-        return new RecordsDecodingStrategy<>(true, true, Optional.of(serde));
+        return new RecordsDecodingStrategy<>(true, Optional.of(serde));
     }
 
     /**
      * Decodes only the data records of a batch and skips the control records.
      */
     public static <T> RecordsDecodingStrategy<T> dataOnly(RecordSerde<T> serde) {
-        return new RecordsDecodingStrategy<>(false, true, Optional.of(serde));
+        return new RecordsDecodingStrategy<>(false, Optional.of(serde));
     }
 
     /**
      * Decodes only the control records of a batch and skips the data records.
      */
     public static <T> RecordsDecodingStrategy<T> controlOnly() {
-        return new RecordsDecodingStrategy<>(true, false, Optional.empty());
+        return new RecordsDecodingStrategy<>(true, Optional.empty());
     }
 
     /**
      * Skips both the control and data records of a batch.
      */
     public static <T> RecordsDecodingStrategy<T> none() {
-        return new RecordsDecodingStrategy<>(false, false, Optional.empty());
+        return new RecordsDecodingStrategy<>(false, Optional.empty());
     }
 
     Batch<T> readBatch(DefaultRecordBatch batch, BufferSupplier bufferSupplier, int numRecords) {
         if (batch.isControlBatch()) {
             return decodeControlRecords ? readControlBatch(batch, bufferSupplier, numRecords) : notDecodedBatch(batch, numRecords);
         } else {
-            return decodeDataRecords ? readDataBatch(batch, bufferSupplier, numRecords) : notDecodedBatch(batch, numRecords);
+            return serde.isPresent() ? readDataBatch(batch, serde.get(), bufferSupplier, numRecords) : notDecodedBatch(batch, numRecords);
         }
     }
 
@@ -114,15 +113,12 @@ public final class RecordsDecodingStrategy<T> {
         }
     }
 
-    private Batch<T> readDataBatch(DefaultRecordBatch batch, BufferSupplier bufferSupplier, int numRecords) {
-        RecordSerde<T> recordSerde = serde.orElseThrow(
-            () -> new IllegalStateException("A serde is required to decode data records")
-        );
+    private Batch<T> readDataBatch(DefaultRecordBatch batch, RecordSerde<T> serde, BufferSupplier bufferSupplier, int numRecords) {
         InputStream input = batch.recordInputStream(bufferSupplier);
         try {
             List<T> records = new ArrayList<>(numRecords);
             for (int i = 0; i < numRecords; i++) {
-                records.add(readRecord(input, batch.sizeInBytes(), bufferSupplier, (key, value) -> decodeDataRecord(key, value, recordSerde)));
+                records.add(readRecord(input, batch.sizeInBytes(), bufferSupplier, (key, value) -> decodeDataRecord(key, value, serde)));
             }
             return Batch.data(
                 batch.baseOffset(),
