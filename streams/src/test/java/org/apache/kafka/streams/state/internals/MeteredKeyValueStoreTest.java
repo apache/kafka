@@ -522,20 +522,26 @@ public class MeteredKeyValueStoreTest {
         assertThrows(NullPointerException.class, () -> metered.reverseRange("from", null));
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldGetRecordsWithPrefixKey() {
         setUp();
-        final StringSerializer stringSerializer = new StringSerializer();
+        final Serializer<String> mockSerializer = mock(Serializer.class);
+        final Headers headers = new RecordHeaders();
+        when(context.headers()).thenReturn(headers);
+        when(mockSerializer.serialize(null, headers, KEY)).thenReturn(KEY.getBytes(StandardCharsets.UTF_8));
+        
         when(inner.prefixScan(eq(KEY.getBytes(StandardCharsets.UTF_8)), any(ByteArraySerializer.class)))
             .thenReturn(new KeyValueIteratorStub<>(Collections.singletonList(BYTE_KEY_VALUE_PAIR).iterator()));
         init();
 
-        final KeyValueIterator<String, String> iterator = metered.prefixScan(KEY, stringSerializer);
+        final KeyValueIterator<String, String> iterator = metered.prefixScan(KEY, mockSerializer);
         assertThat(iterator.next().value, equalTo(VALUE));
         iterator.close();
 
         final KafkaMetric metric = metrics.metric(new MetricName("prefix-scan-rate", STORE_LEVEL_GROUP, "", tags));
         assertTrue((Double) metric.metricValue() > 0);
+        verify(mockSerializer).serialize(null, headers, KEY);
     }
 
     @Test
@@ -549,11 +555,15 @@ public class MeteredKeyValueStoreTest {
         assertThat((Long) numKeysMetric.metricValue(), equalTo(-1L));
     }
 
-    @SuppressWarnings("unused")
+    @SuppressWarnings({"unused", "unchecked"})
     @Test
     public void shouldTrackOpenIteratorsMetric() {
         setUp();
-        final StringSerializer stringSerializer = new StringSerializer();
+        final Serializer<String> mockSerializer = mock(Serializer.class);
+        final Headers headers = new RecordHeaders();
+        when(context.headers()).thenReturn(headers);
+        when(mockSerializer.serialize(null, headers, KEY)).thenReturn(KEY.getBytes(StandardCharsets.UTF_8));
+        
         when(inner.prefixScan(eq(KEY.getBytes(StandardCharsets.UTF_8)), any(ByteArraySerializer.class)))
             .thenReturn(KeyValueIterators.emptyIterator());
         init();
@@ -563,11 +573,12 @@ public class MeteredKeyValueStoreTest {
 
         assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
 
-        try (final KeyValueIterator<String, String> unused = metered.prefixScan(KEY, stringSerializer)) {
+        try (final KeyValueIterator<String, String> unused = metered.prefixScan(KEY, mockSerializer)) {
             assertThat((Long) openIteratorsMetric.metricValue(), equalTo(1L));
         }
 
         assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+        verify(mockSerializer).serialize(null, headers, KEY);
     }
 
     @SuppressWarnings("unused")
@@ -736,19 +747,25 @@ public class MeteredKeyValueStoreTest {
     public void shouldReadOnlyViewPrefixScanApplySerdesAndRecordPrefixScanMetric() {
         setUp();
         final ReadOnlyKeyValueStore<Bytes, byte[]> innerView = mock(ReadOnlyKeyValueStore.class);
-        final StringSerializer stringSerializer = new StringSerializer();
+        final Serializer<String> mockSerializer = mock(Serializer.class);
+        final Headers headers = new RecordHeaders();
+        when(context.headers()).thenReturn(headers);
+        when(mockSerializer.serialize(null, headers, KEY)).thenReturn(KEY.getBytes(StandardCharsets.UTF_8));
+        
         when(inner.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
         when(innerView.prefixScan(eq(KEY.getBytes(StandardCharsets.UTF_8)), any(ByteArraySerializer.class)))
             .thenReturn(new KeyValueIteratorStub<>(Collections.singletonList(BYTE_KEY_VALUE_PAIR).iterator()));
         init();
 
         final ReadOnlyKeyValueStore<String, String> view = metered.readOnly(IsolationLevel.READ_UNCOMMITTED);
-        try (final KeyValueIterator<String, String> it = view.prefixScan(KEY, stringSerializer)) {
+        try (final KeyValueIterator<String, String> it = view.prefixScan(KEY, mockSerializer)) {
             assertThat(it.next().value, equalTo(VALUE));
             assertFalse(it.hasNext());
         }
 
-        assertTrue((Double) metrics.metric(new MetricName("prefix-scan-rate", STORE_LEVEL_GROUP, "", tags)).metricValue() > 0);
+        final KafkaMetric metric = metric("prefix-scan-rate");
+        assertTrue((Double) metric.metricValue() > 0);
+        verify(mockSerializer).serialize(null, headers, KEY);
     }
 
     @SuppressWarnings("unchecked")
