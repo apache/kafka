@@ -1471,7 +1471,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 incompleteAcknowledgements.isEmpty() ? acknowledgementsToSend : incompleteAcknowledgements);
 
             for (Map.Entry<TopicIdPartition, Acknowledgements> entry : finalAcknowledgementsToSend.entrySet()) {
-                sessionHandler.addPartitionToFetch(entry.getKey(), entry.getValue());
+                sessionHandler.addPartitionToAcknowledgeOnly(entry.getKey(), entry.getValue());
             }
 
             ShareAcknowledgeRequest.Builder requestBuilder = sessionHandler.newShareAcknowledgeBuilder(groupId);
