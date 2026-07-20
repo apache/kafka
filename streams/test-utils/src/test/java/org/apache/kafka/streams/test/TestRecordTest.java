@@ -34,8 +34,11 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.hasProperty;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestRecordTest {
     private final String key = "testKey";
@@ -147,7 +150,7 @@ public class TestRecordTest {
         assertThat(testRecord.toString(), equalTo("TestRecord[key=testKey, value=1, "
                 + "headers=RecordHeaders(headers = [RecordHeader(key = foo, value = [118, 97, 108, 117, 101]), "
                 + "RecordHeader(key = bar, value = null), RecordHeader(key = \"A\\u00ea\\u00f1\\u00fcC\", value = [118, 97, 108, 117, 101])], isReadOnly = false), "
-                + "recordTime=2019-06-01T10:00:00Z]"));
+                + "recordTime=2019-06-01T10:00:00Z, partition=-1]"));
     }
 
     @Test
@@ -156,8 +159,29 @@ public class TestRecordTest {
         final ConsumerRecord<String, Integer> consumerRecord = new ConsumerRecord<>(topicName, 1, 0, recordMs,
             TimestampType.CREATE_TIME, 0, 0, key, value, headers, Optional.empty());
         final TestRecord<String, Integer> testRecord = new TestRecord<>(consumerRecord);
-        final TestRecord<String, Integer> expectedRecord = new TestRecord<>(key, value, headers, recordTime);
+        final TestRecord<String, Integer> expectedRecord = new TestRecord<>(key, value, headers, recordTime, 1);
         assertEquals(expectedRecord, testRecord);
+    }
+
+    @Test
+    public void testConsumerRecordWithNegativePartition() {
+        final String topicName = "topic";
+        final ConsumerRecord<String, Integer> consumerRecord = new ConsumerRecord<>(topicName, -1, 0, recordMs,
+            TimestampType.CREATE_TIME, 0, 0, key, value, headers, Optional.empty());
+        final IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> new TestRecord<>(consumerRecord));
+        assertEquals("Invalid partition: -1. Partition number should always be non-negative.",
+            exception.getMessage());
+    }
+
+    @Test
+    public void testConsumerRecordWithNoTimestamp() {
+        final String topicName = "topic";
+        final ConsumerRecord<String, String> record = new ConsumerRecord<>(
+                topicName, 0, 0L, ConsumerRecord.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE,
+                0, 0, "key", "value", new RecordHeaders(), Optional.empty()
+        );
+        final TestRecord<String, String> testRecord = new TestRecord<>(record);
+        assertNull(testRecord.timestamp());
     }
 
     @Test
@@ -166,7 +190,105 @@ public class TestRecordTest {
         final ProducerRecord<String, Integer> producerRecord =
             new ProducerRecord<>(topicName, 1, recordMs, key, value, headers);
         final TestRecord<String, Integer> testRecord = new TestRecord<>(producerRecord);
-        final TestRecord<String, Integer> expectedRecord = new TestRecord<>(key, value, headers, recordTime);
+        final TestRecord<String, Integer> expectedRecord = new TestRecord<>(key, value, headers, recordTime, 1);
         assertEquals(expectedRecord, testRecord);
+    }
+
+    @Test
+    public void testProducerRecordWithNullTimestamp() {
+        final String topicName = "topic";
+        final ProducerRecord<String, String> record = new ProducerRecord<>(
+            topicName, null, null, "key", "value", new RecordHeaders()
+        );
+        final TestRecord<String, String> testRecord = new TestRecord<>(record);
+        assertNull(testRecord.timestamp());
+    }
+
+    @Test
+    public void testProducerRecordWithoutPartition() {
+        final String topicName = "topic";
+        final ProducerRecord<String, Integer> producerRecord =
+            new ProducerRecord<>(topicName, null, recordMs, key, value, headers);
+        final TestRecord<String, Integer> testRecord = new TestRecord<>(producerRecord);
+        assertEquals(-1, testRecord.partition());
+    }
+
+    @Test
+    public void testPartitionDefaultsToUnset() {
+        // Records built without an explicit partition, default to -1
+        assertEquals(-1, new TestRecord<>(key, value, headers, recordTime).partition());
+        assertEquals(-1, new TestRecord<>(key, value, headers, recordMs).partition());
+        assertEquals(-1, new TestRecord<>(key, value, headers).partition());
+        assertEquals(-1, new TestRecord<>(key, value).partition());
+        assertEquals(-1, new TestRecord<>(value).partition());
+    }
+
+    @Test
+    public void testExplicitPartitionConstructor() {
+        // Records built with an explicit partition.
+        final TestRecord<String, Integer> testRecord = new TestRecord<>(key, value, headers, recordTime, 3);
+        assertEquals(3, testRecord.partition());
+    }
+
+    @Test
+    public void testExplicitNoPartitionConstructor() {
+        // Records built with the NO_PARTITION sentinel.
+        final TestRecord<String, Integer> testRecord =
+            new TestRecord<>(key, value, headers, recordTime, -1);
+        assertEquals(-1, testRecord.partition());
+    }
+
+    @Test
+    public void testInvalidNegativePartitionConstructor() {
+        final IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> new TestRecord<>(key, value, headers, recordTime, -2)
+        );
+        assertEquals(
+            "Invalid partition: -2. Partition number should always be non-negative or -1.",
+            exception.getMessage()
+        );
+    }
+
+    @Test
+    public void testEqualsConsidersPartition() {
+        // equals()/hashCode() take the partition into account.
+        final TestRecord<String, Integer> record1 = new TestRecord<>(key, value, headers, recordTime, 0);
+        final TestRecord<String, Integer> record2 = new TestRecord<>(key, value, headers, recordTime, 1);
+        assertNotEquals(record1, record2);
+
+        final TestRecord<String, Integer> record1Again = new TestRecord<>(key, value, headers, recordTime, 0);
+        assertEquals(record1, record1Again);
+        assertEquals(record1.hashCode(), record1Again.hashCode());
+
+        // an unset (default) partition differs from an explicit one
+        assertNotEquals(new TestRecord<>(key, value, headers, recordTime), record1);
+    }
+
+    @Test
+    public void testEqualsIgnorePartition() {
+        // equalsIgnorePartition() matches on every field except the partition.
+        final TestRecord<String, Integer> record1 = new TestRecord<>(key, value, headers, recordTime, 0);
+        final TestRecord<String, Integer> record2 = new TestRecord<>(key, value, headers, recordTime, 1);
+        assertNotEquals(record1, record2);
+        assertTrue(record1.equalsIgnorePartition(record2));
+        assertTrue(record2.equalsIgnorePartition(record1));
+
+        // a genuine field mismatch is still detected
+        assertFalse(record1.equalsIgnorePartition(new TestRecord<>("other", value, headers, recordTime, 0)));
+        assertFalse(record1.equalsIgnorePartition(new TestRecord<>(key, 2, headers, recordTime, 0)));
+
+        // reflexive / null guards
+        assertTrue(record1.equalsIgnorePartition(record1));
+        assertFalse(record1.equalsIgnorePartition(null));
+    }
+
+    @Test
+    public void testToStringIncludesPartitionWhenSet() {
+        final TestRecord<String, Integer> testRecord = new TestRecord<>(key, value, headers, recordTime, 2);
+        assertThat(testRecord.toString(), equalTo("TestRecord[key=testKey, value=1, "
+            + "headers=RecordHeaders(headers = [RecordHeader(key = foo, value = [118, 97, 108, 117, 101]), "
+            + "RecordHeader(key = bar, value = null), RecordHeader(key = \"A\\u00ea\\u00f1\\u00fcC\", value = [118, 97, 108, 117, 101])], isReadOnly = false), "
+            + "recordTime=2019-06-01T10:00:00Z, partition=2]"));
     }
 }

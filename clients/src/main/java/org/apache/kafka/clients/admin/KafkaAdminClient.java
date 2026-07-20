@@ -28,6 +28,7 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.LeastLoadedNode;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.NetworkClient;
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.StaleMetadataException;
 import org.apache.kafka.clients.admin.CreateTopicsResult.TopicMetadataAndConfig;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResult;
@@ -59,6 +60,7 @@ import org.apache.kafka.clients.admin.internals.DescribeShareGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeStreamsGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeTransactionsHandler;
 import org.apache.kafka.clients.admin.internals.FenceProducersHandler;
+import org.apache.kafka.clients.admin.internals.InternalDescribeFeaturesResult;
 import org.apache.kafka.clients.admin.internals.ListConsumerGroupOffsetsHandler;
 import org.apache.kafka.clients.admin.internals.ListOffsetsHandler;
 import org.apache.kafka.clients.admin.internals.ListShareGroupOffsetsHandler;
@@ -88,6 +90,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
@@ -257,13 +260,13 @@ import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
-import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.common.utils.internals.ExponentialBackoff;
 import org.apache.kafka.common.utils.internals.KafkaThread;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch;
 
 import org.slf4j.Logger;
 
@@ -284,6 +287,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.TreeMap;
@@ -316,6 +320,7 @@ import static org.apache.kafka.common.utils.Utils.closeQuietly;
  * This class is thread-safe.
  * </p>
  */
+@InterfaceAudience.Public
 public class KafkaAdminClient extends AdminClient {
 
     /**
@@ -957,6 +962,15 @@ public class KafkaAdminClient extends AdminClient {
             runnable.pendingCalls.add(this);
         }
 
+        /**
+         * Invoked by the polling loop when no node could be assigned to this call. Returns true if
+         * the call took corrective action and should be removed from the pending queue, false to
+         * remain pending and retry node assignment on a later iteration.
+         */
+        boolean handleNodeUnavailable(long now) {
+            return false;
+        }
+
         private void handleTimeoutFailure(long now, Throwable cause) {
             if (log.isDebugEnabled()) {
                 log.debug("{} timed out at {} after {} attempt(s)", this, now, tries,
@@ -1225,6 +1239,8 @@ public class KafkaAdminClient extends AdminClient {
                     log.trace("Assigned {} to node {}", call, node);
                     call.curNode = node;
                     getOrCreateListValue(callsToSend, node).add(call);
+                    return true;
+                } else if (call.handleNodeUnavailable(now)) {
                     return true;
                 } else {
                     log.trace("Unable to assign {} to a node.", call);
@@ -3844,7 +3860,7 @@ public class KafkaAdminClient extends AdminClient {
                                                              final DescribeStreamsGroupsOptions options) {
         SimpleAdminApiFuture<CoordinatorKey, StreamsGroupDescription> future =
             DescribeStreamsGroupsHandler.newFuture(groupIds);
-        DescribeStreamsGroupsHandler handler = new DescribeStreamsGroupsHandler(options.includeAuthorizedOperations(), logContext);
+        DescribeStreamsGroupsHandler handler = new DescribeStreamsGroupsHandler(options.includeAuthorizedOperations(), options.includeTopologyDescription(), logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new DescribeStreamsGroupsResult(future.all().entrySet().stream()
             .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
@@ -4534,11 +4550,20 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public DescribeFeaturesResult describeFeatures(final DescribeFeaturesOptions options) {
         final KafkaFutureImpl<FeatureMetadata> future = new KafkaFutureImpl<>();
+        final KafkaFutureImpl<NodeApiVersions> nodeApiVersionsFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         final NodeProvider nodeProvider = options.nodeId().isPresent() ?
             new ConstantNodeIdProvider(options.nodeId().getAsInt(), true) : new LeastLoadedBrokerOrActiveKController();
         final Call call = new Call(
             "describeFeatures", calcDeadlineMs(now, options.timeoutMs()), nodeProvider) {
+
+            private NodeApiVersions createNodeApiVersion(final ApiVersionsResponse response) {
+                return new NodeApiVersions(
+                    response.data().apiKeys(),
+                    response.data().supportedFeatures(),
+                    response.data().finalizedFeatures(),
+                    response.data().finalizedFeaturesEpoch());
+            }
 
             private FeatureMetadata createFeatureMetadata(final ApiVersionsResponse response) {
                 final Map<String, FinalizedVersionRange> finalizedFeatures = new HashMap<>();
@@ -4571,8 +4596,11 @@ public class KafkaAdminClient extends AdminClient {
                 final ApiVersionsResponse apiVersionsResponse = (ApiVersionsResponse) response;
                 if (apiVersionsResponse.data().errorCode() == Errors.NONE.code()) {
                     future.complete(createFeatureMetadata(apiVersionsResponse));
+                    nodeApiVersionsFuture.complete(createNodeApiVersion(apiVersionsResponse));
                 } else {
-                    future.completeExceptionally(Errors.forCode(apiVersionsResponse.data().errorCode()).exception());
+                    Exception exception = Errors.forCode(apiVersionsResponse.data().errorCode()).exception();
+                    future.completeExceptionally(exception);
+                    nodeApiVersionsFuture.completeExceptionally(exception);
                 }
             }
 
@@ -4583,7 +4611,7 @@ public class KafkaAdminClient extends AdminClient {
         };
 
         runnable.call(call, now);
-        return new DescribeFeaturesResult(future);
+        return new InternalDescribeFeaturesResult(future, nodeApiVersionsFuture);
     }
 
     @Override
@@ -5150,6 +5178,27 @@ public class KafkaAdminClient extends AdminClient {
                 } else {
                     super.maybeRetry(currentTimeMs, throwable);
                 }
+            }
+
+            @Override
+            boolean handleNodeUnavailable(long currentTimeMs) {
+                OptionalInt brokerId = spec.scope.destinationBrokerId();
+                // The fulfillment target broker is no longer present in the cluster metadata. This
+                // happens when a stale entry in the partition leader cache points at a broker that
+                // has since left the cluster. Send the keys back to the lookup stage so the leader
+                // can be re-resolved, rather than waiting for the request deadline to expire without
+                // ever issuing another lookup. maybeRetryLookup is a no-op (returns false) for
+                // strategies that target a fixed broker id, in which case we leave the call pending.
+                if (brokerId.isPresent()
+                        && metadataManager.isReady()
+                        && metadataManager.nodeById(brokerId.getAsInt()) == null
+                        && driver.maybeRetryLookup(currentTimeMs, spec)) {
+                    log.debug("Broker {} for {} is no longer in the cluster metadata; retrying lookup.",
+                        brokerId.getAsInt(), spec.name);
+                    maybeSendRequests(driver, currentTimeMs);
+                    return true;
+                }
+                return false;
             }
         };
     }

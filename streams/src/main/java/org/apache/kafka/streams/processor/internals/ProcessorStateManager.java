@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.FixedOrderMap;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -207,6 +208,9 @@ public class ProcessorStateManager implements StateManager {
     private final StateDirectory stateDirectory;
     private final File baseDir;
     private final UpgradeFromValues upgradeFrom;
+    private final Time time;
+
+    private boolean startupTask = false;
 
     private TaskType taskType;
     private Logger log;
@@ -229,6 +233,7 @@ public class ProcessorStateManager implements StateManager {
                                  final boolean transactionalStateStoresEnabled,
                                  final LogContext logContext,
                                  final StateDirectory stateDirectory,
+                                 final Time time,
                                  final Map<String, String> storeToChangelogTopic,
                                  final Collection<TopicPartition> sourcePartitions,
                                  final UpgradeFromValues upgradeFrom) throws ProcessorStateException {
@@ -241,6 +246,7 @@ public class ProcessorStateManager implements StateManager {
         this.transactionalStateStoresEnabled = transactionalStateStoresEnabled;
         this.sourcePartitions = sourcePartitions;
         this.upgradeFrom = upgradeFrom;
+        this.time = time;
 
         this.baseDir = stateDirectory.getOrCreateDirectoryForTask(taskId);
         this.stateDirectory = stateDirectory;
@@ -259,9 +265,10 @@ public class ProcessorStateManager implements StateManager {
                                  final boolean transactionalStateStoresEnabled,
                                  final LogContext logContext,
                                  final StateDirectory stateDirectory,
+                                 final Time time,
                                  final Map<String, String> storeToChangelogTopic,
                                  final Collection<TopicPartition> sourcePartitions) throws ProcessorStateException {
-        this(taskId, taskType, eosEnabled, transactionalStateStoresEnabled, logContext, stateDirectory, storeToChangelogTopic, sourcePartitions, null);
+        this(taskId, taskType, eosEnabled, transactionalStateStoresEnabled, logContext, stateDirectory, time, storeToChangelogTopic, sourcePartitions, null);
     }
 
     /**
@@ -273,9 +280,13 @@ public class ProcessorStateManager implements StateManager {
                                                                final boolean eosEnabled,
                                                                final LogContext logContext,
                                                                final StateDirectory stateDirectory,
+                                                               final Time time,
                                                                final Map<String, String> storeToChangelogTopic,
                                                                final Set<TopicPartition> sourcePartitions) {
-        return new ProcessorStateManager(taskId, TaskType.STANDBY, eosEnabled, false, logContext, stateDirectory, storeToChangelogTopic, sourcePartitions);
+        final ProcessorStateManager stateManager =
+            new ProcessorStateManager(taskId, TaskType.STANDBY, eosEnabled, false, logContext, stateDirectory, time, storeToChangelogTopic, sourcePartitions);
+        stateManager.startupTask = true;
+        return stateManager;
     }
 
     void registerStateStores(final List<StateStore> allStores, final InternalProcessorContext<?, ?> processorContext) {
@@ -629,6 +640,14 @@ public class ProcessorStateManager implements StateManager {
         }
     }
 
+    long approximateNumUncommittedBytes() {
+        long total = 0;
+        for (final StateStoreMetadata metadata : stores.values()) {
+            total += metadata.stateStore.approximateNumUncommittedBytes();
+        }
+        return total;
+    }
+
     /**
      * {@link StateStore#close() Close} all stores (even in case of failure).
      * Log all exceptions and re-throw the first exception that occurred at the end.
@@ -676,6 +695,13 @@ public class ProcessorStateManager implements StateManager {
             }
 
             stores.clear();
+
+            // Refresh the task directory's modification time so the state directory cleaner does
+            // not treat the just-released directory as obsolete before it can be reassigned.
+            if (!startupTask && baseDir.exists() && !baseDir.setLastModified(time.milliseconds())) {
+                log.warn("{}Failed to update modification time of state directory {} for task {}",
+                    logPrefix, baseDir, taskId);
+            }
         }
 
         LegacyCheckpointingStateStore.maybeDowngradeOffsets(logPrefix, upgradeFrom, stateDirectory, taskId, allOffsets);

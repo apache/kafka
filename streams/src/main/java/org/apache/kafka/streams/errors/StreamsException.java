@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Optional;
@@ -27,6 +28,7 @@ import java.util.Optional;
  * is guaranteed that any exception thrown up to the {@link StreamsUncaughtExceptionHandler} will be of the type
  * {@code StreamsException}. For example, any user exceptions will be wrapped as a {@code StreamsException}.
  */
+@InterfaceAudience.Public
 public class StreamsException extends KafkaException {
 
     private static final long serialVersionUID = 1L;

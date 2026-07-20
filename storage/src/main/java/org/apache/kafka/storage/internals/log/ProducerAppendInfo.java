@@ -170,7 +170,7 @@ public class ProducerAppendInfo {
             if (appendFirstSeq != 0) {
                 if (updatedEntry.producerEpoch() != RecordBatch.NO_PRODUCER_EPOCH) {
                     throw new OutOfOrderSequenceException("Invalid sequence number for new epoch of producer " + producerId +
-                            "at offset " + offset + " in partition " + topicPartition + ": " + producerEpoch + " (request epoch), "
+                            " at offset " + offset + " in partition " + topicPartition + ": " + producerEpoch + " (request epoch), "
                             + appendFirstSeq + " (seq. number), " + updatedEntry.producerEpoch() + " (current producer epoch)");
                 }
             }
