@@ -20,6 +20,8 @@ import tempfile
 import os
 import shutil
 
+SUPPORTED_CONTAINER_RUNTIMES = ("docker", "podman")
+
 def execute(command):
     if subprocess.run(command).returncode != 0:
         raise SystemError("Failure in executing following command:- ", " ".join(command))
@@ -46,3 +48,27 @@ def build_docker_image_runner(command, image_type, kafka_archive=None):
         raise SystemError("Docker Image Build failed")
     finally:
         shutil.rmtree(temp_dir_path)
+
+def detect_container_runtime():
+    configured_runtime = os.environ.get("CONTAINER_RUNTIME")
+
+    if configured_runtime:
+        if configured_runtime not in SUPPORTED_CONTAINER_RUNTIMES:
+            raise ValueError(
+                f"Unsupported container runtime: {configured_runtime}. "
+                f"Supported runtimes: {', '.join(SUPPORTED_CONTAINER_RUNTIMES)}"
+            )
+        if shutil.which(configured_runtime) is None:
+            raise RuntimeError(
+                f"Container runtime '{configured_runtime}' was not found"
+            )
+        return configured_runtime
+
+    for runtime in SUPPORTED_CONTAINER_RUNTIMES:
+        if shutil.which(runtime):
+            return runtime
+
+    raise RuntimeError(
+        "No supported container runtime found. "
+        "Please install Docker or Podman, or set CONTAINER_RUNTIME."
+    )
