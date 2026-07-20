@@ -117,6 +117,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
 
         appendsInProgress.incrementAndGet();
         ChunkedByteBufferOutputStream bufferStream = null;
+        int newBatchSize = 0; // set when bufferStream is allocated; reused as the write-limit basis
         List<ByteBuffer> extensionChunks = null;
         if (headers == null) headers = Record.EMPTY_HEADERS;
         try {
@@ -183,15 +184,15 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     // ratio-adjusted when compressed) so the two stay consistent.
                     int recordUncompressed = AbstractRecords.recordSizeUpperBound(
                             RecordBatch.CURRENT_MAGIC_VALUE, compression.type(), key, value, headers);
-                    int size = MemoryRecordsBuilder.estimatedBytesWritten(
+                    newBatchSize = MemoryRecordsBuilder.estimatedBytesWritten(
                             RecordBatch.CURRENT_MAGIC_VALUE, compression.type(),
                             CompressionRatioEstimator.estimation(topic, compression.type()),
                             recordUncompressed);
                     log.trace("Allocating {} byte chunked buffer ({} byte chunks) for topic {} partition {} with remaining timeout {}ms",
-                            size, chunkedFree.poolableSize(), topic, effectivePartition, maxTimeToBlock);
+                            newBatchSize, chunkedFree.poolableSize(), topic, effectivePartition, maxTimeToBlock);
                     List<ByteBuffer> initialChunks;
                     try {
-                        initialChunks = chunkedFree.allocateChunks(size, maxTimeToBlock);
+                        initialChunks = chunkedFree.allocateChunks(newBatchSize, maxTimeToBlock);
                     } catch (BufferExhaustedException e) {
                         // The blocking new-batch acquire was not able to get memory within
                         // max.block.ms. Record it in the buffer-exhausted metrics.
@@ -249,8 +250,9 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     // so bufferStream was allocated (this iteration or carried from a prior one).
                     if (bufferStream == null)
                         throw new IllegalStateException("needsNewBatch path reached without an allocated buffer stream");
-                    int firstRecordSize = AbstractRecords.estimateSizeInBytesUpperBound(
-                            RecordBatch.CURRENT_MAGIC_VALUE, compression.type(), key, value, headers);
+                    // Reuse the new-batch size estimate as the write-limit basis (equals the record's
+                    // uncompressed upper bound without compression). TODO: review once compression lands.
+                    final int firstRecordSize = newBatchSize;
                     final ChunkedByteBufferOutputStream batchStream = bufferStream;
                     appendResult = appendNewBatch(topic, effectivePartition, dq, timestamp, key, value, headers, callbacks,
                             () -> chunkedRecordsBuilder(batchStream, firstRecordSize), nowMs);
