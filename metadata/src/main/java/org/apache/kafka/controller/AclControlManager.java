@@ -28,7 +28,7 @@ import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.internals.LogContext;
-import org.apache.kafka.metadata.authorizer.CidrUtils;
+import org.apache.kafka.server.authorizer.CidrUtils;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
 import org.apache.kafka.metadata.authorizer.StandardAclWithId;
 import org.apache.kafka.server.authorizer.AclCreateResult;
