@@ -374,6 +374,99 @@ You can now find and query your custom store:
     // Query the store
     String value = store.read("key");
 
+## Header-aware stores and interactive queries {#header-aware-stores-interactive-queries}
+
+A [header-aware store](/{version}/streams/developer-guide/processor-api/#headers-in-state-stores) — built with a `*WithHeaders` supplier and its matching builder ([KIP-1271](../../upgrade-guide/#kip-1271-headers-aware-stores)) — persists each record's [headers](/{version}/javadoc/org/apache/kafka/streams/processor/api/Record.html#headers()) together with its value and timestamp. This section shows how to read those headers back interactively, through both the legacy `store()` API and the IQv2 `query()` API.
+
+### Reading headers with the legacy `store()` API
+
+Look up the store with the `*WithHeaders()` entry from `QueryableStoreTypes` that matches your store type. The returned `ReadOnly*Store` surfaces the headers as part of its value type: [ValueTimestampHeaders](/{version}/javadoc/org/apache/kafka/streams/state/ValueTimestampHeaders.html) for key-value and window stores, and [AggregationWithHeaders](/{version}/javadoc/org/apache/kafka/streams/state/AggregationWithHeaders.html) for session stores.
+    
+    
+    // Key-value store built with a *WithHeaders supplier
+    ReadOnlyKeyValueStore<String, ValueTimestampHeaders<Long>> keyValueStore =
+        streams.store("counts-store", QueryableStoreTypes.timestampedKeyValueStoreWithHeaders());
+    
+    ValueTimestampHeaders<Long> vth = keyValueStore.get("hello");
+    if (vth != null) {
+      System.out.println("value:     " + vth.value());
+      System.out.println("timestamp: " + vth.timestamp());
+      System.out.println("headers:   " + vth.headers());
+    }
+
+Session stores return `AggregationWithHeaders<V>`, which exposes the aggregated value via `aggregation()` and the headers via `headers()`.
+
+### Reading headers with the IQv2 `query()` API
+
+Interactive Queries v2 (IQv2) is the query-based interactive-queries API: instead of accessing a store object directly, you build a `Query`, wrap it in a [StateQueryRequest](/{version}/javadoc/org/apache/kafka/streams/query/StateQueryRequest.html), and run it with `KafkaStreams#query(...)`. The call returns a [StateQueryResult](/{version}/javadoc/org/apache/kafka/streams/query/StateQueryResult.html) that holds a per-partition [QueryResult](/{version}/javadoc/org/apache/kafka/streams/query/QueryResult.html): use `getOnlyPartitionResult()` for a single-key lookup, or `getPartitionResults()` for the full `Map<Integer, QueryResult<R>>`. Each `QueryResult` exposes the query result via `getResult()` and its data-freshness `Position` via `getPosition()`.
+
+Before KIP-1356, no IQv2 query type exposed record headers. KIP-1356 adds four `@Evolving` query types whose results carry headers. Each returns a [ReadOnlyRecord](/{version}/javadoc/org/apache/kafka/streams/processor/api/ReadOnlyRecord.html) — a read-only view exposing `key()`, `value()`, `timestamp()`, and `headers()` (never null) — or, for the range and window queries, a closeable [ReadOnlyRecordIterator](/{version}/javadoc/org/apache/kafka/streams/state/ReadOnlyRecordIterator.html) of such records.
+
+`TimestampedKeyWithHeadersQuery` is a single-key lookup against a header-aware key-value store, parallel to `TimestampedKeyQuery`:
+    
+    
+    TimestampedKeyWithHeadersQuery<String, Long> query =
+        TimestampedKeyWithHeadersQuery.withKey("hello");
+    
+    StateQueryRequest<ReadOnlyRecord<String, Long>> request =
+        StateQueryRequest.inStore("counts-store").withQuery(query);
+    
+    StateQueryResult<ReadOnlyRecord<String, Long>> result = streams.query(request);
+    ReadOnlyRecord<String, Long> record = result.getOnlyPartitionResult().getResult();
+    if (record != null) {
+      System.out.println("value:   " + record.value());
+      System.out.println("headers: " + record.headers());
+    }
+
+Call `skipCache()` on the query to bypass the record cache and read directly from the underlying store.
+
+`TimestampedRangeWithHeadersQuery` is a key-range scan, parallel to `TimestampedRangeQuery`. It returns a `ReadOnlyRecordIterator`, so close it when done (for example, with try-with-resources). A range can span several local partitions, so iterate `getPartitionResults()`:
+    
+    
+    TimestampedRangeWithHeadersQuery<String, Long> query =
+        TimestampedRangeWithHeadersQuery.<String, Long>withRange("a", "n");
+    
+    StateQueryRequest<ReadOnlyRecordIterator<String, Long>> request =
+        StateQueryRequest.inStore("counts-store").withQuery(query);
+    
+    StateQueryResult<ReadOnlyRecordIterator<String, Long>> result = streams.query(request);
+    for (QueryResult<ReadOnlyRecordIterator<String, Long>> partition : result.getPartitionResults().values()) {
+      try (ReadOnlyRecordIterator<String, Long> iterator = partition.getResult()) {
+        while (iterator.hasNext()) {
+          ReadOnlyRecord<String, Long> record = iterator.next();
+          System.out.println(record.key() + " -> " + record.value() + " " + record.headers());
+        }
+      }
+    }
+
+Use `withLowerBound`, `withUpperBound`, or `withNoBounds` for open-ended or full scans, and `withAscendingKeys()` / `withDescendingKeys()` to choose the iteration order.
+
+`TimestampedWindowKeyWithHeadersQuery` fetches all windows for a single key within a window-start range from a header-aware window store, parallel to `WindowKeyQuery`. Its results are keyed by `Windowed<K>` (the window lives in the key; `timestamp()` is the stored record event-time). Execute and consume the `ReadOnlyRecordIterator` exactly as for the range query above:
+    
+    
+    TimestampedWindowKeyWithHeadersQuery<String, Long> query =
+        TimestampedWindowKeyWithHeadersQuery.withKeyAndWindowStartRange(
+            "hello", Instant.ofEpochMilli(0), Instant.now());
+    // Result element type: ReadOnlyRecord<Windowed<String>, Long>
+
+`TimestampedWindowRangeWithHeadersQuery` is parallel to `WindowRangeQuery` and has two forms. Use `withWindowStartRange(timeFrom, timeTo)` against a header-aware window store to fetch every key across a window-start range, or `withKey(key)` against a header-aware session store to fetch all sessions for a key (for session results, `timestamp()` is the session-window end). As with `WindowRangeQuery`, each store accepts only its corresponding form; submitting the wrong form fails with an unknown-query-type error.
+    
+    
+    // Window store: every key across a window-start range
+    TimestampedWindowRangeWithHeadersQuery<String, Long> byWindow =
+        TimestampedWindowRangeWithHeadersQuery.withWindowStartRange(
+            Instant.ofEpochMilli(0), Instant.now());
+    
+    // Session store: all sessions for one key
+    TimestampedWindowRangeWithHeadersQuery<String, Long> byKey =
+        TimestampedWindowRangeWithHeadersQuery.withKey("hello");
+
+**Behavior notes**
+
+  * **Window start range is required.** As with the existing window queries, `TimestampedWindowKeyWithHeadersQuery` and the `withWindowStartRange` form of `TimestampedWindowRangeWithHeadersQuery` require a closed window-start range — both `timeFrom` and `timeTo` must be present.
+  * **Headers depend on how the store was built.** With a `*WithHeaders` builder over a native (RocksDB) header supplier, the queries return the stored headers. With a `*WithHeaders` builder over a non-header supplier, the queries still succeed but `headers()` is always empty — the underlying store cannot persist headers. Against a plain, non-`WithHeaders` store, the new query types are unsupported and fail cleanly with an unknown-query-type error.
+  * **Existing query types are unchanged.** The pre-existing IQv2 query types (`KeyQuery`, `TimestampedKeyQuery`, `RangeQuery`, `TimestampedRangeQuery`, `WindowKeyQuery`, `WindowRangeQuery`) also run against header-aware stores, returning header-stripped results, and now behave identically whether the header store was built on the native or the adapter path.
+
 # Querying remote state stores for the entire app
 
 To query remote states for the entire app, you must expose the application's full state to other applications, including applications that are running on different machines.
