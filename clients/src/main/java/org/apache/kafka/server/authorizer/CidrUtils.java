@@ -17,9 +17,12 @@
 
 package org.apache.kafka.server.authorizer;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import org.apache.commons.net.util.SubnetUtils;
 import org.apache.commons.net.util.SubnetUtils6;
 
+@InterfaceAudience.Public
 public final class CidrUtils {
 
     private CidrUtils() {}
