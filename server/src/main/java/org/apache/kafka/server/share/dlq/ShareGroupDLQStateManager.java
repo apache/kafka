@@ -412,7 +412,9 @@ public class ShareGroupDLQStateManager {
             int batchSize = DefaultRecordBatch.RECORD_BATCH_OVERHEAD;
             Long baseTimestamp = null;
             for (long offset = nextOffsetToSend; offset <= param.lastOffset(); offset++) {
-                long timestamp = time.hiResClockMs();
+                // Must be wall-clock (epoch) time: log retention decides whether to delete this
+                // record's segment by comparing its timestamp against the current wall-clock time.
+                long timestamp = time.milliseconds();
                 ByteBuffer key = null;
                 ByteBuffer value = null;
                 Record record = originalRecordData.get(offset);
