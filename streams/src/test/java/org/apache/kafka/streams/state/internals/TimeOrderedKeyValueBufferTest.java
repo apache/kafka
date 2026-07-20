@@ -25,6 +25,7 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -97,9 +98,16 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
     }
 
     private static MockInternalProcessorContext<?, ?> makeContext() {
+        return makeContext(false);
+    }
+
+    private static MockInternalProcessorContext<?, ?> makeContext(final boolean headersEnabled) {
         final Properties properties = new Properties();
         properties.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID);
         properties.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "mock:localhost:9092");
+        if (headersEnabled) {
+            properties.setProperty(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        }
 
         final TaskId taskId = new TaskId(0, 0);
 
@@ -351,6 +359,74 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         assertThat(evicted.size(), is(1));
         assertThat(evicted.get(0).recordContext().headers(), is(recordHeaders));
+        cleanup(context, buffer);
+    }
+
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldPreservePriorValueTimestampAndHeadersWhenHeadersEnabled(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
+        final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
+        final MockInternalProcessorContext<?, ?> context = makeContext(true);
+        buffer.init(context, buffer);
+
+        final RecordHeaders headers = new RecordHeaders(new Header[]{new RecordHeader("h1", "v1".getBytes(UTF_8))});
+        final ProcessorRecordContext recordContext = getContext(0L);
+        context.setRecordContext(recordContext);
+        buffer.put(1L, new Record<>("A", new Change<>("new-value", "old-value"), 0L, headers), recordContext);
+        buffer.put(1L, new Record<>("B", new Change<>("new-value", null), 0L, headers), recordContext);
+
+        // The prior value's original timestamp/headers are unknown when a key is first buffered, so
+        // they round-trip through the ValueTimestampHeaders encoding as UNKNOWN/empty.
+        assertThat(buffer.priorValueForBuffered("A"), is(Maybe.defined(ValueTimestampHeaders.make("old-value", -1, new RecordHeaders()))));
+        assertThat(buffer.priorValueForBuffered("B"), is(Maybe.defined(null)));
+        cleanup(context, buffer);
+    }
+
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldRoundTripHeadersThroughCommitAndRestoreWhenHeadersEnabled(final String testName, final Function<String, B> bufferSupplier) {
+        setup(testName, bufferSupplier);
+
+        // Buffer a record (with headers and a record timestamp distinct from the buffer time) and
+        // commit it to the changelog using the headers-aware V4 format.
+        final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
+        final MockInternalProcessorContext<?, ?> context = makeContext(true);
+        buffer.init(context, buffer);
+
+        final RecordHeaders headers = new RecordHeaders(new Header[]{new RecordHeader("h1", "v1".getBytes(UTF_8))});
+        context.setRecordContext(new ProcessorRecordContext(5L, 0, 0, "topic", new RecordHeaders()));
+        buffer.put(0L, new Record<>("k", new Change<>("new", "old"), 5L, headers), context.recordContext());
+        buffer.commit(Map.of());
+
+        final List<ProducerRecord<Object, Object>> collected = ((MockRecordCollector) context.recordCollector()).collected();
+        assertThat(collected.size(), is(1));
+
+        // Restore the changelog into a fresh buffer and confirm the value, record timestamp and
+        // headers all survived the V4 serialization round-trip.
+        final TimeOrderedKeyValueBuffer<String, String, Change<String>> restored = bufferSupplier.apply(testName);
+        final MockInternalProcessorContext<?, ?> restoreContext = makeContext(true);
+        restored.init(restoreContext, restored);
+        final RecordBatchingStateRestoreCallback stateRestoreCallback =
+            (RecordBatchingStateRestoreCallback) restoreContext.stateRestoreCallback(testName);
+
+        final List<ConsumerRecord<byte[], byte[]>> toRestore = new LinkedList<>();
+        for (final ProducerRecord<Object, Object> pr : collected) {
+            toRestore.add(new ConsumerRecord<>(
+                "changelog-topic", 0, 0, 999, TimestampType.CREATE_TIME, -1, -1,
+                ((Bytes) pr.key()).get(), (byte[]) pr.value(), pr.headers(), Optional.empty()));
+        }
+        stateRestoreCallback.restoreBatch(toRestore);
+
+        final List<Eviction<String, Change<String>>> evicted = new LinkedList<>();
+        restored.evictWhile(() -> true, evicted::add);
+
+        assertThat(evicted.size(), is(1));
+        assertThat(evicted.get(0).key(), is("k"));
+        assertThat(evicted.get(0).value(), is(new Change<>("new", "old")));
+        assertThat(evicted.get(0).recordContext().timestamp(), is(5L));
+        assertThat(evicted.get(0).recordContext().headers(), is(headers));
+        cleanup(restoreContext, restored);
         cleanup(context, buffer);
     }
 

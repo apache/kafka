@@ -155,4 +155,11 @@ final class TimeOrderedKeyValueBufferChangelogDeserializationHelper {
         final long time = valueAndTime.getLong();
         return new DeserializationResult(time, key, bufferValue);
     }
+
+    // Version 4 has the exact same on-wire layout as Version 3; the only difference is that each
+    // stored value part is a ValueTimestampHeaders blob rather than a plain value. Since BufferValue
+    // treats the parts as opaque byte arrays, deserialization is identical to V3.
+    static DeserializationResult deserializeV4(final ConsumerRecord<byte[], byte[]> record, final Bytes key) {
+        return deserializeV3(record, key);
+    }
 }

@@ -188,18 +188,27 @@ public class SuppressScenarioTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
-            final Headers headers1 = new RecordHeaders().add("hk1", "hv1".getBytes(StandardCharsets.UTF_8));
-            inputTopic.pipeInput(new TestRecord<>("k", "v", headers1, 0L));
 
+            // Buffer the first key. It stays in the suppress buffer until stream time advances past
+            // its suppress deadline.
+            final Headers headers1 = new RecordHeaders().add("hk1", "hv1".getBytes(StandardCharsets.UTF_8));
+            inputTopic.pipeInput(new TestRecord<>("k1", "v1", headers1, 0L));
+
+            // A second key with a much larger timestamp advances stream time and flushes "k1" out of
+            // the buffer. The record being processed while "k1" is emitted carries headers2, so this
+            // is exactly the case where the wrong (current-context) headers used to leak into the
+            // suppressed output.
             final Headers headers2 = new RecordHeaders().add("hk2", "hv2".getBytes(StandardCharsets.UTF_8));
-            inputTopic.pipeInput(new TestRecord<>("k", "v", headers2, 120_000L));
+            inputTopic.pipeInput(new TestRecord<>("k2", "v2", headers2, 120_000L));
 
             final List<TestRecord<String, String>> output = driver
                 .createOutputTopic("output-suppressed", STRING_DESERIALIZER, STRING_DESERIALIZER)
                 .readRecordsToList();
 
             assertThat(output.size(), equalTo(1));
-            // Ensure record headers survive buffering and eviction by suppress
+            assertThat(output.get(0).key(), equalTo("k1"));
+            // The emitted record must carry the headers of the buffered ("k1") record, not those of
+            // the ("k2") record that triggered the eviction.
             assertThat(output.get(0).headers(), equalTo(headers1));
         }
     }
