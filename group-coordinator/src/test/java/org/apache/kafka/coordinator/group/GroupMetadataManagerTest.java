@@ -97,8 +97,8 @@ import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAss
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
-import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignor;
-import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignorException;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
@@ -19592,8 +19592,8 @@ public class GroupMetadataManagerTest {
             )
             .build();
 
-        assignor.prepareGroupAssignment(new org.apache.kafka.coordinator.group.api.assignor.streams.GroupAssignment(Map.of(
-            memberId, (org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignment)
+        assignor.prepareGroupAssignment(new org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment(Map.of(
+            memberId, (org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment)
                 org.apache.kafka.coordinator.group.streams.assignor.MemberAssignmentImpl.empty()
         )));
 

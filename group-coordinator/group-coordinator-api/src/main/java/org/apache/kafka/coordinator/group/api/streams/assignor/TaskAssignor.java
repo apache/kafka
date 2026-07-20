@@ -14,45 +14,35 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.api.assignor.streams;
+package org.apache.kafka.coordinator.group.api.streams.assignor;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.Collection;
-import java.util.Map;
-
 /**
- * The group metadata specifications required to compute the target assignment.
+ * Server side task assignor used by streams groups.
  */
 @InterfaceAudience.Public
 @InterfaceStability.Evolving
-public interface GroupSpec {
+public interface TaskAssignor {
 
     /**
-     * @return The member Ids of all members in the group.
+     * Unique name for this assignor. Used in configuration to select this assignor.
      */
-    Collection<String> memberIds();
+    String name();
 
     /**
-     * Gets the static metadata for a given member.
+     * Assigns tasks to group members based on the given assignment specification and topic metadata.
      *
-     * @param memberId The member Id.
-     * @return The static member metadata.
-     */
-    MemberAssignmentMetadata memberMetadata(String memberId);
-
-    /**
-     * Gets the current assignment state for a given member.
+     * @param groupSpec         The assignment spec which includes member metadata.
+     * @param topologyDescriber The task metadata describer.
+     * @return The new assignment for the group.
      *
-     * @param memberId The member Id.
-     * @return The current member assignment state.
+     * @throws TaskAssignorException If the assignment cannot be computed.
      */
-    MemberAssignmentState memberAssignmentState(String memberId);
-
-    /**
-     * @return Any configurations passed to the assignor.
-     */
-    Map<String, String> configs();
+    GroupAssignment assign(
+        GroupSpec groupSpec,
+        TopologyDescriber topologyDescriber
+    ) throws TaskAssignorException;
 
 }

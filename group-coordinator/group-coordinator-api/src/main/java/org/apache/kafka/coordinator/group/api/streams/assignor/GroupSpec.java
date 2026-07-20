@@ -14,26 +14,45 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.api.assignor.streams;
+package org.apache.kafka.coordinator.group.api.streams.assignor;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.errors.ApiException;
+
+import java.util.Collection;
+import java.util.Map;
 
 /**
- * Exception thrown by {@link TaskAssignor#assign(GroupSpec, TopologyDescriber)} when the group's tasks
- * cannot be assigned. Custom {@link TaskAssignor} implementations should throw this exception to signal
- * an assignment failure.
+ * The group metadata specifications required to compute the target assignment.
  */
 @InterfaceAudience.Public
 @InterfaceStability.Evolving
-public class TaskAssignorException extends ApiException {
+public interface GroupSpec {
 
-    public TaskAssignorException(String message) {
-        super(message);
-    }
+    /**
+     * @return The member Ids of all members in the group.
+     */
+    Collection<String> memberIds();
 
-    public TaskAssignorException(String message, Throwable cause) {
-        super(message, cause);
-    }
+    /**
+     * Gets the static metadata for a given member.
+     *
+     * @param memberId The member Id.
+     * @return The static member metadata.
+     */
+    MemberAssignmentMetadata memberMetadata(String memberId);
+
+    /**
+     * Gets the current assignment state for a given member.
+     *
+     * @param memberId The member Id.
+     * @return The current member assignment state.
+     */
+    MemberAssignmentState memberAssignmentState(String memberId);
+
+    /**
+     * @return Any configurations passed to the assignor.
+     */
+    Map<String, String> configs();
+
 }

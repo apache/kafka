@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.coordinator.group.streams.assignor;
 
-import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignmentMetadata;
-import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignmentState;
+import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignmentMetadata;
+import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignmentState;
 
 import java.util.Collections;
 import java.util.Map;

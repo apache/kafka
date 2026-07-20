@@ -14,25 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.api.assignor.streams;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
-import org.apache.kafka.common.annotation.InterfaceStability;
-
-import java.util.Map;
-import java.util.Objects;
 
 /**
- * The task assignment for a streams group.
- *
- * @param members The member assignments keyed by member ID.
+ * Provides the public API for broker-side custom task assignors used by Kafka Streams groups.
  */
-@InterfaceAudience.Public
-@InterfaceStability.Evolving
-public record GroupAssignment(Map<String, MemberAssignment> members) {
-
-    public GroupAssignment {
-        Objects.requireNonNull(members);
-    }
-
-}
+package org.apache.kafka.coordinator.group.api.streams.assignor;

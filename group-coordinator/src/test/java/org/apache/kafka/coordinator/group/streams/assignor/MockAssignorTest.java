@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.coordinator.group.streams.assignor;
 
-import org.apache.kafka.coordinator.group.api.assignor.streams.GroupAssignment;
-import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignment;
-import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignorException;
-import org.apache.kafka.coordinator.group.api.assignor.streams.TopologyDescriber;
+import org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TopologyDescriber;
 
 import org.junit.jupiter.api.Test;
 

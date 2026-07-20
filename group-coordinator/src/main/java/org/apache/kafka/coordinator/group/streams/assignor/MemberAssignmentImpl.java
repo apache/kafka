@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams.assignor;
 
-import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
 
 import java.util.HashMap;
 import java.util.Map;

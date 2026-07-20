@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
-import org.apache.kafka.coordinator.group.api.assignor.streams.GroupAssignment;
-import org.apache.kafka.coordinator.group.api.assignor.streams.GroupSpec;
-import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignment;
-import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignor;
-import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignorException;
-import org.apache.kafka.coordinator.group.api.assignor.streams.TopologyDescriber;
+import org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec;
+import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TopologyDescriber;
 import org.apache.kafka.coordinator.group.streams.assignor.MemberAssignmentImpl;
 
 import java.util.Map;

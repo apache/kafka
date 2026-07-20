@@ -17,11 +17,11 @@
 package org.apache.kafka.jmh.assignor;
 
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
-import org.apache.kafka.coordinator.group.api.assignor.streams.GroupAssignment;
-import org.apache.kafka.coordinator.group.api.assignor.streams.GroupSpec;
-import org.apache.kafka.coordinator.group.api.assignor.streams.MemberAssignment;
-import org.apache.kafka.coordinator.group.api.assignor.streams.TaskAssignor;
-import org.apache.kafka.coordinator.group.api.assignor.streams.TopologyDescriber;
+import org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec;
+import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TopologyDescriber;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.TopologyMetadata;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
