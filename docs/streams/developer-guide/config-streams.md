@@ -1200,7 +1200,7 @@ Added to a windows maintainMs to ensure data is not deleted from the log prematu
 <tr>  
 <td>
 
-window.size.ms (Deprecated. See [Window Serdes](datatypes.html#window-serdes) for alternatives.)
+window.size.ms (Deprecated. See [Window Serdes](../datatypes#window-serdes) for alternatives.)
 </td>  
 <td>
 
@@ -1217,7 +1217,7 @@ Sets window size for the deserializer in order to calculate window end times.
 <tr>  
 <td>
 
-windowed.inner.class.serde (Deprecated. See [Window Serdes](datatypes.html#window-serdes) for alternatives.)
+windowed.inner.class.serde (Deprecated. See [Window Serdes](../datatypes#window-serdes) for alternatives.)
 </td>  
 <td>
 
@@ -1381,7 +1381,7 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 > 
 
 > 
-> This is discussed in more detail in [Data types and serialization](datatypes.html#streams-developer-guide-serdes).
+> This is discussed in more detail in [Data types and serialization](../datatypes#streams-developer-guide-serdes).
 
 ### default.value.serde
 
@@ -1392,7 +1392,7 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 > 
 
 > 
-> This is discussed in more detail in [Data types and serialization](datatypes.html#streams-developer-guide-serdes).
+> This is discussed in more detail in [Data types and serialization](../datatypes#streams-developer-guide-serdes).
 
 ### dsl.store.format {#dsl-store-format}
 
@@ -1493,7 +1493,7 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 
 ### num.standby.replicas
 
-> The number of standby replicas. Standby replicas are shadow copies of local state stores. Kafka Streams attempts to create the specified number of replicas per store and keep them up to date as long as there are enough instances running. Standby replicas are used to minimize the latency of task failover. A task that was previously running on a failed instance is preferred to restart on an instance that has standby replicas so that the local state store restoration process from its changelog can be minimized. Details about how Kafka Streams makes use of the standby replicas to minimize the cost of resuming tasks on failover can be found in the [State](../architecture.html#streams_architecture_state) section. 
+> The number of standby replicas. Standby replicas are shadow copies of local state stores. Kafka Streams attempts to create the specified number of replicas per store and keep them up to date as long as there are enough instances running. Standby replicas are used to minimize the latency of task failover. A task that was previously running on a failed instance is preferred to restart on an instance that has standby replicas so that the local state store restoration process from its changelog can be minimized. Details about how Kafka Streams makes use of the standby replicas to minimize the cost of resuming tasks on failover can be found in the [State](../../architecture#streams_architecture_state) section. 
 > 
 > Recommendation:
 >     Increase the number of standbys to 1 to get instant fail-over, i.e., high-availability. Increasing the number of standbys requires more client-side storage space. For example, with 1 standby, 2x space is required.
@@ -1503,7 +1503,7 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 
 ### num.stream.threads
 
-> This specifies the number of stream threads in an instance of the Kafka Streams application. The stream processing code runs in these threads. For more information about Kafka Streams threading model, see [Threading Model](../architecture.html#streams_architecture_threads).
+> This specifies the number of stream threads in an instance of the Kafka Streams application. The stream processing code runs in these threads. For more information about Kafka Streams threading model, see [Threading Model](../../architecture#streams_architecture_threads).
 
 ### probing.rebalance.interval.ms
 
@@ -1634,7 +1634,7 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 
 ### processing.guarantee
 
-> The processing guarantee that should be used. Possible values are `"at_least_once"` (default) and `"exactly_once_v2"` (for EOS version 2). Deprecated config options are `"exactly_once"` (for EOS alpha), and `"exactly_once_beta"` (for EOS version 2). Using `"exactly_once_v2"` (or the deprecated `"exactly_once_beta"`) requires broker version 2.5 or newer, while using the deprecated `"exactly_once"` requires broker version 0.11.0 or newer. Note that if exactly-once processing is enabled, the default for parameter `commit.interval.ms` changes to 100ms. Additionally, consumers are configured with `isolation.level="read_committed"` and producers are configured with `enable.idempotence=true` per default. Note that by default exactly-once processing requires a cluster of at least three brokers, which is the recommended setting for production. For development, you can change this configuration by adjusting broker setting `transaction.state.log.replication.factor` and `transaction.state.log.min.isr` to the number of brokers you want to use. For more details see [Processing Guarantees](../core-concepts#streams_processing_guarantee). 
+> The processing guarantee that should be used. Possible values are `"at_least_once"` (default) and `"exactly_once_v2"` (for EOS version 2). Deprecated config options are `"exactly_once"` (for EOS alpha), and `"exactly_once_beta"` (for EOS version 2). Using `"exactly_once_v2"` (or the deprecated `"exactly_once_beta"`) requires broker version 2.5 or newer, while using the deprecated `"exactly_once"` requires broker version 0.11.0 or newer. Note that if exactly-once processing is enabled, the default for parameter `commit.interval.ms` changes to 100ms. Additionally, consumers are configured with `isolation.level="read_committed"` and producers are configured with `enable.idempotence=true` per default. Note that by default exactly-once processing requires a cluster of at least three brokers, which is the recommended setting for production. For development, you can change this configuration by adjusting broker setting `transaction.state.log.replication.factor` and `transaction.state.log.min.isr` to the number of brokers you want to use. For more details see [Processing Guarantees](../../core-concepts#streams_processing_guarantee). 
 > 
 > Recommendation:
 >     While it is technically possible to use EOS with any replication factor, using a replication factor lower than 3 effectively voids EOS. Thus it is strongly recommended to use a replication factor of 3 (together with `min.in.sync.replicas=2`). This recommendation applies to all topics (i.e. `__transaction_state`, `__consumer_offsets`, Kafka Streams internal topics, and user topics).
