@@ -42,7 +42,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
@@ -345,13 +349,16 @@ public class MirrorSourceTaskTest {
         String topicName = "test";
         TopicPartition tp = new TopicPartition(topicName, 0);
         long requestedOffset = 5L;
-        // earliest available offset > 0 indicates records were purged (data loss)
+        // earliest available offset > 0 indicates records were purged (data loss). The requested offset
+        // is below the earliest retained record but still within the log (below the log end offset).
         long earliestOffset = 10L;
+        long logEndOffset = 100L;
 
         @SuppressWarnings("unchecked")
         KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
         when(consumer.poll(any())).thenThrow(new OffsetOutOfRangeException(Map.of(tp, requestedOffset)));
         when(consumer.beginningOffsets(Set.of(tp))).thenReturn(Map.of(tp, earliestOffset));
+        when(consumer.endOffsets(Set.of(tp))).thenReturn(Map.of(tp, logEndOffset));
 
         MirrorSourceLegacyMetrics metrics = mock(MirrorSourceLegacyMetrics.class);
         MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(consumer, metrics, "cluster1",
@@ -368,13 +375,16 @@ public class MirrorSourceTaskTest {
         String topicName = "test";
         TopicPartition tp = new TopicPartition(topicName, 3);
         long requestedOffset = 42L;
-        // earliest available offset == 0 indicates the topic was deleted and recreated (reset)
+        // The requested offset is beyond the current log end offset, which happens when the topic was
+        // deleted and recreated (this log was reset to a similar size).
         long earliestOffset = 0L;
+        long logEndOffset = 5L;
 
         @SuppressWarnings("unchecked")
         KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
         when(consumer.poll(any())).thenThrow(new OffsetOutOfRangeException(Map.of(tp, requestedOffset)));
         when(consumer.beginningOffsets(Set.of(tp))).thenReturn(Map.of(tp, earliestOffset));
+        when(consumer.endOffsets(Set.of(tp))).thenReturn(Map.of(tp, logEndOffset));
 
         MirrorSourceLegacyMetrics metrics = mock(MirrorSourceLegacyMetrics.class);
         MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(consumer, metrics, "cluster1",
@@ -398,6 +408,10 @@ public class MirrorSourceTaskTest {
         beginningOffsets.put(purged, 10L);
         beginningOffsets.put(reset, 0L);
         when(consumer.beginningOffsets(Set.of(purged, reset))).thenReturn(beginningOffsets);
+        Map<TopicPartition, Long> endOffsets = new HashMap<>();
+        endOffsets.put(purged, 100L);
+        endOffsets.put(reset, 5L);
+        when(consumer.endOffsets(Set.of(purged, reset))).thenReturn(endOffsets);
 
         MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(consumer, null, "cluster1",
                 new DefaultReplicationPolicy(), null, true);
@@ -445,6 +459,63 @@ public class MirrorSourceTaskTest {
         // auto.offset.reset=none has no fallback when detection is enabled.
         verify(mockConsumer, times(1)).seekToBeginning(Set.of(newTopic));
         verifyNoMoreInteractions(mockConsumer);
+    }
+
+    @Test
+    public void testHandleOffsetOutOfRangeDetectsDataLoss() {
+        // Records were purged by retention: the requested offset is below the earliest available offset,
+        // but still within the (non-reset) log. This must be classified as data loss.
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> mockConsumer = mock(KafkaConsumer.class);
+        TopicPartition tp = new TopicPartition("topic1", 0);
+        OffsetOutOfRangeException exception = new OffsetOutOfRangeException(Map.of(tp, 5L));
+        when(mockConsumer.beginningOffsets(Set.of(tp))).thenReturn(Map.of(tp, 10L));
+        when(mockConsumer.endOffsets(Set.of(tp))).thenReturn(Map.of(tp, 100L));
+
+        MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(mockConsumer, null, "cluster1",
+                new DefaultReplicationPolicy(), null, true);
+
+        RuntimeException result = mirrorSourceTask.handleOffsetOutOfRange(exception);
+        assertTrue(result instanceof DataLossException, "Expected DataLossException but got " + result.getClass());
+    }
+
+    @Test
+    public void testHandleOffsetOutOfRangeDetectsTopicReset() {
+        // Topic was deleted and recreated: the requested offset is beyond the current log end offset.
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> mockConsumer = mock(KafkaConsumer.class);
+        TopicPartition tp = new TopicPartition("topic1", 0);
+        OffsetOutOfRangeException exception = new OffsetOutOfRangeException(Map.of(tp, 50L));
+        when(mockConsumer.beginningOffsets(Set.of(tp))).thenReturn(Map.of(tp, 0L));
+        when(mockConsumer.endOffsets(Set.of(tp))).thenReturn(Map.of(tp, 5L));
+
+        MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(mockConsumer, null, "cluster1",
+                new DefaultReplicationPolicy(), null, true);
+
+        RuntimeException result = mirrorSourceTask.handleOffsetOutOfRange(exception);
+        assertTrue(result instanceof TopicResetException, "Expected TopicResetException but got " + result.getClass());
+    }
+
+    @Test
+    public void testHandleOffsetOutOfRangeEarliestZeroIsNotAlwaysTopicReset() {
+        // A low-retention topic can have earliestOffset == 0 while records were purged. Because the
+        // requested offset is still within the log (below end offset), this must NOT be a topic reset.
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> mockConsumer = mock(KafkaConsumer.class);
+        TopicPartition tp = new TopicPartition("topic1", 0);
+        OffsetOutOfRangeException exception = new OffsetOutOfRangeException(Map.of(tp, 3L));
+        // earliest is 0 but the requested offset is below neither... requested (3) < earliest (0) is false,
+        // and requested (3) <= end (100), so this is the ambiguous case that fails fast as data loss.
+        when(mockConsumer.beginningOffsets(Set.of(tp))).thenReturn(Map.of(tp, 0L));
+        when(mockConsumer.endOffsets(Set.of(tp))).thenReturn(Map.of(tp, 100L));
+
+        MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(mockConsumer, null, "cluster1",
+                new DefaultReplicationPolicy(), null, true);
+
+        RuntimeException result = mirrorSourceTask.handleOffsetOutOfRange(exception);
+        assertFalse(result instanceof TopicResetException,
+                "earliestOffset == 0 alone must not be classified as a topic reset");
+        assertTrue(result instanceof DataLossException, "Expected DataLossException but got " + result.getClass());
     }
 
     private void compareHeaders(List<Header> expectedHeaders, List<org.apache.kafka.connect.header.Header> taskHeaders) {

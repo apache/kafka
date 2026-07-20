@@ -274,39 +274,60 @@ public class MirrorSourceTask extends SourceTask {
 
     /**
      * Translate an {@link OffsetOutOfRangeException} raised by the replication consumer into an explicit,
-     * fail-fast MirrorMaker 2 exception. For each affected partition we inspect the earliest available
-     * offset on the source cluster:
+     * fail-fast MirrorMaker 2 exception. For each affected partition we inspect both the earliest and the
+     * latest (log end) offset available on the source cluster and compare them against the requested offset:
      * <ul>
-     *     <li>earliest offset {@code == 0}: the topic was deleted and recreated, so a
-     *     {@link TopicResetException} is thrown.</li>
-     *     <li>earliest offset {@code > 0}: earlier records were purged (e.g. by a retention policy)
-     *     before they could be replicated, so a {@link DataLossException} is thrown.</li>
+     *     <li>requested offset {@code > logEndOffset}: the requested offset points beyond the end of the
+     *     log, which can only happen when the topic was deleted and recreated (its log was reset to a
+     *     smaller size). A {@link TopicResetException} is thrown.</li>
+     *     <li>requested offset {@code < earliestOffset}: earlier records were purged (e.g. by a retention
+     *     policy) before they could be replicated, so a {@link DataLossException} is thrown.</li>
      * </ul>
+     * Note that an earliest offset of {@code 0} on its own is not sufficient to conclude a topic reset:
+     * a brand-new or low-retention topic also starts at {@code 0}. The requested offset must exceed the
+     * current log end offset for the partition to be classified as a reset.
      */
     // visible for testing
     RuntimeException handleOffsetOutOfRange(OffsetOutOfRangeException e) {
         Map<TopicPartition, Long> outOfRangeOffsets = e.offsetOutOfRangePartitions();
         Map<TopicPartition, Long> beginningOffsets = consumer.beginningOffsets(outOfRangeOffsets.keySet());
+        Map<TopicPartition, Long> endOffsets = consumer.endOffsets(outOfRangeOffsets.keySet());
         boolean topicReset = false;
+        boolean dataLoss = false;
         StringBuilder details = new StringBuilder();
         for (Map.Entry<TopicPartition, Long> entry : outOfRangeOffsets.entrySet()) {
             TopicPartition tp = entry.getKey();
             long requestedOffset = entry.getValue();
             long earliestOffset = beginningOffsets.getOrDefault(tp, 0L);
-            details.append(String.format("[topic=%s, partition=%d, requestedOffset=%d, earliestAvailableOffset=%d] ",
-                    tp.topic(), tp.partition(), requestedOffset, earliestOffset));
-            if (earliestOffset == 0L) {
+            long logEndOffset = endOffsets.getOrDefault(tp, 0L);
+            details.append(String.format("[topic=%s, partition=%d, requestedOffset=%d, earliestAvailableOffset=%d, logEndOffset=%d] ",
+                    tp.topic(), tp.partition(), requestedOffset, earliestOffset, logEndOffset));
+            if (requestedOffset > logEndOffset) {
+                // The tracked offset is ahead of the current end of the log. The log must have shrunk,
+                // which indicates the topic was deleted and recreated (topic reset).
                 topicReset = true;
+            } else if (requestedOffset < earliestOffset) {
+                // The tracked offset falls below the earliest retained record: earlier records were
+                // purged before they could be replicated (data loss).
+                dataLoss = true;
             }
         }
+        // A topic reset is the more severe / less ambiguous condition, so report it first if detected.
         if (topicReset) {
             String message = "Detected source topic reset (topic deleted and recreated). The previously tracked "
-                    + "offset is no longer valid: " + details.toString().trim();
+                    + "offset is beyond the current end of the log and is no longer valid: " + details.toString().trim();
             log.error(message);
             return new TopicResetException(message, e);
-        } else {
+        } else if (dataLoss) {
             String message = "Detected data loss: source records were purged before they could be replicated. "
-                    + "The requested offset is no longer available: " + details.toString().trim();
+                    + "The requested offset is below the earliest available offset: " + details.toString().trim();
+            log.error(message);
+            return new DataLossException(message, e);
+        } else {
+            // The offset was out of range but neither classification applied (e.g. a transient race
+            // between the failing fetch and the metadata lookup). Surface it as data loss to fail fast.
+            String message = "Detected out-of-range offset that could not be conclusively classified. "
+                    + "Failing fast to avoid silent data loss: " + details.toString().trim();
             log.error(message);
             return new DataLossException(message, e);
         }
