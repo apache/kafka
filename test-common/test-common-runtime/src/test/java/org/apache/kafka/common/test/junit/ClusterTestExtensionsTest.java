@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.test.junit;
 
+import kafka.network.SocketServer;
 import kafka.server.ControllerServer;
 import kafka.server.KafkaBroker;
 
@@ -68,6 +69,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -77,6 +79,8 @@ import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import scala.jdk.javaapi.CollectionConverters;
 
@@ -593,6 +597,43 @@ public class ClusterTestExtensionsTest {
                 () -> admin.describeAcls(AclBindingFilter.ANY).values().get()
             );
             assertInstanceOf(SaslAuthenticationException.class, exception.getCause());
+        }
+    }
+
+    @ClusterTest(
+        types = {Type.KRAFT, Type.CO_KRAFT},
+        brokerSecurityProtocol = SecurityProtocol.SSL,
+        controllerSecurityProtocol = SecurityProtocol.SSL,
+        serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+        }
+    )
+    public void testSsl(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
+        KafkaBroker broker = clusterInstance.brokers().values().iterator().next();
+        ControllerServer controller = clusterInstance.controllers().values().iterator().next();
+        Function<SocketServer, String> endpoints = socketServer -> Collections.list(socketServer.dataPlaneAcceptors().keys())
+                .stream().map(endpoint -> String.format("%s:%s", endpoint.listener(), endpoint.securityProtocol())).collect(Collectors.joining(","));
+        assertEquals("EXTERNAL:SSL", endpoints.apply(broker.socketServer()));
+        assertEquals("CONTROLLER:SSL", endpoints.apply(controller.socketServer()));
+
+        String topic = "ssl-topic";
+        clusterInstance.createTopic(topic, 1, (short) 1);
+        try (Admin admin = clusterInstance.admin()) {
+            Set<String> topics = admin.listTopics().names().get();
+            assertTrue(topics.contains(topic), String.format("%s not included in %s", topic, topics));
+        }
+
+        try (Producer<byte[], byte[]> producer = clusterInstance.producer()) {
+            producer.send(new ProducerRecord<>(topic, Utils.utf8("key"), Utils.utf8("value"))).get();
+            producer.flush();
+        }
+        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer()) {
+            consumer.subscribe(List.of(topic));
+            RaftClusterInvocationContext.waitForCondition(() -> {
+                ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
+                return records.count() == 1;
+            }, "Failed to receive message");
         }
     }
 }
