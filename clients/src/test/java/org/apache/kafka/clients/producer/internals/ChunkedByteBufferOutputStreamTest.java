@@ -42,12 +42,12 @@ public class ChunkedByteBufferOutputStreamTest {
         metrics.close();
     }
 
-    private ChunkedBufferPool pool(long total, int chunkSize) {
+    private BufferPool pool(long total, int chunkSize) {
         String metricGroup = "test";
-        return new ChunkedBufferPool(total, chunkSize, metrics, time, metricGroup);
+        return new BufferPool(total, chunkSize, metrics, time, metricGroup);
     }
 
-    private List<ByteBuffer> chunks(ChunkedBufferPool pool, int chunkSize, int count) throws InterruptedException {
+    private List<ByteBuffer> chunks(BufferPool pool, int chunkSize, int count) throws InterruptedException {
         return pool.allocateChunks(chunkSize * count, 100);
     }
 
@@ -55,7 +55,7 @@ public class ChunkedByteBufferOutputStreamTest {
     @SuppressWarnings({"try", "resource"}) // Each constructor call throws, so no stream is ever created
     public void testConstructorRejectsInvalidChunks() {
         int chunkSize = 16;
-        ChunkedBufferPool p = pool(64, chunkSize);
+        BufferPool p = pool(64, chunkSize);
 
         assertThrows(IllegalArgumentException.class,
             () -> new ChunkedByteBufferOutputStream(null, chunkSize, p));
@@ -71,7 +71,7 @@ public class ChunkedByteBufferOutputStreamTest {
     @Test
     public void testOperationsRejectedAfterDeallocate() throws Exception {
         int chunkSize = 8;
-        ChunkedBufferPool p = pool(64, chunkSize);
+        BufferPool p = pool(64, chunkSize);
         try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 2), chunkSize, p)) {
             stream.write(new byte[]{1, 2, 3}, 0, 3);
 
@@ -100,7 +100,7 @@ public class ChunkedByteBufferOutputStreamTest {
     @Test
     public void testWritesDisallowedAfterBuffer() throws Exception {
         int chunkSize = 16;
-        ChunkedBufferPool p = pool(64, chunkSize);
+        BufferPool p = pool(64, chunkSize);
         try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 2), chunkSize, p)) {
             stream.write(new byte[]{1, 2, 3}, 0, 3);
 
@@ -120,7 +120,7 @@ public class ChunkedByteBufferOutputStreamTest {
     @Test
     public void testSingleChunkWriteRoundtrip() throws Exception {
         int chunkSize = 16;
-        ChunkedBufferPool p = pool(64, chunkSize);
+        BufferPool p = pool(64, chunkSize);
         try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 1), chunkSize, p)) {
 
             byte[] payload = new byte[]{1, 2, 3, 4, 5};
@@ -139,7 +139,7 @@ public class ChunkedByteBufferOutputStreamTest {
     @Test
     public void testWriteAcrossMultipleChunks() throws Exception {
         int chunkSize = 8;
-        ChunkedBufferPool p = pool(64, chunkSize);
+        BufferPool p = pool(64, chunkSize);
         try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 3), chunkSize, p)) {
 
             byte[] payload = new byte[20];
@@ -159,7 +159,7 @@ public class ChunkedByteBufferOutputStreamTest {
     @Test
     public void testRemainingSumsFreeBytesAcrossChunks() throws Exception {
         int chunkSize = 8;
-        ChunkedBufferPool p = pool(64, chunkSize);
+        BufferPool p = pool(64, chunkSize);
         try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 2), chunkSize, p)) {
 
             assertEquals(2 * chunkSize, stream.remaining());
@@ -175,7 +175,7 @@ public class ChunkedByteBufferOutputStreamTest {
     @Test
     public void testAddBuffersExtendsStream() throws Exception {
         int chunkSize = 8;
-        ChunkedBufferPool p = pool(64, chunkSize);
+        BufferPool p = pool(64, chunkSize);
         try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 1), chunkSize, p)) {
 
             // Fill the initial chunk.
@@ -197,7 +197,7 @@ public class ChunkedByteBufferOutputStreamTest {
     @Test
     public void testPositionWalksAcrossChunks() throws Exception {
         int chunkSize = 4;
-        ChunkedBufferPool p = pool(32, chunkSize);
+        BufferPool p = pool(32, chunkSize);
         try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 3), chunkSize, p)) {
 
             stream.position(6); // straddles chunk 0 (4 bytes) and chunk 1 (2 bytes)
@@ -212,7 +212,7 @@ public class ChunkedByteBufferOutputStreamTest {
     public void testDeallocateReturnsAllChunks() throws Exception {
         int chunkSize = 8;
         long total = 64;
-        ChunkedBufferPool p = pool(total, chunkSize);
+        BufferPool p = pool(total, chunkSize);
         List<ByteBuffer> initial = chunks(p, chunkSize, 3);
         try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(initial, chunkSize, p)) {
             // Also attach one extra chunk so deallocate must handle the added-buffer case too.
@@ -235,7 +235,7 @@ public class ChunkedByteBufferOutputStreamTest {
     public void testUnusedChunksReleasedOnCloseNotOnBuffer() throws Exception {
         int chunkSize = 8;
         long total = 64;
-        ChunkedBufferPool p = pool(total, chunkSize);
+        BufferPool p = pool(total, chunkSize);
         ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 3), chunkSize, p);
         // Write into the first chunk only; chunks 2 and 3 stay unused.
         byte[] payload = new byte[]{1, 2, 3};

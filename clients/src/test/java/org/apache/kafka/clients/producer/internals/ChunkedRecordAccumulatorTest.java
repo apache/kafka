@@ -82,7 +82,7 @@ public class ChunkedRecordAccumulatorTest {
     }
 
     private ChunkedRecordAccumulator newAccumulator(int batchSize, int chunkSize, long totalMemory, Compression compression) {
-        ChunkedBufferPool pool = new ChunkedBufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics");
+        BufferPool pool = new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics");
         return new ChunkedRecordAccumulator(logContext, batchSize, compression,
                 /* lingerMs */ 0, /* retryBackoffMs */ 0L, /* retryBackoffMaxMs */ 0L,
                 /* deliveryTimeoutMs */ 3200, metrics, "producer-metrics", time,
@@ -158,10 +158,10 @@ public class ChunkedRecordAccumulatorTest {
      * Pool that adds one append right after a chunk allocation returns, mocking a concurrent
      * appender racing the same batch.
      */
-    private ChunkedBufferPool poolMockingConcurrentChunkAllocation(int chunkSize, long totalMemory,
+    private BufferPool poolMockingConcurrentChunkAllocation(int chunkSize, long totalMemory,
                                                                    AtomicReference<ChunkedRecordAccumulator> injectAppendOnce,
                                                                    byte[] injectedValue) {
-        return new ChunkedBufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics") {
+        return new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics") {
             @Override
             public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
                 List<ByteBuffer> chunks = super.allocateChunks(totalSize, maxTimeToBlockMs);
@@ -190,7 +190,7 @@ public class ChunkedRecordAccumulatorTest {
         final byte[] value = new byte[350];  // needs 2 chunks
         final AtomicReference<ChunkedRecordAccumulator> injectAppendOnce = new AtomicReference<>();
 
-        ChunkedBufferPool pool = poolMockingConcurrentChunkAllocation(chunkSize, 64L * chunkSize, injectAppendOnce, value);
+        BufferPool pool = poolMockingConcurrentChunkAllocation(chunkSize, 64L * chunkSize, injectAppendOnce, value);
         ChunkedRecordAccumulator accum = new ChunkedRecordAccumulator(logContext, 8192, Compression.NONE,
                 /* lingerMs */ 0, /* retryBackoffMs */ 0L, /* retryBackoffMaxMs */ 0L,
                 /* deliveryTimeoutMs */ 3200, metrics, "producer-metrics", time,
@@ -234,7 +234,7 @@ public class ChunkedRecordAccumulatorTest {
         final AtomicReference<ChunkedRecordAccumulator> injectAppendOnce = new AtomicReference<>();
         final AtomicInteger chunkDeallocations = new AtomicInteger();
 
-        ChunkedBufferPool pool = new ChunkedBufferPool(64L * chunkSize, chunkSize, metrics, time, "producer-metrics") {
+        BufferPool pool = new BufferPool(64L * chunkSize, chunkSize, metrics, time, "producer-metrics") {
             @Override
             public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
                 List<ByteBuffer> chunks = super.allocateChunks(totalSize, maxTimeToBlockMs);
@@ -299,7 +299,7 @@ public class ChunkedRecordAccumulatorTest {
         AtomicBoolean extensionAllocated = new AtomicBoolean(false);
         AtomicInteger chunkDeallocations = new AtomicInteger(0);
 
-        ChunkedBufferPool pool = new ChunkedBufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics") {
+        BufferPool pool = new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics") {
             @Override
             public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
                 List<ByteBuffer> chunks = super.allocateChunks(totalSize, maxTimeToBlockMs);
@@ -364,7 +364,7 @@ public class ChunkedRecordAccumulatorTest {
     public void testInflightExpirationReturnsAllChunksToPool() throws Exception {
         int chunkSize = 128;
         long totalMemory = 32L * chunkSize;
-        ChunkedBufferPool pool = new ChunkedBufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics");
+        BufferPool pool = new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics");
         ChunkedRecordAccumulator accum = new ChunkedRecordAccumulator(logContext, 8192, Compression.NONE,
                 /* lingerMs */ 0, /* retryBackoffMs */ 0L, /* retryBackoffMaxMs */ 0L,
                 /* deliveryTimeoutMs */ 3200, metrics, "producer-metrics", time,
@@ -416,7 +416,7 @@ public class ChunkedRecordAccumulatorTest {
         AtomicInteger closeForAppendsCalls = new AtomicInteger();
         List<Integer> closeCallsAtAlloc = new ArrayList<>();
 
-        ChunkedBufferPool pool = new ChunkedBufferPool(16L * chunkSize, chunkSize, metrics, time, "producer-metrics") {
+        BufferPool pool = new BufferPool(16L * chunkSize, chunkSize, metrics, time, "producer-metrics") {
             @Override
             public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
                 allocTimeouts.add(maxTimeToBlockMs);
@@ -585,7 +585,7 @@ public class ChunkedRecordAccumulatorTest {
         int chunkSize = 256;
         int batchSize = 8192;
         long totalMemory = 64L * chunkSize;
-        ChunkedBufferPool pool = new ChunkedBufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics");
+        BufferPool pool = new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics");
         ChunkedRecordAccumulator accum = new ChunkedRecordAccumulator(logContext, batchSize, Compression.NONE,
                 /* lingerMs */ 0, /* retryBackoffMs */ 0L, /* retryBackoffMaxMs */ 0L,
                 /* deliveryTimeoutMs */ 3200, metrics, "producer-metrics", time,

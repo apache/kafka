@@ -38,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class ChunkedBufferPoolTest {
+public class BufferPoolChunkAllocationTest {
 
     private final MockTime time = new MockTime();
     private final Metrics metrics = new Metrics(time);
@@ -48,16 +48,16 @@ public class ChunkedBufferPoolTest {
         metrics.close();
     }
 
-    private ChunkedBufferPool pool(long totalMemory, int chunkSize) {
+    private BufferPool pool(long totalMemory, int chunkSize) {
         String metricGroup = "producer-metrics";
-        return new ChunkedBufferPool(totalMemory, chunkSize, metrics, time, metricGroup);
+        return new BufferPool(totalMemory, chunkSize, metrics, time, metricGroup);
     }
 
     /** Single-chunk request returns a list of one buffer at the chunk size. */
     @Test
     public void testAllocateOneChunk() throws Exception {
         int chunkSize = 64;
-        ChunkedBufferPool p = pool(1024, chunkSize);
+        BufferPool p = pool(1024, chunkSize);
         List<ByteBuffer> chunks = p.allocateChunks(chunkSize, 100);
         assertEquals(1, chunks.size());
         assertEquals(chunkSize, chunks.get(0).capacity());
@@ -67,7 +67,7 @@ public class ChunkedBufferPoolTest {
     @Test
     public void testAllocateRoundsUpToChunkBoundary() throws Exception {
         int chunkSize = 64;
-        ChunkedBufferPool p = pool(1024, chunkSize);
+        BufferPool p = pool(1024, chunkSize);
         // 65 bytes requested → 2 chunks (128 bytes total).
         List<ByteBuffer> chunks = p.allocateChunks(65, 100);
         assertEquals(2, chunks.size());
@@ -79,7 +79,7 @@ public class ChunkedBufferPoolTest {
     @Test
     public void testAllocateMultipleChunks() throws Exception {
         int chunkSize = 64;
-        ChunkedBufferPool p = pool(1024, chunkSize);
+        BufferPool p = pool(1024, chunkSize);
         List<ByteBuffer> chunks = p.allocateChunks(4 * chunkSize, 100);
         assertEquals(4, chunks.size());
     }
@@ -89,7 +89,7 @@ public class ChunkedBufferPoolTest {
     public void testAvailableMemoryAfterAllocation() throws Exception {
         int chunkSize = 64;
         long total = 256;
-        ChunkedBufferPool p = pool(total, chunkSize);
+        BufferPool p = pool(total, chunkSize);
         p.allocateChunks(3 * chunkSize, 100);
         assertEquals(total - 3L * chunkSize, p.availableMemory());
     }
@@ -99,7 +99,7 @@ public class ChunkedBufferPoolTest {
     public void testDeallocationRestoresMemory() throws Exception {
         int chunkSize = 64;
         long total = 256;
-        ChunkedBufferPool p = pool(total, chunkSize);
+        BufferPool p = pool(total, chunkSize);
         List<ByteBuffer> chunks = p.allocateChunks(2 * chunkSize, 100);
         for (ByteBuffer chunk : chunks)
             p.deallocate(chunk);
@@ -108,13 +108,13 @@ public class ChunkedBufferPoolTest {
 
     @Test
     public void testRejectsRequestExceedingTotalMemory() {
-        ChunkedBufferPool p = pool(128, 64);
+        BufferPool p = pool(128, 64);
         assertThrows(IllegalArgumentException.class, () -> p.allocateChunks(129, 100));
     }
 
     @Test
     public void testRejectsNonPositiveRequest() {
-        ChunkedBufferPool p = pool(128, 64);
+        BufferPool p = pool(128, 64);
         assertThrows(IllegalArgumentException.class, () -> p.allocateChunks(0, 100));
         assertThrows(IllegalArgumentException.class, () -> p.allocateChunks(-1, 100));
     }
@@ -127,7 +127,7 @@ public class ChunkedBufferPoolTest {
     public void testRollbackOnPartialFailure() throws Exception {
         int chunkSize = 64;
         long total = 2 * chunkSize;  // only 2 chunks worth of memory
-        ChunkedBufferPool p = pool(total, chunkSize);
+        BufferPool p = pool(total, chunkSize);
         // Reserve one chunk so the pool has only 1 left.
         ByteBuffer held = p.allocate(chunkSize, 100);
 
@@ -150,7 +150,7 @@ public class ChunkedBufferPoolTest {
     public void testNoPartialHoldsDuringWait() throws Exception {
         int chunkSize = 64;
         long total = 4L * chunkSize;
-        ChunkedBufferPool p = pool(total, chunkSize);
+        BufferPool p = pool(total, chunkSize);
         // Drain the pool down to 1 chunk's worth so a 2-chunk request can't be satisfied immediately.
         ByteBuffer h1 = p.allocate(chunkSize, 100);
         ByteBuffer h2 = p.allocate(chunkSize, 100);
@@ -193,7 +193,7 @@ public class ChunkedBufferPoolTest {
     public void testFifoFairnessAcrossChunkedAndSingleChunkRequests() throws Exception {
         int chunkSize = 64;
         long total = 4L * chunkSize;
-        ChunkedBufferPool p = pool(total, chunkSize);
+        BufferPool p = pool(total, chunkSize);
         // Drain the pool entirely so any new request must wait.
         ByteBuffer h1 = p.allocate(chunkSize, 100);
         ByteBuffer h2 = p.allocate(chunkSize, 100);
@@ -267,7 +267,7 @@ public class ChunkedBufferPoolTest {
     public void testSlowPathDoesNotDoubleRefundPolledChunksOnTimeout() throws Exception {
         int chunkSize = 64;
         long total = 3L * chunkSize;
-        ChunkedBufferPool p = pool(total, chunkSize);
+        BufferPool p = pool(total, chunkSize);
 
         // Drain so the next allocateChunks must wait.
         ByteBuffer h1 = p.allocate(chunkSize, 100);
@@ -322,7 +322,7 @@ public class ChunkedBufferPoolTest {
     public void testSlowPathSuccessDoesNotCorruptAccounting() throws Exception {
         int chunkSize = 64;
         long total = 3L * chunkSize;
-        ChunkedBufferPool p = pool(total, chunkSize);
+        BufferPool p = pool(total, chunkSize);
 
         // Drain so a 2-chunk request must wait.
         ByteBuffer h1 = p.allocate(chunkSize, 100);
@@ -371,7 +371,7 @@ public class ChunkedBufferPoolTest {
     public void testCloseDuringAtomicWait() throws Exception {
         int chunkSize = 64;
         long total = 2L * chunkSize;
-        ChunkedBufferPool p = pool(total, chunkSize);
+        BufferPool p = pool(total, chunkSize);
         // Drain so the next request must wait.
         ByteBuffer h1 = p.allocate(chunkSize, 100);
         ByteBuffer h2 = p.allocate(chunkSize, 100);

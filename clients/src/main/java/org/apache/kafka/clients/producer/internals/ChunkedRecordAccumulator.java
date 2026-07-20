@@ -42,7 +42,7 @@ import java.util.List;
 
 /**
  * A {@link RecordAccumulator} variant that backs each batch with fixed-size chunks drawn from a
- * {@link ChunkedBufferPool}, attaching more chunks on demand as records are appended instead of
+ * {@link BufferPool}, attaching more chunks on demand as records are appended instead of
  * reserving {@code batch.size} per batch up front. Buffered memory therefore scales with the data
  * actually written rather than with {@code active_partition_count × batch.size}.
  * <p>
@@ -59,7 +59,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
      */
     public static final int CHUNK_SIZE = 16 * 1024;
 
-    private final ChunkedBufferPool chunkedFree;
+    private final BufferPool chunkedFree;
 
     public ChunkedRecordAccumulator(LogContext logContext,
                                     int batchSize,
@@ -73,7 +73,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                                     String metricGrpName,
                                     Time time,
                                     TransactionManager transactionManager,
-                                    ChunkedBufferPool bufferPool) {
+                                    BufferPool bufferPool) {
         super(logContext, batchSize, compression, lingerMs, retryBackoffMs, retryBackoffMaxMs,
                 deliveryTimeoutMs, partitionerConfig, metrics, metricGrpName, time, transactionManager, bufferPool);
         // TODO: drop this once the incremental strategy supports compressed data (with the
@@ -95,7 +95,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                                     String metricGrpName,
                                     Time time,
                                     TransactionManager transactionManager,
-                                    ChunkedBufferPool bufferPool) {
+                                    BufferPool bufferPool) {
         this(logContext, batchSize, compression, lingerMs, retryBackoffMs, retryBackoffMaxMs,
                 deliveryTimeoutMs, new PartitionerConfig(), metrics, metricGrpName, time, transactionManager,
                 bufferPool);
@@ -254,6 +254,8 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     final ChunkedByteBufferOutputStream batchStream = bufferStream;
                     appendResult = appendNewBatch(topic, effectivePartition, dq, timestamp, key, value, headers, callbacks,
                             () -> chunkedRecordsBuilder(batchStream, firstRecordSize), nowMs);
+                    if (appendResult.needsNewBatch())
+                        throw new IllegalStateException("appendNewBatch must not return a needsNewBatch result");
                     if (appendResult.needsBufferExtension()) {
                         // A concurrent appender created an open batch we should extend rather
                         // than start a new one (detected by appendNewBatch's in-lock tryAppend).
@@ -263,8 +265,6 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                         bufferStream = null;
                         continue;
                     }
-                    if (appendResult.needsNewBatch())
-                        throw new IllegalStateException("appendNewBatch must not return a needsNewBatch result");
                     if (appendResult.newBatchCreated)
                         bufferStream = null;
                     boolean enableSwitch = allBatchesFull(dq);

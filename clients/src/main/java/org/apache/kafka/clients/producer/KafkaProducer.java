@@ -29,7 +29,6 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.producer.internals.BufferPool;
 import org.apache.kafka.clients.producer.internals.BuiltInPartitioner;
-import org.apache.kafka.clients.producer.internals.ChunkedBufferPool;
 import org.apache.kafka.clients.producer.internals.ChunkedRecordAccumulator;
 import org.apache.kafka.clients.producer.internals.KafkaProducerMetrics;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
@@ -488,7 +487,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         PRODUCER_METRIC_GROUP_NAME,
                         time,
                         transactionManager,
-                        new ChunkedBufferPool(this.totalMemorySize, ChunkedRecordAccumulator.CHUNK_SIZE, metrics, time, PRODUCER_METRIC_GROUP_NAME));
+                        new BufferPool(this.totalMemorySize, ChunkedRecordAccumulator.CHUNK_SIZE, metrics, time, PRODUCER_METRIC_GROUP_NAME));
             } else {
                 this.accumulator = new RecordAccumulator(logContext,
                         batchSize,
