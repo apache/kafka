@@ -19,9 +19,8 @@ package org.apache.kafka.streams;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.LinkedHashMap;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Properties;
 
 /**
@@ -30,10 +29,8 @@ import java.util.Properties;
  * <p>This is the entry point for constructing a {@link TopologyTestDriver}, for both
  * single and multi-partition mode. Declare the partition count of each relevant topic, then
  * call {@link #build()}: when at least one declared topic has more than one partition the driver wires
- * its multi-partition task graph; declaring only single-partition topics (or none) keeps the legacy
- * single-flat-task behaviour.
- * The {@link TopologyTestDriver} constructors remain functional but are
- * deprecated in favour of this builder.</p>
+ * its multi-partition task graph; declaring only single-partition topics (or none) keeps the
+ * single-flat-task behaviour.</p>
  *
  * <pre>{@code
  * TopologyTestDriver driver = new TopologyTestDriverBuilder(topology)
@@ -48,7 +45,7 @@ public class TopologyTestDriverBuilder {
     private final Topology topology;
     private Properties config = new Properties();
     private Optional<Instant> initialWallClockTime = Optional.empty();
-    private final Map<String, Integer> declaredTopics = new LinkedHashMap<>();
+    private final Map<String, Integer> declaredTopics = new HashMap<>();
 
     /**
      * Start building a driver for the given topology.
@@ -83,13 +80,11 @@ public class TopologyTestDriverBuilder {
     }
 
     /**
-     * Declare the number of partitions for an input, output, or internal repartition topic.
+     * Declare the number of partitions for an input or output topic.
      *
      * @param topicName  the topic to declare
      * @param partitions the number of partitions (must be at least 1)
      * @return this builder
-     * @throws IllegalArgumentException if {@code partitions} is less than 1, or the topic was already
-     *         declared with a different count
      */
     public TopologyTestDriverBuilder declareTopic(final String topicName, final int partitions) {
         Objects.requireNonNull(topicName, "topicName cannot be null");
@@ -97,18 +92,13 @@ public class TopologyTestDriverBuilder {
             throw new IllegalArgumentException(
                 "Partition count must be at least 1 (topic='" + topicName + "', partitions=" + partitions + ").");
         }
-        final Integer existing = declaredTopics.putIfAbsent(topicName, partitions);
-        if (existing != null && existing != partitions) {
-            throw new IllegalArgumentException(
-                "Topic '" + topicName + "' was already declared with " + existing
-                    + " partitions; cannot redeclare with " + partitions + ".");
-        }
+        declaredTopics.put(topicName, partitions);
         return this;
     }
 
     /**
-     * Build the driver: construct it, declare all topics, and—when at least one declared topic has more
-     * than one partition—create the multi-partition task graph.
+     * Build the driver: construct it, declare all topics, and &mdash; when at least one declared topic has more
+     * than one partition &mdash; create the multi-partition task graph.
      *
      * @return a ready-to-use {@link TopologyTestDriver}
      */
@@ -121,5 +111,6 @@ public class TopologyTestDriverBuilder {
         if (declaredTopics.values().stream().anyMatch(count -> count > 1)) {
             driver.activateMultiPartitionMode();
         }
-        return driver;}
+        return driver;
+    }
 }
