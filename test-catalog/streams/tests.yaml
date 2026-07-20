@@ -926,22 +926,32 @@ org.apache.kafka.streams.kstream.internals.KStreamForeachTest:
 - testTypeVariance
 org.apache.kafka.streams.kstream.internals.KStreamGlobalKTableJoinTest:
 - shouldClearGlobalTableEntryOnNullValueUpdates
+- shouldDropRecordAndRecordDroppedSensorWhenStreamValueIsNull
 - shouldJoinOnNullKey
 - shouldJoinOnlyIfMatchFoundOnStreamUpdates
+- shouldNameProcessorBasedOnNamedParameter
 - shouldNotJoinOnGlobalTableUpdates
 - shouldNotJoinOnNullKeyMapperValues
 - shouldNotJoinOnNullKeyMapperValuesWithNullKeys
 - shouldNotJoinWithEmptyGlobalTableOnStreamUpdates
 - shouldNotRequireCopartitioning
+- shouldPassMappedKeyAndStreamKeyToJoiner
+- shouldPassStreamKeyAsReadOnlyKeyToDeprecatedJoiner
 org.apache.kafka.streams.kstream.internals.KStreamGlobalKTableLeftJoinTest:
 - shouldClearGlobalTableEntryOnNullValueUpdates
+- shouldDropRecordAndRecordDroppedSensorWhenStreamValueIsNull
+- shouldEmitWithNullMappedKeyWhenMapperReturnsNull
+- shouldEmitWithNullTableValueOnNoMatch
 - shouldJoinOnNullKey
 - shouldJoinOnNullKeyMapperValues
 - shouldJoinOnNullKeyMapperValuesWithNullKeys
 - shouldJoinRegardlessIfMatchFoundOnStreamUpdates
+- shouldNameProcessorBasedOnNamedParameter
 - shouldNotJoinOnGlobalTableUpdates
 - shouldNotJoinWithEmptyGlobalTableOnStreamUpdates
 - shouldNotRequireCopartitioning
+- shouldPassMappedKeyAndStreamKeyToJoiner
+- shouldPassStreamKeyAsReadOnlyKeyToDeprecatedJoiner
 org.apache.kafka.streams.kstream.internals.KStreamImplTest:
 - shouldBindStateWithProcessorSupplier
 - shouldMaterializeKTableFromKStream

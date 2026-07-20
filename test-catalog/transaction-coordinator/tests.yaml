@@ -39,6 +39,36 @@ org.apache.kafka.coordinator.transaction.TransactionLogTest:
 - testReadReturnsUnknownValueVersionForInvalidValue
 - testSerializeTransactionLogValueToFlexibleVersion
 - testSerializeTransactionLogValueToHighestNonFlexibleVersion
+org.apache.kafka.coordinator.transaction.TransactionMetadataTest:
+- testAllTransactionStatesAreMapped
+- testAttemptedEpochBumpWithFencedEpoch
+- testAttemptedEpochBumpWithLastEpoch
+- testAttemptedEpochBumpWithNewlyCreatedMetadata
+- testBumpEpochNotAllowedIfEpochsExhausted
+- testEpochBumpOnEndTxn
+- testEpochBumpOnEndTxnOverflow
+- testEpochBumpWithCurrentEpochProvided
+- testFenceProducerAfterEpochsExhausted
+- testFenceProducerNotAllowedIfItWouldOverflow
+- testInitializeEpoch
+- testInvalidTransitionFromCompleteAbortToFence
+- testInvalidTransitionFromCompleteCommitToFence
+- testNormalEpochBump
+- testRotateProducerId
+- testRotateProducerIdInOngoingState
+- testRotateProducerIdInPrepareAbortState
+- testRotateProducerIdInPrepareCommitState
+- testTolerateTimeShiftDuringAddPartitions
+- testTolerateTimeShiftDuringCompleteAbort
+- testTolerateTimeShiftDuringCompleteCommit
+- testTolerateTimeShiftDuringPrepareAbort
+- testTolerateTimeShiftDuringPrepareCommit
+- testTolerateUpdateTimeResetDuringProducerIdRotation
+- testTolerateUpdateTimeShiftDuringEpochBump
+- testTransactionStateIdAndNameMapping
+- testTransitFromCompleteAbortToPrepareAbortInV2
+- testTransitFromCompleteCommitToPrepareAbortInV2
+- testTransitFromEmptyToPrepareAbortInV2
 org.apache.kafka.coordinator.transaction.TransactionStateManagerConfigTest:
 - ShouldDefineAllConfigInConfigDef
 - ShouldGetStaticValueFromClassAttribute
