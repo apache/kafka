@@ -1554,7 +1554,6 @@ public class DelayedShareFetchTest {
      * re-acquiring partitions or starting a new read. It stays in purgatory while the remote fetch is
      * pending and completes once the remote fetch is done.
      */
-    @SuppressWarnings("unchecked")
     @Test
     public void testTryCompleteWithPendingRemoteFetchInFlight() {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
@@ -2267,6 +2266,14 @@ public class DelayedShareFetchTest {
             // The remote partition tp2 is enqueued once, by completeRemoteFetchRequest.
             Mockito.verify(replicaManager, times(1)).completeDelayedShareFetchRequest(
                 new DelayedShareFetchGroupKey(shareFetch.groupId(), tp2.topicId(), tp2.partition()));
+
+            // Validate acquire and release locks for the partitions.
+            Mockito.verify(sp0, times(2)).maybeAcquireFetchLock(fetchId);
+            Mockito.verify(sp1, times(2)).maybeAcquireFetchLock(fetchId);
+            Mockito.verify(sp2, times(1)).maybeAcquireFetchLock(fetchId);
+            Mockito.verify(sp0, times(2)).releaseFetchLock(fetchId);
+            Mockito.verify(sp1, times(2)).releaseFetchLock(fetchId);
+            Mockito.verify(sp2, times(1)).releaseFetchLock(fetchId);
         }
     }
 
@@ -2893,7 +2900,7 @@ public class DelayedShareFetchTest {
         PartitionMaxBytesStrategy partitionMaxBytesStrategy = mockPartitionMaxBytes(Set.of(tp0));
 
         // The exception handler throws while handling the async read failure, simulating a failure
-        // inside the catch block's error handling. Locks must still be released via the finally.
+        // inside the catch block's error handling. Locks must still be released via the finally block.
         BiConsumer<SharePartitionKey, Throwable> exceptionHandler = mockExceptionHandler();
         doThrow(new RuntimeException("handler boom")).when(exceptionHandler).accept(any(), any());
 
@@ -2916,7 +2923,7 @@ public class DelayedShareFetchTest {
         asyncReadFuture.completeExceptionally(new RuntimeException("Simulated read failure"));
 
         // Purgatory re-invokes tryComplete; get() throws, and the error handling (exception handler)
-        // then throws too. The finally must still release the partition locks before the throw propagates.
+        // then throws too. The finally block must still release the partition locks before the throw propagates.
         assertThrows(RuntimeException.class, delayedShareFetch::tryComplete);
         Mockito.verify(sp0).releaseFetchLock(fetchId);
     }
