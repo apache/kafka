@@ -2325,6 +2325,8 @@ org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManagerTest:
 - testAcknowledgeOnClose
 - testAcknowledgeOnCloseWithPendingCommitAsync
 - testAcknowledgeOnCloseWithPendingCommitSync
+- testAcknowledgeRequestFailedWhenNodeDisappearsBeforeSend
+- testAcknowledgeResponseWithUnknownTopicIdRefreshesTopicIdOnRecreation
 - testAcknowledgementCommitCallbackMultiplePartitionCommitAsync
 - testBatchingAcknowledgeRequestStates
 - testCallbackHandlerConfig
@@ -2342,6 +2344,8 @@ org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManagerTest:
 - testFetchError
 - testFetchNormal
 - testFetchOneNodeAtATimeForRecordLimitMode
+- testFetchRecoversWhenCachedLeaderNodeDisappearsFromMetadata
+- testFetchResponseWithUnknownTopicIdRefreshesTopicIdOnRecreation
 - testFetchWithAcquiredRecords
 - testFetchWithLastRecordMissingFromBatch
 - testHandleFetchResponseError
@@ -2359,7 +2363,7 @@ org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManagerTest:
 - testPendingCommitAsyncBeforeCommitSync
 - testPiggybackAcknowledgementsInFlight
 - testPiggybackAcknowledgementsOnInitialShareSessionError
-- testPiggybackAcknowledgementsOnInitialShareSessionErrorSubscriptionChange
+- testPiggybackAcknowledgementsOnInitialShareSessionErrorTopicRemovedFromMetadata
 - testPiggybackAcknowledgementsOnInitialShareSession_ShareSessionNotFound
 - testRecordLatencyOnFetchResponseLevelError
 - testResultHandlerCompleteIfEmpty
@@ -2370,6 +2374,7 @@ org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManagerTest:
 - testRetryAcknowledgementsMultipleCommitSync
 - testRetryAcknowledgementsWithLeaderChange
 - testServerDisconnectedOnShareAcknowledge
+- testSessionHandlerRemovedAndPiggybackAcksFailedWhenNodeDisappears
 - testShareAcknowledgeInvalidResponse
 - testShareFetchAndCloseMultipleNodes
 - testShareFetchInvalidResponse
@@ -2378,6 +2383,7 @@ org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManagerTest:
 - testShareFetchWithSubscriptionChange
 - testShareFetchWithSubscriptionChangeMultipleNodes
 - testShareFetchWithSubscriptionChangeMultipleNodesEmptyAcknowledgements
+- testStaleLeaderEpochDoesNotDowngradeShareSessionLeader
 - testUnauthorizedTopic
 - testUnknownTopicIdError
 - testWhenFetchResponseReturnsWithALeadershipChangeErrorAndNewLeaderInformation
@@ -2526,6 +2532,7 @@ org.apache.kafka.clients.consumer.internals.ShareMembershipManagerTest:
 - testUnresolvedTargetAssignmentIsReconciledWhenMetadataReceived
 - testUpdateStateFailsOnResponsesWithErrors
 org.apache.kafka.clients.consumer.internals.ShareSessionHandlerTest:
+- testAcknowledgeOnlyPartitionNotInSessionIsForgotten
 - testAddNewIdAfterTopicRemovedFromSession
 - testCanSkipIfRequestEmpty
 - testForgottenPartitions
@@ -2533,6 +2540,7 @@ org.apache.kafka.clients.consumer.internals.ShareSessionHandlerTest:
 - testPartitionForgottenOnAcknowledgeOnly
 - testPartitionRemoval
 - testShareSession
+- testSkipEmptyShareFetchWhenSessionEmpty
 - testTopicIdReplaced
 org.apache.kafka.clients.consumer.internals.StreamsGroupHeartbeatRequestManagerTest:
 - testBuildingHeartbeatAssignmentSentWhenChanged
