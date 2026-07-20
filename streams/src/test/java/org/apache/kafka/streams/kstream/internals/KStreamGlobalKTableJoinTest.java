@@ -437,7 +437,7 @@ public class KStreamGlobalKTableJoinTest {
             table,
             (KeyValueMapper<Integer, String, String>) (k, v) -> v,
             (ValueJoinerWithStreamAndMappedKey<Integer, String, String, String, String>)
-                (mk, sk, v1, v2) -> v1 + v2,
+                (streamKey, mappedKey, v1, v2) -> v1 + v2,
             Named.as("join-table"));
         assertThat(builder.build().describe().toString(), containsString("Processor: join-table"));
     }
