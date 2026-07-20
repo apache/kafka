@@ -82,6 +82,8 @@ public class ChunkedByteBufferOutputStreamTest {
             assertThrows(IllegalStateException.class, stream::position);
             assertThrows(IllegalStateException.class, stream::buffer);
             assertThrows(IllegalStateException.class, stream::attachedCapacity);
+            assertThrows(IllegalStateException.class, stream::limit);
+            assertThrows(IllegalStateException.class, stream::initialCapacity);
             assertThrows(IllegalStateException.class, () -> stream.position(1));
             assertThrows(IllegalStateException.class, () -> stream.ensureRemaining(1));
             assertThrows(IllegalStateException.class, () -> stream.write(1));
@@ -98,20 +100,25 @@ public class ChunkedByteBufferOutputStreamTest {
     }
 
     @Test
-    public void testWritesDisallowedAfterBuffer() throws Exception {
+    public void testWritesDisallowedAfterClose() throws Exception {
         int chunkSize = 16;
         BufferPool p = pool(64, chunkSize);
         try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 2), chunkSize, p)) {
             stream.write(new byte[]{1, 2, 3}, 0, 3);
 
-            // buffer() finalizes the stream: it may be called repeatedly (returning the same
-            // instance), but any subsequent write must fail.
-            ByteBuffer first = stream.buffer();
-            assertSame(first, stream.buffer(), "buffer() must return the same cached instance once built");
+            // close() closes the stream for appends; any subsequent write must fail.
+            stream.close();
 
             assertThrows(IllegalStateException.class, () -> stream.write(1));
             assertThrows(IllegalStateException.class, () -> stream.write(new byte[]{4}, 0, 1));
             assertThrows(IllegalStateException.class, () -> stream.write(ByteBuffer.wrap(new byte[]{5})));
+            // Attaching more chunks is a write-preparation step, so it is disallowed once closed too.
+            assertThrows(IllegalStateException.class,
+                () -> stream.addBuffers(Collections.singletonList(ByteBuffer.allocate(chunkSize))));
+
+            // buffer() still works after close and returns the same cached instance on repeat calls.
+            ByteBuffer first = stream.buffer();
+            assertSame(first, stream.buffer(), "buffer() must return the same cached instance once built");
 
             stream.deallocate();
         }

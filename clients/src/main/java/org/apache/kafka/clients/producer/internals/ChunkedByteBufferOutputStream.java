@@ -45,8 +45,8 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     private final BufferPool pool;
     private ByteBuffer currentChunk;
     private int currentChunkIndex;
-    // Set once the content has been read for send via buffer().
-    private boolean finalized;
+    // Set once the stream is closed for appends via close(); no further writes or addBuffers are allowed.
+    private boolean closed;
     // Single-buffer view produced by flatten() and cached here so repeat buffer() calls
     // return the same instance. To be removed once scatter-gather (KAFKA-20580) is implemented.
     private ByteBuffer flattenedBuffer;
@@ -121,11 +121,12 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     }
 
     /**
-     * Guards against writes after the stream has been finalized with a call to {@link #buffer()}.
+     * Guards against writes (and {@link #addBuffers}) after the stream has been closed for appends
+     * via {@link #close()}.
      */
     private void ensureWritable() {
-        if (finalized)
-            throw new IllegalStateException("cannot write after buffer() has been called");
+        if (closed)
+            throw new IllegalStateException("cannot write after the stream has been closed");
     }
 
     /**
@@ -160,19 +161,21 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
      */
     public void addBuffers(List<ByteBuffer> newChunks) {
         ensureNotDeallocated();
+        ensureWritable();
         chunks.addAll(newChunks);
     }
 
     /**
-     * Returns the written bytes as a single contiguous buffer. Calling this finalizes the stream: no
-     * further writes are allowed (see {@link #ensureWritable()}) and later calls return the same
-     * instance, which callers such as {@code MemoryRecordsBuilder#writeDefaultBatchHeader} rely on
-     * when they write the batch header directly into the returned buffer.
+     * Returns the written bytes as a {@link ByteBuffer}.
+     * <p>
+     * Currently the chunks are flattened into a single new buffer, built once and cached so repeat
+     * calls return the same instance, which callers such as
+     * {@code MemoryRecordsBuilder#writeDefaultBatchHeader} rely on when they write the batch header
+     * directly into the returned buffer.
      */
     @Override
     public ByteBuffer buffer() {
         ensureNotDeallocated();
-        finalized = true;
         if (flattenedBuffer == null)
             flattenedBuffer = flatten();
         return flattenedBuffer;
@@ -201,10 +204,12 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     }
 
     /**
-     * Releases the fully-unused chunks, given that the stream is closed for appends.
+     * Closes the stream for appends: no further writes or {@link #addBuffers} are allowed, and the
+     * fully-unused chunks are released to the pool.
      */
     @Override
     public void close() {
+        closed = true;
         releaseUnusedChunks();
     }
 
@@ -290,11 +295,13 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
 
     @Override
     public int limit() {
+        ensureNotDeallocated();
         return Integer.MAX_VALUE;
     }
 
     @Override
     public int initialCapacity() {
+        ensureNotDeallocated();
         return chunkSize;
     }
 
@@ -318,7 +325,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
         }
         chunks.clear();
         currentChunk = null;
-        currentChunkIndex = 0;
+        currentChunkIndex = -1;
         flattenedBuffer = null;
     }
 

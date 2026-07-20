@@ -384,10 +384,11 @@ public class RecordAccumulator {
      *        subclass passes a supplier that produces a builder backed by a
      *        {@link ChunkedByteBufferOutputStream}.
      * @param nowMs The current time, in milliseconds
-     * @return the append result, which never has {@code needsNewBatch=true}: the method either
-     *         propagates a non-{@code needsNewBatch} result from an open batch created concurrently
-     *         (a success, or — incremental strategy — a {@code needsBufferExtension} signal), or it
-     *         creates the new batch here and returns the successful append to it.
+     * @return the append result, which is never {@code needsNewBatch}. It is either {@code appended}
+     *         — the record was appended, whether to a batch another thread created concurrently or to
+     *         the batch this method creates — or, in the incremental strategy, {@code needsBufferExtension}:
+     *         a concurrent appender created an extendable open batch, so the caller releases its
+     *         pre-allocated buffer and retries via the extension path.
      */
     protected RecordAppendResult appendNewBatch(String topic,
                                                 int partition,
@@ -1277,11 +1278,12 @@ public class RecordAccumulator {
      */
     public static final class RecordAppendResult {
         /**
-         * The three mutually-exclusive outcomes of an append attempt.
+         * The three mutually-exclusive outcomes of an append attempt. Internal representation only;
+         * callers use {@link #appended()}, {@link #needsBufferExtension()}, and {@link #needsNewBatch()}.
          */
-        public enum Outcome { APPENDED, NEEDS_BUFFER_EXTENSION, NEEDS_NEW_BATCH }
+        private enum Outcome { APPENDED, NEEDS_BUFFER_EXTENSION, NEEDS_NEW_BATCH }
 
-        public final Outcome outcome;
+        private final Outcome outcome;
         public final FutureRecordMetadata future;
         public final boolean batchIsFull;
         public final boolean newBatchCreated;
