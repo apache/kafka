@@ -487,8 +487,13 @@ public class FileRecords extends AbstractRecords implements Closeable {
                         StandardOpenOption.WRITE);
             } else {
                 RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
-                randomAccessFile.setLength(initFileSize);
-                return randomAccessFile.getChannel();
+                try {
+                    randomAccessFile.setLength(initFileSize);
+                    return randomAccessFile.getChannel();
+                } catch (IOException e) {
+                    randomAccessFile.close();
+                    throw e;
+                }
             }
         } else {
             return FileChannel.open(file.toPath());
