@@ -37,7 +37,7 @@ import java.util.function.BiFunction;
 /**
  * Decides which records {@link RecordsIterator} decodes when turning a batch into a {@link Batch}.
  * A batch's records are decoded only when this strategy is interested in them; otherwise the batch
- * is returned as a {@link Batch#notDecoded} batch carrying only the offset information.
+ * is returned as a {@link Batch#skipped} batch carrying only the offset information.
  *
  * <p>Use one of the factory methods to select the behavior:
  * <ul>
@@ -88,9 +88,11 @@ public final class RecordsDecodingStrategy<T> {
 
     Batch<T> readBatch(DefaultRecordBatch batch, BufferSupplier bufferSupplier, int numRecords) {
         if (batch.isControlBatch()) {
-            return decodeControlRecords ? readControlBatch(batch, bufferSupplier, numRecords) : notDecodedBatch(batch, numRecords);
+            return decodeControlRecords ? readControlBatch(batch, bufferSupplier, numRecords) : skippedBatch(batch, numRecords);
         } else {
-            return serde.isPresent() ? readDataBatch(batch, serde.get(), bufferSupplier, numRecords) : notDecodedBatch(batch, numRecords);
+            return serde
+                .map(value -> readDataBatch(batch, value, bufferSupplier, numRecords))
+                .orElseGet(() -> skippedBatch(batch, numRecords));
         }
     }
 
@@ -132,8 +134,8 @@ public final class RecordsDecodingStrategy<T> {
         }
     }
 
-    private Batch<T> notDecodedBatch(DefaultRecordBatch batch, int numRecords) {
-        return Batch.notDecoded(
+    private Batch<T> skippedBatch(DefaultRecordBatch batch, int numRecords) {
+        return Batch.skipped(
             batch.baseOffset(),
             batch.partitionLeaderEpoch(),
             batch.maxTimestamp(),
@@ -142,6 +144,7 @@ public final class RecordsDecodingStrategy<T> {
         );
     }
 
+    @SuppressWarnings("NPathComplexity")
     private static <U> U readRecord(
         InputStream stream,
         int totalBatchSize,

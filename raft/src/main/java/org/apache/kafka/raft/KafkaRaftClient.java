@@ -452,7 +452,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     private Optional<SnapshotReader<T>> latestSnapshot() {
         return log.latestSnapshot().map(reader ->
-            RecordsSnapshotReader.of(reader,
+            RecordsSnapshotReader.ofDecodingStrategy(reader,
                 RecordsDecodingStrategy.dataAndControl(serde),
                 BufferSupplier.create(),
                 MAX_BATCH_SIZE_BYTES,

@@ -223,7 +223,8 @@ public final class Batch<T> implements Iterable<T> {
     }
 
     /**
-     * Create a batch whose records were not decoded, carrying only the offset information.
+     * Create a batch whose records were skipped, carrying only the offset information without the
+     * record bytes.
      *
      * @param baseOffset offset of the first record in the batch
      * @param epoch epoch of the leader that created this batch
@@ -231,7 +232,7 @@ public final class Batch<T> implements Iterable<T> {
      * @param sizeInBytes number of bytes used by this batch
      * @param numRecords the number of records in this batch
      */
-    public static <T> Batch<T> notDecoded(
+    public static <T> Batch<T> skipped(
         long baseOffset,
         int epoch,
         long appendTimestamp,

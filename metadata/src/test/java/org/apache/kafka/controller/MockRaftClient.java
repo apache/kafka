@@ -33,7 +33,6 @@ import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
-import org.apache.kafka.raft.internals.RecordsDecodingStrategy;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.OffsetAndEpoch;
@@ -480,7 +479,7 @@ public final class MockRaftClient implements RaftClient<ApiMessageAndVersion>, A
                                 listenerData.handleLoadSnapshot(
                                     RecordsSnapshotReader.of(
                                         snapshot.get(),
-                                        RecordsDecodingStrategy.dataAndControl(MetadataRecordSerde.INSTANCE),
+                                        MetadataRecordSerde.INSTANCE,
                                         BufferSupplier.create(),
                                         Integer.MAX_VALUE,
                                         true,

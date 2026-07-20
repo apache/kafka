@@ -155,7 +155,7 @@
 
     <!-- Raft -->
     <suppress checks="NPathComplexity"
-              files="(DynamicVoter|DecodingStrategy).java"/>
+              files="DynamicVoter.java"/>
 
     <suppress checks="JavaNCSS"
               files="(KafkaRaftClientTest).java"/>

@@ -65,7 +65,7 @@ final class RecordsSnapshotWriterTest {
             snapshot.freeze();
         }
 
-        try (RecordsSnapshotReader<String> reader = RecordsSnapshotReader.of(
+        try (RecordsSnapshotReader<String> reader = RecordsSnapshotReader.ofDecodingStrategy(
                 new MockRawSnapshotReader(snapshotId, buffer.get()),
                 RecordsDecodingStrategy.dataAndControl(STRING_SERDE),
                 BufferSupplier.NO_CACHING,
@@ -138,7 +138,7 @@ final class RecordsSnapshotWriterTest {
             snapshot.freeze();
         }
 
-        try (RecordsSnapshotReader<String> reader = RecordsSnapshotReader.of(
+        try (RecordsSnapshotReader<String> reader = RecordsSnapshotReader.ofDecodingStrategy(
                 new MockRawSnapshotReader(snapshotId, buffer.get()),
                 RecordsDecodingStrategy.dataAndControl(STRING_SERDE),
                 BufferSupplier.NO_CACHING,
@@ -196,7 +196,7 @@ final class RecordsSnapshotWriterTest {
             snapshot.freeze();
         }
 
-        try (RecordsSnapshotReader<String> reader = RecordsSnapshotReader.of(
+        try (RecordsSnapshotReader<String> reader = RecordsSnapshotReader.ofDecodingStrategy(
                 new MockRawSnapshotReader(snapshotId, buffer.get()),
                 RecordsDecodingStrategy.dataAndControl(STRING_SERDE),
                 BufferSupplier.NO_CACHING,

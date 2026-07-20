@@ -28,7 +28,6 @@ import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.raft.RaftManager;
-import org.apache.kafka.raft.internals.RecordsDecodingStrategy;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.test.TestUtils;
@@ -101,7 +100,7 @@ public class RaftClusterSnapshotTest {
         for (var raftManager : raftManagers.values()) {
             try (var snapshot = RecordsSnapshotReader.of(
                     raftManager.raftLog().latestSnapshot().get(),
-                    RecordsDecodingStrategy.dataAndControl(MetadataRecordSerde.INSTANCE),
+                    MetadataRecordSerde.INSTANCE,
                     BufferSupplier.create(),
                     1,
                     true,

@@ -163,7 +163,7 @@ public final class Snapshots {
     public static long lastContainedLogTimestamp(RawSnapshotReader reader, LogContext logContext) {
         try (var bufferSupplier = new BufferSupplier.GrowableBufferSupplier();
              RecordsSnapshotReader<ByteBuffer> recordsSnapshotReader =
-                RecordsSnapshotReader.of(
+                RecordsSnapshotReader.ofDecodingStrategy(
                     reader,
                     RecordsDecodingStrategy.controlOnly(),
                     bufferSupplier,

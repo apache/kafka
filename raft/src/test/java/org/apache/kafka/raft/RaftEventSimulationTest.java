@@ -1251,7 +1251,7 @@ public class RaftEventSimulationTest {
                 assertTrue(snapshotId.offset() <= highWatermark.getAsLong());
                 startOffset.set(snapshotId.offset());
 
-                try (SnapshotReader<Integer> snapshot = RecordsSnapshotReader.of(
+                try (SnapshotReader<Integer> snapshot = RecordsSnapshotReader.ofDecodingStrategy(
                         log.readSnapshot(snapshotId).get(),
                         RecordsDecodingStrategy.dataAndControl(node.intSerde),
                         BufferSupplier.create(),

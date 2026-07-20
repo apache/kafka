@@ -262,7 +262,7 @@ public final class KRaftControlRecordStateMachine {
 
             // Load the snapshot since the listener is at the start of the log or the log doesn't have the next entry.
             try (BufferSupplier bufferSupplier = BufferSupplier.create();
-                 SnapshotReader<?> reader = RecordsSnapshotReader.of(
+                 SnapshotReader<?> reader = RecordsSnapshotReader.ofDecodingStrategy(
                     rawSnapshot,
                     RecordsDecodingStrategy.controlOnly(),
                     bufferSupplier,

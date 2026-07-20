@@ -25,6 +25,7 @@ import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.internals.RecordsDecodingStrategy;
 import org.apache.kafka.raft.internals.RecordsIterator;
 import org.apache.kafka.server.common.OffsetAndEpoch;
+import org.apache.kafka.server.common.serialization.RecordSerde;
 
 import java.util.NoSuchElementException;
 import java.util.Optional;
@@ -109,6 +110,25 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
     }
 
     public static <T> RecordsSnapshotReader<T> of(
+        RawSnapshotReader snapshot,
+        RecordSerde<T> serde,
+        BufferSupplier bufferSupplier,
+        int maxBatchSize,
+        boolean doCrcValidation,
+        LogContext logContext
+    ) {
+        return ofDecodingStrategy(
+            snapshot,
+            RecordsDecodingStrategy.dataAndControl(serde),
+            bufferSupplier,
+            maxBatchSize,
+            doCrcValidation,
+            logContext
+        );
+    }
+
+    // Used within the raft module to pass an explicit decoding strategy.
+    public static <T> RecordsSnapshotReader<T> ofDecodingStrategy(
         RawSnapshotReader snapshot,
         RecordsDecodingStrategy<T> decodingStrategy,
         BufferSupplier bufferSupplier,

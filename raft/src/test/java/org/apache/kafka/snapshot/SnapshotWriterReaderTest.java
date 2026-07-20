@@ -192,7 +192,7 @@ public final class SnapshotWriterReaderTest {
         OffsetAndEpoch snapshotId,
         int maxBatchSize
     ) {
-        return RecordsSnapshotReader.of(
+        return RecordsSnapshotReader.ofDecodingStrategy(
             context.log.readSnapshot(snapshotId).get(),
             RecordsDecodingStrategy.dataAndControl(context.serde),
             BufferSupplier.create(),
@@ -252,7 +252,7 @@ public final class SnapshotWriterReaderTest {
     public static void assertDataSnapshot(List<List<String>> batches, RawSnapshotReader reader) {
         assertDataSnapshot(
             batches,
-            RecordsSnapshotReader.of(
+            RecordsSnapshotReader.ofDecodingStrategy(
                 reader,
                 RecordsDecodingStrategy.dataAndControl(new StringSerde()),
                 BufferSupplier.create(),

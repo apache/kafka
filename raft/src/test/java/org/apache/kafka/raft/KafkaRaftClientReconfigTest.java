@@ -118,7 +118,7 @@ public class KafkaRaftClientReconfigTest {
 
         // check the bootstrap snapshot exists and contains the expected records
         assertEquals(BOOTSTRAP_SNAPSHOT_ID, context.log.latestSnapshotId().get());
-        try (SnapshotReader<?> reader = RecordsSnapshotReader.of(
+        try (SnapshotReader<?> reader = RecordsSnapshotReader.ofDecodingStrategy(
                 context.log.latestSnapshot().get(),
                 RecordsDecodingStrategy.dataAndControl(context.serde),
                 BufferSupplier.NO_CACHING,
