@@ -96,7 +96,7 @@ public final class RecordsDecodingStrategy<T> {
         }
     }
 
-    private Batch<T> readControlBatch(DefaultRecordBatch batch, BufferSupplier bufferSupplier, int numRecords) {
+    private static <T> Batch<T> readControlBatch(DefaultRecordBatch batch, BufferSupplier bufferSupplier, int numRecords) {
         InputStream input = batch.recordInputStream(bufferSupplier);
         try {
             List<ControlRecord> records = new ArrayList<>(numRecords);
@@ -115,7 +115,7 @@ public final class RecordsDecodingStrategy<T> {
         }
     }
 
-    private Batch<T> readDataBatch(DefaultRecordBatch batch, RecordSerde<T> serde, BufferSupplier bufferSupplier, int numRecords) {
+    private static <T> Batch<T> readDataBatch(DefaultRecordBatch batch, RecordSerde<T> serde, BufferSupplier bufferSupplier, int numRecords) {
         InputStream input = batch.recordInputStream(bufferSupplier);
         try {
             List<T> records = new ArrayList<>(numRecords);
@@ -134,7 +134,7 @@ public final class RecordsDecodingStrategy<T> {
         }
     }
 
-    private Batch<T> skippedBatch(DefaultRecordBatch batch, int numRecords) {
+    private static <T> Batch<T> skippedBatch(DefaultRecordBatch batch, int numRecords) {
         return Batch.skipped(
             batch.baseOffset(),
             batch.partitionLeaderEpoch(),
