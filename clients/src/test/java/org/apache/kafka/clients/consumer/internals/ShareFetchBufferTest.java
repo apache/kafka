@@ -136,15 +136,19 @@ public class ShareFetchBufferTest {
             fetchBuffer.setNextInLineFetch(completedFetch(topicAPartition0));
             fetchBuffer.add(List.of(completedFetch(topicAPartition1), completedFetch(topicAPartition2)));
             assertEquals(allPartitions, fetchBuffer.bufferedPartitions());
+            assertEquals(Set.of(0), fetchBuffer.bufferedNodes());
 
             fetchBuffer.setNextInLineFetch(null);
             assertEquals(partitions(topicAPartition1, topicAPartition2), fetchBuffer.bufferedPartitions());
+            assertEquals(Set.of(0), fetchBuffer.bufferedNodes());
 
             fetchBuffer.poll();
             assertEquals(partitions(topicAPartition2), fetchBuffer.bufferedPartitions());
+            assertEquals(Set.of(0), fetchBuffer.bufferedNodes());
 
             fetchBuffer.poll();
             assertEquals(partitions(), fetchBuffer.bufferedPartitions());
+            assertEquals(Set.of(), fetchBuffer.bufferedNodes());
         }
     }
 

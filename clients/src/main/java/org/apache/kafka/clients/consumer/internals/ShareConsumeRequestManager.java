@@ -40,6 +40,7 @@ import org.apache.kafka.common.requests.ShareAcknowledgeRequest;
 import org.apache.kafka.common.requests.ShareAcknowledgeResponse;
 import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
+import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
@@ -246,10 +247,15 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             }
         }
 
+        // The set of nodes which will have records buffers for the consumer to consume and acknowledge.
+        // Even when assignments change, we do not close the share sessions which have buffered records.
+        Set<Integer> bufferedNodes = shareFetchBuffer.bufferedNodes();
+
         // Iterate over the session handlers to see if there are acknowledgements to be sent for partitions
         // which are no longer part of the current subscription or which have disappeared from the metadata.
         // Also include session handlers which have no fetchable partitions so the share sessions can be
-        // brought up to date.
+        // brought up to date. Finally, close share sessions for nodes which no longer have any share partitions
+        // and which do not have buffered data.
         sessionHandlers.forEach((nodeId, sessionHandler) -> {
             Node node = cluster.nodeById(nodeId);
             if (node == null) {
@@ -258,6 +264,10 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             }
             if (nodesWithPendingRequests.contains(nodeId)) {
                 log.trace("Skipping fetch because previous request to {} has not been processed", nodeId);
+            } else if (isSessionCloseCandidate(node, sessionHandler, handlerMap, bufferedNodes)) {
+                log.debug("Closing share session for node {} which is now empty", nodeId);
+                sessionHandler.notifyClose();
+                handlerMap.put(node, sessionHandler);
             } else {
                 prepareRemainingSessionHandlerForRequest(node, sessionHandler, handlerMap);
             }
@@ -362,6 +372,49 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         } else {
             handlerMap.putIfAbsent(node, sessionHandler);
         }
+    }
+
+    /**
+     * A share session can be closed if it's empty and has no buffered data.
+     *
+     * @return True if the node's share session can be closed.
+     */
+    private boolean isSessionCloseCandidate(Node node,
+                                            ShareSessionHandler sessionHandler,
+                                            Map<Node, ShareSessionHandler> handlerMap,
+                                            Set<Integer> bufferedNodes) {
+        final int nodeId = node.id();
+        return !closing                                 // the close path already managed closing share sessions
+            && sessionHandler.isSessionEmpty()          // no share partitions remain in the share session
+            && !sessionHandler.isNewSession()           // the session is established on the broker
+            && !handlerMap.containsKey(node)            // the handler is already being used in this poll
+            && !bufferedNodes.contains(nodeId)          // no records for this node remain in the fetch buffer
+            && !nodeHasPendingAcknowledgements(nodeId); // the node has pending acknowledgements
+    }
+
+    /**
+     * Returns whether there are acknowledgements still being delivered for the node, whether waiting to be sent,
+     * in flight, or being processed as part of an acknowledge request state.
+     */
+    private boolean nodeHasPendingAcknowledgements(int nodeId) {
+        Map<TopicIdPartition, Acknowledgements> acksToSend = fetchAcknowledgementsToSend.get(nodeId);
+        if (acksToSend != null && !acksToSend.isEmpty()) {
+            return true;
+        }
+
+        Map<TopicIdPartition, Acknowledgements> acksInFlight = fetchAcknowledgementsInFlight.get(nodeId);
+        if (acksInFlight != null && !acksInFlight.isEmpty()) {
+            return true;
+        }
+
+        Tuple<AcknowledgeRequestState> requestStates = acknowledgeRequestStates.get(nodeId);
+        if (requestStates != null) {
+            return areRequestStatesInProgress(requestStates.getSyncRequestQueue())
+                || isRequestStateInProgress(requestStates.getAsyncRequest())
+                || isRequestStateInProgress(requestStates.getCloseRequest());
+        }
+
+        return false;
     }
 
     /**
@@ -1028,6 +1081,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 fetchRecordsNodeId.compareAndSet(fetchTarget.id(), -1);
             }
             nodesWithPendingRequests.remove(fetchTarget.id());
+
+            maybeRemoveSessionHandlerOnClose(fetchTarget.id(), requestData);
         }
     }
 
@@ -1068,6 +1123,19 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 fetchRecordsNodeId.compareAndSet(fetchTarget.id(), -1);
             }
             nodesWithPendingRequests.remove(fetchTarget.id());
+
+            maybeRemoveSessionHandlerOnClose(fetchTarget.id(), requestData);
+        }
+    }
+
+    /**
+     * If the completed ShareFetch was closing the share session with a final epoch, the session handler
+     * is no longer quired. A subsequent poll will establish a new session if partitions return to the node.
+     */
+    private void maybeRemoveSessionHandlerOnClose(int nodeId, ShareFetchRequestData requestData) {
+        if (requestData.shareSessionEpoch() == ShareRequestMetadata.FINAL_EPOCH) {
+            log.debug("Removing session handler for node {} after closing empty share session", nodeId);
+            sessionHandlers.remove(nodeId);
         }
     }
 

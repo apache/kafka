@@ -68,6 +68,7 @@ import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.ShareAcknowledgeResponse;
 import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
+import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -1177,6 +1178,105 @@ public class ShareConsumeRequestManagerTest {
 
         // The partition has already been removed from the session, so no further ShareFetch is built.
         assertEquals(0, shareConsumeRequestManager.sendFetches());
+    }
+
+    @Test
+    public void testCloseSessionWhenNoSharePartitions() {
+        buildRequestManager();
+
+        assignFromSubscribed(Set.of(tp0));
+
+        // Establish the share session by fetching from tp0 and consume the (empty) buffered fetch.
+        sendFetchAndVerifyResponse(records, emptyAcquiredRecords, Errors.NONE);
+        fetchRecords();
+
+        Node nodeId0 = metadata.fetch().leaderFor(tp0);
+        assertNotNull(shareConsumeRequestManager.sessionHandler(nodeId0.id()));
+
+        // The partition is no longer assigned, so a ShareFetch is built to remove tip0 from the share session,
+        // leaving it empty.
+        subscriptions.assignFromSubscribed(Set.of());
+        assertEquals(1, sendFetches());
+        client.prepareResponse(ShareFetchResponse.of(Errors.NONE, 0, new LinkedHashMap<>(), List.of(), 0));
+        networkClientDelegate.poll(time.timer(0));
+
+        // The next poll closes the now-empty share session using a final-epoch ShareFetch.
+        NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
+        assertEquals(1, pollResult.unsentRequests.size());
+        assertEquals(nodeId0, pollResult.unsentRequests.get(0).node().get());
+        ShareFetchRequest.Builder builder = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
+        assertEquals(ShareRequestMetadata.FINAL_EPOCH, builder.data().shareSessionEpoch());
+        assertTrue(builder.data().topics().isEmpty());
+        assertTrue(builder.data().forgottenTopicsData().isEmpty());
+
+        // The session handle is only removed once the close response is received.
+        assertNotNull(shareConsumeRequestManager.sessionHandler(nodeId0.id()));
+        client.prepareResponse(ShareFetchResponse.of(Errors.NONE, 0, new LinkedHashMap<>(), List.of(), 0));
+        networkClientDelegate.poll(time.timer(0));
+        assertNull(shareConsumeRequestManager.sessionHandler(nodeId0.id()));
+
+        // With the session closed, there is nothing left to send.
+        assertEquals(0, shareConsumeRequestManager.sendFetches());
+    }
+
+    @Test
+    public void testDoesNotCloseSessionWhileRecordsBuffered() {
+        buildRequestManager();
+
+        assignFromSubscribed(Set.of(tp0));
+
+        // Establish the share session, leaving the fetched records unconsumed in the buffer.
+        sendFetchAndVerifyResponse(records, acquiredRecords, Errors.NONE);
+        Node nodeId0 = metadata.fetch().leaderFor(tp0);
+
+        // Remove the partition from the session so the session becomes empty.
+        subscriptions.assignFromSubscribed(Set.of());
+        assertEquals(1, sendFetches());
+        client.prepareResponse(ShareFetchResponse.of(Errors.NONE, 0, new LinkedHashMap<>(), List.of(), 0));
+        networkClientDelegate.poll(time.timer(0));
+
+        // The session is empty, but records for the node remain in the buffer, so the session is not closed.
+        assertEquals(0, shareConsumeRequestManager.sendFetchesReturnPollResult().unsentRequests.size());
+        assertNotNull(shareConsumeRequestManager.sessionHandler(nodeId0.id()));
+
+        // One the buffered records have been consumed, the empty session is closed.
+        fetchRecords();
+        NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
+        assertEquals(1, pollResult.unsentRequests.size());
+        assertEquals(nodeId0, pollResult.unsentRequests.get(0).node().get());
+        ShareFetchRequest.Builder builder = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
+        assertEquals(ShareRequestMetadata.FINAL_EPOCH, builder.data().shareSessionEpoch());
+    }
+
+    @Test
+    public void testDoesNotCloseSessionWhileAcknowledgementsPending() {
+        buildRequestManager();
+
+        assignFromSubscribed(Set.of(tp0));
+
+        // Establish the share session by fetching from tp0 and consume the (empty) buffered fetch.
+        sendFetchAndVerifyResponse(records, emptyAcquiredRecords, Errors.NONE);
+        fetchRecords();
+
+        Node nodeId0 = metadata.fetch().leaderFor(tp0);
+        assertNotNull(shareConsumeRequestManager.sessionHandler(nodeId0.id()));
+
+        // Remove the partition from the session so the session becomes empty.
+        subscriptions.assignFromSubscribed(Set.of());
+        assertEquals(1, sendFetches());
+        client.prepareResponse(ShareFetchResponse.of(Errors.NONE, 0, new LinkedHashMap<>(), List.of(), 0));
+        networkClientDelegate.poll(time.timer(0));
+
+        // There are acknowledgements still to be delivered for the node, so the session is not closed.
+        Acknowledgements acknowledgements = getAcknowledgements(0, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT);
+        shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(nodeId0.id(), acknowledgements)));
+
+        NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.poll(time.milliseconds());
+        assertEquals(1, pollResult.unsentRequests.size());
+        assertEquals(nodeId0, pollResult.unsentRequests.get(0).node().get());
+        ShareFetchRequest.Builder builder = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
+        assertNotEquals(ShareRequestMetadata.FINAL_EPOCH, builder.data().shareSessionEpoch());
+        assertNotNull(shareConsumeRequestManager.sessionHandler(nodeId0.id()));
     }
 
     @Test

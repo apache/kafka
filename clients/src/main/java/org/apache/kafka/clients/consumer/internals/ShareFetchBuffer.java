@@ -189,6 +189,27 @@ public class ShareFetchBuffer implements AutoCloseable {
         }
     }
 
+    /**
+     * Return the set of node IDs for which we have data in the buffer.
+     *
+     * @return Node ID set
+     */
+    Set<Integer> bufferedNodes() {
+        lock.lock();
+        try {
+            final Set<Integer> nodes = new HashSet<>();
+
+            if (nextInLineFetch != null && !nextInLineFetch.isConsumed()) {
+                nodes.add(nextInLineFetch.nodeId);
+            }
+
+            completedFetches.forEach(cf -> nodes.add(cf.nodeId));
+            return nodes;
+        } finally {
+            lock.unlock();
+        }
+    }
+
     private void drainAll() {
         lock.lock();
         try {
