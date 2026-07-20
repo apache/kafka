@@ -27,6 +27,7 @@ import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -525,7 +526,7 @@ public class MeteredKeyValueStoreTest {
     public void shouldGetRecordsWithPrefixKey() {
         setUp();
         final StringSerializer stringSerializer = new StringSerializer();
-        when(inner.prefixScan(KEY, stringSerializer))
+        when(inner.prefixScan(eq(KEY.getBytes(StandardCharsets.UTF_8)), any(ByteArraySerializer.class)))
             .thenReturn(new KeyValueIteratorStub<>(Collections.singletonList(BYTE_KEY_VALUE_PAIR).iterator()));
         init();
 
@@ -553,7 +554,8 @@ public class MeteredKeyValueStoreTest {
     public void shouldTrackOpenIteratorsMetric() {
         setUp();
         final StringSerializer stringSerializer = new StringSerializer();
-        when(inner.prefixScan(KEY, stringSerializer)).thenReturn(KeyValueIterators.emptyIterator());
+        when(inner.prefixScan(eq(KEY.getBytes(StandardCharsets.UTF_8)), any(ByteArraySerializer.class)))
+            .thenReturn(KeyValueIterators.emptyIterator());
         init();
 
         final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
@@ -736,7 +738,7 @@ public class MeteredKeyValueStoreTest {
         final ReadOnlyKeyValueStore<Bytes, byte[]> innerView = mock(ReadOnlyKeyValueStore.class);
         final StringSerializer stringSerializer = new StringSerializer();
         when(inner.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
-        when(innerView.prefixScan(KEY, stringSerializer))
+        when(innerView.prefixScan(eq(KEY.getBytes(StandardCharsets.UTF_8)), any(ByteArraySerializer.class)))
             .thenReturn(new KeyValueIteratorStub<>(Collections.singletonList(BYTE_KEY_VALUE_PAIR).iterator()));
         init();
 
