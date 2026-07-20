@@ -50,8 +50,9 @@ import java.util.concurrent.TimeUnit;
 public class ElectionBenchmarks {
 
     /**
-     * Starting state: the local node is Unattached in a {@code voterCount}-node cluster. A fresh
-     * context is built per invocation because driving the election to completion consumes it.
+     * Starting state: the local node is Unattached in a {@code voterCount}-node cluster. The measured
+     * election is a one-way transition to the Leader state, so once it completes there is no Unattached
+     * node left to elect. A fresh context is rebuilt before each invocation to restore the starting state.
      */
     @State(Scope.Thread)
     public static class UnattachedWithMultipleVoters {

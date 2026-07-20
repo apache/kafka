@@ -96,8 +96,10 @@ public class KRaftBenchmarkingCounters {
     }
 
     /**
-     * Accumulates this invocation's work deltas drained from {@code context} into these counters.
-     * {@code expectedRequest}/{@code expectedResponse} declare the request/response API key the
+     * Records this invocation's work-counter deltas from {@code context}, drains the expected in-flight
+     * request/response RPCs, and counts one completed benchmark operation.
+     *
+     * <p>{@code expectedRequest}/{@code expectedResponse} declare the request/response API key the
      * benchmark expects to still be in-flight at the end of the invocation; an empty {@code Optional}
      * means none are expected, and any leftover fails fast. See
      * {@link RaftClientBenchmarkContext#drainExpectedRequestsAndAssertEmpty} and
