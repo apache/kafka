@@ -635,6 +635,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="org.apache.kafka.streams.processor.internals.StreamsProducer"/>
             <Class name="org.apache.kafka.streams.processor.internals.TaskManager"/>
             <Class name="org.apache.kafka.streams.state.internals.AbstractRocksDBSegmentedBytesStore"/>
+            <Class name="org.apache.kafka.streams.state.internals.AbstractDualSchemaRocksDBSegmentedBytesStore"/>
             <Class name="org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer"/>
             <Class name="org.apache.kafka.streams.state.internals.RocksDBStore"/>
             <Class name="org.apache.kafka.streams.state.internals.TimeOrderedCachingWindowStore"/>

@@ -33,10 +33,9 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
-import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
+import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.RecordDeserializationException;
 import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.common.errors.ShareSessionNotFoundException;
 import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
@@ -1054,7 +1053,7 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
 
             AtomicBoolean callbackCalled = new AtomicBoolean(false);
             shareConsumer.setAcknowledgementCommitCallback((offsetsByTopicPartition, exception) -> {
-                assertInstanceOf(NotLeaderOrFollowerException.class, exception);
+                assertInstanceOf(NetworkException.class, exception);
                 callbackCalled.set(true);
             });
 
@@ -1083,7 +1082,7 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
             assertEquals(1, commitResult.size());
             TopicIdPartition tidp = commitResult.keySet().iterator().next();
             assertTrue(commitResult.get(tidp).isPresent());
-            assertInstanceOf(NotLeaderOrFollowerException.class, commitResult.get(tidp).get());
+            assertInstanceOf(NetworkException.class, commitResult.get(tidp).get());
 
             assertTrue(callbackCalled.get());
         }
@@ -1098,7 +1097,7 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
 
             AtomicBoolean callbackCalled = new AtomicBoolean(false);
             shareConsumer.setAcknowledgementCommitCallback((offsetsByTopicPartition, exception) -> {
-                assertInstanceOf(NotLeaderOrFollowerException.class, exception);
+                assertInstanceOf(NetworkException.class, exception);
                 callbackCalled.set(true);
             });
 
@@ -1147,7 +1146,7 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
 
             AtomicBoolean callbackCalled = new AtomicBoolean(false);
             shareConsumer.setAcknowledgementCommitCallback((offsetsByTopicPartition, exception) -> {
-                assertInstanceOf(ShareSessionNotFoundException.class, exception);
+                assertInstanceOf(NetworkException.class, exception);
                 callbackCalled.set(true);
             });
 

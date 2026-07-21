@@ -230,7 +230,9 @@ public class TopologyMetadata {
                         log.debug("Detected that the topology is currently empty, waiting for something to process");
                         version.topologyCV.await();
                     } catch (final InterruptedException e) {
-                        log.error("StreamThread was interrupted while waiting on empty topology", e);
+                        Thread.currentThread().interrupt();
+                        log.warn("StreamThread was interrupted while waiting on empty topology", e);
+                        break;
                     }
                 }
             } finally {
