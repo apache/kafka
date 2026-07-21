@@ -214,6 +214,50 @@ public class SuppressScenarioTest {
     }
 
     @Test
+    public void shouldPropagateHeadersThroughSuppressionInHeadersMode() {
+        // Coverage (not discrimination) for headers mode: with dsl.store.format=HEADERS the suppress
+        // buffer serializes each value as a ValueTimestampHeaders blob (V4 changelog format). This
+        // exercises that serialize/deserialize path end to end and confirms headers still propagate
+        // through suppression. Note it passes in the default store format too, so on its own it does
+        // not prove the headers feature - see TimeOrderedKeyValueBufferTest for the discriminating tests.
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        builder
+            .table(
+                "input",
+                Consumed.with(STRING_SERDE, STRING_SERDE),
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>with(STRING_SERDE, STRING_SERDE)
+                    .withCachingDisabled()
+                    .withLoggingDisabled()
+            )
+            .suppress(untilTimeLimit(Duration.ofSeconds(1), unbounded()))
+            .toStream()
+            .to("output-suppressed", Produced.with(STRING_SERDE, STRING_SERDE));
+
+        final Topology topology = builder.build();
+
+        config.setProperty(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
+
+            final Headers headers1 = new RecordHeaders().add("hk1", "hv1".getBytes(StandardCharsets.UTF_8));
+            inputTopic.pipeInput(new TestRecord<>("k1", "v1", headers1, 0L));
+
+            final Headers headers2 = new RecordHeaders().add("hk2", "hv2".getBytes(StandardCharsets.UTF_8));
+            inputTopic.pipeInput(new TestRecord<>("k2", "v2", headers2, 120_000L));
+
+            final List<TestRecord<String, String>> output = driver
+                .createOutputTopic("output-suppressed", STRING_DESERIALIZER, STRING_DESERIALIZER)
+                .readRecordsToList();
+
+            assertThat(output.size(), equalTo(1));
+            assertThat(output.get(0).key(), equalTo("k1"));
+            assertThat(output.get(0).headers(), equalTo(headers1));
+        }
+    }
+
+    @Test
     public void shouldSuppressIntermediateEventsWithTimeLimit() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<String, Long> valueCounts = builder

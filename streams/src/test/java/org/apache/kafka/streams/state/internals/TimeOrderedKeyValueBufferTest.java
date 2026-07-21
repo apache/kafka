@@ -19,9 +19,12 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -40,12 +43,14 @@ import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -61,6 +66,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer.CHANGELOG_HEADERS;
+import static org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer.CHANGELOG_HEADERS_WITH_HEADERS;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -359,6 +365,104 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         assertThat(evicted.size(), is(1));
         assertThat(evicted.get(0).recordContext().headers(), is(recordHeaders));
+        cleanup(context, buffer);
+    }
+
+    @Test
+    public void shouldDeserializeEvictedValueWithBufferedHeadersNotEvictionTriggerHeaders() {
+        // A header-dependent value deserializer (as e.g. Schema Registry serdes are, and String
+        // serdes are not) records which headers it is handed. This lets us prove that on eviction the
+        // buffered value is deserialized with the headers it was buffered with, and not with the
+        // headers of whatever record happened to trigger the eviction.
+        final List<String> headerSeenByDeserializer = new ArrayList<>();
+        final Deserializer<String> recordingDeserializer = new Deserializer<>() {
+            @Override
+            public String deserialize(final String topic, final byte[] data) {
+                return data == null ? null : new String(data, UTF_8);
+            }
+
+            @Override
+            public String deserialize(final String topic, final Headers headers, final byte[] data) {
+                final Header header = headers.lastHeader("h");
+                headerSeenByDeserializer.add(header == null ? "none" : new String(header.value(), UTF_8));
+                return deserialize(topic, data);
+            }
+        };
+        final Serde<String> valueSerde = Serdes.serdeFrom(new StringSerializer(), recordingDeserializer);
+
+        final InMemoryTimeOrderedKeyValueChangeBuffer<String, String, Change<String>> buffer =
+            new InMemoryTimeOrderedKeyValueChangeBuffer.Builder<>("test-buffer", Serdes.String(), valueSerde).build();
+        final MockInternalProcessorContext<?, ?> context = makeContext();
+        buffer.init(context, buffer);
+
+        // Buffer key "k" while the processing context carries header h=A.
+        final RecordHeaders bufferedHeaders = new RecordHeaders(new Header[]{new RecordHeader("h", "A".getBytes(UTF_8))});
+        final ProcessorRecordContext bufferedContext = new ProcessorRecordContext(0L, 0, 0, "topic", bufferedHeaders);
+        context.setRecordContext(bufferedContext);
+        buffer.put(0L, new Record<>("k", new Change<>("v", null), 0L, bufferedHeaders), bufferedContext);
+
+        // Eviction happens later, while a DIFFERENT record (header h=B) is being processed.
+        context.setRecordContext(new ProcessorRecordContext(1L, 1, 0, "topic",
+            new RecordHeaders(new Header[]{new RecordHeader("h", "B".getBytes(UTF_8))})));
+
+        final List<Eviction<String, Change<String>>> evicted = new LinkedList<>();
+        buffer.evictWhile(() -> true, evicted::add);
+
+        assertThat(evicted.size(), is(1));
+        // The buffered value must be deserialized with its own headers ("A"), not the headers of the
+        // record that triggered the eviction ("B").
+        assertThat(headerSeenByDeserializer, is(singletonList("A")));
+        cleanup(context, buffer);
+    }
+
+    @Test
+    public void shouldStorePerValueHeadersInChangelogWhenHeadersEnabled() {
+        // Discrimination test for headers mode: with dsl.store.format=HEADERS the buffer writes the V4
+        // changelog format in which the old and new value parts each carry their OWN headers and
+        // timestamp. This is something the plain (V3) format structurally cannot represent.
+        final InMemoryTimeOrderedKeyValueChangeBuffer<String, String, Change<String>> buffer =
+            new InMemoryTimeOrderedKeyValueChangeBuffer.Builder<>("test-buffer", Serdes.String(), Serdes.String()).build();
+        final MockInternalProcessorContext<?, ?> context = makeContext(true);
+        buffer.init(context, buffer);
+
+        final RecordHeaders headersA = new RecordHeaders(new Header[]{new RecordHeader("h", "A".getBytes(UTF_8))});
+        final RecordHeaders headersB = new RecordHeaders(new Header[]{new RecordHeader("h", "B".getBytes(UTF_8))});
+
+        // First buffer "k" (value "v1") with headers A at record timestamp 10.
+        final ProcessorRecordContext contextA = new ProcessorRecordContext(10L, 0, 0, "topic", headersA);
+        context.setRecordContext(contextA);
+        buffer.put(0L, new Record<>("k", new Change<>("v1", null), 10L, headersA), contextA);
+
+        // In-place update (value "v2", old "v1") with headers B at record timestamp 20. The old value
+        // ("v1") should keep the first record's headers/timestamp (A / 10) via carry-forward.
+        final ProcessorRecordContext contextB = new ProcessorRecordContext(20L, 1, 0, "topic", headersB);
+        context.setRecordContext(contextB);
+        buffer.put(0L, new Record<>("k", new Change<>("v2", "v1"), 20L, headersB), contextB);
+
+        buffer.commit(Map.of());
+
+        final List<ProducerRecord<Object, Object>> collected = ((MockRecordCollector) context.recordCollector()).collected();
+        assertThat(collected.size(), is(1));
+        final ProducerRecord<Object, Object> changelogRecord = collected.get(0);
+
+        // Headers mode uses the V4 changelog format...
+        assertThat(changelogRecord.headers(), is(CHANGELOG_HEADERS_WITH_HEADERS));
+
+        // ...and each value part carries its own headers + timestamp.
+        final BufferValue bufferValue = BufferValue.deserialize(ByteBuffer.wrap((byte[]) changelogRecord.value()));
+        final ValueTimestampHeadersDeserializer<String> deserializer =
+            new ValueTimestampHeadersDeserializer<>(new StringDeserializer());
+
+        final ValueTimestampHeaders<String> newValue = deserializer.deserialize("topic", bufferValue.newValue());
+        assertThat(newValue.value(), is("v2"));
+        assertThat(newValue.timestamp(), is(20L));
+        assertThat(newValue.headers(), is(headersB));
+
+        final ValueTimestampHeaders<String> oldValue = deserializer.deserialize("topic", bufferValue.oldValue());
+        assertThat(oldValue.value(), is("v1"));
+        assertThat(oldValue.timestamp(), is(10L));    // carried forward from the first record
+        assertThat(oldValue.headers(), is(headersA));  // carried forward from the first record
+
         cleanup(context, buffer);
     }
 
