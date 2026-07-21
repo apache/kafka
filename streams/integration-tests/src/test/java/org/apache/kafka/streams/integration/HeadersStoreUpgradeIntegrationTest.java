@@ -38,8 +38,8 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
-import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.SessionStore;
@@ -67,9 +67,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
+import java.util.function.Predicate;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
@@ -84,6 +85,7 @@ public class HeadersStoreUpgradeIntegrationTest {
     private static final String SESSION_STORE_NAME = "session-store";
     private static final long WINDOW_SIZE_MS = 1000L;
     private static final long RETENTION_MS = Duration.ofDays(1).toMillis();
+    private static final long DEFAULT_STORE_TIMEOUT_MS = 60_000L;
     private static final Logger LOG = LoggerFactory.getLogger(HeadersStoreUpgradeIntegrationTest.class);
     private String inputStream;
 
@@ -133,6 +135,117 @@ public class HeadersStoreUpgradeIntegrationTest {
             .process(processorSupplier, storeName);
         kafkaStreams = new KafkaStreams(builder.build(), props);
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(kafkaStreams);
+    }
+
+    /**
+     * Produces a single record (no explicit timestamp) into the input stream.
+     */
+    private <K, V> void produce(final K key, final V value) {
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+            inputStream,
+            singletonList(KeyValue.pair(key, value)),
+            TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class),
+            CLUSTER.time,
+            false);
+    }
+
+    /**
+     * Produces a single record with an explicit timestamp into the input stream.
+     */
+    private <K, V> void produce(final K key, final V value, final long timestamp) {
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
+            inputStream,
+            singletonList(KeyValue.pair(key, value)),
+            TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class),
+            timestamp,
+            false);
+    }
+
+    /**
+     * Produces a single record with an explicit timestamp and headers into the input stream.
+     */
+    private <K, V> void produce(final K key, final V value, final long timestamp, final Headers headers) {
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
+            inputStream,
+            singletonList(KeyValue.pair(key, value)),
+            TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class),
+            headers,
+            timestamp,
+            false);
+    }
+
+    /**
+     * Shared skeleton for the process-and-verify / verify helpers: waits until the named store is
+     * queryable and the supplied condition holds. The store lookup is retried until the condition
+     * passes or the timeout elapses; transient query {@link Exception}s (e.g. store not yet ready)
+     * are swallowed and treated as "not ready". {@link AssertionError} thrown by a condition that
+     * uses {@code assertX(...)} is intentionally NOT caught here, so those helpers still fail fast.
+     */
+    private <S> void awaitStore(final String storeName,
+                                final QueryableStoreType<S> storeType,
+                                final Predicate<S> condition,
+                                final String message) throws Exception {
+        TestUtils.waitForCondition(() -> {
+            try {
+                final S store = IntegrationTestUtils.getStore(storeName, kafkaStreams, storeType);
+                if (store == null) {
+                    return false;
+                }
+                return condition.test(store);
+            } catch (final Exception swallow) {
+                LOG.error("Error while checking store result", swallow);
+                return false;
+            }
+        }, DEFAULT_STORE_TIMEOUT_MS, message);
+    }
+
+    /**
+     * Computes the start of the window that {@code timestamp} falls into for the fixed
+     * {@link #WINDOW_SIZE_MS} window size.
+     */
+    private static long windowStart(final long timestamp) {
+        return timestamp - (timestamp % WINDOW_SIZE_MS);
+    }
+
+    /**
+     * Finds the value stored for {@code key} in the window that {@code timestamp} falls into,
+     * by scanning {@link ReadOnlyWindowStore#all()} and matching on key and window start.
+     */
+    private static Optional<ValueTimestampHeaders<String>> findWindowedValue(
+        final ReadOnlyWindowStore<String, ValueTimestampHeaders<String>> store,
+        final String key,
+        final long timestamp) {
+        final long start = windowStart(timestamp);
+        try (final KeyValueIterator<Windowed<String>, ValueTimestampHeaders<String>> iterator = store.all()) {
+            while (iterator.hasNext()) {
+                final KeyValue<Windowed<String>, ValueTimestampHeaders<String>> kv = iterator.next();
+                if (kv.key.key().equals(key) && kv.key.window().start() == start) {
+                    return Optional.ofNullable(kv.value);
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Finds the aggregation stored for {@code key} in the session whose window starts at
+     * {@code timestamp}, by scanning {@link ReadOnlySessionStore#fetch(Object)}. Sessions in this
+     * test are always created as {@code SessionWindow(ts, ts)}, so matching on window start is
+     * equivalent to matching both start and end.
+     */
+    private static Optional<AggregationWithHeaders<String>> findSessionValue(
+        final ReadOnlySessionStore<String, AggregationWithHeaders<String>> store,
+        final String key,
+        final long timestamp) {
+        try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.fetch(key)) {
+            while (iterator.hasNext()) {
+                final KeyValue<Windowed<String>, AggregationWithHeaders<String>> kv = iterator.next();
+                if (kv.key.key().equals(key) && kv.key.window().start() == timestamp) {
+                    return Optional.ofNullable(kv.value);
+                }
+            }
+        }
+        return Optional.empty();
     }
 
     private void assertDowngradeThrowsProcessorStateException(
@@ -371,33 +484,13 @@ public class HeadersStoreUpgradeIntegrationTest {
                                                                  final long timestamp)
         throws Exception {
 
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-            inputStream,
-            singletonList(KeyValue.pair(key, value)),
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(),
-                StringSerializer.class,
-                StringSerializer.class),
-            timestamp,
-            false);
+        produce(key, value, timestamp);
 
-        TestUtils.waitForCondition(
-            () -> {
-                try {
-                    final ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> store =
-                        IntegrationTestUtils.getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedKeyValueStore());
-
-                    if (store == null) {
-                        return false;
-                    }
-
-                    final ValueAndTimestamp<V> result = store.get(key);
-                    return result != null && result.value().equals(value) && result.timestamp() == timestamp;
-                } catch (final Exception swallow) {
-                    LOG.error("Error while checking store result", swallow);
-                    return false;
-                }
+        awaitStore(STORE_NAME, QueryableStoreTypes.<K, V>timestampedKeyValueStore(),
+            store -> {
+                final ValueAndTimestamp<V> result = store.get(key);
+                return result != null && result.value().equals(value) && result.timestamp() == timestamp;
             },
-            60_000L,
             "Could not get expected result in time.");
     }
 
@@ -405,33 +498,13 @@ public class HeadersStoreUpgradeIntegrationTest {
                                                       final V value)
         throws Exception {
 
-        IntegrationTestUtils.produceKeyValuesSynchronously(
-            inputStream,
-            singletonList(KeyValue.pair(key, value)),
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(),
-                StringSerializer.class,
-                StringSerializer.class),
-            CLUSTER.time,
-            false);
+        produce(key, value);
 
-        TestUtils.waitForCondition(
-            () -> {
-                try {
-                    final ReadOnlyKeyValueStore<K, V> store =
-                        IntegrationTestUtils.getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.keyValueStore());
-
-                    if (store == null) {
-                        return false;
-                    }
-
-                    final V result = store.get(key);
-                    return result != null && result.equals(value);
-                } catch (final Exception swallow) {
-                    LOG.error("Error while verifying legacy value", swallow);
-                    return false;
-                }
+        awaitStore(STORE_NAME, QueryableStoreTypes.<K, V>keyValueStore(),
+            store -> {
+                final V result = store.get(key);
+                return result != null && result.equals(value);
             },
-            60_000L,
             "Could not get expected result in time.");
     }
 
@@ -440,24 +513,11 @@ public class HeadersStoreUpgradeIntegrationTest {
                                                      final long timestamp)
         throws Exception {
 
-        TestUtils.waitForCondition(
-            () -> {
-                try {
-                    final ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> store =
-                        IntegrationTestUtils.getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedKeyValueStore());
-
-                    if (store == null) {
-                        return false;
-                    }
-
-                    final ValueAndTimestamp<V> result = store.get(key);
-                    return result != null && result.value().equals(value) && result.timestamp() == timestamp;
-                } catch (final Exception swallow) {
-                    LOG.error("Error while waiting for expected result", swallow);
-                    return false;
-                }
+        awaitStore(STORE_NAME, QueryableStoreTypes.<K, V>timestampedKeyValueStore(),
+            store -> {
+                final ValueAndTimestamp<V> result = store.get(key);
+                return result != null && result.value().equals(value) && result.timestamp() == timestamp;
             },
-            60_000L,
             "Could not get expected result in time.");
     }
 
@@ -468,36 +528,16 @@ public class HeadersStoreUpgradeIntegrationTest {
                                                                         final Headers expectedHeaders)
         throws Exception {
 
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-            inputStream,
-            singletonList(KeyValue.pair(key, value)),
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(),
-                StringSerializer.class,
-                StringSerializer.class),
-            headers,
-            timestamp,
-            false);
+        produce(key, value, timestamp, headers);
 
-        TestUtils.waitForCondition(
-            () -> {
-                try {
-                    final ReadOnlyKeyValueStore<K, ValueTimestampHeaders<V>> store = IntegrationTestUtils
-                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders());
-
-                    if (store == null)
-                        return false;
-
-                    final ValueTimestampHeaders<V> result = store.get(key);
-                    return result != null
-                        && result.value().equals(value)
-                        && result.timestamp() == timestamp
-                        && result.headers().equals(expectedHeaders);
-                } catch (final Exception swallow) {
-                    LOG.error("Failed to retrieve expected result", swallow);
-                    return false;
-                }
+        awaitStore(STORE_NAME, QueryableStoreTypes.<K, V>timestampedKeyValueStoreWithHeaders(),
+            store -> {
+                final ValueTimestampHeaders<V> result = store.get(key);
+                return result != null
+                    && result.value().equals(value)
+                    && result.timestamp() == timestamp
+                    && result.headers().equals(expectedHeaders);
             },
-            60_000L,
             "Could not get expected result in time.");
     }
 
@@ -509,62 +549,30 @@ public class HeadersStoreUpgradeIntegrationTest {
                                                                         final Headers expectedHeaders)
         throws Exception {
 
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-            inputStream,
-            singletonList(KeyValue.pair(key, value)),
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(),
-                StringSerializer.class,
-                StringSerializer.class),
-            headers,
-            timestamp,
-            false);
+        produce(key, value, timestamp, headers);
 
-        TestUtils.waitForCondition(
-            () -> {
-                try {
-                    final ReadOnlyKeyValueStore<K, ValueTimestampHeaders<V>> store = IntegrationTestUtils
-                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders());
-
-                    if (store == null)
-                        return false;
-
-                    final ValueTimestampHeaders<V> result = store.get(key);
-                    return result != null
-                        && result.value().equals(value)
-                        && result.timestamp() == expectedTimestamp
-                        && result.headers().equals(expectedHeaders);
-                } catch (final Exception swallow) {
-                    LOG.error("Failed to retrieve expected result", swallow);
-                    return false;
-                }
+        awaitStore(STORE_NAME, QueryableStoreTypes.<K, V>timestampedKeyValueStoreWithHeaders(),
+            store -> {
+                final ValueTimestampHeaders<V> result = store.get(key);
+                return result != null
+                    && result.value().equals(value)
+                    && result.timestamp() == expectedTimestamp
+                    && result.headers().equals(expectedHeaders);
             },
-            60_000L,
             "Could not get expected result in time.");
     }
 
     private <K, V> void verifyLegacyValuesWithEmptyHeaders(final K key,
                                                            final V value,
                                                            final long timestamp) throws Exception {
-        TestUtils.waitForCondition(
-            () -> {
-                try {
-                    final ReadOnlyKeyValueStore<K, ValueTimestampHeaders<V>> store = IntegrationTestUtils
-                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedKeyValueStoreWithHeaders());
-
-                    if (store == null)
-                        return false;
-
-                    final ValueTimestampHeaders<V> result = store.get(key);
-                    return result != null
-                        && result.value().equals(value)
-                        && result.timestamp() == timestamp
-                        && result.headers().toArray().length == 0;
-                } catch (final Exception swallow) {
-                    LOG.error("Failed to retrieve expected result", swallow);
-                    return false;
-                }
+        awaitStore(STORE_NAME, QueryableStoreTypes.<K, V>timestampedKeyValueStoreWithHeaders(),
+            store -> {
+                final ValueTimestampHeaders<V> result = store.get(key);
+                return result != null
+                    && result.value().equals(value)
+                    && result.timestamp() == timestamp
+                    && result.headers().toArray().length == 0;
             },
-            60_000L,
             "Could not get expected result in time.");
     }
 
@@ -814,78 +822,39 @@ public class HeadersStoreUpgradeIntegrationTest {
     private void processPlainWindowedKeyValueAndVerify(final String key,
                                                        final String value,
                                                        final long timestamp) throws Exception {
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-            inputStream,
-            List.of(KeyValue.pair(key, value)),
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(),
-                StringSerializer.class,
-                StringSerializer.class),
-            timestamp,
-            false);
+        produce(key, value, timestamp);
 
-        TestUtils.waitForCondition(() -> {
-            try {
-                final ReadOnlyWindowStore<String, String> store =
-                    IntegrationTestUtils.getStore(WINDOW_STORE_NAME, kafkaStreams, QueryableStoreTypes.windowStore());
-
-                if (store == null) {
-                    return false;
-                }
-
-                final long windowStart = timestamp - (timestamp % WINDOW_SIZE_MS);
-                final String result = store.fetch(key, windowStart);
-
+        awaitStore(WINDOW_STORE_NAME, QueryableStoreTypes.<String, String>windowStore(),
+            store -> {
+                final String result = store.fetch(key, windowStart(timestamp));
                 return result != null && result.equals(value);
-            } catch (final Exception e) {
-                return false;
-            }
-        }, 60_000L, "Could not verify plain window value in time.");
+            },
+            "Could not verify plain window value in time.");
     }
 
     private void verifyPlainWindowValueWithEmptyHeadersAndTimestamp(final String key,
                                                                     final String value,
                                                                     final long windowTimestamp,
                                                                     final long expectedTimestamp) throws Exception {
-        TestUtils.waitForCondition(() -> {
-            try {
-                final ReadOnlyWindowStore<String, ValueTimestampHeaders<String>> store =
-                    IntegrationTestUtils.getStore(WINDOW_STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedWindowStoreWithHeaders());
-
-                if (store == null) {
+        awaitStore(WINDOW_STORE_NAME, QueryableStoreTypes.<String, String>timestampedWindowStoreWithHeaders(),
+            store -> {
+                final Optional<ValueTimestampHeaders<String>> result = findWindowedValue(store, key, windowTimestamp);
+                if (result.isEmpty()) {
                     return false;
                 }
 
-                final long windowStart = windowTimestamp - (windowTimestamp % WINDOW_SIZE_MS);
-
-                final List<KeyValue<Windowed<String>, ValueTimestampHeaders<String>>> results = new LinkedList<>();
-                try (final KeyValueIterator<Windowed<String>, ValueTimestampHeaders<String>> iterator = store.all()) {
-                    while (iterator.hasNext()) {
-                        final KeyValue<Windowed<String>, ValueTimestampHeaders<String>> kv = iterator.next();
-                        if (kv.key.key().equals(key) && kv.key.window().start() == windowStart) {
-                            results.add(kv);
-                        }
-                    }
-                }
-
-                if (results.isEmpty()) {
-                    return false;
-                }
-
-                final ValueTimestampHeaders<String> result = results.get(0).value;
-                assertNotNull(result, "Result should not be null");
-                assertEquals(value, result.value(), "Value should match");
-                assertEquals(expectedTimestamp, result.timestamp(), "Timestamp should be " + expectedTimestamp + " for plain store migration");
+                final ValueTimestampHeaders<String> value0 = result.get();
+                assertNotNull(value0, "Result should not be null");
+                assertEquals(value, value0.value(), "Value should match");
+                assertEquals(expectedTimestamp, value0.timestamp(), "Timestamp should be " + expectedTimestamp + " for plain store migration");
 
                 // Verify headers exist but are empty (migrated from plain store without headers or timestamps)
-                assertNotNull(result.headers(), "Headers should not be null for migrated data");
-                assertEquals(0, result.headers().toArray().length, "Headers should be empty for migrated data");
+                assertNotNull(value0.headers(), "Headers should not be null for migrated data");
+                assertEquals(0, value0.headers().toArray().length, "Headers should be empty for migrated data");
 
                 return true;
-            } catch (final Exception e) {
-                LOG.error("Error while verifying plain window value with empty headers and timestamp", e);
-                return false;
-            }
-        }, 60_000L, "Could not verify plain window value with empty headers and timestamp in time.");
+            },
+            "Could not verify plain window value with empty headers and timestamp in time.");
     }
 
     private void processPlainWindowedKeyValueWithHeadersAndVerify(final String key,
@@ -893,85 +862,33 @@ public class HeadersStoreUpgradeIntegrationTest {
                                                                   final long timestamp,
                                                                   final Headers headers,
                                                                   final Headers expectedHeaders) throws Exception {
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-            inputStream,
-            List.of(KeyValue.pair(key, value)),
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(),
-                StringSerializer.class,
-                StringSerializer.class),
-            headers,
-            timestamp,
-            false);
+        produce(key, value, timestamp, headers);
 
-        TestUtils.waitForCondition(() -> {
-            try {
-                final ReadOnlyWindowStore<String, ValueTimestampHeaders<String>> store =
-                    IntegrationTestUtils.getStore(WINDOW_STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedWindowStoreWithHeaders());
-
-                if (store == null) {
-                    return false;
-                }
-
-                final long windowStart = timestamp - (timestamp % WINDOW_SIZE_MS);
-
-                final List<KeyValue<Windowed<String>, ValueTimestampHeaders<String>>> results = new LinkedList<>();
-                try (final KeyValueIterator<Windowed<String>, ValueTimestampHeaders<String>> iterator = store.all()) {
-                    while (iterator.hasNext()) {
-                        final KeyValue<Windowed<String>, ValueTimestampHeaders<String>> kv = iterator.next();
-                        if (kv.key.key().equals(key) && kv.key.window().start() == windowStart) {
-                            results.add(kv);
-                        }
-                    }
-                }
-
-                if (results.isEmpty()) {
-                    return false;
-                }
-
-                final ValueTimestampHeaders<String> result = results.get(0).value;
+        awaitStore(WINDOW_STORE_NAME, QueryableStoreTypes.<String, String>timestampedWindowStoreWithHeaders(),
+            store -> {
+                final Optional<ValueTimestampHeaders<String>> result = findWindowedValue(store, key, timestamp);
                 // For plain window stores, timestamp is always -1 since it's not preserved
-                return result != null
-                    && result.value().equals(value)
-                    && result.timestamp() == -1L
-                    && result.headers().equals(expectedHeaders);
-            } catch (final Exception e) {
-                e.printStackTrace();
-                return false;
-            }
-        }, 60_000L, "Could not verify plain windowed value with headers in time.");
+                return result.isPresent()
+                    && result.get().value().equals(value)
+                    && result.get().timestamp() == -1L
+                    && result.get().headers().equals(expectedHeaders);
+            },
+            "Could not verify plain windowed value with headers in time.");
     }
 
     private void processWindowedKeyValueAndVerifyTimestamped(final String key,
                                                              final String value,
                                                              final long timestamp) throws Exception {
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-            inputStream,
-            singletonList(KeyValue.pair(key, value)),
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(),
-                StringSerializer.class,
-                StringSerializer.class),
-            timestamp,
-            false);
+        produce(key, value, timestamp);
 
-        TestUtils.waitForCondition(() -> {
-            try {
-                final ReadOnlyWindowStore<String, ValueAndTimestamp<String>> store =
-                    IntegrationTestUtils.getStore(WINDOW_STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedWindowStore());
-
-                if (store == null) {
-                    return false;
-                }
-
-                final long windowStart = timestamp - (timestamp % WINDOW_SIZE_MS);
-                final ValueAndTimestamp<String> result = store.fetch(key, windowStart);
-
+        awaitStore(WINDOW_STORE_NAME, QueryableStoreTypes.<String, String>timestampedWindowStore(),
+            store -> {
+                final ValueAndTimestamp<String> result = store.fetch(key, windowStart(timestamp));
                 return result != null
                     && result.value().equals(value)
                     && result.timestamp() == timestamp;
-            } catch (final Exception e) {
-                return false;
-            }
-        }, 60_000L, "Could not verify timestamped value in time.");
+            },
+            "Could not verify timestamped value in time.");
     }
 
     private void processWindowedKeyValueWithHeadersAndVerify(final String key,
@@ -979,96 +896,41 @@ public class HeadersStoreUpgradeIntegrationTest {
                                                              final long timestamp,
                                                              final Headers headers,
                                                              final Headers expectedHeaders) throws Exception {
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-            inputStream,
-            singletonList(KeyValue.pair(key, value)),
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(),
-                StringSerializer.class,
-                StringSerializer.class),
-            headers,
-            timestamp,
-            false);
+        produce(key, value, timestamp, headers);
 
-        TestUtils.waitForCondition(() -> {
-            try {
-                final ReadOnlyWindowStore<String, ValueTimestampHeaders<String>> store =
-                    IntegrationTestUtils.getStore(WINDOW_STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedWindowStoreWithHeaders());
-
-                if (store == null) {
-                    return false;
-                }
-
-                final long windowStart = timestamp - (timestamp % WINDOW_SIZE_MS);
-
-                final List<KeyValue<Windowed<String>, ValueTimestampHeaders<String>>> results = new LinkedList<>();
-                try (final KeyValueIterator<Windowed<String>, ValueTimestampHeaders<String>> iterator = store.all()) {
-                    while (iterator.hasNext()) {
-                        final KeyValue<Windowed<String>, ValueTimestampHeaders<String>> kv = iterator.next();
-                        if (kv.key.key().equals(key) && kv.key.window().start() == windowStart) {
-                            results.add(kv);
-                        }
-                    }
-                }
-
-                if (results.isEmpty()) {
-                    return false;
-                }
-
-                final ValueTimestampHeaders<String> result = results.get(0).value;
-                return result != null
-                    && result.value().equals(value)
-                    && result.timestamp() == timestamp
-                    && result.headers().equals(expectedHeaders);
-            } catch (final Exception e) {
-                LOG.error("Error while verifying windowed value with headers", e);
-                return false;
-            }
-        }, 60_000L, "Could not verify windowed value with headers in time.");
+        awaitStore(WINDOW_STORE_NAME, QueryableStoreTypes.<String, String>timestampedWindowStoreWithHeaders(),
+            store -> {
+                final Optional<ValueTimestampHeaders<String>> result = findWindowedValue(store, key, timestamp);
+                return result.isPresent()
+                    && result.get().value().equals(value)
+                    && result.get().timestamp() == timestamp
+                    && result.get().headers().equals(expectedHeaders);
+            },
+            "Could not verify windowed value with headers in time.");
     }
 
     private void verifyWindowValueWithEmptyHeaders(final String key,
                                                    final String value,
                                                    final long timestamp) throws Exception {
-        TestUtils.waitForCondition(() -> {
-            try {
-                final ReadOnlyWindowStore<String, ValueTimestampHeaders<String>> store =
-                    IntegrationTestUtils.getStore(WINDOW_STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedWindowStoreWithHeaders());
-
-                if (store == null) {
+        awaitStore(WINDOW_STORE_NAME, QueryableStoreTypes.<String, String>timestampedWindowStoreWithHeaders(),
+            store -> {
+                final Optional<ValueTimestampHeaders<String>> result = findWindowedValue(store, key, timestamp);
+                if (result.isEmpty()) {
                     return false;
                 }
 
-                final long windowStart = timestamp - (timestamp % WINDOW_SIZE_MS);
-
-                final List<KeyValue<Windowed<String>, ValueTimestampHeaders<String>>> results = new LinkedList<>();
-                try (final KeyValueIterator<Windowed<String>, ValueTimestampHeaders<String>> iterator = store.all()) {
-                    while (iterator.hasNext()) {
-                        final KeyValue<Windowed<String>, ValueTimestampHeaders<String>> kv = iterator.next();
-                        if (kv.key.key().equals(key) && kv.key.window().start() == windowStart) {
-                            results.add(kv);
-                        }
-                    }
-                }
-
-                if (results.isEmpty()) {
-                    return false;
-                }
-
-                final ValueTimestampHeaders<String> result = results.get(0).value;
-                assertNotNull(result, "Result should not be null");
-                assertEquals(value, result.value(), "Value should match");
-                assertEquals(timestamp, result.timestamp(), "Timestamp should match");
+                final ValueTimestampHeaders<String> value0 = result.get();
+                assertNotNull(value0, "Result should not be null");
+                assertEquals(value, value0.value(), "Value should match");
+                assertEquals(timestamp, value0.timestamp(), "Timestamp should match");
 
                 // Verify headers exist but are empty (migrated from timestamped store without headers)
-                assertNotNull(result.headers(), "Headers should not be null for migrated data");
-                assertEquals(0, result.headers().toArray().length, "Headers should be empty for migrated data");
+                assertNotNull(value0.headers(), "Headers should not be null for migrated data");
+                assertEquals(0, value0.headers().toArray().length, "Headers should be empty for migrated data");
 
                 return true;
-            } catch (final Exception e) {
-                LOG.error("Error while verifying legacy value with empty headers", e);
-                return false;
-            }
-        }, 60_000L, "Could not verify legacy value with empty headers in time.");
+            },
+            "Could not verify legacy value with empty headers in time.");
     }
 
     /**
@@ -1295,20 +1157,7 @@ public class HeadersStoreUpgradeIntegrationTest {
             final ReadOnlyWindowStore<String, ValueTimestampHeaders<String>> store =
                 IntegrationTestUtils.getStore(WINDOW_STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedWindowStoreWithHeaders());
 
-            if (store == null) {
-                return false;
-            }
-
-            final long expectedWindowStart = timestamp - (timestamp % WINDOW_SIZE_MS);
-            try (final KeyValueIterator<Windowed<String>, ValueTimestampHeaders<String>> iterator = store.all()) {
-                while (iterator.hasNext()) {
-                    final KeyValue<Windowed<String>, ValueTimestampHeaders<String>> kv = iterator.next();
-                    if (kv.key.key().equals(key) && kv.key.window().start() == expectedWindowStart) {
-                        return true;
-                    }
-                }
-            }
-            return false;
+            return store != null && findWindowedValue(store, key, timestamp).isPresent();
         } catch (final Exception e) {
             return false;
         }
@@ -1364,13 +1213,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         final Headers headers = new RecordHeaders();
         headers.add("source", "test".getBytes());
 
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-            inputStream,
-            singletonList(KeyValue.pair(key, value)),
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class),
-            headers,
-            timestamp,
-            false);
+        produce(key, value, timestamp, headers);
     }
 
     private void setupAndPopulateKeyValueStoreWithHeaders(final Properties props) throws Exception {
@@ -1586,24 +1429,10 @@ public class HeadersStoreUpgradeIntegrationTest {
     private void processSessionKeyValueAndVerify(final String key,
                                                   final String value,
                                                   final long timestamp) throws Exception {
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-            inputStream,
-            singletonList(KeyValue.pair(key, value)),
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(),
-                StringSerializer.class,
-                StringSerializer.class),
-            timestamp,
-            false);
+        produce(key, value, timestamp);
 
-        TestUtils.waitForCondition(() -> {
-            try {
-                final ReadOnlySessionStore<String, String> store =
-                    IntegrationTestUtils.getStore(SESSION_STORE_NAME, kafkaStreams, QueryableStoreTypes.sessionStore());
-
-                if (store == null) {
-                    return false;
-                }
-
+        awaitStore(SESSION_STORE_NAME, QueryableStoreTypes.<String, String>sessionStore(),
+            store -> {
                 try (final KeyValueIterator<Windowed<String>, String> iterator = store.fetch(key)) {
                     while (iterator.hasNext()) {
                         final KeyValue<Windowed<String>, String> kv = iterator.next();
@@ -1613,49 +1442,31 @@ public class HeadersStoreUpgradeIntegrationTest {
                     }
                 }
                 return false;
-            } catch (final Exception e) {
-                return false;
-            }
-        }, 60_000L, "Could not verify session value in time.");
+            },
+            "Could not verify session value in time.");
     }
 
     private void verifySessionValueWithEmptyHeaders(final String key,
                                                     final String value,
                                                     final long timestamp) throws Exception {
-        TestUtils.waitForCondition(() -> {
-            try {
-                final ReadOnlySessionStore<String, AggregationWithHeaders<String>> store =
-                    IntegrationTestUtils.getStore(SESSION_STORE_NAME, kafkaStreams, QueryableStoreTypes.sessionStoreWithHeaders());
-
-                if (store == null) {
+        awaitStore(SESSION_STORE_NAME, QueryableStoreTypes.<String, String>sessionStoreWithHeaders(),
+            store -> {
+                final Optional<AggregationWithHeaders<String>> result = findSessionValue(store, key, timestamp);
+                if (result.isEmpty()) {
                     return false;
                 }
 
-                try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.fetch(key)) {
-                    while (iterator.hasNext()) {
-                        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> kv = iterator.next();
-                        if (kv.key.key().equals(key)
-                            && kv.key.window().start() == timestamp
-                            && kv.key.window().end() == timestamp) {
+                final AggregationWithHeaders<String> value0 = result.get();
+                assertNotNull(value0, "Result should not be null");
+                assertEquals(value, value0.aggregation(), "Value should match");
 
-                            final AggregationWithHeaders<String> result = kv.value;
-                            assertNotNull(result, "Result should not be null");
-                            assertEquals(value, result.aggregation(), "Value should match");
+                // Verify headers exist but are empty (migrated from plain session store)
+                assertNotNull(value0.headers(), "Headers should not be null for migrated data");
+                assertEquals(0, value0.headers().toArray().length, "Headers should be empty for migrated data");
 
-                            // Verify headers exist but are empty (migrated from plain session store)
-                            assertNotNull(result.headers(), "Headers should not be null for migrated data");
-                            assertEquals(0, result.headers().toArray().length, "Headers should be empty for migrated data");
-
-                            return true;
-                        }
-                    }
-                }
-                return false;
-            } catch (final Exception e) {
-                LOG.error("Error verifying legacy session value with empty headers", e);
-                return false;
-            }
-        }, 60_000L, "Could not verify legacy session value with empty headers in time.");
+                return true;
+            },
+            "Could not verify legacy session value with empty headers in time.");
     }
 
     private void processSessionKeyValueWithHeadersAndVerify(final String key,
@@ -1663,45 +1474,16 @@ public class HeadersStoreUpgradeIntegrationTest {
                                                             final long timestamp,
                                                             final Headers headers,
                                                             final Headers expectedHeaders) throws Exception {
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-            inputStream,
-            singletonList(KeyValue.pair(key, value)),
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(),
-                StringSerializer.class,
-                StringSerializer.class),
-            headers,
-            timestamp,
-            false);
+        produce(key, value, timestamp, headers);
 
-        TestUtils.waitForCondition(() -> {
-            try {
-                final ReadOnlySessionStore<String, AggregationWithHeaders<String>> store =
-                    IntegrationTestUtils.getStore(SESSION_STORE_NAME, kafkaStreams, QueryableStoreTypes.sessionStoreWithHeaders());
-
-                if (store == null) {
-                    return false;
-                }
-
-                try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.fetch(key)) {
-                    while (iterator.hasNext()) {
-                        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> kv = iterator.next();
-                        if (kv.key.key().equals(key)
-                            && kv.key.window().start() == timestamp
-                            && kv.key.window().end() == timestamp) {
-
-                            final AggregationWithHeaders<String> result = kv.value;
-                            return result != null
-                                && result.aggregation().equals(value)
-                                && result.headers().equals(expectedHeaders);
-                        }
-                    }
-                }
-                return false;
-            } catch (final Exception e) {
-                LOG.error("Error verifying session value with headers", e);
-                return false;
-            }
-        }, 60_000L, "Could not verify session value with headers in time.");
+        awaitStore(SESSION_STORE_NAME, QueryableStoreTypes.<String, String>sessionStoreWithHeaders(),
+            store -> {
+                final Optional<AggregationWithHeaders<String>> result = findSessionValue(store, key, timestamp);
+                return result.isPresent()
+                    && result.get().aggregation().equals(value)
+                    && result.get().headers().equals(expectedHeaders);
+            },
+            "Could not verify session value with headers in time.");
     }
 
     private boolean sessionStoreContainsKey(final String key,
@@ -1710,19 +1492,7 @@ public class HeadersStoreUpgradeIntegrationTest {
             final ReadOnlySessionStore<String, AggregationWithHeaders<String>> store =
                 IntegrationTestUtils.getStore(SESSION_STORE_NAME, kafkaStreams, QueryableStoreTypes.sessionStoreWithHeaders());
 
-            if (store == null) {
-                return false;
-            }
-
-            try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.fetch(key)) {
-                while (iterator.hasNext()) {
-                    final KeyValue<Windowed<String>, AggregationWithHeaders<String>> kv = iterator.next();
-                    if (kv.key.key().equals(key) && kv.key.window().start() == timestamp) {
-                        return true;
-                    }
-                }
-            }
-            return false;
+            return store != null && findSessionValue(store, key, timestamp).isPresent();
         } catch (final Exception e) {
             return false;
         }
