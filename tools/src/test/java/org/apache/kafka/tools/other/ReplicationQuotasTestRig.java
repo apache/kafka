@@ -18,11 +18,12 @@ package org.apache.kafka.tools.other;
 
 import kafka.server.BrokerServer;
 import kafka.server.KafkaBroker;
-import kafka.utils.TestUtils;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
@@ -39,6 +40,8 @@ import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.quota.QuotaType;
 import org.apache.kafka.storage.internals.log.UnifiedLog;
+import org.apache.kafka.test.NoRetryException;
+import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.reassign.ReassignPartitionsCommand;
 
 import org.apache.logging.log4j.core.config.Configurator;
@@ -63,6 +66,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
@@ -72,8 +76,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import javax.imageio.ImageIO;
-
-import scala.Option;
 
 import static java.nio.file.StandardOpenOption.APPEND;
 import static java.nio.file.StandardOpenOption.CREATE;
@@ -215,14 +217,14 @@ public class ReplicationQuotasTestRig {
             startBrokers(config.brokers);
             adminClient.createTopics(Set.of(new NewTopic(TOPIC_NAME, replicas))).all().get();
 
-            TestUtils.waitUntilTrue(
+            TestUtils.waitForCondition(
                     () -> cluster.brokers().values().stream().allMatch(server -> {
                         TopicImage image = server.metadataCache().currentImage().topics().getTopic(TOPIC_NAME);
                         return image != null && image.partitions().values().stream().allMatch(PartitionRegistration::hasLeader);
                     }),
-                    () -> "Timed out waiting for topic listing",
                     DEFAULT_MAX_WAIT_MS,
-                    500L
+                    500L,
+                    () -> "Timed out waiting for topic listing"
             );
 
             System.out.println("Writing Data");
@@ -306,15 +308,18 @@ public class ReplicationQuotasTestRig {
             System.out.println("Worst case duration is " + config.targetBytesPerBrokerMB * 1000 * 1000 / config.throttle);
         }
 
-        void waitForReassignmentToComplete() {
-            TestUtils.waitUntilTrue(() -> {
+        void waitForReassignmentToComplete() throws InterruptedException {
+            TestUtils.waitForCondition(() -> {
                 printRateMetrics();
                 try {
                     return adminClient.listPartitionReassignments().reassignments().get().isEmpty();
-                } catch (InterruptedException | ExecutionException e) {
-                    throw new RuntimeException(e);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new NoRetryException(e);
+                } catch (ExecutionException e) {
+                    throw new NoRetryException(e);
                 }
-            }, () -> "Partition reassignments didn't complete.", 60 * 60 * 1000, 1000L);
+            }, 60 * 60 * 1000, 1000L, () -> "Partition reassignments didn't complete.");
         }
 
         void renderChart(Map<Integer, List<Double>> data, String name, Journal journal, boolean displayChartsOnScreen) throws Exception {
@@ -398,24 +403,20 @@ public class ReplicationQuotasTestRig {
         }
 
         KafkaProducer<byte[], byte[]> createProducer() {
-            return TestUtils.createProducer(
-                cluster.bootstrapServers(),
-                1,
-                60 * 1000L,
-                1024L * 1024L,
-                Integer.MAX_VALUE,
-                30 * 1000,
-                0,
-                16384,
-                "none",
-                20 * 1000,
-                SecurityProtocol.PLAINTEXT,
-                Option.empty(),
-                Option.empty(),
-                new ByteArraySerializer(),
-                new ByteArraySerializer(),
-                false
-            );
+            Properties producerProps = new Properties();
+            producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+            producerProps.put(ProducerConfig.ACKS_CONFIG, "1");
+            producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.toString(60 * 1000L));
+            producerProps.put(ProducerConfig.BUFFER_MEMORY_CONFIG, Long.toString(1024L * 1024L));
+            producerProps.put(ProducerConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE));
+            producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.toString(30 * 1000));
+            producerProps.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, Integer.toString(20 * 1000));
+            producerProps.put(ProducerConfig.LINGER_MS_CONFIG, "0");
+            producerProps.put(ProducerConfig.BATCH_SIZE_CONFIG, "16384");
+            producerProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "none");
+            producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
+            producerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.PLAINTEXT.name());
+            return new KafkaProducer<>(producerProps, new ByteArraySerializer(), new ByteArraySerializer());
         }
     }
 
