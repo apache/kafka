@@ -81,11 +81,13 @@ public class DeleteRecordsCommandTest {
                 admin
             );
 
-            executeAndAssertOutput(
-                "{\"partitions\":[{\"topic\":\"t\", \"partition\":42, \"offset\":42}]}",
-                "partition: t-42\terror",
-                admin
-            );
+            String errorOutput = ToolsTestUtils.captureStandardOut(() ->
+                assertThrows(
+                    AdminCommandFailedException.class,
+                    () -> DeleteRecordsCommand.execute(admin,
+                        "{\"partitions\":[{\"topic\":\"t\", \"partition\":42, \"offset\":42}]}", System.out)
+                ));
+            assertTrue(errorOutput.contains("partition: t-42\terror"));
         }
     }
 
