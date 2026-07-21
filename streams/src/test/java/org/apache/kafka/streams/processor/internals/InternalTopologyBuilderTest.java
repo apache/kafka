@@ -1066,8 +1066,9 @@ public class InternalTopologyBuilderTest {
 
     @Test
     @SuppressWarnings("deprecation")
-    public void shouldSetBufferedPartitionsToNegativeValueWhenBothBufferedRecordsPerPartitionAndInputBufferMaxBytesConfigAreSet() {
-        // both set -> legacy is disabled (-1), bytes guard wins.
+    public void shouldIgnoreTopologyInputBufferMaxBytesOverrideAndHonorLegacyOverride() {
+        // Per-topology input.buffer.max.bytes is unsupported and ignored; the legacy override still
+        // wins for this topology rather than being silently disabled by the (ignored) byte override.
         final Properties topologyOverrides = new Properties();
         topologyOverrides.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 15);
         topologyOverrides.put(StreamsConfig.INPUT_BUFFER_MAX_BYTES_CONFIG, 100L);
@@ -1079,7 +1080,7 @@ public class InternalTopologyBuilderTest {
                 config,
                 topologyOverrides)
         );
-        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().maxBufferedSize, is(-1));
+        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().maxBufferedSize, is(15));
     }
 
     @Test

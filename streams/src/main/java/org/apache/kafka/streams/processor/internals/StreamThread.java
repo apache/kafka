@@ -1222,6 +1222,11 @@ public class StreamThread extends Thread implements ProcessingThread {
         maxBufferSizeInBytes.set(maxBufferSize);
     }
 
+    // Drop revoked partitions so we never later resume one now owned by another path (reset/rebalance).
+    void removePartitionsFromBufferOverflowTracking(final Collection<TopicPartition> revokedPartitions) {
+        partitionsPausedForBufferOverflow.removeAll(revokedPartitions);
+    }
+
     private void maybeResumePartitionsPausedForBufferOverflow() {
         if (maxBufferSizeInBytes.get() == UNDEFINED_INPUT_BUFFER_MAX_BYTES) {
             return;
@@ -1265,6 +1270,9 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         final long pollLatency;
         taskManager.resumePollingForPartitionsWithAvailableSpace();
+        // resume here too (mirrors runOnceWithProcessingThreads) so a drain outside a processing
+        // state still resumes paused partitions.
+        maybeResumePartitionsPausedForBufferOverflow();
         pollLatency = pollPhase();
         totalPolledSinceLastSummary += 1;
 
@@ -1562,11 +1570,16 @@ public class StreamThread extends Thread implements ProcessingThread {
         final long bufferSize = taskManager.getInputBufferSizeInBytes();
         if (maxBufferSizeInBytes.get() != UNDEFINED_INPUT_BUFFER_MAX_BYTES && bufferSize > maxBufferSizeInBytes.get()) {
             // pause only non-empty partitions; pausing empty ones risks ordering deadlock (KAFKA-13152).
-            final Set<TopicPartition> nonEmptyPartitions = taskManager.nonEmptyPartitions();
-            log.info("Buffered records size {} bytes exceeds {}. Pausing partitions {} from the consumer",
-                bufferSize, maxBufferSizeInBytes.get(), nonEmptyPartitions);
-            mainConsumer.pause(nonEmptyPartitions);
-            partitionsPausedForBufferOverflow.addAll(nonEmptyPartitions);
+            // copy first — nonEmptyPartitions may be immutable, and pausing an unassigned partition
+            // throws, so intersect with assignment (mirrors resume side).
+            final Set<TopicPartition> nonEmptyPartitions = new HashSet<>(taskManager.nonEmptyPartitions());
+            nonEmptyPartitions.retainAll(mainConsumer.assignment());
+            if (!nonEmptyPartitions.isEmpty()) {
+                log.info("Buffered records size {} bytes exceeds {}. Pausing partitions {} from the consumer",
+                    bufferSize, maxBufferSizeInBytes.get(), nonEmptyPartitions);
+                mainConsumer.pause(nonEmptyPartitions);
+                partitionsPausedForBufferOverflow.addAll(nonEmptyPartitions);
+            }
         }
 
         while (!nonFatalExceptionsToHandle.isEmpty()) {

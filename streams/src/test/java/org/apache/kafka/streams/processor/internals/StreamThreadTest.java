@@ -697,6 +697,7 @@ public class StreamThreadTest {
         final TopicPartition tp = new TopicPartition("topic", 0);
         when(taskManager.getInputBufferSizeInBytes()).thenReturn(2_000L);
         when(taskManager.nonEmptyPartitions()).thenReturn(Set.of(tp));
+        when(mainConsumer.assignment()).thenReturn(Set.of(tp));
 
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
@@ -721,9 +722,9 @@ public class StreamThreadTest {
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
         final TaskManager taskManager = Mockito.mock(TaskManager.class);
         final TopicPartition pausedByBytes = new TopicPartition("topic", 0);
-        // each runOnce calls getInputBufferSizeInBytes twice (pollPhase + intra-loop maybeResume).
-        // runOnce 1: 2_000, 2_000 → pause; runOnce 2: 100, 100 → resume.
-        when(taskManager.getInputBufferSizeInBytes()).thenReturn(2_000L, 2_000L, 100L, 100L);
+        // runOnce 1 stays above the cap (pause fires); runOnce 2 drops below it (resume fires).
+        // The trailing 100L covers any extra reads from the top-of-loop resume check.
+        when(taskManager.getInputBufferSizeInBytes()).thenReturn(2_000L, 2_000L, 100L, 100L, 100L);
         when(taskManager.nonEmptyPartitions()).thenReturn(Set.of(pausedByBytes));
         when(mainConsumer.assignment()).thenReturn(Set.of(pausedByBytes));
 
@@ -751,12 +752,12 @@ public class StreamThreadTest {
         final TaskManager taskManager = Mockito.mock(TaskManager.class);
         final TopicPartition stillOwned = new TopicPartition("topic", 0);
         final TopicPartition revoked = new TopicPartition("topic", 1);
-        // runOnce 1: pause both. runOnce 2: drain below cap, but `revoked` was rebalanced away.
-        when(taskManager.getInputBufferSizeInBytes()).thenReturn(2_000L, 2_000L, 100L, 100L);
+        // runOnce 1 stays above the cap (pause both, both still assigned); runOnce 2 drops below it,
+        // but `revoked` has since left the assignment, so only `stillOwned` is resumed.
+        when(taskManager.getInputBufferSizeInBytes()).thenReturn(2_000L, 2_000L, 100L, 100L, 100L);
         when(taskManager.nonEmptyPartitions()).thenReturn(Set.of(stillOwned, revoked));
-        // assignment() is only consulted during the resume path in runOnce 2; by then `revoked`
-        // has been rebalanced away, so only `stillOwned` should remain.
-        when(mainConsumer.assignment()).thenReturn(Set.of(stillOwned));
+        // both assigned while pausing; `revoked` gone by the time we resume.
+        when(mainConsumer.assignment()).thenReturn(Set.of(stillOwned, revoked), Set.of(stillOwned));
 
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
@@ -769,6 +770,38 @@ public class StreamThreadTest {
         Mockito.verify(mainConsumer).pause(Set.of(stillOwned, revoked));
         runOnce(false);
         Mockito.verify(mainConsumer).resume(Set.of(stillOwned));
+    }
+
+    @Test
+    public void shouldNotResumePartitionsPrunedFromBufferOverflowTrackingOnRevoke() {
+        final Properties props = configProps(false, false);
+        final StreamsConfig config = new StreamsConfig(props);
+        when(mainConsumer.poll(Mockito.any())).thenReturn(ConsumerRecords.empty());
+        final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
+        when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        final TaskManager taskManager = Mockito.mock(TaskManager.class);
+        final TopicPartition pausedByBytes = new TopicPartition("topic", 0);
+        when(taskManager.getInputBufferSizeInBytes()).thenReturn(2_000L, 2_000L, 100L, 100L, 100L);
+        when(taskManager.nonEmptyPartitions()).thenReturn(Set.of(pausedByBytes));
+        when(mainConsumer.assignment()).thenReturn(Set.of(pausedByBytes));
+
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        thread = buildStreamThreadWithBufferCap(mainConsumer, taskManager, config, topologyMetadata, 1_000L);
+        thread.updateThreadMetadata("admin");
+        thread.setState(State.STARTING);
+        thread.setState(State.PARTITIONS_ASSIGNED);
+        thread.setState(State.RUNNING);
+        runOnce(false);
+        Mockito.verify(mainConsumer).pause(Set.of(pausedByBytes));
+
+        // partition is revoked before the buffer drains — prune it from tracking.
+        thread.removePartitionsFromBufferOverflowTracking(Set.of(pausedByBytes));
+
+        // buffer now drains below the cap, but the bytes guard must not resume the revoked partition.
+        runOnce(false);
+        Mockito.verify(mainConsumer, Mockito.never()).resume(Set.of(pausedByBytes));
     }
 
     @Test
