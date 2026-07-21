@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -159,6 +160,7 @@ import static org.apache.kafka.common.config.ConfigDef.parseType;
  * @see ConsumerConfig
  * @see ProducerConfig
  */
+@InterfaceAudience.Public
 public class StreamsConfig extends AbstractConfig {
 
     private static final Logger log = LoggerFactory.getLogger(StreamsConfig.class);
@@ -1628,12 +1630,6 @@ public class StreamsConfig extends AbstractConfig {
 
     private void verifyStreamsProtocolCompatibility(final boolean doLog) {
         if (doLog && isStreamsProtocolEnabled()) {
-            final Map<String, Object> mainConsumerConfigs = getMainConsumerConfigs("dummy", "dummy", -1);
-            final String instanceId = (String) mainConsumerConfigs.get(CommonClientConfigs.GROUP_INSTANCE_ID_CONFIG);
-            if (instanceId != null && !instanceId.isEmpty()) {
-                throw new ConfigException("Streams rebalance protocol does not support static membership. "
-                    + "Please set group.protocol=classic or remove group.instance.id from the configuration.");
-            }
             if (getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG) != 0) {
                 log.warn("Warmup replicas are not supported yet with the streams protocol and will be ignored. "
                     + "If you want to use warmup replicas, please set group.protocol=classic.");

@@ -1,0 +1,146 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// Shared configuration for the api-checker included build. Lives outside Kafka's main
+// settings tree so its Maven dependencies (in :maven-plugin) don't end up on every
+// developer's main-build classpath, and so each published artifact carries only the classes
+// its consumers need.
+
+// Default the published version to the same string as the rest of Kafka (gradle.properties
+// at the repo root). release.py's `updateVersion` task writes that file, so the included
+// build's artifacts ship under the AK release version automatically. `-PkafkaPluginsVersion=…`
+// overrides for one-off out-of-band publishes.
+def rootGradleProps = new Properties()
+def rootGradlePropsFile = file('../gradle.properties')
+if (rootGradlePropsFile.exists()) {
+    rootGradlePropsFile.withInputStream { rootGradleProps.load(it) }
+}
+def kafkaVersion = providers.gradleProperty('kafkaPluginsVersion')
+        .orElse(providers.provider { rootGradleProps.getProperty('version') })
+        .orElse('1.0.0-SNAPSHOT')
+
+// Single source of truth for every dependency version used in the api-checker build.
+// Cross-referenced against the root Kafka build's gradle/dependencies.gradle for the deps
+// that exist on both sides (junit, slf4j, mockito); when bumping those in the root catalog,
+// bump them here too. ASM and the Maven plugin family are unique to this included build.
+//
+// ASM versions cap the JDK class-file major they can parse. 9.6 covers up to Java 21
+// (class-file 65). If Kafka starts compiling against a newer JDK whose major exceeds what
+// this ASM release knows about, the scanner will throw
+// `IllegalArgumentException: Unsupported class file major version N` on encountering a fresh
+// bytecode file. Bump in lockstep with the project's max-supported compile JDK.
+ext.apiCheckerVersions = [
+        asm: '9.6',
+        slf4j: '2.0.16',
+        junit: '5.9.2',
+        junitPlatform: '1.9.2',
+        mockito: '5.3.1',
+        mavenApi: '3.9.4',
+        mavenPluginAnnotations: '3.9.0',
+]
+
+allprojects {
+    group = 'org.apache.kafka'
+    version = kafkaVersion.get()
+    ext.apiCheckerVersions = rootProject.apiCheckerVersions
+
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
+subprojects {
+    apply plugin: 'java-library'
+    apply plugin: 'maven-publish'
+    apply plugin: 'signing'
+    apply plugin: 'checkstyle'
+
+    java {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+        // Maven Central requires sources + javadoc jars alongside every artifact.
+        withSourcesJar()
+        withJavadocJar()
+    }
+
+    test {
+        useJUnitPlatform()
+    }
+
+    checkstyle {
+        toolVersion = '12.3.1'
+        configDirectory = file("$rootDir/../checkstyle")
+        configProperties = [importControlFile: 'import-control-api-checker.xml']
+    }
+    // Tests legitimately need junit/mockito; main sources don't. Swap the import-control
+    // file for every test-flavoured Checkstyle task so a stray junit/mockito import in a
+    // main file still fails checkstyle.
+    tasks.matching { it.name == 'checkstyleTest' || it.name == 'checkstyleTestFixtures' }.configureEach {
+        configProperties = [importControlFile: 'import-control-api-checker-test.xml']
+    }
+
+    publishing {
+        repositories {
+            // Mirrors the root Kafka project's publishing.repositories block — credentials
+            // come from ~/.gradle/gradle.properties via the same -PmavenUrl / -PmavenUsername /
+            // -PmavenPassword properties release.py uses.
+            maven {
+                url = project.hasProperty('mavenUrl') ? project.mavenUrl : ''
+                credentials {
+                    username = project.hasProperty('mavenUsername') ? project.mavenUsername : ''
+                    password = project.hasProperty('mavenPassword') ? project.mavenPassword : ''
+                }
+            }
+        }
+
+        // Apply Apache-Kafka POM defaults (url, license, developer, scm) to every publication
+        // in this subproject — each MavenPublication block only needs to set its own name,
+        // description, and packaging.
+        publications.withType(MavenPublication).configureEach {
+            pom {
+                url = 'https://kafka.apache.org'
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'apache-kafka'
+                        name = 'Apache Kafka Team'
+                        email = 'dev@kafka.apache.org'
+                    }
+                }
+                scm {
+                    connection = 'scm:git:https://github.com/apache/kafka.git'
+                    developerConnection = 'scm:git:https://github.com/apache/kafka.git'
+                    url = 'https://github.com/apache/kafka'
+                }
+            }
+        }
+    }
+
+    def skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
+    def shouldSign = !skipSigning && !version.toString().endsWith('SNAPSHOT')
+    if (shouldSign) {
+        signing {
+            sign publishing.publications
+        }
+    }
+}

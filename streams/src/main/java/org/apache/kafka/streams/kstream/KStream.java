@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -58,6 +59,7 @@ import java.time.Duration;
  * @param <K> the key type of this stream
  * @param <V> the value type of this stream
  */
+@InterfaceAudience.Public
 public interface KStream<K, V> {
 
     /**
@@ -1280,7 +1282,8 @@ public interface KStream<K, V> {
      * <p>For each {@code KStream} record that finds a joining record in the {@link GlobalKTable} the provided
      * {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
      * The key of the result record is the same as the stream record's key.
-     * If you need read access to the {@code KStream} key, use {@link #join(GlobalKTable, KeyValueMapper, ValueJoinerWithKey)}.
+     * If you need read access to the {@code KStream} key or the {@link GlobalKTable} key (which is the same as the
+     * join key extracted by {@code keySelector}), use {@link #join(GlobalKTable, KeyValueMapper, ValueJoinerWithStreamAndMappedKey)}.
      * If a {@code KStream} input record's value is {@code null} or if the provided {@link KeyValueMapper keySelector}
      * returns {@code null}, the input record will be dropped, and no join computation is triggered.
      * If a {@link GlobalKTable} input record's key is {@code null} the input record will be dropped, and the table
@@ -1345,12 +1348,29 @@ public interface KStream<K, V> {
     /**
      * See {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}.
      *
-     * <p>Note that the {@link KStream} key is read-only and must not be modified, as this can lead to corrupt
-     * partitioning and incorrect results.
+     * <b>Warning:</b> {@code readOnlyKey} is the {@code KStream} record's key, <b>not</b>
+     * the join key produced by {@code keySelector}. Unlike {@link #join(KTable, ValueJoinerWithKey)
+     * KStream-KTable} and {@link #join(KStream, ValueJoinerWithKey, JoinWindows) KStream-KStream}
+     * joins &mdash; where the stream key <em>is</em> the join key &mdash; {@link GlobalKTable} joins derive
+     * the join key via {@code keySelector}, so {@code readOnlyKey} does <b>not</b> necessarily
+     * match the key of the {@link GlobalKTable} record being joined.
+     *
+     * @deprecated Since 4.4. Use {@link #join(GlobalKTable, KeyValueMapper, ValueJoinerWithStreamAndMappedKey)}
+     *             instead.
      */
+    @Deprecated
     <GlobalKey, GlobalValue, VOut> KStream<K, VOut> join(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
                                                          final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
                                                          final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner);
+
+    /**
+     * See {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}.
+     *
+     * <p>The joiner receives both the mapped join key and the {@link KStream} record key.
+     */
+    <GlobalKey, GlobalValue, VOut> KStream<K, VOut> join(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
+                                                         final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
+                                                         final ValueJoinerWithStreamAndMappedKey<? super K, ? super GlobalKey, ? super V, ? super GlobalValue, ? extends VOut> joiner);
 
     /**
      * See {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}.
@@ -1366,10 +1386,31 @@ public interface KStream<K, V> {
      * See {@link #join(GlobalKTable, KeyValueMapper, ValueJoinerWithKey)}.
      *
      * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
+     *
+     * <b>Warning:</b> {@code readOnlyKey} is the {@code KStream} record's key, <b>not</b>
+     * the join key produced by {@code keySelector}. Unlike {@link #join(KTable, ValueJoinerWithKey)
+     * KStream-KTable} and {@link #join(KStream, ValueJoinerWithKey, JoinWindows) KStream-KStream}
+     * joins &mdash; where the stream key <em>is</em> the join key &mdash; {@link GlobalKTable} joins derive
+     * the join key via {@code keySelector}, so {@code readOnlyKey} does <b>not</b> necessarily
+     * match the key of the {@link GlobalKTable} record being joined.
+     *
+     * @deprecated Since 4.4. Use {@link #join(GlobalKTable, KeyValueMapper, ValueJoinerWithStreamAndMappedKey, Named)}
+     *             instead.
      */
+    @Deprecated
     <GlobalKey, GlobalValue, VOut> KStream<K, VOut> join(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
                                                          final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
                                                          final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner,
+                                                         final Named named);
+
+    /**
+     * See {@link #join(GlobalKTable, KeyValueMapper, ValueJoinerWithStreamAndMappedKey)}
+     *
+     * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
+     */
+    <GlobalKey, GlobalValue, VOut> KStream<K, VOut> join(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
+                                                         final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
+                                                         final ValueJoinerWithStreamAndMappedKey<? super K, ? super GlobalKey, ? super V, ? super GlobalValue, ? extends VOut> joiner,
                                                          final Named named);
 
     /**
@@ -1390,8 +1431,8 @@ public interface KStream<K, V> {
      * called with a {@code null} value for the global table record.
      * The key of the result record is the same as for both joining input records,
      * or the {@code KStreams} input record's key for a left-join result.
-     * If you need read access to the {@code KStream} key, use
-     * {@link #leftJoin(GlobalKTable, KeyValueMapper, ValueJoinerWithKey)}.
+     * If you need read access to the {@code KStream} key or the {@link GlobalKTable} key (which is the same as the
+     * join key extracted by {@code keySelector}), use {@link #leftJoin(GlobalKTable, KeyValueMapper, ValueJoinerWithStreamAndMappedKey)}.
      * If a {@code KStream} input record's value is {@code null} or if the provided {@link KeyValueMapper keySelector}
      * returns {@code null}, the input record will be dropped, and no join computation is triggered.
      * Note, that {@code null} keys for {@code KStream} input records are supported (in contrast to
@@ -1458,12 +1499,29 @@ public interface KStream<K, V> {
     /**
      * See {@link #leftJoin(GlobalKTable, KeyValueMapper, ValueJoiner)}.
      *
-     * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning and
-     * incorrect results.
+     * <b>Warning:</b> {@code readOnlyKey} is the {@code KStream} record's key, <b>not</b>
+     * the join key produced by {@code keySelector}. Unlike {@link #leftJoin(KTable, ValueJoinerWithKey)
+     * KStream-KTable} and {@link #leftJoin(KStream, ValueJoinerWithKey, JoinWindows) KStream-KStream}
+     * joins &mdash; where the stream key <em>is</em> the join key &mdash; {@link GlobalKTable} joins derive
+     * the join key via {@code keySelector}, so {@code readOnlyKey} does <b>not</b> necessarily
+     * match the key of the {@link GlobalKTable} record being joined.
+     *
+     * @deprecated Since 4.4. Use {@link #leftJoin(GlobalKTable, KeyValueMapper, ValueJoinerWithStreamAndMappedKey)}
+     *             instead.
      */
+    @Deprecated
     <GlobalKey, GlobalValue, VOut> KStream<K, VOut> leftJoin(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
                                                              final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
                                                              final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner);
+
+    /**
+     * See {@link #leftJoin(GlobalKTable, KeyValueMapper, ValueJoiner)}.
+     *
+     * <p>The joiner receives both the mapped join key and the {@link KStream} record key.</p>
+     */
+    <GlobalKey, GlobalValue, VOut> KStream<K, VOut> leftJoin(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
+                                                             final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
+                                                             final ValueJoinerWithStreamAndMappedKey<? super K, ? super GlobalKey, ? super V, ? super GlobalValue, ? extends VOut> joiner);
 
     /**
      * See {@link #leftJoin(GlobalKTable, KeyValueMapper, ValueJoiner)}.
@@ -1479,10 +1537,31 @@ public interface KStream<K, V> {
      * See {@link #leftJoin(GlobalKTable, KeyValueMapper, ValueJoinerWithKey)}.
      *
      * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
+     *
+     * <b>Warning:</b> {@code readOnlyKey} is the {@code KStream} record's key, <b>not</b>
+     * the join key produced by {@code keySelector}. Unlike {@link #leftJoin(KTable, ValueJoinerWithKey)
+     * KStream-KTable} and {@link #leftJoin(KStream, ValueJoinerWithKey, JoinWindows) KStream-KStream}
+     * joins &mdash; where the stream key <em>is</em> the join key &mdash; {@link GlobalKTable} joins derive
+     * the join key via {@code keySelector}, so {@code readOnlyKey} does <b>not</b> necessarily
+     * match the key of the {@link GlobalKTable} record being joined.
+     *
+     * @deprecated Since 4.4. Use {@link #leftJoin(GlobalKTable, KeyValueMapper, ValueJoinerWithStreamAndMappedKey, Named)}
+     *             instead.
      */
+    @Deprecated
     <GlobalKey, GlobalValue, VOut> KStream<K, VOut> leftJoin(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
                                                              final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
                                                              final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner,
+                                                             final Named named);
+
+    /**
+     * See {@link #leftJoin(GlobalKTable, KeyValueMapper, ValueJoinerWithStreamAndMappedKey)}.
+     *
+     * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
+     */
+    <GlobalKey, GlobalValue, VOut> KStream<K, VOut> leftJoin(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
+                                                             final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
+                                                             final ValueJoinerWithStreamAndMappedKey<? super K, ? super GlobalKey, ? super V, ? super GlobalValue, ? extends VOut> joiner,
                                                              final Named named);
 
     /**

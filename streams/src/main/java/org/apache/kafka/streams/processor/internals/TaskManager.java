@@ -1294,6 +1294,14 @@ public class TaskManager {
     }
 
     /**
+     * Returns the per-task changelog end-offset-sum snapshot published by the state updater.
+     * Safe to invoke from any thread.
+     */
+    public Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSumSnapshot() {
+        return stateUpdater.taskEndOffsetSumSnapshot();
+    }
+
+    /**
      * Compute the offset total summed across all stores in a task. Includes offset sum for any tasks we own the
      * lock for, which includes assigned and unassigned tasks we locked in {@link #tryToLockAllNonEmptyTaskDirectories()}.
      * Does not include stateless or non-logged tasks.

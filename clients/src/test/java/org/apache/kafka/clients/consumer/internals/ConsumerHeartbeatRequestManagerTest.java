@@ -88,7 +88,7 @@ import static org.mockito.Mockito.when;
 
 
 public class ConsumerHeartbeatRequestManagerTest
-        extends AbstractHeartbeatRequestManagerTest {
+        extends AbstractHeartbeatRequestManagerTest<ConsumerGroupHeartbeatResponse> {
 
     private static final String DEFAULT_REMOTE_ASSIGNOR = "uniform";
     private static final String DEFAULT_GROUP_INSTANCE_ID = "group-instance-id";
@@ -101,6 +101,10 @@ public class ConsumerHeartbeatRequestManagerTest
     private Metadata metadata;
     private HeartbeatState heartbeatState;
     private LogContext logContext;
+
+    public ConsumerHeartbeatRequestManagerTest() {
+        super(ConsumerGroupHeartbeatResponse.class);
+    }
 
     @BeforeEach
     public void setUp() {
@@ -300,6 +304,25 @@ public class ConsumerHeartbeatRequestManagerTest
             assertEquals(0, result,
                 "maximumTimeToWait should return 0 when heartbeat interval timer has already expired");
         }
+    }
+
+    /**
+     * KAFKA-20253: when the coordinator is unavailable (e.g. after a re-authentication failure),
+     * poll() returns EMPTY, so no heartbeat can be sent. maximumTimeToWait() must return a positive
+     * value in that case; returning 0 busy-spins the application thread (and, via wakeups, the
+     * consumer network thread), which is the AsyncKafkaConsumer high-CPU loop in this ticket.
+     */
+    @Test
+    public void testMaximumTimeToWaitWhenCoordinatorUnavailableDoesNotSpin() {
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
+        when(membershipManager.state()).thenReturn(MemberState.STABLE);
+        when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
+
+        long result = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
+
+        assertTrue(result > 0,
+            "maximumTimeToWait must be > 0 when the coordinator is unavailable to avoid a busy-spin; got " + result);
+        assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, result);
     }
 
     @Test
@@ -903,17 +926,25 @@ public class ConsumerHeartbeatRequestManagerTest
     @Override
     protected ClientResponse createHeartbeatResponse(NetworkClientDelegate.UnsentRequest request,
                                                      Errors error) {
-        return createHeartbeatResponse(request, error, "stubbed error message");
+        return createHeartbeatResponse(request, error, DEFAULT_HEARTBEAT_INTERVAL_MS, "stubbed error message");
+    }
+
+    @Override
+    protected ClientResponse createHeartbeatResponse(NetworkClientDelegate.UnsentRequest request,
+                                                     Errors error,
+                                                     int heartbeatIntervalMs) {
+        return createHeartbeatResponse(request, error, heartbeatIntervalMs, "stubbed error message");
     }
 
     private ClientResponse createHeartbeatResponse(
         final NetworkClientDelegate.UnsentRequest request,
         final Errors error,
+        final int heartbeatIntervalMs,
         final String msg
     ) {
         ConsumerGroupHeartbeatResponseData data = new ConsumerGroupHeartbeatResponseData()
             .setErrorCode(error.code())
-            .setHeartbeatIntervalMs(DEFAULT_HEARTBEAT_INTERVAL_MS)
+            .setHeartbeatIntervalMs(heartbeatIntervalMs)
             .setMemberId(DEFAULT_MEMBER_ID)
             .setMemberEpoch(DEFAULT_MEMBER_EPOCH);
         if (error != Errors.NONE) {

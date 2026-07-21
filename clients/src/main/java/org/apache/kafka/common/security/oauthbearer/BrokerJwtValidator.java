@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.BasicOAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ClaimValidationUtils;
@@ -93,6 +94,7 @@ import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
  *     </li>
  * </ol>
  */
+@InterfaceAudience.Public
 public class BrokerJwtValidator implements JwtValidator {
 
     private static final Logger log = LoggerFactory.getLogger(BrokerJwtValidator.class);
