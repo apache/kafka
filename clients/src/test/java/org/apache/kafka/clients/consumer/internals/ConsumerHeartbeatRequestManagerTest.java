@@ -306,6 +306,25 @@ public class ConsumerHeartbeatRequestManagerTest
         }
     }
 
+    /**
+     * KAFKA-20253: when the coordinator is unavailable (e.g. after a re-authentication failure),
+     * poll() returns EMPTY, so no heartbeat can be sent. maximumTimeToWait() must return a positive
+     * value in that case; returning 0 busy-spins the application thread (and, via wakeups, the
+     * consumer network thread), which is the AsyncKafkaConsumer high-CPU loop in this ticket.
+     */
+    @Test
+    public void testMaximumTimeToWaitWhenCoordinatorUnavailableDoesNotSpin() {
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
+        when(membershipManager.state()).thenReturn(MemberState.STABLE);
+        when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
+
+        long result = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
+
+        assertTrue(result > 0,
+            "maximumTimeToWait must be > 0 when the coordinator is unavailable to avoid a busy-spin; got " + result);
+        assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, result);
+    }
+
     @Test
     public void testHeartbeatNotSentIfAnotherOneInFlight() {
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
