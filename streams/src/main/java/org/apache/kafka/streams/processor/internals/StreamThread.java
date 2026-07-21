@@ -828,6 +828,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                         final long maxUncommittedBytesPerThread
                         ) {
         super(threadId);
+        setDaemon(false);
         this.stateLock = new Object();
         this.adminClient = adminClient;
         this.streamsMetrics = streamsMetrics;
