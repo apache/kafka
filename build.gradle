@@ -1196,6 +1196,9 @@ project(':core') {
     testImplementation testFixtures(project(':raft'))
     testImplementation testFixtures(project(':server-common'))
     testImplementation testFixtures(project(':storage:storage-api'))
+    // No source need - added for scala flattening/classpath presence so LocalTieredStorage lands in
+    // core/build/dependant-testlibs/ for ducktape system tests.
+    testImplementation testFixtures(project(':storage'))
     testImplementation testFixtures(project(':server'))
     testImplementation project(':streams')
     testImplementation project(':test-common:test-common-runtime')
@@ -2484,7 +2487,6 @@ project(':storage') {
     testImplementation project(':clients')
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':core')
-    testImplementation project(':core').sourceSets.test.output
     testImplementation testFixtures(project(':storage:storage-api'))
     testImplementation project(':metadata')
     testImplementation project(':test-common:test-common-internal-api')
@@ -2498,7 +2500,6 @@ project(':storage') {
     testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    testImplementation libs.bcpkix
     testImplementation testLog4j2Libs
 
     testRuntimeOnly runtimeTestLibs
@@ -2644,12 +2645,6 @@ project(':tools') {
 
   configurations {
     releaseOnly
-    // ApacheDS 2.0.0-M24 pulls in the stale bcprov-jdk15on:1.56, which ships the same
-    // RosstandartObjectIdentifiers class as the modern bcprov-jdk18on we already depend on
-    // but is missing fields referenced by bcpkix-jdk18on:1.84. When IntelliJ's test runner
-    // orders the old JAR first, BC provider registration fails with NoSuchFieldError. Drop it.
-    testCompileClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
-    testRuntimeClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
   }
 
   dependencies {
@@ -2703,16 +2698,9 @@ project(':tools') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
-    testImplementation libs.bcpkix // required by the clients test module, but we have to specify it explicitly as gradle does not include the transitive test dependency automatically
     testImplementation(libs.jfreechart) {
       exclude group: 'junit', module: 'junit'
     }
-    testImplementation libs.apachedsCoreApi
-    testImplementation libs.apachedsInterceptorKerberos
-    testImplementation libs.apachedsProtocolShared
-    testImplementation libs.apachedsProtocolKerberos
-    testImplementation libs.apachedsProtocolLdap
-    testImplementation libs.apachedsLdifPartition
     testImplementation testLog4j2Libs
 
     testRuntimeOnly runtimeTestLibs
@@ -2871,7 +2859,6 @@ project(':streams') {
     testImplementation testFixtures(project(':clients'))
     testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
-    testImplementation libs.bcpkix
     testImplementation libs.hamcrest
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
@@ -3065,6 +3052,7 @@ project(':streams:integration-tests') {
 
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':group-coordinator')
+    testImplementation project(':group-coordinator:group-coordinator-api')
     testImplementation project(':server')
     testImplementation project(':server-common')
     testImplementation testFixtures(project(':server-common'))
@@ -3073,7 +3061,6 @@ project(':streams:integration-tests') {
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':tools')
     testImplementation project(':transaction-coordinator')
-    testImplementation libs.bcpkix
     testImplementation libs.hamcrest
     testImplementation libs.junitJupiter
     testImplementation libs.junitPlatformSuiteEngine // supports suite test
@@ -3992,7 +3979,6 @@ project(':connect:basic-auth-extension') {
     implementation libs.jakartaRsApi
     implementation libs.jakartaAnnotationApi
 
-    testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
     testImplementation libs.junitJupiter
     testImplementation testLog4j2Libs
