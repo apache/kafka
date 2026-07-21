@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
+import org.apache.kafka.common.message.FetchResponseData;
+import org.apache.kafka.common.message.ListOffsetsResponseData;
+import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.message.ResponseHeaderData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -23,11 +26,17 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.AddOffsetsToTxnResponse;
 import org.apache.kafka.common.requests.EndTxnResponse;
+import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
+import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
+import org.apache.kafka.common.requests.JoinGroupResponse;
+import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.RequestUtils;
+import org.apache.kafka.common.requests.SyncGroupResponse;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +47,7 @@ import java.io.EOFException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -65,7 +75,9 @@ import java.util.function.BiConsumer;
  *
  *         proxy.injectError(ApiKeys.END_TXN, Errors.CONCURRENT_TRANSACTIONS).once();
  *         proxy.injectError(ApiKeys.PRODUCE, Errors.NOT_ENOUGH_REPLICAS).onCall(2);
- *         proxy.disconnectOn(ApiKeys.END_TXN).once();      // the EOS "commit gap"
+ *         proxy.disconnectOn(ApiKeys.END_TXN).once();               // the EOS "commit gap"
+ *         proxy.delayResponse(ApiKeys.FETCH, Duration.ofSeconds(5)).everyTime(); // a slow/degraded broker
+ *         proxy.blackholeOn(ApiKeys.JOIN_GROUP).once();              // a silent network partition
  *     }
  * }
  * }</pre>
@@ -77,6 +89,17 @@ import java.util.function.BiConsumer;
  * <p>Determinism: {@code once()}/{@code onCall(n)}/{@code times(n)} are deterministic and safe for
  * assertions; {@code withProbability(p)} is chaos-mode only. The proxy never closes sockets unless a
  * {@code disconnectOn(...)} rule fires, so it is not itself a source of flakiness.
+ *
+ * <p>Fault actions differ in how "broken" they make the connection look to the client:
+ * <ul>
+ *   <li>{@code injectError(...)} — the broker-visible response arrives, carrying an application error code.</li>
+ *   <li>{@code disconnectOn(...)} — the TCP connection is reset; most clients treat this as an immediate,
+ *       unambiguous "reconnect now" signal.</li>
+ *   <li>{@code delayResponse(...)} — the response arrives, but only after a delay; exercises client-side
+ *       timeout paths ({@code request.timeout.ms}, session/heartbeat timeouts) that the above two can't reach.</li>
+ *   <li>{@code blackholeOn(...)} — the request is dropped before it ever reaches the broker: no response, no
+ *       reset. The client just waits until its own timeout fires, as with a real silent network partition.</li>
+ * </ul>
  */
 public final class KafkaProtocolFaultProxy implements AutoCloseable {
 
@@ -96,6 +119,25 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
             data.responses().forEach(topic ->
                 topic.partitionResponses().forEach(p -> p.setErrorCode(e.code())));
         });
+        // Common consumer-path errors.
+        ERROR_SETTERS.put(ApiKeys.FETCH, (r, e) -> {
+            final FetchResponseData data = ((FetchResponse) r).data();
+            data.responses().forEach(topic ->
+                topic.partitions().forEach(p -> p.setErrorCode(e.code())));
+        });
+        ERROR_SETTERS.put(ApiKeys.OFFSET_COMMIT, (r, e) -> {
+            final OffsetCommitResponseData data = ((OffsetCommitResponse) r).data();
+            data.topics().forEach(topic ->
+                topic.partitions().forEach(p -> p.setErrorCode(e.code())));
+        });
+        ERROR_SETTERS.put(ApiKeys.LIST_OFFSETS, (r, e) -> {
+            final ListOffsetsResponseData data = ((ListOffsetsResponse) r).data();
+            data.topics().forEach(topic ->
+                topic.partitions().forEach(p -> p.setErrorCode(e.code())));
+        });
+        ERROR_SETTERS.put(ApiKeys.JOIN_GROUP, (r, e) -> ((JoinGroupResponse) r).data().setErrorCode(e.code()));
+        ERROR_SETTERS.put(ApiKeys.SYNC_GROUP, (r, e) -> ((SyncGroupResponse) r).data().setErrorCode(e.code()));
+        ERROR_SETTERS.put(ApiKeys.HEARTBEAT, (r, e) -> ((HeartbeatResponse) r).data().setErrorCode(e.code()));
     }
 
     private final String targetHost;
@@ -157,12 +199,33 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
         if (apiKey == ApiKeys.METADATA || apiKey == ApiKeys.FIND_COORDINATOR) {
             throw new IllegalArgumentException(apiKey + " is reserved for routing and cannot carry injected errors.");
         }
-        return new FaultRule.Builder(this, apiKey, FaultRule.Action.INJECT_ERROR, error);
+        return new FaultRule.Builder(this, apiKey, FaultRule.Action.INJECT_ERROR, error, null);
     }
 
     /** Drop the connection when a response of {@code apiKey} would be returned (models the EOS commit gap). */
     public FaultRule.Builder disconnectOn(final ApiKeys apiKey) {
-        return new FaultRule.Builder(this, apiKey, FaultRule.Action.DISCONNECT, null);
+        return new FaultRule.Builder(this, apiKey, FaultRule.Action.DISCONNECT, null, null);
+    }
+
+    /**
+     * Delay responses of {@code apiKey} by {@code delay} before forwarding them (models a slow broker or a
+     * degraded network path). The delay runs on this connection's response-pump thread, so it also holds up
+     * forwarding of any later responses on the same connection ("head of line" — realistic for a single slow
+     * link, but worth knowing if the test also expects other in-flight requests on the same connection to
+     * complete promptly).
+     */
+    public FaultRule.Builder delayResponse(final ApiKeys apiKey, final Duration delay) {
+        return new FaultRule.Builder(this, apiKey, FaultRule.Action.DELAY, null, delay);
+    }
+
+    /**
+     * Silently drop requests of {@code apiKey} before they ever reach the broker: no response, no connection
+     * reset — the client just sits waiting until its own timeout (e.g. {@code request.timeout.ms}) fires.
+     * Models a network black hole (a firewall or partition silently dropping packets), as distinct from
+     * {@link #disconnectOn(ApiKeys)}'s immediate, unambiguous connection reset.
+     */
+    public FaultRule.Builder blackholeOn(final ApiKeys apiKey) {
+        return new FaultRule.Builder(this, apiKey, FaultRule.Action.BLACKHOLE, null, null);
     }
 
     /** Remove all registered faults (routing rewrites are always on and unaffected). */
@@ -204,17 +267,28 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
     }
 
     // client -> broker: forward verbatim, recording each request header for response decoding.
+    // Unless a BLACKHOLE rule fires for the request's API, in which case it is silently dropped here and
+    // never reaches the broker at all (the client just times out waiting for a response).
     private void pumpRequests(final Socket client, final Socket broker, final Connection conn) {
         try (client; broker;
              DataInputStream in = new DataInputStream(client.getInputStream());
              DataOutputStream out = new DataOutputStream(broker.getOutputStream())) {
             byte[] frame;
             while (running.get() && (frame = readFrame(in)) != null) {
+                RequestHeader header = null;
                 try {
-                    final RequestHeader header = RequestHeader.parse(ByteBuffer.wrap(frame));
-                    conn.inflight.put(header.correlationId(), header);
+                    header = RequestHeader.parse(ByteBuffer.wrap(frame));
                 } catch (final Exception parseErr) {
                     LOG.debug("could not parse request header (forwarding anyway)", parseErr);
+                }
+
+                if (header != null) {
+                    final FaultRule fired = firstFiringRequestRule(header.apiKey());
+                    if (fired != null) {
+                        LOG.info("Fault: blackholing {} request, never forwarded to the broker ({})", header.apiKey(), fired);
+                        continue;
+                    }
+                    conn.inflight.put(header.correlationId(), header);
                 }
                 writeFrame(out, frame);
             }
@@ -240,14 +314,24 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
 
                 final ApiKeys apiKey = reqHeader.apiKey();
                 final boolean routing = apiKey == ApiKeys.METADATA || apiKey == ApiKeys.FIND_COORDINATOR;
-                final FaultRule fired = firstFiringRule(apiKey);
+                final FaultRule fired = firstFiringResponseRule(apiKey);
 
                 if (fired != null && fired.action() == FaultRule.Action.DISCONNECT) {
                     LOG.info("Fault: dropping connection on {} response ({})", apiKey, fired);
                     break; // closes both sockets via try-with-resources
                 }
 
-                if (!routing && fired == null) {
+                if (fired != null && fired.action() == FaultRule.Action.DELAY) {
+                    LOG.info("Fault: delaying {} response by {} ({})", apiKey, fired.delay(), fired);
+                    try {
+                        Thread.sleep(fired.delay().toMillis());
+                    } catch (final InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        return; // proxy is shutting down
+                    }
+                }
+
+                if (!routing && (fired == null || fired.action() == FaultRule.Action.DELAY)) {
                     writeFrame(out, frame);
                     continue;
                 }
@@ -268,7 +352,7 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
             final AbstractResponse response = AbstractResponse.parseResponse(ByteBuffer.wrap(frame), reqHeader);
 
             if (routing) {
-                applyRouting(response);
+                applyRouting(response, version);
             }
             if (fired != null && fired.action() == FaultRule.Action.INJECT_ERROR) {
                 ERROR_SETTERS.get(apiKey).accept(response, fired.error());
@@ -287,20 +371,42 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
         }
     }
 
-    private void applyRouting(final AbstractResponse response) {
+    // FindCoordinatorResponse's top-level Host/Port fields are only valid for versions 0-3; version 4+ (KIP-699)
+    // batches results into the Coordinators list instead, and the generated code rejects a non-default
+    // top-level Host/Port at those versions. Rewrite whichever half of the schema the negotiated version
+    // actually carries.
+    private static final short FIND_COORDINATOR_BATCHED_VERSION = 4;
+
+    private void applyRouting(final AbstractResponse response, final short version) {
         if (response instanceof MetadataResponse) {
             ((MetadataResponse) response).data().brokers().forEach(b -> b.setHost(proxyHost).setPort(proxyPort));
         } else if (response instanceof FindCoordinatorResponse) {
             final FindCoordinatorResponse fc = (FindCoordinatorResponse) response;
-            fc.data().setHost(proxyHost).setPort(proxyPort);
-            fc.data().coordinators().forEach(c -> c.setHost(proxyHost).setPort(proxyPort));
+            if (version >= FIND_COORDINATOR_BATCHED_VERSION) {
+                fc.data().coordinators().forEach(c -> c.setHost(proxyHost).setPort(proxyPort));
+            } else {
+                fc.data().setHost(proxyHost).setPort(proxyPort);
+            }
         }
     }
 
-    private FaultRule firstFiringRule(final ApiKeys apiKey) {
+    // Evaluated from pumpRequests: only BLACKHOLE rules match here, since that's the one action that must act
+    // before the request ever reaches the broker.
+    private FaultRule firstFiringRequestRule(final ApiKeys apiKey) {
         FaultRule chosen = null;
         for (final FaultRule rule : rules) {
-            if (rule.apiKey() == apiKey && rule.shouldFire() && chosen == null) {
+            if (rule.apiKey() == apiKey && rule.action() == FaultRule.Action.BLACKHOLE && rule.shouldFire() && chosen == null) {
+                chosen = rule; // keep evaluating so every same-API rule still counts its match
+            }
+        }
+        return chosen;
+    }
+
+    // Evaluated from pumpResponses: every other action (a response necessarily exists to act on).
+    private FaultRule firstFiringResponseRule(final ApiKeys apiKey) {
+        FaultRule chosen = null;
+        for (final FaultRule rule : rules) {
+            if (rule.apiKey() == apiKey && rule.action() != FaultRule.Action.BLACKHOLE && rule.shouldFire() && chosen == null) {
                 chosen = rule; // keep evaluating so every same-API rule still counts its match
             }
         }

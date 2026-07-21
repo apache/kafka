@@ -19,27 +19,29 @@ package org.apache.kafka.streams.integration.utils;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 
+import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntPredicate;
 
 /**
- * A single fault to apply to responses of one {@link ApiKeys}. Built through the fluent DSL on
- * {@link KafkaProtocolFaultProxy} ({@code injectError(...)} / {@code disconnectOn(...)} then a trigger),
- * and returned to the caller as a handle so a test can inspect {@link #timesTriggered()} or
- * {@link #remove()} it.
+ * A single fault to apply to responses (or, for {@code BLACKHOLE}, requests) of one {@link ApiKeys}. Built
+ * through the fluent DSL on {@link KafkaProtocolFaultProxy} ({@code injectError(...)} / {@code disconnectOn(...)}
+ * / {@code delayResponse(...)} / {@code blackholeOn(...)} then a trigger), and returned to the caller as a
+ * handle so a test can inspect {@link #timesTriggered()} or {@link #remove()} it.
  *
- * <p>A rule counts every response of its API it sees ("matches"); the {@link IntPredicate} trigger decides,
- * from the 1-based match count, whether the fault fires on that match — e.g. {@code n -> n == 1} is
+ * <p>A rule counts every request/response of its API it sees ("matches"); the {@link IntPredicate} trigger
+ * decides, from the 1-based match count, whether the fault fires on that match — e.g. {@code n -> n == 1} is
  * {@code once()}, {@code n -> n <= 3} is {@code times(3)}.
  */
 public final class FaultRule {
 
-    enum Action { INJECT_ERROR, DISCONNECT }
+    enum Action { INJECT_ERROR, DISCONNECT, DELAY, BLACKHOLE }
 
     private final KafkaProtocolFaultProxy owner;
     private final ApiKeys apiKey;
     private final Action action;
     private final Errors error; // only for INJECT_ERROR
+    private final Duration delay; // only for DELAY
     private final IntPredicate trigger;
     private final String description;
 
@@ -50,12 +52,14 @@ public final class FaultRule {
               final ApiKeys apiKey,
               final Action action,
               final Errors error,
+              final Duration delay,
               final IntPredicate trigger,
               final String description) {
         this.owner = owner;
         this.apiKey = apiKey;
         this.action = action;
         this.error = error;
+        this.delay = delay;
         this.trigger = trigger;
         this.description = description;
     }
@@ -70,6 +74,10 @@ public final class FaultRule {
 
     Errors error() {
         return error;
+    }
+
+    Duration delay() {
+        return delay;
     }
 
     /** Called by the proxy for each response of this rule's API; returns true if the fault should fire. */
@@ -103,7 +111,7 @@ public final class FaultRule {
     }
 
     // ------------------------------------------------------------------
-    // Fluent trigger step: returned by injectError(...)/disconnectOn(...).
+    // Fluent trigger step: returned by injectError(...)/disconnectOn(...)/delayResponse(...)/blackholeOn(...).
     // Each terminal registers the built rule with the proxy and returns the handle.
     // ------------------------------------------------------------------
     public static final class Builder {
@@ -111,17 +119,33 @@ public final class FaultRule {
         private final ApiKeys apiKey;
         private final Action action;
         private final Errors error;
+        private final Duration delay;
 
-        Builder(final KafkaProtocolFaultProxy owner, final ApiKeys apiKey, final Action action, final Errors error) {
+        Builder(final KafkaProtocolFaultProxy owner, final ApiKeys apiKey, final Action action,
+                final Errors error, final Duration delay) {
             this.owner = owner;
             this.apiKey = apiKey;
             this.action = action;
             this.error = error;
+            this.delay = delay;
         }
 
         private FaultRule register(final IntPredicate trigger, final String triggerDesc) {
-            final String verb = action == Action.DISCONNECT ? "disconnect" : "inject " + error;
-            final FaultRule rule = new FaultRule(owner, apiKey, action, error, trigger,
+            final String verb;
+            switch (action) {
+                case DISCONNECT:
+                    verb = "disconnect";
+                    break;
+                case BLACKHOLE:
+                    verb = "blackhole (drop request before it reaches the broker)";
+                    break;
+                case DELAY:
+                    verb = "delay response by " + delay;
+                    break;
+                default:
+                    verb = "inject " + error;
+            }
+            final FaultRule rule = new FaultRule(owner, apiKey, action, error, delay, trigger,
                     verb + " on " + apiKey + " [" + triggerDesc + "]");
             owner.addFault(rule);
             return rule;
