@@ -37,7 +37,9 @@ import org.apache.kafka.snapshot.Snapshots;
 
 import java.io.File;
 import java.io.PrintStream;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -449,7 +451,7 @@ public class Formatter {
                 printStream.printf("Formatting %s %s with %s %s.%n",
                     directoryType.description(), writeLogDir,
                     MetadataVersion.FEATURE_NAME, releaseVersion);
-                Files.createDirectories(Paths.get(writeLogDir));
+                createLogDirectory(Paths.get(writeLogDir));
                 if (writeBootstrapSnapshot && directoryType.isMetadataDirectory()) {
                     writeBoostrapSnapshot(writeLogDir,
                         bootstrapMetadata,
@@ -463,6 +465,18 @@ public class Formatter {
                         errorLogDir + ": " + e);
             });
             copier.writeLogDirChanges();
+        }
+    }
+
+    // On JDK < 20, Files.createDirectories throws FileAlreadyExistsException when the
+    // path is a symbolic link to an existing directory (JDK-8294193).
+    static void createLogDirectory(Path dir) throws java.io.IOException {
+        try {
+            Files.createDirectories(dir);
+        } catch (FileAlreadyExistsException e) {
+            if (!Files.isDirectory(dir)) {
+                throw e;
+            }
         }
     }
 
