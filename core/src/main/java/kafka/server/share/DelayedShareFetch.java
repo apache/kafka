@@ -338,8 +338,7 @@ public class DelayedShareFetch extends DelayedOperation {
             // Handle synchronous exceptions thrown by async read before future is returned
             log.error("Error initiating async fetch during request completion for group {}, member {}",
                 shareFetch.groupId(), shareFetch.memberId(), e);
-            handleFetchException(shareFetch, topicPartitionData.keySet(), e);
-            releasePartitionLocks(topicPartitionData.keySet());
+            handleFetchExceptionAndReleaseLocks(topicPartitionData.keySet(), e);
             return;
         }
         // If the future is successfully created then complete the request asynchronously. The completion
@@ -348,8 +347,7 @@ public class DelayedShareFetch extends DelayedOperation {
             if (throwable != null) {
                 log.error("Async fetch failed during request completion for group {}, member {}",
                     shareFetch.groupId(), shareFetch.memberId(), throwable);
-                handleFetchException(shareFetch, topicPartitionData.keySet(), throwable);
-                releasePartitionLocks(topicPartitionData.keySet());
+                handleFetchExceptionAndReleaseLocks(topicPartitionData.keySet(), throwable);
                 return;
             }
             // Complete the share fetch request and release the locks as completion handler will complete
@@ -696,6 +694,20 @@ public class DelayedShareFetch extends DelayedOperation {
     }
 
     /**
+     * Surfaces the fetch exception for the given partitions and releases their fetch locks.
+     *
+     * @param topicIdPartitions The topic-partitions whose fetch failed and whose locks must be released.
+     * @param throwable The exception that occurred while fetching messages.
+     */
+    private void handleFetchExceptionAndReleaseLocks(Set<TopicIdPartition> topicIdPartitions, Throwable throwable) {
+        try {
+            handleFetchException(shareFetch, topicIdPartitions, throwable);
+        } finally {
+            releasePartitionLocks(topicIdPartitions);
+        }
+    }
+
+    /**
      * The method updates the metric for the time taken to acquire the share partition locks. Also,
      * it resets the acquireStartTimeMs to the current time, so that the metric records the time taken
      * to acquire the locks for the re-try, if the partitions are re-acquired. The partitions can be
@@ -769,7 +781,7 @@ public class DelayedShareFetch extends DelayedOperation {
             partitionMaxBytesStrategy.maxBytes(shareFetch.fetchParams().maxBytes,
                 topicPartitionData.keySet(), topicPartitionData.size()))) {
             // Request can be completed - set state and force completion. Though on-slow path when
-            // readFuture is not syncronously completed the partitionsAcquired will be already set
+            // readFuture is not synchronously completed the partitionsAcquired will be already set
             // but on fast-path when readFuture is completed synchronously, we need to set the
             // partitionsAcquired.
             partitionsAcquired = topicPartitionData;
@@ -1161,18 +1173,14 @@ public class DelayedShareFetch extends DelayedOperation {
             completeRemoteFetchRequest(shareFetchPartitionDataList, acquiredNonRemoteFetchTopicPartitionData);
         } catch (InterruptedException | ExecutionException e) {
             log.error("Exception occurred in completing remote fetch {} for delayed share fetch request {}", pendingRemoteFetchesOpt.get(), e);
-            handleExceptionInCompletingRemoteStorageShareFetchRequest(acquiredNonRemoteFetchTopicPartitionData.keySet(), e);
-            // Release locks on error
             Set<TopicIdPartition> topicIdPartitions = new LinkedHashSet<>(partitionsAcquired.keySet());
             topicIdPartitions.addAll(acquiredNonRemoteFetchTopicPartitionData.keySet());
-            releasePartitionLocks(topicIdPartitions);
+            handleFetchExceptionAndReleaseLocks(topicIdPartitions, e);
         } catch (Exception e) {
             log.error("Unexpected error in processing delayed share fetch request", e);
-            handleExceptionInCompletingRemoteStorageShareFetchRequest(acquiredNonRemoteFetchTopicPartitionData.keySet(), e);
-            // Release locks on error
             Set<TopicIdPartition> topicIdPartitions = new LinkedHashSet<>(partitionsAcquired.keySet());
             topicIdPartitions.addAll(acquiredNonRemoteFetchTopicPartitionData.keySet());
-            releasePartitionLocks(topicIdPartitions);
+            handleFetchExceptionAndReleaseLocks(topicIdPartitions, e);
         }
     }
 
