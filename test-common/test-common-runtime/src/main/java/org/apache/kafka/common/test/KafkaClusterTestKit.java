@@ -251,6 +251,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 props.putIfAbsent(StandardAuthorizer.ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "false");
                 props.putIfAbsent(StandardAuthorizer.SUPER_USERS_CONFIG, "User:" + JaasUtils.KAFKA_PLAIN_ADMIN);
                 sslConfig.forEach(props::putIfAbsent);
+            } else if (securityProtocol.equals(SecurityProtocol.SSL.name)) {
+                sslConfig.forEach(props::putIfAbsent);
             }
         }
 
@@ -260,7 +262,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 File file = JaasUtils.writeJaasContextsToFile(Set.of(
                     new JaasUtils.JaasSection(JaasUtils.KAFKA_SERVER_CONTEXT_NAME,
                         List.of(
-                            JaasModule.plainLoginModule(
+                            JaasUtils.plainLoginModule(
                                 JaasUtils.KAFKA_PLAIN_ADMIN, 
                                 JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD,
                                 true,

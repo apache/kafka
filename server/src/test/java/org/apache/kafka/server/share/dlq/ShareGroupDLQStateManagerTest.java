@@ -543,9 +543,28 @@ class ShareGroupDLQStateManagerTest {
                 HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
             ), List.of(), List.of())
         ));
+        assertDlqRecordTimestampsAreWallClock(capturedProduces.get(0));
         verify(mockMetrics).recordDLQProduce(GROUP_ID);
         verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
         verify(mockMetrics, never()).recordDLQProduceFailed(any());
+    }
+
+    /**
+     * Asserts every record in the captured produce request carries wall-clock (epoch) time as its
+     * timestamp, matching {@link #MOCK_TIME}'s {@link org.apache.kafka.common.utils.Time#milliseconds()}.
+     * DLQ record timestamps must reflect real time, since log retention decides whether to delete a
+     * segment by comparing each record's timestamp against the current wall-clock time.
+     */
+    private static void assertDlqRecordTimestampsAreWallClock(ProduceRequest request) {
+        long expectedTimestampMs = MOCK_TIME.milliseconds();
+        for (ProduceRequestData.TopicProduceData topic : request.data().topicData()) {
+            for (ProduceRequestData.PartitionProduceData partition : topic.partitionData()) {
+                for (Record record : ((MemoryRecords) partition.records()).records()) {
+                    assertEquals(expectedTimestampMs, record.timestamp(),
+                        "DLQ record timestamp should be wall-clock time, not an arbitrary-origin clock");
+                }
+            }
+        }
     }
 
     @Test
