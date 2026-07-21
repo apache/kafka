@@ -45,7 +45,6 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
-import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -63,7 +62,6 @@ import org.apache.kafka.streams.processor.internals.GlobalStateUpdateTask;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
-import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
@@ -82,9 +80,6 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
-import org.apache.kafka.streams.state.ReadOnlySessionStore;
-import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.SessionStoreWithHeaders;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
@@ -126,7 +121,6 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
-import java.util.regex.Pattern;
 
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
@@ -237,9 +231,10 @@ public class TopologyTestDriver implements Closeable {
 
     private static final int PARTITION_ID = 0;
     private static final TaskId TASK_ID = new TaskId(0, PARTITION_ID);
-    StreamTask task;
     private GlobalStateUpdateTask globalStateTask;
     private GlobalStateManager globalStateManager;
+
+    private final Runtime runtime;
 
     private StateDirectory stateDirectory;
     private Metrics metrics;
@@ -378,7 +373,40 @@ public class TopologyTestDriver implements Closeable {
         );
 
         setupGlobalTask(mockWallClockTime, streamsConfig, streamsMetrics, cache);
-        setupTask(streamsConfig, streamsMetrics, cache, internalTopologyBuilder.topologyConfigs().getTaskConfig());
+        final StreamTask task = setupTask(streamsConfig, streamsMetrics, cache, internalTopologyBuilder.topologyConfigs().getTaskConfig());
+        runtime = new SinglePartitionRuntime(
+                task,
+                internalTopologyBuilder,
+                globalStateManager,
+                partitionsByInputTopic,
+                offsetsByTopicOrPatternPartition,
+                producer,
+                mockWallClockTime,
+                new Runtime.Host() {
+                    @Override
+                    public void commit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+                        TopologyTestDriver.this.commit(offsets);
+                    }
+
+                    @Override
+                    public void processGlobalRecord(final TopicPartition globalInputTopicPartition,
+                                                    final long timestamp,
+                                                    final byte[] key,
+                                                    final byte[] value,
+                                                    final Headers headers) {
+                        TopologyTestDriver.this.processGlobalRecord(globalInputTopicPartition, timestamp, key, value, headers);
+                    }
+
+                    @Override
+                    public TopicPartition globalPartitionOrNull(final String topic) {
+                        return globalPartitionsByInputTopic.get(topic);
+                    }
+
+                    @Override
+                    public void recordOutput(final String topic, final ProducerRecord<byte[], byte[]> record) {
+                        outputRecordsByTopic.computeIfAbsent(topic, k -> new LinkedList<>()).add(record);
+                    }
+                });
     }
 
     private static void logIfTaskIdleEnabled(final StreamsConfig streamsConfig) {
@@ -483,10 +511,10 @@ public class TopologyTestDriver implements Closeable {
         }
     }
 
-    private void setupTask(final StreamsConfig streamsConfig,
-                           final StreamsMetricsImpl streamsMetrics,
-                           final ThreadCache cache,
-                           final TaskConfig taskConfig) {
+    private StreamTask setupTask(final StreamsConfig streamsConfig,
+                                 final StreamsMetricsImpl streamsMetrics,
+                                 final ThreadCache cache,
+                                 final TaskConfig taskConfig) {
         if (!partitionsByInputTopic.isEmpty()) {
             consumer.assign(partitionsByInputTopic.values());
             final Map<TopicPartition, Long> startOffsets = new HashMap<>();
@@ -522,7 +550,7 @@ public class TopologyTestDriver implements Closeable {
                 cache
             );
 
-            task = new StreamTask(
+            final StreamTask task = new StreamTask(
                 TASK_ID,
                 new HashSet<>(partitionsByInputTopic.values()),
                 processorTopology,
@@ -537,14 +565,15 @@ public class TopologyTestDriver implements Closeable {
                 context,
                 logContext,
                 false
-                );
+            );
             task.initializeIfNeeded();
             task.completeRestoration(noOpResetter -> { });
             for (final TopicPartition tp: task.inputPartitions()) {
                 task.updateNextOffsets(tp, new OffsetAndMetadata(0, Optional.empty(), ""));
             }
+            return task;
         } else {
-            task = null;
+            return null;
         }
     }
 
@@ -562,74 +591,7 @@ public class TopologyTestDriver implements Closeable {
                             final byte[] key,
                             final byte[] value,
                             final Headers headers) {
-        final TopicPartition inputTopicOrPatternPartition = getInputTopicOrPatternPartition(topicName);
-        final TopicPartition globalInputTopicPartition = globalPartitionsByInputTopic.get(topicName);
-
-        if (inputTopicOrPatternPartition == null && globalInputTopicPartition == null) {
-            throw new IllegalArgumentException("Unknown topic: " + topicName);
-        }
-
-        if (inputTopicOrPatternPartition != null) {
-            enqueueTaskRecord(topicName, inputTopicOrPatternPartition, timestamp, key, value, headers);
-            completeAllProcessableWork();
-        }
-
-        if (globalInputTopicPartition != null) {
-            processGlobalRecord(globalInputTopicPartition, timestamp, key, value, headers);
-        }
-    }
-
-    private void enqueueTaskRecord(final String inputTopic,
-                                   final TopicPartition topicOrPatternPartition,
-                                   final long timestamp,
-                                   final byte[] key,
-                                   final byte[] value,
-                                   final Headers headers) {
-        final long offset = offsetsByTopicOrPatternPartition.get(topicOrPatternPartition).incrementAndGet() - 1;
-        task.addRecords(topicOrPatternPartition, Collections.singleton(new ConsumerRecord<>(
-            inputTopic,
-            topicOrPatternPartition.partition(),
-            offset,
-            timestamp,
-            TimestampType.CREATE_TIME,
-            key == null ? ConsumerRecord.NULL_SIZE : key.length,
-            value == null ? ConsumerRecord.NULL_SIZE : value.length,
-            key,
-            value,
-            headers,
-            Optional.empty()))
-        );
-    }
-
-    private void completeAllProcessableWork() {
-        // for internally triggered processing (like wall-clock punctuations),
-        // we might have buffered some records to internal topics that need to
-        // be piped back in to kick-start the processing loop. This is idempotent
-        // and therefore harmless in the case where all we've done is enqueued an
-        // input record from the user.
-        captureOutputsAndReEnqueueInternalResults();
-
-        // If the topology only has global tasks, then `task` would be null.
-        // For this method, it just means there's nothing to do.
-        if (task != null) {
-            task.resumePollingForPartitionsWithAvailableSpace();
-            task.updateLags();
-            while (task.hasRecordsQueued() && task.isProcessable(mockWallClockTime.milliseconds())) {
-                // Process the record ...
-                task.process(mockWallClockTime.milliseconds());
-                task.maybePunctuateStreamTime();
-                commit(task.prepareCommit(true));
-                task.postCommit(true);
-                captureOutputsAndReEnqueueInternalResults();
-            }
-            if (task.hasRecordsQueued()) {
-                log.info("Due to the {} configuration, there are currently some records" +
-                             " that cannot be processed. Advancing wall-clock time or" +
-                             " enqueuing records on the empty topics will allow" +
-                             " Streams to process more.",
-                         StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
-            }
-        }
+        runtime.pipeRecord(topicName, timestamp, key, value, headers);
     }
 
     @SuppressWarnings("removal")
@@ -662,69 +624,6 @@ public class TopologyTestDriver implements Closeable {
         globalStateTask.flushState();
     }
 
-    private void validateSourceTopicNameRegexPattern(final String inputRecordTopic) {
-        for (final String sourceTopicName : internalTopologyBuilder.fullSourceTopicNames()) {
-            if (!sourceTopicName.equals(inputRecordTopic) && Pattern.compile(sourceTopicName).matcher(inputRecordTopic).matches()) {
-                throw new TopologyException("Topology add source of type String for topic: " + sourceTopicName +
-                                                " cannot contain regex pattern for input record topic: " + inputRecordTopic +
-                                                " and hence cannot process the message.");
-            }
-        }
-    }
-
-    private TopicPartition getInputTopicOrPatternPartition(final String topicName) {
-        if (!internalTopologyBuilder.fullSourceTopicNames().isEmpty()) {
-            validateSourceTopicNameRegexPattern(topicName);
-        }
-
-        final TopicPartition topicPartition = partitionsByInputTopic.get(topicName);
-        if (topicPartition == null) {
-            for (final Map.Entry<String, TopicPartition> entry : partitionsByInputTopic.entrySet()) {
-                if (Pattern.compile(entry.getKey()).matcher(topicName).matches()) {
-                    return entry.getValue();
-                }
-            }
-        }
-        return topicPartition;
-    }
-
-    private void captureOutputsAndReEnqueueInternalResults() {
-        // Capture all the records sent to the producer ...
-        final List<ProducerRecord<byte[], byte[]>> output = producer.history();
-        producer.clear();
-
-        for (final ProducerRecord<byte[], byte[]> record : output) {
-            outputRecordsByTopic.computeIfAbsent(record.topic(), k -> new LinkedList<>()).add(record);
-
-            // Forward back into the topology if the produced record is to an internal or a source topic ...
-            final String outputTopicName = record.topic();
-
-            final TopicPartition inputTopicOrPatternPartition = getInputTopicOrPatternPartition(outputTopicName);
-            final TopicPartition globalInputTopicPartition = globalPartitionsByInputTopic.get(outputTopicName);
-
-            if (inputTopicOrPatternPartition != null) {
-                enqueueTaskRecord(
-                    outputTopicName,
-                    inputTopicOrPatternPartition,
-                    record.timestamp(),
-                    record.key(),
-                    record.value(),
-                    record.headers()
-                );
-            }
-
-            if (globalInputTopicPartition != null) {
-                processGlobalRecord(
-                    globalInputTopicPartition,
-                    record.timestamp(),
-                    record.key(),
-                    record.value(),
-                    record.headers()
-                );
-            }
-        }
-    }
-
     /**
      * Advances the internally mocked wall-clock time.
      * This might trigger a {@link PunctuationType#WALL_CLOCK_TIME wall-clock} type
@@ -735,12 +634,7 @@ public class TopologyTestDriver implements Closeable {
     public void advanceWallClockTime(final Duration advance) {
         Objects.requireNonNull(advance, "advance cannot be null");
         mockWallClockTime.sleep(advance.toMillis());
-        if (task != null) {
-            task.maybePunctuateSystemTime();
-            commit(task.prepareCommit(true));
-            task.postCommit(true);
-        }
-        completeAllProcessableWork();
+        runtime.advanceWallClockTime();
     }
 
     private Queue<ProducerRecord<byte[], byte[]>> getRecordsQueue(final String topicName) {
@@ -952,61 +846,15 @@ public class TopologyTestDriver implements Closeable {
 
     private StateStore getStateStore(final String name,
                                      final boolean throwForBuiltInStores) {
-        if (task != null) {
-            // Accessing a store must not corrupt the task's record context. Only set a dummy
-            // context when none exists yet (i.e. before any record has been processed) so that
-            // direct store operations have a context to work with; never overwrite a live one.
-            if (task.processorContext().recordContext() == null) {
-                task.processorContext().setRecordContext(new ProcessorRecordContext(0L, -1L, -1, null, new RecordHeaders()));
-            }
-            final StateStore stateStore = ((ProcessorContextImpl) task.processorContext()).stateManager().store(name);
-            if (stateStore != null) {
-                if (throwForBuiltInStores) {
-                    throwIfBuiltInStore(stateStore);
-                }
-                return stateStore;
-            }
-        }
-
-        if (globalStateManager != null) {
-            final StateStore stateStore = globalStateManager.store(name);
-            if (stateStore != null) {
-                if (throwForBuiltInStores) {
-                    throwIfBuiltInStore(stateStore);
-                }
-                return stateStore;
-            }
-
-        }
-
-        return null;
+        return runtime.getStateStore(name, throwForBuiltInStores);
     }
 
-    private void throwIfBuiltInStore(final StateStore stateStore) {
-        if (stateStore instanceof VersionedKeyValueStore) {
-            throw new IllegalArgumentException("Store " + stateStore.name()
-                                                   + " is a versioned key-value store and should be accessed via `getVersionedKeyValueStore()`");
-        }
-        if (stateStore instanceof TimestampedKeyValueStore) {
-            throw new IllegalArgumentException("Store " + stateStore.name()
-                                                   + " is a timestamped key-value store and should be accessed via `getTimestampedKeyValueStore()`");
-        }
-        if (stateStore instanceof ReadOnlyKeyValueStore) {
-            throw new IllegalArgumentException("Store " + stateStore.name()
-                                                   + " is a key-value store and should be accessed via `getKeyValueStore()`");
-        }
-        if (stateStore instanceof TimestampedWindowStore) {
-            throw new IllegalArgumentException("Store " + stateStore.name()
-                                                   + " is a timestamped window store and should be accessed via `getTimestampedWindowStore()`");
-        }
-        if (stateStore instanceof ReadOnlyWindowStore) {
-            throw new IllegalArgumentException("Store " + stateStore.name()
-                                                   + " is a window store and should be accessed via `getWindowStore()`");
-        }
-        if (stateStore instanceof ReadOnlySessionStore) {
-            throw new IllegalArgumentException("Store " + stateStore.name()
-                                                   + " is a session store and should be accessed via `getSessionStore()`");
-        }
+    /**
+     * For {@code TopologyTestDriverWrapper}, which needs direct access
+     * to the underlying task's processor context for test-only introspection.
+     */
+    ProcessorContext<?, ?> taskProcessorContext() {
+        return runtime.taskProcessorContext();
     }
 
     /**
@@ -1305,12 +1153,7 @@ public class TopologyTestDriver implements Closeable {
      * Close the driver, its topology, and all processors.
      */
     public void close() {
-        if (task != null) {
-            task.suspend();
-            task.prepareCommit(true);
-            task.postCommit(true);
-            task.closeClean();
-        }
+        runtime.suspendAndCloseTaskCleanly();
         if (globalStateTask != null) {
             try {
                 globalStateTask.close(false);
@@ -1318,8 +1161,8 @@ public class TopologyTestDriver implements Closeable {
                 // ignore
             }
         }
-        completeAllProcessableWork();
-        if (task != null && task.hasRecordsQueued()) {
+        runtime.completeAllProcessableWork();
+        if (runtime.hasRecordsQueued()) {
             log.warn("Found some records that cannot be processed due to the" +
                          " {} configuration during TopologyTestDriver#close().",
                      StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);

@@ -44,7 +44,7 @@ public class TopologyTestDriverWrapper extends TopologyTestDriver {
      */
     @SuppressWarnings("unchecked")
     public <K, V> ProcessorContext<K, V> setCurrentNodeForProcessorContext(final String processorName) {
-        final ProcessorContext<K, V> context = task.processorContext();
+        final ProcessorContext<K, V> context = (ProcessorContext<K, V>) taskProcessorContext();
         ((ProcessorContextImpl) context).setCurrentNode(getProcessor(processorName));
         return context;
     }
