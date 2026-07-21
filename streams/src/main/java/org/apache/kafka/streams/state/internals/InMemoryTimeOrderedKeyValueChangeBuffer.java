@@ -29,6 +29,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.FullChangeSerde;
 import org.apache.kafka.streams.processor.StateStore;
@@ -537,12 +538,14 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
                 value.context()
             );
         }
-        // ValueTimestampHeaders -> plain (dropping the per-value headers/timestamp).
-        return new BufferValue(
-            unwrapHeadersFormatToPlainValue(value.priorValue()),
-            unwrapHeadersFormatToPlainValue(value.oldValue()),
-            unwrapHeadersFormatToPlainValue(value.newValue()),
-            value.context()
+        // ValueTimestampHeaders -> plain would drop the per-value headers/timestamps carried by a V4
+        // changelog. This only arises when a store that previously used a headers store format is
+        // restored without one, i.e. a store-format downgrade. Downgrades are not supported, so we
+        // fail fast here rather than silently discarding the stored header data.
+        throw new StreamsException(
+            "Cannot restore suppress buffer '" + storeName + "': its changelog contains header-aware "
+                + "(V4) records, but the store is configured without a headers store format. "
+                + "Downgrading the store format is not supported."
         );
     }
 
