@@ -2487,7 +2487,6 @@ project(':storage') {
     testImplementation project(':clients')
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':core')
-    testImplementation project(':core').sourceSets.test.output
     testImplementation testFixtures(project(':storage:storage-api'))
     testImplementation project(':metadata')
     testImplementation project(':test-common:test-common-internal-api')
