@@ -94,10 +94,6 @@ public class ShareSessionHandler {
         return sessionPartitions;
     }
 
-    public Collection<TopicIdPartition> sessionPartitions() {
-        return Set.copyOf(sessionPartitions.values());
-    }
-
     public void addPartitionToFetch(TopicIdPartition topicIdPartition, Acknowledgements partitionAcknowledgements) {
         nextPartitions.put(topicIdPartition.topicPartition(), topicIdPartition);
         if (partitionAcknowledgements != null) {
