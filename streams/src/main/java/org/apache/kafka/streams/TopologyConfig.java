@@ -311,36 +311,17 @@ public final class TopologyConfig extends AbstractConfig {
                 .getOrDefault(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, "false")));
     }
 
-    // local sentinel mirroring StreamTask.UNDEFINED_MAX_BUFFERED_SIZE; -1 disables the legacy
-    // per-partition pause and lets the bytes guard own buffering.
-    private static final int UNDEFINED_MAX_BUFFERED_SIZE = -1;
-
-    private int configureMaxBufferedSize() {
-        final boolean bufferedRecordsPerPartitionOverridden = isTopologyOverride(BUFFERED_RECORDS_PER_PARTITION_CONFIG, topologyOverrides);
-        // A topology-level override is the strongest signal of intent, so we let it win locally; the
-        // thread-wide bytes guard still bounds memory globally. We deliberately do NOT lock this out
-        // based on a global input.buffer.max.bytes value (which could just be the documented default).
-        final boolean inputBufferMaxBytesOverridden = isTopologyOverride(INPUT_BUFFER_MAX_BYTES_CONFIG, topologyOverrides);
-
-        if (!bufferedRecordsPerPartitionOverridden && !inputBufferMaxBytesOverridden) {
-            return getBufferedRecordsPerPartition(globalAppConfigs);
-        }
-        return setMaxBufferedRecordsPerPartition(bufferedRecordsPerPartitionOverridden, inputBufferMaxBytesOverridden);
-    }
-
     @SuppressWarnings("deprecation")
-    private int setMaxBufferedRecordsPerPartition(final boolean bufferedRecordsPerPartitionOverridden,
-                                                  final boolean inputBufferMaxBytesOverridden) {
-        if (bufferedRecordsPerPartitionOverridden && inputBufferMaxBytesOverridden) {
-            log.warn("Topology {} overrides both deprecated config {} and new config {}; {} is ignored and {} is used to keep memory usage under control.",
-                topologyName,
-                BUFFERED_RECORDS_PER_PARTITION_CONFIG,
-                INPUT_BUFFER_MAX_BYTES_CONFIG,
-                BUFFERED_RECORDS_PER_PARTITION_CONFIG,
-                INPUT_BUFFER_MAX_BYTES_CONFIG);
-            return UNDEFINED_MAX_BUFFERED_SIZE;
+    private int configureMaxBufferedSize() {
+        // Per-topology input.buffer.max.bytes is not supported: the bytes cap is enforced per thread
+        // from the global config, so a topology-level override cannot take effect. Reject it explicitly
+        // rather than let it silently disable the legacy per-partition guard. See KAFKA-13152.
+        if (isTopologyOverride(INPUT_BUFFER_MAX_BYTES_CONFIG, topologyOverrides)) {
+            log.warn("Topology {} overrides {} but per-topology byte caps are not supported; the override is ignored.",
+                topologyName, INPUT_BUFFER_MAX_BYTES_CONFIG);
         }
-        if (bufferedRecordsPerPartitionOverridden) {
+
+        if (isTopologyOverride(BUFFERED_RECORDS_PER_PARTITION_CONFIG, topologyOverrides)) {
             log.warn("Topology {} overrides deprecated config {} which will be used to set max buffered size; we suggest setting {} instead as {} will be removed in the future.",
                 topologyName,
                 BUFFERED_RECORDS_PER_PARTITION_CONFIG,
@@ -348,7 +329,7 @@ public final class TopologyConfig extends AbstractConfig {
                 BUFFERED_RECORDS_PER_PARTITION_CONFIG);
             return getInt(BUFFERED_RECORDS_PER_PARTITION_CONFIG);
         }
-        return UNDEFINED_MAX_BUFFERED_SIZE;
+        return getBufferedRecordsPerPartition(globalAppConfigs);
     }
 
     @Deprecated
