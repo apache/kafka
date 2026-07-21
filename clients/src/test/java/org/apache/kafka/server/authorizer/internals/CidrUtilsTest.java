@@ -15,15 +15,15 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.authorizer;
+package org.apache.kafka.server.authorizer.internals;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.net.InetAddress;
 
-import static org.apache.kafka.server.authorizer.CidrUtils.isInRange;
-import static org.apache.kafka.server.authorizer.CidrUtils.validate;
+import static org.apache.kafka.server.authorizer.internals.CidrUtils.isInRange;
+import static org.apache.kafka.server.authorizer.internals.CidrUtils.validate;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

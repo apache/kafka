@@ -15,14 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.authorizer;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
+package org.apache.kafka.server.authorizer.internals;
 
 import org.apache.commons.net.util.SubnetUtils;
 import org.apache.commons.net.util.SubnetUtils6;
 
-@InterfaceAudience.Public
 public final class CidrUtils {
 
     private CidrUtils() {}

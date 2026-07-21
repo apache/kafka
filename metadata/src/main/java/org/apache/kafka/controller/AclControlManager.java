@@ -33,7 +33,7 @@ import org.apache.kafka.metadata.authorizer.StandardAclWithId;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult;
-import org.apache.kafka.server.authorizer.CidrUtils;
+import org.apache.kafka.server.authorizer.internals.CidrUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.mutable.BoundedList;

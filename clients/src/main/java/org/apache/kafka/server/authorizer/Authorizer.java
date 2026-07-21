@@ -31,6 +31,7 @@ import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.internals.SecurityUtils;
+import org.apache.kafka.server.authorizer.internals.CidrUtils;
 
 import java.io.Closeable;
 import java.util.Collections;
