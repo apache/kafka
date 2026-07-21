@@ -17,11 +17,10 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsResult;
-import org.apache.kafka.clients.admin.GroupListing;
-import org.apache.kafka.clients.admin.ListGroupsOptions;
 import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -29,6 +28,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
+import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
@@ -156,7 +156,13 @@ public class StreamsResetter {
             properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServerValue);
 
             try (Admin adminClient = Admin.create(properties)) {
-                maybeDeleteActiveConsumers(groupId, adminClient, options.hasForce());
+                final boolean force = options.hasForce();
+
+                maybeDeleteActiveConsumers(groupId, adminClient, force);
+
+                if (!force) {
+                    validateApplicationIdExists(groupId, adminClient);
+                }
 
                 allTopics.clear();
                 allTopics.addAll(adminClient.listTopics().names().get(60, TimeUnit.SECONDS));
@@ -184,19 +190,29 @@ public class StreamsResetter {
         }
     }
 
+    // Note: this check confirms the application.id exists as a consumer group,
+    // but cannot prevent topic deletion for other applications whose IDs share
+    // this application.id as a prefix (e.g. resetting "foo" may affect "foo-v2"
+    // topics). This is a known limitation of prefix-based topic inference.
     void validateApplicationIdExists(final String applicationId,
                                              final Admin adminClient)
-            throws ExecutionException, InterruptedException, TimeoutException {
+            throws InterruptedException, TimeoutException {
+        ConsumerGroupDescription description = null;
+        try {
+            final Map<String, ConsumerGroupDescription> groups = adminClient
+                    .describeConsumerGroups(Set.of(applicationId))
+                    .all()
+                    .get(60, TimeUnit.SECONDS);
 
-        final Collection<GroupListing> groups = adminClient
-                .listGroups(new ListGroupsOptions())
-                .all()
-                .get(60, TimeUnit.SECONDS);
+            description = groups.get(applicationId);
+        } catch (final ExecutionException e) {
+            if (!(e.getCause() instanceof GroupIdNotFoundException)) {
+                throw new RuntimeException(e.getCause());
+            }
+        }
+        System.out.println("This method is invoked");
 
-        final boolean groupExists = groups.stream()
-                .anyMatch(group -> group.groupId().equals(applicationId));
-
-        if (!groupExists) {
+        if (description == null || GroupState.DEAD.equals(description.groupState())) {
             throw new IllegalArgumentException(
                     "No consumer group found with application.id '" + applicationId + "'. "
                             + "Refusing to delete internal topics to avoid accidentally removing topics "
@@ -547,9 +563,6 @@ public class StreamsResetter {
     }
 
     private int maybeDeleteInternalTopics(final Admin adminClient, final StreamsResetterOptions options) throws ExecutionException, InterruptedException, TimeoutException {
-        if (!options.hasForce()) {
-            validateApplicationIdExists(options.applicationId(), adminClient);
-        }
 
         final List<String> inferredInternalTopics = allTopics.stream()
                 .filter(options::isInferredInternalTopic)

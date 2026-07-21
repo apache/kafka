@@ -232,6 +232,7 @@ public class ResetIntegrationTest {
         cluster.createTopic(INPUT_TOPIC, 1, (short) 1);
         final String[] parameters = new String[] {
             "--application-id", appId,
+            "--force",
             "--bootstrap-server", cluster.bootstrapServers(),
             "--input-topics", INPUT_TOPIC
         };

@@ -19,9 +19,6 @@ package org.apache.kafka.tools;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsResult;
-import org.apache.kafka.clients.admin.GroupListing;
-import org.apache.kafka.clients.admin.ListGroupsOptions;
-import org.apache.kafka.clients.admin.ListGroupsResult;
 import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.admin.MemberToRemove;
 import org.apache.kafka.clients.admin.MockAdminClient;
@@ -33,7 +30,6 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.GroupState;
-import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -54,7 +50,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
@@ -437,20 +432,19 @@ public class StreamsResetterTest {
             return topicPartitionToOffsetAndTimestamp;
         }
     }
+
     @Test
     public void shouldFailIfApplicationIdDoesNotExistAsConsumerGroup() throws Exception {
         final String groupId = "my-app";
 
         final Admin adminClient = mock(Admin.class);
-        final ListGroupsResult listGroupsResult = mock(ListGroupsResult.class);
+        final DescribeConsumerGroupsResult describeResult = mock(DescribeConsumerGroupsResult.class);
 
-        when(listGroupsResult.all()).thenReturn(KafkaFutureImpl.completedFuture(
-                List.of(
-                        new GroupListing("my-app-v1", Optional.of(GroupType.CLASSIC), "", Optional.of(GroupState.STABLE)),
-                        new GroupListing("my-app-v2", Optional.of(GroupType.CLASSIC), "", Optional.of(GroupState.STABLE))
-                )
-        ));
-        when(adminClient.listGroups(any(ListGroupsOptions.class))).thenReturn(listGroupsResult);
+        final KafkaFutureImpl<Map<String, ConsumerGroupDescription>> future = new KafkaFutureImpl<>();
+        future.completeExceptionally(new GroupIdNotFoundException("Group " + groupId + " not found."));
+
+        when(describeResult.all()).thenReturn(future);
+        when(adminClient.describeConsumerGroups(Set.of(groupId))).thenReturn(describeResult);
 
         assertThrows(IllegalArgumentException.class,
                 () -> streamsResetter.validateApplicationIdExists(groupId, adminClient));
@@ -461,17 +455,17 @@ public class StreamsResetterTest {
         final String groupId = "my-app-v1";
 
         final Admin adminClient = mock(Admin.class);
-        final ListGroupsResult listGroupsResult = mock(ListGroupsResult.class);
+        final DescribeConsumerGroupsResult describeResult = mock(DescribeConsumerGroupsResult.class);
+        final ConsumerGroupDescription stableDescription = mock(ConsumerGroupDescription.class);
 
-        when(listGroupsResult.all()).thenReturn(KafkaFutureImpl.completedFuture(
-                List.of(
-                        new GroupListing("my-app-v1", Optional.of(GroupType.CLASSIC), "", Optional.of(GroupState.STABLE)),
-                        new GroupListing("my-app-v2", Optional.of(GroupType.CLASSIC), "", Optional.of(GroupState.STABLE))
-                )
-        ));
-        when(adminClient.listGroups(any(ListGroupsOptions.class))).thenReturn(listGroupsResult);
+        when(stableDescription.groupState()).thenReturn(GroupState.STABLE);
 
-        // should not throw
+        final KafkaFutureImpl<Map<String, ConsumerGroupDescription>> future = new KafkaFutureImpl<>();
+        future.complete(Map.of(groupId, stableDescription));
+
+        when(describeResult.all()).thenReturn(future);
+        when(adminClient.describeConsumerGroups(Set.of(groupId))).thenReturn(describeResult);
+
         streamsResetter.validateApplicationIdExists(groupId, adminClient);
     }
 
@@ -480,10 +474,13 @@ public class StreamsResetterTest {
         final String groupId = "my-app";
 
         final Admin adminClient = mock(Admin.class);
-        final ListGroupsResult listGroupsResult = mock(ListGroupsResult.class);
+        final DescribeConsumerGroupsResult describeResult = mock(DescribeConsumerGroupsResult.class);
 
-        when(listGroupsResult.all()).thenReturn(KafkaFutureImpl.completedFuture(List.of()));
-        when(adminClient.listGroups(any(ListGroupsOptions.class))).thenReturn(listGroupsResult);
+        final KafkaFutureImpl<Map<String, ConsumerGroupDescription>> future = new KafkaFutureImpl<>();
+        future.completeExceptionally(new GroupIdNotFoundException("Group " + groupId + " not found."));
+
+        when(describeResult.all()).thenReturn(future);
+        when(adminClient.describeConsumerGroups(Set.of(groupId))).thenReturn(describeResult);
 
         assertThrows(IllegalArgumentException.class,
                 () -> streamsResetter.validateApplicationIdExists(groupId, adminClient));
@@ -491,18 +488,16 @@ public class StreamsResetterTest {
 
     @Test
     public void shouldFailIfApplicationIdIsAPrefixOfExistingGroup() throws Exception {
-        // "my-app" is a prefix of "my-app-v1" but NOT an exact match
         final String groupId = "my-app";
 
         final Admin adminClient = mock(Admin.class);
-        final ListGroupsResult listGroupsResult = mock(ListGroupsResult.class);
+        final DescribeConsumerGroupsResult describeResult = mock(DescribeConsumerGroupsResult.class);
 
-        when(listGroupsResult.all()).thenReturn(KafkaFutureImpl.completedFuture(
-                List.of(
-                        new GroupListing("my-app-v1", Optional.of(GroupType.CLASSIC), "", Optional.of(GroupState.STABLE))
-                )
-        ));
-        when(adminClient.listGroups(any(ListGroupsOptions.class))).thenReturn(listGroupsResult);
+        final KafkaFutureImpl<Map<String, ConsumerGroupDescription>> future = new KafkaFutureImpl<>();
+        future.completeExceptionally(new GroupIdNotFoundException("Group " + groupId + " not found."));
+
+        when(describeResult.all()).thenReturn(future);
+        when(adminClient.describeConsumerGroups(Set.of(groupId))).thenReturn(describeResult);
 
         assertThrows(IllegalArgumentException.class,
                 () -> streamsResetter.validateApplicationIdExists(groupId, adminClient));
@@ -513,15 +508,13 @@ public class StreamsResetterTest {
         final String groupId = "my-ap";
 
         final Admin adminClient = mock(Admin.class);
-        final ListGroupsResult listGroupsResult = mock(ListGroupsResult.class);
+        final DescribeConsumerGroupsResult describeResult = mock(DescribeConsumerGroupsResult.class);
 
-        when(listGroupsResult.all()).thenReturn(KafkaFutureImpl.completedFuture(
-                List.of(
-                        new GroupListing("my-app-v1", Optional.of(GroupType.CLASSIC), "", Optional.of(GroupState.STABLE)),
-                        new GroupListing("my-app-v2", Optional.of(GroupType.CLASSIC), "", Optional.of(GroupState.STABLE))
-                )
-        ));
-        when(adminClient.listGroups(any(ListGroupsOptions.class))).thenReturn(listGroupsResult);
+        final KafkaFutureImpl<Map<String, ConsumerGroupDescription>> future = new KafkaFutureImpl<>();
+        future.completeExceptionally(new GroupIdNotFoundException("Group " + groupId + " not found."));
+
+        when(describeResult.all()).thenReturn(future);
+        when(adminClient.describeConsumerGroups(Set.of(groupId))).thenReturn(describeResult);
 
         final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> streamsResetter.validateApplicationIdExists(groupId, adminClient));
@@ -535,17 +528,39 @@ public class StreamsResetterTest {
         final String groupId = "foo";
 
         final Admin adminClient = mock(Admin.class);
-        final ListGroupsResult listGroupsResult = mock(ListGroupsResult.class);
+        final DescribeConsumerGroupsResult describeResult = mock(DescribeConsumerGroupsResult.class);
 
-        when(listGroupsResult.all()).thenReturn(KafkaFutureImpl.completedFuture(
-                List.of(
-                        new GroupListing("foobar", Optional.of(GroupType.CLASSIC), "", Optional.of(GroupState.STABLE)),
-                        new GroupListing("foo-v1", Optional.of(GroupType.CLASSIC), "", Optional.of(GroupState.STABLE))
-                )
-        ));
-        when(adminClient.listGroups(any(ListGroupsOptions.class))).thenReturn(listGroupsResult);
+        final KafkaFutureImpl<Map<String, ConsumerGroupDescription>> future = new KafkaFutureImpl<>();
+        future.completeExceptionally(new GroupIdNotFoundException("Group " + groupId + " not found."));
+
+        when(describeResult.all()).thenReturn(future);
+        when(adminClient.describeConsumerGroups(Set.of(groupId))).thenReturn(describeResult);
 
         assertThrows(IllegalArgumentException.class,
                 () -> streamsResetter.validateApplicationIdExists(groupId, adminClient));
+    }
+
+    @Test
+    public void shouldThrowWhenApplicationIdGroupIsDead() throws Exception {
+        final String groupId = "test-app-dead-group";
+
+        final Admin adminClient = mock(Admin.class);
+        final DescribeConsumerGroupsResult describeResult = mock(DescribeConsumerGroupsResult.class);
+        final ConsumerGroupDescription deadDescription = mock(ConsumerGroupDescription.class);
+
+        when(deadDescription.groupState()).thenReturn(GroupState.DEAD);
+
+        final KafkaFutureImpl<Map<String, ConsumerGroupDescription>> future = new KafkaFutureImpl<>();
+        future.complete(Map.of(groupId, deadDescription));
+
+        when(describeResult.all()).thenReturn(future);
+        when(adminClient.describeConsumerGroups(Set.of(groupId))).thenReturn(describeResult);
+
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> streamsResetter.validateApplicationIdExists(groupId, adminClient));
+
+        assertTrue(exception.getMessage().contains(groupId));
+        assertTrue(exception.getMessage().contains("Refusing to delete internal topics"));
     }
 }
