@@ -731,6 +731,190 @@ At this point the full state of the application is interactively queryable:
 
 
 
+# Interactive Queries v2 (IQv2) {#interactive-queries-v2}
+
+The sections above describe the original interactive queries API (informally, "IQv1"), where you obtain a read-only store facade from [KafkaStreams#store(...)](/{version}/javadoc/org/apache/kafka/streams/KafkaStreams.html) and call methods such as `get(key)` or `range(from, to)` on it. Interactive Queries v2 (IQv2), introduced in [KIP-796](https://cwiki.apache.org/confluence/x/34xnCw), is an alternative, more flexible API for the same purpose: querying the local state of a running Kafka Streams application.
+
+Instead of a fixed store facade, IQv2 models every query as a first-class [Query](/{version}/javadoc/org/apache/kafka/streams/query/Query.html) object that you submit through a single [KafkaStreams#query(StateQueryRequest)](/{version}/javadoc/org/apache/kafka/streams/KafkaStreams.html) method. The response is a [StateQueryResult](/{version}/javadoc/org/apache/kafka/streams/query/StateQueryResult.html) that contains a separate [QueryResult](/{version}/javadoc/org/apache/kafka/streams/query/QueryResult.html) for each partition that executed the query, along with metadata such as each partition's [Position](/{version}/javadoc/org/apache/kafka/streams/query/Position.html).
+
+IQv2 offers several advantages over the original API:
+
+  * A single, uniform entry point for every kind of query.
+  * Extensibility: custom state stores can define their own `Query` types, and the runtime forwards unknown queries straight through to the underlying byte store.
+  * Rich, per-partition results with typed failure reasons instead of exceptions.
+  * Fine-grained consistency control through `Position` and `PositionBound`.
+  * The ability to target specific partitions, require active (leader) tasks, override the isolation level, and collect execution information.
+
+Both APIs are fully supported and can be used side by side. Note that IQv2 is marked as an evolving API, so it may change between releases, and global stores are not yet supported by `query(...)` (see [Limitations](#limitations-of-iqv2) below).
+
+## How Interactive Queries v2 works
+
+Issuing an IQv2 query follows four steps:
+
+  1. **Build a query.** Create a `Query` object that describes what you want to read, for example a [KeyQuery](/{version}/javadoc/org/apache/kafka/streams/query/KeyQuery.html) for a single-key lookup or a [RangeQuery](/{version}/javadoc/org/apache/kafka/streams/query/RangeQuery.html) for a scan.
+  2. **Build a request.** Wrap the query in a [StateQueryRequest](/{version}/javadoc/org/apache/kafka/streams/query/StateQueryRequest.html) that names the store to query: `StateQueryRequest.inStore(storeName).withQuery(query)`. Optionally configure the request (partitions, position bound, isolation level, and so on).
+  3. **Execute the request.** Call `streams.query(request)`, which runs the query against every locally available partition of the store (or just the partitions you requested) and returns a `StateQueryResult`.
+  4. **Read the results.** For a query that targets a single partition, use `getOnlyPartitionResult()`. For a query that may span multiple partitions, use `getPartitionResults()` to get a `Map` from partition number to `QueryResult`. Each `QueryResult` reports whether the query succeeded on that partition and holds either the result value or a typed failure reason.
+
+## Building and executing a query
+
+The following example looks up a single key in the `CountsKeyValueStore` state store from the word-count example used earlier on this page:
+
+```java
+import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.query.KeyQuery;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.StateQueryRequest;
+import org.apache.kafka.streams.query.StateQueryResult;
+
+import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
+
+KafkaStreams streams = ...;
+
+// 1. Build the query: retrieve the value for a single key.
+KeyQuery<String, Long> query = KeyQuery.withKey("alice");
+
+// 2. Build the request, naming the store to run the query against.
+//    A KeyQuery<String, Long> is a Query<Long>, so the request is a StateQueryRequest<Long>.
+StateQueryRequest<Long> request = inStore("CountsKeyValueStore").withQuery(query);
+
+// 3. Execute the query.
+StateQueryResult<Long> result = streams.query(request);
+
+// 4. Read the result. A key lookup targets a single partition, so getOnlyPartitionResult()
+//    returns that partition's result (or null if no locally available partition holds the key).
+QueryResult<Long> partitionResult = result.getOnlyPartitionResult();
+if (partitionResult != null && partitionResult.isSuccess()) {
+    Long count = partitionResult.getResult();
+    System.out.println("Count for alice: " + count);
+}
+```
+
+Note that the type parameter of `StateQueryRequest` (and of `StateQueryResult` and `QueryResult`) is the query's *result* type, not the query type: a `KeyQuery<String, Long>` implements `Query<Long>`, so the request is a `StateQueryRequest<Long>`.
+
+## Built-in query types
+
+Kafka Streams ships with a set of query types covering the standard store types. All of them live in the [org.apache.kafka.streams.query](/{version}/javadoc/org/apache/kafka/streams/query/package-summary.html) package.
+
+| Query | Result type (`R`) | Key factory / builder methods |
+| --- | --- | --- |
+| `KeyQuery<K, V>` | `V` | `withKey(key)`; `.skipCache()` |
+| `TimestampedKeyQuery<K, V>` | `ValueAndTimestamp<V>` | `withKey(key)`; `.skipCache()` |
+| `RangeQuery<K, V>` | `KeyValueIterator<K, V>` | `withRange(lower, upper)`, `withLowerBound(lower)`, `withUpperBound(upper)`, `withNoBounds()`; `.withAscendingKeys()` / `.withDescendingKeys()` |
+| `TimestampedRangeQuery<K, V>` | `KeyValueIterator<K, ValueAndTimestamp<V>>` | `withRange(lower, upper)`, `withLowerBound(lower)`, `withUpperBound(upper)`, `withNoBounds()`; `.withAscendingKeys()` / `.withDescendingKeys()` |
+| `WindowKeyQuery<K, V>` | `WindowStoreIterator<V>` | `withKeyAndWindowStartRange(key, timeFrom, timeTo)` |
+| `WindowRangeQuery<K, V>` | `KeyValueIterator<Windowed<K>, V>` | `withKey(key)`, `withWindowStartRange(timeFrom, timeTo)` |
+| `VersionedKeyQuery<K, V>` | `VersionedRecord<V>` | `withKey(key)`; `.asOf(instant)` |
+| `MultiVersionedKeyQuery<K, V>` | `VersionedRecordIterator<V>` | `withKey(key)`; `.fromTime(instant)`, `.toTime(instant)`, `.withAscendingTimestamps()` / `.withDescendingTimestamps()` |
+
+For range and scan queries (`RangeQuery`, `TimestampedRangeQuery`), passing no bounds performs a full scan, and result ordering is based on the serialized `byte[]` of the keys, not on the logical key order.
+
+There are also headers-aware variants (`TimestampedKeyWithHeadersQuery`, `TimestampedRangeWithHeadersQuery`, `TimestampedWindowKeyWithHeadersQuery`, and `TimestampedWindowRangeWithHeadersQuery`, added by KIP-1271 and KIP-1356) that return the record headers alongside the value. These require a headers-aware store supplier (for example `Stores.persistentTimestampedKeyValueStoreWithHeaders`); querying a plain store with them fails with `UNKNOWN_QUERY_TYPE`.
+
+Because IQv2 is extensible, a custom state store may implement additional query types of its own. When a store does not know how to handle a query, it does not throw; instead it returns a failed `QueryResult` with `FailureReason.UNKNOWN_QUERY_TYPE`.
+
+## Handling query results
+
+A `StateQueryResult` aggregates one `QueryResult` per partition that ran the query:
+
+  * `getPartitionResults()` returns a `Map<Integer, QueryResult<R>>`, keyed by partition number.
+  * `getOnlyPartitionResult()` is a convenience for queries that are expected to match a single partition (such as a key lookup). It returns that partition's result, or throws `IllegalArgumentException` if more than one partition returned a result.
+  * `getPosition()` returns the merged `Position` observed across the partition results.
+
+Each `QueryResult` reports the outcome for one partition. Use `isSuccess()` / `isFailure()` before reading: `getResult()` returns the value on success (which may itself be `null`, for example when a key is not found), while `getFailureReason()` and `getFailureMessage()` describe a failure. Results are always **per-partition** — a query may succeed on some partitions and fail on others (for example, if one partition has migrated off this instance).
+
+When a query returns an iterator (`RangeQuery`, `WindowKeyQuery`, `MultiVersionedKeyQuery`, and so on), the iterator must be closed after use. Iterate over every partition's result and use a try-with-resources block:
+
+```java
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.StateQueryRequest;
+import org.apache.kafka.streams.query.StateQueryResult;
+import org.apache.kafka.streams.state.KeyValueIterator;
+
+import java.util.Map;
+
+import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
+
+RangeQuery<String, Long> query = RangeQuery.withRange("a", "n");
+StateQueryRequest<KeyValueIterator<String, Long>> request =
+    inStore("CountsKeyValueStore").withQuery(query);
+StateQueryResult<KeyValueIterator<String, Long>> result = streams.query(request);
+
+for (Map.Entry<Integer, QueryResult<KeyValueIterator<String, Long>>> entry
+        : result.getPartitionResults().entrySet()) {
+    QueryResult<KeyValueIterator<String, Long>> partitionResult = entry.getValue();
+    if (partitionResult.isFailure()) {
+        System.out.println("Partition " + entry.getKey() + " failed: "
+            + partitionResult.getFailureReason() + " - " + partitionResult.getFailureMessage());
+        continue;
+    }
+    try (KeyValueIterator<String, Long> iterator = partitionResult.getResult()) {
+        while (iterator.hasNext()) {
+            KeyValue<String, Long> record = iterator.next();
+            System.out.println(record.key + ": " + record.value);
+        }
+    }
+}
+```
+
+A failed `QueryResult` carries one of the [FailureReason](/{version}/javadoc/org/apache/kafka/streams/query/FailureReason.html) values:
+
+| `FailureReason` | Meaning | Recommended action |
+| --- | --- | --- |
+| `UNKNOWN_QUERY_TYPE` | The store does not know how to execute this query. | Verify the query is supported by that store type; for custom queries, contact the store maintainer. |
+| `NOT_ACTIVE` | `requireActive()` was set, but the partition is a standby or an active task that is not yet in the `RUNNING` state. | Retry later or query a different replica. |
+| `NOT_UP_TO_BOUND` | The partition has not yet caught up to the requested `PositionBound`. | Retry later or query a different replica. |
+| `NOT_PRESENT` | The requested partition is not present on this instance (for example, it migrated during a rebalance). | Query a different replica. |
+| `DOES_NOT_EXIST` | The requested partition does not exist for this store. | Correct the requested set of partitions. |
+| `STORE_EXCEPTION` | The store threw an exception while executing the query. | Depending on the exception, retry this instance or a different one. |
+
+## Controlling consistency and availability
+
+A `StateQueryRequest` is immutable; each configuration method returns a new request. Beyond `inStore(...).withQuery(...)`, the following options let you trade off consistency, availability, and cost:
+
+  * `withPartitions(Set<Integer>)` / `withAllPartitions()`: run against a specific set of partitions or against all locally available partitions (the default). Partitions that are missing return `NOT_PRESENT`; partitions that do not exist return `DOES_NOT_EXIST`.
+  * `requireActive()`: run only on active (leader) partitions. Non-active partitions return `NOT_ACTIVE`. Use this when you need the most up-to-date data and want to avoid reading from standby replicas.
+  * `withPositionBound(PositionBound)`: by default a request is `PositionBound.unbounded()`. Use `PositionBound.at(position)` to require that each queried partition has consumed up to a given `Position` before serving the query; a partition that is behind returns `NOT_UP_TO_BOUND`. Combined with the `Position` returned by `StateQueryResult#getPosition()`, this lets you implement read-your-writes / monotonic reads: feed the position from one query into the bound of the next so repeated queries never appear to move backwards in time, while still allowing reads to be served from any replica that is caught up.
+  * `withIsolationLevel(IsolationLevel)`: override the isolation level for this query. When not set, the effective level falls back to the `default.interactive.query.isolation.level` configuration.
+  * `enableExecutionInfo()`: ask stores and the runtime to record details about how the query executed, retrievable via `QueryResult#getExecutionInfo()`.
+
+For example, the following request reads the latest committed value for a key from the active replica, but only for partitions 0 and 1, and only once the store has caught up to a known input position:
+
+```java
+KeyQuery<String, Long> query = KeyQuery.withKey("alice");
+StateQueryRequest<Long> request =
+    inStore("CountsKeyValueStore")
+        .withQuery(query)
+        .requireActive()
+        .withPartitions(Set.of(0, 1))
+        .withPositionBound(PositionBound.at(inputPosition));
+
+StateQueryResult<Long> result = streams.query(request);
+Position position = result.getPosition(); // pass into a later query for monotonic reads
+```
+
+## Comparison of IQv1 and IQv2
+
+| Aspect | IQv1 (`KafkaStreams#store`) | IQv2 (`KafkaStreams#query`) |
+| --- | --- | --- |
+| Entry point | `store(StoreQueryParameters)` returns a typed, read-only store facade | `query(StateQueryRequest)` returns a `StateQueryResult` |
+| Query surface | Fixed methods on the store facade (`get`, `range`, ...) | First-class `Query` objects |
+| Extensibility | Not extensible | Custom stores can define custom `Query` types |
+| Result granularity | Values from the store facade | A `QueryResult` per partition |
+| Failure reporting | Exceptions (for example, `InvalidStateStoreException`) | Typed `FailureReason` per partition |
+| Consistency control | `enableStaleStores()` toggle | `PositionBound` plus the returned `Position` |
+| Partition targeting | `.withPartition(int)` | `.withPartitions(Set)` / `.withAllPartitions()` |
+| Global stores | Supported | Not yet supported |
+| Maturity | Stable | Evolving |
+
+## Limitations of IQv2 {#limitations-of-iqv2}
+
+  * Global stores are not yet supported by `query(...)`. Use [KafkaStreams#store(...)](/{version}/javadoc/org/apache/kafka/streams/KafkaStreams.html) to query global stores.
+  * The IQv2 API is still evolving and may change in future releases.
+  * For range and scan queries, ordering is based on the serialized `byte[]` of the keys, not on the logical key order.
+
 To see an end-to-end application with interactive queries, review the demo applications.
 
   * [Documentation](/documentation)
