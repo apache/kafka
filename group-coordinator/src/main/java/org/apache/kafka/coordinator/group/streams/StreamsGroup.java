@@ -222,14 +222,6 @@ public class StreamsGroup implements Group {
      * This is transient telemetry that the assignor uses to estimate task lag for warm-up promotion. Per KIP-1071
      * it is not persisted to the {@code __consumer_offsets} topic; it is held in memory and re-reported by members
      * on the task-offset interval (and is therefore lost on coordinator failover until re-reported).
-     *
-     * <p>Unlike the rest of the member state this is a plain (non-timeline) map, so it does not take part in the
-     * coordinator's snapshot/rollback machinery. A value written while handling a heartbeat is therefore <em>not</em>
-     * reverted if that heartbeat's record append later fails and the timeline state rolls back to
-     * {@code committedOffset}; it lingers until the member's next heartbeat overwrites it. Since
-     * {@link #asDescribedGroup(long)} reads these at the latest in-memory value, a describe issued in that window can
-     * momentarily surface a task offset that was never committed. This is intentional: the data is transient and
-     * self-heals on the next heartbeat, so it is not worth the cost of making it timeline-aware.
      */
     private final Map<String, MemberTaskOffsets> taskOffsets = new HashMap<>();
 
@@ -1342,11 +1334,6 @@ public class StreamsGroup implements Group {
             entry -> describedGroup.members().add(
                 entry.getValue().asStreamsGroupDescribeMember(
                     targetAssignment.get(entry.getValue().memberId(), committedOffset),
-                    // Task (end-)offsets are transient, unpersisted telemetry, so unlike the rest of the member state
-                    // they are read from the latest in-memory value rather than at committedOffset. As a result, if a
-                    // heartbeat updated them but its record append then failed and rolled back, this can momentarily
-                    // surface an offset that was never committed; it self-heals on the next heartbeat (see the
-                    // taskOffsets field for details). Members that have not reported any yield MemberTaskOffsets.EMPTY.
                     taskOffsets(entry.getValue().memberId())
                 )
             )
