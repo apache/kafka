@@ -976,20 +976,22 @@ public class ShareConsumeRequestManagerTest {
 
         assignFromSubscribed(Set.of(tp0));
         sendFetchAndVerifyResponse(records, acquiredRecords, Errors.NONE);
-        fetchRecords();
+        ShareFetch<byte[], byte[]> fetch = collectFetch();
+        assertEquals(3, fetch.numRecords());
 
         int nodeId0 = metadata.fetch().leaderFor(tp0).id();
 
-        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.RENEW, AcknowledgeType.RENEW, AcknowledgeType.RENEW);
+        // The application renews the delivered records. They are still logically held by the consumer.
+        fetch.acknowledgeAll(AcknowledgeType.RENEW);
+        Map<TopicIdPartition, NodeAcknowledgements> renewAcknowledgements = fetch.takeAcknowledgedRecords();
+        Acknowledgements acknowledgements = renewAcknowledgements.get(tip0).acknowledgements();
 
         // Renew acknowledgements are committed through a ShareAcknowledge request (not piggybacked on a ShareFetch).
         CompletableFuture<Map<TopicIdPartition, Acknowledgements>> future = null;
         if (commitSync) {
-            future = shareConsumeRequestManager.commitSync(Map.of(tip0, new NodeAcknowledgements(nodeId0, acknowledgements)),
-                calculateDeadlineMs(time.timer(2000)));
+            future = shareConsumeRequestManager.commitSync(renewAcknowledgements, calculateDeadlineMs(time.timer(2000)));
         } else {
-            shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(nodeId0, acknowledgements)),
-                calculateDeadlineMs(time.timer(defaultApiTimeoutMs)));
+            shareConsumeRequestManager.commitAsync(renewAcknowledgements, calculateDeadlineMs(time.timer(defaultApiTimeoutMs)));
         }
 
         // The partition is no longer assigned, so the share session would normally be tidied up and eventually closed.
@@ -1016,8 +1018,7 @@ public class ShareConsumeRequestManagerTest {
             assertTrue(future.isDone());
         }
 
-        // Now the acknowledgements have been accepted, the now-empty share session is closed. This takes 2 ShareFetch round trips,
-        // one to remove the partition from the share session, and one more to close the share session.
+        // The revoked partition is removed from the share session, but the session cannot be closed while the records are still held.
         NetworkClientDelegate.PollResult removeResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
         assertEquals(1, removeResult.unsentRequests.size());
         ShareFetchRequest.Builder removeBuilder = (ShareFetchRequest.Builder) removeResult.unsentRequests.get(0).requestBuilder();
@@ -1027,6 +1028,30 @@ public class ShareConsumeRequestManagerTest {
         client.prepareResponse(ShareFetchResponse.of(Errors.NONE, 0, new LinkedHashMap<>(), List.of(), 0));
         networkClientDelegate.poll(time.timer(0));
 
+        assertEquals(0, shareConsumeRequestManager.sendFetchesReturnPollResult().unsentRequests.size());
+        assertNotNull(shareConsumeRequestManager.sessionHandler(nodeId0));
+
+        fetch.renew(Map.of(tip0, acknowledgements), Optional.empty());
+        fetch.takeRenewedRecords();
+        assertEquals(3, fetch.numRecords());
+        assertEquals(0, shareConsumeRequestManager.sendFetchesReturnPollResult().unsentRequests.size());
+        assertNotNull(shareConsumeRequestManager.sessionHandler(nodeId0));
+
+        // The application finally accepts the records and the acknowledgements are sent.
+        fetch.acknowledgeAll(AcknowledgeType.ACCEPT);
+        shareConsumeRequestManager.fetch(fetch.takeAcknowledgedRecords());
+        NetworkClientDelegate.PollResult ackResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
+        assertEquals(1, ackResult.unsentRequests.size());
+
+        ShareFetchRequest.Builder ackBuilder = (ShareFetchRequest.Builder) ackResult.unsentRequests.get(0).requestBuilder();
+        assertNotEquals(ShareRequestMetadata.FINAL_EPOCH, ackBuilder.data().shareSessionEpoch());
+        client.prepareResponse(fullFetchResponse(tip0, MemoryRecords.EMPTY, emptyAcquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+
+        // The application consumes the fetch response corresponding to the piggybacked acknowledgements.
+        fetchRecords();
+
+        // With the record finally acknowledged, the empty share session is closed.
         NetworkClientDelegate.PollResult closeResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
         assertEquals(1, closeResult.unsentRequests.size());
         ShareFetchRequest.Builder closeBuilder = (ShareFetchRequest.Builder) closeResult.unsentRequests.get(0).requestBuilder();
@@ -1312,12 +1337,27 @@ public class ShareConsumeRequestManagerTest {
         assertEquals(0, shareConsumeRequestManager.sendFetchesReturnPollResult().unsentRequests.size());
         assertNotNull(shareConsumeRequestManager.sessionHandler(nodeId0));
 
-        // One the buffered records have been consumed, the empty session is closed.
-        fetchRecords();
-        NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
-        assertEquals(1, pollResult.unsentRequests.size());
-        assertEquals(node0, pollResult.unsentRequests.get(0).node().get());
-        ShareFetchRequest.Builder builder = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
+        // Consuming the records hands them to the application, but leaves the acknowledgements outstanding and the session
+        // is not closed.
+        ShareFetch<byte[], byte[]> fetch = collectFetch();
+        assertEquals(0, shareConsumeRequestManager.sendFetchesReturnPollResult().unsentRequests.size());
+        assertNotNull(shareConsumeRequestManager.sessionHandler(nodeId0));
+
+        // Acknowledge the records and send the acknowledgements. This is not a close request.
+        fetch.acknowledgeAll(AcknowledgeType.ACCEPT);
+        shareConsumeRequestManager.fetch(fetch.takeAcknowledgedRecords());
+        NetworkClientDelegate.PollResult ackResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
+        assertEquals(1, ackResult.unsentRequests.size());
+        ShareFetchRequest.Builder ackBuilder = (ShareFetchRequest.Builder) ackResult.unsentRequests.get(0).requestBuilder();
+        assertNotEquals(ShareRequestMetadata.FINAL_EPOCH, ackBuilder.data().shareSessionEpoch());
+        client.prepareResponse(ShareFetchResponse.of(Errors.NONE, 0, new LinkedHashMap<>(), List.of(), 0));
+        networkClientDelegate.poll(time.timer(0));
+
+        // Once the acknowledgements have been sent, the empty session is closed.
+        NetworkClientDelegate.PollResult closeResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
+        assertEquals(1, closeResult.unsentRequests.size());
+        assertEquals(node0, closeResult.unsentRequests.get(0).node().get());
+        ShareFetchRequest.Builder builder = (ShareFetchRequest.Builder) closeResult.unsentRequests.get(0).requestBuilder();
         assertEquals(ShareRequestMetadata.FINAL_EPOCH, builder.data().shareSessionEpoch());
     }
 

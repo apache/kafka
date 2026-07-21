@@ -23,6 +23,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CorruptRecordException;
+import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.RecordDeserializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -58,6 +59,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -108,6 +110,76 @@ public class ShareCompletedFetchTest {
         acknowledgements = batch.getAcknowledgements();
         assertEquals(0, acknowledgements.size());
         assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, batch.getAcquisitionLockTimeoutMs());
+    }
+
+    @Test
+    public void testHasPendingAcknowledgements() {
+        long startingOffset = 10L;
+        int numRecords = 5;
+        ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
+            .setRecords(newRecords(startingOffset, numRecords, 1))
+            .setAcquiredRecords(acquiredRecords(startingOffset, numRecords));
+
+        Deserializers<String, String> deserializers = newStringDeserializers();
+        ShareCompletedFetch completedFetch = newShareCompletedFetch(partitionData);
+
+        // No records have been delivered to the application yet.
+        assertFalse(completedFetch.hasPendingAcknowledgements());
+
+        // Once the record have been delivered, their acknowledgements are outstanding even though the fetch is consumed.
+        ShareInFlightBatch<String, String> batch = completedFetch.fetchRecords(deserializers, 10, true);
+        assertEquals(numRecords, batch.getInFlightRecords().size());
+        assertTrue(completedFetch.isConsumed());
+        assertTrue(completedFetch.hasPendingAcknowledgements());
+
+        // Acknowledging the records and taking them to be sent by the background thread, clears the outstanding acknowledgements.
+        batch.acknowledgeAll(AcknowledgeType.ACCEPT);
+        batch.takeAcknowledgedRecords();
+        assertFalse(completedFetch.hasPendingAcknowledgements());
+    }
+
+    @Test
+    public void testPendingRenewAcknowledgementsWithException() {
+        long startingOffset = 10L;
+        int numRecords = 5;
+        ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
+            .setRecords(newRecords(startingOffset, numRecords, 1))
+            .setAcquiredRecords(acquiredRecords(startingOffset, numRecords));
+
+        Deserializers<String, String> deserializers = newStringDeserializers();
+        ShareCompletedFetch completedFetch = newShareCompletedFetch(partitionData);
+
+        // No records have been delivered to the application yet.
+        assertFalse(completedFetch.hasPendingAcknowledgements());
+
+        // Once the record have been delivered, their acknowledgements are outstanding even though the fetch is consumed.
+        ShareInFlightBatch<String, String> batch = completedFetch.fetchRecords(deserializers, 10, true);
+        assertEquals(numRecords, batch.getInFlightRecords().size());
+        assertTrue(completedFetch.isConsumed());
+        assertTrue(completedFetch.hasPendingAcknowledgements());
+
+        // Acknowledging the records and taking them to be sent by the background thread, leaves the acknowledgements outstanding.
+        batch.acknowledgeAll(AcknowledgeType.RENEW);
+        Acknowledgements renewAcknowledgements = batch.takeAcknowledgedRecords();
+        assertTrue(completedFetch.hasPendingAcknowledgements());
+
+        renewAcknowledgements.complete(null);
+        batch.renew(renewAcknowledgements);
+        assertTrue(completedFetch.isConsumed());
+        assertTrue(completedFetch.hasPendingAcknowledgements());
+
+        batch.takeRenewals();
+        assertTrue(completedFetch.isConsumed());
+        assertTrue(completedFetch.hasPendingAcknowledgements());
+
+        batch.acknowledgeAll(AcknowledgeType.RENEW);
+        renewAcknowledgements = batch.takeAcknowledgedRecords();
+        assertTrue(completedFetch.hasPendingAcknowledgements());
+
+        renewAcknowledgements.complete(new NetworkException());
+        batch.renew(renewAcknowledgements);
+        assertTrue(completedFetch.isConsumed());
+        assertFalse(completedFetch.hasPendingAcknowledgements());
     }
 
     @Test
