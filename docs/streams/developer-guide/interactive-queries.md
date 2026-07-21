@@ -809,7 +809,7 @@ Kafka Streams ships with a set of query types covering the standard store types.
 
 For range and scan queries (`RangeQuery`, `TimestampedRangeQuery`), passing no bounds performs a full scan, and result ordering is based on the serialized `byte[]` of the keys, not on the logical key order.
 
-There are also headers-aware variants (`TimestampedKeyWithHeadersQuery`, `TimestampedRangeWithHeadersQuery`, `TimestampedWindowKeyWithHeadersQuery`, and `TimestampedWindowRangeWithHeadersQuery`, added by KIP-1271 and KIP-1356) that return the record headers alongside the value. These require a headers-aware store supplier (for example `Stores.persistentTimestampedKeyValueStoreWithHeaders`); querying a plain store with them fails with `UNKNOWN_QUERY_TYPE`.
+There are also headers-aware variants (`TimestampedKeyWithHeadersQuery`, `TimestampedRangeWithHeadersQuery`, and `TimestampedWindowKeyWithHeadersQuery`, added by KIP-1356 building on the header-storage support from KIP-1271) that return the record headers alongside the value. These require a headers-aware store supplier (for example `Stores.persistentTimestampedKeyValueStoreWithHeaders`); querying a plain store with them fails with `UNKNOWN_QUERY_TYPE`.
 
 Because IQv2 is extensible, a custom state store may implement additional query types of its own. When a store does not know how to handle a query, it does not throw; instead it returns a failed `QueryResult` with `FailureReason.UNKNOWN_QUERY_TYPE`.
 
