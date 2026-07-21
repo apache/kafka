@@ -53,6 +53,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -606,6 +608,68 @@ public class FormatterTest {
             assertNotNull(logDirProps0);
             MetaProperties logDirProps1 = ensemble.logDirProps().get(testEnv.directory(1));
             assertNotNull(logDirProps1);
+        }
+    }
+
+    @Test
+    public void testFormatWithSymbolicLinkLogDir() throws Exception {
+        Path tempDir = Files.createTempDirectory("kafka-symlink-test");
+        Path realDir = tempDir.resolve("real-log-dir");
+        Files.createDirectory(realDir);
+        Path symlinkDir = tempDir.resolve("symlink-log-dir");
+        Files.createSymbolicLink(symlinkDir, realDir);
+
+        try {
+            String symlinkPath = symlinkDir.toAbsolutePath().toString();
+            Formatter formatter = new Formatter()
+                .setNodeId(DEFAULT_NODE_ID)
+                .setClusterId(DEFAULT_CLUSTER_ID.toString());
+            formatter.addDirectory(symlinkPath);
+            formatter.setMetadataLogDirectory(symlinkPath);
+            FormatterContext context = new FormatterContext(formatter);
+            context.formatter.run();
+
+            MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble.Loader()
+                .addLogDirs(List.of(symlinkPath))
+                .load();
+            assertEquals(OptionalInt.of(DEFAULT_NODE_ID), ensemble.nodeId());
+            assertEquals(Optional.of(DEFAULT_CLUSTER_ID.toString()), ensemble.clusterId());
+            assertTrue(ensemble.logDirProps().containsKey(symlinkPath));
+        } finally {
+            Utils.delete(tempDir.toFile());
+        }
+    }
+
+    @Test
+    public void testCreateLogDirectoryWithSymlink() throws Exception {
+        Path tempDir = Files.createTempDirectory("kafka-symlink-test");
+        Path realDir = tempDir.resolve("real-log-dir");
+        Files.createDirectory(realDir);
+        Path symlinkDir = tempDir.resolve("symlink-log-dir");
+        Files.createSymbolicLink(symlinkDir, realDir);
+
+        try {
+            // Should succeed on a symlink to an existing directory
+            assertDoesNotThrow(() -> Formatter.createLogDirectory(symlinkDir));
+            assertTrue(Files.isDirectory(symlinkDir));
+
+            // Should succeed on a regular directory
+            assertDoesNotThrow(() -> Formatter.createLogDirectory(realDir));
+
+            // Should succeed on a non-existent path (creates it)
+            Path newDir = tempDir.resolve("new-dir");
+            assertDoesNotThrow(() -> Formatter.createLogDirectory(newDir));
+            assertTrue(Files.isDirectory(newDir));
+
+            // Should throw on a symlink to a regular file
+            Path regularFile = tempDir.resolve("regular-file");
+            Files.createFile(regularFile);
+            Path symlinkToFile = tempDir.resolve("symlink-to-file");
+            Files.createSymbolicLink(symlinkToFile, regularFile);
+            assertThrows(java.nio.file.FileAlreadyExistsException.class,
+                () -> Formatter.createLogDirectory(symlinkToFile));
+        } finally {
+            Utils.delete(tempDir.toFile());
         }
     }
 }
