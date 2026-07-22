@@ -68,4 +68,9 @@ public class DescribeTransactionsResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return true;
+    }
+
 }

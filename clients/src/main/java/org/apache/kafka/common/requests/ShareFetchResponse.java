@@ -101,6 +101,11 @@ public class ShareFetchResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return true;
+    }
+
     /**
      * Creates a {@link org.apache.kafka.common.requests.ShareFetchResponse} from the given byte buffer.
      * Unlike {@link org.apache.kafka.common.requests.ShareFetchResponse#of(Errors, int, LinkedHashMap, List, int)},

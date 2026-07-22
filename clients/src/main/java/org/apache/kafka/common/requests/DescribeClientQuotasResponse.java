@@ -75,6 +75,11 @@ public class DescribeClientQuotasResponse extends AbstractResponse {
     }
 
     @Override
+    public boolean shouldClientThrottle(short version) {
+        return true;
+    }
+
+    @Override
     public DescribeClientQuotasResponseData data() {
         return data;
     }

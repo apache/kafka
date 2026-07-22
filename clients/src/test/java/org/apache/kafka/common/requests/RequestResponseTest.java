@@ -256,6 +256,7 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.types.RawTaggedField;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
@@ -4147,5 +4148,25 @@ public class RequestResponseTest {
                 .setTopologyDescriptionStatus(StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_AVAILABLE)));
         StreamsGroupDescribeResponse response = new StreamsGroupDescribeResponse(data);
         assertThrows(UnsupportedVersionException.class, () -> response.serialize((short) 0));
+    }
+
+    // Any response that carries a throttle_time_ms field must indicate client-side throttling so that
+    // the client honours the broker's throttle time on quota violations. This guards against
+    // forgetting the override on new APIs.
+    @Test
+    public void testResponsesWithThrottleTimeFieldClientThrottle() {
+        for (ApiKeys apiKey : ApiKeys.values()) {
+            short version = apiKey.latestVersion();
+            Schema[] responseSchemas = apiKey.messageType.responseSchemas();
+            if (version >= responseSchemas.length || responseSchemas[version] == null)
+                continue;
+            boolean hasThrottleTimeField = responseSchemas[version].get("throttle_time_ms") != null;
+            if (!hasThrottleTimeField)
+                continue;
+            AbstractResponse response = getResponse(apiKey, version);
+            assertTrue(response.shouldClientThrottle(version),
+                apiKey + " response declares a throttle_time_ms field, so shouldClientThrottle(" + version
+                    + ") must return true.");
+        }
     }
 }

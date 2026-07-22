@@ -69,6 +69,11 @@ public class ConsumerGroupDescribeResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return true;
+    }
+
     public static ConsumerGroupDescribeResponse parse(Readable readable, short version) {
         return new ConsumerGroupDescribeResponse(
             new ConsumerGroupDescribeResponseData(readable, version)

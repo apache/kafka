@@ -67,6 +67,11 @@ public class ListConfigResourcesResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return true;
+    }
+
     public Collection<ConfigResource> configResources() {
         return data.configResources()
             .stream()

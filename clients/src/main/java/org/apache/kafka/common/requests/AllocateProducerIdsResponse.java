@@ -59,6 +59,11 @@ public class AllocateProducerIdsResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return true;
+    }
+
     public Errors error() {
         return Errors.forCode(data.errorCode());
     }

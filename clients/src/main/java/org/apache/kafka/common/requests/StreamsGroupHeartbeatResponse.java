@@ -72,6 +72,11 @@ public class StreamsGroupHeartbeatResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return true;
+    }
+
     public static StreamsGroupHeartbeatResponse parse(Readable readable, short version) {
         return new StreamsGroupHeartbeatResponse(new StreamsGroupHeartbeatResponseData(
             readable, version));

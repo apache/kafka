@@ -59,6 +59,11 @@ public class AlterPartitionResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return true;
+    }
+
     public static AlterPartitionResponse parse(Readable readable, short version) {
         return new AlterPartitionResponse(new AlterPartitionResponseData(readable, version));
     }

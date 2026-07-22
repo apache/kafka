@@ -64,6 +64,11 @@ public final class FetchSnapshotResponse extends AbstractResponse {
     }
 
     @Override
+    public boolean shouldClientThrottle(short version) {
+        return true;
+    }
+
+    @Override
     public FetchSnapshotResponseData data() {
         return data;
     }

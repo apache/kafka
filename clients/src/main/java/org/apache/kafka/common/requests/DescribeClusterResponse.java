@@ -58,6 +58,11 @@ public class DescribeClusterResponse extends AbstractResponse {
     }
 
     @Override
+    public boolean shouldClientThrottle(short version) {
+        return true;
+    }
+
+    @Override
     public DescribeClusterResponseData data() {
         return data;
     }

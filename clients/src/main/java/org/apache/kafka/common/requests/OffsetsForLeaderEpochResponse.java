@@ -72,6 +72,12 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        // Version 2 added the throttle time, along with client-side throttling.
+        return version >= 2;
+    }
+
     public static OffsetsForLeaderEpochResponse parse(Readable readable, short version) {
         return new OffsetsForLeaderEpochResponse(new OffsetForLeaderEpochResponseData(readable, version));
     }

@@ -69,6 +69,11 @@ public class UpdateFeaturesResponse extends AbstractResponse {
     }
 
     @Override
+    public boolean shouldClientThrottle(short version) {
+        return true;
+    }
+
+    @Override
     public String toString() {
         return data.toString();
     }

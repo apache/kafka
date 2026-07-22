@@ -82,6 +82,11 @@ public class ShareAcknowledgeResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return true;
+    }
+
     public static ShareAcknowledgeResponse parse(Readable readable, short version) {
         return new ShareAcknowledgeResponse(
                 new ShareAcknowledgeResponseData(readable, version)

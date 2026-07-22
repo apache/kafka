@@ -75,6 +75,11 @@ public class StreamsGroupDescribeResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return true;
+    }
+
     public static StreamsGroupDescribeResponse parse(Readable readable, short version) {
         return new StreamsGroupDescribeResponse(
             new StreamsGroupDescribeResponseData(readable, version)

@@ -52,6 +52,11 @@ public class AssignReplicasToDirsResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return true;
+    }
+
     public static AssignReplicasToDirsResponse parse(Readable readable, short version) {
         return new AssignReplicasToDirsResponse(new AssignReplicasToDirsResponseData(
                 readable, version));

@@ -73,6 +73,11 @@ public class AlterClientQuotasResponse extends AbstractResponse {
     }
 
     @Override
+    public boolean shouldClientThrottle(short version) {
+        return true;
+    }
+
+    @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> counts = new EnumMap<>(Errors.class);
         data.entries().forEach(entry ->

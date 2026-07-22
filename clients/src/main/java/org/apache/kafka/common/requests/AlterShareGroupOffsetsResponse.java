@@ -58,6 +58,11 @@ public class AlterShareGroupOffsetsResponse extends AbstractResponse {
     }
 
     @Override
+    public boolean shouldClientThrottle(short version) {
+        return true;
+    }
+
+    @Override
     public AlterShareGroupOffsetsResponseData data() {
         return data;
     }

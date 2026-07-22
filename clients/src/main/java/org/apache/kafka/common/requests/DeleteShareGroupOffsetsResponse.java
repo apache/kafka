@@ -58,6 +58,11 @@ public class DeleteShareGroupOffsetsResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return true;
+    }
+
     public static DeleteShareGroupOffsetsResponse parse(Readable readable, short version) {
         return new DeleteShareGroupOffsetsResponse(
             new DeleteShareGroupOffsetsResponseData(readable, version)

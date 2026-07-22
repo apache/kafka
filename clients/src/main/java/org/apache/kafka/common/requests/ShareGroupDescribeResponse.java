@@ -69,6 +69,11 @@ public class ShareGroupDescribeResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return true;
+    }
+
     public static ShareGroupDescribeResponse parse(Readable readable, short version) {
         return new ShareGroupDescribeResponse(
                 new ShareGroupDescribeResponseData(readable, version)

@@ -65,6 +65,11 @@ public class StreamsGroupTopologyDescriptionUpdateResponse extends AbstractRespo
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return true;
+    }
+
     public static StreamsGroupTopologyDescriptionUpdateResponse parse(Readable readable, short version) {
         return new StreamsGroupTopologyDescriptionUpdateResponse(
             new StreamsGroupTopologyDescriptionUpdateResponseData(readable, version));

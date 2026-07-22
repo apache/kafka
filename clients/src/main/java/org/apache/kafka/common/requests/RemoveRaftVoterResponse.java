@@ -48,6 +48,11 @@ public class RemoveRaftVoterResponse extends AbstractResponse {
     }
 
     @Override
+    public boolean shouldClientThrottle(short version) {
+        return true;
+    }
+
+    @Override
     public Map<Errors, Integer> errorCounts() {
         if (data.errorCode() != Errors.NONE.code()) {
             return Map.of(Errors.forCode(data.errorCode()), 1);

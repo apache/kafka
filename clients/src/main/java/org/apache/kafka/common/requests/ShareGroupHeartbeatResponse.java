@@ -68,6 +68,11 @@ public class ShareGroupHeartbeatResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return true;
+    }
+
     public static ShareGroupHeartbeatResponse parse(Readable readable, short version) {
         return new ShareGroupHeartbeatResponse(new ShareGroupHeartbeatResponseData(
                 readable, version));

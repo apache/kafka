@@ -56,6 +56,11 @@ public class PushTelemetryResponse  extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return true;
+    }
+
     public boolean hasError() {
         return error() != Errors.NONE;
     }
