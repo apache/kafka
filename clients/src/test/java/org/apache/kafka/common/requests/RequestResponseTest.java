@@ -359,6 +359,21 @@ public class RequestResponseTest {
         }
     }
 
+    @Test
+    public void testClientThrottlesResponsesWithThrottleTime() {
+        List<ApiKeys> apiKeys = List.of(
+            ApiKeys.CONSUMER_GROUP_HEARTBEAT,
+            ApiKeys.SHARE_GROUP_HEARTBEAT,
+            ApiKeys.STREAMS_GROUP_HEARTBEAT
+        );
+
+        for (ApiKeys apiKey : apiKeys) {
+            for (short version : apiKey.allVersions()) {
+                assertTrue(getResponse(apiKey, version).shouldClientThrottle(version));
+            }
+        }
+    }
+
     // This test validates special cases that are not checked in testSerialization
     @Test
     public void testSerializationSpecialCases() {
