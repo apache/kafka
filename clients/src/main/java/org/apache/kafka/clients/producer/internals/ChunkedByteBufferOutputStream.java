@@ -166,16 +166,21 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     }
 
     /**
-     * Returns the written bytes as a {@link ByteBuffer}.
+     * Returns the written bytes as a {@link ByteBuffer}. Must be called only after the stream is
+     * {@link #close() closed for appends}.
      * <p>
      * Currently the chunks are flattened into a single new buffer, built once and cached so repeat
      * calls return the same instance, which callers such as
      * {@code MemoryRecordsBuilder#writeDefaultBatchHeader} rely on when they write the batch header
      * directly into the returned buffer.
+     *
+     * @throws IllegalStateException if the stream has not been closed for appends
      */
     @Override
     public ByteBuffer buffer() {
         ensureNotDeallocated();
+        if (!closed)
+            throw new IllegalStateException("buffer() must not be called before the stream is closed for appends");
         if (flattenedBuffer == null)
             flattenedBuffer = flatten();
         return flattenedBuffer;

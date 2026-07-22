@@ -133,6 +133,7 @@ public class ChunkedByteBufferOutputStreamTest {
             byte[] payload = new byte[]{1, 2, 3, 4, 5};
             stream.write(payload, 0, payload.length);
 
+            stream.close();
             ByteBuffer flat = stream.buffer();
             flat.flip();
             byte[] out = new byte[flat.remaining()];
@@ -153,6 +154,7 @@ public class ChunkedByteBufferOutputStreamTest {
             for (int i = 0; i < payload.length; i++) payload[i] = (byte) i;
             stream.write(payload, 0, payload.length);
 
+            stream.close();
             ByteBuffer flat = stream.buffer();
             flat.flip();
             byte[] out = new byte[flat.remaining()];
@@ -233,8 +235,8 @@ public class ChunkedByteBufferOutputStreamTest {
 
     /**
      * The fully-unused chunks are returned to the pool on {@link ChunkedByteBufferOutputStream#close()}
-     * (the stream is closed for appends), not as a side effect of reading {@link
-     * ChunkedByteBufferOutputStream#buffer()}. Data-bearing chunks stay reserved until
+     * (the stream is closed for appends). Reading {@link ChunkedByteBufferOutputStream#buffer()}
+     * afterwards has no chunk-releasing side effect; the data-bearing chunks stay reserved until
      * {@link ChunkedByteBufferOutputStream#deallocate()}, which must not return the already-released
      * chunks a second time.
      */
@@ -249,14 +251,9 @@ public class ChunkedByteBufferOutputStreamTest {
         stream.write(payload, 0, payload.length);
         assertEquals(total - 3L * chunkSize, p.availableMemory());
 
-        // reading buffer() on a still-open stream must not release chunks.
-        ByteBuffer built = stream.buffer();
-        assertEquals(total - 3L * chunkSize, p.availableMemory(),
-            "buffer() must not release chunks on a still-open stream");
-        built.flip();
-        byte[] out = new byte[built.remaining()];
-        built.get(out);
-        assertArrayEquals(payload, out);
+        // buffer() is only valid once the stream is closed for appends.
+        assertThrows(IllegalStateException.class, stream::buffer,
+            "buffer() must not be called before the stream is closed");
 
         // close() (appends done) releases the two unused chunks; a second close() is a no-op.
         stream.close();
@@ -264,6 +261,15 @@ public class ChunkedByteBufferOutputStreamTest {
             "the two unused chunks should return to the pool on close");
         stream.close();
         assertEquals(total - chunkSize, p.availableMemory());
+
+        // Reading buffer() after close must not release the remaining data-bearing chunk.
+        ByteBuffer built = stream.buffer();
+        assertEquals(total - chunkSize, p.availableMemory(),
+            "buffer() must not release chunks");
+        built.flip();
+        byte[] out = new byte[built.remaining()];
+        built.get(out);
+        assertArrayEquals(payload, out);
 
         // Completion-time deallocate returns only the remaining data-bearing chunk (no double free).
         stream.deallocate();
