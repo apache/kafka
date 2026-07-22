@@ -112,8 +112,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                                      long maxTimeToBlock,
                                      long nowMs,
                                      Cluster cluster) throws InterruptedException {
-        TopicInfo topicInfo = topicInfoMap.computeIfAbsent(topic,
-                k -> new TopicInfo(createBuiltInPartitioner(logContext, k, batchSize, partitionerRackAware, rack)));
+        TopicInfo topicInfo = topicInfoFor(topic);
 
         appendsInProgress.incrementAndGet();
         ChunkedByteBufferOutputStream bufferStream = null;
@@ -145,11 +144,8 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     // outside the deque lock. A needsNewBatch result means there is no open batch
                     // (full or absent), so it will fall through to the first-record (new batch) path.
                     appendResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
-                    if (appendResult.appended()) {
-                        boolean enableSwitch = allBatchesFull(dq);
-                        topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, appendResult.appendedBytes, cluster, enableSwitch);
-                        return appendResult;
-                    }
+                    if (appendResult.appended())
+                        return updatePartitionInfoOnAppend(appendResult, topicInfo, partitionInfo, dq, cluster);
                 }
 
                 if (appendResult.needsBufferExtension()) {
@@ -229,11 +225,8 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                             ((ChunkedProducerBatch) last).addBuffers(extensionChunks);
                             extensionChunks = null;
                             RecordAppendResult retryResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
-                            if (retryResult.appended()) {
-                                boolean enableSwitch = allBatchesFull(dq);
-                                topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, retryResult.appendedBytes, cluster, enableSwitch);
-                                return retryResult;
-                            }
+                            if (retryResult.appended())
+                                return updatePartitionInfoOnAppend(retryResult, topicInfo, partitionInfo, dq, cluster);
                             // Still not appended: concurrent appenders filled the batch,
                             // so the extension we attached is no longer enough.
                             // Loop so the next iteration routes the record
@@ -269,9 +262,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     }
                     if (appendResult.newBatchCreated)
                         bufferStream = null;
-                    boolean enableSwitch = allBatchesFull(dq);
-                    topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, appendResult.appendedBytes, cluster, enableSwitch);
-                    return appendResult;
+                    return updatePartitionInfoOnAppend(appendResult, topicInfo, partitionInfo, dq, cluster);
                 }
             }
         } finally {

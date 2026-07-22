@@ -289,7 +289,7 @@ public class RecordAccumulator {
                                      long maxTimeToBlock,
                                      long nowMs,
                                      Cluster cluster) throws InterruptedException {
-        TopicInfo topicInfo = topicInfoMap.computeIfAbsent(topic, k -> new TopicInfo(createBuiltInPartitioner(logContext, k, batchSize, partitionerRackAware, rack)));
+        TopicInfo topicInfo = topicInfoFor(topic);
 
         // We keep track of the number of appending thread to make sure we do not miss batches in
         // abortIncompleteBatches().
@@ -324,12 +324,8 @@ public class RecordAccumulator {
                         continue;
 
                     RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
-                    if (appendResult.appended()) {
-                        // If queue has incomplete batches we disable switch (see comments in updatePartitionInfo).
-                        boolean enableSwitch = allBatchesFull(dq);
-                        topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, appendResult.appendedBytes, cluster, enableSwitch);
-                        return appendResult;
-                    }
+                    if (appendResult.appended())
+                        return updatePartitionInfoOnAppend(appendResult, topicInfo, partitionInfo, dq, cluster);
                 }
 
                 if (buffer == null) {
@@ -356,16 +352,34 @@ public class RecordAccumulator {
                     // Set buffer to null, so that deallocate doesn't return it back to free pool, since it's used in the batch.
                     if (appendResult.newBatchCreated)
                         buffer = null;
-                    // If queue has incomplete batches we disable switch (see comments in updatePartitionInfo).
-                    boolean enableSwitch = allBatchesFull(dq);
-                    topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, appendResult.appendedBytes, cluster, enableSwitch);
-                    return appendResult;
+                    return updatePartitionInfoOnAppend(appendResult, topicInfo, partitionInfo, dq, cluster);
                 }
             }
         } finally {
             free.deallocate(buffer);
             appendsInProgress.decrementAndGet();
         }
+    }
+
+    /**
+     * The {@link TopicInfo} for the given topic, creating it (with its built-in partitioner) on first use.
+     */
+    protected TopicInfo topicInfoFor(String topic) {
+        return topicInfoMap.computeIfAbsent(topic,
+                k -> new TopicInfo(createBuiltInPartitioner(logContext, k, batchSize, partitionerRackAware, rack)));
+    }
+
+    /**
+     * Update the built-in partitioner for a successful append and return the result. Shared by the
+     * full and incremental strategies at each point a record is appended.
+     */
+    protected RecordAppendResult updatePartitionInfoOnAppend(RecordAppendResult appendResult, TopicInfo topicInfo,
+                                                             BuiltInPartitioner.StickyPartitionInfo partitionInfo,
+                                                             Deque<ProducerBatch> dq, Cluster cluster) {
+        // If the queue has incomplete batches we disable switch (see comments in updatePartitionInfo).
+        boolean enableSwitch = allBatchesFull(dq);
+        topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, appendResult.appendedBytes, cluster, enableSwitch);
+        return appendResult;
     }
 
     /**
@@ -1045,8 +1059,7 @@ public class RecordAccumulator {
      * Get the deque for the given topic-partition, creating it if necessary.
      */
     private Deque<ProducerBatch> getOrCreateDeque(TopicPartition tp) {
-        TopicInfo topicInfo = topicInfoMap.computeIfAbsent(tp.topic(),
-                k -> new TopicInfo(createBuiltInPartitioner(logContext, k, batchSize, partitionerRackAware, rack)));
+        TopicInfo topicInfo = topicInfoFor(tp.topic());
         return topicInfo.batches.computeIfAbsent(tp.partition(), k -> new ArrayDeque<>());
     }
 
