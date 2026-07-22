@@ -49,7 +49,7 @@ public class MockTaskAssignor implements TaskAssignor {
                     Entry::getKey,
                     entry -> {
                         TasksTuple tasksTuple = entry.getValue();
-                        return (MemberAssignment) new MemberAssignmentImpl(
+                        return new MemberAssignmentImpl(
                             tasksTuple.activeTasks(), tasksTuple.standbyTasks());
                     })));
     }

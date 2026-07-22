@@ -249,7 +249,7 @@ public class TargetAssignmentBuilder {
             );
         } else {
             newGroupAssignment = new GroupAssignment(
-                memberMetadataMap.keySet().stream().collect(Collectors.toMap(x -> x, x -> (MemberAssignment) MemberAssignmentImpl.empty())));
+                memberMetadataMap.keySet().stream().collect(Collectors.toMap(x -> x, x -> MemberAssignmentImpl.empty())));
         }
 
         // Compute delta from previous to new target assignment and create the
