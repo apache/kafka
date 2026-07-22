@@ -1446,8 +1446,11 @@ public class StickyTaskAssignorTest {
             Map.of());
     }
 
-    private MemberMetadataAndAssignmentImpl createMemberMetadata(final String processId, final Map<String, Set<Integer>> prevActiveTasks,
-                                                            final Map<String, Set<Integer>> prevStandbyTasks) {
+    private MemberMetadataAndAssignmentImpl createMemberMetadata(
+        final String processId,
+        final Map<String, Set<Integer>> prevActiveTasks,
+        final Map<String, Set<Integer>> prevStandbyTasks
+    ) {
         return new MemberMetadataAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),

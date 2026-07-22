@@ -32,8 +32,10 @@ import java.util.Set;
  * @param activeTasks  The active tasks assigned to this member keyed by subtopology Id.
  * @param standbyTasks The standby tasks assigned to this member keyed by subtopology Id.
  */
-public record MemberAssignmentImpl(Map<String, Set<Integer>> activeTasks,
-                                   Map<String, Set<Integer>> standbyTasks) implements MemberAssignment {
+public record MemberAssignmentImpl(
+    Map<String, Set<Integer>> activeTasks,
+    Map<String, Set<Integer>> standbyTasks
+) implements MemberAssignment {
 
     public MemberAssignmentImpl {
         Objects.requireNonNull(activeTasks);
