@@ -31,12 +31,12 @@ import java.util.Set;
 public interface MemberAssignmentState {
 
     /**
-     * @return The member's current target active tasks keyed by subtopology Id.
+     * @return The member's current active tasks keyed by subtopology Id.
      */
     Map<String, Set<Integer>> activeTasks();
 
     /**
-     * @return The standby tasks currently assigned to the member, keyed by subtopology Id.
+     * @return The member's current standby tasks keyed by subtopology Id.
      */
     Map<String, Set<Integer>> standbyTasks();
 
