@@ -1437,10 +1437,10 @@ public class StickyTaskAssignorTest {
         return new MemberMetadataAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            Map.of(),
-            Map.of(),
-            Map.of(),
             processId,
+            Map.of(),
+            Map.of(),
+            Map.of(),
             Map.of(),
             Map.of(),
             Map.of());
@@ -1454,10 +1454,10 @@ public class StickyTaskAssignorTest {
         return new MemberMetadataAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
+            processId,
+            Map.of(),
             prevActiveTasks,
             prevStandbyTasks,
-            Map.of(),
-            processId,
             Map.of(),
             Map.of(),
             Map.of());

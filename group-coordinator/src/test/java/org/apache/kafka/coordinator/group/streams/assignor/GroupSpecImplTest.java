@@ -41,10 +41,10 @@ public class GroupSpecImplTest {
         member = new MemberMetadataAndAssignmentImpl(
             Optional.of("test-instance"),
             Optional.of("test-rack"),
-            Map.of(),
-            Map.of(),
-            Map.of(),
             "test-process",
+            Map.of(),
+            Map.of(),
+            Map.of(),
             Map.of(),
             Map.of(),
             Map.of()

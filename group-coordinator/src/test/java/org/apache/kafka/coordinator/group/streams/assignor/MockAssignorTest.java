@@ -68,10 +68,10 @@ public class MockAssignorTest {
         final MemberMetadataAndAssignmentImpl memberMetadata1 = new MemberMetadataAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
+            "test-process",
+            Map.of(),
             Map.of("test-subtopology", Set.of(0)),
             Map.of(),
-            Map.of(),
-            "test-process",
             Map.of(),
             Map.of(),
             Map.of()
@@ -80,10 +80,10 @@ public class MockAssignorTest {
         final MemberMetadataAndAssignmentImpl memberMetadata2 = new MemberMetadataAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
+            "test-process",
+            Map.of(),
             Map.of("test-subtopology", Set.of(0)),
             Map.of(),
-            Map.of(),
-            "test-process",
             Map.of(),
             Map.of(),
             Map.of()
@@ -121,10 +121,10 @@ public class MockAssignorTest {
         final MemberMetadataAndAssignmentImpl memberMetadata = new MemberMetadataAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            Map.of(),
-            Map.of(),
-            Map.of(),
             "test-process",
+            Map.of(),
+            Map.of(),
+            Map.of(),
             Map.of(),
             Map.of(),
             Map.of()
@@ -153,10 +153,10 @@ public class MockAssignorTest {
         final MemberMetadataAndAssignmentImpl memberMetadata1 = new MemberMetadataAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            Map.of(),
-            Map.of(),
-            Map.of(),
             "test-process",
+            Map.of(),
+            Map.of(),
+            Map.of(),
             Map.of(),
             Map.of(),
             Map.of()
@@ -165,10 +165,10 @@ public class MockAssignorTest {
         final MemberMetadataAndAssignmentImpl memberMetadata2 = new MemberMetadataAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            Map.of(),
-            Map.of(),
-            Map.of(),
             "test-process",
+            Map.of(),
+            Map.of(),
+            Map.of(),
             Map.of(),
             Map.of(),
             Map.of()
@@ -206,13 +206,13 @@ public class MockAssignorTest {
         final MemberMetadataAndAssignmentImpl memberMetadata1 = new MemberMetadataAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
+            "test-process",
+            Map.of(),
             mkMap(
                 mkEntry("test-subtopology1", new HashSet<>(List.of(0, 2, 3))),
                 mkEntry("test-subtopology2", new HashSet<>(List.of(0)))
             ),
             Map.of(),
-            Map.of(),
-            "test-process",
             Map.of(),
             Map.of(),
             Map.of()
@@ -221,13 +221,13 @@ public class MockAssignorTest {
         final MemberMetadataAndAssignmentImpl memberMetadata2 = new MemberMetadataAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
+            "test-process",
+            Map.of(),
             mkMap(
                 mkEntry("test-subtopology1", new HashSet<>(List.of(1))),
                 mkEntry("test-subtopology2", new HashSet<>(List.of(3)))
             ),
             Map.of(),
-            Map.of(),
-            "test-process",
             Map.of(),
             Map.of(),
             Map.of()

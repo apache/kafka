@@ -122,11 +122,11 @@ public class TargetAssignmentBuilderTest {
         assertEquals(new MemberMetadataAndAssignmentImpl(
             Optional.of("instanceId"),
             Optional.of("rackId"),
+            "processId",
+            clientTags,
             activeTasks,
             standbyTasks,
             Map.of(),
-            "processId",
-            clientTags,
             Map.of(),
             Map.of()
         ), memberMetadata);

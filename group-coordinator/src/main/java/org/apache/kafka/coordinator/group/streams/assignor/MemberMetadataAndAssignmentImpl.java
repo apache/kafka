@@ -31,22 +31,22 @@ import java.util.Set;
  *
  * @param instanceId    The instance ID if provided.
  * @param rackId        The rack ID if provided.
+ * @param processId     The process ID.
+ * @param clientTags    The client tags for a rack-aware assignment.
  * @param activeTasks   Current active tasks.
  * @param standbyTasks  Current standby tasks.
  * @param warmupTasks   Current warm-up tasks.
- * @param processId     The process ID.
- * @param clientTags    The client tags for a rack-aware assignment.
  * @param taskOffsets   The last received cumulative task offsets of assigned tasks or dormant tasks.
  * @param taskEndOffsets The last received cumulative task end offsets of assigned tasks or dormant tasks.
  */
 public record MemberMetadataAndAssignmentImpl(
     Optional<String> instanceId,
     Optional<String> rackId,
+    String processId,
+    Map<String, String> clientTags,
     Map<String, Set<Integer>> activeTasks,
     Map<String, Set<Integer>> standbyTasks,
     Map<String, Set<Integer>> warmupTasks,
-    String processId,
-    Map<String, String> clientTags,
     Map<String, Map<Integer, Long>> taskOffsets,
     Map<String, Map<Integer, Long>> taskEndOffsets
 ) implements MemberAssignmentMetadata, MemberAssignmentState {
@@ -54,11 +54,11 @@ public record MemberMetadataAndAssignmentImpl(
     public MemberMetadataAndAssignmentImpl {
         Objects.requireNonNull(instanceId);
         Objects.requireNonNull(rackId);
+        Objects.requireNonNull(processId);
+        clientTags = Collections.unmodifiableMap(Objects.requireNonNull(clientTags));
         activeTasks = Collections.unmodifiableMap(Objects.requireNonNull(activeTasks));
         standbyTasks = Collections.unmodifiableMap(Objects.requireNonNull(standbyTasks));
         warmupTasks = Collections.unmodifiableMap(Objects.requireNonNull(warmupTasks));
-        Objects.requireNonNull(processId);
-        clientTags = Collections.unmodifiableMap(Objects.requireNonNull(clientTags));
         taskOffsets = Collections.unmodifiableMap(Objects.requireNonNull(taskOffsets));
         taskEndOffsets = Collections.unmodifiableMap(Objects.requireNonNull(taskEndOffsets));
     }

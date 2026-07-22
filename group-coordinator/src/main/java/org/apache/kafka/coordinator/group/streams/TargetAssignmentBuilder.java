@@ -133,11 +133,11 @@ public class TargetAssignmentBuilder {
         return new MemberMetadataAndAssignmentImpl(
             member.instanceId(),
             member.rackId(),
+            member.processId(),
+            member.clientTags(),
             activeTasks,
             currentAssignment.standbyTasks(),
             currentAssignment.warmupTasks(),
-            member.processId(),
-            member.clientTags(),
             taskOffsets.taskOffsets(),
             taskOffsets.taskEndOffsets()
         );
