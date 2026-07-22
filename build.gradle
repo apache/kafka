@@ -1040,9 +1040,6 @@ project(':server') {
   apply plugin: 'java-test-fixtures'
 
   dependencies {
-    compileOnly libs.bndlib
-    compileOnly libs.spotbugs
-
     implementation libs.commonsValidator
 
     implementation project(':clients')
@@ -1177,7 +1174,6 @@ project(':core') {
 
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
-    implementation libs.jacksonDataformatCsv
     implementation libs.jacksonJDK8Datatypes
     implementation libs.jacksonDataformatYaml
     implementation libs.joptSimple
@@ -1470,7 +1466,6 @@ project(':metadata') {
       exclude group: 'commons-io', module: 'commons-io'
     }
     implementation libs.jacksonDatabind
-    implementation libs.jacksonJDK8Datatypes
     implementation libs.metrics
     implementation libs.slf4jApi
 
@@ -1601,7 +1596,6 @@ project(':group-coordinator') {
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
     implementation libs.metrics
-    implementation libs.hdrHistogram
     implementation libs.re2j
     implementation libs.slf4jApi
     implementation libs.hash4j
@@ -1962,7 +1956,6 @@ project(':generator') {
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
-    implementation libs.jacksonJakartarsJsonProvider
     implementation libs.jgit
     implementation libs.jgitSshApache
     implementation libs.jgitGpgBc
@@ -2666,13 +2659,11 @@ project(':tools') {
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonDataformatCsv
-    implementation libs.jacksonJDK8Datatypes
     implementation libs.joptSimple
     implementation libs.slf4jApi
     implementation libs.re2j
 
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
-    implementation libs.jacksonJakartarsJsonProvider
 
     compileOnly libs.spotbugs
 
@@ -2791,7 +2782,6 @@ project(':shell') {
   dependencies {
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
-    implementation libs.jacksonJDK8Datatypes
     implementation libs.jline
     implementation libs.slf4jApi
     implementation project(':server-common')
@@ -2800,9 +2790,6 @@ project(':shell') {
     implementation project(':metadata')
     implementation project(':raft')
     implementation project(':server')
-
-    implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
-    implementation libs.jacksonJakartarsJsonProvider
 
     testImplementation project(':clients')
     testImplementation project(':core')
@@ -4019,8 +4006,6 @@ project(':connect:mirror') {
 
     implementation libs.argparse4j
     implementation libs.slf4jApi
-    implementation libs.jacksonAnnotations
-    implementation libs.jacksonJakartarsJsonProvider
     implementation libs.jerseyContainerServlet
     implementation libs.jerseyHk2
     implementation libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
