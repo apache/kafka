@@ -43,6 +43,11 @@ public class BufferPoolChunkAllocationTest {
     private final MockTime time = new MockTime();
     private final Metrics metrics = new Metrics(time);
 
+    // Safety ceiling for block-until-available requests that the test unblocks itself (by
+    // deallocating or closing). The waiter is always signaled first, so a passing test returns in
+    // milliseconds; this only bounds how long a broken test can block before failing.
+    private static final long MAX_BLOCK_TIME_MS = 2_000;
+
     @AfterEach
     public void teardown() {
         metrics.close();
@@ -149,12 +154,11 @@ public class BufferPoolChunkAllocationTest {
     @Test
     public void testNoPartialHoldsDuringWait() throws Exception {
         int chunkSize = 64;
-        long total = 4L * chunkSize;
+        // Hold 2 of 3 chunks so exactly 1 is free — a 2-chunk request can't be satisfied immediately.
+        long total = 3L * chunkSize;
         BufferPool p = pool(total, chunkSize);
-        // Drain the pool down to 1 chunk's worth so a 2-chunk request can't be satisfied immediately.
         ByteBuffer h1 = p.allocateChunks(chunkSize, 100).get(0);
         ByteBuffer h2 = p.allocateChunks(chunkSize, 100).get(0);
-        ByteBuffer h3 = p.allocateChunks(chunkSize, 100).get(0);
         long available = p.availableMemory();
         assertEquals(chunkSize, available, "pool should have exactly 1 chunk free");
 
@@ -162,7 +166,7 @@ public class BufferPoolChunkAllocationTest {
         AtomicReference<Throwable> err = new AtomicReference<>();
         Thread t = new Thread(() -> {
             try {
-                p.allocateChunks(2 * chunkSize, 5_000);
+                p.allocateChunks(2 * chunkSize, MAX_BLOCK_TIME_MS);
             } catch (Throwable th) {
                 err.set(th);
             }
@@ -176,12 +180,12 @@ public class BufferPoolChunkAllocationTest {
         assertEquals(chunkSize, p.availableMemory(),
                 "pool memory must reflect no partial holds during the atomic wait");
 
-        // Free enough chunks for the waiter to complete.
+        // The pool still has 1 chunk free (asserted above) and the waiter never consumed it, so
+        // freeing just one more chunk reaches the 2 it needs and unblocks it.
         p.deallocate(h1);
-        p.deallocate(h2);
-        t.join(5_000);
+        t.join();
         assertNull(err.get(), "waiter unexpectedly threw: " + err.get());
-        p.deallocate(h3);
+        p.deallocate(h2);
     }
 
     /**
@@ -192,23 +196,26 @@ public class BufferPoolChunkAllocationTest {
     @Test
     public void testFifoFairnessAcrossMultiChunkAndSingleChunkRequests() throws Exception {
         int chunkSize = 64;
-        long total = 4L * chunkSize;
+        // Exactly the chunks the two waiters need: 2 for the multi request, 1 for the single.
+        long total = 3L * chunkSize;
         BufferPool p = pool(total, chunkSize);
         // Drain the pool entirely so any new request must wait.
         ByteBuffer h1 = p.allocateChunks(chunkSize, 100).get(0);
         ByteBuffer h2 = p.allocateChunks(chunkSize, 100).get(0);
         ByteBuffer h3 = p.allocateChunks(chunkSize, 100).get(0);
-        ByteBuffer h4 = p.allocateChunks(chunkSize, 100).get(0);
         assertEquals(0, p.availableMemory());
 
         // T_multi enters first, requesting 2 chunks; T_single enters second, requesting 1 chunk.
         AtomicReference<Long> multiCompletionMs = new AtomicReference<>();
         AtomicReference<Long> singleCompletionMs = new AtomicReference<>();
+        AtomicReference<List<ByteBuffer>> multiChunks = new AtomicReference<>();
+        AtomicReference<ByteBuffer> singleChunk = new AtomicReference<>();
         CountDownLatch multiStarted = new CountDownLatch(1);
         Thread tMulti = new Thread(() -> {
             try {
                 multiStarted.countDown();
-                List<ByteBuffer> got = p.allocateChunks(2 * chunkSize, 10_000);
+                List<ByteBuffer> got = p.allocateChunks(2 * chunkSize, MAX_BLOCK_TIME_MS);
+                multiChunks.set(got);
                 multiCompletionMs.set(System.nanoTime());
                 for (ByteBuffer b : got) p.deallocate(b);
             } catch (Throwable th) {
@@ -217,7 +224,8 @@ public class BufferPoolChunkAllocationTest {
         }, "multi");
         Thread tSingle = new Thread(() -> {
             try {
-                ByteBuffer got = p.allocateChunks(chunkSize, 10_000).get(0);
+                ByteBuffer got = p.allocateChunks(chunkSize, MAX_BLOCK_TIME_MS).get(0);
+                singleChunk.set(got);
                 singleCompletionMs.set(System.nanoTime());
                 p.deallocate(got);
             } catch (Throwable th) {
@@ -239,32 +247,33 @@ public class BufferPoolChunkAllocationTest {
         p.deallocate(h2);
         // Both freed — the FIFO leader (multi) should claim both before the single-chunk waiter
         // gets any. The multi completes first.
-        tMulti.join(5_000);
+        tMulti.join();
         // Now free another chunk for the single-chunk waiter.
         p.deallocate(h3);
-        tSingle.join(5_000);
+        tSingle.join();
 
         assertNotNull(multiCompletionMs.get(), "multi did not complete");
         assertNotNull(singleCompletionMs.get(), "single did not complete");
         assertTrue(multiCompletionMs.get() != -1L && singleCompletionMs.get() != -1L,
                 "both threads must complete without exception");
+        // Each waiter must actually have received its chunks.
+        assertNotNull(multiChunks.get(), "multi did not receive its chunks");
+        assertEquals(2, multiChunks.get().size(), "multi must receive exactly 2 chunks");
+        assertNotNull(singleChunk.get(), "single did not receive its chunk");
         assertTrue(multiCompletionMs.get() <= singleCompletionMs.get(),
                 "FIFO violated: single (joined later) completed at "
                         + singleCompletionMs.get() + " before multi at " + multiCompletionMs.get());
-        p.deallocate(h4);
     }
 
     /**
-     * Slow-path rollback must not double-refund pooled chunks. When the waiter polls some
-     * chunks from the free list, then times out on a subsequent iteration, the inner finally
-     * refunds {@code accumulated} bytes to {@code nonPooledAvailableMemory} and the outer
-     * catch re-inserts the polled chunks into {@code free}. If {@code accumulated} includes
-     * bytes that came from polled chunks, the same memory is refunded twice — the pool
-     * over-reports {@code availableMemory()} and subsequent allocations can exceed the
-     * configured {@code buffer.memory} limit.
+     * A chunk request that can't be satisfied immediately must wait for memory, taking chunks as
+     * they are freed. If it then times out before acquiring all it needs, each chunk it already
+     * took must be returned to the pool exactly once. A double refund would make the pool
+     * over-report {@code availableMemory()}, letting later allocations exceed the configured
+     * {@code buffer.memory} limit.
      */
     @Test
-    public void testSlowPathDoesNotDoubleRefundPolledChunksOnTimeout() throws Exception {
+    public void testWaitingRequestDoesNotDoubleRefundChunksOnTimeout() throws Exception {
         int chunkSize = 64;
         long total = 3L * chunkSize;
         BufferPool p = pool(total, chunkSize);
@@ -278,10 +287,8 @@ public class BufferPoolChunkAllocationTest {
         AtomicReference<Throwable> err = new AtomicReference<>();
         Thread t = new Thread(() -> {
             try {
-                // Asks for 3 chunks with a finite deadline. After we deallocate 2 chunks below
-                // the waiter will poll them, find itself still 1 short, and time out on the
-                // next await iteration — with 2 chunks held in `pooled` and 2*chunkSize in
-                // `accumulated`.
+                // Asks for 3 chunks with a finite deadline. We free 2 chunks below, so the waiter
+                // takes those but is still 1 short and times out waiting for the 3rd.
                 p.allocateChunks(3 * chunkSize, 500);
             } catch (Throwable th) {
                 err.set(th);
@@ -291,35 +298,32 @@ public class BufferPoolChunkAllocationTest {
 
         TestUtils.waitForCondition(() -> p.queued() == 1, "waiter should be parked on the pool's queue");
 
-        // Hand the waiter 2 chunks — it polls them into `pooled` then awaits again for the 3rd.
+        // Free 2 chunks — the waiter takes both, then waits again for the 3rd it never gets.
         p.deallocate(h1);
         p.deallocate(h2);
 
-        // Give the waiter a moment to wake, poll, and re-enter await before the timeout fires.
+        // Give the waiter a moment to wake, take the 2 chunks, and re-enter the wait before it times out.
         Thread.sleep(100);
 
-        t.join(5_000);
+        t.join();
         assertInstanceOf(BufferExhaustedException.class, err.get(), "expected BufferExhaustedException, got " + err.get());
 
-        // After the throw, exactly 2 chunkSizes of physical memory should be back in the pool
-        // (h1 + h2). h3 is still held outside the pool. The bug double-refunds: it credits
-        // 2*chunkSize to `nonPooledAvailableMemory` (inner finally) AND re-inserts h1, h2 into
-        // `free` (outer catch), so availableMemory() reports 4*chunkSize.
+        // After the timeout, exactly the 2 freed chunks (h1 + h2) must be back in the pool, each
+        // returned once; h3 is still held outside the pool. A double refund would over-report
+        // availableMemory() (e.g. 4*chunkSize instead of 2).
         assertEquals(2L * chunkSize, p.availableMemory(),
-                "pool over-reports availableMemory due to double-refund of pooled chunks on rollback");
+                "pool over-reports availableMemory if polled chunks are refunded twice on rollback");
 
         p.deallocate(h3);
     }
 
     /**
-     * Slow-path success must not corrupt the pool's accounting. When the waiter polls chunks
-     * from the free list to satisfy its request, the finally block runs with the inner loop's
-     * "success" reset still in effect — it must not refund or decrement {@code nonPool}.
-     * Pool chunks transferred to the caller via {@code pooled} are accounted for by removing
-     * them from {@code free}, not by deducting their bytes from {@code nonPool}.
+     * A chunk request that must wait for memory and then completes by taking chunks as they are
+     * freed must account for those chunks exactly once — as memory now held by the caller — so the
+     * pool neither loses nor over-reports capacity.
      */
     @Test
-    public void testSlowPathSuccessDoesNotCorruptAccounting() throws Exception {
+    public void testWaitingRequestDoesNotCorruptAccountingOnSuccess() throws Exception {
         int chunkSize = 64;
         long total = 3L * chunkSize;
         BufferPool p = pool(total, chunkSize);
@@ -334,7 +338,7 @@ public class BufferPoolChunkAllocationTest {
         AtomicReference<List<ByteBuffer>> got = new AtomicReference<>();
         Thread t = new Thread(() -> {
             try {
-                got.set(p.allocateChunks(2 * chunkSize, 10_000));
+                got.set(p.allocateChunks(2 * chunkSize, MAX_BLOCK_TIME_MS));
             } catch (Throwable th) {
                 err.set(th);
             }
@@ -343,17 +347,16 @@ public class BufferPoolChunkAllocationTest {
 
         TestUtils.waitForCondition(() -> p.queued() == 1, "waiter should be parked on the pool's queue");
 
-        // Deallocate 2 chunks → waiter wakes, polls both, accumulated reaches memoryRequired,
-        // exits normally. The success path's finally must NOT refund or decrement nonPool.
+        // Free 2 chunks → the waiter wakes, takes both, and completes normally.
         p.deallocate(h1);
         p.deallocate(h2);
-        t.join(5_000);
+        t.join();
         assertNull(err.get(), "waiter unexpectedly threw: " + err.get());
 
-        // After success: waiter owns the 2 chunks (returned via `got`), the test still holds h3.
-        // The pool has lent out everything it had — availableMemory must be exactly 0.
+        // After success the waiter owns the 2 chunks (returned via `got`) and the test still holds
+        // h3, so the pool has lent out everything it had — availableMemory must be exactly 0.
         assertEquals(0, p.availableMemory(),
-                "slow-path success corrupted accounting (likely a phantom nonPool decrement in the finally)");
+                "a completed waiting request must leave the pool with no available memory (accounting not corrupted)");
 
         // Returning all the held buffers must fully restore the pool.
         for (ByteBuffer chunk : got.get())
@@ -380,7 +383,7 @@ public class BufferPoolChunkAllocationTest {
         AtomicReference<Throwable> err = new AtomicReference<>();
         Thread t = new Thread(() -> {
             try {
-                p.allocateChunks(2 * chunkSize, 10_000);
+                p.allocateChunks(2 * chunkSize, MAX_BLOCK_TIME_MS);
             } catch (Throwable th) {
                 err.set(th);
             }
@@ -390,7 +393,7 @@ public class BufferPoolChunkAllocationTest {
 
         // Close the pool: signals all waiters; the waiter must throw KafkaException.
         p.close();
-        t.join(5_000);
+        t.join();
         assertInstanceOf(KafkaException.class, err.get(), "expected KafkaException, got " + err.get());
         p.deallocate(h1);
         p.deallocate(h2);

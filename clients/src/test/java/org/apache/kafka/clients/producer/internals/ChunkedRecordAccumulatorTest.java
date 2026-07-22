@@ -159,8 +159,8 @@ public class ChunkedRecordAccumulatorTest {
      * appender racing the same batch.
      */
     private BufferPool poolMockingConcurrentChunkAllocation(int chunkSize, long totalMemory,
-                                                                   AtomicReference<ChunkedRecordAccumulator> injectAppendOnce,
-                                                                   byte[] injectedValue) {
+                                                            AtomicReference<ChunkedRecordAccumulator> injectAppendOnce,
+                                                            byte[] injectedValue) {
         return new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.CHUNKED) {
             @Override
             public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
@@ -271,7 +271,6 @@ public class ChunkedRecordAccumulatorTest {
             Deque<ProducerBatch> dq = batchesFor(accum, tp1);
             assertEquals(2, dq.size(), "The losing record must roll to a new batch, not exceed batch.size");
             assertNotNull(dq.peekFirst());
-            assertNotNull(dq.peekLast());
             assertEquals(2, dq.peekFirst().recordCount, "First batch should have the initial record plus the race winner");
             assertNotNull(dq.peekLast());
             assertEquals(1, dq.peekLast().recordCount, "Second batch should have the loser record");
@@ -465,12 +464,10 @@ public class ChunkedRecordAccumulatorTest {
 
             Deque<ProducerBatch> dq = batchesFor(accum, tp1);
             assertEquals(2, dq.size(), "closed batch + new batch expected");
-            assertNotNull(dq.peekFirst());
-            assertNotNull(dq.peekLast());
             // The original batch is far below its writeLimit, so isFull() can only be true via
             // the closed append stream — i.e., it was closed for appends on the failed extension.
-            assertTrue(dq.peekFirst().isFull(), "original batch must be closed for appends");
             assertNotNull(dq.peekFirst());
+            assertTrue(dq.peekFirst().isFull(), "original batch must be closed for appends");
             assertEquals(1, dq.peekFirst().recordCount);
             assertNotNull(dq.peekLast());
             assertEquals(1, dq.peekLast().recordCount);
@@ -498,11 +495,14 @@ public class ChunkedRecordAccumulatorTest {
                     maxBlockTimeMs, time.milliseconds(), cluster);
             assertEquals(0.0, (double) exhausted.metricValue());
 
-            // Second record overflows the batch's chunk, so extension attempt fails (pool empty,
-            // recovered by closing the batch), then the new-batch acquire fails too (maxTimeToBlock
-            // = 0). The two failed acquires must count as a single dropped record.
+            // Second record overflows the batch's chunk. The extension attempt (always non-blocking)
+            // fails first — pool empty, recovered by closing the batch — then the new-batch acquire
+            // blocks up to max.block.ms and also fails since the pool stays empty. A small block time
+            // keeps the test fast (nothing frees memory during the wait). Both failed acquires must
+            // count as a single dropped record.
+            long newBatchBlockMs = 50L;
             assertThrows(BufferExhaustedException.class, () -> accum.append(topic, partition1, 0L, key,
-                    new byte[150], Record.EMPTY_HEADERS, null, 0L, time.milliseconds(), cluster));
+                    new byte[150], Record.EMPTY_HEADERS, null, newBatchBlockMs, time.milliseconds(), cluster));
             assertEquals(1.0, (double) exhausted.metricValue(),
                     "the dropped record must be counted once, not once per failed acquire");
         } finally {
@@ -516,8 +516,14 @@ public class ChunkedRecordAccumulatorTest {
     @Test
     public void testBatchCloseDoesNotDeallocateChunksPrematurely() throws Exception {
         int chunkSize = 256;
-        ChunkedRecordAccumulator accum = newAccumulator(8192, chunkSize, 32L * chunkSize, Compression.NONE);
+        long totalMemory = 32L * chunkSize;
+        BufferPool pool = new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.CHUNKED);
+        ChunkedRecordAccumulator accum = new ChunkedRecordAccumulator(logContext, 8192, Compression.NONE,
+                /* lingerMs */ 0, /* retryBackoffMs */ 0L, /* retryBackoffMaxMs */ 0L,
+                /* deliveryTimeoutMs */ 3200, metrics, "producer-metrics", time,
+                /* transactionManager */ null, pool);
 
+        // A small record fits in a single chunk, so exactly one (data-bearing) chunk is reserved.
         byte[] value = new byte[64];
         accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null,
                 maxBlockTimeMs, time.milliseconds(), cluster);
@@ -525,9 +531,13 @@ public class ChunkedRecordAccumulatorTest {
         Deque<ProducerBatch> dq = batchesFor(accum, tp1);
         ProducerBatch batch = dq.peekFirst();
         assertNotNull(batch);
+        assertEquals(totalMemory - chunkSize, pool.availableMemory(), "append must reserve exactly one chunk");
 
         // Matches the call sites in RecordAccumulator.drain and Sender.
         batch.close();
+        // close() must not return the chunk to the pool: available memory is unchanged, and the
+        // built record set is still readable because its bytes still live in the batch's chunk.
+        assertEquals(totalMemory - chunkSize, pool.availableMemory(), "close() must not return chunks to the pool");
         MemoryRecords records = batch.records();
         assertTrue(records.sizeInBytes() > 0,
                 "batch must produce a non-empty record set after close; chunks were deallocated prematurely");
@@ -540,6 +550,10 @@ public class ChunkedRecordAccumulatorTest {
             }
         }
         assertEquals(1, count, "expected exactly 1 record after close");
+
+        // Completion (deallocate) is what returns the chunk to the pool.
+        accum.deallocate(batch);
+        assertEquals(totalMemory, pool.availableMemory(), "deallocate must return the chunk to the pool");
 
         accum.close();
     }
@@ -566,8 +580,10 @@ public class ChunkedRecordAccumulatorTest {
         assertNotNull(batch);
         assertEquals(6, batch.recordCount);
 
-        // batch.close() flattens chunks and writes the header. If chunks under-allocated, this
-        // throws (insufficient capacity in the underlying buffer).
+        // Finalize the batch: close() writes the record-batch header and builds the record set.
+        // Chunk capacity for every record is ensured at append time (the accumulator attaches
+        // extension chunks before appending, and an append without capacity would throw), so the
+        // chunks already hold the whole batch by the time it is built.
         batch.close();
         MemoryRecords records = batch.records();
         int actualSize = records.sizeInBytes();
