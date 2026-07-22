@@ -20,7 +20,6 @@ package org.apache.kafka.message;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -56,14 +55,14 @@ public final class MessageSpec {
         this.struct = new StructSpec(name, validVersions, deprecatedVersions, fields);
         this.apiKey = apiKey == null ? Optional.empty() : Optional.of(apiKey);
         this.type = Objects.requireNonNull(type);
-        this.commonStructs = commonStructs == null ? Collections.emptyList() :
+        this.commonStructs = commonStructs == null ? List.of() :
                 List.copyOf(commonStructs);
         // If the struct has no valid versions (the typical use case is to completely remove support for
         // an existing protocol api while ensuring the api key id is not reused), we configure the spec
         // to effectively be empty
         if (struct.versions().empty()) {
             this.flexibleVersions = Versions.NONE;
-            this.listeners = Collections.emptyList();
+            this.listeners = List.of();
             this.latestVersionUnstable = false;
         } else {
             if (flexibleVersions == null) {

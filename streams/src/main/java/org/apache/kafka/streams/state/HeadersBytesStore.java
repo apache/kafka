@@ -14,9 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.state;
 
-import java.nio.ByteBuffer;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Marker interface to indicate that a bytes store understands the value-with-headers format
@@ -27,23 +28,27 @@ import java.nio.ByteBuffer;
  * Per KIP-1271, the value format is: [headersSize(varint)][headersBytes][payloadBytes]
  * where payloadBytes is the existing serialized value (e.g., [timestamp(8)][value] for timestamped stores).
  */
+@InterfaceAudience.Public
 public interface HeadersBytesStore {
 
     /**
-     * Converts a legacy timestamped value (ValueAndTimestamp format, without headers) to the header-embedded format.
+     * Converts a legacy value (without headers) to the header-embedded format by adding empty headers prefix.
      * <p>
-     * For timestamped stores, the legacy format is: [timestamp(8)][value]
-     * The new format is: [headersSize(varint)][headersBytes][timestamp(8)][value]
+     * This is a general-purpose method that prepends an empty headers prefix to any byte array.
+     * The header-embedded format is: [headersSize(varint)][headersBytes][payload]
+     * where empty headers are represented as headersSize=0 (encoded as [0x00]).
      * <p>
-     * This method adds empty headers to the existing timestamped value format.
-     * <p>
-     * Empty headers are represented as 0 bytes (headersSize=0, no headersBytes),
+     * Usage examples:
+     * <ul>
+     *   <li>Timestamped stores: [timestamp(8)][value] → [0x00][timestamp(8)][value]</li>
+     *   <li>Window stores: [value] → [0x00][value]</li>
+     * </ul>
      *
-     * @param valueAndTimestamp the legacy timestamped value bytes
-     * @return the value in header-embedded format with empty headers
+     * @param value the legacy value bytes (may include timestamp for timestamped stores, or plain value for window stores)
+     * @return the value in header-embedded format with empty headers prefix [0x00][value]
      */
-    static byte[] convertToHeaderFormat(final byte[] valueAndTimestamp) {
-        if (valueAndTimestamp == null) {
+    static byte[] convertToHeaderFormat(final byte[] value) {
+        if (value == null) {
             return null;
         }
 
@@ -52,10 +57,35 @@ public interface HeadersBytesStore {
         //   headersSize = varint(0) = [0x00]
         //   headersBytes = [] (empty, 0 bytes)
         // Result: [0x00][payload]
-        return ByteBuffer
-            .allocate(1 + valueAndTimestamp.length)
-            .put((byte) 0x00)
-            .put(valueAndTimestamp)
-            .array();
+        final byte[] valueHeaders = new byte[1 + value.length];
+        // valueHeaders[0] is initialized to 0x00 per Java Specification
+        System.arraycopy(value, 0, valueHeaders, 1, value.length);
+        return valueHeaders;
+    }
+
+    static byte[] convertFromPlainToHeaderFormat(final byte[] value) {
+        if (value == null) {
+            return null;
+        }
+
+        // Format: [headersSize(varint)][headersBytes][timestamp(8)][payload]
+        // For empty headers and timestamp=-1:
+        //   headersSize = varint(0) = [0x00]
+        //   headersBytes = [] (empty, 0 bytes)
+        //   timestamp = -1 (8 bytes)
+        // Result: [0x00][timestamp=-1][payload]
+        final byte[] result = new byte[1 + 8 + value.length];
+        result[0] = 0x00; // empty headers
+        // timestamp = -1 (8 bytes in big-endian)
+        result[1] = (byte) 0xFF;
+        result[2] = (byte) 0xFF;
+        result[3] = (byte) 0xFF;
+        result[4] = (byte) 0xFF;
+        result[5] = (byte) 0xFF;
+        result[6] = (byte) 0xFF;
+        result[7] = (byte) 0xFF;
+        result[8] = (byte) 0xFF;
+        System.arraycopy(value, 0, result, 9, value.length);
+        return result;
     }
 }

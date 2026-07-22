@@ -33,7 +33,8 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ObjectSerializationCache, Writable}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
-import org.apache.kafka.common.utils.{Exit, Time, Utils}
+import org.apache.kafka.common.utils.internals.Exit
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
 import org.apache.kafka.raft.errors.NotLeaderException
 import org.apache.kafka.raft.{Batch, BatchReader, Endpoints, KRaftConfigs, LeaderAndEpoch, QuorumConfig, RaftClient, RaftManager}
@@ -82,7 +83,7 @@ class TestRaftServer(
     val apiVersionManager = new SimpleApiVersionManager(
       ListenerType.CONTROLLER,
       true,
-      () => FinalizedFeatures.fromKRaftVersion(MetadataVersion.MINIMUM_VERSION))
+      () => FinalizedFeatures.fromMetadataVersion(MetadataVersion.MINIMUM_VERSION))
     socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
 
     val endpoints = Endpoints.fromInetSocketAddresses(
@@ -196,6 +197,11 @@ class TestRaftServer(
 
     override def handleLoadSnapshot(reader: SnapshotReader[Array[Byte]]): Unit = {
       eventQueue.offer(HandleSnapshot(reader))
+    }
+
+    override def handleLoadBootstrap(reader: SnapshotReader[Array[Byte]]): Unit = {
+      // TestRaftServer does not process bootstrap snapshots.
+      reader.close()
     }
 
     override def initiateShutdown(): Boolean = {

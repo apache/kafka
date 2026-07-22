@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -32,6 +34,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -288,7 +292,7 @@ public class StreamsRebalanceDataTest {
     }
 
     @Test
-    public void streamsRebalanceDataShouldNotHaveModifiableSubtopologiesAndClientTags() {
+    public void streamsRebalanceDataShouldNotHaveModifiableSubtopologiesClientTags() {
         final UUID processId = UUID.randomUUID();
         final Optional<StreamsRebalanceData.HostInfo> endpoint = Optional.of(new StreamsRebalanceData.HostInfo("localhost", 9090));
         final Map<String, StreamsRebalanceData.Subtopology> subtopologies = new HashMap<>();
@@ -296,8 +300,11 @@ public class StreamsRebalanceDataTest {
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
             processId,
             endpoint,
+            Optional.empty(),
             subtopologies,
-            clientTags
+            clientTags,
+            Map::of,
+            Map::of
         );
 
         assertThrows(
@@ -327,8 +334,11 @@ public class StreamsRebalanceDataTest {
             () -> new StreamsRebalanceData(
                 null,
                 endpoint,
+                Optional.empty(),
                 subtopologies,
-                clientTags
+                clientTags,
+                Map::of,
+                Map::of
             )
         );
         assertEquals("Process ID cannot be null", exception.getMessage());
@@ -345,8 +355,11 @@ public class StreamsRebalanceDataTest {
             () -> new StreamsRebalanceData(
                 processId,
                 null,
+                Optional.empty(),
                 subtopologies,
-                clientTags
+                clientTags,
+                Map::of,
+                Map::of
             )
         );
         assertEquals("Endpoint cannot be null", exception.getMessage());
@@ -363,11 +376,36 @@ public class StreamsRebalanceDataTest {
             () -> new StreamsRebalanceData(
                 processId,
                 endpoint,
+                Optional.empty(),
                 null,
-                clientTags
+                clientTags,
+                Map::of,
+                Map::of
             )
         );
         assertEquals("Subtopologies cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void streamsRebalanceDataShouldNotAcceptNullRackId() {
+        final UUID processId = UUID.randomUUID();
+        final Optional<StreamsRebalanceData.HostInfo> endpoint = Optional.of(new StreamsRebalanceData.HostInfo("localhost", 9090));
+        final Map<String, StreamsRebalanceData.Subtopology> subtopologies = new HashMap<>();
+        final Map<String, String> clientTags = Map.of("clientTag1", "clientTagValue1");
+
+        final Exception exception = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsRebalanceData(
+                processId,
+                endpoint,
+                null,
+                subtopologies,
+                clientTags,
+                Map::of,
+                Map::of
+            )
+        );
+        assertEquals("Rack ID cannot be null", exception.getMessage());
     }
 
     @Test
@@ -381,8 +419,11 @@ public class StreamsRebalanceDataTest {
             () -> new StreamsRebalanceData(
                 processId,
                 endpoint,
+                Optional.empty(),
                 subtopologies,
-                null
+                null,
+                Map::of,
+                Map::of
             )
         );
         assertEquals("Client tags cannot be null", exception.getMessage());
@@ -397,8 +438,11 @@ public class StreamsRebalanceDataTest {
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
             processId,
             endpoint,
+            Optional.empty(),
             subtopologies,
-            clientTags
+            clientTags,
+            Map::of,
+            Map::of
         );
 
         assertEquals(StreamsRebalanceData.Assignment.EMPTY, streamsRebalanceData.reconciledAssignment());
@@ -413,8 +457,11 @@ public class StreamsRebalanceDataTest {
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
             processId,
             endpoint,
+            Optional.empty(),
             subtopologies,
-            clientTags
+            clientTags,
+            Map::of,
+            Map::of
         );
 
         assertTrue(streamsRebalanceData.partitionsByHost().isEmpty());
@@ -429,8 +476,11 @@ public class StreamsRebalanceDataTest {
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
             processId,
             endpoint,
+            Optional.empty(),
             subtopologies,
-            clientTags
+            clientTags,
+            Map::of,
+            Map::of
         );
 
         assertFalse(streamsRebalanceData.shutdownRequested());
@@ -445,8 +495,11 @@ public class StreamsRebalanceDataTest {
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
             processId,
             endpoint,
+            Optional.empty(),
             subtopologies,
-            clientTags
+            clientTags,
+            Map::of,
+            Map::of
         );
 
         assertTrue(streamsRebalanceData.statuses().isEmpty());
@@ -461,10 +514,13 @@ public class StreamsRebalanceDataTest {
         final Map<String, String> clientTags = Map.of("clientTag1",
                 "clientTagValue1");
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
-                processId,
-                endpoint,
-                subtopologies,
-                clientTags
+            processId,
+            endpoint,
+            Optional.empty(),
+            subtopologies,
+            clientTags,
+            Map::of,
+            Map::of
         );
 
         assertEquals(-1, streamsRebalanceData.heartbeatIntervalMs());
@@ -479,14 +535,41 @@ public class StreamsRebalanceDataTest {
         final Map<String, String> clientTags = Map.of("clientTag1",
                 "clientTagValue1");
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
-                processId,
-                endpoint,
-                subtopologies,
-                clientTags
+            processId,
+            endpoint,
+            Optional.empty(),
+            subtopologies,
+            clientTags,
+            Map::of,
+            Map::of
         );
 
         streamsRebalanceData.setHeartbeatIntervalMs(1000);
         assertEquals(1000, streamsRebalanceData.heartbeatIntervalMs());
+    }
+
+    @Test
+    public void streamsRebalanceDataShouldDefaultAndUpdateTopologyPushFields() {
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+            UUID.randomUUID(),
+            Optional.of(new StreamsRebalanceData.HostInfo("localhost", 9090)),
+            Optional.empty(),
+            Map.of(),
+            Map.of("clientTag1", "clientTagValue1"),
+            Map::of,
+            Map::of
+        );
+
+        assertNull(streamsRebalanceData.wireTopologyDescription());
+        assertFalse(streamsRebalanceData.topologyPushRequired());
+
+        final StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription wire =
+                new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription();
+        streamsRebalanceData.setWireTopologyDescription(wire);
+        streamsRebalanceData.setTopologyPushRequired(true);
+
+        assertSame(wire, streamsRebalanceData.wireTopologyDescription());
+        assertTrue(streamsRebalanceData.topologyPushRequired());
     }
 
 }

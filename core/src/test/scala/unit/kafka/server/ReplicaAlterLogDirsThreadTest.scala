@@ -17,7 +17,6 @@
 package kafka.server
 
 import kafka.cluster.Partition
-import kafka.log.LogManager
 import kafka.server.QuotaFactory.UNBOUNDED_QUOTA
 import kafka.server.ReplicaAlterLogDirsThread.ReassignmentState
 import kafka.utils.TestUtils
@@ -32,8 +31,9 @@ import org.apache.kafka.metadata.KRaftMetadataCache
 import org.apache.kafka.server.{PartitionFetchState, ReplicaState, common}
 import org.apache.kafka.server.common.{DirectoryEventHandler, KRaftVersion, OffsetAndEpoch}
 import org.apache.kafka.server.network.BrokerEndPoint
+import org.apache.kafka.server.quota.{ReplicaQuota, ReplicationQuotaManager}
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
-import org.apache.kafka.storage.internals.log.UnifiedLog
+import org.apache.kafka.storage.internals.log.{LogManager, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test

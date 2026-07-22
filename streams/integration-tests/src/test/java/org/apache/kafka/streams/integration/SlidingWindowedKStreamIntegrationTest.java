@@ -44,6 +44,7 @@ import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
@@ -54,7 +55,8 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -63,6 +65,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.stream.Stream;
 
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
@@ -130,9 +133,31 @@ public class SlidingWindowedKStreamIntegrationTest {
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
+    public static Stream<Arguments> data() {
+        return Stream.of(
+            // (strategyType, withCache, withHeaders, transactional)
+            // Existing non-transactional coverage (at-least-once) is preserved unchanged.
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, true, false, false),
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, true, true, false),
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, false, false, false),
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, false, true, false),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, true, false, false),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, true, true, false),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, false, false, false),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, false, true, false),
+            // Sparse transactional (KIP-892) coverage: enable.transactional.statestores=true always
+            // implies exactly_once_v2. One representative case per emit strategy, cache disabled and no
+            // store-format headers, exercising the transactional sliding-window aggregation store path.
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, false, false, true),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, false, false, true)
+        );
+    }
+
     @ParameterizedTest
-    @CsvSource({"ON_WINDOW_UPDATE, true", "ON_WINDOW_UPDATE, false", "ON_WINDOW_CLOSE, true", "ON_WINDOW_CLOSE, false"})
-    public void shouldAggregateWindowedWithNoGrace(final StrategyType strategyType, final boolean withCache) throws Exception {
+    @MethodSource("data")
+    public void shouldAggregateWindowedWithNoGrace(final StrategyType strategyType, final boolean withCache, final boolean withHeaders, final boolean transactional) throws Exception {
+        maybeSetTransactionalStateStores(transactional);
+
         produceMessages(
             streamOneInput,
             new KeyValueTimestamp<>("A", "1", 0),  // Create [0, 10](0+1)
@@ -157,6 +182,8 @@ public class SlidingWindowedKStreamIntegrationTest {
             )
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, new StringSerde()));
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
 
@@ -197,8 +224,10 @@ public class SlidingWindowedKStreamIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"ON_WINDOW_UPDATE, true", "ON_WINDOW_UPDATE, false", "ON_WINDOW_CLOSE, true", "ON_WINDOW_CLOSE, false"})
-    public void shouldAggregateWindowedWithGrace(final StrategyType strategyType, final boolean withCache) throws Exception {
+    @MethodSource("data")
+    public void shouldAggregateWindowedWithGrace(final StrategyType strategyType, final boolean withCache, final boolean withHeaders, final boolean transactional) throws Exception {
+        maybeSetTransactionalStateStores(transactional);
+
         produceMessages(
             streamOneInput,
             new KeyValueTimestamp<>("A", "1", 0),  // Create [0, 10](0+1)
@@ -223,6 +252,8 @@ public class SlidingWindowedKStreamIntegrationTest {
             )
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, new StringSerde()));
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
 
@@ -272,8 +303,10 @@ public class SlidingWindowedKStreamIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"ON_WINDOW_UPDATE, true", "ON_WINDOW_UPDATE, false", "ON_WINDOW_CLOSE, true", "ON_WINDOW_CLOSE, false"})
-    public void shouldRestoreAfterJoinRestart(final StrategyType strategyType, final boolean withCache) throws Exception {
+    @MethodSource("data")
+    public void shouldRestoreAfterJoinRestart(final StrategyType strategyType, final boolean withCache, final boolean withHeaders, final boolean transactional) throws Exception {
+        maybeSetTransactionalStateStores(transactional);
+
         produceMessages(
             streamOneInput,
             new KeyValueTimestamp<>("A", "L1", 0),
@@ -313,6 +346,8 @@ public class SlidingWindowedKStreamIntegrationTest {
             )
             .toStream()
             .to(outputTopic, Produced.with(windowedSerde, new StringSerde()));
+
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
 
@@ -410,6 +445,15 @@ public class SlidingWindowedKStreamIntegrationTest {
             Optional.empty(),
             Arrays.asList(records)
         );
+    }
+
+    private void maybeSetTransactionalStateStores(final boolean transactional) {
+        if (transactional) {
+            // KIP-892 transactional state stores are only supported under exactly-once semantics, so
+            // enabling them requires exactly_once_v2 as the processing guarantee.
+            streamsConfiguration.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
+            streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        }
     }
 
     private Materialized getMaterialized(final boolean withCache) {

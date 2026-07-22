@@ -39,9 +39,9 @@ import org.apache.kafka.common.requests.ReadShareGroupStateResponse;
 import org.apache.kafka.common.requests.ReadShareGroupStateSummaryResponse;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.WriteShareGroupStateResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
@@ -71,31 +71,78 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalInt;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.IntSupplier;
-import java.util.function.Supplier;
 
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorOperationExceptionHelper.handleOperationException;
 
 @SuppressWarnings({"ClassDataAbstractionCoupling", "ClassFanOutComplexity"})
 public class ShareCoordinatorService implements ShareCoordinator {
+    /**
+     * Object for supplying share coordinator related configs.
+     */
     private final ShareCoordinatorConfig config;
+
+    /**
+     * Logger instance.
+     */
     private final Logger log;
-    private final AtomicBoolean isActive = new AtomicBoolean(false);  // for controlling start and stop
+
+    /**
+     * Sentinel to indicate the state of the component. Used for guarding start and stop activity.
+     */
+    private final AtomicBoolean isActive = new AtomicBoolean(false);
+
+    /**
+     * The main coordinator runtime reference used to queue callbacks to the share coordinator shards.
+     */
     private final CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime;
+
+    /**
+     * Metrics object for recording share coordinator related metrics.
+     */
     private final ShareCoordinatorMetrics shareCoordinatorMetrics;
-    private volatile int numPartitions = -1; // Number of partitions for __share_group_state. Provided when component is started.
+
+    /**
+     * Integer specifying the number of partitions in __share_group_state topic. It helps create a hash which is
+     * used for the mapping between {@link SharePartitionKey} and the relevant {@link ShareCoordinatorShard}.
+     * Updated by call from broker lifecycle manager.
+     */
+    private volatile int numPartitions = -1;
+
+    /**
+     * Time reference.
+     */
     private final Time time;
+
+    /**
+     * Timer object to schedule tasks.
+     */
     private final Timer timer;
+
+    /**
+     * Reference used to write records to the internal __share_group_state. To be passed to the coordinator runtime
+     * and utilized in the periodic snapshot job.
+     */
     private final PartitionWriter writer;
+
+    /**
+     * Cache used to optimize calls to clean up __share_group_state. Presence of same entry in the cache helps prevent
+     * issuing redundant record delete calls. Used in the redundant offset prune job.
+     */
     private final Map<TopicPartition, Long> lastPrunedOffsets;
-    private final Supplier<Boolean> shareGroupConfigEnabledSupplier;
-    private volatile boolean shouldRunPeriodicJob;
+
+    /**
+     * Config based sentinel used to start or eventually stop defined periodic job tasks.
+     */
+    private volatile boolean periodicJobsEnabled;
+
+    private final AtomicLong periodicJobGeneration = new AtomicLong();
 
     public static class Builder {
         private final int nodeId;
@@ -104,7 +151,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
         private CoordinatorLoader<CoordinatorRecord> loader;
         private Time time;
         private Timer timer;
-        private Supplier<Boolean> shareGroupConfigEnabledSupplier;
         private ShareCoordinatorMetrics coordinatorMetrics;
         private CoordinatorRuntimeMetrics coordinatorRuntimeMetrics;
 
@@ -143,11 +189,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
             return this;
         }
 
-        public Builder withShareGroupEnabledConfigSupplier(Supplier<Boolean> shareGroupConfigEnabledSupplier) {
-            this.shareGroupConfigEnabledSupplier = shareGroupConfigEnabledSupplier;
-            return this;
-        }
-
         public ShareCoordinatorService build() {
             if (config == null) {
                 throw new IllegalArgumentException("Config must be set.");
@@ -169,9 +210,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
             }
             if (coordinatorRuntimeMetrics == null) {
                 throw new IllegalArgumentException("Coordinator runtime metrics must be set.");
-            }
-            if (shareGroupConfigEnabledSupplier == null) {
-                throw new IllegalArgumentException("Share group enabled config enabled supplier must be set.");
             }
 
             String logPrefix = String.format("ShareCoordinator id=%d", nodeId);
@@ -216,8 +254,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 coordinatorMetrics,
                 time,
                 timer,
-                writer,
-                shareGroupConfigEnabledSupplier
+                writer
             );
         }
     }
@@ -229,8 +266,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
         ShareCoordinatorMetrics shareCoordinatorMetrics,
         Time time,
         Timer timer,
-        PartitionWriter writer,
-        Supplier<Boolean> shareGroupConfigEnabledSupplier
+        PartitionWriter writer
     ) {
         this.log = logContext.logger(ShareCoordinatorService.class);
         this.config = config;
@@ -240,7 +276,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
         this.timer = timer;
         this.writer = writer;
         this.lastPrunedOffsets = new ConcurrentHashMap<>();
-        this.shareGroupConfigEnabledSupplier = shareGroupConfigEnabledSupplier;
     }
 
     @Override
@@ -253,15 +288,15 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     @Override
-    public Properties shareGroupStateTopicConfigs() {
-        Properties properties = new Properties();
+    public Map<String, String> shareGroupStateTopicConfigs() {
         // As defined in KIP-932.
-        properties.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
-        properties.put(TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.PRODUCER.name);
-        properties.put(TopicConfig.SEGMENT_BYTES_CONFIG, config.shareCoordinatorStateTopicSegmentBytes());
-        properties.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, config.shareCoordinatorStateTopicMinIsr());
-        properties.put(TopicConfig.RETENTION_MS_CONFIG, -1);
-        return properties;
+        return Map.of(
+            TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE,
+            TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.PRODUCER.name,
+            TopicConfig.SEGMENT_BYTES_CONFIG, String.valueOf(config.shareCoordinatorStateTopicSegmentBytes()),
+            TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, String.valueOf(config.shareCoordinatorStateTopicMinIsr()),
+            TopicConfig.RETENTION_MS_CONFIG, "-1"
+        );
     }
 
     /**
@@ -287,18 +322,27 @@ public class ShareCoordinatorService implements ShareCoordinator {
         log.info("Startup complete.");
     }
 
-    private void setupPeriodicJobs() {
-        setupRecordPruning();
-        setupSnapshotColdPartitions();
+    private void setupPeriodicJobs(long generation) {
+        setupRecordPruning(generation);
+        setupSnapshotColdPartitions(generation);
     }
 
+    /**
+     * Sets up a timer based task which fetches the latest redundant offset information from the coordinator
+     * runtime and if new information is obtained, issue pruning calls via the partition writer.
+     * On completion, a new task to be invoked after configured duration is enqueued in the timer object.
+     */
     // Visibility for tests
     void setupRecordPruning() {
+        setupRecordPruning(periodicJobGeneration.get());
+    }
+
+    private void setupRecordPruning(long generation) {
         log.debug("Scheduling share-group state topic prune job.");
         timer.add(new TimerTask(config.shareCoordinatorTopicPruneIntervalMs()) {
             @Override
             public void run() {
-                if (!shouldRunPeriodicJob) {
+                if (!shouldRunPeriodicJobForGeneration(generation)) {
                     return;
                 }
                 List<CompletableFuture<Void>> futures = new ArrayList<>();
@@ -309,8 +353,11 @@ public class ShareCoordinatorService implements ShareCoordinator {
                         if (exp != null) {
                             log.error("Received error in share-group state topic prune.", exp);
                         }
+                        if (!shouldRunPeriodicJobForGeneration(generation)) {
+                            return;
+                        }
                         // Perpetual recursion, failure or not.
-                        setupRecordPruning();
+                        setupRecordPruning(generation);
                     });
             }
         });
@@ -370,13 +417,23 @@ public class ShareCoordinatorService implements ShareCoordinator {
         return fut;
     }
 
+    /**
+     * Sets up a timer task to create new share snapshots keyed on their {@link SharePartitionKey},
+     * incase there hasn't been any activity on the corresponding share partition for while. This helps
+     * in cleanup of redundant records from the internal __share_group_state topic.
+     * On completion, a new task to be invoked after configured duration is enqueued in the timer object.
+     */
     // Visibility for tests
     void setupSnapshotColdPartitions() {
+        setupSnapshotColdPartitions(periodicJobGeneration.get());
+    }
+
+    private void setupSnapshotColdPartitions(long generation) {
         log.debug("Scheduling cold share-partition snapshotting.");
         timer.add(new TimerTask(config.shareCoordinatorColdPartitionSnapshotIntervalMs()) {
             @Override
             public void run() {
-                if (!shouldRunPeriodicJob) {
+                if (!shouldRunPeriodicJobForGeneration(generation)) {
                     return;
                 }
                 List<CompletableFuture<Void>> futures = runtime.scheduleWriteAllOperation(
@@ -389,7 +446,10 @@ public class ShareCoordinatorService implements ShareCoordinator {
                         if (exp != null) {
                             log.error("Received error while snapshotting cold partitions.", exp);
                         }
-                        setupSnapshotColdPartitions();
+                        if (!shouldRunPeriodicJobForGeneration(generation)) {
+                            return;
+                        }
+                        setupSnapshotColdPartitions(generation);
                     });
             }
         });
@@ -1087,15 +1147,14 @@ public class ShareCoordinatorService implements ShareCoordinator {
         }
 
         boolean enabled = isShareGroupsEnabled(newImage);
-        // enabled    shouldRunJob         result (XOR)
-        // 0            0               no op on flag, do not call jobs
-        // 0            1               disable flag, do not call jobs                      => action
-        // 1            0               enable flag, call jobs as they are not recursing    => action
-        // 1            1               no op on flag, do not call jobs
-        if (enabled ^ shouldRunPeriodicJob) {
-            shouldRunPeriodicJob = enabled;
+        // Only act when the enabled state actually changes. Each change bumps the
+        // generation, which fences any jobs from the previous generation so they
+        // stop rescheduling. A fresh set of jobs is started only when enabling.
+        if (enabled != periodicJobsEnabled) {
+            periodicJobsEnabled = enabled;
+            long generation = periodicJobGeneration.incrementAndGet();
             if (enabled) {
-                setupPeriodicJobs();
+                setupPeriodicJobs(generation);
             }
         }
     }
@@ -1130,13 +1189,12 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     private boolean isShareGroupsEnabled(MetadataImage image) {
-        return shareGroupConfigEnabledSupplier.get() || ShareVersion.fromFeatureLevel(
+        return ShareVersion.fromFeatureLevel(
             image.features().finalizedVersions().getOrDefault(ShareVersion.FEATURE_NAME, (short) 0)
         ).supportsShareGroups();
     }
 
-    // Visibility for tests
-    boolean shouldRunPeriodicJob() {
-        return shouldRunPeriodicJob;
+    private boolean shouldRunPeriodicJobForGeneration(long generation) {
+        return periodicJobsEnabled && periodicJobGeneration.get() == generation;
     }
 }

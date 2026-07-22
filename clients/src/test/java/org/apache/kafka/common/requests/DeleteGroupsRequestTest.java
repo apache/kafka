@@ -43,7 +43,7 @@ public class DeleteGroupsRequestTest {
                 new DeleteGroupsResponseData.DeletableGroupResult()
                     .setGroupId(groupId2)
                     .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
-            ).iterator());
+            ));
 
         assertEquals(expectedResultCollection, getErrorResultCollection(data.groupsNames(), Errors.COORDINATOR_LOAD_IN_PROGRESS));
     }

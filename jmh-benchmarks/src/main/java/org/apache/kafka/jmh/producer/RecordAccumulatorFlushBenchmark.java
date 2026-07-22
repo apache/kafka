@@ -30,9 +30,9 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.DefaultRecordBatch;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.requests.MetadataResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -50,10 +50,10 @@ import org.openjdk.jmh.annotations.Warmup;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -122,12 +122,12 @@ public class RecordAccumulatorFlushBenchmark {
         MetadataSnapshot metadataCache = new MetadataSnapshot(
             null,
             nodes,
-            Collections.singletonList(partMetadata),
-            Collections.emptySet(),
-            Collections.emptySet(),
-            Collections.emptySet(),
+            List.of(partMetadata),
+            Set.of(),
+            Set.of(),
+            Set.of(),
             null,
-            Collections.emptyMap()
+            Map.of()
         );
         return metadataCache.cluster();
     }

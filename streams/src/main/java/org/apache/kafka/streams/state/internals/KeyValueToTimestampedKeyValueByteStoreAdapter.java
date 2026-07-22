@@ -106,6 +106,22 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
         store.commit(changelogOffsets);
     }
 
+    @SuppressWarnings("deprecation")
+    @Override
+    public boolean managesOffsets() {
+        return store.managesOffsets();
+    }
+
+    @Override
+    public Long committedOffset(final TopicPartition partition) {
+        return store.committedOffset(partition);
+    }
+
+    @Override
+    public long approximateNumUncommittedBytes() {
+        return store.approximateNumUncommittedBytes();
+    }
+
     @Override
     public void close() {
         store.close();
@@ -140,8 +156,8 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
                 final byte[] valueWithTimestamp = convertToTimestampedFormat(plainValue);
                 result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(result, valueWithTimestamp);
             } else if (query instanceof RangeQuery || query instanceof TimestampedRangeQuery) {
-                final KeyValueToTimestampedKeyValueAdapterIterator wrappedRocksDBRangeIterator = new KeyValueToTimestampedKeyValueAdapterIterator((RocksDbIterator) result.getResult());
-                result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(result, wrappedRocksDBRangeIterator);
+                final KeyValueToTimestampedKeyValueAdapterIterator wrappedIterator = new KeyValueToTimestampedKeyValueAdapterIterator((ManagedKeyValueIterator<Bytes, byte[]>) result.getResult());
+                result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(result, wrappedIterator);
             } else {
                 throw new IllegalArgumentException("Unsupported query type: " + query.getClass());
             }
@@ -202,35 +218,35 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
 
     private static class KeyValueToTimestampedKeyValueAdapterIterator implements ManagedKeyValueIterator<Bytes, byte[]> {
 
-        private final RocksDbIterator rocksDbIterator;
+        private final ManagedKeyValueIterator<Bytes, byte[]> iterator;
 
-        public KeyValueToTimestampedKeyValueAdapterIterator(final RocksDbIterator rocksDbIterator) {
-            this.rocksDbIterator = rocksDbIterator;
+        public KeyValueToTimestampedKeyValueAdapterIterator(final ManagedKeyValueIterator<Bytes, byte[]> iterator) {
+            this.iterator = iterator;
         }
 
         @Override
         public void close() {
-            rocksDbIterator.close();
+            iterator.close();
         }
 
         @Override
         public Bytes peekNextKey() {
-            return rocksDbIterator.peekNextKey();
+            return iterator.peekNextKey();
         }
 
         @Override
         public void onClose(final Runnable closeCallback) {
-            rocksDbIterator.onClose(closeCallback);
+            iterator.onClose(closeCallback);
         }
 
         @Override
         public boolean hasNext() {
-            return rocksDbIterator.hasNext();
+            return iterator.hasNext();
         }
 
         @Override
         public KeyValue<Bytes, byte[]> next() {
-            final KeyValue<Bytes, byte[]> next = rocksDbIterator.next();
+            final KeyValue<Bytes, byte[]> next = iterator.next();
             if (next == null) {
                 return null;
             }

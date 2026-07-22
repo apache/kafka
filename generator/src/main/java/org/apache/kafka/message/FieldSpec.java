@@ -21,9 +21,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Base64;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -87,8 +85,7 @@ public final class FieldSpec {
             throw new RuntimeException("You must specify the version of the " +
                 name + " structure.");
         }
-        this.fields = Collections.unmodifiableList(fields == null ?
-            Collections.emptyList() : new ArrayList<>(fields));
+        this.fields = fields == null ? List.of() : List.copyOf(fields);
         this.type = FieldType.parse(Objects.requireNonNull(type));
         this.mapKey = mapKey;
         this.nullableVersions = Versions.parse(nullableVersions, Versions.NONE);

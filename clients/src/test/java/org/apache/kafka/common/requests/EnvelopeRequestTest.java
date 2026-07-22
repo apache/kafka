@@ -22,7 +22,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 
@@ -57,7 +56,7 @@ public class EnvelopeRequestTest {
             ).build(version);
 
             Send send = request.toSend(header);
-            ByteBuffer buffer = TestUtils.toBuffer(send);
+            ByteBuffer buffer = ByteBufferChannel.toBuffer(send);
             assertEquals(send.size() - 4, buffer.getInt());
             RequestHeader parsedHeader = RequestHeader.parse(buffer);
             assertEquals(header.size(), parsedHeader.size());

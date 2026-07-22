@@ -24,7 +24,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.utils.Utils;
 
-import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -106,7 +105,7 @@ public class DescribeGroupsResponse extends AbstractResponse {
 
     public static DescribedGroup groupError(String groupId, Errors error) {
         return groupMetadata(groupId, error, DescribeGroupsResponse.UNKNOWN_STATE, DescribeGroupsResponse.UNKNOWN_PROTOCOL_TYPE,
-            DescribeGroupsResponse.UNKNOWN_PROTOCOL, Collections.emptyList(), AUTHORIZED_OPERATIONS_OMITTED);
+            DescribeGroupsResponse.UNKNOWN_PROTOCOL, List.of(), AUTHORIZED_OPERATIONS_OMITTED);
     }
 
     public static DescribedGroup groupError(String groupId, Errors error, String errorMessage) {

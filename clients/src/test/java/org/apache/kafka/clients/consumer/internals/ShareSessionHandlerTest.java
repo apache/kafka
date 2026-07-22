@@ -28,7 +28,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -37,7 +37,6 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -338,10 +337,10 @@ public class ShareSessionHandlerTest {
 
         // If we started with an ID, only a new ID will count towards replaced.
         // The old topic ID partition should be forgotten, and the new one should be fetched.
-        assertEquals(Collections.singletonList(tp), reqForgetList(requestData2, topicNames));
+        assertEquals(List.of(tp), reqForgetList(requestData2, topicNames));
         assertMapsEqual(reqMap(new TopicIdPartition(topicId2, 0, "foo")),
                 handler.sessionPartitionMap());
-        assertListEquals(Collections.singletonList(tp2), reqFetchList(requestData2, topicNames));
+        assertListEquals(List.of(tp2), reqFetchList(requestData2, topicNames));
 
         // Should have the same session ID, and next epoch and can use topic IDs if it ended with topic IDs.
         assertEquals(memberId.toString(), requestData2.memberId(), "Did not use same session");
@@ -376,7 +375,7 @@ public class ShareSessionHandlerTest {
         // Remove the topic from the session by setting acknowledgements only - this is not asking to fetch records
         ShareFetchRequestData requestData2 = handler.newShareFetchBuilder(groupId, shareFetchConfig, false).build().data();
         handler.addPartitionToAcknowledgeOnly(foo0, Acknowledgements.empty());
-        assertEquals(Collections.singletonList(foo0), reqForgetList(requestData2, topicNames));
+        assertEquals(List.of(foo0), reqForgetList(requestData2, topicNames));
 
         // Should have the same session ID, next epoch, and same ID usage
         assertEquals(memberId.toString(), requestData2.memberId(), "Did not use same session");
@@ -410,7 +409,7 @@ public class ShareSessionHandlerTest {
 
         // Remove the topic from the session
         ShareFetchRequestData requestData2 = handler.newShareFetchBuilder(groupId, shareFetchConfig, false).build().data();
-        assertEquals(Collections.singletonList(foo0), reqForgetList(requestData2, topicNames));
+        assertEquals(List.of(foo0), reqForgetList(requestData2, topicNames));
 
         // Should have the same session ID, next epoch, and same ID usage
         assertEquals(memberId.toString(), requestData2.memberId(), "Did not use same session");
@@ -475,7 +474,7 @@ public class ShareSessionHandlerTest {
         handler.addPartitionToFetch(foo0, acknowledgements);
 
         // As we start with a ShareAcknowledge on epoch 0, we expect a null response.
-        assertNull(handler.newShareAcknowledgeBuilder(groupId, shareFetchConfig));
+        assertNull(handler.newShareAcknowledgeBuilder(groupId));
 
         // Attempt a new ShareFetch
         TopicIdPartition foo1 = new TopicIdPartition(fooId, 1, "foo");
@@ -537,6 +536,87 @@ public class ShareSessionHandlerTest {
         // The request can be skipped when the share session is empty.
         builder = handler.newShareFetchBuilder(groupId, shareFetchConfig, true);
         assertNull(builder);
+    }
+
+    @Test
+    public void testSkipEmptyShareFetchWhenSessionEmpty() {
+        // Using the default (non record_limit) config, canSkipIfRequestEmpty is false.
+        ShareFetchConfig shareFetchConfig = DEFAULT_SHARE_FETCH_CONFIG;
+
+        String groupId = "G1";
+        Uuid memberId = Uuid.randomUuid();
+        ShareSessionHandler handler = new ShareSessionHandler(LOG_CONTEXT, 1, memberId);
+
+        Map<Uuid, String> topicNames = new HashMap<>();
+        Uuid fooId = addTopicId(topicNames, "foo");
+        TopicIdPartition foo0 = new TopicIdPartition(fooId, 0, "foo");
+
+        // Adding a partition to the session builds a request.
+        handler.addPartitionToFetch(foo0, null);
+        assertNotNull(handler.newShareFetchBuilder(groupId, shareFetchConfig, false));
+
+        ShareFetchResponse resp = ShareFetchResponse.of(Errors.NONE,
+            0,
+            buildResponseData(new RespEntry("foo", 0, fooId)),
+            List.of(),
+            0);
+        handler.handleResponse(resp, ApiKeys.SHARE_FETCH.latestVersion());
+
+        // A non-empty session with no changes still builds a request in the default mode, since we want to fetch records.
+        handler.addPartitionToFetch(foo0, null);
+        assertNotNull(handler.newShareFetchBuilder(groupId, shareFetchConfig, false));
+        handler.handleResponse(resp, ApiKeys.SHARE_FETCH.latestVersion());
+
+        // Removing the only partition from the session builds a request to forget it.
+        assertNotNull(handler.newShareFetchBuilder(groupId, shareFetchConfig, false));
+        handler.handleResponse(ShareFetchResponse.of(Errors.NONE, 0, new LinkedHashMap<>(), List.of(), 0), ApiKeys.SHARE_FETCH.latestVersion());
+
+        // Once the session is empty, no request is built even though canSkipIfRequestEmpty is false.
+        assertTrue(handler.sessionPartitionMap().isEmpty());
+        assertNull(handler.newShareFetchBuilder(groupId, shareFetchConfig, false));
+    }
+
+    @ParameterizedTest
+    @MethodSource("shareFetchConfigProvider")
+    public void testAcknowledgeOnlyPartitionNotInSessionIsForgotten(ShareFetchConfig shareFetchConfig) {
+        String groupId = "G1";
+        Uuid memberId = Uuid.randomUuid();
+        ShareSessionHandler handler = new ShareSessionHandler(LOG_CONTEXT, 1, memberId);
+
+        Map<Uuid, String> topicNames = new HashMap<>();
+        Uuid fooId = addTopicId(topicNames, "foo");
+        Uuid barId = addTopicId(topicNames, "bar");
+        TopicIdPartition foo0 = new TopicIdPartition(fooId, 0, "foo");
+        TopicIdPartition bar0 = new TopicIdPartition(barId, 0, "bar");
+
+        // Establish the session with foo0.
+        handler.addPartitionToFetch(foo0, null);
+        handler.newShareFetchBuilder(groupId, shareFetchConfig, false);
+        ShareFetchResponse resp = ShareFetchResponse.of(Errors.NONE,
+            0,
+            buildResponseData(new RespEntry("foo", 0, fooId), new RespEntry("bar", 0, barId)),
+            List.of(),
+            0);
+        handler.handleResponse(resp, ApiKeys.SHARE_FETCH.latestVersion());
+
+        // Continue fetching foo0, and send acknowledgements for bar0, which is not part of the session.
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(0L, AcknowledgeType.ACCEPT);
+        handler.addPartitionToFetch(foo0, null);
+        handler.addPartitionToAcknowledgeOnly(bar0, acknowledgements);
+        ShareFetchRequestData requestData = handler.newShareFetchBuilder(groupId, shareFetchConfig, false).build().data();
+
+        // bar0 is not added to the session; it is placed in the forgotten list so that it is removed from the
+        // share session on the broker once its acknowledgements have been sent.
+        assertMapsEqual(reqMap(foo0), handler.sessionPartitionMap());
+        assertEquals(List.of(bar0), reqForgetList(requestData, topicNames));
+
+        // The acknowledgements for bar0 are still included in the request.
+        ShareFetchRequestData.FetchPartition barPartition = requestData.topics().stream()
+                .filter(topic -> topic.topicId().equals(barId))
+                .flatMap(topic -> topic.partitions().stream())
+                .findFirst().get();
+        assertEquals(1, barPartition.acknowledgementBatches().size());
     }
 
     private Uuid addTopicId(Map<Uuid, String> topicNames, String name) {

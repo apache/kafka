@@ -106,6 +106,9 @@ public final class DistributedConfig extends WorkerConfig {
     private static final String METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC = CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC;
     public static final long DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS = CommonClientConfigs.DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS;
 
+    public static final String METADATA_CLUSTER_CHECK_ENABLE_CONFIG = CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG;
+    private static final String METADATA_CLUSTER_CHECK_ENABLE_DOC = CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_DOC;
+
     /**
      * <code>worker.sync.timeout.ms</code>
      */
@@ -535,7 +538,12 @@ public final class DistributedConfig extends WorkerConfig {
                     DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS,
                     atLeast(0),
                     ConfigDef.Importance.LOW,
-                    METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC);
+                    METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
+            .define(METADATA_CLUSTER_CHECK_ENABLE_CONFIG,
+                    ConfigDef.Type.BOOLEAN,
+                    true,
+                    ConfigDef.Importance.LOW,
+                    METADATA_CLUSTER_CHECK_ENABLE_DOC);
 
     }
 
@@ -590,7 +598,20 @@ public final class DistributedConfig extends WorkerConfig {
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
         CommonClientConfigs.warnDisablingExponentialBackoff(this);
+        warnIfConnectionsMaxIdleMsLowerThanRebalanceTimeoutMs();
         return super.postProcessParsedConfig(parsedValues);
+    }
+
+    private void warnIfConnectionsMaxIdleMsLowerThanRebalanceTimeoutMs() {
+        long connectionsMaxIdleMs = getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG);
+        int rebalanceTimeoutMs = getInt(REBALANCE_TIMEOUT_MS_CONFIG);
+        if (connectionsMaxIdleMs >= 0 && connectionsMaxIdleMs < rebalanceTimeoutMs) {
+            log.warn("Configuration '{}' with value '{}' is lower than configuration '{}' with value '{}'. " +
+                    "This may cause the connection to the group coordinator to be closed during an ongoing rebalance, " +
+                    "which can prolong or disrupt group rejoin.",
+                CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG, connectionsMaxIdleMs,
+                REBALANCE_TIMEOUT_MS_CONFIG, rebalanceTimeoutMs);
+        }
     }
 
     public DistributedConfig(Map<String, String> props) {

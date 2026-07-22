@@ -39,8 +39,8 @@ import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
 import org.apache.kafka.common.requests.RequestHeader;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -256,6 +256,66 @@ public class OffsetsRequestManagerTest {
         Map<TopicPartition, OffsetAndTimestampInternal> expectedOffsets = Collections.singletonMap(
                 TEST_PARTITION_1, new OffsetAndTimestampInternal(5L, -1, Optional.empty()));
         verifySuccessfulPollAndResponseReceived(fetchOffsetsFuture, expectedOffsets);
+    }
+
+    /**
+     * Test for KAFKA-20312: when regroupPartitionMapByNode sees a partition with null leader
+     * (e.g. metadata race), it should skip that partition and add it to remainingToSearch instead
+     * of throwing NullPointerException.
+     */
+    @Test
+    public void testFetchOffsetsRegroupSkipsNullLeaderPartitionNoNPE() throws ExecutionException,
+            InterruptedException {
+        Map<TopicPartition, Long> timestampsToSearch = new HashMap<>();
+        timestampsToSearch.put(TEST_PARTITION_1, ListOffsetsRequest.EARLIEST_TIMESTAMP);
+        timestampsToSearch.put(TEST_PARTITION_2, ListOffsetsRequest.EARLIEST_TIMESTAMP);
+
+        // currentLeader returns a leader for both partitions (so both enter partitionDataMap)
+        when(metadata.currentLeader(TEST_PARTITION_1)).thenReturn(testLeaderEpoch(LEADER_1, Optional.empty()));
+        when(metadata.currentLeader(TEST_PARTITION_2)).thenReturn(testLeaderEpoch(LEADER_2, Optional.empty()));
+        when(subscriptionState.isAssigned(any(TopicPartition.class))).thenReturn(true);
+
+        // metadata.fetch() returns a cluster where PARTITION_2 has null leader (e.g. race: leader lost)
+        List<PartitionInfo> partitions = new ArrayList<>();
+        partitions.add(new PartitionInfo(TEST_TOPIC, 1, LEADER_1, null, null));
+        partitions.add(new PartitionInfo(TEST_TOPIC, 2, null, null, null));
+        Cluster clusterWithNullLeader = new Cluster("clusterId", Collections.singletonList(LEADER_1),
+                partitions, Collections.emptySet(), Collections.emptySet());
+        when(metadata.fetch()).thenReturn(clusterWithNullLeader);
+
+        CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> fetchOffsetsFuture =
+                assertDoesNotThrow(
+                        () -> requestManager.fetchOffsets(timestampsToSearch, false),
+                        "Should not throw NPE; only PARTITION_1 has a leader in regroup, so one request for LEADER_1");
+        assertEquals(1, requestManager.requestsToSend());
+        // requestsToRetry is populated when the in-flight request completes and remainingToSearch is non-empty, not yet
+        assertEquals(0, requestManager.requestsToRetry());
+
+        // Complete request for PARTITION_1
+        NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+        NetworkClientDelegate.UnsentRequest unsentRequest = res.unsentRequests.get(0);
+        ClientResponse clientResponse = buildClientResponse(unsentRequest,
+                Collections.singletonMap(TEST_PARTITION_1, new OffsetAndTimestampInternal(5L, -1, Optional.empty())));
+        clientResponse.onComplete();
+        assertFalse(fetchOffsetsFuture.isDone());
+
+        // Metadata update: now both partitions have leaders; retry should send request for PARTITION_2
+        mockSuccessfulRequest(Map.of(TEST_PARTITION_1, LEADER_1, TEST_PARTITION_2, LEADER_2));
+        requestManager.onUpdate(new ClusterResource(""));
+        assertEquals(1, requestManager.requestsToSend());
+
+        // Complete the retry request (only PARTITION_2 in this batch)
+        NetworkClientDelegate.PollResult retryPoll = requestManager.poll(time.milliseconds());
+        assertEquals(1, retryPoll.unsentRequests.size());
+        ClientResponse retryResponse = buildClientResponse(retryPoll.unsentRequests.get(0),
+                Collections.singletonMap(TEST_PARTITION_2, new OffsetAndTimestampInternal(10L, -1, Optional.empty())));
+        retryResponse.onComplete();
+
+        Map<TopicPartition, OffsetAndTimestampInternal> expectedOffsets = new HashMap<>();
+        expectedOffsets.put(TEST_PARTITION_1, new OffsetAndTimestampInternal(5L, -1, Optional.empty()));
+        expectedOffsets.put(TEST_PARTITION_2, new OffsetAndTimestampInternal(10L, -1, Optional.empty()));
+        verifyRequestSuccessfullyCompleted(fetchOffsetsFuture, expectedOffsets);
     }
 
     @ParameterizedTest
@@ -675,7 +735,7 @@ public class OffsetsRequestManagerTest {
         mockAssignedPartitionsMissingPositions(initPartitions1, initPartitions1, leaderAndEpoch);
 
         // Call to updateFetchPositions. Should send an OffsetFetch request and use the response to set positions
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchResult = new CompletableFuture<>();
+        CompletableFuture<CommitRequestManager.OffsetFetchResult> fetchResult = new CompletableFuture<>();
         when(commitRequestManager.fetchOffsets(initPartitions1, internalFetchCommittedTimeout)).thenReturn(fetchResult);
         CompletableFuture<Void> updatePositions1 = requestManager.updateFetchPositions(time.milliseconds());
         assertFalse(updatePositions1.isDone(), "Update positions should wait for the OffsetFetch request");
@@ -685,7 +745,8 @@ public class OffsetsRequestManagerTest {
         // of initializing partitions hasn't changed)
         when(subscriptionState.initializingPartitions()).thenReturn(initPartitions1);
         OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(10, Optional.of(1), "");
-        fetchResult.complete(Collections.singletonMap(tp1, offsetAndMetadata));
+        fetchResult.complete(new CommitRequestManager.OffsetFetchResult(
+            Collections.singletonMap(tp1, offsetAndMetadata), Collections.emptyMap()));
 
         assertTrue(updatePositions1.isDone(), "Update positions should complete after the OffsetFetch response");
         SubscriptionState.FetchPosition expectedPosition = new SubscriptionState.FetchPosition(
@@ -704,7 +765,7 @@ public class OffsetsRequestManagerTest {
         mockAssignedPartitionsMissingPositions(initPartitions1, initPartitions1, leaderAndEpoch);
 
         // call to updateFetchPositions. Should send an OffsetFetch request
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchResult = new CompletableFuture<>();
+        CompletableFuture<CommitRequestManager.OffsetFetchResult> fetchResult = new CompletableFuture<>();
         when(commitRequestManager.fetchOffsets(initPartitions1, internalFetchCommittedTimeout)).thenReturn(fetchResult);
         CompletableFuture<Void> updatePositions1 = requestManager.updateFetchPositions(time.milliseconds());
         assertFalse(updatePositions1.isDone(), "Update positions should wait for the OffsetFetch request");
@@ -717,7 +778,8 @@ public class OffsetsRequestManagerTest {
 
         // Receive response with committed offsets, should complete both calls
         OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(10, Optional.of(1), "");
-        fetchResult.complete(Collections.singletonMap(tp1, offsetAndMetadata));
+        fetchResult.complete(new CommitRequestManager.OffsetFetchResult(
+            Collections.singletonMap(tp1, offsetAndMetadata), Collections.emptyMap()));
 
         assertTrue(updatePositions1.isDone());
         assertTrue(updatePositions2.isDone());
@@ -737,7 +799,7 @@ public class OffsetsRequestManagerTest {
         mockAssignedPartitionsMissingPositions(initPartitions1, initPartitions1, leaderAndEpoch);
 
         // call to updateFetchPositions will trigger an OffsetFetch request for tp1 (won't complete just yet)
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchResult = new CompletableFuture<>();
+        CompletableFuture<CommitRequestManager.OffsetFetchResult> fetchResult = new CompletableFuture<>();
         when(commitRequestManager.fetchOffsets(initPartitions1, internalFetchCommittedTimeout)).thenReturn(fetchResult);
         CompletableFuture<Void> updatePositions1 = requestManager.updateFetchPositions(time.milliseconds());
         assertFalse(updatePositions1.isDone());
@@ -748,7 +810,8 @@ public class OffsetsRequestManagerTest {
         // seek). When the OffsetFetch response is received, it should not update the position for tp1 to the
         // committed offset
         when(subscriptionState.initializingPartitions()).thenReturn(Collections.emptySet());
-        fetchResult.complete(Collections.singletonMap(tp1, new OffsetAndMetadata(5)));
+        fetchResult.complete(new CommitRequestManager.OffsetFetchResult(
+            Collections.singletonMap(tp1, new OffsetAndMetadata(5)), Collections.emptyMap()));
         verify(subscriptionState, never()).seekUnvalidated(any(), any());
     }
 
@@ -765,7 +828,7 @@ public class OffsetsRequestManagerTest {
         mockAssignedPartitionsMissingPositions(initPartitions1, initPartitions1, leaderAndEpoch);
 
         // call to updateFetchPositions will trigger an OffsetFetch request for tp1 (won't complete just yet)
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchResult = new CompletableFuture<>();
+        CompletableFuture<CommitRequestManager.OffsetFetchResult> fetchResult = new CompletableFuture<>();
         when(commitRequestManager.fetchOffsets(initPartitions1, internalFetchCommittedTimeout)).thenReturn(fetchResult);
         CompletableFuture<Void> updatePositions1 = requestManager.updateFetchPositions(time.milliseconds());
         assertFalse(updatePositions1.isDone());
@@ -781,7 +844,8 @@ public class OffsetsRequestManagerTest {
         // include the requested partition tp1
         when(subscriptionState.initializingPartitions()).thenReturn(initPartitions2);
         OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(10, Optional.empty(), "");
-        fetchResult.complete(Collections.singletonMap(tp1, offsetAndMetadata));
+        fetchResult.complete(new CommitRequestManager.OffsetFetchResult(
+            Collections.singletonMap(tp1, offsetAndMetadata), Collections.emptyMap()));
 
         // Position should have been updated for tp1 using the committed offset
         SubscriptionState.FetchPosition expectedPosition = new SubscriptionState.FetchPosition(

@@ -19,6 +19,7 @@ package org.apache.kafka.server.purgatory;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.message.ListOffsetsResponseData;
+import org.apache.kafka.common.metrics.internals.MetricsUtils;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
@@ -186,13 +187,13 @@ public class DelayedRemoteListOffsets extends DelayedOperation {
         PARTITION_EXPIRATION_METERS.computeIfAbsent(partition, tp -> METRICS_GROUP.newMeter("ExpiresPerSec",
                 "requests",
                 TimeUnit.SECONDS,
-                Map.of("topic", tp.topic(), "partition", String.valueOf(tp.partition())))).mark();
+                MetricsUtils.getTags("topic", tp.topic(), "partition", String.valueOf(tp.partition())))).mark();
     }
 
     public static void removePartitionMetrics(TopicPartition partition) {
         if (PARTITION_EXPIRATION_METERS.remove(partition) != null) {
             METRICS_GROUP.removeMetric("ExpiresPerSec",
-                    Map.of("topic", partition.topic(), "partition", String.valueOf(partition.partition())));
+                    MetricsUtils.getTags("topic", partition.topic(), "partition", String.valueOf(partition.partition())));
         }
     }
 }

@@ -168,6 +168,7 @@ public class MeteredVersionedKeyValueStoreTest {
         when(keySerde.serializer()).thenReturn(keySerializer);
         when(valueSerde.serializer()).thenReturn(valueSerializer);
         when(valueSerde.deserializer()).thenReturn(valueDeserializer);
+        when(context.headers()).thenReturn(new RecordHeaders());
 
         store.close();
         store = new MeteredVersionedKeyValueStore<>(
@@ -232,7 +233,7 @@ public class MeteredVersionedKeyValueStoreTest {
         store.commit(Map.of());
 
         verify(inner).commit(Map.of());
-        assertThat((Double) getMetric("flush-rate").metricValue(), greaterThan(0.0));
+        assertThat((Double) getMetric("commit-rate").metricValue(), greaterThan(0.0));
     }
 
     @Test

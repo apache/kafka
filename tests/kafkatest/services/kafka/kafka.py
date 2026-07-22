@@ -206,8 +206,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  consumer_group_migration_policy=None,
                  dynamicRaftQuorum=False,
                  use_transactions_v2=False,
-                 use_share_groups=None,
-                 use_streams_groups=False
+                 use_streams_groups=False,
+                 enable_assignment_batching=None,
+                 share_version=None
                  ):
         """
         :param context: test context
@@ -271,8 +272,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param consumer_group_migration_policy: The config that enables converting the non-empty classic group using the consumer embedded protocol to the non-empty consumer group using the consumer group protocol and vice versa.
         :param dynamicRaftQuorum: When true, controller_quorum_bootstrap_servers, and bootstraps the first controller using the standalone flag
         :param use_transactions_v2: When true, uses transaction.version=2 which utilizes the new transaction protocol introduced in KIP-890
-        :param use_share_groups: When true, enables the use of share groups introduced in KIP-932
         :param use_streams_groups: When true, enables the use of streams groups introduced in KIP-1071
+        :param enable_assignment_batching: When true, enables assignment batching introduced in KIP-1263. If not specified, defaults to True.
+        :param share_version: When set, bootstraps the cluster with --feature share.version=<value> (KIP-932/KIP-1191).
         """
 
         self.zk = zk
@@ -286,19 +288,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.isolated_controller_quorum = None # will define below if necessary
         self.dynamicRaftQuorum = False
 
-        # Set use_share_groups based on context and arguments.
-        # If not specified, the default config is used.
-        if use_share_groups is None:
-            arg_name = 'use_share_groups'
-            if context.injected_args is not None:
-                use_share_groups = context.injected_args.get(arg_name)
-            if use_share_groups is None:
-                use_share_groups = context.globals.get(arg_name)
-        
-        # Assign the determined value.
         self.use_transactions_v2 = use_transactions_v2
-        self.use_share_groups = use_share_groups
         self.use_streams_groups = use_streams_groups
+        self.share_version = share_version
 
         # Set consumer_group_migration_policy based on context and arguments.
         if consumer_group_migration_policy is None:
@@ -308,6 +300,18 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             if consumer_group_migration_policy is None:
                 consumer_group_migration_policy = context.globals.get(arg_name)
         self.consumer_group_migration_policy = consumer_group_migration_policy
+
+        # Set enable_assignment_batching based on context and arguments.
+        # If not specified, defaults to true.
+        if enable_assignment_batching is None:
+            arg_name = 'enable_assignment_batching'
+            if context.injected_args is not None:
+                enable_assignment_batching = context.injected_args.get(arg_name)
+            if enable_assignment_batching is None:
+                enable_assignment_batching = context.globals.get(arg_name)
+            if enable_assignment_batching is None:
+                enable_assignment_batching = True
+        self.enable_assignment_batching = enable_assignment_batching
 
         if num_nodes < 1:
             raise Exception("Must set a positive number of nodes: %i" % num_nodes)
@@ -358,8 +362,10 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                     extra_kafka_opts=extra_kafka_opts, tls_version=tls_version,
                     isolated_kafka=self, allow_zk_with_kraft=self.allow_zk_with_kraft,
                     server_prop_overrides=server_prop_overrides, dynamicRaftQuorum=self.dynamicRaftQuorum,
-                    use_transactions_v2=self.use_transactions_v2, use_share_groups=self.use_share_groups,
-                    use_streams_groups=self.use_streams_groups
+                    use_transactions_v2=self.use_transactions_v2,
+                    use_streams_groups=self.use_streams_groups,
+                    enable_assignment_batching=self.enable_assignment_batching,
+                    share_version=self.share_version
                 )
                 self.controller_quorum = self.isolated_controller_quorum
 
@@ -754,8 +760,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         #load template configs as dictionary
         config_template = self.render('kafka.properties', node=node, broker_id=self.idx(node),
                                       security_config=self.security_config, num_nodes=self.num_nodes,
-                                      listener_security_config=self.listener_security_config,
-                                      use_share_groups=self.use_share_groups)
+                                      listener_security_config=self.listener_security_config)
 
         configs = dict( l.rstrip().split('=', 1) for l in config_template.split('\n')
                         if not l.startswith("#") and "=" in l )
@@ -781,12 +786,17 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         for prop in self.per_node_server_prop_overrides.get(self.idx(node), []):
             override_configs[prop[0]] = prop[1]
 
-        if self.use_share_groups is not None and self.use_share_groups is True:
-            override_configs[config_property.SHARE_GROUP_ENABLE] = str(self.use_share_groups)
-
         if self.use_streams_groups is True:
             override_configs[config_property.UNSTABLE_API_VERSIONS_ENABLE] = str(True)
             override_configs[config_property.UNSTABLE_FEATURE_VERSIONS_ENABLE] = str(True)
+
+        if self.enable_assignment_batching:
+            # Assignment batching is enabled by default in Kafka
+            pass
+        else:
+            override_configs[config_property.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS] = "0"
+            override_configs[config_property.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS] = "0"
+            override_configs[config_property.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS] = "0"
 
         #update template configs with test override configs
         configs.update(override_configs)
@@ -901,6 +911,12 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             else:
                 if get_version(node).supports_feature_command():
                     cmd += " --feature transaction.version=0"
+            if self.share_version is not None:
+                # share.version=2 (KIP-1191 DLQ) declares a bootstrap metadata.version of 4.4-IV0,
+                # but that isn't yet a valid --release-version for kafka-storage.sh format in this
+                # build (max supported is 4.3-IV0), and Feature.validateVersion() does not enforce
+                # the dependency, so the feature can be bootstrapped on its own.
+                cmd += " --feature share.version=%s" % self.share_version
             self.logger.info("Running log directory format command...\n%s" % cmd)
             node.account.ssh(cmd)
 
@@ -1651,10 +1667,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             # e.g. Topic: test_topic	Partition: 0	Leader: 3	Replicas: 3,2	Isr: 3,2
             if not requested_partition_line:
                 raise Exception("Error finding partition state for topic %s and partition %d." % (topic, partition))
-            leader_idx = int(requested_partition_line.split()[5]) # 6th column from above
+            leader_idx_str = requested_partition_line.split()[5] # 6th column from above
+            leader_idx = int(leader_idx_str) if leader_idx_str != "none" else None
 
-        self.logger.info("Leader for topic %s and partition %d is now: %d" % (topic, partition, leader_idx))
-        return self.get_node(leader_idx)
+        self.logger.info("Leader for topic %s and partition %d is now: %s" % (topic, partition, leader_idx))
+        return self.get_node(leader_idx) if leader_idx is not None and leader_idx != -1 else None
 
     def cluster_id(self):
         """ Get the current cluster id
@@ -1738,6 +1755,57 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 self.bootstrap_servers(self.security_protocol),
                 group,
                 strategy,
+                command_config)
+        return "Completed" in self.run_cli_tool(node, cmd)
+
+    def set_share_group_dlq_config(self, group, topic_name=None, copy_record_enable=None, node=None, command_config=None):
+        """ Set the DLQ configs (errors.deadletterqueue.topic.name / errors.deadletterqueue.copy.record.enable)
+        for the given share group (KIP-1191).
+        """
+        if topic_name is None and copy_record_enable is None:
+            return
+        if node is None:
+            node = self.nodes[0]
+        config_script = self.path.script("kafka-configs.sh", node)
+
+        if command_config is None:
+            command_config = ""
+        else:
+            command_config = "--command-config " + command_config
+
+        configs = []
+        if topic_name is not None:
+            configs.append("errors.deadletterqueue.topic.name=%s" % topic_name)
+        if copy_record_enable is not None:
+            configs.append("errors.deadletterqueue.copy.record.enable=%s" % str(copy_record_enable).lower())
+
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s --bootstrap-server %s --group %s --alter --add-config \"%s\" %s" % \
+               (config_script,
+                self.bootstrap_servers(self.security_protocol),
+                group,
+                ",".join(configs),
+                command_config)
+        return "Completed" in self.run_cli_tool(node, cmd)
+
+    def set_share_group_delivery_count_limit(self, group, limit, node=None, command_config=None):
+        """ Set the share.delivery.count.limit config (GroupConfig, per-group override) for the given share group.
+        """
+        if node is None:
+            node = self.nodes[0]
+        config_script = self.path.script("kafka-configs.sh", node)
+
+        if command_config is None:
+            command_config = ""
+        else:
+            command_config = "--command-config " + command_config
+
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s --bootstrap-server %s --group %s --alter --add-config \"share.delivery.count.limit=%s\" %s" % \
+               (config_script,
+                self.bootstrap_servers(self.security_protocol),
+                group,
+                limit,
                 command_config)
         return "Completed" in self.run_cli_tool(node, cmd)
 
@@ -2010,6 +2078,18 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             output += line
         self.logger.debug(output)
         return output
+
+    def earliest_local_offset(self, topic, partition):
+        """ The earliest offset still held in local storage for the given topic-partition (KIP-405's
+        OffsetSpec.earliestLocal()) - offsets below this have been tiered to remote storage and removed
+        locally.
+        """
+        output = self.get_offset_shell(time="earliest-local", topic_partitions="%s:%d" % (topic, partition))
+        for line in output.strip().split("\n"):
+            if not line:
+                continue
+            return int(line.split(":")[-1])
+        raise Exception("No offset returned for %s:%d" % (topic, partition))
 
     def java_class_name(self):
         return "kafka\.Kafka"

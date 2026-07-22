@@ -30,7 +30,6 @@ public interface DirectoryEventHandler {
         @Override public void handleAssignment(TopicIdPartition partition, Uuid directoryId, String reason, Runnable callback) {}
         @Override public void handleFailure(Uuid directoryId) {}
         @Override public void handleCordoned(Set<Uuid> directoryIds) {}
-        @Override public void handleUncordoned(Set<Uuid> directoryIds) {}
     };
 
     /**
@@ -49,14 +48,8 @@ public interface DirectoryEventHandler {
     void handleFailure(Uuid directoryId);
 
     /**
-     * Handle the transition of an online log directory to the cordoned state.
-     * @param directoryIds  The directory IDs to cordon
+     * Handle the update of the cordoned.log.dirs configuration.
+     * @param directoryIds  The directory IDs of the cordoned log dirs
      */
     void handleCordoned(Set<Uuid> directoryIds);
-
-    /**
-     * Handle the transition of a cordoned log directory to the online state.
-     * @param directoryIds  The directory IDs to uncordon
-     */
-    void handleUncordoned(Set<Uuid> directoryIds);
 }

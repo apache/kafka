@@ -20,8 +20,8 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.params.ParameterizedTest;

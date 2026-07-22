@@ -14,12 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.errors;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Indicates that there was a problem when trying to access a {@link org.apache.kafka.streams.processor.StateStore StateStore}.
  * {@code InvalidStateStoreException} is not thrown directly but only its following subclasses.
  */
+@InterfaceAudience.Public
 public class InvalidStateStoreException extends StreamsException {
 
     private static final long serialVersionUID = 1L;

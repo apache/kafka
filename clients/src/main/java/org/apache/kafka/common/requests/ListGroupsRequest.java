@@ -24,7 +24,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 
@@ -86,7 +85,7 @@ public class ListGroupsRequest extends AbstractRequest {
     @Override
     public ListGroupsResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         ListGroupsResponseData listGroupsResponseData = new ListGroupsResponseData().
-            setGroups(Collections.emptyList()).
+            setGroups(List.of()).
             setErrorCode(Errors.forException(e).code());
         if (version() >= 1) {
             listGroupsResponseData.setThrottleTimeMs(throttleTimeMs);

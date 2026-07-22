@@ -173,6 +173,8 @@ import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
+import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.AddRaftVoterRequest;
 import org.apache.kafka.common.requests.AddRaftVoterResponse;
 import org.apache.kafka.common.requests.AlterClientQuotasResponse;
@@ -297,8 +299,10 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -381,7 +385,7 @@ public class KafkaAdminClientTest {
                 new DescribeClusterBroker().
                     setBrokerId(2).
                     setHost("controller2.com").
-                    setPort(9092)).iterator())));
+                    setPort(9092)))));
         if (includeController) {
             assertNotNull(cluster.controller());
             assertEquals(0, cluster.controller().id());
@@ -600,8 +604,8 @@ public class KafkaAdminClientTest {
                             new OffsetDeleteResponsePartition()
                                 .setPartitionIndex(partition)
                                 .setErrorCode(error.code())
-                        ).iterator()))
-                ).collect(Collectors.toList()).iterator()))
+                        )))
+                ).collect(Collectors.toList())))
         );
     }
 
@@ -622,7 +626,7 @@ public class KafkaAdminClientTest {
     public static CreateTopicsResponse prepareCreateTopicsResponse(int throttleTimeMs, CreatableTopicResult... topics) {
         CreateTopicsResponseData data = new CreateTopicsResponseData()
             .setThrottleTimeMs(throttleTimeMs)
-            .setTopics(new CreatableTopicResultCollection(Arrays.stream(topics).iterator()));
+            .setTopics(new CreatableTopicResultCollection(Arrays.asList(topics)));
         return new CreateTopicsResponse(data);
     }
 
@@ -635,7 +639,7 @@ public class KafkaAdminClientTest {
     public static DeleteTopicsResponse prepareDeleteTopicsResponse(int throttleTimeMs, DeletableTopicResult... topics) {
         DeleteTopicsResponseData data = new DeleteTopicsResponseData()
             .setThrottleTimeMs(throttleTimeMs)
-            .setResponses(new DeletableTopicResultCollection(Arrays.stream(topics).iterator()));
+            .setResponses(new DeletableTopicResultCollection(Arrays.asList(topics)));
         return new DeleteTopicsResponse(data);
     }
 
@@ -767,9 +771,9 @@ public class KafkaAdminClientTest {
 
     private static FeatureMetadata defaultFeatureMetadata() {
         return new FeatureMetadata(
-            Utils.mkMap(Utils.mkEntry("test_feature_1", new FinalizedVersionRange((short) 2, (short) 2))),
+            Map.of("test_feature_1", new FinalizedVersionRange((short) 2, (short) 2)),
             Optional.of(1L),
-            Utils.mkMap(Utils.mkEntry("test_feature_1", new SupportedVersionRange((short) 1, (short) 5))));
+            Map.of("test_feature_1", new SupportedVersionRange((short) 1, (short) 5)));
     }
 
     private static Features<org.apache.kafka.common.feature.SupportedVersionRange> convertSupportedFeaturesMap(Map<String, SupportedVersionRange> features) {
@@ -854,7 +858,7 @@ public class KafkaAdminClientTest {
             .setTopics(topics)
             .setErrorCode(topLevelError.code())
             .setErrorMessage(topLevelError.message())
-            .setNodes(new DescribeQuorumResponseData.NodeCollection(Collections.singleton(new DescribeQuorumResponseData.Node().setNodeId(1)).iterator())));
+            .setNodes(new DescribeQuorumResponseData.NodeCollection(Collections.singleton(new DescribeQuorumResponseData.Node().setNodeId(1)))));
     }
 
     /**
@@ -912,21 +916,24 @@ public class KafkaAdminClientTest {
         // which prevents AdminClient from being able to send the initial metadata request
 
         Cluster cluster = Cluster.bootstrap(singletonList(new InetSocketAddress("localhost", 8121)));
-        Map<Node, Long> unreachableNodes = Collections.singletonMap(cluster.nodes().get(0), 200L);
+        Node bootstrapNode = cluster.nodes().get(0);
+        Map<Node, Long> unreachableNodes = Collections.singletonMap(bootstrapNode, 200L);
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM, cluster,
                 AdminClientUnitTestEnv.clientConfigs(AdminClientConfig.METADATA_RECOVERY_STRATEGY_CONFIG, metadataRecoveryStrategy.name), unreachableNodes)) {
             Cluster discoveredCluster = mockCluster(3, 0);
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-            env.kafkaClient().prepareResponse(body -> body instanceof MetadataRequest,
+            // Bind responses to specific destinations so MockClient delivery does not depend on
+            // the iteration order of AdminClient's callsToSend map (which is keyed by Node).
+            env.kafkaClient().prepareResponseFrom(body -> body instanceof MetadataRequest,
                     RequestTestUtils.metadataResponse(discoveredCluster.nodes(), discoveredCluster.clusterResource().clusterId(),
-                            1, Collections.emptyList()));
+                            1, Collections.emptyList()), bootstrapNode);
             if (metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP) {
-                env.kafkaClient().prepareResponse(body -> body instanceof MetadataRequest,
-                        RequestTestUtils.metadataResponse(discoveredCluster.nodes(),
-                                discoveredCluster.clusterResource().clusterId(), 1, Collections.emptyList()));
+                env.kafkaClient().prepareResponseFrom(body -> body instanceof MetadataRequest,
+                        RequestTestUtils.metadataResponse(discoveredCluster.nodes(), discoveredCluster.clusterResource().clusterId(),
+                                1, Collections.emptyList()), bootstrapNode);
             }
-            env.kafkaClient().prepareResponse(body -> body instanceof CreateTopicsRequest,
-                prepareCreateTopicsResponse("myTopic", Errors.NONE));
+            env.kafkaClient().prepareResponseFrom(body -> body instanceof CreateTopicsRequest,
+                prepareCreateTopicsResponse("myTopic", Errors.NONE), discoveredCluster.nodeById(1));
 
             KafkaFuture<Void> future = env.adminClient().createTopics(
                     singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
@@ -2763,7 +2770,7 @@ public class KafkaAdminClientTest {
                             .setPartitions(new DeleteRecordsResponseData.DeleteRecordsPartitionResultCollection(singletonList(new DeleteRecordsResponseData.DeleteRecordsPartitionResult()
                                     .setPartitionIndex(tp0.partition())
                                     .setErrorCode(Errors.NONE.code())
-                                    .setLowWatermark(3)).iterator()))).iterator()))), nodes.get(0));
+                                    .setLowWatermark(3)))))))), nodes.get(0));
 
             env.kafkaClient().disconnect(nodes.get(1).idString());
             env.kafkaClient().createPendingAuthenticationError(nodes.get(1), 100);
@@ -2820,7 +2827,7 @@ public class KafkaAdminClientTest {
                             .setPartitionIndex(myTopicPartition2.partition())
                             .setLowWatermark(DeleteRecordsResponse.INVALID_LOW_WATERMARK)
                             .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code())
-                    ).iterator())));
+                    ))));
             env.kafkaClient().prepareResponse(new DeleteRecordsResponse(m));
 
             Map<TopicPartition, RecordsToDelete> recordsToDelete = new HashMap<>();
@@ -5259,7 +5266,7 @@ public class KafkaAdminClientTest {
 
         ListConsumerGroupOffsetsSpec groupASpec = new ListConsumerGroupOffsetsSpec().topicPartitions(groupAPartitions);
         ListConsumerGroupOffsetsSpec groupBSpec = new ListConsumerGroupOffsetsSpec().topicPartitions(groupBPartitions);
-        return Utils.mkMap(Utils.mkEntry("groupA", groupASpec), Utils.mkEntry("groupB", groupBSpec));
+        return Map.of("groupA", groupASpec, "groupB", groupBSpec);
     }
 
     private Map<String, ListStreamsGroupOffsetsSpec> batchedListStreamsGroupOffsetsSpec() {
@@ -5268,7 +5275,7 @@ public class KafkaAdminClientTest {
 
         ListStreamsGroupOffsetsSpec groupASpec = new ListStreamsGroupOffsetsSpec().topicPartitions(groupAPartitions);
         ListStreamsGroupOffsetsSpec groupBSpec = new ListStreamsGroupOffsetsSpec().topicPartitions(groupBPartitions);
-        return Utils.mkMap(Utils.mkEntry("groupA", groupASpec), Utils.mkEntry("groupB", groupBSpec));
+        return Map.of("groupA", groupASpec, "groupB", groupBSpec);
     }
 
     private void waitForRequest(MockClient mockClient, ApiKeys apiKeys) throws Exception {
@@ -5983,15 +5990,15 @@ public class KafkaAdminClientTest {
                                 new OffsetDeleteResponsePartition()
                                     .setPartitionIndex(0)
                                     .setErrorCode(Errors.NONE.code())
-                            ).iterator())),
+                            ))),
                         new OffsetDeleteResponseTopic()
                             .setName("bar")
                             .setPartitions(new OffsetDeleteResponsePartitionCollection(Collections.singletonList(
                                 new OffsetDeleteResponsePartition()
                                     .setPartitionIndex(0)
                                     .setErrorCode(Errors.GROUP_SUBSCRIBED_TO_TOPIC.code())
-                            ).iterator()))
-                    ).collect(Collectors.toList()).iterator()))
+                            )))
+                    ).collect(Collectors.toList())))
                 )
             );
 
@@ -6028,15 +6035,15 @@ public class KafkaAdminClientTest {
                                     new OffsetDeleteResponsePartition()
                                         .setPartitionIndex(0)
                                         .setErrorCode(Errors.NONE.code())
-                                ).iterator())),
+                                ))),
                             new OffsetDeleteResponseTopic()
                                 .setName("bar")
                                 .setPartitions(new OffsetDeleteResponsePartitionCollection(Collections.singletonList(
                                     new OffsetDeleteResponsePartition()
                                         .setPartitionIndex(0)
                                         .setErrorCode(Errors.GROUP_SUBSCRIBED_TO_TOPIC.code())
-                                ).iterator()))
-                        ).collect(Collectors.toList()).iterator()))
+                                )))
+                        ).collect(Collectors.toList())))
                 )
             );
 
@@ -8365,6 +8372,113 @@ public class KafkaAdminClientTest {
         }
     }
 
+    /**
+     * Reproduces the scenario where the partition leader cache holds an entry pointing at a broker
+     * that has since left the cluster (for example after a broker is recycled with a new id). The
+     * cached leader sends the request straight to the fulfillment stage, but the admin client can
+     * never route it because the broker is no longer in the metadata. Without re-running the lookup,
+     * the call would sit unassigned until the request deadline expires and fail with
+     * "Timed out waiting for a node assignment". The admin client should instead re-resolve the
+     * leader and complete the request.
+     */
+    @Test
+    public void testListOffsetsRetriesLookupWhenCachedLeaderLeavesCluster() throws Exception {
+        Node node0 = new Node(0, "localhost", 8120);
+        Node node1 = new Node(1, "localhost", 8121);
+        final TopicPartition tp0 = new TopicPartition("foo", 0);
+
+        // Initially foo-0 is led by node1.
+        final Cluster initialCluster = new Cluster("mockClusterId", asList(node0, node1),
+            singletonList(new PartitionInfo("foo", 0, node1, new Node[]{node0, node1}, new Node[]{node0, node1})),
+            emptySet(), emptySet(), node0);
+        // After node1 leaves the cluster, foo-0 is led by node0.
+        final Cluster shrunkCluster = new Cluster("mockClusterId", singletonList(node0),
+            singletonList(new PartitionInfo("foo", 0, node0, new Node[]{node0}, new Node[]{node0})),
+            emptySet(), emptySet(), node0);
+
+        MockTime time = new MockTime();
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, initialCluster,
+                newStrMap(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "5000",
+                          AdminClientConfig.METADATA_MAX_AGE_CONFIG, "50"))) {
+            MockClient mockClient = env.kafkaClient();
+            mockClient.setNodeApiVersions(NodeApiVersions.create());
+
+            // First call: the lookup resolves foo-0 to node1 and caches it, then the offsets fetch
+            // succeeds on node1.
+            mockClient.prepareResponse(body -> body instanceof MetadataRequest,
+                prepareMetadataResponse(initialCluster, Errors.NONE));
+            mockClient.prepareResponseFrom(listOffsetsResponse(tp0, 100L), node1);
+            assertEquals(100L, env.adminClient().listOffsets(singletonMap(tp0, OffsetSpec.latest()))
+                .all().get().get(tp0).offset());
+
+            // Drop node1 from the admin client's metadata via the periodic broker-info refresh.
+            // Waiting for a second refresh guarantees the first one has been fully processed.
+            AtomicInteger refreshes = new AtomicInteger();
+            TestUtils.waitForCondition(() -> {
+                time.sleep(20);
+                if (respondToBrokerInfoRefresh(mockClient, shrunkCluster))
+                    refreshes.incrementAndGet();
+                return refreshes.get() >= 2;
+            }, "Timed out waiting for the broker-info metadata refresh to drop node1");
+
+            // Second call: the cache still points foo-0 at node1, which is gone. The admin client
+            // must re-resolve the leader (now node0) rather than getting stuck until the deadline.
+            ListOffsetsResult result = env.adminClient().listOffsets(singletonMap(tp0, OffsetSpec.latest()));
+            TestUtils.waitForCondition(() -> {
+                time.sleep(20);
+                // Keep node1 out of the metadata, re-resolve foo-0 to node0, and satisfy the fetch.
+                respondToBrokerInfoRefresh(mockClient, shrunkCluster);
+                respondToTopicMetadata(mockClient, "foo", shrunkCluster);
+                respondToListOffsets(mockClient, tp0, 200L, node0);
+                return result.all().isDone();
+            }, "Timed out waiting for listOffsets to recover after the cached leader left the cluster");
+
+            assertEquals(200L, result.all().get().get(tp0).offset());
+        }
+    }
+
+    private static ListOffsetsResponse listOffsetsResponse(TopicPartition tp, long offset) {
+        return new ListOffsetsResponse(new ListOffsetsResponseData().setTopics(singletonList(
+            ListOffsetsResponse.singletonListOffsetsTopicResponse(tp, Errors.NONE, -1L, offset, 5))));
+    }
+
+    /**
+     * Respond out of order to the first in-flight request matching {@code matcher} with
+     * {@code response}. Returns true if a matching request was found and answered.
+     */
+    private static boolean respondToInFlightRequest(MockClient mockClient,
+                                                    Predicate<ClientRequest> matcher,
+                                                    AbstractResponse response) {
+        for (ClientRequest request : mockClient.requests()) {
+            if (matcher.test(request)) {
+                mockClient.respondToRequest(request, response);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean respondToBrokerInfoRefresh(MockClient mockClient, Cluster cluster) {
+        return respondToInFlightRequest(mockClient, request -> {
+            AbstractRequest body = request.requestBuilder().build();
+            return body instanceof MetadataRequest && ((MetadataRequest) body).topics().isEmpty();
+        }, prepareMetadataResponse(cluster, Errors.NONE));
+    }
+
+    private static boolean respondToTopicMetadata(MockClient mockClient, String topic, Cluster cluster) {
+        return respondToInFlightRequest(mockClient, request -> {
+            AbstractRequest body = request.requestBuilder().build();
+            return body instanceof MetadataRequest && ((MetadataRequest) body).topics().contains(topic);
+        }, prepareMetadataResponse(cluster, Errors.NONE));
+    }
+
+    private static boolean respondToListOffsets(MockClient mockClient, TopicPartition tp, long offset, Node node) {
+        return respondToInFlightRequest(mockClient,
+            request -> request.requestBuilder().build() instanceof ListOffsetsRequest
+                && request.destination().equals(node.idString()),
+            listOffsetsResponse(tp, offset));
+    }
+
     @Test
     public void testListOffsetsRetriableErrors() throws Exception {
 
@@ -8801,9 +8915,9 @@ public class KafkaAdminClientTest {
     }
 
     private Map<String, FeatureUpdate> makeTestFeatureUpdates() {
-        return Utils.mkMap(
-            Utils.mkEntry("test_feature_1", new FeatureUpdate((short) 2,  FeatureUpdate.UpgradeType.UPGRADE)),
-            Utils.mkEntry("test_feature_2", new FeatureUpdate((short) 3,  FeatureUpdate.UpgradeType.SAFE_DOWNGRADE)));
+        return Map.of(
+            "test_feature_1", new FeatureUpdate((short) 2,  FeatureUpdate.UpgradeType.UPGRADE),
+            "test_feature_2", new FeatureUpdate((short) 3,  FeatureUpdate.UpgradeType.SAFE_DOWNGRADE));
     }
 
     private void testUpdateFeatures(Map<String, FeatureUpdate> featureUpdates,
@@ -8871,9 +8985,9 @@ public class KafkaAdminClientTest {
                     0),
                 env.cluster().nodeById(controllerId));
             final KafkaFuture<Void> future = env.adminClient().updateFeatures(
-                Utils.mkMap(
-                    Utils.mkEntry("test_feature_1", new FeatureUpdate((short) 2,  FeatureUpdate.UpgradeType.UPGRADE)),
-                    Utils.mkEntry("test_feature_2", new FeatureUpdate((short) 3,  FeatureUpdate.UpgradeType.SAFE_DOWNGRADE))),
+                Map.of(
+                    "test_feature_1", new FeatureUpdate((short) 2,  FeatureUpdate.UpgradeType.UPGRADE),
+                    "test_feature_2", new FeatureUpdate((short) 3,  FeatureUpdate.UpgradeType.SAFE_DOWNGRADE)),
                 new UpdateFeaturesOptions().timeoutMs(10000)
             ).all();
             future.get();
@@ -8895,8 +9009,8 @@ public class KafkaAdminClientTest {
             assertThrows(
                 IllegalArgumentException.class,
                 () -> env.adminClient().updateFeatures(
-                    Utils.mkMap(Utils.mkEntry("feature", new FeatureUpdate((short) 2,  FeatureUpdate.UpgradeType.UPGRADE)),
-                                Utils.mkEntry("", new FeatureUpdate((short) 2,  FeatureUpdate.UpgradeType.UPGRADE)))));
+                    Map.of("feature", new FeatureUpdate((short) 2,  FeatureUpdate.UpgradeType.UPGRADE),
+                        "", new FeatureUpdate((short) 2,  FeatureUpdate.UpgradeType.UPGRADE))));
         }
     }
 
@@ -10959,52 +11073,6 @@ public class KafkaAdminClientTest {
         assertEquals(elements.length, collection.size(), "There are unexpected extra elements in the collection.");
     }
 
-    public static KafkaAdminClient createInternal(AdminClientConfig config, KafkaAdminClient.TimeoutProcessorFactory timeoutProcessorFactory) {
-        return KafkaAdminClient.createInternal(config, timeoutProcessorFactory);
-    }
-
-    public static class FailureInjectingTimeoutProcessorFactory extends KafkaAdminClient.TimeoutProcessorFactory {
-
-        private int numTries = 0;
-
-        private int failuresInjected = 0;
-
-        @Override
-        public KafkaAdminClient.TimeoutProcessor create(long now) {
-            return new FailureInjectingTimeoutProcessor(now);
-        }
-
-        synchronized boolean shouldInjectFailure() {
-            numTries++;
-            if (numTries == 1) {
-                failuresInjected++;
-                return true;
-            }
-            return false;
-        }
-
-        public synchronized int failuresInjected() {
-            return failuresInjected;
-        }
-
-        public final class FailureInjectingTimeoutProcessor extends KafkaAdminClient.TimeoutProcessor {
-            public FailureInjectingTimeoutProcessor(long now) {
-                super(now);
-            }
-
-            boolean callHasExpired(KafkaAdminClient.Call call) {
-                if ((!call.isInternal()) && shouldInjectFailure()) {
-                    log.debug("Injecting timeout for {}.", call);
-                    return true;
-                } else {
-                    boolean ret = super.callHasExpired(call);
-                    log.debug("callHasExpired({}) = {}", call, ret);
-                    return ret;
-                }
-            }
-        }
-    }
-
     @ParameterizedTest
     @CsvSource({ "false, false", "false, true", "true, false", "true, true" })
     public void testAddRaftVoterRequest(boolean fail, boolean sendClusterId) throws Exception {
@@ -11427,7 +11495,7 @@ public class KafkaAdminClientTest {
                 new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection(List.of(
                     new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic().setTopicName("foo").setPartitions(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition().setPartitionIndex(0), new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition().setPartitionIndex(1))),
                     new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic().setTopicName("bar").setPartitions(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition().setPartitionIndex(0)))
-                ).iterator())
+                ))
             );
 
             TopicPartition fooTopicPartition0 = new TopicPartition("foo", 0);
@@ -11479,7 +11547,7 @@ public class KafkaAdminClientTest {
                     new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic().setTopicName("foo").setPartitions(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition().setPartitionIndex(0),
                         new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition().setPartitionIndex(1).setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code()).setErrorMessage("Topic authorization failed."))),
                     new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic().setTopicName("bar").setPartitions(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition().setPartitionIndex(0)))
-                ).iterator())
+                ))
             );
 
             TopicPartition fooTopicPartition0 = new TopicPartition("foo", 0);
@@ -11785,6 +11853,32 @@ public class KafkaAdminClientTest {
 
             assertInstanceOf(TimeoutException.class, exception.getCause());
             assertTrue(duration >= 150L && duration < 30000);
+        }
+    }
+
+    /**
+     * Test that OutOfMemoryError is properly propagated and not masked as TimeoutException.
+     * This test simulates an OOM error during response processing and verifies it propagates
+     * without being wrapped. This is a regression test for KAFKA-19932.
+     */
+    @Test
+    public void testOutOfMemoryErrorPropagation() throws Exception {
+        MockTime time = new MockTime();
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, mockCluster(1, 0),
+                AdminClientConfig.RETRIES_CONFIG, "2",
+                AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "100")) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            OutOfMemoryError oomError = new OutOfMemoryError("Simulated OOM during response handling");
+            MetadataResponse mockResponse = mock(MetadataResponse.class);
+            doThrow(oomError).when(mockResponse).topicMetadata();
+
+            env.kafkaClient().prepareResponse(mockResponse);
+
+            // Make the listTopics call - this will internally trigger a metadata request
+            ListTopicsResult result = env.adminClient().listTopics(new ListTopicsOptions().timeoutMs(10000));
+
+            TestUtils.assertFutureThrows(OutOfMemoryError.class, result.names());
         }
     }
 }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -75,15 +76,17 @@ import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
  *
  * <ul>
  * <li>partitions_revoked: outputs the partitions revoked through {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)}.
- *     See {@link org.apache.kafka.tools.VerifiableConsumer.PartitionsRevoked}</li>
+ *     See {@link org.apache.kafka.tools.VerifiableConsumer.PartitionsRevoked}.</li>
  * <li>partitions_assigned: outputs the partitions assigned through {@link ConsumerRebalanceListener#onPartitionsAssigned(Collection)}
  *     See {@link org.apache.kafka.tools.VerifiableConsumer.PartitionsAssigned}.</li>
  * <li>records_consumed: contains a summary of records consumed in a single call to {@link KafkaConsumer#poll(Duration)}.
  *     See {@link org.apache.kafka.tools.VerifiableConsumer.RecordsConsumed}.</li>
  * <li>record_data: contains the key, value, and offset of an individual consumed record (only included if verbose
  *     output is enabled). See {@link org.apache.kafka.tools.VerifiableConsumer.RecordData}.</li>
- * <li>offsets_committed: The result of every offset commit (only included if auto-commit is not enabled).
- *     See {@link org.apache.kafka.tools.VerifiableConsumer.OffsetsCommitted}</li>
+ * <li>offsets_committed: the result of every offset commit (only included if auto-commit is not enabled).
+ *     See {@link org.apache.kafka.tools.VerifiableConsumer.OffsetsCommitted}.</li>
+ * <li>shutdown_requested: emitted as consumer shutdown is requested.
+ *     See {@link org.apache.kafka.tools.VerifiableConsumer.ShutdownRequested}.</li>
  * <li>shutdown_complete: emitted after the consumer returns from {@link KafkaConsumer#close()}.
  *     See {@link org.apache.kafka.tools.VerifiableConsumer.ShutdownComplete}.</li>
  * </ul>
@@ -102,6 +105,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
     private final int maxMessages;
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
     private int consumedMessages = 0;
+    private final int closeTimeoutMs;
 
     public VerifiableConsumer(KafkaConsumer<String, String> consumer,
                               PrintStream out,
@@ -109,7 +113,8 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                               int maxMessages,
                               boolean useAutoCommit,
                               boolean useAsyncCommit,
-                              boolean verbose) {
+                              boolean verbose,
+                              int closeTimeoutMs) {
         this.consumer = consumer;
         this.out = out;
         this.topic = topic;
@@ -117,6 +122,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         this.useAutoCommit = useAutoCommit;
         this.useAsyncCommit = useAsyncCommit;
         this.verbose = verbose;
+        this.closeTimeoutMs = closeTimeoutMs;
         addKafkaSerializerModule();
     }
 
@@ -250,7 +256,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             // Log the error so it goes to the service log and not stdout
             log.error("Error during processing, terminating consumer process: ", t);
         } finally {
-            consumer.close();
+            consumer.close(CloseOptions.timeout(Duration.ofMillis(closeTimeoutMs)));
             printJson(new ShutdownComplete());
             shutdownLatch.countDown();
         }
@@ -259,6 +265,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
     public void close() {
         boolean interrupted = false;
         try {
+            printJson(new ShutdownRequested());
             consumer.wakeup();
             while (true) {
                 try {
@@ -292,6 +299,14 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         @Override
         public String name() {
             return "startup_complete";
+        }
+    }
+
+    private static class ShutdownRequested extends ConsumerEvent {
+
+        @Override
+        public String name() {
+            return "shutdown_requested";
         }
     }
 
@@ -591,6 +606,15 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             .metavar("ENABLE-AUTOCOMMIT")
             .help("Enable offset auto-commit on consumer");
 
+        parser.addArgument("--close-timeout")
+                .action(store())
+                .required(false)
+                .type(Integer.class)
+                .setDefault(30000)
+                .dest("closeTimeout")
+                .metavar("CLOSE-TIMEOUT-MS")
+                .help("Timeout in milliseconds for closing the consumer (default: 30000)");
+
         parser.addArgument("--reset-policy")
             .action(store())
             .required(false)
@@ -632,6 +656,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         Namespace res = parser.parseArgs(args);
 
         boolean useAutoCommit = res.getBoolean("useAutoCommit");
+        int closeTimeout = res.getInt("closeTimeout");
         String configFile = res.getString("consumer.config");
         String commandConfigFile = res.getString("commandConfigFile");
         String brokerHostAndPort = res.getString("bootstrapServer");
@@ -705,7 +730,8 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 maxMessages,
                 useAutoCommit,
                 false,
-                verbose);
+                verbose,
+                closeTimeout);
     }
 
     public static void main(String[] args) {

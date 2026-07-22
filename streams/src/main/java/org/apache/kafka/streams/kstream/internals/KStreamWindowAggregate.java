@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.EmitStrategy.StrategyType;
@@ -25,6 +27,7 @@ import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -32,8 +35,9 @@ import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrappingStoreBuilder;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.TimestampedWindowStore;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
+import org.apache.kafka.streams.state.internals.WindowedTimestampedHeadersStoreToWindowedTimestampedStoreAdapter;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,7 +46,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+import static org.apache.kafka.streams.state.ValueTimestampHeaders.getValueOrNull;
 
 public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements KStreamAggProcessorSupplier<KIn, VIn, Windowed<KIn>, VAgg> {
 
@@ -133,8 +137,8 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                 final Long windowStart = entry.getKey();
                 final long windowEnd = entry.getValue().end();
                 if (windowEnd > windowCloseTime) {
-                    final ValueAndTimestamp<VAgg> oldAggAndTimestamp = windowStore.fetch(record.key(), windowStart);
-                    VAgg oldAgg = getValueOrNull(oldAggAndTimestamp);
+                    final ValueTimestampHeaders<VAgg> oldAggTimestampHeaders = windowStore.fetch(record.key(), windowStart);
+                    VAgg oldAgg = getValueOrNull(oldAggTimestampHeaders);
 
                     final VAgg newAgg;
                     final long newTimestamp;
@@ -143,13 +147,13 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                         oldAgg = initializer.apply();
                         newTimestamp = record.timestamp();
                     } else {
-                        newTimestamp = Math.max(record.timestamp(), oldAggAndTimestamp.timestamp());
+                        newTimestamp = Math.max(record.timestamp(), oldAggTimestampHeaders.timestamp());
                     }
 
                     newAgg = aggregator.apply(record.key(), record.value(), oldAgg);
 
                     // update the store with the new value
-                    windowStore.put(record.key(), ValueAndTimestamp.make(newAgg, newTimestamp), windowStart);
+                    windowStore.put(record.key(), ValueTimestampHeaders.make(newAgg, newTimestamp, new RecordHeaders()), windowStart);
                     maybeForwardUpdate(record, entry.getValue(), oldAgg, newAgg, newTimestamp);
                 } else {
                     final String windowString = "[" + windowStart + "," + windowEnd + ")";
@@ -210,16 +214,30 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
     }
 
     private class KStreamWindowAggregateValueGetter implements KTableValueGetter<Windowed<KIn>, VAgg> {
-        private TimestampedWindowStore<KIn, VAgg> windowStore;
+        private TimestampedWindowStoreWithHeaders<KIn, VAgg> windowStore;
 
         @Override
         public void init(final ProcessorContext<?, ?> context) {
-            windowStore = context.getStateStore(storeName);
+            try {
+                windowStore = new WindowedTimestampedHeadersStoreToWindowedTimestampedStoreAdapter<>(context.getStateStore(storeName));
+            } catch (final ClassCastException swallow) {
+                // not timestamped store
+
+                // Try headers-aware timestamped store
+                try {
+                    windowStore = context.getStateStore(storeName);
+                } catch (final ClassCastException fatal) {
+                    final StateStore store = context.getStateStore(storeName);
+                    final String storeType = store == null ? "null" : store.getClass().getName();
+                    throw new InvalidStateStoreException("Windowed-KTable state store must implement either "
+                        + "TimestampedWindowStore, or TimestampedWindowStoreWithHeaders. Got: " + storeType);
+                }
+            }
         }
 
         @SuppressWarnings("unchecked")
         @Override
-        public ValueAndTimestamp<VAgg> get(final Windowed<KIn> windowedKey) {
+        public ValueTimestampHeaders<VAgg> get(final Windowed<KIn> windowedKey) {
             final KIn key = windowedKey.key();
             final W window = (W) windowedKey.window();
             return windowStore.fetch(key, window.start());

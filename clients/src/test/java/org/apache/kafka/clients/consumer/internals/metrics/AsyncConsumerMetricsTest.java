@@ -32,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class AsyncConsumerMetricsTest {
+public class AsyncConsumerMetricsTest extends AbstractConsumerMetricsManagerTest {
     private static final long METRIC_VALUE = 123L;
 
     private final Metrics metrics = new Metrics();
@@ -51,6 +51,11 @@ public class AsyncConsumerMetricsTest {
             consumerMetrics.close();
         }
         metrics.close();
+    }
+
+    @Override
+    protected AbstractConsumerMetricsManager metricsManager(Metrics metrics, String groupDescription) {
+        return new AsyncConsumerMetrics(metrics, groupDescription);
     }
 
     @ParameterizedTest

@@ -17,9 +17,11 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStore;
@@ -33,6 +35,7 @@ import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -57,6 +61,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     private final Position position = Position.emptyPosition();
     private volatile boolean open = false;
     private StateStoreContext context;
+    private InMemoryTransactionBuffer transactionBuffer;
 
     public InMemoryKeyValueStore(final String name) {
         this.name = name;
@@ -84,7 +89,8 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
                 (RecordBatchingStateRestoreCallback) records -> {
                     synchronized (position) {
                         for (final ConsumerRecord<byte[], byte[]> record : records) {
-                            put(Bytes.wrap(record.key()), record.value());
+                            final Bytes key = Bytes.wrap(record.key());
+                            putInternal(key, record.value());
                             ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
                                 record,
                                 consistencyEnabled,
@@ -98,6 +104,13 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
         open = true;
         this.context = stateStoreContext;
+        final boolean transactional = StreamsConfig.InternalConfig.getBoolean(
+            stateStoreContext.appConfigs(),
+            StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG,
+            false);
+        if (transactional) {
+            this.transactionBuffer = new InMemoryTransactionBuffer(map);
+        }
     }
 
     @Override
@@ -112,6 +125,16 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public Position getPosition() {
+        // Mirror RocksDBStore#getPosition: report the uncommitted position (committed + staged) so the
+        // changelog consistency vector, which ChangeLogging*BytesStore writes at put() time via
+        // getPosition(), reflects the input position of the staged write. Otherwise a transactional
+        // store's changelog records carry the stale committed position and the position cannot be
+        // rebuilt when the store is restored from its changelog.
+        if (transactionBuffer != null) {
+            synchronized (position) {
+                return position.copy().merge(transactionBuffer.pendingPosition());
+            }
+        }
         return position;
     }
 
@@ -120,23 +143,55 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
 
-        return StoreQueryUtils.handleBasicQueries(
-            query,
-            positionBound,
-            config,
-            this,
-            position,
-            context
-        );
+        synchronized (position) {
+            // Mirror RocksDBStore#query: under READ_UNCOMMITTED, expose the writes staged in the
+            // transaction buffer since the last commit by merging the buffer's pending position
+            // deltas into a copy of the committed position. READ_COMMITTED (and the
+            // non-transactional store) query the committed position directly.
+            final Position queryPosition;
+            if (transactionBuffer != null && config.getIsolationLevel() == IsolationLevel.READ_UNCOMMITTED) {
+                queryPosition = position.copy().merge(transactionBuffer.pendingPosition());
+            } else {
+                queryPosition = position;
+            }
+            return StoreQueryUtils.handleBasicQueries(
+                query,
+                positionBound,
+                config,
+                this,
+                queryPosition,
+                context
+            );
+        }
     }
 
     @Override
-    public synchronized byte[] get(final Bytes key) {
-        return map.get(key);
+    public byte[] get(final Bytes key) {
+        return get(key, IsolationLevel.READ_UNCOMMITTED);
+    }
+
+    private byte[] get(final Bytes key, final IsolationLevel isolationLevel) {
+        if (transactionBuffer != null) {
+            if (isolationLevel == IsolationLevel.READ_UNCOMMITTED) {
+                final java.util.Optional<byte[]> staged = transactionBuffer.get(key);
+                if (staged != null) {
+                    return staged.orElse(null);
+                }
+            }
+            return transactionBuffer.getCommitted(key);
+        }
+        synchronized (this) {
+            return map.get(key);
+        }
     }
 
     @Override
     public synchronized void put(final Bytes key, final byte[] value) {
+        if (transactionBuffer != null) {
+            transactionBuffer.stage(key, value);
+            transactionBuffer.updatePosition(context);
+            return;
+        }
         putInternal(key, value);
     }
 
@@ -164,50 +219,78 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public synchronized void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
+        if (transactionBuffer != null) {
+            for (final KeyValue<Bytes, byte[]> entry : entries) {
+                transactionBuffer.stage(entry.key, entry.value);
+                transactionBuffer.updatePosition(context);
+            }
+            return;
+        }
         for (final KeyValue<Bytes, byte[]> entry : entries) {
             putInternal(entry.key, entry.value);
         }
     }
 
     @Override
-    public synchronized <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix, final PS prefixKeySerializer) {
+    public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix, final PS prefixKeySerializer) {
+        return prefixScan(prefix, prefixKeySerializer, IsolationLevel.READ_UNCOMMITTED);
+    }
 
+    private <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix, final PS prefixKeySerializer,
+                                                                                     final IsolationLevel isolationLevel) {
         final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
-        final Bytes to = Bytes.increment(from);
+        final Bytes to = ByteUtils.increment(from);
 
-        return new InMemoryKeyValueIterator(map.subMap(from, true, to, false).keySet(), true);
+        if (transactionBuffer != null) {
+            return transactionBuffer.range(from, to, true, false, isolationLevel);
+        }
+        synchronized (this) {
+            return new InMemoryKeyValueIterator(map.subMap(from, true, to, false).keySet(), true);
+        }
     }
 
     @Override
     public synchronized byte[] delete(final Bytes key) {
+        if (transactionBuffer != null) {
+            final byte[] oldValue = get(key);
+            transactionBuffer.stage(key, null);
+            return oldValue;
+        }
         return map.remove(key);
     }
 
     @Override
-    public synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
-        return range(from, to, true);
+    public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
+        return range(from, to, true, IsolationLevel.READ_UNCOMMITTED);
     }
 
     @Override
-    public synchronized KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from, final Bytes to) {
-        return range(from, to, false);
+    public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from, final Bytes to) {
+        return range(from, to, false, IsolationLevel.READ_UNCOMMITTED);
     }
 
-    private KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to, final boolean forward) {
-        if (from == null && to == null) {
-            return getKeyValueIterator(map.keySet(), forward);
-        } else if (from == null) {
-            return getKeyValueIterator(map.headMap(to, true).keySet(), forward);
-        } else if (to == null) {
-            return getKeyValueIterator(map.tailMap(from, true).keySet(), forward);
-        } else if (from.compareTo(to) > 0) {
+    private KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to, final boolean forward,
+                                                  final IsolationLevel isolationLevel) {
+        if (from != null && to != null && from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
                     "This may be due to range arguments set in the wrong order, " +
                     "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
                     "Note that the built-in numerical serdes do not follow this for negative numbers");
             return KeyValueIterators.emptyIterator();
-        } else {
-            return getKeyValueIterator(map.subMap(from, true, to, true).keySet(), forward);
+        }
+        if (transactionBuffer != null) {
+            return transactionBuffer.range(from, to, forward, true, isolationLevel);
+        }
+        synchronized (this) {
+            if (from == null && to == null) {
+                return getKeyValueIterator(map.keySet(), forward);
+            } else if (from == null) {
+                return getKeyValueIterator(map.headMap(to, true).keySet(), forward);
+            } else if (to == null) {
+                return getKeyValueIterator(map.tailMap(from, true).keySet(), forward);
+            } else {
+                return getKeyValueIterator(map.subMap(from, true, to, true).keySet(), forward);
+            }
         }
     }
 
@@ -216,13 +299,13 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
-    public synchronized KeyValueIterator<Bytes, byte[]> all() {
-        return range(null, null);
+    public KeyValueIterator<Bytes, byte[]> all() {
+        return range(null, null, true, IsolationLevel.READ_UNCOMMITTED);
     }
 
     @Override
-    public synchronized KeyValueIterator<Bytes, byte[]> reverseAll() {
-        return new InMemoryKeyValueIterator(map.keySet(), false);
+    public KeyValueIterator<Bytes, byte[]> reverseAll() {
+        return range(null, null, false, IsolationLevel.READ_UNCOMMITTED);
     }
 
     @Override
@@ -231,12 +314,97 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
+    public ReadOnlyKeyValueStore<Bytes, byte[]> readOnly(final IsolationLevel isolationLevel) {
+        Objects.requireNonNull(isolationLevel, "isolationLevel cannot be null");
+        return new ReadOnlyView(isolationLevel);
+    }
+
+    /**
+     * Read-only view of this store bound to an isolation level. Every read delegates to the store's
+     * shared read helper with this view's {@code isolationLevel}, so the view and the store's own
+     * reads follow one code path; under READ_COMMITTED that path excludes the transaction buffer's
+     * staging layer and snapshots the committed base under the buffer's read-lock, so an interactive
+     * query cannot race a concurrent commit.
+     */
+    private final class ReadOnlyView implements ReadOnlyKeyValueStore<Bytes, byte[]> {
+
+        private final IsolationLevel isolationLevel;
+
+        ReadOnlyView(final IsolationLevel isolationLevel) {
+            this.isolationLevel = isolationLevel;
+        }
+
+        @Override
+        public byte[] get(final Bytes key) {
+            Objects.requireNonNull(key, "key cannot be null");
+            return InMemoryKeyValueStore.this.get(key, isolationLevel);
+        }
+
+        @Override
+        public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
+            return InMemoryKeyValueStore.this.range(from, to, true, isolationLevel);
+        }
+
+        @Override
+        public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from, final Bytes to) {
+            return InMemoryKeyValueStore.this.range(from, to, false, isolationLevel);
+        }
+
+        @Override
+        public KeyValueIterator<Bytes, byte[]> all() {
+            return InMemoryKeyValueStore.this.range(null, null, true, isolationLevel);
+        }
+
+        @Override
+        public KeyValueIterator<Bytes, byte[]> reverseAll() {
+            return InMemoryKeyValueStore.this.range(null, null, false, isolationLevel);
+        }
+
+        @Override
+        public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix,
+                                                                                        final PS prefixKeySerializer) {
+            Objects.requireNonNull(prefix, "prefix cannot be null");
+            Objects.requireNonNull(prefixKeySerializer, "prefixKeySerializer cannot be null");
+            return InMemoryKeyValueStore.this.prefixScan(prefix, prefixKeySerializer, isolationLevel);
+        }
+
+        @Override
+        public long approximateNumEntries() {
+            return InMemoryKeyValueStore.this.approximateNumEntries();
+        }
+    }
+
+    @Override
+    public long approximateNumUncommittedBytes() {
+        if (transactionBuffer != null) {
+            return transactionBuffer.approximateNumUncommittedBytes();
+        }
+        return 0;
+    }
+
+    @Override
     public void commit(final Map<TopicPartition, Long> changelogOffsets) {
-        // do-nothing since it is in-memory
+        commitStagedWrites();
+    }
+
+    void commitStagedWrites() {
+        if (transactionBuffer != null) {
+            synchronized (position) {
+                transactionBuffer.mergePendingPositionInto(position);
+                transactionBuffer.commit();
+            }
+        }
+    }
+
+    void rollbackStagedWrites() {
+        if (transactionBuffer != null) {
+            transactionBuffer.rollback();
+        }
     }
 
     @Override
     public void close() {
+        rollbackStagedWrites();
         map.clear();
         open = false;
     }

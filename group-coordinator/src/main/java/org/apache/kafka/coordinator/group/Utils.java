@@ -33,6 +33,8 @@ import com.dynatrace.hash4j.hashing.Hashing;
 import com.google.re2j.Pattern;
 import com.google.re2j.PatternSyntaxException;
 
+import org.slf4j.Logger;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -84,6 +86,36 @@ public class Utils {
                 builder.append(entry.getKey());
                 builder.append("-");
                 builder.append(partitionsIterator.next());
+                if (partitionsIterator.hasNext() || topicsIterator.hasNext()) {
+                    builder.append(", ");
+                }
+            }
+        }
+        builder.append("]");
+        return builder.toString();
+    }
+
+    /**
+     * @return The provided assignment with epochs as a String.
+     *
+     * Example:
+     * [topicid1-0@5, topicid1-1@5, topicid2-0@3, topicid2-1@3]
+     */
+    public static String assignmentWithEpochsToString(
+        Map<Uuid, Map<Integer, Integer>> assignmentWithEpochs
+    ) {
+        StringBuilder builder = new StringBuilder("[");
+        Iterator<Map.Entry<Uuid, Map<Integer, Integer>>> topicsIterator = assignmentWithEpochs.entrySet().iterator();
+        while (topicsIterator.hasNext()) {
+            Map.Entry<Uuid, Map<Integer, Integer>> entry = topicsIterator.next();
+            Iterator<Map.Entry<Integer, Integer>> partitionsIterator = entry.getValue().entrySet().iterator();
+            while (partitionsIterator.hasNext()) {
+                Map.Entry<Integer, Integer> partitionEpoch = partitionsIterator.next();
+                builder.append(entry.getKey());
+                builder.append("-");
+                builder.append(partitionEpoch.getKey());
+                builder.append("@");
+                builder.append(partitionEpoch.getValue());
                 if (partitionsIterator.hasNext() || topicsIterator.hasNext()) {
                     builder.append(", ");
                 }
@@ -201,17 +233,79 @@ public class Utils {
     }
 
     /**
-     * Creates a map of topic id and partition set from a list of consumer group TopicPartitions.
+     * Creates a map of topic id and partition with assignment epochs from a list of consumer group TopicPartitions.
      *
-     * @param topicPartitionsList   The list of TopicPartitions.
-     * @return a map of topic id and partition set.
+     * @param log The logger to use for logging errors.
+     * @param groupId The group id for logging context.
+     * @param topicPartitions The list of TopicPartitions.
+     * @param defaultEpoch The default epoch to use when the epoch information is not available for a partition.
+     * @return a map of topic id and partitions with assignment epochs.
      */
-    public static Map<Uuid, Set<Integer>> assignmentFromTopicPartitions(
-        List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitionsList
+    public static Map<Uuid, Map<Integer, Integer>> assignmentFromTopicPartitions(
+        Logger log,
+        String groupId,
+        List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitions,
+        int defaultEpoch
     ) {
-        return topicPartitionsList.stream().collect(Collectors.toMap(
-            ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions::topicId,
-            topicPartitions -> Collections.unmodifiableSet(new HashSet<>(topicPartitions.partitions()))));
+        // For legacy static member, the defaultEpoch could be -2 (LEAVE_GROUP_STATIC_MEMBER_EPOCH).
+        // But we want to ensure the default memberEpoch assigned is non-negative.
+        int adjustedDefaultEpoch = Math.max(defaultEpoch, 0);
+        Map<Uuid, Map<Integer, Integer>> assignmentWithEpochs = new HashMap<>();
+
+        for (ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions tp : topicPartitions) {
+            Map<Integer, Integer> partitionEpochs = new HashMap<>();
+            List<Integer> partitions = tp.partitions();
+            List<Integer> epochs = tp.assignmentEpochs();
+
+            if (epochs != null && epochs.size() == partitions.size()) {
+                for (int i = 0; i < partitions.size(); i++) {
+                    partitionEpochs.put(partitions.get(i), epochs.get(i));
+                }
+            } else {
+                if (epochs != null) {
+                    log.error("[GroupId {}] Size of assignment epochs {} is not equal to partitions {} for topic {}. " +
+                            "Using default epoch {} for all partitions.",
+                        groupId, epochs.size(), partitions.size(), tp.topicId(), adjustedDefaultEpoch);
+                }
+                for (Integer partition : partitions) {
+                    partitionEpochs.put(partition, adjustedDefaultEpoch);
+                }
+            }
+
+            assignmentWithEpochs.put(tp.topicId(), Collections.unmodifiableMap(partitionEpochs));
+        }
+        return Collections.unmodifiableMap(assignmentWithEpochs);
+    }
+
+    /**
+     * Adds the given assignment epoch to an assignment without epochs.
+     */
+    public static Map<Uuid, Map<Integer, Integer>> toAssignmentWithEpochs(
+        Map<Uuid, Set<Integer>> assignment,
+        int epoch
+    ) {
+        Map<Uuid, Map<Integer, Integer>> result = new HashMap<>();
+        for (Map.Entry<Uuid, Set<Integer>> entry : assignment.entrySet()) {
+            Map<Integer, Integer> partitionEpochs = new HashMap<>();
+            for (Integer partition : entry.getValue()) {
+                partitionEpochs.put(partition, epoch);
+            }
+            result.put(entry.getKey(), Collections.unmodifiableMap(partitionEpochs));
+        }
+        return Collections.unmodifiableMap(result);
+    }
+
+    /**
+     * Discards the assignment epochs from an assignment with epochs.
+     */
+    public static Map<Uuid, Set<Integer>> toAssignmentWithoutEpochs(
+        Map<Uuid, Map<Integer, Integer>> assignmentWithEpochs
+    ) {
+        Map<Uuid, Set<Integer>> result = new HashMap<>();
+        for (Map.Entry<Uuid, Map<Integer, Integer>> entry : assignmentWithEpochs.entrySet()) {
+            result.put(entry.getKey(), Collections.unmodifiableSet(new HashSet<>(entry.getValue().keySet())));
+        }
+        return Collections.unmodifiableMap(result);
     }
 
     /**

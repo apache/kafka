@@ -54,6 +54,7 @@ public class AddNamedTopologyResult {
                 return new StreamsException(e.getCause());
             }
         } catch (final InterruptedException e) {
+            Thread.currentThread().interrupt();
             return null;
         }
     }

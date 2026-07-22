@@ -19,10 +19,10 @@ package org.apache.kafka.common.record.internal;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
-import org.apache.kafka.common.utils.ByteUtils;
-import org.apache.kafka.common.utils.Checksums;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.internals.ByteUtils;
+import org.apache.kafka.common.utils.internals.Checksums;
 
 import java.io.DataOutputStream;
 import java.io.IOException;

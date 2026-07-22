@@ -18,10 +18,12 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+
+import static org.apache.kafka.streams.state.internals.Utils.readBytes;
 
 /**
  * Deserializer for Kafka Headers.
@@ -66,8 +68,8 @@ class HeadersDeserializer {
 
         for (int i = 0; i < headersCount; i++) {
             final int keyLength = ByteUtils.readVarint(buffer);
-            final byte[] keyBytes = new byte[keyLength];
-            buffer.get(keyBytes);
+            final byte[] keyBytes = readBytes(buffer, keyLength);
+            
             final String key = new String(keyBytes, StandardCharsets.UTF_8);
 
             final int valueLength = ByteUtils.readVarint(buffer);
@@ -75,8 +77,7 @@ class HeadersDeserializer {
             if (valueLength == -1) {
                 value = null;
             } else {
-                value = new byte[valueLength];
-                buffer.get(value);
+                value = readBytes(buffer, valueLength);
             }
 
             headers.add(key, value);

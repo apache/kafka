@@ -29,19 +29,19 @@ import org.apache.kafka.common.requests.ShareAcknowledgeResponse;
 import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -95,7 +95,7 @@ public class ShareSessionHandler {
     }
 
     public Collection<TopicIdPartition> sessionPartitions() {
-        return Collections.unmodifiableCollection(sessionPartitions.values());
+        return Set.copyOf(sessionPartitions.values());
     }
 
     public void addPartitionToFetch(TopicIdPartition topicIdPartition, Acknowledgements partitionAcknowledgements) {
@@ -166,12 +166,22 @@ public class ShareSessionHandler {
         Map<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgementBatches = new HashMap<>();
         if (!nextAcknowledgements.isEmpty()) {
             for (Map.Entry<TopicIdPartition, Acknowledgements> partitionsAcks : nextAcknowledgements.entrySet()) {
+                TopicIdPartition tip = partitionsAcks.getKey();
                 List<AcknowledgementBatch> partitionAckBatches = partitionsAcks.getValue().getAcknowledgementBatches();
                 for (AcknowledgementBatch ackBatch : partitionAckBatches) {
                     if (ackBatch.acknowledgeTypes().contains(AcknowledgeType.RENEW.id)) {
                         hasRenewAcknowledgements = true;
                     }
-                    acknowledgementBatches.computeIfAbsent(partitionsAcks.getKey(), k -> new ArrayList<>()).add(ackBatch.toShareFetchRequest());
+                    acknowledgementBatches.computeIfAbsent(tip, k -> new ArrayList<>()).add(ackBatch.toShareFetchRequest());
+                }
+
+                // If the partition is only being included in the request to send acknowledgements, we need to
+                // remove it so that it doesn't get added into the share session for fetching
+                TopicIdPartition sessionTip = sessionPartitions.get(tip.topicPartition());
+                if ((sessionTip == null) || !sessionTip.equals(tip)) {
+                    if (!removed.contains(tip)) {
+                        removed.add(tip);
+                    }
                 }
             }
         }
@@ -179,16 +189,26 @@ public class ShareSessionHandler {
         nextPartitions = new LinkedHashMap<>();
         nextAcknowledgements = new LinkedHashMap<>();
 
-        if (canSkipIfRequestEmpty && added.isEmpty() && removed.isEmpty() && acknowledgementBatches.isEmpty()) {
-            return null;
+        // If there are no changes to the share session and no acknowledgements, we can sometimes skip sending an empty request
+        if (added.isEmpty() && removed.isEmpty() && acknowledgementBatches.isEmpty()) {
+            // If the share session is empty, there are no partitions to fetch from and we can always skip
+            if (sessionPartitions.isEmpty()) {
+                log.debug("Skipping sending empty ShareFetch because share partitions empty");
+                return null;
+            }
+
+            // If the share session is not empty, but we do not want to fetch records for this node, we can skip
+            if (canSkipIfRequestEmpty) {
+                log.debug("Skipping sending empty ShareFetch because no share session changes or acknowledgements");
+                return null;
+            }
         }
 
         if (log.isDebugEnabled()) {
-            log.debug("Build ShareFetch {} for node {}. Added {}, removed {}, replaced {} out of {}",
+            log.debug("Build ShareFetch {} for node {}. Added {}, removed {} out of {}",
                 nextMetadata, node,
                 topicIdPartitionsToLogString(added),
                 topicIdPartitionsToLogString(removed),
-                topicIdPartitionsToLogString(replaced),
                 topicIdPartitionsToLogString(sessionPartitions.values()));
         }
 
@@ -218,9 +238,9 @@ public class ShareSessionHandler {
         }
     }
 
-    public ShareAcknowledgeRequest.Builder newShareAcknowledgeBuilder(String groupId, ShareFetchConfig shareFetchConfig) {
+    public ShareAcknowledgeRequest.Builder newShareAcknowledgeBuilder(String groupId) {
         if (nextMetadata.isNewSession()) {
-            // A share session cannot be started with a ShareAcknowledge request
+            // A share session cannot be started with a ShareAcknowledge request. The caller handles completing the acks.
             nextPartitions.clear();
             nextAcknowledgements.clear();
             return null;
@@ -264,8 +284,15 @@ public class ShareSessionHandler {
         if ((response.error() == Errors.SHARE_SESSION_NOT_FOUND) ||
                 (response.error() == Errors.INVALID_SHARE_SESSION_EPOCH) ||
                 (response.error() == Errors.SHARE_SESSION_LIMIT_REACHED)) {
-            log.info("Node {} was unable to process the ShareFetch request with {}: {}.",
-                    node, nextMetadata, response.error());
+            // These share-session errors are handled the same way: close the existing session (if any) and re-establish
+            // it by re-sending a full ShareFetch request. For SHARE_SESSION_NOT_FOUND / INVALID_SHARE_SESSION_EPOCH this
+            // recovers on the next request; for SHARE_SESSION_LIMIT_REACHED it succeeds once the broker's session cache
+            // has capacity.
+            if (log.isDebugEnabled()) {
+                log.debug("Node {} was unable to process the ShareFetch request with {}: {}. " +
+                        "Re-sending a full ShareFetch request, which closes the existing session on the broker and establishes a new one.",
+                        node, nextMetadata, response.error());
+            }
             nextMetadata = nextMetadata.nextCloseExistingAttemptNew();
             return false;
         }
@@ -296,8 +323,13 @@ public class ShareSessionHandler {
     public boolean handleResponse(ShareAcknowledgeResponse response, short version) {
         if ((response.error() == Errors.SHARE_SESSION_NOT_FOUND) ||
                 (response.error() == Errors.INVALID_SHARE_SESSION_EPOCH)) {
-            log.info("Node {} was unable to process the ShareAcknowledge request with {}: {}.",
-                    node, nextMetadata, response.error());
+            // These share-session errors are handled the same way: close the existing session (if any) and re-establish
+            // it by re-sending a full ShareAcknowledge request, which recovers on the next request.
+            if (log.isDebugEnabled()) {
+                log.debug("Node {} was unable to process the ShareAcknowledge request with {}: {}. " +
+                        "Re-sending a full ShareAcknowledge request, which closes the existing session on the broker and establishes a new one.",
+                        node, nextMetadata, response.error());
+            }
             nextMetadata = nextMetadata.nextCloseExistingAttemptNew();
             return false;
         }

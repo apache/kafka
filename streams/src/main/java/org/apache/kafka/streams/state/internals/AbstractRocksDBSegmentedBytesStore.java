@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
@@ -40,16 +41,16 @@ import org.rocksdb.WriteBatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 
-public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements SegmentedBytesStore {
+public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements SegmentedBytesStore, WithRetentionPeriod {
     private static final Logger LOG = LoggerFactory.getLogger(AbstractRocksDBSegmentedBytesStore.class);
 
     private final String name;
@@ -62,7 +63,9 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
     private boolean consistencyEnabled = false;
     private Position position;
-    protected OffsetCheckpoint positionCheckpoint;
+    // Position of writes staged in the current transaction; merged into the committed position on commit().
+    private Position pendingPosition = Position.emptyPosition();
+    private boolean transactional;
     private volatile boolean open;
 
     AbstractRocksDBSegmentedBytesStore(final String name,
@@ -76,23 +79,29 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     }
 
     @Override
+    public long retentionPeriod() {
+        return retentionPeriod;
+    }
+
+    @Override
     public KeyValueIterator<Bytes, byte[]> fetch(final Bytes key,
                                                  final long from,
                                                  final long to) {
-        return fetch(key, from, to, true);
+        return fetch(key, from, to, true, null);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> backwardFetch(final Bytes key,
                                                          final long from,
                                                          final long to) {
-        return fetch(key, from, to, false);
+        return fetch(key, from, to, false, null);
     }
 
-    KeyValueIterator<Bytes, byte[]> fetch(final Bytes key,
-                                          final long from,
-                                          final long to,
-                                          final boolean forward) {
+    private KeyValueIterator<Bytes, byte[]> fetch(final Bytes key,
+                                                  final long from,
+                                                  final long to,
+                                                  final boolean forward,
+                                                  final IsolationLevel isolationLevel) {
         final long actualFrom = getActualFrom(from);
 
         if (keySchema instanceof WindowKeySchema && to < actualFrom) {
@@ -110,7 +119,8 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                 keySchema.hasNextCondition(key, key, actualFrom, to, forward),
                 binaryFrom,
                 binaryTo,
-                forward);
+                forward,
+                isolationLevel);
     }
 
     private long getActualFrom(final long from) {
@@ -122,7 +132,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                                                  final Bytes keyTo,
                                                  final long from,
                                                  final long to) {
-        return fetch(keyFrom, keyTo, from, to, true);
+        return fetch(keyFrom, keyTo, from, to, true, null);
     }
 
     @Override
@@ -130,14 +140,15 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                                                          final Bytes keyTo,
                                                          final long from,
                                                          final long to) {
-        return fetch(keyFrom, keyTo, from, to, false);
+        return fetch(keyFrom, keyTo, from, to, false, null);
     }
 
-    KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom,
-                                          final Bytes keyTo,
-                                          final long from,
-                                          final long to,
-                                          final boolean forward) {
+    private KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom,
+                                                  final Bytes keyTo,
+                                                  final long from,
+                                                  final long to,
+                                                  final boolean forward,
+                                                  final IsolationLevel isolationLevel) {
         if (keyFrom != null && keyTo != null && keyFrom.compareTo(keyTo) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
                     "This may be due to range arguments set in the wrong order, " +
@@ -163,59 +174,49 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                 keySchema.hasNextCondition(keyFrom, keyTo, actualFrom, to, forward),
                 binaryFrom,
                 binaryTo,
-                forward);
+                forward,
+                isolationLevel);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
-        final long actualFrom = getActualFrom(0);
-        final List<S> searchSpace = keySchema.segmentsToSearch(segments, actualFrom, Long.MAX_VALUE, true);
-
-        return new SegmentIterator<>(
-                searchSpace.iterator(),
-                keySchema.hasNextCondition(null, null, actualFrom, Long.MAX_VALUE, true),
-                null,
-                null,
-                true);
+        return all(true, null);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> backwardAll() {
-        final long actualFrom = getActualFrom(0);
+        return all(false, null);
+    }
 
-        final List<S> searchSpace = keySchema.segmentsToSearch(segments, actualFrom, Long.MAX_VALUE, false);
+    private KeyValueIterator<Bytes, byte[]> all(final boolean forward, final IsolationLevel isolationLevel) {
+        final long actualFrom = getActualFrom(0);
+        final List<S> searchSpace = keySchema.segmentsToSearch(segments, actualFrom, Long.MAX_VALUE, forward);
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
-                keySchema.hasNextCondition(null, null, actualFrom, Long.MAX_VALUE, false),
+                keySchema.hasNextCondition(null, null, actualFrom, Long.MAX_VALUE, forward),
                 null,
                 null,
-                false);
+                forward,
+                isolationLevel);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> fetchAll(final long timeFrom,
                                                     final long timeTo) {
-        final long actualFrom = getActualFrom(timeFrom);
-
-        if (keySchema instanceof WindowKeySchema && timeTo < actualFrom) {
-            LOG.debug("Returning no records for as timeTo ({}) < actualFrom ({}) ", timeTo, actualFrom);
-            return KeyValueIterators.emptyIterator();
-        }
-
-        final List<S> searchSpace = segments.segments(actualFrom, timeTo, true);
-
-        return new SegmentIterator<>(
-                searchSpace.iterator(),
-                keySchema.hasNextCondition(null, null, actualFrom, timeTo, true),
-                null,
-                null,
-                true);
+        return fetchAll(timeFrom, timeTo, true, null);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> backwardFetchAll(final long timeFrom,
                                                             final long timeTo) {
+        return fetchAll(timeFrom, timeTo, false, null);
+    }
+
+    private KeyValueIterator<Bytes, byte[]> fetchAll(final long timeFrom,
+                                                     final long timeTo,
+                                                     final boolean forward,
+                                                     final IsolationLevel isolationLevel) {
         final long actualFrom = getActualFrom(timeFrom);
 
         if (keySchema instanceof WindowKeySchema && timeTo < actualFrom) {
@@ -223,14 +224,15 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             return KeyValueIterators.emptyIterator();
         }
 
-        final List<S> searchSpace = segments.segments(actualFrom, timeTo, false);
+        final List<S> searchSpace = segments.segments(actualFrom, timeTo, forward);
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
-                keySchema.hasNextCondition(null, null, actualFrom, timeTo, false),
+                keySchema.hasNextCondition(null, null, actualFrom, timeTo, forward),
                 null,
                 null,
-                false);
+                forward,
+                isolationLevel);
     }
 
     @Override
@@ -255,7 +257,8 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             expiredRecordSensor.record(1.0d, internalProcessorContext.currentSystemTimeMs());
         } else {
             synchronized (position) {
-                StoreQueryUtils.updatePosition(position, internalProcessorContext);
+                // Transactional puts stage their position too, so READ_COMMITTED never sees a position ahead of the data.
+                StoreQueryUtils.updatePosition(transactional ? pendingPosition : position, internalProcessorContext);
                 segment.put(key, value);
             }
         }
@@ -263,6 +266,10 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
     @Override
     public byte[] get(final Bytes key) {
+        return get(key, null);
+    }
+
+    private byte[] get(final Bytes key, final IsolationLevel isolationLevel) {
         final long timestampFromKey = keySchema.segmentTimestamp(key);
         // check if timestamp is expired
         if (timestampFromKey < observedStreamTime - retentionPeriod + 1) {
@@ -274,7 +281,14 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         if (segment == null) {
             return null;
         }
-        return segment.get(key);
+        // Live read for the vanilla path; interactive queries read through the segment's isolation view.
+        return isolationLevel == null ? segment.get(key) : segment.readOnly(isolationLevel).get(key);
+    }
+
+    /** An isolation-bound read view; the level is resolved once here and reads share the store's private utilities. */
+    ReadOnlyView readOnly(final IsolationLevel isolationLevel) {
+        Objects.requireNonNull(isolationLevel, "isolationLevel cannot be null");
+        return new ReadOnlyView(this, isolationLevel);
     }
 
     @Override
@@ -296,17 +310,16 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                 metrics
         );
 
-        final File positionCheckpointFile = new File(stateStoreContext.stateDir(), name() + ".position");
-        this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
-        this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
-        segments.setPosition(position);
         segments.openExisting(internalProcessorContext, observedStreamTime);
+        this.position = segments.position;
+        this.pendingPosition = Position.emptyPosition();
+        StoreQueryUtils.maybeMigrateExistingPositionFile(stateStoreContext.stateDir(), name(), this.position);
 
         // register and possibly restore the state from the logs
         stateStoreContext.register(
             root,
             (RecordBatchingStateRestoreCallback) this::restoreAllInternal,
-            () -> StoreQueryUtils.checkpointPosition(positionCheckpoint, position)
+                segments::writePosition
         );
 
         open = true;
@@ -315,17 +328,51 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                 stateStoreContext.appConfigs(),
                 IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
                 false);
+
+        transactional = StreamsConfig.InternalConfig.getBoolean(
+                stateStoreContext.appConfigs(),
+                StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG,
+                false);
     }
 
     @Override
     public void commit(final Map<TopicPartition, Long> changelogOffsets) {
-        segments.commit(changelogOffsets);
+        synchronized (position) {
+            if (transactional) {
+                // Publish the staged position atomically with the segment-buffer flush below.
+                position.merge(pendingPosition);
+                pendingPosition = Position.emptyPosition();
+            }
+            segments.commit(changelogOffsets);
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    public boolean managesOffsets() {
+        return segments.managesOffsets();
+    }
+
+    @Override
+    public Long committedOffset(final TopicPartition partition) {
+        return segments.committedOffset(partition);
+    }
+
+    @Override
+    public long approximateNumUncommittedBytes() {
+        long total = 0;
+        for (final S segment : segments.allSegments(true)) {
+            total += segment.approximateNumUncommittedBytes();
+        }
+        return total;
     }
 
     @Override
     public void close() {
         open = false;
         segments.close();
+        // The segments discard their uncommitted writes on close; drop the staged position to match.
+        pendingPosition = Position.emptyPosition();
     }
 
     @Override
@@ -394,6 +441,68 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
     @Override
     public Position getPosition() {
+        // Include staged writes so the owner's view (and READ_UNCOMMITTED queries) stays consistent.
+        if (transactional) {
+            synchronized (position) {
+                return position.copy().merge(pendingPosition);
+            }
+        }
         return position;
+    }
+
+    Position getCommittedPosition() {
+        if (transactional) {
+            synchronized (position) {
+                return position.copy();
+            }
+        }
+        return position;
+    }
+
+    /** Read view bound to an {@link IsolationLevel}, delegating to the store's private read utilities. */
+    static final class ReadOnlyView {
+        private final AbstractRocksDBSegmentedBytesStore<?> store;
+        private final IsolationLevel isolationLevel;
+
+        private ReadOnlyView(final AbstractRocksDBSegmentedBytesStore<?> store, final IsolationLevel isolationLevel) {
+            this.store = store;
+            this.isolationLevel = isolationLevel;
+        }
+
+        KeyValueIterator<Bytes, byte[]> fetch(final Bytes key, final long from, final long to) {
+            return store.fetch(key, from, to, true, isolationLevel);
+        }
+
+        KeyValueIterator<Bytes, byte[]> backwardFetch(final Bytes key, final long from, final long to) {
+            return store.fetch(key, from, to, false, isolationLevel);
+        }
+
+        KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to) {
+            return store.fetch(keyFrom, keyTo, from, to, true, isolationLevel);
+        }
+
+        KeyValueIterator<Bytes, byte[]> backwardFetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to) {
+            return store.fetch(keyFrom, keyTo, from, to, false, isolationLevel);
+        }
+
+        KeyValueIterator<Bytes, byte[]> all() {
+            return store.all(true, isolationLevel);
+        }
+
+        KeyValueIterator<Bytes, byte[]> backwardAll() {
+            return store.all(false, isolationLevel);
+        }
+
+        KeyValueIterator<Bytes, byte[]> fetchAll(final long from, final long to) {
+            return store.fetchAll(from, to, true, isolationLevel);
+        }
+
+        KeyValueIterator<Bytes, byte[]> backwardFetchAll(final long from, final long to) {
+            return store.fetchAll(from, to, false, isolationLevel);
+        }
+
+        byte[] get(final Bytes key) {
+            return store.get(key, isolationLevel);
+        }
     }
 }

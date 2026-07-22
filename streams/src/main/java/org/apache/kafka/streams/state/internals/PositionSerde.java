@@ -25,6 +25,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import static org.apache.kafka.streams.state.internals.Utils.readBytes;
+
 public final class PositionSerde {
 
     // uninstantiable utility class
@@ -40,8 +42,7 @@ public final class PositionSerde {
                 final Map<String, Map<Integer, Long>> position = new HashMap<>(nTopics);
                 for (int i = 0; i < nTopics; i++) {
                     final int topicNameLength = buffer.getInt();
-                    final byte[] topicNameBytes = new byte[topicNameLength];
-                    buffer.get(topicNameBytes);
+                    final byte[] topicNameBytes = readBytes(buffer, topicNameLength);
                     final String topic = new String(topicNameBytes, StandardCharsets.UTF_8);
 
                     final int numPairs = buffer.getInt();

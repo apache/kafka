@@ -179,6 +179,21 @@ public class EosIntegrationTest {
         );
     }
 
+    // Adds a sparse "transactional state stores" (KIP-892) dimension on top of the group-protocol/
+    // processing-threads matrix. To avoid exploding the full matrix by 2, the transactional=true case
+    // is only exercised for a single, representative combination (classic protocol, processing threads
+    // disabled) while preserving all existing (transactional=false) coverage. Transactional state stores
+    // are an exactly-once-only feature; this test already runs under EXACTLY_ONCE_V2.
+    private static java.util.stream.Stream<Arguments> groupProtocolProcessingThreadsAndTransactionalParameters() {
+        return java.util.stream.Stream.of(
+            Arguments.of("classic", true, false),
+            Arguments.of("classic", false, false),
+            Arguments.of("streams", true, false),
+            Arguments.of("streams", false, false),
+            Arguments.of("classic", false, true)
+        );
+    }
+
     @BeforeEach
     public void createTopics() throws Exception {
         applicationId = "appId-" + TEST_NUMBER.getAndIncrement();
@@ -498,8 +513,10 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("groupProtocolAndProcessingThreadsParameters")
-    public void shouldNotViolateEosIfOneTaskFailsWithState(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
+    @MethodSource("groupProtocolProcessingThreadsAndTransactionalParameters")
+    public void shouldNotViolateEosIfOneTaskFailsWithState(final String groupProtocol,
+                                                           final boolean processingThreadsEnabled,
+                                                           final boolean transactionalStateStores) throws Exception {
 
         // this test updates a store with 10 + 5 + 5 records per partition (running with 2 partitions)
         // the app is supposed to emit all 40 update records into the output topic
@@ -515,7 +532,7 @@ public class EosIntegrationTest {
 
         // We need more processing time under "with state" situation, so increasing the max.poll.interval.ms
         // to avoid unexpected rebalance during test, which will cause unexpected fail over triggered
-        try (final KafkaStreams streams = getKafkaStreams("dummy", true, "appDir", 2, groupProtocol, processingThreadsEnabled)) {
+        try (final KafkaStreams streams = getKafkaStreams("dummy", true, "appDir", 2, groupProtocol, processingThreadsEnabled, transactionalStateStores)) {
             startApplicationAndWaitUntilRunning(streams);
 
             final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
@@ -772,12 +789,14 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("groupProtocolAndProcessingThreadsParameters")
-    public void shouldWriteLatestOffsetsToCheckpointOnShutdown(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
+    @MethodSource("groupProtocolProcessingThreadsAndTransactionalParameters")
+    public void shouldWriteLatestOffsetsToCheckpointOnShutdown(final String groupProtocol,
+                                                               final boolean processingThreadsEnabled,
+                                                               final boolean transactionalStateStores) throws Exception {
         final List<KeyValue<Long, Long>> writtenData = prepareData(0L, 10, 0L, 1L);
         final List<KeyValue<Long, Long>> expectedResult = computeExpectedResult(writtenData);
 
-        try (final KafkaStreams streams = getKafkaStreams("streams", true, "appDir", 1, groupProtocol, processingThreadsEnabled)) {
+        try (final KafkaStreams streams = getKafkaStreams("streams", true, "appDir", 1, groupProtocol, processingThreadsEnabled, transactionalStateStores)) {
             writeInputData(writtenData);
 
             startApplicationAndWaitUntilRunning(streams);
@@ -923,18 +942,12 @@ public class EosIntegrationTest {
         kafkaStreams.close();
         waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.NOT_RUNNING, Duration.ofSeconds(60));
 
-        final File checkpointFile = Paths.get(
+        final File taskDir = Paths.get(
             streamsConfiguration.getProperty(StreamsConfig.STATE_DIR_CONFIG),
             streamsConfiguration.getProperty(StreamsConfig.APPLICATION_ID_CONFIG),
-            task00.toString(),
-            ".checkpoint"
+            task00.toString()
         ).toFile();
-        assertTrue(checkpointFile.exists());
-        final Map<TopicPartition, Long> checkpoints = new OffsetCheckpoint(checkpointFile).read();
-        assertEquals(
-            Long.valueOf(restoredOffsetsForPartition0.get()),
-            new ArrayList<>(checkpoints.values()).get(0)
-        );
+        assertTrue(taskDir.exists());
     }
 
 
@@ -1123,13 +1136,23 @@ public class EosIntegrationTest {
         return data;
     }
 
-    // the threads should no longer fail one thread one at a time
     private KafkaStreams getKafkaStreams(final String dummyHostName,
                                          final boolean withState,
                                          final String appDir,
                                          final int numberOfStreamsThreads,
                                          final String groupProtocol,
                                          final boolean processingThreadsEnabled) {
+        return getKafkaStreams(dummyHostName, withState, appDir, numberOfStreamsThreads, groupProtocol, processingThreadsEnabled, false);
+    }
+
+    // the threads should no longer fail one thread one at a time
+    private KafkaStreams getKafkaStreams(final String dummyHostName,
+                                         final boolean withState,
+                                         final String appDir,
+                                         final int numberOfStreamsThreads,
+                                         final String groupProtocol,
+                                         final boolean processingThreadsEnabled,
+                                         final boolean transactionalStateStores) {
         commitRequested = new AtomicInteger(0);
         errorInjected = new AtomicBoolean(false);
         stallInjected = new AtomicBoolean(false);
@@ -1237,6 +1260,11 @@ public class EosIntegrationTest {
         properties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, dummyHostName + ":2142");
         properties.put(InternalConfig.PROCESSING_THREADS_ENABLED, processingThreadsEnabled);
         properties.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
+        if (transactionalStateStores) {
+            // This test already runs under EXACTLY_ONCE_V2 (see PROCESSING_GUARANTEE_CONFIG above);
+            // transactional state stores are an exactly-once-only feature.
+            properties.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
+        }
 
         final Properties config = StreamsTestUtils.getStreamsConfig(
             applicationId,

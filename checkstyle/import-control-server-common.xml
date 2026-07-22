@@ -32,7 +32,6 @@
     <allow pkg="java.security" />
     <allow pkg="javax.net.ssl" />
     <allow pkg="javax.security" />
-    <allow pkg="net.jqwik.api" />
     <allow pkg="javax.crypto" />
 
     <!-- no one depends on the server -->
@@ -58,9 +57,12 @@
     </subpackage>
 
     <subpackage name="metadata">
+        <allow pkg="org.apache.kafka.common.config" />
         <allow pkg="org.apache.kafka.common.message" />
-        <allow pkg="org.apache.kafka.server.common" />
         <allow pkg="org.apache.kafka.common.protocol" />
+        <allow pkg="org.apache.kafka.metadata.properties" />
+        <allow pkg="org.apache.kafka.server.common" />
+        <allow pkg="org.apache.kafka.test" />
     </subpackage>
 
     <subpackage name="security">
@@ -110,6 +112,11 @@
             <allow pkg="org.apache.kafka.server.util" />
             <allow pkg="org.apache.kafka.test" />
           </subpackage>
+          <subpackage name="dlq">
+            <allow pkg="org.apache.kafka.clients" />
+            <allow pkg="org.apache.kafka.server.util" />
+            <allow pkg="org.apache.kafka.test" />
+          </subpackage>
         </subpackage>
 
         <subpackage name="util">
@@ -126,6 +133,10 @@
 
             <allow class="org.apache.kafka.server.util.TopicFilter.IncludeList" />
             <allow class="org.apache.kafka.test.TestUtils" />
+            <allow class="org.apache.kafka.server.authorizer.Authorizer" />
+            <!-- ServerTestUtils uses yammer metrics for test cleanup -->
+            <allow pkg="org.apache.kafka.server.metrics" />
+            <allow pkg="com.yammer.metrics.core" />
             <subpackage name="timer">
                 <allow class="org.apache.kafka.server.util.MockTime" />
                 <allow class="org.apache.kafka.server.util.ShutdownableThread" />

@@ -142,7 +142,7 @@ public final class ClusterDelta {
                 () -> new IllegalStateException(String.format("Unable to replay %s: unknown " +
                     "value for inControlledShutdown field: %d", record, record.inControlledShutdown())));
         Optional<List<Uuid>> directoriesChange = Optional.ofNullable(record.logDirs()).filter(list -> !list.isEmpty());
-        Optional<List<Uuid>> cordonedDirectoriesChange = Optional.ofNullable(record.cordonedLogDirs()).filter(list -> !list.isEmpty());
+        Optional<List<Uuid>> cordonedDirectoriesChange = Optional.ofNullable(record.cordonedLogDirs());
         BrokerRegistration nextRegistration = curRegistration.cloneWith(
             fencingChange.asBoolean(),
             inControlledShutdownChange.asBoolean(),

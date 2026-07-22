@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.Login;
@@ -28,7 +29,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
@@ -236,6 +236,7 @@ import javax.security.auth.spi.LoginModule;
  * @see SaslConfigs#SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS_DOC
  * @see SaslConfigs#SASL_LOGIN_REFRESH_BUFFER_SECONDS_DOC
  */
+@InterfaceAudience.Public
 public class OAuthBearerLoginModule implements LoginModule {
 
     /**
@@ -257,7 +258,7 @@ public class OAuthBearerLoginModule implements LoginModule {
      */
     public static final String OAUTHBEARER_MECHANISM = "OAUTHBEARER";
     private static final Logger log = LoggerFactory.getLogger(OAuthBearerLoginModule.class);
-    private static final SaslExtensions EMPTY_EXTENSIONS = new SaslExtensions(Collections.emptyMap());
+    private static final SaslExtensions EMPTY_EXTENSIONS = new SaslExtensions(Map.of());
     private Subject subject = null;
     private AuthenticateCallbackHandler callbackHandler = null;
     private OAuthBearerToken tokenRequiringCommit = null;

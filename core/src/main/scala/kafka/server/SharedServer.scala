@@ -23,18 +23,20 @@ import kafka.server.Server.MetricsPrefix
 import kafka.utils.{Logging, VerifiableProperties}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
+import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.internals.AppInfoParser
+import org.apache.kafka.common.utils.internals.LogContext
 import org.apache.kafka.controller.metrics.ControllerMetadataMetrics
 import org.apache.kafka.image.MetadataProvenance
 import org.apache.kafka.image.loader.MetadataLoader
 import org.apache.kafka.image.loader.metrics.MetadataLoaderMetrics
 import org.apache.kafka.image.publisher.metrics.SnapshotEmitterMetrics
 import org.apache.kafka.image.publisher.{SnapshotEmitter, SnapshotGenerator}
-import org.apache.kafka.metadata.ListenerInfo
-import org.apache.kafka.metadata.MetadataRecordSerde
+import org.apache.kafka.metadata.{SupportedConfigChecker, ListenerInfo, MetadataRecordSerde}
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble
 import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics}
 import org.apache.kafka.server.{ProcessRole, ServerSocketFactory}
+import org.apache.kafka.server.config.DefaultSupportedConfigChecker
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.{FaultHandler, LoggingFaultHandler, ProcessTerminatingFaultHandler}
 import org.apache.kafka.server.metrics.{BrokerServerMetrics, KafkaYammerMetrics, NodeMetrics}
@@ -113,6 +115,7 @@ class SharedServer(
   private var usedByController: Boolean = false
   val brokerConfig = new KafkaConfig(sharedServerConfig.props, false)
   val controllerConfig = new KafkaConfig(sharedServerConfig.props, false)
+  val supportedConfigChecker: SupportedConfigChecker = new DefaultSupportedConfigChecker()
   
   // Factory for creating request handler pools with shared aggregate thread counter
   val requestHandlerPoolFactory = new KafkaRequestHandlerPoolFactory()
@@ -296,7 +299,7 @@ class SharedServer(
           clusterId,
           sharedServerConfig,
           metaPropsEnsemble.logDirProps.get(metaPropsEnsemble.metadataLogDir.get).directoryId.get,
-          new MetadataRecordSerde,
+          MetadataRecordSerde.INSTANCE,
           KafkaRaftServer.MetadataPartition,
           KafkaRaftServer.MetadataTopicId,
           time,
@@ -331,7 +334,8 @@ class SharedServer(
           setThreadNamePrefix(s"kafka-${sharedServerConfig.nodeId}-").
           setFaultHandler(metadataLoaderFaultHandler).
           setHighWaterMarkAccessor(() => _raftManager.client.highWatermark()).
-          setMetrics(metadataLoaderMetrics)
+          setMetrics(metadataLoaderMetrics).
+          setSupportedConfigChecker(supportedConfigChecker)
         loader = loaderBuilder.build()
         snapshotEmitter = new SnapshotEmitter.Builder().
           setNodeId(nodeId).

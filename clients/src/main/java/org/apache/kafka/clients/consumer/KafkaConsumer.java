@@ -28,15 +28,16 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidRegularExpression;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import java.time.Duration;
 import java.util.Collection;
@@ -430,7 +431,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *
  * <p>
  * Partitions with transactional messages will include commit or abort markers which indicate the result of a transaction.
- * There markers are not returned to applications, yet have an offset in the log. As a result, applications reading from
+ * These markers are not returned to applications, yet have an offset in the log. As a result, applications reading from
  * topics with transactional messages will see gaps in the consumed offsets. These missing messages would be the transaction
  * markers, and they are filtered out for consumers in both isolation levels. Additionally, applications using
  * {@code read_committed} consumers may also see gaps due to aborted transactions, since those messages would not
@@ -536,6 +537,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * the consumer threads can hash into these queues using the TopicPartition to ensure in-order consumption and simplify
  * commit.
  */
+@InterfaceAudience.Public
 public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private static final ConsumerDelegateCreator CREATOR = new ConsumerDelegateCreator();
@@ -643,7 +645,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * were assigned. If topic subscription was used, then this will give the set of topic partitions currently assigned
      * to the consumer (which may be none if the assignment hasn't happened yet, or the partitions are in the
      * process of getting reassigned).
-     * @return The set of partitions currently assigned to this consumer
+     *
+     * <p>The returned set is a snapshot of the current assignment at the time of the call. It will not be updated
+     * if the assignment changes afterward.
+     *
+     * @return An immutable snapshot of the set of partitions currently assigned to this consumer
      */
     public Set<TopicPartition> assignment() {
         return delegate.assignment();
@@ -652,7 +658,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Get the current subscription. Will return the same topics used in the most recent call to
      * {@link #subscribe(Collection, ConsumerRebalanceListener)}, or an empty set if no such call has been made.
-     * @return The set of topics currently subscribed to
+     *
+     * <p>The returned set is a snapshot of the current subscription at the time of the call. It will not be updated
+     * if the subscription changes afterward.
+     *
+     * @return An immutable snapshot of the set of topics currently subscribed to
      */
     public Set<String> subscription() {
         return delegate.subscription();
@@ -824,6 +834,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Unsubscribe from topics currently subscribed with {@link #subscribe(Collection)} or {@link #subscribe(Pattern)}.
      * This also clears any partitions directly assigned through {@link #assign(Collection)}.
+     * <p>
+     * <b>Note:</b> Unlike {@link #close()}, this method does not commit the pending offsets before
+     * unsubscribing, even if {@code enable.auto.commit} is enabled. To avoid duplicate processing upon re-joining,
+     * it is recommended to explicitly call {@link #commitSync()} before invoking this method.
      *
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. rebalance callback errors)
      */
@@ -1398,8 +1412,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         return delegate.clientInstanceId(timeout);
     }
 
-  /**
+    /**
      * Get the metrics kept by the consumer
+     *
+     * <p>The returned map is an unmodifiable live view of the metrics. Changes to the underlying
+     * metrics will be reflected in the returned map.
+     *
+     * @return An unmodifiable live view of the map of metrics currently maintained by the consumer
      */
     @Override
     public Map<MetricName, ? extends Metric> metrics() {
@@ -1412,7 +1431,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @param topic The topic to get partition metadata for
      *
-     * @return The list of partitions, which will be empty when the given topic is not found
+     * @return The list of partitions, which will be empty when the given topic is not found.
+     *         Note: when both the broker config {@code auto.create.topics.enable} and the consumer
+     *         config {@code allow.auto.create.topics} are {@code true}, this method may return an
+     *         empty list even though the topic is being auto-created in the background. Callers
+     *         should not assume the topic does not exist based solely on an empty result.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
@@ -1435,7 +1458,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param topic The topic to get partition metadata for
      * @param timeout The maximum of time to await topic metadata
      *
-     * @return The list of partitions, which will be empty when the given topic is not found
+     * @return The list of partitions, which will be empty when the given topic is not found.
+     *         Note: when both the broker config {@code auto.create.topics.enable} and the consumer
+     *         config {@code allow.auto.create.topics} are {@code true}, this method may return an
+     *         empty list even though the topic is being auto-created in the background. Callers
+     *         should not assume the topic does not exist based solely on an empty result.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
@@ -1496,8 +1523,21 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * any records from these partitions until they have been resumed using {@link #resume(Collection)}.
      * Note that this method does not affect partition subscription. In particular, it does not cause a group
      * rebalance when automatic assignment is used.
+     * <p/>
+     * The pause state is preserved across a rebalance for partitions that remain assigned to this
+     * consumer, but it is lost for partitions that are revoked. Which partitions are revoked depends
+     * on the group protocol in use (see {@link ConsumerConfig#GROUP_PROTOCOL_CONFIG}):
+     * <ul>
+     * <li>Classic group protocol: the behavior depends on the assignor configured in
+     * {@link ConsumerConfig#PARTITION_ASSIGNMENT_STRATEGY_CONFIG}: eager assignors (e.g., {@link RangeAssignor},
+     * {@link RoundRobinAssignor}) revoke all partitions on every rebalance (pause state is
+     * not preserved); cooperative assignors (e.g., {@link CooperativeStickyAssignor}) only revoke the
+     * partitions that are reassigned to another consumer (pause state preserved for partitions that remain
+     * assigned)</li>
+     * <li>Consumer group protocol (KIP-848): only revokes partitions that are reassigned to another consumer
+     * (pause state preserved for partitions that remain assigned)</li>
+     * </ul>
      *
-     * Note: Rebalance will not preserve the pause/resume state.
      * @param partitions The partitions which should be paused
      * @throws IllegalStateException if any of the provided partitions are not currently assigned to this consumer
      */

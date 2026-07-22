@@ -17,8 +17,8 @@
 package org.apache.kafka.common.record.internal;
 
 import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.AbstractIterator;
 
 import java.nio.ByteBuffer;
 import java.util.Iterator;

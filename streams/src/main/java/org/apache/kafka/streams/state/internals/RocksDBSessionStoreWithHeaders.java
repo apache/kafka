@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
@@ -25,8 +27,9 @@ import org.apache.kafka.streams.state.HeadersBytesStore;
 /**
  * RocksDB-backed session store with support for record headers.
  * <p>
- * This store extends {@link RocksDBSessionStore} and overrides
- * {@code query()} to disable IQv2 for header-aware stores.
+ * This store extends {@link RocksDBSessionStore} and returns
+ * {@link QueryResult#forUnknownQueryType(Query, StateStore)} for all queries,
+ * as IQv2 query handling is done at the metered layer.
  * <p>
  * The storage format for values is: [headersSize(varint)][headersBytes][aggregationBytes]
  *
@@ -34,12 +37,28 @@ import org.apache.kafka.streams.state.HeadersBytesStore;
  */
 class RocksDBSessionStoreWithHeaders extends RocksDBSessionStore implements HeadersBytesStore {
 
-    RocksDBSessionStoreWithHeaders(final SegmentedBytesStore bytesStore) {
+    RocksDBSessionStoreWithHeaders(final AbstractRocksDBSegmentedBytesStore<?> bytesStore) {
         super(bytesStore);
     }
 
     @Override
-    public <R> QueryResult<R> query(final Query<R> query, final PositionBound positionBound, final QueryConfig config) {
-        throw new UnsupportedOperationException("Querying stores with headers is not supported");
+    public <R> QueryResult<R> query(final Query<R> query,
+                                    final PositionBound positionBound,
+                                    final QueryConfig config) {
+        final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
+        final QueryResult<R> result;
+        final Position position = getPosition();
+
+        synchronized (position) {
+            result = QueryResult.forUnknownQueryType(query, this);
+
+            if (config.isCollectExecutionInfo()) {
+                result.addExecutionInfo(
+                    "Handled in " + this.getClass() + " in " + (System.nanoTime() - start) + "ns"
+                );
+            }
+            result.setPosition(position.copy());
+        }
+        return result;
     }
 }

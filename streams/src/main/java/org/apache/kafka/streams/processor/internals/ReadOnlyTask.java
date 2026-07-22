@@ -115,7 +115,7 @@ public class ReadOnlyTask implements Task {
     }
 
     @Override
-    public void maybeCheckpoint(final boolean enforceCheckpoint) {
+    public void maybeCheckpoint() {
         throw new UnsupportedOperationException("This task is read-only");
     }
 
@@ -244,6 +244,11 @@ public class ReadOnlyTask implements Task {
 
     @Override
     public ProcessorStateManager stateManager() {
+        throw new UnsupportedOperationException("This task is read-only");
+    }
+
+    @Override
+    public long approximateNumUncommittedBytes() {
         throw new UnsupportedOperationException("This task is read-only");
     }
 }

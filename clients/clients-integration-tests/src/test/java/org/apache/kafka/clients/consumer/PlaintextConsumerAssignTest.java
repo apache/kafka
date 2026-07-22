@@ -24,6 +24,7 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 
@@ -38,6 +39,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_IN
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -295,6 +297,61 @@ public class PlaintextConsumerAssignTest {
             // Check committed offsets twice with same consumer
             assertEquals(numRecords, consumer.committed(Set.of(tp)).get(tp).offset());
             assertEquals(numRecords, consumer.committed(Set.of(tp)).get(tp).offset());
+        }
+    }
+
+    @ClusterTest
+    public void testAsyncPollAfterTopicDeleted() throws Exception {
+        testPollAfterTopicDeleted(GroupProtocol.CONSUMER);
+    }
+
+    @ClusterTest
+    public void testClassicPollAfterTopicDeleted() throws Exception {
+        testPollAfterTopicDeleted(GroupProtocol.CLASSIC);
+    }
+
+    /**
+     * Test that poll() doesn't fail to retrieve committed offsets after the assigned topic is deleted.
+     * Validates fix for KAFKA-20165.
+     */
+    private void testPollAfterTopicDeleted(GroupProtocol groupProtocol) throws Exception {
+        String topicToDelete = "topic-to-delete-assign";
+        clusterInstance.createTopic(topicToDelete, 1, (short) BROKER_COUNT);
+        TopicPartition tpToDelete = new TopicPartition(topicToDelete, 0);
+
+        int numRecords = 10;
+        long startingTimestamp = System.currentTimeMillis();
+
+        Map<String, Object> consumerConfig = Map.of(
+            GROUP_PROTOCOL_CONFIG, groupProtocol.name,
+            GROUP_ID_CONFIG, "test-group",
+            ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(consumerConfig);
+             var admin = clusterInstance.admin()) {
+
+            // Send records and consume them (this caches the topic ID in the consumer)
+            ClientsTestUtils.sendRecords(clusterInstance, tpToDelete, numRecords, startingTimestamp);
+            consumer.assign(List.of(tpToDelete));
+            consumer.seek(tpToDelete, 0);
+            ClientsTestUtils.consumeAndVerifyRecords(consumer, tpToDelete, numRecords, 0, 0, startingTimestamp);
+            consumer.commitSync();
+
+            // Delete the topic and wait for deletion to propagate to metadata
+            admin.deleteTopics(List.of(topicToDelete)).all().get();
+            TestUtils.waitForCondition(
+                () -> !admin.listTopics().names().get().contains(topicToDelete),
+                10000,
+                "Topic should be removed from metadata");
+
+            // Change assignment to force the consumer to fetch committed offsets on next poll()
+            // The consumer still has the topic ID cached, so it will use version 10+
+            // and get UNKNOWN_TOPIC_ID from the broker
+            consumer.unsubscribe();
+            consumer.assign(List.of(tpToDelete));
+
+            // poll() should not throw - internally fetches committed offsets for deleted topic and recovers
+            assertDoesNotThrow(() -> consumer.poll(java.time.Duration.ofMillis(5000)));
         }
     }
 

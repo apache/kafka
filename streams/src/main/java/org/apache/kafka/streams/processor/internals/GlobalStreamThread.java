@@ -27,9 +27,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.internals.metrics.StreamsThreadMetricsDelegatingReporter;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -74,6 +75,7 @@ public class GlobalStreamThread extends Thread {
     private volatile long fetchDeadlineClientInstanceId = -1;
     private volatile KafkaFutureImpl<Uuid> clientInstanceIdFuture = new KafkaFutureImpl<>();
     private final CountDownLatch initializationLatch = new CountDownLatch(1);
+    private volatile long maxUncommittedBytes;
 
     /**
      * The states that the global stream thread can be in
@@ -201,6 +203,7 @@ public class GlobalStreamThread extends Thread {
                               final Consumer<byte[], byte[]> globalConsumer,
                               final StateDirectory stateDirectory,
                               final long cacheSizeBytes,
+                              final long maxUncommittedBytes,
                               final StreamsMetricsImpl streamsMetrics,
                               final Time time,
                               final String threadClientId,
@@ -220,6 +223,7 @@ public class GlobalStreamThread extends Thread {
         this.stateRestoreListener = stateRestoreListener;
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
         this.cacheSize = new AtomicLong(-1L);
+        this.maxUncommittedBytes = maxUncommittedBytes;
     }
 
     static class StateConsumer {
@@ -256,6 +260,14 @@ public class GlobalStreamThread extends Thread {
                 stateMaintainer.update(record);
             }
             stateMaintainer.maybeCheckpoint();
+        }
+
+        void flushState() {
+            stateMaintainer.flushState();
+        }
+
+        long approximateNumUncommittedBytes() {
+            return stateMaintainer.approximateNumUncommittedBytes();
         }
 
         public void close(final boolean wipeStateStore) throws IOException {
@@ -299,6 +311,13 @@ public class GlobalStreamThread extends Thread {
                     cache.resize(size);
                 }
                 stateConsumer.pollAndUpdate();
+
+                final long uncommittedLimit = maxUncommittedBytes;
+                if (uncommittedLimit > 0
+                        && stateConsumer.approximateNumUncommittedBytes() > uncommittedLimit) {
+                    log.debug("Committing global state: uncommitted bytes exceeded {}", uncommittedLimit);
+                    stateConsumer.flushState();
+                }
 
                 if (fetchDeadlineClientInstanceId != -1) {
                     if (fetchDeadlineClientInstanceId >= time.milliseconds()) {
@@ -371,6 +390,10 @@ public class GlobalStreamThread extends Thread {
         this.cacheSize.set(cacheSize);
     }
 
+    public void resizeMaxUncommittedBytes(final long maxUncommittedBytes) {
+        this.maxUncommittedBytes = maxUncommittedBytes;
+    }
+
     private StateConsumer initialize() {
         StateConsumer stateConsumer = null;
         try {
@@ -394,7 +417,8 @@ public class GlobalStreamThread extends Thread {
             stateMgr.setGlobalProcessorContext(globalProcessorContext);
             final StreamsThreadMetricsDelegatingReporter globalMetricsReporter = new StreamsThreadMetricsDelegatingReporter(globalConsumer, getName(), Optional.empty());
             streamsMetrics.metricsRegistry().addReporter(globalMetricsReporter);
-
+            @SuppressWarnings("deprecation")
+            final ProcessingExceptionHandler processingExceptionHandler = config.getBoolean(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG) ? config.processingExceptionHandler() : null;
             stateConsumer = new StateConsumer(
                 logContext,
                 globalConsumer,
@@ -404,6 +428,7 @@ public class GlobalStreamThread extends Thread {
                     globalProcessorContext,
                     stateMgr,
                     config.deserializationExceptionHandler(),
+                    processingExceptionHandler,
                     time,
                     config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG)
                 ),

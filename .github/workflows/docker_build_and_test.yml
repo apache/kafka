@@ -54,9 +54,10 @@ jobs:
       run: |
         python docker_build_test.py kafka/test -tag=test -type=$IMAGE_TYPE -u=$KAFKA_URL
     - name: Run CVE scan
-      uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
+      uses: lhotari/sandboxed-trivy-action@555963036b2012b44c1071508a236e569db28ebb # v1.0.1
       with:
-        image-ref: 'kafka/test:test'
+        scan-type: 'image'
+        scan-ref: 'kafka/test:test'
         format: 'table'
         severity: 'CRITICAL,HIGH'
         output: scan_report_${{ github.event.inputs.image_type }}.txt

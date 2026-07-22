@@ -20,12 +20,13 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.AsyncPollEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
+import org.apache.kafka.clients.consumer.internals.events.PausePartitionsEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 
@@ -37,6 +38,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
@@ -52,6 +54,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -314,6 +317,24 @@ public class ConsumerNetworkThreadTest {
             throw new KafkaException("Injecting RequestManagers initialization failure");
         };
         testInitializeResourcesError(networkClientDelegateSupplier, requestManagersSupplier);
+    }
+
+    @Test
+    public void testProcessEventFailureCompletesFutureExceptionally() {
+        RuntimeException processingError = new RuntimeException("Simulated processing failure");
+        doThrow(processingError).when(applicationEventProcessor).process(any(ApplicationEvent.class));
+
+        PausePartitionsEvent event = new PausePartitionsEvent(Collections.emptyList(), time.milliseconds() + 1000);
+        event.setEnqueuedMs(time.milliseconds());
+        applicationEventQueue.add(event);
+
+        consumerNetworkThread.runOnce();
+
+        assertTrue(event.future().isDone(), "Event future should be completed after processing failure");
+        assertTrue(event.future().isCompletedExceptionally(), "Event future should be completed exceptionally");
+
+        KafkaException thrown = assertThrows(KafkaException.class, () -> ConsumerUtils.getResult(event.future()));
+        assertEquals(processingError, thrown.getCause());
     }
 
     /**

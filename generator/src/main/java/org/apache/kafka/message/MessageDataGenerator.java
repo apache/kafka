@@ -201,6 +201,8 @@ public final class MessageDataGenerator implements MessageClassGenerator {
         buffer.printf("%n");
         generateHashSetIteratorConstructor(className);
         buffer.printf("%n");
+        generateHashSetIterableConstructor(className);
+        buffer.printf("%n");
         generateHashSetFindMethod(className, struct);
         buffer.printf("%n");
         generateHashSetFindAllMethod(className, struct);
@@ -233,6 +235,15 @@ public final class MessageDataGenerator implements MessageClassGenerator {
             FieldSpec.collectionType(className), className);
         buffer.incrementIndent();
         buffer.printf("super(iterator);%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+    }
+
+    private void generateHashSetIterableConstructor(String className) {
+        buffer.printf("public %s(Iterable<%s> iterable) {%n",
+            FieldSpec.collectionType(className), className);
+        buffer.incrementIndent();
+        buffer.printf("super(iterable.iterator());%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
     }
