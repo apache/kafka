@@ -506,7 +506,7 @@ public class KStreamGlobalKTableLeftJoinTest {
         stream.leftJoin(
             table,
             (KeyValueMapper<Integer, String, String>) (k, v) -> v,
-            (ValueJoinerWithStreamAndMappedKey<Integer, String, String, String, String>) (mk, sk, v1, v2) -> v1 + v2,
+            (ValueJoinerWithStreamAndMappedKey<Integer, String, String, String, String>) (streamKey, mappedKey, v1, v2) -> v1 + v2,
             Named.as("left-join-table"));
 
         assertThat(builder.build().describe().toString(), containsString("Processor: left-join-table"));
