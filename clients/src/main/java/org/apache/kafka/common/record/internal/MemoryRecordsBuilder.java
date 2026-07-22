@@ -830,13 +830,10 @@ public class MemoryRecordsBuilder implements AutoCloseable {
      * Returns the projected number of bytes the builder would write for
      * {@code uncompressedRecordsSizeInBytes} of records under the given magic, compression type,
      * and ratio: exact for uncompressed, a ratio-aware estimate for compressed.
-     * <p>
-     * Used by the incremental strategy to size chunk reservations (first record, and mid-batch via
-     * {@link #estimatedBytesWrittenAfter}).
      */
-    public static int estimatedBytesWritten(byte magic, CompressionType compressionType,
-                                            float compressionRatio,
-                                            int uncompressedRecordsSizeInBytes) {
+    private static int estimatedBytesWritten(byte magic, CompressionType compressionType,
+                                             float compressionRatio,
+                                             int uncompressedRecordsSizeInBytes) {
         int batchHeaderSizeInBytes = AbstractRecords.recordBatchHeaderSizeInBytes(magic, compressionType);
         if (compressionType == CompressionType.NONE) {
             return batchHeaderSizeInBytes + uncompressedRecordsSizeInBytes;

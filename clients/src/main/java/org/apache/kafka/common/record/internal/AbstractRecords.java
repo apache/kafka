@@ -144,22 +144,6 @@ public abstract class AbstractRecords implements Records {
     }
 
     /**
-     * Upper-bound on the bytes a single record contributes to a batch, excluding the batch header.
-     * Used by the incremental strategy, which counts the header once, separately.
-     */
-    public static int recordSizeUpperBound(byte magic, CompressionType compressionType, byte[] key,
-                                           byte[] value, Header[] headers) {
-        ByteBuffer keyBuffer = Utils.wrapNullable(key);
-        ByteBuffer valueBuffer = Utils.wrapNullable(value);
-        if (magic >= RecordBatch.MAGIC_VALUE_V2)
-            return DefaultRecord.recordSizeUpperBound(keyBuffer, valueBuffer, headers);
-        else if (compressionType != CompressionType.NONE)
-            return Records.LOG_OVERHEAD + LegacyRecord.recordOverhead(magic) + LegacyRecord.recordSize(magic, keyBuffer, valueBuffer);
-        else
-            return Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, keyBuffer, valueBuffer);
-    }
-
-    /**
      * Return the size of the record batch header.
      *
      * For V0 and V1 with no compression, it's unclear if Records.LOG_OVERHEAD or 0 should be chosen. There is no header

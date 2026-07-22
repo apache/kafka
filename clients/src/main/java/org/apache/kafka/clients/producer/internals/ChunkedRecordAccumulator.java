@@ -27,7 +27,6 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.AbstractRecords;
-import org.apache.kafka.common.record.internal.CompressionRatioEstimator;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.Record;
@@ -175,16 +174,13 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     }
                     nowMs = time.milliseconds();
                 } else if (appendResult.needsNewBatch() && newBatch == null) {
-                    // The open batch is done (e.g., full, closed) so start a new one.
-                    // Block on the pool for enough chunks to fit this record, sized with the
-                    // same cumulative estimator used mid-batch (header + record bytes for NONE,
-                    // ratio-adjusted when compressed) so the two stay consistent.
-                    int recordUncompressed = AbstractRecords.recordSizeUpperBound(
+                    // The open batch is done (e.g., full, closed) so start a new one. Size it for
+                    // this first record with the same estimator the full strategy uses
+                    // (RecordAccumulator.append), but reserve only enough for the record rather than
+                    // a whole batch.size.
+                    // TODO: review when compression is supported.
+                    int newBatchSize = AbstractRecords.estimateSizeInBytesUpperBound(
                             RecordBatch.CURRENT_MAGIC_VALUE, compression.type(), key, value, headers);
-                    int newBatchSize = MemoryRecordsBuilder.estimatedBytesWritten(
-                            RecordBatch.CURRENT_MAGIC_VALUE, compression.type(),
-                            CompressionRatioEstimator.estimation(topic, compression.type()),
-                            recordUncompressed);
                     log.trace("Allocating {} byte chunked buffer ({} byte chunks) for topic {} partition {} with remaining timeout {}ms",
                             newBatchSize, chunkedFree.poolableSize(), topic, effectivePartition, maxTimeToBlock);
                     List<ByteBuffer> initialChunks;
@@ -246,8 +242,8 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     // so bufferStream was allocated (this iteration or carried from a prior one).
                     if (newBatch == null)
                         throw new IllegalStateException("needsNewBatch path reached without an allocated buffer stream");
-                    // Reuse the new-batch size estimate as the write-limit basis (equals the record's
-                    // uncompressed upper bound without compression). TODO: review once compression lands.
+                    // Reuse the new-batch size estimate as the write-limit basis.
+                    // TODO: review when compression is supported.
                     final NewBatchBuffer pending = newBatch;
                     appendResult = appendNewBatch(topic, effectivePartition, dq, timestamp, key, value, headers, callbacks,
                             () -> chunkedRecordsBuilder(pending.stream, pending.size), nowMs);
