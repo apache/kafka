@@ -19,7 +19,6 @@ package org.apache.kafka.tools.other;
 import kafka.server.BrokerServer;
 import kafka.server.KafkaBroker;
 
-import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -29,7 +28,6 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.test.KafkaClusterTestKit;
 import org.apache.kafka.common.test.TestKitNodes;
@@ -66,7 +64,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
@@ -403,20 +400,22 @@ public class ReplicationQuotasTestRig {
         }
 
         KafkaProducer<byte[], byte[]> createProducer() {
-            Properties producerProps = new Properties();
-            producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
-            producerProps.put(ProducerConfig.ACKS_CONFIG, "1");
-            producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.toString(60 * 1000L));
-            producerProps.put(ProducerConfig.BUFFER_MEMORY_CONFIG, Long.toString(1024L * 1024L));
-            producerProps.put(ProducerConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE));
-            producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.toString(30 * 1000));
-            producerProps.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, Integer.toString(20 * 1000));
-            producerProps.put(ProducerConfig.LINGER_MS_CONFIG, "0");
-            producerProps.put(ProducerConfig.BATCH_SIZE_CONFIG, "16384");
-            producerProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "none");
-            producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
-            producerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.PLAINTEXT.name());
-            return new KafkaProducer<>(producerProps, new ByteArraySerializer(), new ByteArraySerializer());
+            return new KafkaProducer<>(
+                Map.of(
+                    ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers(),
+                    ProducerConfig.ACKS_CONFIG, "1",
+                    ProducerConfig.MAX_BLOCK_MS_CONFIG, 60 * 1000L,
+                    ProducerConfig.BUFFER_MEMORY_CONFIG, 1024L * 1024L,
+                    ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE,
+                    ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, 30 * 1000,
+                    ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 20 * 1000,
+                    ProducerConfig.LINGER_MS_CONFIG, 0,
+                    ProducerConfig.BATCH_SIZE_CONFIG, 16384,
+                    ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false
+                ),
+                new ByteArraySerializer(),
+                new ByteArraySerializer()
+            );
         }
     }
 
