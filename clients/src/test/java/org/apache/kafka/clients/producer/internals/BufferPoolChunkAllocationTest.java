@@ -50,7 +50,7 @@ public class BufferPoolChunkAllocationTest {
 
     private BufferPool pool(long totalMemory, int chunkSize) {
         String metricGroup = "producer-metrics";
-        return new BufferPool(totalMemory, chunkSize, metrics, time, metricGroup);
+        return new BufferPool(totalMemory, chunkSize, metrics, time, metricGroup, BufferPool.AllocationMode.CHUNKED);
     }
 
     /** Single-chunk request returns a list of one buffer at the chunk size. */
@@ -129,7 +129,7 @@ public class BufferPoolChunkAllocationTest {
         long total = 2 * chunkSize;  // only 2 chunks worth of memory
         BufferPool p = pool(total, chunkSize);
         // Reserve one chunk so the pool has only 1 left.
-        ByteBuffer held = p.allocate(chunkSize, 100);
+        ByteBuffer held = p.allocateChunks(chunkSize, 100).get(0);
 
         // Request 2 chunks with a zero deadline — first chunk fits, second can't, must throw.
         assertThrows(BufferExhaustedException.class, () -> p.allocateChunks(2 * chunkSize, 0));
@@ -152,9 +152,9 @@ public class BufferPoolChunkAllocationTest {
         long total = 4L * chunkSize;
         BufferPool p = pool(total, chunkSize);
         // Drain the pool down to 1 chunk's worth so a 2-chunk request can't be satisfied immediately.
-        ByteBuffer h1 = p.allocate(chunkSize, 100);
-        ByteBuffer h2 = p.allocate(chunkSize, 100);
-        ByteBuffer h3 = p.allocate(chunkSize, 100);
+        ByteBuffer h1 = p.allocateChunks(chunkSize, 100).get(0);
+        ByteBuffer h2 = p.allocateChunks(chunkSize, 100).get(0);
+        ByteBuffer h3 = p.allocateChunks(chunkSize, 100).get(0);
         long available = p.availableMemory();
         assertEquals(chunkSize, available, "pool should have exactly 1 chunk free");
 
@@ -190,15 +190,15 @@ public class BufferPoolChunkAllocationTest {
      * K-chunk request occupies a single waiter slot, not K of them.
      */
     @Test
-    public void testFifoFairnessAcrossChunkedAndSingleChunkRequests() throws Exception {
+    public void testFifoFairnessAcrossMultiChunkAndSingleChunkRequests() throws Exception {
         int chunkSize = 64;
         long total = 4L * chunkSize;
         BufferPool p = pool(total, chunkSize);
         // Drain the pool entirely so any new request must wait.
-        ByteBuffer h1 = p.allocate(chunkSize, 100);
-        ByteBuffer h2 = p.allocate(chunkSize, 100);
-        ByteBuffer h3 = p.allocate(chunkSize, 100);
-        ByteBuffer h4 = p.allocate(chunkSize, 100);
+        ByteBuffer h1 = p.allocateChunks(chunkSize, 100).get(0);
+        ByteBuffer h2 = p.allocateChunks(chunkSize, 100).get(0);
+        ByteBuffer h3 = p.allocateChunks(chunkSize, 100).get(0);
+        ByteBuffer h4 = p.allocateChunks(chunkSize, 100).get(0);
         assertEquals(0, p.availableMemory());
 
         // T_multi enters first, requesting 2 chunks; T_single enters second, requesting 1 chunk.
@@ -217,7 +217,7 @@ public class BufferPoolChunkAllocationTest {
         }, "multi");
         Thread tSingle = new Thread(() -> {
             try {
-                ByteBuffer got = p.allocate(chunkSize, 10_000);
+                ByteBuffer got = p.allocateChunks(chunkSize, 10_000).get(0);
                 singleCompletionMs.set(System.nanoTime());
                 p.deallocate(got);
             } catch (Throwable th) {
@@ -270,9 +270,9 @@ public class BufferPoolChunkAllocationTest {
         BufferPool p = pool(total, chunkSize);
 
         // Drain so the next allocateChunks must wait.
-        ByteBuffer h1 = p.allocate(chunkSize, 100);
-        ByteBuffer h2 = p.allocate(chunkSize, 100);
-        ByteBuffer h3 = p.allocate(chunkSize, 100);
+        ByteBuffer h1 = p.allocateChunks(chunkSize, 100).get(0);
+        ByteBuffer h2 = p.allocateChunks(chunkSize, 100).get(0);
+        ByteBuffer h3 = p.allocateChunks(chunkSize, 100).get(0);
         assertEquals(0, p.availableMemory());
 
         AtomicReference<Throwable> err = new AtomicReference<>();
@@ -325,9 +325,9 @@ public class BufferPoolChunkAllocationTest {
         BufferPool p = pool(total, chunkSize);
 
         // Drain so a 2-chunk request must wait.
-        ByteBuffer h1 = p.allocate(chunkSize, 100);
-        ByteBuffer h2 = p.allocate(chunkSize, 100);
-        ByteBuffer h3 = p.allocate(chunkSize, 100);
+        ByteBuffer h1 = p.allocateChunks(chunkSize, 100).get(0);
+        ByteBuffer h2 = p.allocateChunks(chunkSize, 100).get(0);
+        ByteBuffer h3 = p.allocateChunks(chunkSize, 100).get(0);
         assertEquals(0, p.availableMemory());
 
         AtomicReference<Throwable> err = new AtomicReference<>();
@@ -373,8 +373,8 @@ public class BufferPoolChunkAllocationTest {
         long total = 2L * chunkSize;
         BufferPool p = pool(total, chunkSize);
         // Drain so the next request must wait.
-        ByteBuffer h1 = p.allocate(chunkSize, 100);
-        ByteBuffer h2 = p.allocate(chunkSize, 100);
+        ByteBuffer h1 = p.allocateChunks(chunkSize, 100).get(0);
+        ByteBuffer h2 = p.allocateChunks(chunkSize, 100).get(0);
         assertEquals(0, p.availableMemory());
 
         AtomicReference<Throwable> err = new AtomicReference<>();

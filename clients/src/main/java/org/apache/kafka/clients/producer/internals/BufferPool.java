@@ -49,6 +49,13 @@ public class BufferPool {
 
     static final String WAIT_TIME_SENSOR_NAME = "bufferpool-wait-time";
 
+    /**
+     * Which allocation method a pool serves: {@link #SINGLE} accepts only {@link #allocate} (the full
+     * strategy), {@link #CHUNKED} only {@link #allocateChunks} (the incremental strategy). Fixed at
+     * construction so the two are never mixed on the same pool.
+     */
+    public enum AllocationMode { SINGLE, CHUNKED }
+
     private final long totalMemory;
     private final int poolableSize;
     /** Lock held for any read or write of {@link #free}, {@link #waiters}, {@link #nonPooledAvailableMemory}, or {@link #closed}. */
@@ -63,6 +70,7 @@ public class BufferPool {
     protected final Time time;
     private final Sensor waitTime;
     protected boolean closed;
+    private final AllocationMode allocationMode;
 
     /**
      * Create a new buffer pool
@@ -74,6 +82,21 @@ public class BufferPool {
      * @param metricGrpName logical group name for metrics
      */
     public BufferPool(long memory, int poolableSize, Metrics metrics, Time time, String metricGrpName) {
+        this(memory, poolableSize, metrics, time, metricGrpName, AllocationMode.SINGLE);
+    }
+
+    /**
+     * Create a new buffer pool that serves the given {@link AllocationMode}.
+     *
+     * @param memory The maximum amount of memory that this buffer pool can allocate
+     * @param poolableSize The buffer size to cache in the free list rather than deallocating
+     * @param metrics instance of Metrics
+     * @param time time instance
+     * @param metricGrpName logical group name for metrics
+     * @param allocationMode which allocation method this pool serves ({@link #allocate} vs {@link #allocateChunks})
+     */
+    public BufferPool(long memory, int poolableSize, Metrics metrics, Time time, String metricGrpName, AllocationMode allocationMode) {
+        this.allocationMode = allocationMode;
         this.poolableSize = poolableSize;
         this.lock = new ReentrantLock();
         this.free = new ArrayDeque<>();
@@ -111,6 +134,9 @@ public class BufferPool {
      *         forever)
      */
     public ByteBuffer allocate(int size, long maxTimeToBlockMs) throws InterruptedException {
+        if (allocationMode != AllocationMode.SINGLE)
+            throw new IllegalStateException("allocate() is not supported on a " + allocationMode
+                + " buffer pool; use allocateChunks()");
         if (size > this.totalMemory)
             throw new IllegalArgumentException("Attempt to allocate " + size
                                                + " bytes, but there is a hard limit of "
@@ -249,6 +275,9 @@ public class BufferPool {
      * @throws KafkaException           if the pool is closed during the wait
      */
     public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
+        if (allocationMode != AllocationMode.CHUNKED)
+            throw new IllegalStateException("allocateChunks() is not supported on a " + allocationMode
+                + " buffer pool; use allocate()");
         if (totalSize <= 0)
             throw new IllegalArgumentException("totalSize must be positive: " + totalSize);
 

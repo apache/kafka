@@ -44,7 +44,7 @@ public class ChunkedByteBufferOutputStreamTest {
 
     private BufferPool pool(long total, int chunkSize) {
         String metricGroup = "test";
-        return new BufferPool(total, chunkSize, metrics, time, metricGroup);
+        return new BufferPool(total, chunkSize, metrics, time, metricGroup, BufferPool.AllocationMode.CHUNKED);
     }
 
     private List<ByteBuffer> chunks(BufferPool pool, int chunkSize, int count) throws InterruptedException {
@@ -190,7 +190,7 @@ public class ChunkedByteBufferOutputStreamTest {
             assertEquals(0, stream.remaining());
 
             // Extend and write more — must land in the new chunk.
-            stream.addBuffers(Collections.singletonList(p.allocate(chunkSize, 100)));
+            stream.addBuffers(Collections.singletonList(p.allocateChunks(chunkSize, 100).get(0)));
             assertEquals(chunkSize, stream.remaining());
 
             byte[] more = new byte[]{9, 9, 9};
@@ -223,7 +223,7 @@ public class ChunkedByteBufferOutputStreamTest {
         List<ByteBuffer> initial = chunks(p, chunkSize, 3);
         try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(initial, chunkSize, p)) {
             // Also attach one extra chunk so deallocate must handle the added-buffer case too.
-            stream.addBuffers(Collections.singletonList(p.allocate(chunkSize, 100)));
+            stream.addBuffers(Collections.singletonList(p.allocateChunks(chunkSize, 100).get(0)));
             assertEquals(total - 4L * chunkSize, p.availableMemory());
 
             stream.deallocate();
