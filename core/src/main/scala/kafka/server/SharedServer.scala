@@ -131,7 +131,7 @@ class SharedServer(
   @volatile private var snapshotGenerator: SnapshotGenerator = _
   @volatile private var metadataLoaderMetrics: MetadataLoaderMetrics = _
 
-  def clusterId: DeferredValue[String] =
+  val clusterId: DeferredValue[String] =
     if (metaPropsEnsemble.clusterId().isPresent)
       DeferredValue.completed(metaPropsEnsemble.clusterId().get())
     else

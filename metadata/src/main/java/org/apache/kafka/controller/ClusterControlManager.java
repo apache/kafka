@@ -363,7 +363,7 @@ public class ClusterControlManager {
             throw new RuntimeException("ClusterControlManager is not active.");
         }
         if (!request.clusterId().equals(clusterId.getNow())) {
-            throw new InconsistentClusterIdException("Expected cluster ID " + clusterId +
+            throw new InconsistentClusterIdException("Expected cluster ID " + clusterId.getNow() +
                 ", but got cluster ID " + request.clusterId());
         }
         int brokerId = request.brokerId();

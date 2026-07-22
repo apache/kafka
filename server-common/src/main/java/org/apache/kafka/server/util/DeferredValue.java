@@ -57,8 +57,11 @@ public class DeferredValue<T> {
     }
 
     /**
-     * Get the value if it is available, or throw an exception if it is not available.
+     * Get the value if it is available.
      *
+     * @throws IllegalStateException if the value is not available yet
+     * @throws ExecutionException    if the value completed exceptionally
+     * @throws InterruptedException  if the current thread was interrupted
      */
     public T getOrThrow() throws ExecutionException, InterruptedException {
         if (isDone()) {
