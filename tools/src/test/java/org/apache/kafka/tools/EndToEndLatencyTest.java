@@ -332,8 +332,7 @@ public class EndToEndLatencyTest {
 
     @Test
     public void shouldAcceptMinusOneForRecordHeaderValueSize() {
-        assertInitializeValidOptionsDoesNotExit(
-                ArgsBuilder.defaults().withMinusOne("--record-header-size").build());
+        assertInitializeValidOptionsDoesNotExit(ArgsBuilder.defaults().withMinusOne("--record-header-size").build());
     }
 
     private void assertInitializeValidOptionsDoesNotExit(String[] args) {
