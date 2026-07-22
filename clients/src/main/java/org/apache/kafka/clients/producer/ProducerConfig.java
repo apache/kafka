@@ -19,6 +19,7 @@ package org.apache.kafka.clients.producer;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -51,6 +52,7 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  * Configuration for the Kafka Producer. Documentation for these configurations can be found in the <a
  * href="http://kafka.apache.org/documentation.html#producerconfigs">Kafka documentation</a>
  */
+@InterfaceAudience.Public
 public class ProducerConfig extends AbstractConfig {
     private static final Logger log = LoggerFactory.getLogger(ProducerConfig.class);
 

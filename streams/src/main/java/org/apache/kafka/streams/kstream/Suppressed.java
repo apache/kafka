@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.kstream.internals.suppress.EagerBufferConfigImpl;
 import org.apache.kafka.streams.kstream.internals.suppress.FinalResultsSuppressionBuilder;
 import org.apache.kafka.streams.kstream.internals.suppress.StrictBufferConfigImpl;
@@ -25,6 +26,7 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.Map;
 
+@InterfaceAudience.Public
 public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
 
     /**

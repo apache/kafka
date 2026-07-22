@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.GroupCoordinatorNode;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Node;
@@ -317,7 +318,7 @@ public class KafkaShareConsumerTest {
 
     private Node findCoordinator(MockClient client, Node node) {
         client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
-        return new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        return new GroupCoordinatorNode(node.id(), node.host(), node.port());
     }
 
     // This method generates a sequence of prepared SHARE_GROUP_HEARTBEAT responses with increasing member epochs.

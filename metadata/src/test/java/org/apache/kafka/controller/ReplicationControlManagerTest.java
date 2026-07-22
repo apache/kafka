@@ -622,6 +622,21 @@ public class ReplicationControlManagerTest {
     }
 
     @Test
+    public void testTotalNumberOfPartitionsValidationDoesNotOverflow() {
+        CreateTopicsRequestData request = new CreateTopicsRequestData();
+        request.topics().add(new CreatableTopic().setName("foo").
+                setNumPartitions(Integer.MAX_VALUE).setReplicationFactor((short) 1));
+        request.topics().add(new CreatableTopic().setName("bar").
+                setNumPartitions(Integer.MAX_VALUE).setReplicationFactor((short) 1));
+
+        PolicyViolationException error = assertThrows(
+                PolicyViolationException.class,
+                () -> ReplicationControlManager.validateTotalNumberOfPartitions(request, 1)
+        );
+        assertEquals("Excessively large number of partitions per request.", error.getMessage());
+    }
+
+    @Test
     public void testCreateTopics() {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
         ReplicationControlManager replicationControl = ctx.replicationControl;

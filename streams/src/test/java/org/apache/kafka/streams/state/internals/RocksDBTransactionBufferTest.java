@@ -420,9 +420,8 @@ public class RocksDBTransactionBufferTest {
     public void shouldStageWriteToOtherCF() throws RocksDBException {
         buffer.stage(otherCfHandle, key("x"), val("other-x"));
 
-        // Shared read buffer sees the staged value
-        assertTrue(buffer.get(key("x")).isPresent());
-        assertArrayEquals(val("other-x"), buffer.get(key("x")).get());
+        // Non-primary CF writes are not visible in the staging read buffer
+        assertNull(buffer.get(key("x")));
         // Not yet flushed to RocksDB
         assertNull(db.get(otherCfHandle, key("x").get()));
 
@@ -437,8 +436,8 @@ public class RocksDBTransactionBufferTest {
 
         buffer.stage(otherCfHandle, key("x"), null);
 
-        // Shared read buffer shows tombstone
-        assertEquals(Optional.empty(), buffer.get(key("x")));
+        // Non-primary CF deletes are not visible in the staging read buffer
+        assertNull(buffer.get(key("x")));
         // Not yet flushed
         assertArrayEquals(val("other-x"), db.get(otherCfHandle, key("x").get()));
 

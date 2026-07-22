@@ -58,11 +58,12 @@ versions += [
   bndlib: "7.1.0",
   checkstyle: project.hasProperty('checkstyleVersion') ? checkstyleVersion : "12.3.1",
   commonsValidator: "1.10.1",
+  commonsNet: "3.13.0",
   classgraph: "4.8.179",
   gradle: "9.4.1",
   grgit: "5.3.3",
   httpclient: "4.5.14",
-  jackson: "2.21.2",
+  jackson: "2.21.5",
   jacksonAnnotations: "2.21",
   jacoco: "0.8.14",
   javassist: "3.30.2-GA",
@@ -71,7 +72,7 @@ versions += [
   jetty: "12.0.34",
   jersey: "3.1.10",
   jgit: "7.6.0.202603022253-r",
-  jline: "3.30.4",
+  jline: "3.30.15",
   jmh: "1.37",
   hamcrest: "3.0",
   scalaLogging: "3.9.6",
@@ -109,7 +110,7 @@ versions += [
   kafka_41: "4.1.2",
   kafka_42: "4.2.1",
   kafka_43: "4.3.1",
-  log4j2: "2.25.4",
+  log4j2: "2.25.5",
   // When updating lz4 make sure the compression levels in org.apache.kafka.common.record.internal.CompressionType are still valid
   // https://github.com/apache/kafka/blob/trunk/clients/src/main/java/org/apache/kafka/common/record/internal/CompressionType.java#L73-L74
   // https://github.com/yawkat/lz4-java/blob/main/src/java/net/jpountz/lz4/LZ4Constants.java#L23-L24
@@ -158,6 +159,7 @@ libs += [
   bndlib:"biz.aQute.bnd:biz.aQute.bndlib:$versions.bndlib",
   caffeine: "com.github.ben-manes.caffeine:caffeine:$versions.caffeine",
   classgraph: "io.github.classgraph:classgraph:$versions.classgraph",
+  commonsNet: "commons-net:commons-net:$versions.commonsNet",
   commonsValidator: "commons-validator:commons-validator:$versions.commonsValidator",
   jacksonAnnotations: "com.fasterxml.jackson.core:jackson-annotations:$versions.jacksonAnnotations",
   jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jackson",
@@ -183,7 +185,7 @@ libs += [
   jgitSshApache: "org.eclipse.jgit:org.eclipse.jgit.ssh.apache:$versions.jgit",
   // GPG support for JGit based on BouncyCastle (commit signing)
   jgitGpgBc: "org.eclipse.jgit:org.eclipse.jgit.gpg.bc:$versions.jgit",
-  jline: "org.jline:jline:$versions.jline",
+  jline: "org.jline:jline-reader:$versions.jline",
   jmhCore: "org.openjdk.jmh:jmh-core:$versions.jmh",
   jmhCoreBenchmarks: "org.openjdk.jmh:jmh-core-benchmarks:$versions.jmh",
   jmhGeneratorAnnProcess: "org.openjdk.jmh:jmh-generator-annprocess:$versions.jmh",

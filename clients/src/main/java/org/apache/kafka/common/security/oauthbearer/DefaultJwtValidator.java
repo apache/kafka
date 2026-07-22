@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
@@ -37,6 +39,7 @@ import javax.security.auth.login.AppConfigurationEntry;
  * of the {@link VerificationKeyResolver}: if it's present, a {@link BrokerJwtValidator} is
  * created, otherwise a {@link ClientJwtValidator} is created.
  */
+@InterfaceAudience.Public
 public class DefaultJwtValidator implements JwtValidator {
 
     private final Optional<CloseableVerificationKeyResolver> verificationKeyResolver;
@@ -47,6 +50,7 @@ public class DefaultJwtValidator implements JwtValidator {
         this.verificationKeyResolver = Optional.empty();
     }
 
+    @SuppressKafkaInternalApiUsage("KIP-1265: ctor leaks internal CloseableVerificationKeyResolver — pending KIP review to promote the type or refactor")
     public DefaultJwtValidator(CloseableVerificationKeyResolver verificationKeyResolver) {
         this.verificationKeyResolver = Optional.of(verificationKeyResolver);
     }

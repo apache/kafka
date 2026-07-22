@@ -179,23 +179,24 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 final Map<StreamsRebalanceData.TaskId, Long> taskOffsetSum = streamsRebalanceData.taskOffsetSum();
                 final Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSum = streamsRebalanceData.taskEndOffsetSum();
 
+                final long now = time.milliseconds();
                 if (assignmentChanged
-                    || taskOffsetIntervalPassed()
+                    || taskOffsetIntervalPassed(now)
                     || hasAtLeastOneHotWarmupTask(reconciledAssignment.warmupTasks(), taskOffsetSum, taskEndOffsetSum)
                 ) {
                     // Task offsets and end-offsets are reported independently. A null field means "unchanged since the
                     // last heartbeat", so we send each one only when its value actually changed and leave it null
-                    // otherwise. reset() clears the snapshot on any error/disconnect, forcing a full resend afterwards.
+                    // otherwise. reset() clears the snapshot on any error/disconnect, forcing a full resend afterward.
                     if (!taskOffsetSum.equals(lastSentFields.taskOffsets)) {
                         data.setTaskOffsets(convertToList(taskOffsetSum));
                         lastSentFields.taskOffsets = taskOffsetSum;
+                        lastTaskOffsetIntervalTs = now;
                     }
                     if (!taskEndOffsetSum.equals(lastSentFields.taskEndOffsets)) {
                         data.setTaskEndOffsets(convertToList(taskEndOffsetSum));
                         lastSentFields.taskEndOffsets = taskEndOffsetSum;
+                        lastTaskOffsetIntervalTs = now;
                     }
-
-                    lastTaskOffsetIntervalTs = time.milliseconds();
                 }
             }
             data.setShutdownApplication(streamsRebalanceData.shutdownRequested());
@@ -211,8 +212,8 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 .collect(Collectors.toList());
         }
 
-        private boolean taskOffsetIntervalPassed() {
-            return lastTaskOffsetIntervalTs + streamsRebalanceData.taskOffsetIntervalMs() <= time.milliseconds();
+        private boolean taskOffsetIntervalPassed(final long now) {
+            return lastTaskOffsetIntervalTs + streamsRebalanceData.taskOffsetIntervalMs() <= now;
         }
 
         private boolean hasAtLeastOneHotWarmupTask(
@@ -649,9 +650,24 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         heartbeatRequestState.updateHeartbeatIntervalMs(data.heartbeatIntervalMs());
         heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
         heartbeatState.setEndpointInformationEpoch(data.endpointInformationEpoch());
-        streamsRebalanceData.setHeartbeatIntervalMs(data.heartbeatIntervalMs());
-        streamsRebalanceData.setTaskOffsetIntervalMs(data.taskOffsetIntervalMs());
-        streamsRebalanceData.setAcceptableRecoveryLag(data.acceptableRecoveryLag());
+        // A leaving member's response carries no group configuration (the fields hold protocol defaults), so do not
+        // log or store it while shutting down. Normal responses have memberEpoch >= 0; leave responses use the
+        // negative leave sentinels (fenced members take the error path instead). Log only when a value changes, to
+        // avoid repeating it on every heartbeat: this fires on first receipt (values start unset) and on any later change.
+        if (data.memberEpoch() >= 0) {
+            if (data.heartbeatIntervalMs() != streamsRebalanceData.heartbeatIntervalMs()
+                    || data.taskOffsetIntervalMs() != streamsRebalanceData.taskOffsetIntervalMs()
+                    || data.acceptableRecoveryLag() != streamsRebalanceData.acceptableRecoveryLag()) {
+                logger.info("Received Streams group configuration from the group coordinator: "
+                        + "heartbeatIntervalMs={}, taskOffsetIntervalMs={}, acceptableRecoveryLag={}",
+                    describeConfig(data.heartbeatIntervalMs(), 1),
+                    describeConfig(data.taskOffsetIntervalMs(), 1),
+                    describeConfig(data.acceptableRecoveryLag(), 0));
+            }
+            streamsRebalanceData.setHeartbeatIntervalMs(data.heartbeatIntervalMs());
+            streamsRebalanceData.setTaskOffsetIntervalMs(data.taskOffsetIntervalMs());
+            streamsRebalanceData.setAcceptableRecoveryLag(data.acceptableRecoveryLag());
+        }
 
         if (data.topologyDescriptionRequired() && streamsRebalanceData.wireTopologyDescription() != null) {
             logger.info("Broker requested topology description push");
@@ -674,6 +690,13 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         }
 
         membershipManager.onHeartbeatSuccess(response);
+    }
+
+    // Renders a coordinator-provided config value for logging, or a note when the broker did not provide it. An older
+    // broker leaves these at their protocol defaults (intervals 0, acceptableRecoveryLag -1); a value below minValid
+    // means "not provided".
+    private static String describeConfig(final long value, final long minValid) {
+        return value < minValid ? "not provided (older broker)" : Long.toString(value);
     }
 
     private void onErrorResponse(final StreamsGroupHeartbeatResponse response, final long currentTimeMs) {

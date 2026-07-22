@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.server.quota;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.List;
 
@@ -23,6 +26,7 @@ import java.util.List;
  * different levels and `configEntities` gives the list of config entities that define
  * the level of this quota entity.
  */
+@InterfaceAudience.Public
 public interface ClientQuotaEntity {
 
     /**
