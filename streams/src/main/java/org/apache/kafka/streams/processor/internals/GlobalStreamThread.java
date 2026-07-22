@@ -210,6 +210,7 @@ public class GlobalStreamThread extends Thread {
                               final StateRestoreListener stateRestoreListener,
                               final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler) {
         super(threadClientId);
+        setDaemon(false);
         this.time = time;
         this.config = config;
         this.topology = topology;

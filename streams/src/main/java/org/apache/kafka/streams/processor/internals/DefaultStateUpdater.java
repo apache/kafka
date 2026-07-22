@@ -109,6 +109,7 @@ public class DefaultStateUpdater implements StateUpdater {
                                   final StreamsMetricsImpl metrics,
                                   final ChangelogReader changelogReader) {
             super(name);
+            setDaemon(true);
             this.changelogReader = changelogReader;
             this.updaterMetrics = new StateUpdaterMetrics(metrics, name);
             this.metricsConfig = metrics.metricsRegistry().config();
