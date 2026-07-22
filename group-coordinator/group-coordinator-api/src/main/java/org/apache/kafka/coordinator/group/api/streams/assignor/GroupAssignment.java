@@ -24,15 +24,43 @@ import java.util.Objects;
 
 /**
  * The task assignment for a streams group.
- *
- * @param members The member assignments keyed by member ID.
  */
 @InterfaceAudience.Public
 @InterfaceStability.Evolving
-public record GroupAssignment(Map<String, MemberAssignment> members) {
+public class GroupAssignment {
+    /**
+     * The member assignments keyed by member ID.
+     */
+    private final Map<String, MemberAssignment> members;
 
-    public GroupAssignment {
-        Objects.requireNonNull(members);
+    public GroupAssignment(
+        Map<String, MemberAssignment> members
+    ) {
+        this.members = Objects.requireNonNull(members);
     }
 
+    /**
+     * @return The member assignments keyed by member ID.
+     */
+    public Map<String, MemberAssignment> members() {
+        return members;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        GroupAssignment that = (GroupAssignment) o;
+        return members.equals(that.members);
+    }
+
+    @Override
+    public int hashCode() {
+        return members.hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "GroupAssignment(members=" + members + ')';
+    }
 }

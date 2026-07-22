@@ -29,9 +29,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class MemberTaskOffsetsTest {
 
-    private static StreamsGroupHeartbeatRequestData.TaskOffset taskOffset(final String subtopologyId,
-                                                                          final int partition,
-                                                                          final long offset) {
+    private static StreamsGroupHeartbeatRequestData.TaskOffset taskOffset(
+        final String subtopologyId,
+        final int partition,
+        final long offset
+    ) {
         return new StreamsGroupHeartbeatRequestData.TaskOffset()
             .setSubtopologyId(subtopologyId)
             .setPartition(partition)

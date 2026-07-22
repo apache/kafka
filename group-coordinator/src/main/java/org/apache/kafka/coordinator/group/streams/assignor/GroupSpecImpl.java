@@ -32,7 +32,7 @@ import java.util.Objects;
  * @param configs Any configurations passed to the assignor.
  */
 public record GroupSpecImpl(
-    Map<String, MemberMetadataAndAssignmentImpl> members,
+    Map<String, MemberMetadataAndStateImpl> members,
     Map<String, String> configs
 ) implements GroupSpec {
 
@@ -56,8 +56,8 @@ public record GroupSpecImpl(
         return requireMember(memberId);
     }
 
-    private MemberMetadataAndAssignmentImpl requireMember(String memberId) {
-        MemberMetadataAndAssignmentImpl member = members.get(memberId);
+    private MemberMetadataAndStateImpl requireMember(String memberId) {
+        MemberMetadataAndStateImpl member = members.get(memberId);
         if (member == null) {
             throw new IllegalArgumentException("Member Id " + memberId + " not found.");
         }

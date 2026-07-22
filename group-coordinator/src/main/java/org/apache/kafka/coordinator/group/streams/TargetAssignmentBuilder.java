@@ -24,16 +24,17 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
-import org.apache.kafka.coordinator.group.streams.assignor.MemberAssignmentImpl;
-import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndAssignmentImpl;
+import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndStateImpl;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -117,21 +118,25 @@ public class TargetAssignmentBuilder {
         this.assignmentConfigs = Objects.requireNonNull(assignmentConfigs);
     }
 
-    static MemberMetadataAndAssignmentImpl createMemberMetadataAndAssignment(
+    static MemberMetadataAndStateImpl createMemberMetadataAndState(
         StreamsGroupMember member,
-        TasksTuple targetAssignment,
         MemberTaskOffsets taskOffsets
     ) {
-        return new MemberMetadataAndAssignmentImpl(
+        // Active, standby and warm-up tasks all reflect the tasks the member currently has, not the
+        // target assignment. Active tasks are stored with epochs; MemberAssignmentState exposes them
+        // without, so drop the epoch.
+        TasksTupleWithEpochs currentAssignment = member.assignedTasks();
+        Map<String, Set<Integer>> activeTasks = new HashMap<>();
+        currentAssignment.activeTasksWithEpochs().forEach((subtopologyId, partitionsWithEpochs) ->
+            activeTasks.put(subtopologyId, new HashSet<>(partitionsWithEpochs.keySet())));
+        return new MemberMetadataAndStateImpl(
             member.instanceId(),
             member.rackId(),
-            targetAssignment.activeTasks(),
-            targetAssignment.standbyTasks(),
-            // Warm-up tasks are decided during reconciliation and recorded in the member's current
-            // assignment, not in the target assignment, so they are sourced from there.
-            member.assignedTasks().warmupTasks(),
             member.processId(),
             member.clientTags(),
+            activeTasks,
+            currentAssignment.standbyTasks(),
+            currentAssignment.warmupTasks(),
             taskOffsets.taskOffsets(),
             taskOffsets.taskEndOffsets()
         );
@@ -220,12 +225,11 @@ public class TargetAssignmentBuilder {
      * @throws TaskAssignorException if the target assignment cannot be computed.
      */
     public TargetAssignmentResult build() throws TaskAssignorException {
-        Map<String, MemberMetadataAndAssignmentImpl> memberMetadataMap = new HashMap<>();
+        Map<String, MemberMetadataAndStateImpl> memberMetadataMap = new HashMap<>();
 
         // Prepare the member metadata for all members.
-        members.forEach((memberId, member) -> memberMetadataMap.put(memberId, createMemberMetadataAndAssignment(
+        members.forEach((memberId, member) -> memberMetadataMap.put(memberId, createMemberMetadataAndState(
             member,
-            targetAssignment.getOrDefault(memberId, org.apache.kafka.coordinator.group.streams.TasksTuple.EMPTY),
             taskOffsets.getOrDefault(memberId, MemberTaskOffsets.EMPTY)
         )));
 
@@ -244,7 +248,7 @@ public class TargetAssignmentBuilder {
             );
         } else {
             newGroupAssignment = new GroupAssignment(
-                memberMetadataMap.keySet().stream().collect(Collectors.toMap(x -> x, x -> (MemberAssignment) MemberAssignmentImpl.empty())));
+                memberMetadataMap.keySet().stream().collect(Collectors.toMap(x -> x, x -> new MemberAssignment(Map.of(), Map.of()))));
         }
 
         // Compute delta from previous to new target assignment and create the
@@ -294,15 +298,23 @@ public class TargetAssignmentBuilder {
     ) {
         MemberAssignment newMemberAssignment = newGroupAssignment.members().get(memberId);
         if (newMemberAssignment != null) {
+            // Copy the maps returned by the assignor so the server does not keep a reference to
+            // maps the assignor is free to mutate afterwards.
             return new TasksTuple(
-                newMemberAssignment.activeTasks(),
-                newMemberAssignment.standbyTasks(),
+                copyTasks(newMemberAssignment.activeTasks()),
+                copyTasks(newMemberAssignment.standbyTasks()),
                 // Warm-up tasks are not assigned by the assignor; they are decided during reconciliation.
                 Map.of()
             );
         } else {
             return TasksTuple.EMPTY;
         }
+    }
+
+    private static Map<String, Set<Integer>> copyTasks(Map<String, Set<Integer>> tasks) {
+        Map<String, Set<Integer>> copy = new HashMap<>();
+        tasks.forEach((subtopologyId, partitions) -> copy.put(subtopologyId, new HashSet<>(partitions)));
+        return copy;
     }
 
     /**

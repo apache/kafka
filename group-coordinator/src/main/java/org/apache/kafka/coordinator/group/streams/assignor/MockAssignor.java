@@ -66,7 +66,7 @@ public class MockAssignor implements TaskAssignor {
         for (final String memberId : groupSpec.memberIds()) {
             Map<String, Set<Integer>> activeTasks = new HashMap<>(groupSpec.memberAssignmentState(memberId).activeTasks());
 
-            newTargetAssignment.put(memberId, new MemberAssignmentImpl(activeTasks, new HashMap<>()));
+            newTargetAssignment.put(memberId, new MemberAssignment(activeTasks, new HashMap<>()));
             for (Map.Entry<String, Set<Integer>> entry : activeTasks.entrySet()) {
                 final String subtopologyId = entry.getKey();
                 final Set<Integer> taskIds = entry.getValue();

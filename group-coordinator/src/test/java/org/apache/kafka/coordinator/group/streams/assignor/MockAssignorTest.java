@@ -65,25 +65,25 @@ public class MockAssignorTest {
     @Test
     public void testDoubleAssignment() {
 
-        final MemberMetadataAndAssignmentImpl memberMetadata1 = new MemberMetadataAndAssignmentImpl(
+        final MemberMetadataAndStateImpl memberMetadata1 = new MemberMetadataAndStateImpl(
             Optional.empty(),
             Optional.empty(),
+            "test-process",
+            Map.of(),
             Map.of("test-subtopology", Set.of(0)),
             Map.of(),
-            Map.of(),
-            "test-process",
             Map.of(),
             Map.of(),
             Map.of()
         );
 
-        final MemberMetadataAndAssignmentImpl memberMetadata2 = new MemberMetadataAndAssignmentImpl(
+        final MemberMetadataAndStateImpl memberMetadata2 = new MemberMetadataAndStateImpl(
             Optional.empty(),
             Optional.empty(),
+            "test-process",
+            Map.of(),
             Map.of("test-subtopology", Set.of(0)),
             Map.of(),
-            Map.of(),
-            "test-process",
             Map.of(),
             Map.of(),
             Map.of()
@@ -118,13 +118,13 @@ public class MockAssignorTest {
     @Test
     public void testSingleMember() {
 
-        final MemberMetadataAndAssignmentImpl memberMetadata = new MemberMetadataAndAssignmentImpl(
+        final MemberMetadataAndStateImpl memberMetadata = new MemberMetadataAndStateImpl(
             Optional.empty(),
             Optional.empty(),
-            Map.of(),
-            Map.of(),
-            Map.of(),
             "test-process",
+            Map.of(),
+            Map.of(),
+            Map.of(),
             Map.of(),
             Map.of(),
             Map.of()
@@ -150,25 +150,25 @@ public class MockAssignorTest {
     @Test
     public void testTwoMembersTwoSubtopologies() {
 
-        final MemberMetadataAndAssignmentImpl memberMetadata1 = new MemberMetadataAndAssignmentImpl(
+        final MemberMetadataAndStateImpl memberMetadata1 = new MemberMetadataAndStateImpl(
             Optional.empty(),
             Optional.empty(),
-            Map.of(),
-            Map.of(),
-            Map.of(),
             "test-process",
+            Map.of(),
+            Map.of(),
+            Map.of(),
             Map.of(),
             Map.of(),
             Map.of()
         );
 
-        final MemberMetadataAndAssignmentImpl memberMetadata2 = new MemberMetadataAndAssignmentImpl(
+        final MemberMetadataAndStateImpl memberMetadata2 = new MemberMetadataAndStateImpl(
             Optional.empty(),
             Optional.empty(),
-            Map.of(),
-            Map.of(),
-            Map.of(),
             "test-process",
+            Map.of(),
+            Map.of(),
+            Map.of(),
             Map.of(),
             Map.of(),
             Map.of()
@@ -203,31 +203,31 @@ public class MockAssignorTest {
     @Test
     public void testTwoMembersTwoSubtopologiesStickiness() {
 
-        final MemberMetadataAndAssignmentImpl memberMetadata1 = new MemberMetadataAndAssignmentImpl(
+        final MemberMetadataAndStateImpl memberMetadata1 = new MemberMetadataAndStateImpl(
             Optional.empty(),
             Optional.empty(),
+            "test-process",
+            Map.of(),
             mkMap(
                 mkEntry("test-subtopology1", new HashSet<>(List.of(0, 2, 3))),
                 mkEntry("test-subtopology2", new HashSet<>(List.of(0)))
             ),
             Map.of(),
             Map.of(),
-            "test-process",
-            Map.of(),
             Map.of(),
             Map.of()
         );
 
-        final MemberMetadataAndAssignmentImpl memberMetadata2 = new MemberMetadataAndAssignmentImpl(
+        final MemberMetadataAndStateImpl memberMetadata2 = new MemberMetadataAndStateImpl(
             Optional.empty(),
             Optional.empty(),
+            "test-process",
+            Map.of(),
             mkMap(
                 mkEntry("test-subtopology1", new HashSet<>(List.of(1))),
                 mkEntry("test-subtopology2", new HashSet<>(List.of(3)))
             ),
             Map.of(),
-            Map.of(),
-            "test-process",
             Map.of(),
             Map.of(),
             Map.of()

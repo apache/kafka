@@ -23,33 +23,20 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Interface representing the current assignment state for a streams group member, used by the
- * {@link TaskAssignor} to compute a new, sticky target assignment.
- *
- * <p>The active and standby tasks are the member's current <em>target</em> assignment (the last
- * assignment committed for the member). Using the committed target as the stickiness baseline keeps
- * in-flight task moves converging rather than reverting them. Warm-up tasks are not assigned by the
- * assignor (they are decided during reconciliation); the tasks the member is <em>currently</em>
- * warming up are exposed here so that the assignor can take them into account. As a result, a task
- * that is being moved to this member can appear both as an active or standby task (from the target)
- * and as a warm-up task (currently in progress).
- *
- * <p>All accessors are keyed by subtopology ID. The task-set accessors ({@link #activeTasks()},
- * {@link #standbyTasks()}, {@link #warmupTasks()}) map each subtopology ID to its set of
- * partitions, while {@link #taskOffsets()} and {@link #taskEndOffsets()} map each subtopology ID
- * to a map from partition to offset.
+ * The active, standby, and warm-up tasks that a streams group member currently has,
+ * used by the {@link TaskAssignor} to compute a new target assignment.
  */
 @InterfaceAudience.Public
 @InterfaceStability.Evolving
 public interface MemberAssignmentState {
 
     /**
-     * @return The member's current target active tasks keyed by subtopology Id.
+     * @return The member's current active tasks keyed by subtopology Id.
      */
     Map<String, Set<Integer>> activeTasks();
 
     /**
-     * @return The member's current target standby tasks keyed by subtopology Id.
+     * @return The member's current standby tasks keyed by subtopology Id.
      */
     Map<String, Set<Integer>> standbyTasks();
 

@@ -97,6 +97,7 @@ import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAss
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
@@ -19685,8 +19686,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         assignor.prepareGroupAssignment(new org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment(Map.of(
-            memberId, (org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment)
-                org.apache.kafka.coordinator.group.streams.assignor.MemberAssignmentImpl.empty()
+            memberId, new MemberAssignment(Map.of(), Map.of())
         )));
 
         // Member joins the streams group.

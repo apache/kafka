@@ -25,8 +25,7 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.TopologyDescriber
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.TopologyMetadata;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
-import org.apache.kafka.coordinator.group.streams.assignor.MemberAssignmentImpl;
-import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndAssignmentImpl;
+import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndStateImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 
@@ -133,35 +132,35 @@ public class StreamsStickyAssignorBenchmark {
         GroupAssignment initialAssignment = new StickyTaskAssignor().assign(groupSpec, topologyDescriber);
         Map<String, MemberAssignment> members = initialAssignment.members();
 
-        Map<String, MemberMetadataAndAssignmentImpl> updatedMemberSpec = new HashMap<>();
+        Map<String, MemberMetadataAndStateImpl> updatedMemberSpec = new HashMap<>();
 
         for (String memberId : groupSpec.memberIds()) {
             MemberAssignment memberAssignment = members.getOrDefault(
                 memberId,
-                new MemberAssignmentImpl(Map.of(), Map.of())
+                new MemberAssignment(Map.of(), Map.of())
             );
 
-            updatedMemberSpec.put(memberId, new MemberMetadataAndAssignmentImpl(
+            updatedMemberSpec.put(memberId, new MemberMetadataAndStateImpl(
                 Optional.empty(),
                 Optional.empty(),
+                groupSpec.memberMetadata(memberId).processId(),
+                Map.of(),
                 memberAssignment.activeTasks(),
                 memberAssignment.standbyTasks(),
                 // Warm-up tasks are not assigned by the assignor; they are decided during reconciliation.
-                Map.of(),
-                groupSpec.memberMetadata(memberId).processId(),
                 Map.of(),
                 Map.of(),
                 Map.of()
             ));
         }
 
-        updatedMemberSpec.put("newMember", new MemberMetadataAndAssignmentImpl(
+        updatedMemberSpec.put("newMember", new MemberMetadataAndStateImpl(
             Optional.empty(),
             Optional.empty(),
-            Map.of(),
-            Map.of(),
-            Map.of(),
             "process-newMember",
+            Map.of(),
+            Map.of(),
+            Map.of(),
             Map.of(),
             Map.of(),
             Map.of()

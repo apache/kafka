@@ -20,7 +20,6 @@ package org.apache.kafka.coordinator.group.streams.assignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignmentMetadata;
 import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignmentState;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
@@ -117,9 +116,8 @@ public class StickyTaskAssignor implements TaskAssignor {
         localState.activeTaskToPrevMember = new HashMap<>(localState.totalActiveTasks);
         localState.standbyTaskToPrevMember = new HashMap<>(localState.numStandbyReplicas > 0 ? (localState.totalTasks - localState.totalActiveTasks) / localState.numStandbyReplicas : 0);
         for (final String memberId : groupSpec.memberIds()) {
-            final MemberAssignmentMetadata memberMetadata = groupSpec.memberMetadata(memberId);
             final MemberAssignmentState memberAssignmentState = groupSpec.memberAssignmentState(memberId);
-            final String processId = memberMetadata.processId();
+            final String processId = groupSpec.memberMetadata(memberId).processId();
             final Member member = new Member(processId, memberId);
 
             localState.processIdToState.putIfAbsent(processId, new ProcessState(processId));
@@ -172,7 +170,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             if (standbyTasksAssignments.containsKey(memberId)) {
                 standByTasks.putAll(toCompactedTaskIds(standbyTasksAssignments.get(memberId)));
             }
-            memberAssignments.put(memberId, new MemberAssignmentImpl(activeTasks, standByTasks));
+            memberAssignments.put(memberId, new MemberAssignment(activeTasks, standByTasks));
         }
 
         return new GroupAssignment(memberAssignments);

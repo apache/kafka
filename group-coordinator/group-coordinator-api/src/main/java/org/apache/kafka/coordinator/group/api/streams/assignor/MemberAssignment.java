@@ -20,6 +20,7 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -30,16 +31,48 @@ import java.util.Set;
  */
 @InterfaceAudience.Public
 @InterfaceStability.Evolving
-public interface MemberAssignment {
+public class MemberAssignment {
+
+    private final Map<String, Set<Integer>> activeTasks;
+    private final Map<String, Set<Integer>> standbyTasks;
+
+    public MemberAssignment(
+        Map<String, Set<Integer>> activeTasks,
+        Map<String, Set<Integer>> standbyTasks
+    ) {
+        this.activeTasks = Objects.requireNonNull(activeTasks);
+        this.standbyTasks = Objects.requireNonNull(standbyTasks);
+    }
 
     /**
      * @return The active tasks assigned to this member keyed by subtopology Id.
      */
-    Map<String, Set<Integer>> activeTasks();
+    public Map<String, Set<Integer>> activeTasks() {
+        return activeTasks;
+    }
 
     /**
      * @return The standby tasks assigned to this member keyed by subtopology Id.
      */
-    Map<String, Set<Integer>> standbyTasks();
+    public Map<String, Set<Integer>> standbyTasks() {
+        return standbyTasks;
+    }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        MemberAssignment that = (MemberAssignment) o;
+        return activeTasks.equals(that.activeTasks) && standbyTasks.equals(that.standbyTasks);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(activeTasks, standbyTasks);
+    }
+
+    @Override
+    public String toString() {
+        return "MemberAssignment(activeTasks=" + activeTasks + ", standbyTasks=" + standbyTasks + ')';
+    }
 }
