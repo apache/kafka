@@ -118,7 +118,7 @@ public class TargetAssignmentBuilder {
         this.assignmentConfigs = Objects.requireNonNull(assignmentConfigs);
     }
 
-    static MemberMetadataAndStateImpl createMemberMetadataAndAssignment(
+    static MemberMetadataAndStateImpl createMemberMetadataAndState(
         StreamsGroupMember member,
         MemberTaskOffsets taskOffsets
     ) {
@@ -228,7 +228,7 @@ public class TargetAssignmentBuilder {
         Map<String, MemberMetadataAndStateImpl> memberMetadataMap = new HashMap<>();
 
         // Prepare the member metadata for all members.
-        members.forEach((memberId, member) -> memberMetadataMap.put(memberId, createMemberMetadataAndAssignment(
+        members.forEach((memberId, member) -> memberMetadataMap.put(memberId, createMemberMetadataAndState(
             member,
             taskOffsets.getOrDefault(memberId, MemberTaskOffsets.EMPTY)
         )));

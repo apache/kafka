@@ -49,7 +49,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedRecordsEquals;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord;
-import static org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.createMemberMetadataAndAssignment;
+import static org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.createMemberMetadataAndState;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksTuple;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -89,7 +89,7 @@ public class TargetAssignmentBuilderTest {
     // Active, standby and warm-up tasks all come from the member's current assignment, so this
     // test varies which role the member's current tasks are in.
     @EnumSource(value = TaskRole.class, names = {"ACTIVE", "STANDBY"})
-    public void testCreateMemberMetadataAndAssignment(TaskRole taskRole) {
+    public void testCreateMemberMetadataAndState(TaskRole taskRole) {
         String fooSubtopologyId = Uuid.randomUuid().toString();
         String barSubtopologyId = Uuid.randomUuid().toString();
 
@@ -113,7 +113,7 @@ public class TargetAssignmentBuilderTest {
                 Map.of()))
             .build();
 
-        MemberMetadataAndStateImpl memberMetadata = createMemberMetadataAndAssignment(
+        MemberMetadataAndStateImpl memberMetadata = createMemberMetadataAndState(
             member,
             MemberTaskOffsets.EMPTY
         );
@@ -132,7 +132,7 @@ public class TargetAssignmentBuilderTest {
     }
 
     @Test
-    public void testCreateMemberMetadataAndAssignmentPopulatesTaskOffsets() {
+    public void testCreateMemberMetadataAndStatePopulatesTaskOffsets() {
         String fooSubtopologyId = Uuid.randomUuid().toString();
 
         StreamsGroupMember member = new StreamsGroupMember.Builder("member-id")
@@ -146,7 +146,7 @@ public class TargetAssignmentBuilderTest {
         Map<String, Map<Integer, Long>> taskOffsets = Map.of(fooSubtopologyId, Map.of(0, 10L));
         Map<String, Map<Integer, Long>> taskEndOffsets = Map.of(fooSubtopologyId, Map.of(0, 20L));
 
-        MemberMetadataAndStateImpl memberMetadata = createMemberMetadataAndAssignment(
+        MemberMetadataAndStateImpl memberMetadata = createMemberMetadataAndState(
             member,
             new MemberTaskOffsets(taskOffsets, taskEndOffsets)
         );
@@ -156,7 +156,7 @@ public class TargetAssignmentBuilderTest {
     }
 
     @Test
-    public void testCreateMemberMetadataAndAssignmentSourcesWarmupTasksFromCurrentAssignment() {
+    public void testCreateMemberMetadataAndStateSourcesWarmupTasksFromCurrentAssignment() {
         String fooSubtopologyId = Uuid.randomUuid().toString();
 
         // Warm-up tasks are decided during reconciliation and stored in the member's current
@@ -169,7 +169,7 @@ public class TargetAssignmentBuilderTest {
             .setAssignedTasks(new TasksTupleWithEpochs(Map.of(), Map.of(), Map.of(fooSubtopologyId, Set.of(1, 2, 3))))
             .build();
 
-        MemberMetadataAndStateImpl memberMetadata = createMemberMetadataAndAssignment(
+        MemberMetadataAndStateImpl memberMetadata = createMemberMetadataAndState(
             member,
             MemberTaskOffsets.EMPTY
         );
@@ -467,7 +467,7 @@ public class TargetAssignmentBuilderTest {
             // Prepare expected member specs.
             Map<String, MemberMetadataAndStateImpl> memberMetadataMap = new HashMap<>();
             members.forEach((memberId, member) ->
-                memberMetadataMap.put(memberId, createMemberMetadataAndAssignment(
+                memberMetadataMap.put(memberId, createMemberMetadataAndState(
                         member,
                         MemberTaskOffsets.EMPTY
                     )
