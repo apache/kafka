@@ -198,6 +198,7 @@ public class GlobalStreamThread extends Thread {
         }
     }
 
+    @SuppressWarnings("this-escape")
     public GlobalStreamThread(final ProcessorTopology topology,
                               final StreamsConfig config,
                               final Consumer<byte[], byte[]> globalConsumer,
