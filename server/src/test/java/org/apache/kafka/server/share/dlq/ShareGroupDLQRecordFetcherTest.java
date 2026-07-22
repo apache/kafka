@@ -63,6 +63,7 @@ class ShareGroupDLQRecordFetcherTest {
     private static final TopicIdPartition TOPIC_ID_PARTITION =
         new TopicIdPartition(Uuid.randomUuid(), 0, "source-topic");
     private static final int MAX_FETCH_BYTES = 1024 * 1024;
+    private static final int MAX_DECOMPRESSED_BYTES = 1024 * 1024;
 
     private final LogReader logReader = mock(LogReader.class);
 
@@ -72,7 +73,11 @@ class ShareGroupDLQRecordFetcherTest {
     }
 
     private ShareGroupDLQRecordFetcher fetcher(ShareGroupDLQRecordParameter param) {
-        return new ShareGroupDLQRecordFetcher(logReader, MOCK_TIME, param, MAX_FETCH_BYTES);
+        return fetcher(param, MAX_DECOMPRESSED_BYTES);
+    }
+
+    private ShareGroupDLQRecordFetcher fetcher(ShareGroupDLQRecordParameter param, int maxDecompressedBytes) {
+        return new ShareGroupDLQRecordFetcher(logReader, MOCK_TIME, param, MAX_FETCH_BYTES, maxDecompressedBytes);
     }
 
     private Map<Long, Record> fetch(ShareGroupDLQRecordParameter param) throws Exception {
@@ -88,8 +93,12 @@ class ShareGroupDLQRecordFetcherTest {
 
     // A successful read carrying the given records (offsets assigned from 0 by MemoryRecords#withRecords).
     private static LogReadResult success(SimpleRecord... records) {
+        return success(Compression.NONE, records);
+    }
+
+    private static LogReadResult success(Compression compression, SimpleRecord... records) {
         return logReadResult(
-            new FetchDataInfo(null, MemoryRecords.withRecords(Compression.NONE, records)), Errors.NONE);
+            new FetchDataInfo(null, MemoryRecords.withRecords(compression, records)), Errors.NONE);
     }
 
     // A failed read - partial-data tolerant, so it still carries a (here empty) FetchDataInfo.
@@ -287,5 +296,34 @@ class ShareGroupDLQRecordFetcherTest {
         Map<Long, Record> result = fetch(param(0L, 2L));
 
         assertTrue(result.isEmpty());
+    }
+
+    @Test
+    public void testCompressedBatchFetchedCorrectly() throws Exception {
+        // A normal, well within-budget compressed batch is unaffected by the bounded decompression path.
+        whenReadAsync(done(success(Compression.gzip().build(),
+            record("k0", "v0"), record("k1", "v1"), record("k2", "v2"))));
+
+        Map<Long, Record> result = fetch(param(0L, 2L));
+
+        assertEquals(3, result.size());
+        assertRecord(result, 0L, "k0", "v0");
+        assertRecord(result, 1L, "k1", "v1");
+        assertRecord(result, 2L, "k2", "v2");
+    }
+
+    @Test
+    public void testCompressedBatchExceedingDecompressedBudgetStopsEarly() throws Exception {
+        // Highly compressible values so the batch is small on the wire but decompresses well past a
+        // tiny budget - simulates a decompression-bomb-shaped batch. The whole batch is decompressed
+        // into a bounded buffer before any record is parsed, so exceeding the budget yields none of its
+        // records rather than a partial subset.
+        String bigValue = "x".repeat(10_000);
+        whenReadAsync(done(success(Compression.gzip().build(),
+            record("k0", bigValue), record("k1", bigValue), record("k2", bigValue))));
+
+        Map<Long, Record> result = fetcher(param(0L, 2L), 100).fetch().get(10, TimeUnit.SECONDS);
+
+        assertTrue(result.isEmpty(), "Expected the fetch to abort before collecting any record from the batch");
     }
 }
