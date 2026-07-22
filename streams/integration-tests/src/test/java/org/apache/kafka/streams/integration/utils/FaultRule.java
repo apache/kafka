@@ -43,6 +43,7 @@ public final class FaultRule {
     private final Errors error; // only for INJECT_ERROR
     private final Duration delay; // only for DELAY
     private final IntPredicate trigger;
+    private final String clientIdFilter; // null = any client; otherwise the request clientId must contain it
     private final String description;
 
     private final AtomicInteger matches = new AtomicInteger(0);
@@ -54,6 +55,7 @@ public final class FaultRule {
               final Errors error,
               final Duration delay,
               final IntPredicate trigger,
+              final String clientIdFilter,
               final String description) {
         this.owner = owner;
         this.apiKey = apiKey;
@@ -61,6 +63,7 @@ public final class FaultRule {
         this.error = error;
         this.delay = delay;
         this.trigger = trigger;
+        this.clientIdFilter = clientIdFilter;
         this.description = description;
     }
 
@@ -78,6 +81,15 @@ public final class FaultRule {
 
     Duration delay() {
         return delay;
+    }
+
+    /**
+     * Whether this rule applies to a request from {@code clientId}. Lets a rule be scoped to a specific
+     * client — e.g. {@code forClient("restore")} to fault only the restore consumer's fetches, leaving the
+     * main consumer untouched. A null filter matches any client.
+     */
+    boolean matchesClient(final String clientId) {
+        return clientIdFilter == null || (clientId != null && clientId.contains(clientIdFilter));
     }
 
     /** Called by the proxy for each response of this rule's API; returns true if the fault should fire. */
@@ -120,6 +132,7 @@ public final class FaultRule {
         private final Action action;
         private final Errors error;
         private final Duration delay;
+        private String clientIdFilter; // null = any client
 
         Builder(final KafkaProtocolFaultProxy owner, final ApiKeys apiKey, final Action action,
                 final Errors error, final Duration delay) {
@@ -128,6 +141,16 @@ public final class FaultRule {
             this.action = action;
             this.error = error;
             this.delay = delay;
+        }
+
+        /**
+         * Scope this fault to requests whose clientId contains {@code substring} — e.g.
+         * {@code forClient("restore")} to fault only the restore consumer (leaving the main consumer and
+         * producer untouched). Without this, the rule matches any client.
+         */
+        public Builder forClient(final String substring) {
+            this.clientIdFilter = substring;
+            return this;
         }
 
         private FaultRule register(final IntPredicate trigger, final String triggerDesc) {
@@ -145,8 +168,9 @@ public final class FaultRule {
                 default:
                     verb = "inject " + error;
             }
-            final FaultRule rule = new FaultRule(owner, apiKey, action, error, delay, trigger,
-                    verb + " on " + apiKey + " [" + triggerDesc + "]");
+            final String scope = clientIdFilter == null ? "" : " client~" + clientIdFilter;
+            final FaultRule rule = new FaultRule(owner, apiKey, action, error, delay, trigger, clientIdFilter,
+                    verb + " on " + apiKey + scope + " [" + triggerDesc + "]");
             owner.addFault(rule);
             return rule;
         }

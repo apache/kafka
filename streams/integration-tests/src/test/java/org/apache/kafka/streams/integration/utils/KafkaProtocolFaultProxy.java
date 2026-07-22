@@ -50,6 +50,7 @@ import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.EnumMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
@@ -78,6 +79,8 @@ import java.util.function.BiConsumer;
  *         proxy.disconnectOn(ApiKeys.END_TXN).once();               // the EOS "commit gap"
  *         proxy.delayResponse(ApiKeys.FETCH, Duration.ofSeconds(5)).everyTime(); // a slow/degraded broker
  *         proxy.blackholeOn(ApiKeys.JOIN_GROUP).once();              // a silent network partition
+ *         proxy.injectError(ApiKeys.FETCH, Errors.OFFSET_OUT_OF_RANGE).forClient("restore").withProbability(0.3);
+ *         proxy.blackholeClient("streams-instance-1");               // evict one Streams instance entirely
  *     }
  * }
  * }</pre>
@@ -99,7 +102,15 @@ import java.util.function.BiConsumer;
  *       timeout paths ({@code request.timeout.ms}, session/heartbeat timeouts) that the above two can't reach.</li>
  *   <li>{@code blackholeOn(...)} — the request is dropped before it ever reaches the broker: no response, no
  *       reset. The client just waits until its own timeout fires, as with a real silent network partition.</li>
+ *   <li>{@code blackholeClient(...)} — like {@code blackholeOn(...)} but scoped to one client (by clientId
+ *       substring) instead of one API: drops every request from that client and closes its connection, an
+ *       ungraceful one-node network partition (e.g. to force a standby takeover).</li>
  * </ul>
+ *
+ * <p>Any {@code injectError(...)}/{@code disconnectOn(...)}/{@code delayResponse(...)}/{@code blackholeOn(...)}
+ * rule can be further scoped to one client via {@code .forClient(substring)} before the trigger, so it only
+ * matches requests whose clientId contains that substring (e.g. faulting only a Streams app's restore
+ * consumer, leaving its main consumer untouched).
  */
 public final class KafkaProtocolFaultProxy implements AutoCloseable {
 
@@ -149,6 +160,7 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
     });
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final CopyOnWriteArrayList<FaultRule> rules = new CopyOnWriteArrayList<>();
+    private final Set<String> blackholedClients = ConcurrentHashMap.newKeySet();
     private ServerSocket serverSocket;
     private volatile String proxyHost;
     private volatile int proxyPort;
@@ -228,9 +240,20 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
         return new FaultRule.Builder(this, apiKey, FaultRule.Action.BLACKHOLE, null, null);
     }
 
-    /** Remove all registered faults (routing rewrites are always on and unaffected). */
+    /**
+     * Blackhole every request from clients whose clientId contains {@code clientIdSubstring}: drop the request
+     * before it reaches the broker and close the connection. The broker stops hearing that instance's
+     * heartbeats and evicts it by session timeout — an ungraceful, reversible one-node network partition.
+     * Set a distinct {@code client.id} per Streams instance to target one instance. Undo via {@link #clearFaults()}.
+     */
+    public void blackholeClient(final String clientIdSubstring) {
+        blackholedClients.add(clientIdSubstring);
+    }
+
+    /** Remove all registered faults and client blackholes (routing rewrites are always on and unaffected). */
     public void clearFaults() {
         rules.clear();
+        blackholedClients.clear();
     }
 
     void addFault(final FaultRule rule) {
@@ -266,9 +289,10 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
         private final Map<Integer, RequestHeader> inflight = new ConcurrentHashMap<>();
     }
 
-    // client -> broker: forward verbatim, recording each request header for response decoding.
-    // Unless a BLACKHOLE rule fires for the request's API, in which case it is silently dropped here and
-    // never reaches the broker at all (the client just times out waiting for a response).
+    // client -> broker: forward verbatim, recording each request header for response decoding. If the whole
+    // client is blackholed (blackholeClient), the connection is dropped outright. Otherwise, unless a
+    // BLACKHOLE rule fires for the request's API (+ client, if scoped via forClient), the request is silently
+    // dropped here and never reaches the broker at all (the client just times out waiting for a response).
     private void pumpRequests(final Socket client, final Socket broker, final Connection conn) {
         try (client; broker;
              DataInputStream in = new DataInputStream(client.getInputStream());
@@ -283,7 +307,12 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
                 }
 
                 if (header != null) {
-                    final FaultRule fired = firstFiringRequestRule(header.apiKey());
+                    if (isBlackholed(header.clientId())) {
+                        LOG.info("Fault: blackholing request {} from client {} (dropping, not forwarding)",
+                                header.apiKey(), header.clientId());
+                        break; // closes both sockets via try-with-resources; broker never sees this request
+                    }
+                    final FaultRule fired = firstFiringRequestRule(header.apiKey(), header.clientId());
                     if (fired != null) {
                         LOG.info("Fault: blackholing {} request, never forwarded to the broker ({})", header.apiKey(), fired);
                         continue;
@@ -295,6 +324,18 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
         } catch (final Exception e) {
             LOG.debug("request pump closed", e);
         }
+    }
+
+    private boolean isBlackholed(final String clientId) {
+        if (clientId == null || blackholedClients.isEmpty()) {
+            return false;
+        }
+        for (final String substring : blackholedClients) {
+            if (clientId.contains(substring)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // broker -> client: rewrite for routing and/or apply a matching fault rule; otherwise forward verbatim.
@@ -314,7 +355,7 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
 
                 final ApiKeys apiKey = reqHeader.apiKey();
                 final boolean routing = apiKey == ApiKeys.METADATA || apiKey == ApiKeys.FIND_COORDINATOR;
-                final FaultRule fired = firstFiringResponseRule(apiKey);
+                final FaultRule fired = firstFiringResponseRule(apiKey, reqHeader.clientId());
 
                 if (fired != null && fired.action() == FaultRule.Action.DISCONNECT) {
                     LOG.info("Fault: dropping connection on {} response ({})", apiKey, fired);
@@ -392,10 +433,11 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
 
     // Evaluated from pumpRequests: only BLACKHOLE rules match here, since that's the one action that must act
     // before the request ever reaches the broker.
-    private FaultRule firstFiringRequestRule(final ApiKeys apiKey) {
+    private FaultRule firstFiringRequestRule(final ApiKeys apiKey, final String clientId) {
         FaultRule chosen = null;
         for (final FaultRule rule : rules) {
-            if (rule.apiKey() == apiKey && rule.action() == FaultRule.Action.BLACKHOLE && rule.shouldFire() && chosen == null) {
+            if (rule.apiKey() == apiKey && rule.action() == FaultRule.Action.BLACKHOLE
+                    && rule.matchesClient(clientId) && rule.shouldFire() && chosen == null) {
                 chosen = rule; // keep evaluating so every same-API rule still counts its match
             }
         }
@@ -403,10 +445,11 @@ public final class KafkaProtocolFaultProxy implements AutoCloseable {
     }
 
     // Evaluated from pumpResponses: every other action (a response necessarily exists to act on).
-    private FaultRule firstFiringResponseRule(final ApiKeys apiKey) {
+    private FaultRule firstFiringResponseRule(final ApiKeys apiKey, final String clientId) {
         FaultRule chosen = null;
         for (final FaultRule rule : rules) {
-            if (rule.apiKey() == apiKey && rule.action() != FaultRule.Action.BLACKHOLE && rule.shouldFire() && chosen == null) {
+            if (rule.apiKey() == apiKey && rule.action() != FaultRule.Action.BLACKHOLE
+                    && rule.matchesClient(clientId) && rule.shouldFire() && chosen == null) {
                 chosen = rule; // keep evaluating so every same-API rule still counts its match
             }
         }
