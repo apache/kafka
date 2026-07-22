@@ -299,15 +299,23 @@ public class TargetAssignmentBuilder {
     ) {
         MemberAssignment newMemberAssignment = newGroupAssignment.members().get(memberId);
         if (newMemberAssignment != null) {
+            // Copy the maps returned by the assignor so the server does not keep a reference to
+            // maps the assignor is free to mutate afterwards.
             return new TasksTuple(
-                newMemberAssignment.activeTasks(),
-                newMemberAssignment.standbyTasks(),
+                copyTasks(newMemberAssignment.activeTasks()),
+                copyTasks(newMemberAssignment.standbyTasks()),
                 // Warm-up tasks are not assigned by the assignor; they are decided during reconciliation.
                 Map.of()
             );
         } else {
             return TasksTuple.EMPTY;
         }
+    }
+
+    private static Map<String, Set<Integer>> copyTasks(Map<String, Set<Integer>> tasks) {
+        Map<String, Set<Integer>> copy = new HashMap<>();
+        tasks.forEach((subtopologyId, partitions) -> copy.put(subtopologyId, new HashSet<>(partitions)));
+        return copy;
     }
 
     /**

@@ -26,9 +26,6 @@ import java.util.Set;
 /**
  * The task assignment for a streams group member.
  *
- * <p>The task maps are not made immutable, since the server-side assignors rely on mutating them
- * while building new assignments.
- *
  * @param activeTasks  The active tasks assigned to this member keyed by subtopology Id.
  * @param standbyTasks The standby tasks assigned to this member keyed by subtopology Id.
  */
