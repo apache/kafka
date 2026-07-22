@@ -467,6 +467,48 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
     }
 
     @Test
+    public void testEachTransformationAndPredicateAliasUsesRequestedVersion() {
+        String firstTransformationPrefix = ConnectorConfig.TRANSFORMS_CONFIG + ".t1.";
+        String secondTransformationPrefix = ConnectorConfig.TRANSFORMS_CONFIG + ".t2.";
+        String firstPredicatePrefix = ConnectorConfig.PREDICATES_CONFIG + ".p1.";
+        String secondPredicatePrefix = ConnectorConfig.PREDICATES_CONFIG + ".p2.";
+        String firstTransformationVersion = "1.1.0";
+        String secondTransformationVersion = "2.3.0";
+        String firstPredicateVersion = "4.3.0";
+        String secondPredicateVersion = "0.5.0";
+
+        Map<String, String> connectorProps = new HashMap<>();
+        connectorProps.put(ConnectorConfig.NAME_CONFIG, "test");
+        connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.SINK_CONNECTOR.className());
+        connectorProps.put(ConnectorConfig.TRANSFORMS_CONFIG, "t1,t2");
+        connectorProps.put(firstTransformationPrefix + "type", VersionedPluginBuilder.VersionedTestPlugin.TRANSFORMATION.className());
+        connectorProps.put(firstTransformationPrefix + WorkerConfig.PLUGIN_VERSION_SUFFIX, firstTransformationVersion);
+        connectorProps.put(secondTransformationPrefix + "type", VersionedPluginBuilder.VersionedTestPlugin.TRANSFORMATION.className());
+        connectorProps.put(secondTransformationPrefix + WorkerConfig.PLUGIN_VERSION_SUFFIX, secondTransformationVersion);
+        connectorProps.put(ConnectorConfig.PREDICATES_CONFIG, "p1,p2");
+        connectorProps.put(firstPredicatePrefix + "type", VersionedPluginBuilder.VersionedTestPlugin.PREDICATE.className());
+        connectorProps.put(firstPredicatePrefix + WorkerConfig.PLUGIN_VERSION_SUFFIX, firstPredicateVersion);
+        connectorProps.put(secondPredicatePrefix + "type", VersionedPluginBuilder.VersionedTestPlugin.PREDICATE.className());
+        connectorProps.put(secondPredicatePrefix + WorkerConfig.PLUGIN_VERSION_SUFFIX, secondPredicateVersion);
+
+        Plugins plugins = MultiVersionTest.MULTI_VERSION_PLUGINS;
+        ConfigDef configDef;
+        try (LoaderSwap ignored = plugins.withClassLoader(plugins.delegatingLoader())) {
+            configDef = ConnectorConfig.enrich(plugins, new ConfigDef(), connectorProps, true);
+        }
+
+        // Different defaults prove that each alias loaded the ConfigDef from its own requested plugin version.
+        assertConfigDefault(configDef, firstTransformationPrefix + VersionedPluginBuilder.VERSION_SPECIFIC_CONFIG,
+            firstTransformationVersion);
+        assertConfigDefault(configDef, secondTransformationPrefix + VersionedPluginBuilder.VERSION_SPECIFIC_CONFIG,
+            secondTransformationVersion);
+        assertConfigDefault(configDef, firstPredicatePrefix + VersionedPluginBuilder.VERSION_SPECIFIC_CONFIG,
+            firstPredicateVersion);
+        assertConfigDefault(configDef, secondPredicatePrefix + VersionedPluginBuilder.VERSION_SPECIFIC_CONFIG,
+            secondPredicateVersion);
+    }
+
+    @Test
     public void testHeaderConverterDefaultsUseWorkerDefault() {
         Map<String, String> connectorProps = Map.of(
             ConnectorConfig.NAME_CONFIG, "test",
