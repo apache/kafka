@@ -3374,6 +3374,12 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             // If we are an observer, then we can shutdown immediately. We want to
             // skip potentially sending any add or remove voter RPCs.
             return 0;
+        } else if (state.hasFetchTimeoutExpired(currentTimeMs)) {
+            // If we can no longer reach the leader, transition to Unattached so we
+            // re-discover the leader (and its endpoints) via the bootstrap servers,
+            // rather than continuing to retry RPCs against an unreachable leader.
+            transitionToUnattached(state.epoch(), OptionalInt.of(state.leaderId()));
+            return 0L;
         } else if (shouldSendAddOrRemoveVoterRequest(state, currentTimeMs)) {
             final var localReplicaKey = quorum.localReplicaKeyOrThrow();
             final var voters = partitionState.lastVoterSet();
@@ -3396,9 +3402,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 state.resetUpdateVoterSetPeriod(currentTimeMs);
             }
             return sendResult.timeToWaitMs();
-        } else if (state.hasFetchTimeoutExpired(currentTimeMs)) {
-            transitionToUnattached(state.epoch(), OptionalInt.of(state.leaderId()));
-            return 0L;
         } else {
             return maybeSendFetchToBestNode(state, currentTimeMs);
         }

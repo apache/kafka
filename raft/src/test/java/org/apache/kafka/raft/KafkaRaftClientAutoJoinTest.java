@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
@@ -23,12 +24,17 @@ import org.apache.kafka.server.common.KRaftVersion;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.raft.KafkaRaftClientTest.replicaKey;
 import static org.apache.kafka.raft.RaftClientTestContext.RaftProtocol.KIP_595_PROTOCOL;
 import static org.apache.kafka.raft.RaftClientTestContext.RaftProtocol.KIP_853_PROTOCOL;
+import static org.apache.kafka.raft.RaftClientTestContext.RaftProtocol.KIP_1186_PROTOCOL;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KafkaRaftClientAutoJoinTest {
     @Test
@@ -259,6 +265,58 @@ public class KafkaRaftClientAutoJoinTest {
         final var fetchRequest = context.assertSentFetchRequest();
 
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
+    }
+
+    @Test
+    public void testAutoJoinObserverFetchesFromBootstrapWhenLeaderUnreachable() throws Exception {
+        final var leader = replicaKey(randomReplicaId(), true);
+        final var otherVoter = replicaKey(leader.id() + 1, true);
+        final var localObserver = replicaKey(otherVoter.id() + 1, true);
+        final int epoch = 1;
+        final var context = new RaftClientTestContext.Builder(
+            localObserver.id(),
+            localObserver.directoryId().get()
+        )
+            .withRaftProtocol(KIP_1186_PROTOCOL)
+            .withStartingVoters(
+                VoterSetTest.voterSet(Stream.of(leader, otherVoter)), KRaftVersion.KRAFT_VERSION_1
+            )
+            .withElectedLeader(epoch, leader.id())
+            // configure a single bootstrap server (the other voter) so we can
+            // distinguish a fetch to the bootstrap servers from a fetch to the leader
+            .withBootstrapServers(
+                Optional.of(List.of(RaftClientTestContext.mockAddress(otherVoter.id())))
+            )
+            .withAutoJoin(true)
+            .withCanBecomeVoter(true)
+            .build();
+
+        // The observer starts as a follower and fetches from the leader. Simulate the
+        // leader's endpoints being unreachable by returning BROKER_NOT_AVAILABLE.
+        context.pollUntilRequest();
+        final var leaderFetch = context.assertSentFetchRequest();
+        assertEquals(leader.id(), leaderFetch.destination().id());
+        context.deliverResponse(
+            leaderFetch.correlationId(),
+            leaderFetch.destination(),
+            RaftUtil.errorResponse(ApiKeys.FETCH, Errors.BROKER_NOT_AVAILABLE)
+        );
+        context.client.poll();
+
+        // Expire the fetch timeout (which also expires the update voter set period since
+        // the two use the same duration). Even though the observer can auto join, an
+        // unreachable leader means it should transition to Unattached
+        context.time.sleep(context.fetchTimeoutMs);
+        context.pollUntilRequest();
+
+        // and its next request is a fetch to the bootstrap server, not an add voter
+        // request to the unreachable leader
+        final var bootstrapFetch = context.assertSentFetchRequest();
+        assertTrue(bootstrapFetch.destination().id() < -1);
+        assertEquals(
+            RaftClientTestContext.mockAddress(otherVoter.id()).getPort(),
+            bootstrapFetch.destination().port()
+        );
     }
 
     private void pollAndDeliverRemoveVoter(
