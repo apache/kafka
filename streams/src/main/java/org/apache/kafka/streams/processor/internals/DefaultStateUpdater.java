@@ -109,6 +109,7 @@ public class DefaultStateUpdater implements StateUpdater {
                                   final StreamsMetricsImpl metrics,
                                   final ChangelogReader changelogReader) {
             super(name);
+            // daemon: internal helper thread must not block JVM shutdown on its own
             setDaemon(true);
             this.changelogReader = changelogReader;
             this.updaterMetrics = new StateUpdaterMetrics(metrics, name);
