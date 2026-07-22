@@ -170,7 +170,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             if (standbyTasksAssignments.containsKey(memberId)) {
                 standByTasks.putAll(toCompactedTaskIds(standbyTasksAssignments.get(memberId)));
             }
-            memberAssignments.put(memberId, new MemberAssignmentImpl(activeTasks, standByTasks));
+            memberAssignments.put(memberId, new MemberAssignment(activeTasks, standByTasks));
         }
 
         return new GroupAssignment(memberAssignments);

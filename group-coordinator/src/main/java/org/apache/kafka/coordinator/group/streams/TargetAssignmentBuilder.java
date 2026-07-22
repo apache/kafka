@@ -24,7 +24,6 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
-import org.apache.kafka.coordinator.group.streams.assignor.MemberAssignmentImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndAssignmentImpl;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 
@@ -249,7 +248,7 @@ public class TargetAssignmentBuilder {
             );
         } else {
             newGroupAssignment = new GroupAssignment(
-                memberMetadataMap.keySet().stream().collect(Collectors.toMap(x -> x, x -> MemberAssignmentImpl.empty())));
+                memberMetadataMap.keySet().stream().collect(Collectors.toMap(x -> x, x -> new MemberAssignment(Map.of(), Map.of()))));
         }
 
         // Compute delta from previous to new target assignment and create the

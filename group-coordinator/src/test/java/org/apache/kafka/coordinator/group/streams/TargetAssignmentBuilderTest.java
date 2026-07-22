@@ -28,7 +28,6 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.TaskRole;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
-import org.apache.kafka.coordinator.group.streams.assignor.MemberAssignmentImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndAssignmentImpl;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
@@ -461,7 +460,7 @@ public class TargetAssignmentBuilderTest {
             String memberId,
             TasksTuple assignment
         ) {
-            memberAssignments.put(memberId, new MemberAssignmentImpl(assignment.activeTasks(), assignment.standbyTasks()));
+            memberAssignments.put(memberId, new MemberAssignment(assignment.activeTasks(), assignment.standbyTasks()));
         }
 
         public org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult build() {

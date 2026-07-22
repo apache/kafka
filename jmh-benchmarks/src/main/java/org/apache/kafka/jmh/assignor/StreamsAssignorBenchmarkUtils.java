@@ -56,11 +56,11 @@ public class StreamsAssignorBenchmarkUtils {
             memberSpecs.put(memberId, new MemberMetadataAndAssignmentImpl(
                 member.instanceId(),
                 member.rackId(),
-                Map.of(),
-                Map.of(),
-                Map.of(),
                 member.processId(),
                 member.clientTags(),
+                Map.of(),
+                Map.of(),
+                Map.of(),
                 Map.of(),
                 Map.of()
             ));
