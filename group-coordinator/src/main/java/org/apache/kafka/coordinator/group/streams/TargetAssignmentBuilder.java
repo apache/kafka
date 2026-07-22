@@ -31,9 +31,11 @@ import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -119,17 +121,21 @@ public class TargetAssignmentBuilder {
 
     static MemberMetadataAndAssignmentImpl createMemberMetadataAndAssignment(
         StreamsGroupMember member,
-        TasksTuple targetAssignment,
         MemberTaskOffsets taskOffsets
     ) {
+        // Active, standby and warm-up tasks all reflect the tasks the member currently has, not the
+        // target assignment. Active tasks are stored with epochs; MemberAssignmentState exposes them
+        // without, so drop the epoch.
+        TasksTupleWithEpochs currentAssignment = member.assignedTasks();
+        Map<String, Set<Integer>> activeTasks = new HashMap<>();
+        currentAssignment.activeTasksWithEpochs().forEach((subtopologyId, partitionsWithEpochs) ->
+            activeTasks.put(subtopologyId, new HashSet<>(partitionsWithEpochs.keySet())));
         return new MemberMetadataAndAssignmentImpl(
             member.instanceId(),
             member.rackId(),
-            targetAssignment.activeTasks(),
-            targetAssignment.standbyTasks(),
-            // Warm-up tasks are decided during reconciliation and recorded in the member's current
-            // assignment, not in the target assignment, so they are sourced from there.
-            member.assignedTasks().warmupTasks(),
+            activeTasks,
+            currentAssignment.standbyTasks(),
+            currentAssignment.warmupTasks(),
             member.processId(),
             member.clientTags(),
             taskOffsets.taskOffsets(),
@@ -225,7 +231,6 @@ public class TargetAssignmentBuilder {
         // Prepare the member metadata for all members.
         members.forEach((memberId, member) -> memberMetadataMap.put(memberId, createMemberMetadataAndAssignment(
             member,
-            targetAssignment.getOrDefault(memberId, org.apache.kafka.coordinator.group.streams.TasksTuple.EMPTY),
             taskOffsets.getOrDefault(memberId, MemberTaskOffsets.EMPTY)
         )));
 

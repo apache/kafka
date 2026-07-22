@@ -87,38 +87,43 @@ public class TargetAssignmentBuilderTest {
     }
 
     @ParameterizedTest
-    // Warm-up tasks are sourced from the member's current assignment (set during reconciliation),
-    // not from the target assignment, so this test only varies the target's active and standby tasks.
+    // Active, standby and warm-up tasks all come from the member's current assignment, so this
+    // test varies which role the member's current tasks are in.
     @EnumSource(value = TaskRole.class, names = {"ACTIVE", "STANDBY"})
     public void testCreateMemberMetadataAndAssignment(TaskRole taskRole) {
         String fooSubtopologyId = Uuid.randomUuid().toString();
         String barSubtopologyId = Uuid.randomUuid().toString();
 
         final Map<String, String> clientTags = mkMap(mkEntry("tag1", "value1"), mkEntry("tag2", "value2"));
+
+        Map<String, Set<Integer>> activeTasks = taskRole == TaskRole.ACTIVE
+            ? Map.of(fooSubtopologyId, Set.of(1, 2, 3), barSubtopologyId, Set.of(1, 2, 3)) : Map.of();
+        Map<String, Set<Integer>> standbyTasks = taskRole == TaskRole.STANDBY
+            ? Map.of(fooSubtopologyId, Set.of(1, 2, 3), barSubtopologyId, Set.of(1, 2, 3)) : Map.of();
+
         StreamsGroupMember member = new StreamsGroupMember.Builder("member-id")
             .setRackId("rackId")
             .setInstanceId("instanceId")
             .setProcessId("processId")
             .setClientTags(clientTags)
-            .setAssignedTasks(TasksTupleWithEpochs.EMPTY)
+            .setAssignedTasks(new TasksTupleWithEpochs(
+                taskRole == TaskRole.ACTIVE
+                    ? Map.of(fooSubtopologyId, Map.of(1, 0, 2, 0, 3, 0), barSubtopologyId, Map.of(1, 0, 2, 0, 3, 0))
+                    : Map.of(),
+                standbyTasks,
+                Map.of()))
             .build();
-
-        TasksTuple assignment = mkTasksTuple(taskRole,
-            mkTasks(fooSubtopologyId, 1, 2, 3),
-            mkTasks(barSubtopologyId, 1, 2, 3)
-        );
 
         MemberMetadataAndAssignmentImpl memberMetadata = createMemberMetadataAndAssignment(
             member,
-            assignment,
             MemberTaskOffsets.EMPTY
         );
 
         assertEquals(new MemberMetadataAndAssignmentImpl(
             Optional.of("instanceId"),
             Optional.of("rackId"),
-            assignment.activeTasks(),
-            assignment.standbyTasks(),
+            activeTasks,
+            standbyTasks,
             Map.of(),
             "processId",
             clientTags,
@@ -144,7 +149,6 @@ public class TargetAssignmentBuilderTest {
 
         MemberMetadataAndAssignmentImpl memberMetadata = createMemberMetadataAndAssignment(
             member,
-            TasksTuple.EMPTY,
             new MemberTaskOffsets(taskOffsets, taskEndOffsets)
         );
 
@@ -168,8 +172,6 @@ public class TargetAssignmentBuilderTest {
 
         MemberMetadataAndAssignmentImpl memberMetadata = createMemberMetadataAndAssignment(
             member,
-            // The target assignment never carries warm-up tasks; even if it did, it must be ignored.
-            mkTasksTuple(TaskRole.WARMUP, mkTasks(fooSubtopologyId, 7, 8, 9)),
             MemberTaskOffsets.EMPTY
         );
 
@@ -468,7 +470,6 @@ public class TargetAssignmentBuilderTest {
             members.forEach((memberId, member) ->
                 memberMetadataMap.put(memberId, createMemberMetadataAndAssignment(
                         member,
-                        targetAssignment.getOrDefault(memberId, TasksTuple.EMPTY),
                         MemberTaskOffsets.EMPTY
                     )
                 ));
