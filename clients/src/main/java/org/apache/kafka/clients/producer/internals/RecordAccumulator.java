@@ -401,8 +401,8 @@ public class RecordAccumulator {
      * @return the append result, which is never {@code needsNewBatch}. It is either {@code appended}
      *         — the record was appended, whether to a batch another thread created concurrently or to
      *         the batch this method creates — or, in the incremental strategy, {@code needsBufferExtension}:
-     *         a concurrent appender created an extendable open batch, so the caller releases its
-     *         pre-allocated buffer and retries via the extension path.
+     *         a concurrent appender created an extendable open batch, but the new record doesn't fit in,
+     *         so the caller releases its pre-allocated buffer and retries via the extension path.
      */
     protected RecordAppendResult appendNewBatch(String topic,
                                                 int partition,
@@ -420,8 +420,8 @@ public class RecordAccumulator {
         if (!appendResult.needsNewBatch()) {
             // Propagate without creating a new batch: either another thread already made us a batch
             // (success), or — incremental strategy — a concurrent appender created an extendable open batch
-            // (needsBufferExtension), so the caller releases its pre-allocated buffer and retries via
-            // the extension path.
+            // that the new record doesn't fit into (needsBufferExtension), so the caller releases its
+            // pre-allocated buffer and retries via the extension path.
             return appendResult;
         }
 
@@ -453,16 +453,22 @@ public class RecordAccumulator {
         return last == null || last.isFull();
     }
 
-     /**
-     *  Try to append to a ProducerBatch.
+    /**
+     * Try to append to a ProducerBatch.
+     * <p>
+     * If it is full (or absent), we return {@link RecordAppendResult#NEEDS_NEW_BATCH} and a new batch is created.
+     * We also close the batch for record appends to free up resources like compression buffers. The batch will be
+     * fully closed (ie. the record batch headers will be written and memory records built) in one of the following
+     * cases (whichever comes first): right before send, if it is expired, or when the producer is closed.
      *
-     *  If it is full (or absent), we return {@link RecordAppendResult#NEEDS_NEW_BATCH} and a new batch is created.
-     *  We also close the batch for record appends to free up resources like compression buffers. The batch will be
-     *  fully closed (ie. the record batch headers will be written and memory records built) in one of the following
-     *  cases (whichever comes first): right before send, if it is expired, or when the producer is closed.
+     * @return one of two outcomes: an {@code appended} result ({@link RecordAppendResult#appended()}) when the
+     * record was appended to the open batch, or {@link RecordAppendResult#NEEDS_NEW_BATCH} when there is
+     * no open batch that can take it (full or absent). The incremental strategy overrides this and may
+     * additionally return a {@link RecordAppendResult#needsExtension(int) needsBufferExtension} result
+     * when the open batch is within its batch-size limit but its chunks lack capacity for the record.
      */
     protected RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers,
-                                         Callback callback, Deque<ProducerBatch> deque, long nowMs) {
+                                           Callback callback, Deque<ProducerBatch> deque, long nowMs) {
         if (closed)
             throw new KafkaException("Producer closed while send in progress");
         ProducerBatch last = deque.peekLast();

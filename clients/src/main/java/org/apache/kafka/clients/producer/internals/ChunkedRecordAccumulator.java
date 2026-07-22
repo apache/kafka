@@ -115,8 +115,9 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
         TopicInfo topicInfo = topicInfoFor(topic);
 
         appendsInProgress.incrementAndGet();
-        ChunkedByteBufferOutputStream bufferStream = null;
-        int newBatchSize = 0; // set when bufferStream is allocated; reused as the write-limit basis
+        // The buffer stream allocated to back a new batch (sized for its first record), paired
+        // with that size. Set and cleared together across retries; null when none is held.
+        NewBatchBuffer newBatch = null;
         List<ByteBuffer> extensionChunks = null;
         if (headers == null) headers = Record.EMPTY_HEADERS;
         try {
@@ -173,14 +174,14 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                         continue;
                     }
                     nowMs = time.milliseconds();
-                } else if (appendResult.needsNewBatch() && bufferStream == null) {
+                } else if (appendResult.needsNewBatch() && newBatch == null) {
                     // The open batch is done (e.g., full, closed) so start a new one.
                     // Block on the pool for enough chunks to fit this record, sized with the
                     // same cumulative estimator used mid-batch (header + record bytes for NONE,
                     // ratio-adjusted when compressed) so the two stay consistent.
                     int recordUncompressed = AbstractRecords.recordSizeUpperBound(
                             RecordBatch.CURRENT_MAGIC_VALUE, compression.type(), key, value, headers);
-                    newBatchSize = MemoryRecordsBuilder.estimatedBytesWritten(
+                    int newBatchSize = MemoryRecordsBuilder.estimatedBytesWritten(
                             RecordBatch.CURRENT_MAGIC_VALUE, compression.type(),
                             CompressionRatioEstimator.estimation(topic, compression.type()),
                             recordUncompressed);
@@ -196,7 +197,9 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                         throw e;
                     }
                     nowMs = time.milliseconds();
-                    bufferStream = new ChunkedByteBufferOutputStream(initialChunks, chunkedFree.poolableSize(), chunkedFree);
+                    newBatch = new NewBatchBuffer(
+                            new ChunkedByteBufferOutputStream(initialChunks, chunkedFree.poolableSize(), chunkedFree),
+                            newBatchSize);
                 }
 
                 synchronized (dq) {
@@ -241,14 +244,13 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
 
                     // needsNewBatch path: extensionChunks == null here implies needsNewBatch,
                     // so bufferStream was allocated (this iteration or carried from a prior one).
-                    if (bufferStream == null)
+                    if (newBatch == null)
                         throw new IllegalStateException("needsNewBatch path reached without an allocated buffer stream");
                     // Reuse the new-batch size estimate as the write-limit basis (equals the record's
                     // uncompressed upper bound without compression). TODO: review once compression lands.
-                    final int firstRecordSize = newBatchSize;
-                    final ChunkedByteBufferOutputStream batchStream = bufferStream;
+                    final NewBatchBuffer pending = newBatch;
                     appendResult = appendNewBatch(topic, effectivePartition, dq, timestamp, key, value, headers, callbacks,
-                            () -> chunkedRecordsBuilder(batchStream, firstRecordSize), nowMs);
+                            () -> chunkedRecordsBuilder(pending.stream, pending.size), nowMs);
                     if (appendResult.needsNewBatch())
                         throw new IllegalStateException("appendNewBatch must not return a needsNewBatch result");
                     if (appendResult.needsBufferExtension()) {
@@ -256,18 +258,18 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                         // than start a new one (detected by appendNewBatch's in-lock tryAppend).
                         // Our bufferStream was sized for a fresh batch — release it and loop so
                         // the extension path allocates exactly the gap-sized chunks.
-                        bufferStream.deallocate();
-                        bufferStream = null;
+                        newBatch.stream.deallocate();
+                        newBatch = null;
                         continue;
                     }
                     if (appendResult.newBatchCreated)
-                        bufferStream = null;
+                        newBatch = null;
                     return updatePartitionInfoOnAppend(appendResult, topicInfo, partitionInfo, dq, cluster);
                 }
             }
         } finally {
-            if (bufferStream != null)
-                bufferStream.deallocate();
+            if (newBatch != null)
+                newBatch.stream.deallocate();
             deallocateExtensionChunks(extensionChunks);
             appendsInProgress.decrementAndGet();
         }
@@ -290,6 +292,11 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
      * capacity, returns {@link RecordAppendResult#needsExtension(int)} without
      * attempting the append; the caller allocates chunks outside the deque lock, attaches
      * them, and retries. Otherwise defers to the parent, which appends or returns
+     * {@link RecordAppendResult#NEEDS_NEW_BATCH}.
+     *
+     * @return a {@link RecordAppendResult#needsExtension(int) needsBufferExtension} result when the open batch is
+     * within its batch-size limit but its chunks lack capacity (the append is not attempted); otherwise the
+     * parent implementation's outcome: an {@code appended} result ({@link RecordAppendResult#appended()}) or
      * {@link RecordAppendResult#NEEDS_NEW_BATCH}.
      */
     @Override
@@ -327,5 +334,21 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                 TimestampType.CREATE_TIME, 0L, RecordBatch.NO_TIMESTAMP, RecordBatch.NO_PRODUCER_ID,
                 RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false, false,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH, writeLimit);
+    }
+
+    /**
+     * A buffer stream allocated to back a new batch, sized to fit the batch's first record,
+     * paired with that size. That same size is also used as the batch's write-limit basis (see
+     * {@link #chunkedRecordsBuilder}). The two are always set and cleared together in {@link #append},
+     * including across retries.
+     */
+    private static final class NewBatchBuffer {
+        final ChunkedByteBufferOutputStream stream;
+        final int size;
+
+        NewBatchBuffer(ChunkedByteBufferOutputStream stream, int size) {
+            this.stream = stream;
+            this.size = size;
+        }
     }
 }

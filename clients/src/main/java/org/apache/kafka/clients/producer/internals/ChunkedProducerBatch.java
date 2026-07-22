@@ -97,6 +97,10 @@ public class ChunkedProducerBatch extends ProducerBatch {
      * layer may still be reading the pooled one — a chunked batch's inflight bytes live in the
      * separate flattened buffer (see {@link ChunkedByteBufferOutputStream#buffer()}), so it is
      * safe to return the actual chunks to the pool here.
+     * <p>
+     * TODO (KAFKA-20580): review when removing the flatten.
+     *  Once we send directly from the chunks, the chunks themselves hold the
+     *  inflight bytes so would be unsafe to return them here.
      */
     @Override
     protected void deallocateInflightBuffer(BufferPool pool) {

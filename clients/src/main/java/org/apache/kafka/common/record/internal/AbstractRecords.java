@@ -149,20 +149,14 @@ public abstract class AbstractRecords implements Records {
      */
     public static int recordSizeUpperBound(byte magic, CompressionType compressionType, byte[] key,
                                            byte[] value, Header[] headers) {
-        return recordSizeUpperBound(magic, compressionType, Utils.wrapNullable(key), Utils.wrapNullable(value), headers);
-    }
-
-    /**
-     * @see #recordSizeUpperBound(byte, CompressionType, byte[], byte[], Header[])
-     */
-    private static int recordSizeUpperBound(byte magic, CompressionType compressionType, ByteBuffer key,
-                                            ByteBuffer value, Header[] headers) {
+        ByteBuffer keyBuffer = Utils.wrapNullable(key);
+        ByteBuffer valueBuffer = Utils.wrapNullable(value);
         if (magic >= RecordBatch.MAGIC_VALUE_V2)
-            return DefaultRecord.recordSizeUpperBound(key, value, headers);
+            return DefaultRecord.recordSizeUpperBound(keyBuffer, valueBuffer, headers);
         else if (compressionType != CompressionType.NONE)
-            return Records.LOG_OVERHEAD + LegacyRecord.recordOverhead(magic) + LegacyRecord.recordSize(magic, key, value);
+            return Records.LOG_OVERHEAD + LegacyRecord.recordOverhead(magic) + LegacyRecord.recordSize(magic, keyBuffer, valueBuffer);
         else
-            return Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, key, value);
+            return Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, keyBuffer, valueBuffer);
     }
 
     /**

@@ -851,18 +851,13 @@ public class MemoryRecordsBuilder implements AutoCloseable {
      * incremental strategy to size mid-batch chunk extensions.
      */
     public int estimatedBytesWrittenAfter(byte[] key, byte[] value, Header[] headers) {
-        return estimatedBytesWrittenAfter(wrapNullable(key), wrapNullable(value), headers);
-    }
-
-    /**
-     * @see #estimatedBytesWrittenAfter(byte[], byte[], Header[])
-     */
-    private int estimatedBytesWrittenAfter(ByteBuffer key, ByteBuffer value, Header[] headers) {
+        ByteBuffer keyBuffer = wrapNullable(key);
+        ByteBuffer valueBuffer = wrapNullable(value);
         final int recordSize;
         if (magic < RecordBatch.MAGIC_VALUE_V2) {
-            recordSize = Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, key, value);
+            recordSize = Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, keyBuffer, valueBuffer);
         } else {
-            recordSize = DefaultRecord.recordSizeUpperBound(key, value, headers);
+            recordSize = DefaultRecord.recordSizeUpperBound(keyBuffer, valueBuffer, headers);
         }
         return estimatedBytesWritten(magic, compression.type(), estimatedCompressionRatio,
                 uncompressedRecordsSizeInBytes + recordSize);
