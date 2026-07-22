@@ -34,18 +34,7 @@ below cover building, testing, and publishing the plugins themselves.
   `org.apache.kafka.internal-api-checker` plugin to a synthetic consumer project.
 - `:maven-plugin:test` — hosts `PluginXmlParityTest`, which locks the generated
   `plugin.xml` Mojo descriptor against the fields on `KafkaInternalApiCheckerMojo` so
-  adding a parameter without exposing it (or vice versa) fails CI.
-
-### CI integration
-
-The root `check` task depends on `:api-checker:core:check`,
-`:api-checker:gradle-plugins:check`, and `:api-checker:maven-plugin:check` (wired in the
-top-level `build.gradle`). Since `.github/workflows/build.yml` runs `./gradlew check` on
-every PR, the composite build's checkstyle and unit tests — including
-`PluginXmlParityTest` — are exercised in the standard PR workflow.
-
-The producer-side checker itself is separately exercised via `docsJar`, which every
-module's `check` finalises against real annotated code and a real javadoc jar.
+  adding a parameter without exposing it (or vice versa) fails locally.
 
 ## Publish
 
