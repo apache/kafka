@@ -29,9 +29,11 @@ import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssign
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.SimpleAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
+import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 
 import org.junit.jupiter.api.Test;
 
@@ -40,6 +42,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -132,6 +135,120 @@ public class GroupCoordinatorConfigTest {
         assertEquals(2, assignors.size());
         assertInstanceOf(UniformAssignor.class, assignors.get(0));
         assertInstanceOf(CustomAssignor.class, assignors.get(1));
+    }
+
+    public static class CustomTaskAssignor implements TaskAssignor, Configurable {
+        public Map<String, ?> configs;
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            this.configs = configs;
+        }
+
+        @Override
+        public String name() {
+            return "custom";
+        }
+
+        @Override
+        public org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment assign(
+            org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec groupSpec,
+            org.apache.kafka.coordinator.group.api.streams.assignor.TopologyDescriber topologyDescriber
+        ) {
+            return new org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment(Map.of());
+        }
+    }
+
+    public static class StickyNamedTaskAssignor implements TaskAssignor {
+        @Override
+        public String name() {
+            // Collides with the builtin "sticky" assignor.
+            return "sticky";
+        }
+
+        @Override
+        public org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment assign(
+            org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec groupSpec,
+            org.apache.kafka.coordinator.group.api.streams.assignor.TopologyDescriber topologyDescriber
+        ) {
+            return new org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment(Map.of());
+        }
+    }
+
+    @Test
+    public void testStreamsGroupAssignorFullClassName() {
+        // The full class name of the assignor is part of our public api. Hence,
+        // we should ensure that it is not changed by mistake.
+        assertEquals(
+            "org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor",
+            StickyTaskAssignor.class.getName()
+        );
+    }
+
+    @Test
+    public void testStreamsGroupAssignors() {
+        Map<String, Object> configs = new HashMap<>();
+        GroupCoordinatorConfig config;
+        List<TaskAssignor> assignors;
+
+        // The default is the builtin sticky assignor.
+        config = createConfig(configs);
+        assignors = config.streamsGroupAssignors();
+        assertEquals(1, assignors.size());
+        assertInstanceOf(StickyTaskAssignor.class, assignors.get(0));
+        assertEquals(Set.of("sticky"), config.streamsGroupAssignorNames());
+
+        // Builtin short name.
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, "sticky");
+        config = createConfig(configs);
+        assignors = config.streamsGroupAssignors();
+        assertEquals(1, assignors.size());
+        assertInstanceOf(StickyTaskAssignor.class, assignors.get(0));
+
+        // Custom assignor by class name is instantiated and configured.
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, CustomTaskAssignor.class.getName());
+        config = createConfig(configs);
+        assignors = config.streamsGroupAssignors();
+        assertEquals(1, assignors.size());
+        assertInstanceOf(CustomTaskAssignor.class, assignors.get(0));
+        assertNotNull(((CustomTaskAssignor) assignors.get(0)).configs);
+
+        // Combination of builtin short name and custom class; order is preserved (first is default).
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, List.of("sticky", CustomTaskAssignor.class.getName()));
+        config = createConfig(configs);
+        assignors = config.streamsGroupAssignors();
+        assertEquals(2, assignors.size());
+        assertInstanceOf(StickyTaskAssignor.class, assignors.get(0));
+        assertInstanceOf(CustomTaskAssignor.class, assignors.get(1));
+        assertEquals(Set.of("sticky", "custom"), config.streamsGroupAssignorNames());
+    }
+
+    @Test
+    public void testStreamsGroupAssignorsRemovesDuplicateTokens() {
+        // A repeated token refers to the same assignor and is de-duplicated during list parsing
+        // (with a warning), matching the behavior of group.consumer.assignors.
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, "sticky, sticky");
+        GroupCoordinatorConfig config = createConfig(configs);
+        assertEquals(1, config.streamsGroupAssignors().size());
+        assertInstanceOf(StickyTaskAssignor.class, config.streamsGroupAssignors().get(0));
+    }
+
+    @Test
+    public void testStreamsGroupAssignorsWithDuplicateNamesFails() {
+        // Two distinct assignors resolving to the same name must fail startup, even when one is a
+        // builtin and the other is a custom assignor.
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG,
+            List.of("sticky", StickyNamedTaskAssignor.class.getName()));
+        assertThrows(KafkaException.class, () -> createConfig(configs));
+    }
+
+    @Test
+    public void testStreamsGroupAssignorsWithUnknownClassFails() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, "org.apache.kafka.NonExistentTaskAssignor");
+        assertThrows(KafkaException.class, () -> createConfig(configs));
     }
 
     @Test
