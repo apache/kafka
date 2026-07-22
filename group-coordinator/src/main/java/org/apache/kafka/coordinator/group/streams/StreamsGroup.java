@@ -1333,7 +1333,8 @@ public class StreamsGroup implements Group {
         members.entrySet(committedOffset).forEach(
             entry -> describedGroup.members().add(
                 entry.getValue().asStreamsGroupDescribeMember(
-                    targetAssignment.get(entry.getValue().memberId(), committedOffset)
+                    targetAssignment.get(entry.getValue().memberId(), committedOffset),
+                    taskOffsets(entry.getValue().memberId())
                 )
             )
         );
