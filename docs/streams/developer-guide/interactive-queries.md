@@ -781,8 +781,9 @@ StateQueryRequest<Long> request = inStore("CountsKeyValueStore").withQuery(query
 // 3. Execute the query.
 StateQueryResult<Long> result = streams.query(request);
 
-// 4. Read the result. A key lookup targets a single partition, so getOnlyPartitionResult()
-//    returns that partition's result (or null if no locally available partition holds the key).
+// 4. Read the result. A given key lives in exactly one partition, so at most one partition
+//    returns a value. getOnlyPartitionResult() returns that partition's result, or null if
+//    no locally available partition holds the key.
 QueryResult<Long> partitionResult = result.getOnlyPartitionResult();
 if (partitionResult != null && partitionResult.isSuccess()) {
     Long count = partitionResult.getResult();
@@ -809,16 +810,23 @@ Kafka Streams ships with a set of query types covering the standard store types.
 
 For range and scan queries (`RangeQuery`, `TimestampedRangeQuery`), passing no bounds performs a full scan, and result ordering is based on the serialized `byte[]` of the keys, not on the logical key order.
 
-There are also headers-aware variants (`TimestampedKeyWithHeadersQuery`, `TimestampedRangeWithHeadersQuery`, and `TimestampedWindowKeyWithHeadersQuery`, added by KIP-1356 building on the header-storage support from KIP-1271) that return the record headers alongside the value. These require a headers-aware store supplier (for example `Stores.persistentTimestampedKeyValueStoreWithHeaders`); querying a plain store with them fails with `UNKNOWN_QUERY_TYPE`.
+Versioned key-value stores are queryable **only** through IQv2 — use `VersionedKeyQuery` for a single version (latest, or as of a timestamp) and `MultiVersionedKeyQuery` for a range of versions. The original `KafkaStreams#store(...)` API has no queryable store type for versioned stores.
 
 Because IQv2 is extensible, a custom state store may implement additional query types of its own. When a store does not know how to handle a query, it does not throw; instead it returns a failed `QueryResult` with `FailureReason.UNKNOWN_QUERY_TYPE`.
 
 ## Handling query results
 
-A `StateQueryResult` aggregates one `QueryResult` per partition that ran the query:
+A `StateQueryResult` aggregates one `QueryResult` per partition that ran the query. By default a request runs against all locally available partitions of the store (unless you narrow it with `withPartitions(...)`), so `getPartitionResults()` may contain an entry for every one of those partitions.
 
-  * `getPartitionResults()` returns a `Map<Integer, QueryResult<R>>`, keyed by partition number.
-  * `getOnlyPartitionResult()` is a convenience for queries that are expected to match a single partition (such as a key lookup). It returns that partition's result, or throws `IllegalArgumentException` if more than one partition returned a result.
+Which accessor to use is determined by the *query type* you chose, not by inspecting the result at runtime:
+
+  * **Point lookups** (`KeyQuery`, `TimestampedKeyQuery`, `VersionedKeyQuery`) can only match in the single partition that owns the key, so at most one partition returns a value (the other queried partitions return a successful result with `null`). Use `getOnlyPartitionResult()`.
+  * **Range, scan, and window queries** (`RangeQuery`, `WindowRangeQuery`, `MultiVersionedKeyQuery`, and so on) can match records in every queried partition, so results are spread across partitions. Use `getPartitionResults()` and iterate.
+
+The accessors are:
+
+  * `getPartitionResults()` returns a `Map<Integer, QueryResult<R>>`, keyed by partition number — one entry per partition that ran the query. This is the general form and works for any query.
+  * `getOnlyPartitionResult()` is a convenience that filters to the single partition that produced a value and returns it (or `null` if none did). It throws `IllegalArgumentException` if more than one partition produced a value, so only use it when you know the query matches at most one partition.
   * `getPosition()` returns the merged `Position` observed across the partition results.
 
 Each `QueryResult` reports the outcome for one partition. Use `isSuccess()` / `isFailure()` before reading: `getResult()` returns the value on success (which may itself be `null`, for example when a key is not found), while `getFailureReason()` and `getFailureMessage()` describe a failure. Results are always **per-partition** — a query may succeed on some partitions and fail on others (for example, if one partition has migrated off this instance).
@@ -906,6 +914,7 @@ Position position = result.getPosition(); // pass into a later query for monoton
 | Failure reporting | Exceptions (for example, `InvalidStateStoreException`) | Typed `FailureReason` per partition |
 | Consistency control | `enableStaleStores()` toggle | `PositionBound` plus the returned `Position` |
 | Partition targeting | `.withPartition(int)` | `.withPartitions(Set)` / `.withAllPartitions()` |
+| Versioned stores | Not queryable | `VersionedKeyQuery` / `MultiVersionedKeyQuery` |
 | Global stores | Supported | Not yet supported |
 | Maturity | Stable | Evolving |
 
@@ -913,7 +922,6 @@ Position position = result.getPosition(); // pass into a later query for monoton
 
   * Global stores are not yet supported by `query(...)`. Use [KafkaStreams#store(...)](/{version}/javadoc/org/apache/kafka/streams/KafkaStreams.html) to query global stores.
   * The IQv2 API is still evolving and may change in future releases.
-  * For range and scan queries, ordering is based on the serialized `byte[]` of the keys, not on the logical key order.
 
 To see an end-to-end application with interactive queries, review the demo applications.
 
