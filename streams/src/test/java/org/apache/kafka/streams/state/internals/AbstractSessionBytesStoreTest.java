@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -27,8 +28,8 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -75,7 +76,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-
 public abstract class AbstractSessionBytesStoreTest {
 
     static final long SEGMENT_INTERVAL = 60_000L;
@@ -105,84 +105,72 @@ public abstract class AbstractSessionBytesStoreTest {
         switch (storeType()) {
             case RocksDBSessionStore: {
                 return Stores.sessionStoreBuilder(
-                        Stores.persistentSessionStore(
-                                ROCK_DB_STORE_NAME,
-                                ofMillis(retentionPeriod)),
-                        keySerde,
-                        valueSerde).build();
+                    Stores.persistentSessionStore(
+                        ROCK_DB_STORE_NAME,
+                        ofMillis(retentionPeriod)),
+                    keySerde,
+                    valueSerde).build();
             }
             case RocksDBTimeOrderedSessionStoreWithIndex: {
                 return Stores.sessionStoreBuilder(
-                        new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                                ROCK_DB_STORE_NAME,
-                                retentionPeriod,
-                                true
-                        ),
-                        keySerde,
-                        valueSerde
+                    new RocksDbTimeOrderedSessionBytesStoreSupplier(
+                        ROCK_DB_STORE_NAME,
+                        retentionPeriod,
+                        true
+                    ),
+                    keySerde,
+                    valueSerde
                 ).build();
             }
             case RocksDBTimeOrderedSessionStoreWithoutIndex: {
                 return Stores.sessionStoreBuilder(
-                        new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                                ROCK_DB_STORE_NAME,
-                                retentionPeriod,
-                                false
-                        ),
-                        keySerde,
-                        valueSerde
+                    new RocksDbTimeOrderedSessionBytesStoreSupplier(
+                        ROCK_DB_STORE_NAME,
+                        retentionPeriod,
+                        false
+                    ),
+                    keySerde,
+                    valueSerde
                 ).build();
             }
             case RocksDBSessionStoreWithHeaders: {
                 return Stores.sessionStoreBuilder(
-                        new RocksDbSessionBytesStoreSupplier(ROCK_DB_STORE_NAME, retentionPeriod) {
-                            @Override
-                            public SessionStore<Bytes, byte[]> get() {
-                                return new RocksDBSessionStoreWithHeaders(
-                                    new RocksDBSegmentedBytesStore(
-                                        name(), metricsScope(), retentionPeriod(), segmentIntervalMs(),
-                                        new SessionKeySchema()));
-                            }
-                        },
-                        keySerde,
-                        valueSerde
+                    new RocksDbSessionBytesStoreSupplier(ROCK_DB_STORE_NAME, retentionPeriod) {
+                        @Override
+                        public SessionStore<Bytes, byte[]> get() {
+                            return new RocksDBSessionStoreWithHeaders(
+                                new RocksDBSegmentedBytesStore(
+                                    name(), metricsScope(), retentionPeriod(), segmentIntervalMs(),
+                                    new SessionKeySchema()));
+                        }
+                    },
+                    keySerde,
+                    valueSerde
                 ).build();
             }
             case RocksDBTimeOrderedSessionStoreWithHeadersWithIndex: {
                 return Stores.sessionStoreBuilder(
-                        new RocksDbTimeOrderedSessionBytesStoreSupplier(ROCK_DB_STORE_NAME, retentionPeriod, true) {
-                            @Override
-                            public SessionStore<Bytes, byte[]> get() {
-                                return new RocksDBTimeOrderedSessionStoreWithHeaders(
-                                    new RocksDBTimeOrderedSessionSegmentedBytesStore(
-                                        name(), metricsScope(), retentionPeriod(), segmentIntervalMs(), true));
-                            }
-                        },
-                        keySerde,
-                        valueSerde
+                    new RocksDbTimeOrderedSessionHeadersBytesStoreSupplier(ROCK_DB_STORE_NAME, retentionPeriod, true),
+                    keySerde,
+                    valueSerde
                 ).build();
             }
             case RocksDBTimeOrderedSessionStoreWithHeadersWithoutIndex: {
                 return Stores.sessionStoreBuilder(
-                        new RocksDbTimeOrderedSessionBytesStoreSupplier(ROCK_DB_STORE_NAME, retentionPeriod, false) {
-                            @Override
-                            public SessionStore<Bytes, byte[]> get() {
-                                return new RocksDBTimeOrderedSessionStoreWithHeaders(
-                                    new RocksDBTimeOrderedSessionSegmentedBytesStore(
-                                        name(), metricsScope(), retentionPeriod(), segmentIntervalMs(), false));
-                            }
-                        },
-                        keySerde,
-                        valueSerde
+                    new RocksDbTimeOrderedSessionHeadersBytesStoreSupplier(ROCK_DB_STORE_NAME, retentionPeriod, false),
+                    keySerde,
+                    valueSerde
                 ).build();
             }
             case InMemoryStore: {
                 return Stores.sessionStoreBuilder(
-                        Stores.inMemorySessionStore(
-                                IN_MEMORY_STORE_NAME,
-                                ofMillis(retentionPeriod)),
-                        keySerde,
-                        valueSerde).build();
+                    Stores.inMemorySessionStore(
+                        IN_MEMORY_STORE_NAME,
+                        ofMillis(retentionPeriod)
+                    ),
+                    keySerde,
+                    valueSerde
+                ).build();
             }
             default:
                 throw new IllegalStateException("Unknown StoreType: " + storeType());
@@ -191,10 +179,19 @@ public abstract class AbstractSessionBytesStoreTest {
 
     abstract StoreType storeType();
 
+    /** Overridden by subclasses to exercise the transactional (staged-write) code path. */
+    boolean transactional() {
+        return false;
+    }
+
     @BeforeEach
     public void setUp() {
         sessionStore = buildSessionStore(RETENTION_PERIOD, Serdes.String(), Serdes.Long());
         recordCollector = new MockRecordCollector();
+        final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
+        if (transactional()) {
+            streamsConfig.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
+        }
         context = new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             Serdes.String(),
@@ -203,7 +200,8 @@ public abstract class AbstractSessionBytesStoreTest {
             new ThreadCache(
                 new LogContext("testCache"),
                 0,
-                new MockStreamsMetrics(new Metrics())));
+                new MockStreamsMetrics(new Metrics())),
+            new StreamsConfig(streamsConfig));
         context.setTime(1L);
 
         sessionStore.init(context, sessionStore);

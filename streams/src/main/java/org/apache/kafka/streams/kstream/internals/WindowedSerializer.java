@@ -16,10 +16,15 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.Windowed;
 
 public interface WindowedSerializer<T> extends Serializer<Windowed<T>> {
 
     byte[] serializeBaseKey(String topic, Windowed<T> data);
+
+    default byte[] serializeBaseKey(final String topic, final  Headers headers, final  Windowed<T> data) {
+        return serializeBaseKey(topic, data);
+    }
 }

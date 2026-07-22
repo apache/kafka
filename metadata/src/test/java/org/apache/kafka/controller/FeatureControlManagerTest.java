@@ -22,7 +22,7 @@ import org.apache.kafka.common.metadata.ClusterIdRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.VersionRange;
@@ -496,7 +496,7 @@ public class FeatureControlManagerTest {
     @Test
     public void testUpgradeGeneratesClusterIdRecord() {
         // Start at a version that doesn't support ClusterIdRecord (IBP_4_3_IV0)
-        // and upgrade to one that does (IBP_4_4_IV0)
+        // and upgrade to one that does (IBP_4_4_IV2)
         String testClusterId = "test-cluster-id-123";
         Map<String, VersionRange> localSupportedFeatures = new HashMap<>();
         localSupportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
@@ -509,9 +509,9 @@ public class FeatureControlManagerTest {
         manager.replay(new FeatureLevelRecord().setName(MetadataVersion.FEATURE_NAME)
             .setFeatureLevel(MetadataVersion.IBP_4_3_IV0.featureLevel()));
 
-        // Upgrade to IBP_4_4_IV0 which supports ClusterIdRecord
+        // Upgrade to IBP_4_4_IV2 which supports ClusterIdRecord
         ControllerResult<ApiError> result = manager.updateFeatures(
-            Map.of(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_4_4_IV0.featureLevel()),
+            Map.of(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_4_4_IV2.featureLevel()),
             Map.of(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.UPGRADE),
             false,
             0);
@@ -521,7 +521,7 @@ public class FeatureControlManagerTest {
         assertEquals(2, result.records().size());
         assertEquals(new FeatureLevelRecord()
                 .setName(MetadataVersion.FEATURE_NAME)
-                .setFeatureLevel(MetadataVersion.IBP_4_4_IV0.featureLevel()),
+                .setFeatureLevel(MetadataVersion.IBP_4_4_IV2.featureLevel()),
             result.records().get(0).message());
         assertEquals(new ClusterIdRecord().setClusterId(testClusterId),
             result.records().get(1).message());
@@ -534,18 +534,18 @@ public class FeatureControlManagerTest {
         String testClusterId = "test-cluster-id-456";
         Map<String, VersionRange> localSupportedFeatures = new HashMap<>();
         localSupportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
-            MetadataVersion.IBP_4_4_IV0.featureLevel(), MetadataVersion.latestTesting().featureLevel()));
+            MetadataVersion.IBP_4_4_IV2.featureLevel(), MetadataVersion.latestTesting().featureLevel()));
 
         FeatureControlManager manager = new FeatureControlManager.Builder().
             setQuorumFeatures(new QuorumFeatures(0, localSupportedFeatures, List.of())).
             setClusterId(testClusterId).
             build();
         manager.replay(new FeatureLevelRecord().setName(MetadataVersion.FEATURE_NAME)
-            .setFeatureLevel(MetadataVersion.IBP_4_4_IV0.featureLevel()));
+            .setFeatureLevel(MetadataVersion.IBP_4_4_IV2.featureLevel()));
 
-        // Upgrade to IBP_4_4_IV1
+        // Upgrade to IBP_4_4_IV3
         ControllerResult<ApiError> result = manager.updateFeatures(
-            Map.of(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_4_4_IV1.featureLevel()),
+            Map.of(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_4_4_IV3.featureLevel()),
             Map.of(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.UPGRADE),
             false,
             0);
@@ -555,7 +555,7 @@ public class FeatureControlManagerTest {
         assertEquals(1, result.records().size());
         assertEquals(new FeatureLevelRecord()
                 .setName(MetadataVersion.FEATURE_NAME)
-                .setFeatureLevel(MetadataVersion.IBP_4_4_IV1.featureLevel()),
+                .setFeatureLevel(MetadataVersion.IBP_4_4_IV3.featureLevel()),
             result.records().get(0).message());
     }
 
@@ -573,9 +573,9 @@ public class FeatureControlManagerTest {
         manager.replay(new FeatureLevelRecord().setName(MetadataVersion.FEATURE_NAME)
             .setFeatureLevel(MetadataVersion.IBP_4_3_IV0.featureLevel()));
 
-        // Attempt to upgrade to IBP_4_4_IV0 without clusterId configured should throw
+        // Attempt to upgrade to IBP_4_4_IV2 without clusterId configured should throw
         assertThrows(IllegalStateException.class, () -> manager.updateFeatures(
-            Map.of(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_4_4_IV0.featureLevel()),
+            Map.of(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_4_4_IV2.featureLevel()),
             Map.of(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.UPGRADE),
             false,
             0));

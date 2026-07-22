@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.protocol;
 
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 
 import org.junit.jupiter.api.Test;
 

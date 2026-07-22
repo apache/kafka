@@ -18,6 +18,7 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsRequestFormatterFactory;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
 
@@ -125,14 +126,14 @@ public class DefaultJwtRetrieverTest extends OAuthBearerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("urlencodeHeaderSupplier")
-    public void testUrlencodeHeader(Map<String, Object> configs, boolean expectedValue) {
+    @MethodSource("urlEncodeHeaderSupplier")
+    public void testUrlEncodeHeader(Map<String, Object> configs, boolean expectedValue) {
         ConfigurationUtils cu = new ConfigurationUtils(configs);
-        boolean actualValue = ClientCredentialsJwtRetriever.validateUrlencodeHeader(cu);
+        boolean actualValue = ClientCredentialsRequestFormatterFactory.validateUrlEncodeHeader(cu);
         assertEquals(expectedValue, actualValue);
     }
 
-    private static Stream<Arguments> urlencodeHeaderSupplier() {
+    private static Stream<Arguments> urlEncodeHeaderSupplier() {
         return Stream.of(
             Arguments.of(Collections.emptyMap(), DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE),
             Arguments.of(Collections.singletonMap(SASL_OAUTHBEARER_HEADER_URLENCODE, null), DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE),

@@ -24,7 +24,7 @@ import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.NoOpRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -440,7 +440,7 @@ public class FeatureControlManager {
      * This provides a generic mechanism for adding records that must accompany certain MV upgrades.
      * <p>
      * For example, all valid metadata version upgrades write a FeatureLevelRecord for MetadataVersion.
-     * However, when upgrading to IBP_4_4_IV0 or later, a ClusterIdRecord must be written because
+     * However, when upgrading to IBP_4_4_IV2 or later, a ClusterIdRecord must be written because
      * one does not already exist. This ensures that a cluster whose MV supports ClusterIdRecord
      * will have one in the log.
      *

@@ -97,7 +97,7 @@ public class BatchFileWriter implements AutoCloseable {
             new BatchMemoryPool(5, MAX_BATCH_SIZE_BYTES),
             time,
             Compression.NONE,
-            new MetadataRecordSerde()
+            MetadataRecordSerde.INSTANCE
         );
 
         // Append the snapshot header control record and force it to create a batch

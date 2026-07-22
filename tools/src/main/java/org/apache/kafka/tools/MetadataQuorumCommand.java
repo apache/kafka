@@ -24,8 +24,8 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.network.SocketServerConfigs;
@@ -168,7 +168,7 @@ public class MetadataQuorumCommand {
             return new Properties();
         } else {
             if (!optionalCommandConfig.exists())
-                throw new TerseException("Properties file " + optionalCommandConfig.getPath() + " does not exists!");
+                throw new TerseException("Properties file " + optionalCommandConfig.getPath() + " does not exist.");
             return Utils.loadProps(optionalCommandConfig.getPath());
         }
     }
@@ -300,15 +300,10 @@ public class MetadataQuorumCommand {
         return node == null ? new ArrayList<>() : node.endpoints();
     }
 
-    private static class Node {
-        private final int id;
-        private final Uuid directoryId;
-        private final List<RaftVoterEndpoint> endpoints;
-
-        private Node(int id, Uuid directoryId, List<RaftVoterEndpoint> endpoints) {
-            this.id = id;
-            this.directoryId = Objects.requireNonNull(directoryId);
-            this.endpoints = Objects.requireNonNull(endpoints);
+    private record Node(int id, Uuid directoryId, List<RaftVoterEndpoint> endpoints) {
+        private Node {
+            Objects.requireNonNull(directoryId);
+            Objects.requireNonNull(endpoints);
         }
 
         @Override

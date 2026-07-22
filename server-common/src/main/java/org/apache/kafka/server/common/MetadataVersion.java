@@ -131,16 +131,19 @@ public enum MetadataVersion {
     // Please move this comment when updating the LATEST_PRODUCTION constant.
     //
 
-    // Enables auto-formatting directories.
-    // ClusterIdRecord is added.
-    IBP_4_4_IV0(31, "4.4", "IV0", true),
+    // IBP_4_4_IV0 enables dead-letter queue support for share groups (KIP-1191).
+    IBP_4_4_IV0(31, "4.4", "IV0", false),
 
-    IBP_4_4_IV1(32, "4.4", "IV1", false);
+    // Add support for CIDR-based ACL host patterns (KIP-1276).
+    IBP_4_4_IV1(32, "4.4", "IV1", true),
 
+    // Enables auto-formatting directories; adds ClusterIdRecord (KIP-1262).
+    IBP_4_4_IV2(33, "4.4", "IV2", true),
+
+    IBP_4_4_IV3(34, "4.4", "IV3", false);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
-    //   Change expected message in org.apache.kafka.tools.FeatureCommandTest in multiple places (search for "Change expected message")
     public static final String FEATURE_NAME = "metadata.version";
 
     /**
@@ -216,6 +219,10 @@ public enum MetadataVersion {
         return this.isAtLeast(IBP_4_0_IV1);
     }
 
+    public boolean isCidrAclSupported() {
+        return this.isAtLeast(IBP_4_4_IV1);
+    }
+
     public boolean isMigrationSupported() {
         return this.isAtLeast(MetadataVersion.IBP_3_4_IV0);
     }
@@ -225,7 +232,7 @@ public enum MetadataVersion {
     }
 
     public boolean isClusterIdSupported() {
-        return this.isAtLeast(MetadataVersion.IBP_4_4_IV0);
+        return this.isAtLeast(MetadataVersion.IBP_4_4_IV2);
     }
 
     public short registerBrokerRecordVersion() {

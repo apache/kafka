@@ -131,7 +131,7 @@ public class ActivationRecordsGeneratorTest {
                 logMsg -> { },
                 -1L,
                 bootstrapWithoutClusterId,
-                MetadataVersion.IBP_4_4_IV0,  // Version that supports ClusterIdRecord
+                MetadataVersion.IBP_4_4_IV2,  // Version that supports ClusterIdRecord
                 2
             ));
         assertTrue(exception.getMessage().contains("requires a ClusterIdRecord"));
@@ -143,8 +143,8 @@ public class ActivationRecordsGeneratorTest {
         ControllerResult<Void> result = ActivationRecordsGenerator.recordsForEmptyLog(
             logMsg -> assertTrue(logMsg.contains("Appending 2 bootstrap record(s)")),
             -1L,
-            BootstrapMetadata.fromVersion(MetadataVersion.IBP_4_4_IV0, "test-cluster-id", "test"),
-            MetadataVersion.IBP_4_4_IV0,
+            BootstrapMetadata.fromVersion(MetadataVersion.IBP_4_4_IV2, "test-cluster-id", "test"),
+            MetadataVersion.IBP_4_4_IV2,
             2
         );
         assertFalse(result.isAtomic());

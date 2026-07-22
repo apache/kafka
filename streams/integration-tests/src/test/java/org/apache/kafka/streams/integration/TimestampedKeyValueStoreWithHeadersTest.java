@@ -125,7 +125,7 @@ public class TimestampedKeyValueStoreWithHeadersTest {
 
         streamsBuilder
             .addStateStore(
-                Stores.timestampedKeyValueStoreBuilderWithHeaders(
+                Stores.timestampedKeyValueStoreWithHeadersBuilder(
                     Stores.persistentTimestampedKeyValueStoreWithHeaders(STORE_NAME),
                     Serdes.Integer(),
                     Serdes.String()
@@ -173,7 +173,7 @@ public class TimestampedKeyValueStoreWithHeadersTest {
 
         streamsBuilder
             .addStateStore(
-                Stores.timestampedKeyValueStoreBuilderWithHeaders(
+                Stores.timestampedKeyValueStoreWithHeadersBuilder(
                     Stores.persistentTimestampedKeyValueStoreWithHeaders(STORE_NAME),
                     Serdes.Integer(),
                     Serdes.String()
@@ -210,7 +210,7 @@ public class TimestampedKeyValueStoreWithHeadersTest {
 
         streamsBuilder
             .addStateStore(
-                Stores.timestampedKeyValueStoreBuilderWithHeaders(
+                Stores.timestampedKeyValueStoreWithHeadersBuilder(
                     Stores.persistentTimestampedKeyValueStoreWithHeaders(STORE_NAME),
                     Serdes.Integer(),
                     Serdes.String()
@@ -264,7 +264,7 @@ public class TimestampedKeyValueStoreWithHeadersTest {
 
         streamsBuilder
             .addStateStore(
-                Stores.timestampedKeyValueStoreBuilderWithHeaders(
+                Stores.timestampedKeyValueStoreWithHeadersBuilder(
                     Stores.persistentTimestampedKeyValueStoreWithHeaders(STORE_NAME),
                     Serdes.Integer(),
                     Serdes.String()
@@ -356,7 +356,7 @@ public class TimestampedKeyValueStoreWithHeadersTest {
 
         streamsBuilder
             .addStateStore(
-                Stores.timestampedKeyValueStoreBuilderWithHeaders(
+                Stores.timestampedKeyValueStoreWithHeadersBuilder(
                     Stores.persistentTimestampedKeyValueStoreWithHeaders(STORE_NAME),
                     Serdes.Integer(),
                     Serdes.String()

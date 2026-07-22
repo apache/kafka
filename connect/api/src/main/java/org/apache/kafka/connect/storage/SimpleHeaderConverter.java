@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.connect.components.Versioned;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Values;
@@ -37,7 +37,8 @@ import java.util.NoSuchElementException;
  * A {@link HeaderConverter} that serializes header values as strings and that deserializes header values to the most appropriate
  * numeric, boolean, array, or map representation. Schemas are not serialized, but are inferred upon deserialization when possible.
  */
-public class SimpleHeaderConverter implements HeaderConverter, Versioned {
+@InterfaceAudience.Public
+public class SimpleHeaderConverter implements HeaderConverter {
 
     private static final Logger LOG = LoggerFactory.getLogger(SimpleHeaderConverter.class);
     private static final ConfigDef CONFIG_DEF = new ConfigDef();

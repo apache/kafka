@@ -28,6 +28,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.test.TestUtils;
@@ -41,19 +43,27 @@ import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
+@ClusterTestDefaults(
+    types = {Type.KRAFT},
+    brokers = 3,
+    serverProperties = {
+        @ClusterConfigProperty(id = 0, key = "broker.rack", value = "rack0"),
+        @ClusterConfigProperty(id = 1, key = "broker.rack", value = "rack1"),
+        @ClusterConfigProperty(id = 2, key = "broker.rack", value = "rack2"),
+        @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNORS_CONFIG, value = "org.apache.kafka.clients.consumer.RackAwareTestAssignor")
+    }
+)
 public class ShareConsumerRackAwareTest {
-    @ClusterTest(
-        types = {Type.KRAFT},
-        brokers = 3,
-        serverProperties = {
-            @ClusterConfigProperty(id = 0, key = "broker.rack", value = "rack0"),
-            @ClusterConfigProperty(id = 1, key = "broker.rack", value = "rack1"),
-            @ClusterConfigProperty(id = 2, key = "broker.rack", value = "rack2"),
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic, share"),
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNORS_CONFIG, value = "org.apache.kafka.clients.consumer.RackAwareAssignor")
-        }
-    )
-    void testShareConsumerWithRackAwareAssignor(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
+
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
+    public void testShareConsumerWithRackAwareAssignor(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
         String groupId = "group0";
         String topic = "test-topic";
         try (Admin admin = clusterInstance.admin();
@@ -127,6 +137,8 @@ public class ShareConsumerRackAwareTest {
                     NewPartitions.increaseTo(6, List.of(List.of(2), List.of(2), List.of(2)))
                 )
             );
+            clusterInstance.waitTopicCreation(topic, 6);
+
             TestUtils.waitForCondition(() -> {
                 consumer0.poll(Duration.ofMillis(1000));
                 consumer1.poll(Duration.ofMillis(1000));

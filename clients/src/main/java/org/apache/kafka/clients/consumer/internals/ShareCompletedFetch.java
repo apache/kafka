@@ -33,9 +33,9 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.CloseableIterator;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -179,7 +179,7 @@ public class ShareCompletedFetch {
         ShareInFlightBatch<K, V> inFlightBatch = new ShareInFlightBatch<>(nodeId, partition, acquisitionLockTimeoutMs);
 
         if (cachedBatchException != null) {
-            // If the event that a CRC check fails, reject the entire record batch because it is corrupt.
+            // In the event that a CRC check fails, reject the entire record batch because it is corrupt.
             Set<Long> offsets = rejectRecordBatch(inFlightBatch, currentBatch);
             inFlightBatch.setException(new ShareInFlightBatchException(cachedBatchException, offsets));
             cachedBatchException = null;
@@ -249,7 +249,7 @@ public class ShareCompletedFetch {
             }
         } catch (CorruptRecordException e) {
             if (inFlightBatch.isEmpty()) {
-                // If the event that a CRC check fails, reject the entire record batch because it is corrupt.
+                // In the event that a CRC check fails, reject the entire record batch because it is corrupt.
                 Set<Long> offsets = rejectRecordBatch(inFlightBatch, currentBatch);
                 inFlightBatch.setException(new ShareInFlightBatchException(e, offsets));
             } else {

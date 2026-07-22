@@ -27,6 +27,8 @@ import net.sourceforge.argparse4j.inf.ArgumentParserException;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -773,5 +775,21 @@ public class ProducerPerformanceTest {
         verify(producerMock, times(10)).send(any(), any());
         assertEquals(10, producerPerformanceSpy.stats.totalCount());
         verify(producerMock, times(1)).close();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"--command-property", "--producer-props"})
+    public void testMultipleProducerProperty(String configKey) throws IOException, ArgumentParserException {
+        ArgumentParser parser = ProducerPerformance.argParser();
+        String[] args = new String[]{
+            "--topic", "Hello-Kafka",
+            "--num-records", "5",
+            "--throughput", "100",
+            "--record-size", "100",
+            "--bootstrap-server", "localhost:9000",
+            configKey, "linger.ms=10", "batch.size=32768"};
+        ProducerPerformance.ConfigPostProcessor configs = new ProducerPerformance.ConfigPostProcessor(parser, args);
+        assertEquals("10", configs.producerProps.get(ProducerConfig.LINGER_MS_CONFIG));
+        assertEquals("32768", configs.producerProps.get(ProducerConfig.BATCH_SIZE_CONFIG));
     }
 }

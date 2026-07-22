@@ -17,13 +17,12 @@
 // Version 2 adds LogDirs for KIP-858
 // Version 3 adds the PreviousBrokerEpoch for the KIP-966
 // Version 4 fixes KAFKA-17011, which blocked SupportedFeatures.MinVersion in the response from being 0.
-// Version 5 adds the CordonedLogDirs flexible field
 {
   "apiKey":62,
   "type": "request",
   "listeners": ["controller"],
   "name": "BrokerRegistrationRequest",
-  "validVersions": "0-5",
+  "validVersions": "0-4",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
@@ -61,8 +60,6 @@
     { "name": "LogDirs", "type":  "[]uuid", "versions":  "2+",
       "about": "Log directories configured in this broker which are available.", "ignorable": true },
     { "name": "PreviousBrokerEpoch", "type": "int64", "versions": "3+", "default": "-1", "ignorable": true,
-      "about": "The epoch before a clean shutdown." },
-    { "name": "CordonedLogDirs", "type":  "[]uuid", "versions":  "5+", "taggedVersions": "5+",
-      "tag": "0", "about": "Log directories that are cordoned." }
+      "about": "The epoch before a clean shutdown." }
   ]
 }

@@ -45,10 +45,10 @@ import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.internals.Plugin;
-import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.ThreadUtils;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
@@ -2396,8 +2396,8 @@ public final class Worker {
         protected synchronized void recordTaskRemoved(ConnectorTaskId connectorTaskId) {
             // Unregister connector task count metric if we remove the last task of the connector
             if (tasks.keySet().stream().noneMatch(id -> id.connector().equals(connectorTaskId.connector()))) {
-                connectorStatusMetrics.get(connectorTaskId.connector()).close();
-                connectorStatusMetrics.remove(connectorTaskId.connector());
+                MetricGroup metricGroup = connectorStatusMetrics.remove(connectorTaskId.connector());
+                if (metricGroup != null) metricGroup.close();
             }
         }
 

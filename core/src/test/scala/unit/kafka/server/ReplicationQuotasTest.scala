@@ -120,6 +120,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
           Map(new ConfigResource(BROKER, String.valueOf(brokerId)) -> Map(
             QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG -> entry,
             QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG -> entry).asJava).asJava,
+          false,
           false
         ).get()
       }
@@ -248,7 +249,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
   private def waitForOffsetsToMatch(offset: Int, partitionId: Int, brokerId: Int): Unit = {
     waitUntilTrue(() => {
       offset == brokerFor(brokerId).logManager.getLog(new TopicPartition(topic, partitionId))
-        .map(_.logEndOffset).getOrElse(0)
+        .map(_.logEndOffset).orElse(0)
     }, s"Offsets did not match for partition $partitionId on broker $brokerId", 60000)
   }
 

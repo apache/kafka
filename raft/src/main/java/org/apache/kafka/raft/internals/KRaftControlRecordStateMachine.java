@@ -18,8 +18,8 @@ package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.VotersRecord;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.ControlRecord;
 import org.apache.kafka.raft.ExternalKRaftMetrics;
@@ -55,7 +55,6 @@ public final class KRaftControlRecordStateMachine {
     private final LogContext logContext;
     private final RaftLog log;
     private final RecordSerde<?> serde;
-    private final BufferSupplier bufferSupplier;
     private final Logger logger;
     private final int maxBatchSizeBytes;
 
@@ -82,7 +81,6 @@ public final class KRaftControlRecordStateMachine {
      * @param staticVoterSet the set of voter statically configured
      * @param log the on disk topic partition
      * @param serde the record decoder for data records
-     * @param bufferSupplier the supplier of byte buffers
      * @param maxBatchSizeBytes the maximum size of record batch
      * @param logContext the log context
      */
@@ -90,7 +88,6 @@ public final class KRaftControlRecordStateMachine {
         VoterSet staticVoterSet,
         RaftLog log,
         RecordSerde<?> serde,
-        BufferSupplier bufferSupplier,
         int maxBatchSizeBytes,
         LogContext logContext,
         KafkaRaftMetrics kafkaRaftMetrics,
@@ -100,7 +97,6 @@ public final class KRaftControlRecordStateMachine {
         this.log = log;
         this.voterSetHistory = new VoterSetHistory(staticVoterSet, logContext);
         this.serde = serde;
-        this.bufferSupplier = bufferSupplier;
         this.maxBatchSizeBytes = maxBatchSizeBytes;
         this.logger = logContext.logger(getClass());
         this.kafkaRaftMetrics = kafkaRaftMetrics;
@@ -232,21 +228,27 @@ public final class KRaftControlRecordStateMachine {
     }
 
     private void maybeLoadLog() {
-        while (log.endOffset().offset() > nextOffset) {
-            LogFetchInfo info = log.read(nextOffset, Isolation.UNCOMMITTED);
-            try (RecordsIterator<?> iterator = new RecordsIterator<>(
-                    info.records,
-                    serde,
-                    bufferSupplier,
-                    maxBatchSizeBytes,
-                    true, // Validate batch CRC
-                    logContext
-                )
-            ) {
-                while (iterator.hasNext()) {
-                    Batch<?> batch = iterator.next();
-                    handleBatch(batch, OptionalLong.empty());
-                    nextOffset = batch.lastOffset() + 1;
+        try (BufferSupplier bufferSupplier = BufferSupplier.create()) {
+            while (log.endOffset().offset() > nextOffset) {
+                LogFetchInfo info = log.read(
+                    nextOffset,
+                    Isolation.UNCOMMITTED,
+                    Integer.MAX_VALUE
+                );
+                try (RecordsIterator<?> iterator = new RecordsIterator<>(
+                        info.records,
+                        serde,
+                        bufferSupplier,
+                        maxBatchSizeBytes,
+                        true, // Validate batch CRC
+                        logContext
+                    )
+                ) {
+                    while (iterator.hasNext()) {
+                        Batch<?> batch = iterator.next();
+                        handleBatch(batch, OptionalLong.empty());
+                        nextOffset = batch.lastOffset() + 1;
+                    }
                 }
             }
         }
@@ -264,7 +266,8 @@ public final class KRaftControlRecordStateMachine {
             }
 
             // Load the snapshot since the listener is at the start of the log or the log doesn't have the next entry.
-            try (SnapshotReader<?> reader = RecordsSnapshotReader.of(
+            try (BufferSupplier bufferSupplier = BufferSupplier.create();
+                 SnapshotReader<?> reader = RecordsSnapshotReader.of(
                     rawSnapshot,
                     serde,
                     bufferSupplier,

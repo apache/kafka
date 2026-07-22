@@ -49,9 +49,9 @@ import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
-import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.security.spec.ECGenParameterSpec;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
@@ -257,9 +257,13 @@ public abstract class OAuthBearerTest {
     protected KeyPair generateKeyPair(String algorithm) {
         try {
             KeyPairGenerator keyGen = KeyPairGenerator.getInstance(algorithm);
-            keyGen.initialize(2048);
+            if ("EC".equals(algorithm)) {
+                keyGen.initialize(new ECGenParameterSpec("secp256r1"));
+            } else {
+                keyGen.initialize(2048);
+            }
             return keyGen.generateKeyPair();
-        } catch (NoSuchAlgorithmException e) {
+        } catch (Exception e) {
             throw new IllegalStateException("Received unexpected error during private key generation", e);
         }
     }

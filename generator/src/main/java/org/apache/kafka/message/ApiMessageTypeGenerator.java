@@ -22,7 +22,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.List;
@@ -213,7 +212,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
 
             final Collection<String> listeners;
             if (apiData.requestSpec.listeners() == null) {
-                listeners = Collections.emptyList();
+                listeners = List.of();
             } else {
                 listeners = apiData.requestSpec.listeners().stream()
                     .map(RequestListenerType::name)

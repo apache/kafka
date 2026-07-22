@@ -25,7 +25,8 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
-import java.util.Collections;
+import java.util.List;
+
 
 public class FindCoordinatorRequest extends AbstractRequest {
 
@@ -52,10 +53,10 @@ public class FindCoordinatorRequest extends AbstractRequest {
                         "because we require features supported only in " + MIN_BATCHED_VERSION + " or later.");
                 if (batchedKeys == 1) {
                     data.setKey(data.coordinatorKeys().get(0));
-                    data.setCoordinatorKeys(Collections.emptyList());
+                    data.setCoordinatorKeys(List.of());
                 }
             } else if (batchedKeys == 0 && data.key() != null) {
-                data.setCoordinatorKeys(Collections.singletonList(data.key()));
+                data.setCoordinatorKeys(List.of(data.key()));
                 data.setKey(""); // default value
             }
             return new FindCoordinatorRequest(data, version);

@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.server.log.remote.storage;
 
-import kafka.utils.TestUtils;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManager;
+import org.apache.kafka.server.util.ServerTestUtils;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.internals.log.RemoteLogReadResult;
@@ -58,7 +58,7 @@ public class RemoteLogReaderTest {
 
     @BeforeEach
     public void setUp() throws Exception {
-        TestUtils.clearYammerMetrics();
+        ServerTestUtils.clearYammerMetrics();
         brokerTopicStats = new BrokerTopicStats(true);
         when(timer.time(any(Callable.class))).thenAnswer(ans -> ans.getArgument(0, Callable.class).call());
     }

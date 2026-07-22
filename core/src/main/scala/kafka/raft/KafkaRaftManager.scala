@@ -22,6 +22,7 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.{OptionalInt, Collection => JCollection, Map => JMap}
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionStage
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, MetadataRecoveryStrategy, NetworkClient}
@@ -35,7 +36,8 @@ import org.apache.kafka.common.requests.RequestContext
 import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.utils.{LogContext, Time, Utils}
+import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.internals.LogContext
 import org.apache.kafka.raft.internals.KafkaRaftLog
 import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics, FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, MetadataLogConfig, QuorumConfig, RaftLog, RaftManager, TimingWheelExpirationService}
 import org.apache.kafka.server.ProcessRole
@@ -156,7 +158,7 @@ class KafkaRaftManager[T](
     header: RequestHeader,
     request: ApiMessage,
     createdTimeMs: Long
-  ): CompletableFuture[ApiMessage] = {
+  ): CompletionStage[ApiMessage] = {
     clientDriver.handleRequest(context, header, request, createdTimeMs)
   }
 
@@ -253,7 +255,8 @@ class KafkaRaftManager[T](
       discoverBrokerVersions,
       apiVersions,
       logContext,
-      MetadataRecoveryStrategy.NONE
+      MetadataRecoveryStrategy.NONE,
+      false
     )
 
     (controllerListenerName, networkClient)

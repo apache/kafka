@@ -40,8 +40,8 @@ import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.Records;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
@@ -132,7 +132,11 @@ public class KafkaRaftClientReconfigTest {
         context.unattachedToLeader();
 
         // check if leader writes 3 bootstrap records to the log
-        Records records = context.log.read(0, Isolation.UNCOMMITTED).records;
+        Records records = context.log.read(
+            0,
+            Isolation.UNCOMMITTED,
+            Integer.MAX_VALUE
+        ).records;
         RecordBatch batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
         Iterator<Record> recordIterator = batch.iterator();
@@ -195,7 +199,11 @@ public class KafkaRaftClientReconfigTest {
         // check leader does not write bootstrap records to log
         context.unattachedToLeader();
 
-        Records records = context.log.read(0, Isolation.UNCOMMITTED).records;
+        Records records = context.log.read(
+            0,
+            Isolation.UNCOMMITTED,
+            Integer.MAX_VALUE
+        ).records;
         RecordBatch batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
         Iterator<Record> recordIterator = batch.iterator();
@@ -306,7 +314,7 @@ public class KafkaRaftClientReconfigTest {
         }
 
         // follower applies the bootstrap records, registering follower2 as a new voter
-        context.client.poll();
+        context.poll();
         assertTrue(context.client.quorum().isVoter(follower));
     }
 
@@ -345,9 +353,9 @@ public class KafkaRaftClientReconfigTest {
         completeApiVersionsForAddVoter(context, newVoter, newAddress);
 
         // Handle the API_VERSIONS response
-        context.client.poll();
+        context.poll();
         // Append new VotersRecord to log
-        context.client.poll();
+        context.poll();
 
         commitNewVoterSetForAddVoter(context, local, follower, newVoter, epoch);
 
@@ -397,7 +405,7 @@ public class KafkaRaftClientReconfigTest {
         completeApiVersionsForAddVoter(context, newVoter, newAddress);
 
         // Handle the API_VERSIONS response
-        context.client.poll();
+        context.poll();
         // Append new VotersRecord to log
         // Expect a response for AddVoter request before committing the new voter
         context.pollUntilResponse();
@@ -818,7 +826,7 @@ public class KafkaRaftClientReconfigTest {
         );
 
         // Handle the API_VERSIONS response
-        context.client.poll();
+        context.poll();
 
         // Wait for request timeout without sending a FETCH request to timeout the add voter RPC
         context.time.sleep(context.requestTimeoutMs());
@@ -1130,9 +1138,9 @@ public class KafkaRaftClientReconfigTest {
         context.deliverRequest(context.removeVoterRequest(follower2));
 
         // Handle the remove voter request
-        context.client.poll();
+        context.poll();
         // Append the VotersRecord to the log
-        context.client.poll();
+        context.poll();
 
         // follower2 should not be a voter in the latest voter set
         assertFalse(context.client.quorum().isVoter(follower2));
@@ -1181,9 +1189,9 @@ public class KafkaRaftClientReconfigTest {
         context.deliverRequest(context.removeVoterRequest(local));
 
         // Handle the remove voter request
-        context.client.poll();
+        context.poll();
         // Append the VotersRecord to the log
-        context.client.poll();
+        context.poll();
 
         // local should not be a voter in the latest voter set
         assertFalse(context.client.quorum().isVoter(local));
@@ -1223,7 +1231,7 @@ public class KafkaRaftClientReconfigTest {
 
         // Election timeout is random number in [electionTimeoutMs, 2 * electionTimeoutMs)
         context.time.sleep(2L * context.electionTimeoutMs());
-        context.client.poll();
+        context.poll();
 
         assertTrue(context.client.quorum().isObserver());
         assertTrue(context.client.quorum().isUnattached());
@@ -1306,9 +1314,9 @@ public class KafkaRaftClientReconfigTest {
         context.deliverRequest(context.removeVoterRequest(follower2));
 
         // Handle the remove voter request
-        context.client.poll();
+        context.poll();
         // Append the VotersRecord to the log
-        context.client.poll();
+        context.poll();
 
         // Attempt to remove follower1
         context.deliverRequest(context.removeVoterRequest(follower1));
@@ -1478,9 +1486,9 @@ public class KafkaRaftClientReconfigTest {
         context.deliverRequest(context.removeVoterRequest(follower2));
 
         // Handle the remove voter request
-        context.client.poll();
+        context.poll();
         // Append the VotersRecord to the log
-        context.client.poll();
+        context.poll();
 
         // Wait for request timeout without sending a FETCH request to timeout the remove voter RPC
         context.time.sleep(context.requestTimeoutMs());
@@ -1522,9 +1530,9 @@ public class KafkaRaftClientReconfigTest {
         context.deliverRequest(context.removeVoterRequest(follower2));
 
         // Handle the remove voter request
-        context.client.poll();
+        context.poll();
         // Append the VotersRecord to the log
-        context.client.poll();
+        context.poll();
 
         // Leader completes the RemoveVoter RPC when resigning
         context.client.resign(epoch);
@@ -1564,9 +1572,9 @@ public class KafkaRaftClientReconfigTest {
         context.deliverRequest(context.removeVoterRequest(follower2));
 
         // Handle the remove voter request
-        context.client.poll();
+        context.poll();
         // Append the VotersRecord to the log
-        context.client.poll();
+        context.poll();
 
         // Attempt to add a new voter while the RemoveVoter RPC is pending
         ReplicaKey newVoter = replicaKey(local.id() + 2, true);
@@ -2293,7 +2301,7 @@ public class KafkaRaftClientReconfigTest {
                 new LeaderAndEpoch(OptionalInt.of(voter1.id()), epoch)
             )
         );
-        context.client.poll();
+        context.poll();
 
         // after sending an update voter the next requests should be fetch and no update voter
         for (int i = 0; i < 10; i++) {
@@ -2314,7 +2322,7 @@ public class KafkaRaftClientReconfigTest {
                 )
             );
             // poll kraft to handle the fetch response
-            context.client.poll();
+            context.poll();
         }
     }
 
@@ -2446,12 +2454,16 @@ public class KafkaRaftClientReconfigTest {
         assertEquals(KRaftVersion.KRAFT_VERSION_1, context.client.kraftVersion());
 
         var localLogEndOffset = context.log.endOffset().offset();
-        context.client.poll();
+        context.poll();
 
         // check if leader writes 2 control records to the log;
         // one for the kraft version and one for the voter set
         var updatedVoters = VoterSetTest.voterSet(Stream.of(local, voter1, voter2));
-        var records = context.log.read(localLogEndOffset, Isolation.UNCOMMITTED).records;
+        var records = context.log.read(
+            localLogEndOffset,
+            Isolation.UNCOMMITTED,
+            Integer.MAX_VALUE
+        ).records;
         var batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
         var recordsIterator = batch.iterator();
@@ -2513,7 +2525,7 @@ public class KafkaRaftClientReconfigTest {
         assertEquals(KRaftVersion.KRAFT_VERSION_1, context.client.kraftVersion());
 
         // Push the control records to the log
-        context.client.poll();
+        context.poll();
         // Advance the HWM to the LEO
         for (var voter : List.of(voter1, voter2)) {
             context.deliverRequest(
@@ -2556,10 +2568,14 @@ public class KafkaRaftClientReconfigTest {
 
         // Push the control records to the log
         var localLogEndOffset = context.log.endOffset().offset();
-        context.client.poll();
+        context.poll();
 
         // check that the leader wrote voters control record to the log;
-        var records = context.log.read(localLogEndOffset, Isolation.UNCOMMITTED).records;
+        var records = context.log.read(
+            localLogEndOffset,
+            Isolation.UNCOMMITTED,
+            Integer.MAX_VALUE
+        ).records;
         var batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
         var recordsIterator = batch.iterator();
@@ -2691,7 +2707,7 @@ public class KafkaRaftClientReconfigTest {
 
         // don't send a response but increase the time
         context.time.sleep(context.requestTimeoutMs() - 1);
-        context.client.poll();
+        context.poll();
         assertFalse(context.channel.hasSentRequests());
 
         // expect an update voter request after the FETCH rpc completes
@@ -2801,7 +2817,7 @@ public class KafkaRaftClientReconfigTest {
             .withKip853Rpc(true)
             .build();
 
-        context.client.poll();
+        context.poll();
 
         HashMap<ListenerName, InetSocketAddress> leaderListenersMap = new HashMap<>(2);
         leaderListenersMap.put(
@@ -2897,11 +2913,11 @@ public class KafkaRaftClientReconfigTest {
         );
 
         context.deliverResponse(request.correlationId(), request.destination(), response);
-        context.client.poll();
+        context.poll();
 
         // Bump the context epoch after resignation completes
         context.time.sleep(context.electionTimeoutMs() * 2L);
-        context.client.poll();
+        context.poll();
         assertEquals(epoch + 1, context.currentEpoch());
 
         // Become leader again and verify metrics values have been reset

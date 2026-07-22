@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -87,7 +88,7 @@ public class WindowedSerdesTest {
         final TimeWindowedSerializer<byte[]> serializer = new TimeWindowedSerializer<>();
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> serializer.serializeBaseKey("topic", new Windowed<>(new byte[0], new TimeWindow(0, 1))));
+            () -> serializer.serializeBaseKey("topic", new RecordHeaders(), new Windowed<>(new byte[0], new TimeWindow(0, 1))));
         assertThat(
             exception.getMessage(),
             equalTo("Inner serializer is `null`. User code must use constructor " +
@@ -123,7 +124,7 @@ public class WindowedSerdesTest {
         final SessionWindowedSerializer<byte[]> serializer = new SessionWindowedSerializer<>();
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> serializer.serializeBaseKey("topic", new Windowed<>(new byte[0], new SessionWindow(0, 0))));
+            () -> serializer.serializeBaseKey("topic", new RecordHeaders(), new Windowed<>(new byte[0], new SessionWindow(0, 0))));
         assertThat(
             exception.getMessage(),
             equalTo("Inner serializer is `null`. User code must use constructor " +

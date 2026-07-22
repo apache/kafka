@@ -59,7 +59,7 @@ class ConfigAdminManagerTest {
     setConfigs(new IAlterableConfigCollection(
       util.Arrays.asList(new IAlterableConfig().setName("foo").
         setValue("bar").
-        setConfigOperation(OpType.SET.id())).iterator()))
+        setConfigOperation(OpType.SET.id()))))
 
   def topicAIncremental(): IAlterConfigsResource = new IAlterConfigsResource().
     setResourceName("a").
@@ -67,21 +67,21 @@ class ConfigAdminManagerTest {
     setConfigs(new IAlterableConfigCollection(
       util.Arrays.asList(new IAlterableConfig().setName("foo").
         setValue("bar").
-        setConfigOperation(OpType.SET.id())).iterator()))
+        setConfigOperation(OpType.SET.id()))))
 
   def broker0Legacy(): LAlterConfigsResource = new LAlterConfigsResource().
     setResourceName("0").
     setResourceType(BROKER.id()).
     setConfigs(new LAlterableConfigCollection(
       util.Arrays.asList(new LAlterableConfig().setName("foo").
-        setValue("bar")).iterator()))
+        setValue("bar"))))
 
   def topicALegacy(): LAlterConfigsResource = new LAlterConfigsResource().
     setResourceName("a").
     setResourceType(TOPIC.id()).
     setConfigs(new LAlterableConfigCollection(
       util.Arrays.asList(new LAlterableConfig().setName("foo").
-        setValue("bar")).iterator()))
+        setValue("bar"))))
 
   val invalidRequestError = new ApiError(INVALID_REQUEST)
 
@@ -91,17 +91,17 @@ class ConfigAdminManagerTest {
     val topicA = topicAIncremental()
     val request = new IncrementalAlterConfigsRequestData().setValidateOnly(true).
       setResources(new IAlterConfigsResourceCollection(util.Arrays.asList(
-        broker0, topicA).iterator()))
+        broker0, topicA)))
     val processed1 = new util.IdentityHashMap[IAlterConfigsResource, ApiError]()
     processed1.put(broker0, ApiError.NONE)
     assertEquals(new IncrementalAlterConfigsRequestData().setValidateOnly(true).
       setResources(new IAlterConfigsResourceCollection(util.Arrays.asList(
-        topicA.duplicate()).iterator())),
+        topicA.duplicate()))),
         ConfigAdminManager.copyWithoutPreprocessed(request, processed1))
     val processed2 = new util.IdentityHashMap[IAlterConfigsResource, ApiError]()
     assertEquals(new IncrementalAlterConfigsRequestData().setValidateOnly(true).
       setResources(new IAlterConfigsResourceCollection(util.Arrays.asList(
-        broker0.duplicate(), topicA.duplicate()).iterator())),
+        broker0.duplicate(), topicA.duplicate()))),
       ConfigAdminManager.copyWithoutPreprocessed(request, processed2))
     val processed3 = new util.IdentityHashMap[IAlterConfigsResource, ApiError]()
     processed3.put(broker0, ApiError.NONE)
@@ -116,17 +116,17 @@ class ConfigAdminManagerTest {
     val topicA = topicALegacy()
     val request = new AlterConfigsRequestData().setValidateOnly(true).
       setResources(new LAlterConfigsResourceCollection(util.Arrays.asList(
-        broker0, topicA).iterator()))
+        broker0, topicA)))
     val processed1 = new util.IdentityHashMap[LAlterConfigsResource, ApiError]()
     processed1.put(broker0, ApiError.NONE)
     assertEquals(new AlterConfigsRequestData().setValidateOnly(true).
       setResources(new LAlterConfigsResourceCollection(util.Arrays.asList(
-        topicA.duplicate()).iterator())),
+        topicA.duplicate()))),
       ConfigAdminManager.copyWithoutPreprocessed(request, processed1))
     val processed2 = new util.IdentityHashMap[LAlterConfigsResource, ApiError]()
     assertEquals(new AlterConfigsRequestData().setValidateOnly(true).
       setResources(new LAlterConfigsResourceCollection(util.Arrays.asList(
-        broker0.duplicate(), topicA.duplicate()).iterator())),
+        broker0.duplicate(), topicA.duplicate()))),
       ConfigAdminManager.copyWithoutPreprocessed(request, processed2))
     val processed3 = new util.IdentityHashMap[LAlterConfigsResource, ApiError]()
     processed3.put(broker0, ApiError.NONE)
@@ -141,7 +141,7 @@ class ConfigAdminManagerTest {
     val topicA = topicAIncremental()
     val original = new IncrementalAlterConfigsRequestData().
       setResources(new IAlterConfigsResourceCollection(util.Arrays.asList(
-        broker0, topicA).iterator()))
+        broker0, topicA)))
     val preprocessed1 = new util.IdentityHashMap[IAlterConfigsResource, ApiError]()
     preprocessed1.put(broker0, invalidRequestError)
     val persistentResponses1 = new IncrementalAlterConfigsResponseData().setResponses(
@@ -195,7 +195,7 @@ class ConfigAdminManagerTest {
     val topicA = topicALegacy()
     val original = new AlterConfigsRequestData().
       setResources(new LAlterConfigsResourceCollection(util.Arrays.asList(
-        broker0, topicA).iterator()))
+        broker0, topicA)))
     val preprocessed1 = new util.IdentityHashMap[LAlterConfigsResource, ApiError]()
     preprocessed1.put(broker0, invalidRequestError)
     val persistentResponses1 = new AlterConfigsResponseData().setResponses(
@@ -264,7 +264,7 @@ class ConfigAdminManagerTest {
     setConfigs(new IAlterableConfigCollection(
       util.Arrays.asList(new IAlterableConfig().setName(logger.getName).
         setValue("INFO").
-        setConfigOperation(OpType.SET.id())).iterator()))
+        setConfigOperation(OpType.SET.id()))))
 
   def brokerLogger2Incremental(): IAlterConfigsResource = new IAlterConfigsResource().
     setResourceName("2").
@@ -272,7 +272,7 @@ class ConfigAdminManagerTest {
     setConfigs(new IAlterableConfigCollection(
       util.Arrays.asList(new IAlterableConfig().setName(logger.getName).
         setValue(null).
-        setConfigOperation(OpType.SET.id())).iterator()))
+        setConfigOperation(OpType.SET.id()))))
 
   @Test
   def testPreprocessIncrementalWithUnauthorizedBrokerLoggerChanges(): Unit = {
@@ -282,7 +282,7 @@ class ConfigAdminManagerTest {
         new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, null)),
       manager.preprocess(new IncrementalAlterConfigsRequestData().
         setResources(new IAlterConfigsResourceCollection(util.Arrays.asList(
-          brokerLogger1).iterator())),
+          brokerLogger1))),
           (_, _) => false))
   }
 
@@ -294,7 +294,7 @@ class ConfigAdminManagerTest {
       new ApiError(INVALID_REQUEST, s"Null value not supported for : ${logger.getName}")),
       manager.preprocess(new IncrementalAlterConfigsRequestData().
         setResources(new IAlterConfigsResourceCollection(util.Arrays.asList(
-          brokerLogger2).iterator())),
+          brokerLogger2))),
         (_, _) => true))
   }
 
@@ -306,7 +306,7 @@ class ConfigAdminManagerTest {
       new ApiError(Errors.NONE, null)),
       manager.preprocess(new IncrementalAlterConfigsRequestData().
         setResources(new IAlterConfigsResourceCollection(util.Arrays.asList(
-          brokerLogger1).iterator())),
+          brokerLogger1))),
         (_, _) => true))
   }
 
@@ -317,7 +317,7 @@ class ConfigAdminManagerTest {
     val brokerLogger1b = brokerLogger1Incremental()
     val output = manager.preprocess(new IncrementalAlterConfigsRequestData().
         setResources(new IAlterConfigsResourceCollection(util.Arrays.asList(
-          brokerLogger1a, brokerLogger1b).iterator())),
+          brokerLogger1a, brokerLogger1b))),
         (_, _) => true)
     assertEquals(2, output.size())
     Seq(brokerLogger1a, brokerLogger1b).foreach(r =>
@@ -330,14 +330,14 @@ class ConfigAdminManagerTest {
     setResourceType(BROKER_LOGGER.id).
     setConfigs(new LAlterableConfigCollection(
       util.Arrays.asList(new LAlterableConfig().setName(logger.getName).
-        setValue("INFO")).iterator()))
+        setValue("INFO"))))
 
   def broker2Legacy(): LAlterConfigsResource = new LAlterConfigsResource().
     setResourceName("2").
     setResourceType(BROKER.id).
     setConfigs(new LAlterableConfigCollection(
       util.Arrays.asList(new LAlterableConfig().setName(logger.getName).
-        setValue(null)).iterator()))
+        setValue(null))))
 
   @Test
   def testPreprocessLegacyWithBrokerLoggerChanges(): Unit = {
@@ -347,7 +347,7 @@ class ConfigAdminManagerTest {
       new ApiError(INVALID_REQUEST, "Unknown resource type 8")),
       manager.preprocess(new AlterConfigsRequestData().
         setResources(new LAlterConfigsResourceCollection(util.Arrays.asList(
-          brokerLogger1).iterator()))))
+          brokerLogger1)))))
   }
 
   @Test
@@ -358,7 +358,7 @@ class ConfigAdminManagerTest {
       new ApiError(INVALID_REQUEST, s"Null value not supported for : ${logger.getName}")),
       manager.preprocess(new AlterConfigsRequestData().
         setResources(new LAlterConfigsResourceCollection(util.Arrays.asList(
-          brokerLogger2).iterator()))))
+          brokerLogger2)))))
   }
 
   @Test
@@ -368,7 +368,7 @@ class ConfigAdminManagerTest {
     val brokerLogger1b = brokerLogger1Legacy()
     val output = manager.preprocess(new AlterConfigsRequestData().
       setResources(new LAlterConfigsResourceCollection(util.Arrays.asList(
-        brokerLogger1a, brokerLogger1b).iterator())))
+        brokerLogger1a, brokerLogger1b))))
     assertEquals(2, output.size())
     Seq(brokerLogger1a, brokerLogger1b).foreach(r =>
       assertEquals(new ApiError(INVALID_REQUEST, "Each resource must appear at most once."),
@@ -381,14 +381,14 @@ class ConfigAdminManagerTest {
     setConfigs(new IAlterableConfigCollection(
       util.Arrays.asList(new IAlterableConfig().setName("foo").
         setValue("bar").
-        setConfigOperation(OpType.SET.id())).iterator()))
+        setConfigOperation(OpType.SET.id()))))
 
   def unknownLegacy(): LAlterConfigsResource = new LAlterConfigsResource().
     setResourceName("unknown").
     setResourceType(UNKNOWN.id).
     setConfigs(new LAlterableConfigCollection(
       util.Arrays.asList(new LAlterableConfig().setName("foo").
-        setValue("bar")).iterator()))
+        setValue("bar"))))
 
   @Test
   def testPreprocessIncrementalWithUnknownResource(): Unit = {
@@ -398,7 +398,7 @@ class ConfigAdminManagerTest {
       new ApiError(INVALID_REQUEST, "Unknown resource type 0")),
         manager.preprocess(new IncrementalAlterConfigsRequestData().
         setResources(new IAlterConfigsResourceCollection(util.Arrays.asList(
-          unknown).iterator())),
+          unknown))),
         (_, _) => false))
   }
 
@@ -410,7 +410,7 @@ class ConfigAdminManagerTest {
       new ApiError(INVALID_REQUEST, "Unknown resource type 0")),
       manager.preprocess(new AlterConfigsRequestData().
         setResources(new LAlterConfigsResourceCollection(util.Arrays.asList(
-          unknown).iterator()))))
+          unknown)))))
   }
 
   @Test

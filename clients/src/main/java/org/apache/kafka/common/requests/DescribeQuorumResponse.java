@@ -22,8 +22,8 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
-import java.util.Collections;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -79,9 +79,9 @@ public class DescribeQuorumResponse extends AbstractResponse {
         Errors error
     ) {
         return new DescribeQuorumResponseData()
-            .setTopics(Collections.singletonList(new DescribeQuorumResponseData.TopicData()
+            .setTopics(List.of(new DescribeQuorumResponseData.TopicData()
                 .setTopicName(topicPartition.topic())
-                .setPartitions(Collections.singletonList(new DescribeQuorumResponseData.PartitionData()
+                .setPartitions(List.of(new DescribeQuorumResponseData.PartitionData()
                     .setPartitionIndex(topicPartition.partition())
                     .setErrorCode(error.code())
                     .setErrorMessage(error.message())))));
@@ -94,9 +94,9 @@ public class DescribeQuorumResponse extends AbstractResponse {
         DescribeQuorumResponseData.NodeCollection nodes
     ) {
         DescribeQuorumResponseData res = new DescribeQuorumResponseData()
-            .setTopics(Collections.singletonList(new DescribeQuorumResponseData.TopicData()
+            .setTopics(List.of(new DescribeQuorumResponseData.TopicData()
                 .setTopicName(topicPartition.topic())
-                .setPartitions(Collections.singletonList(partitionData
+                .setPartitions(List.of(partitionData
                     .setPartitionIndex(topicPartition.partition())))));
 
         if (nodes != null)

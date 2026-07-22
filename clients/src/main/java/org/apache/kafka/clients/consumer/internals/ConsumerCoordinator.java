@@ -30,6 +30,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
+import org.apache.kafka.clients.consumer.internals.metrics.MetricsLedger;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -65,16 +66,15 @@ import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.RequestUtils;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -108,6 +108,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private final List<ConsumerPartitionAssignor> assignors;
     private final ConsumerMetadata metadata;
     private final ConsumerCoordinatorMetrics coordinatorMetrics;
+    private final RebalanceCallbackMetricsManager rebalanceCallbackMetricsManager;
     private final SubscriptionState subscriptions;
     private final OffsetCommitCallback defaultOffsetCommitCallback;
     private final boolean autoCommitEnabled;
@@ -272,11 +273,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             protocol = null;
         }
 
+        this.rebalanceCallbackMetricsManager = new RebalanceCallbackMetricsManager(metrics, metricGrpPrefix);
         this.rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
             logContext,
             subscriptions,
             time,
-            new RebalanceCallbackMetricsManager(metrics, metricGrpPrefix)
+            rebalanceCallbackMetricsManager
         );
         this.metadata.requestUpdate(true);
     }
@@ -1026,6 +1028,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             }
         } finally {
             super.close(timer, membershipOperation);
+            Utils.closeQuietly(coordinatorMetrics, "consumer coordinator metrics");
+            Utils.closeQuietly(rebalanceCallbackMetricsManager, "consumer rebalance callback metrics");
         }
     }
 
@@ -1408,7 +1412,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                     if (ConsumerCoordinator.this.state == MemberState.PREPARING_REBALANCE) {
                                         exception = new RebalanceInProgressException("Offset commit cannot be completed since the " +
                                             "consumer member's old generation is fenced by its group instance id, it is possible that " +
-                                            "this consumer has already participated another rebalance and got a new generation");
+                                            "this consumer has already participated in another rebalance and got a new generation");
                                     } else {
                                         exception = new CommitFailedException();
                                     }
@@ -1614,7 +1618,29 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         boolean matches(MetadataSnapshot other) {
-            return version == other.version || partitionsPerTopic.equals(other.partitionsPerTopic);
+            if (version == other.version)
+                return true;
+
+            // A rebalance is only needed if the metadata changed in a way that could change the
+            // assignment: a subscribed topic was added or removed, a topic's partition count
+            // changed, or the racks of a partition's replicas changed. But rack differences that are
+            // only due to a replica broker being temporarily offline (host and rack become unknown)
+            // are tolerated, so that a broker bounce does not trigger unnecessary rebalances.
+            // See PartitionRackInfo#equivalentTo.
+            if (partitionsPerTopic.size() != other.partitionsPerTopic.size())
+                return false;
+
+            for (Map.Entry<String, List<PartitionRackInfo>> entry : partitionsPerTopic.entrySet()) {
+                List<PartitionRackInfo> partitionRacks = entry.getValue();
+                List<PartitionRackInfo> otherPartitionRacks = other.partitionsPerTopic.get(entry.getKey());
+                if (otherPartitionRacks == null || otherPartitionRacks.size() != partitionRacks.size())
+                    return false;
+                for (int i = 0; i < partitionRacks.size(); i++) {
+                    if (!partitionRacks.get(i).equivalentTo(otherPartitionRacks.get(i)))
+                        return false;
+                }
+            }
+            return true;
         }
 
         @Override
@@ -1623,10 +1649,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    private class ConsumerCoordinatorMetrics {
+    private class ConsumerCoordinatorMetrics extends AbstractCoordinatorMetrics {
         private final Sensor commitSensor;
 
         private ConsumerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
+            this(new MetricsLedger(metrics), metricGrpPrefix);
+        }
+
+        private ConsumerCoordinatorMetrics(MetricsLedger metrics, String metricGrpPrefix) {
+            super(metrics);
             String metricGrpName = metricGrpPrefix + COORDINATOR_METRICS_SUFFIX;
 
             this.commitSensor = metrics.sensor("commit-latency");
@@ -1636,7 +1667,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             this.commitSensor.add(metrics.metricName("commit-latency-max",
                 metricGrpName,
                 "The max time taken for a commit request"), new Max());
-            this.commitSensor.add(createMeter(metrics, metricGrpName, "commit", "commit calls"));
+            this.commitSensor.add(createMeter(metricGrpName, "commit", "commit calls"));
 
             Measurable numParts = (config, now) -> subscriptions.numAssignedPartitions();
             metrics.addMetric(metrics.metricName("assigned-partitions",
@@ -1646,36 +1677,61 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private static class PartitionRackInfo {
-        private final Set<String> racks;
+        // Racks of the online replicas, keyed by replica id. Replicas on brokers without a
+        // configured rack are not tracked, since they cannot affect rack-aware assignment.
+        private final Map<Integer, String> onlineRacks;
+        // Ids of the offline replicas, whose broker is not in the current live-broker list (they
+        // resolve to an empty node), so their rack is unknown. Tracked by id so that a broker
+        // that is temporarily offline is not mistaken for a rack change.
+        private final Set<Integer> offlineReplicas;
 
         PartitionRackInfo(Optional<String> clientRack, PartitionInfo partition) {
+            Map<Integer, String> onlineRacks = new HashMap<>();
+            Set<Integer> offlineReplicas = new HashSet<>();
             if (clientRack.isPresent() && partition.replicas() != null) {
-                racks = Arrays.stream(partition.replicas()).map(Node::rack).collect(Collectors.toSet());
-            } else {
-                racks = Collections.emptySet();
+                for (Node replica : partition.replicas()) {
+                    if (replica.isEmpty())
+                        offlineReplicas.add(replica.id());
+                    else if (replica.rack() != null)
+                        onlineRacks.put(replica.id(), replica.rack());
+                }
             }
+            this.onlineRacks = onlineRacks;
+            this.offlineReplicas = offlineReplicas;
         }
 
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) {
-                return true;
-            }
-            if (!(o instanceof PartitionRackInfo)) {
-                return false;
-            }
-            PartitionRackInfo rackInfo = (PartitionRackInfo) o;
-            return Objects.equals(racks, rackInfo.racks);
+        /**
+         * Returns true if the two snapshots expose the same set of racks for assignment purposes.
+         * Replica changes that leave the set of racks unchanged (e.g. a replica moved to a
+         * different broker on one of the same racks) are not considered a change. A rack that is
+         * present in one snapshot but missing from the other is tolerated only when the replica
+         * it belongs to is offline (same replica id, rack unknown rather than changed),
+         * so a temporarily offline broker is not a rack change, while
+         * a rack that is actually added or removed still is.
+         */
+        boolean equivalentTo(PartitionRackInfo other) {
+            return racksAccountedForIn(other) && other.racksAccountedForIn(this);
         }
 
-        @Override
-        public int hashCode() {
-            return Objects.hash(racks);
+        /**
+         * Returns true if every online rack in this PartitionRackInfo snapshot is either still
+         * present in {@code other}, or belongs to a replica that is offline in {@code other}
+         * (its rack is unknown there, rather than changed).
+         */
+        private boolean racksAccountedForIn(PartitionRackInfo other) {
+            for (Map.Entry<Integer, String> replicaRack : onlineRacks.entrySet()) {
+                if (!other.onlineRacks.containsValue(replicaRack.getValue()) &&
+                        !other.offlineReplicas.contains(replicaRack.getKey())) {
+                    return false;
+                }
+            }
+            return true;
         }
 
         @Override
         public String toString() {
-            return racks.isEmpty() ? "NO_RACKS" : "racks=" + racks;
+            String racks = onlineRacks.isEmpty() ? "NO_RACKS" : "racks=" + onlineRacks;
+            return offlineReplicas.isEmpty() ? racks : racks + ", offlineReplicas=" + offlineReplicas;
         }
     }
 

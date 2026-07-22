@@ -27,6 +27,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
@@ -161,7 +162,7 @@ public class SessionStoreFetchTest {
                 expectedRecords.iterator() :
                 expectedRecords.descendingIterator();
 
-            TestUtils.checkEquals(scanIterator, dataIterator);
+            TestUtils.checkEquals(dataIterator, scanIterator);
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> scanIterator = forward ?
@@ -172,7 +173,7 @@ public class SessionStoreFetchTest {
                 expectedRecords.iterator() :
                 expectedRecords.descendingIterator();
 
-            TestUtils.checkEquals(scanIterator, dataIterator);
+            TestUtils.checkEquals(dataIterator, scanIterator);
         }
     }
 
@@ -185,7 +186,7 @@ public class SessionStoreFetchTest {
                 expectedRecords.iterator() :
                 expectedRecords.descendingIterator();
 
-            TestUtils.checkEquals(scanIterator, dataIterator);
+            TestUtils.checkEquals(dataIterator, scanIterator);
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> scanIterator = forward ?
@@ -196,7 +197,7 @@ public class SessionStoreFetchTest {
                 expectedRecords.iterator() :
                 expectedRecords.descendingIterator();
 
-            TestUtils.checkEquals(scanIterator, dataIterator);
+            TestUtils.checkEquals(dataIterator, scanIterator);
         }
     }
 
@@ -226,7 +227,7 @@ public class SessionStoreFetchTest {
 
         final Topology topology = builder.build();
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).build()) {
             //get input topic and stateStore
             final TestInputTopic<String, String> input = driver
                     .createInputTopic("input", new StringSerializer(), new StringSerializer());

@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.coordinator.common.runtime;
 
-import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.ThreadUtils;
 
 import java.util.Objects;
 import java.util.concurrent.LinkedBlockingQueue;

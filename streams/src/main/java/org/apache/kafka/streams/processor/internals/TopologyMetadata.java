@@ -20,7 +20,7 @@ import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.errors.TopologyException;
@@ -230,7 +230,9 @@ public class TopologyMetadata {
                         log.debug("Detected that the topology is currently empty, waiting for something to process");
                         version.topologyCV.await();
                     } catch (final InterruptedException e) {
-                        log.error("StreamThread was interrupted while waiting on empty topology", e);
+                        Thread.currentThread().interrupt();
+                        log.warn("StreamThread was interrupted while waiting on empty topology", e);
+                        break;
                     }
                 }
             } finally {

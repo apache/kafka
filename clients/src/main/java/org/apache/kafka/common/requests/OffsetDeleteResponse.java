@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.message.OffsetDeleteRequestData;
 import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartition;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
@@ -75,10 +76,10 @@ public class OffsetDeleteResponse extends AbstractResponse {
             return this;
         }
 
-        public <P> Builder addPartitions(
+        public Builder addPartitions(
             String topicName,
-            List<P> partitions,
-            Function<P, Integer> partitionIndex,
+            List<OffsetDeleteRequestData.OffsetDeleteRequestPartition> partitions,
+            Function<OffsetDeleteRequestData.OffsetDeleteRequestPartition, Integer> partitionIndex,
             Errors error
         ) {
             final OffsetDeleteResponseTopic topicResponse = getOrCreateTopic(topicName);

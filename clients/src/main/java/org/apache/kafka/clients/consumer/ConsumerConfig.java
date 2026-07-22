@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.ShareAcknowledgementMode;
 import org.apache.kafka.clients.consumer.internals.ShareAcquireMode;
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -36,6 +37,9 @@ import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Utils;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -57,7 +61,9 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 /**
  * The consumer configuration keys
  */
+@InterfaceAudience.Public
 public class ConsumerConfig extends AbstractConfig {
+    private static final Logger log = LoggerFactory.getLogger(ConsumerConfig.class);
     private static final ConfigDef CONFIG;
 
     // a list contains all the assignor names that only assign subscribed topics to consumer. Should be updated when new assignor added.
@@ -689,6 +695,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         atLeast(0),
                                         Importance.LOW,
                                         CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
+                                .define(CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG,
+                                        Type.BOOLEAN,
+                                        true,
+                                        Importance.LOW,
+                                        CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_DOC)
                                 .define(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
                                         Type.STRING,
                                         ShareAcknowledgementMode.IMPLICIT.name(),
@@ -717,7 +728,24 @@ public class ConsumerConfig extends AbstractConfig {
         maybeOverrideClientId(refinedConfigs);
         maybeOverrideEnableAutoCommit(refinedConfigs);
         checkUnsupportedConfigsPostProcess();
+        warnIfConnectionsMaxIdleMsLowerThanMaxPollIntervalMs();
         return refinedConfigs;
+    }
+
+    private void warnIfConnectionsMaxIdleMsLowerThanMaxPollIntervalMs() {
+        String groupProtocol = getString(GROUP_PROTOCOL_CONFIG);
+        if (!GroupProtocol.CLASSIC.name().equalsIgnoreCase(groupProtocol)) {
+            return;
+        }
+        long connectionsMaxIdleMs = getLong(CONNECTIONS_MAX_IDLE_MS_CONFIG);
+        int maxPollIntervalMs = getInt(MAX_POLL_INTERVAL_MS_CONFIG);
+        if (connectionsMaxIdleMs >= 0 && connectionsMaxIdleMs < maxPollIntervalMs) {
+            log.warn("Configuration '{}' with value '{}' is lower than configuration '{}' with value '{}'. " +
+                    "This may cause the connection to the group coordinator to be closed during an ongoing rebalance, " +
+                    "which can prolong or disrupt group rejoin.",
+                CONNECTIONS_MAX_IDLE_MS_CONFIG, connectionsMaxIdleMs,
+                MAX_POLL_INTERVAL_MS_CONFIG, maxPollIntervalMs);
+        }
     }
 
     private void maybeOverrideClientId(Map<String, Object> configs) {
@@ -788,10 +816,20 @@ public class ConsumerConfig extends AbstractConfig {
         }
     }
 
+    /**
+     * Constructs a new ConsumerConfig with the given properties.
+     *
+     * @param props The consumer configuration properties
+     */
     public ConsumerConfig(Properties props) {
         super(CONFIG, props);
     }
 
+    /**
+     * Constructs a new ConsumerConfig with the given properties.
+     *
+     * @param props The consumer configuration properties
+     */
     public ConsumerConfig(Map<String, Object> props) {
         super(CONFIG, props);
     }
@@ -800,10 +838,20 @@ public class ConsumerConfig extends AbstractConfig {
         super(CONFIG, props, doLog);
     }
 
+    /**
+     * Returns the set of all configuration keys.
+     *
+     * @return The set of configuration keys
+     */
     public static Set<String> configNames() {
         return CONFIG.names();
     }
 
+    /**
+     * Returns the configuration definition.
+     *
+     * @return The configuration definition
+     */
     public static ConfigDef configDef() {
         return new ConfigDef(CONFIG);
     }

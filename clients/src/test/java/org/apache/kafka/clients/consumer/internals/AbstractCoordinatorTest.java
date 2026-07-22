@@ -52,11 +52,11 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -154,7 +154,7 @@ public class AbstractCoordinatorTest {
 
         mockClient.updateMetadata(RequestTestUtils.metadataUpdateWith(1, emptyMap()));
         this.node = metadata.fetch().nodes().get(0);
-        this.coordinatorNode = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        this.coordinatorNode = new GroupCoordinatorNode(node.id(), node.host(), node.port());
 
         GroupRebalanceConfig rebalanceConfig = new GroupRebalanceConfig(SESSION_TIMEOUT_MS,
                                                                         rebalanceTimeoutMs,
@@ -1752,7 +1752,7 @@ public class AbstractCoordinatorTest {
             return new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
                     Collections.singleton(new JoinGroupRequestData.JoinGroupRequestProtocol()
                             .setName(PROTOCOL_NAME)
-                            .setMetadata(EMPTY_DATA.array())).iterator()
+                            .setMetadata(EMPTY_DATA.array()))
             );
         }
 

@@ -36,9 +36,9 @@ import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -48,7 +48,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -336,8 +335,8 @@ public class ShareFetchCollectorTest {
     }
 
     private void subscribeAndAssign(TopicIdPartition tp) {
-        subscriptions.subscribe(Collections.singleton(tp.topic()), Optional.empty());
-        subscriptions.assignFromSubscribed(Collections.singleton(tp.topicPartition()));
+        subscriptions.subscribe(Set.of(tp.topic()), Optional.empty());
+        subscriptions.assignFromSubscribed(Set.of(tp.topicPartition()));
     }
 
     /**

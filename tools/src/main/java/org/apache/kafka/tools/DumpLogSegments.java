@@ -18,6 +18,7 @@ package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.message.ConsumerProtocolAssignment;
 import org.apache.kafka.common.message.ConsumerProtocolAssignmentJsonConverter;
 import org.apache.kafka.common.message.ConsumerProtocolSubscription;
@@ -52,15 +53,16 @@ import org.apache.kafka.coordinator.common.runtime.Deserializer;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde;
 import org.apache.kafka.coordinator.share.ShareCoordinatorRecordSerde;
 import org.apache.kafka.coordinator.transaction.TransactionCoordinatorRecordSerde;
+import org.apache.kafka.coordinator.transaction.TransactionState;
+import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
 import org.apache.kafka.metadata.MetadataRecordSerde;
-import org.apache.kafka.metadata.bootstrap.BootstrapDirectory;
+import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.snapshot.SnapshotPath;
 import org.apache.kafka.snapshot.Snapshots;
-import org.apache.kafka.storage.internals.log.AbortedTxn;
 import org.apache.kafka.storage.internals.log.BatchMetadata;
 import org.apache.kafka.storage.internals.log.CorruptSnapshotException;
 import org.apache.kafka.storage.internals.log.LogFileUtils;
@@ -118,7 +120,12 @@ public class DumpLogSegments {
             System.out.println("Dumping " + file);
 
             String filename = file.getName();
-            String suffix = filename.substring(filename.lastIndexOf("."));
+            int dotIndex = filename.lastIndexOf(".");
+            if (dotIndex == -1) {
+                System.err.println("Ignoring unknown file " + file);
+                continue;
+            }
+            String suffix = filename.substring(dotIndex);
 
             switch (suffix) {
                 case UnifiedLog.LOG_FILE_SUFFIX, Snapshots.SUFFIX ->
@@ -151,7 +158,7 @@ public class DumpLogSegments {
     private static void dumpTxnIndex(File file) throws IOException {
         try (TransactionIndex index = new TransactionIndex(UnifiedLog.offsetFromFile(file), file)) {
             for (AbortedTxn abortedTxn : index.allAbortedTxns()) {
-                System.out.println("version: " + abortedTxn.version() +
+                System.out.println("version: " + AbortedTxn.HIGHEST_SUPPORTED_VERSION +
                     " producerId: " + abortedTxn.producerId() +
                     " firstOffset: " + abortedTxn.firstOffset() +
                     " lastOffset: " + abortedTxn.lastOffset() +
@@ -360,7 +367,7 @@ public class DumpLogSegments {
             long startOffset = Long.parseLong(file.getName().split("\\.")[0]);
             System.out.println("Log starting offset: " + startOffset);
         } else if (file.getName().endsWith(Snapshots.SUFFIX)) {
-            if (file.getName().equals(BootstrapDirectory.BINARY_BOOTSTRAP_FILENAME)) {
+            if (file.getName().equals(BootstrapMetadata.BINARY_BOOTSTRAP_FILENAME)) {
                 System.out.println("KRaft bootstrap snapshot");
             } else {
                 Optional<SnapshotPath> pathOpt = Snapshots.parse(file.toPath());
@@ -529,47 +536,47 @@ public class DumpLogSegments {
     }
 
     static class TimeIndexDumpErrors {
-        final Map<String, List<Pair<Long, Long>>> misMatchesForTimeIndexFilesMap = new HashMap<>();
-        final Map<String, List<Pair<Long, Long>>> outOfOrderTimestamp = new HashMap<>();
-        final Map<String, List<Pair<Long, Long>>> shallowOffsetNotFound = new HashMap<>();
+        final Map<String, List<Map.Entry<Long, Long>>> misMatchesForTimeIndexFilesMap = new HashMap<>();
+        final Map<String, List<Map.Entry<Long, Long>>> outOfOrderTimestamp = new HashMap<>();
+        final Map<String, List<Map.Entry<Long, Long>>> shallowOffsetNotFound = new HashMap<>();
 
         void recordMismatchTimeIndex(File file, long indexTimestamp, long logTimestamp) {
-            List<Pair<Long, Long>> misMatchesSeq = misMatchesForTimeIndexFilesMap
+            List<Map.Entry<Long, Long>> misMatchesSeq = misMatchesForTimeIndexFilesMap
                 .computeIfAbsent(file.getAbsolutePath(), k -> new ArrayList<>());
-            misMatchesSeq.add(new Pair<>(indexTimestamp, logTimestamp));
+            misMatchesSeq.add(Map.entry(indexTimestamp, logTimestamp));
         }
 
         void recordOutOfOrderIndexTimestamp(File file, long indexTimestamp, long prevIndexTimestamp) {
-            List<Pair<Long, Long>> outOfOrderSeq = outOfOrderTimestamp
+            List<Map.Entry<Long, Long>> outOfOrderSeq = outOfOrderTimestamp
                 .computeIfAbsent(file.getAbsolutePath(), k -> new ArrayList<>());
-            outOfOrderSeq.add(new Pair<>(indexTimestamp, prevIndexTimestamp));
+            outOfOrderSeq.add(Map.entry(indexTimestamp, prevIndexTimestamp));
         }
 
         void recordShallowOffsetNotFound(File file, long indexOffset, long logOffset) {
-            List<Pair<Long, Long>> shallowOffsetNotFoundSeq = shallowOffsetNotFound
+            List<Map.Entry<Long, Long>> shallowOffsetNotFoundSeq = shallowOffsetNotFound
                 .computeIfAbsent(file.getAbsolutePath(), k -> new ArrayList<>());
-            shallowOffsetNotFoundSeq.add(new Pair<>(indexOffset, logOffset));
+            shallowOffsetNotFoundSeq.add(Map.entry(indexOffset, logOffset));
         }
 
         void printErrors() {
             misMatchesForTimeIndexFilesMap.forEach((fileName, listOfMismatches) -> {
                 System.err.println("Found timestamp mismatch in :" + fileName);
                 listOfMismatches.forEach(m ->
-                    System.err.println("  Index timestamp: " + m.first + ", log timestamp: " + m.second)
+                    System.err.println("  Index timestamp: " + m.getKey() + ", log timestamp: " + m.getValue())
                 );
             });
 
             outOfOrderTimestamp.forEach((fileName, outOfOrderTimestamps) -> {
                 System.err.println("Found out of order timestamp in :" + fileName);
                 outOfOrderTimestamps.forEach(m ->
-                    System.err.println("  Index timestamp: " + m.first + ", Previously indexed timestamp: " + m.second)
+                    System.err.println("  Index timestamp: " + m.getKey() + ", Previously indexed timestamp: " + m.getValue())
                 );
             });
 
-            shallowOffsetNotFound.values().forEach(listOfShallowOffsetNotFound -> {
-                System.err.println("The following indexed offsets are not found in the log.");
+            shallowOffsetNotFound.forEach((fileName, listOfShallowOffsetNotFound) -> {
+                System.err.println("The following indexed offsets are not found in :" + fileName);
                 listOfShallowOffsetNotFound.forEach(pair ->
-                    System.err.println("Indexed offset: " + pair.first + ", found log offset: " + pair.second)
+                    System.err.println("Indexed offset: " + pair.getKey() + ", found log offset: " + pair.getValue())
                 );
             });
         }
@@ -720,19 +727,29 @@ public class DumpLogSegments {
 
         @Override
         protected JsonNode valueAsJson(ApiMessage message, short version) {
-            return org.apache.kafka.coordinator.transaction.generated.CoordinatorRecordJsonConverters
+            JsonNode json = org.apache.kafka.coordinator.transaction.generated.CoordinatorRecordJsonConverters
                 .writeRecordValueAsJson(message, version);
+            if (message instanceof TransactionLogValue) {
+                byte statusId = ((TransactionLogValue) message).transactionStatus();
+                String statusName;
+                try {
+                    statusName = TransactionState.fromId(statusId).stateName();
+                } catch (IllegalStateException e) {
+                    statusName = String.valueOf(statusId);
+                }
+                ((ObjectNode) json).put("transactionStatus", statusName);
+            }
+            return json;
         }
     }
 
     private static class ClusterMetadataLogMessageParser implements MessageParser<String, String> {
-        private final MetadataRecordSerde metadataRecordSerde = new MetadataRecordSerde();
 
         @Override
         public ParseResult<String, String> parse(Record record) {
             String output;
             try {
-                ApiMessageAndVersion messageAndVersion = metadataRecordSerde.read(
+                ApiMessageAndVersion messageAndVersion = MetadataRecordSerde.INSTANCE.read(
                     new ByteBufferAccessor(record.value()), record.valueSize());
                 ObjectNode json = new ObjectNode(JsonNodeFactory.instance);
                 json.set("type", new TextNode(
@@ -785,8 +802,6 @@ public class DumpLogSegments {
                 .writeRecordValueAsJson(message, version);
         }
     }
-
-    record Pair<F, S>(F first, S second) { }
 
     private static class DumpLogSegmentsOptions extends CommandDefaultOptions {
         private final OptionSpec<Void> printOpt;

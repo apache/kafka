@@ -398,7 +398,7 @@ public class TopologyTest {
         config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
         try {
-            new TopologyTestDriver(topology, config);
+            new TopologyTestDriverBuilder(topology).withConfig(config).build();
             fail("Should have thrown StreamsException");
         } catch (final StreamsException e) {
             final String error = e.toString();

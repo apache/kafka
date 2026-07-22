@@ -17,6 +17,7 @@
 
 package kafka.api
 
+import java.util
 import java.util.{Locale, Properties}
 import java.util.concurrent.{ExecutionException, Future, TimeUnit}
 import kafka.utils.{TestInfoUtils, TestUtils}
@@ -187,11 +188,10 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("timestampConfigProvider"))
   def testSendWithInvalidBeforeAndAfterTimestamp(groupProtocol: String, messageTimeStampConfig: String, recordTimestamp: Long): Unit = {
-    val topicProps = new Properties()
     // set the TopicConfig for timestamp validation to have 1 minute threshold. Note that recordTimestamp has 5 minutes diff
     val oneMinuteInMs: Long = 1 * 60 * 60 * 1000L
-    topicProps.setProperty(messageTimeStampConfig, oneMinuteInMs.toString)
-    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2, topicConfig = topicProps)
+    val topicConfigs = util.Map.of(messageTimeStampConfig, oneMinuteInMs.toString)
+    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2, topicConfig = topicConfigs)
 
     val producer = createProducer()
     try {
@@ -216,11 +216,9 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("timestampConfigProvider"))
   def testValidBeforeAndAfterTimestampsAtThreshold(groupProtocol: String, messageTimeStampConfig: String, recordTimestamp: Long): Unit = {
-    val topicProps = new Properties()
-
     // set the TopicConfig for timestamp validation to be the same as the record timestamp
-    topicProps.setProperty(messageTimeStampConfig, recordTimestamp.toString)
-    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2, topicConfig = topicProps)
+    val topicConfigs = util.Map.of(messageTimeStampConfig, recordTimestamp.toString)
+    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2, topicConfig = topicConfigs)
 
     val producer = createProducer()
 
@@ -236,12 +234,10 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("timestampConfigProvider"))
   def testValidBeforeAndAfterTimestampsWithinThreshold(groupProtocol: String, messageTimeStampConfig: String, recordTimestamp: Long): Unit = {
-    val topicProps = new Properties()
-
     // set the TopicConfig for timestamp validation to have 10 minute threshold. Note that recordTimestamp has 5 minutes diff
     val tenMinutesInMs: Long = 10 * 60 * 60 * 1000L
-    topicProps.setProperty(messageTimeStampConfig, tenMinutesInMs.toString)
-    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2, topicConfig = topicProps)
+    val topicConfigs = util.Map.of(messageTimeStampConfig, tenMinutesInMs.toString)
+    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2, topicConfig = topicConfigs)
 
     val producer = createProducer()
 

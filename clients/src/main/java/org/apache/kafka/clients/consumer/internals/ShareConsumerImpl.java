@@ -68,11 +68,11 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
-import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 import org.slf4j.event.Level;
@@ -169,6 +169,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
     private final ApplicationEventHandler applicationEventHandler;
     private final Time time;
+    private final ShareFetchMetricsManager shareFetchMetricsManager;
     private final KafkaShareConsumerMetrics kafkaShareConsumerMetrics;
     private final AsyncConsumerMetrics asyncConsumerMetrics;
     private Logger log;
@@ -205,6 +206,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     // Init value is needed to avoid NPE in case of exception raised in the constructor
     private Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.empty();
 
+    private SharePollEvent inFlightPoll;
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
 
     // currentThread holds the threadId of the current thread accessing the KafkaShareConsumer
@@ -262,7 +264,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             this.metrics = createMetrics(config, time, reporters);
             this.asyncConsumerMetrics = new AsyncConsumerMetrics(metrics, CONSUMER_SHARE_METRIC_GROUP);
 
-            this.acknowledgementMode = initializeAcknowledgementMode(config, log);
+            this.acknowledgementMode = initializeAcknowledgementMode(config);
             this.deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer, metrics);
             this.currentFetch = ShareFetch.empty();
             this.subscriptions = createSubscriptionState(config, logContext);
@@ -273,7 +275,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
             metadata.bootstrap(addresses);
 
-            ShareFetchMetricsManager shareFetchMetricsManager = createShareFetchMetricsManager(metrics);
+            this.shareFetchMetricsManager = createShareFetchMetricsManager(metrics);
             ApiVersions apiVersions = new ApiVersions();
             final BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
             this.acknowledgementEventHandler = new ShareAcknowledgementEventHandler(acknowledgementEventQueue);
@@ -379,12 +381,12 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         this.metadata = metadata;
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
-        this.acknowledgementMode = initializeAcknowledgementMode(config, log);
+        this.acknowledgementMode = initializeAcknowledgementMode(config);
         this.fetchBuffer = new ShareFetchBuffer(logContext);
         this.completedAcknowledgements = new LinkedList<>();
 
         ShareConsumerMetrics metricsRegistry = new ShareConsumerMetrics();
-        ShareFetchMetricsManager shareFetchMetricsManager = new ShareFetchMetricsManager(metrics, metricsRegistry.shareFetchMetrics);
+        this.shareFetchMetricsManager = new ShareFetchMetricsManager(metrics, metricsRegistry.shareFetchMetrics);
         this.fetchCollector = new ShareFetchCollector<>(
                 logContext,
                 metadata,
@@ -456,6 +458,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                       final Deserializer<V> valueDeserializer,
                       final ShareFetchBuffer fetchBuffer,
                       final ShareFetchCollector<K, V> fetchCollector,
+                      final ShareFetchMetricsManager shareFetchMetricsManager,
                       final Time time,
                       final ApplicationEventHandler applicationEventHandler,
                       final BlockingQueue<ShareAcknowledgementEvent> acknowledgementEventQueue,
@@ -474,6 +477,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         this.groupId = groupId;
         this.fetchBuffer = fetchBuffer;
         this.fetchCollector = fetchCollector;
+        this.shareFetchMetricsManager = shareFetchMetricsManager;
         this.time = time;
         this.acknowledgementEventQueue = acknowledgementEventQueue;
         this.acknowledgementEventProcessor = new ShareAcknowledgementEventProcessor();
@@ -490,7 +494,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         this.applicationEventHandler = applicationEventHandler;
         this.kafkaShareConsumerMetrics = new KafkaShareConsumerMetrics(metrics);
         this.clientTelemetryReporter = Optional.empty();
-        this.completedAcknowledgements = Collections.emptyList();
+        this.completedAcknowledgements = List.of();
         this.asyncConsumerMetrics = new AsyncConsumerMetrics(metrics, CONSUMER_SHARE_METRIC_GROUP);
         this.acknowledgementEventHandler = new ShareAcknowledgementEventHandler(acknowledgementEventQueue);
         this.backgroundEventHandler = new BackgroundEventHandler(
@@ -532,7 +536,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     public Set<String> subscription() {
         acquireAndEnsureOpen();
         try {
-            return Collections.unmodifiableSet(subscriptions.subscription());
+            return Set.copyOf(subscriptions.subscription());
         } finally {
             release();
         }
@@ -615,15 +619,19 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
             shouldSendShareFetchEvent = true;
 
-            do {
-                // Make sure the network thread can tell the application is actively polling
-                applicationEventHandler.add(new SharePollEvent(timer.currentTimeMs()));
+            // This distinguishes the first pass of the inner do/while loop from subsequent passes for the
+            // in-flight poll event logic.
+            boolean firstPass = true;
 
+            do {
                 // We must not allow wake-ups between polling for fetches and returning the records.
                 // A wake-up between returned fetches and returning records would lead to never
                 // returning the records in the fetches. Thus, we trigger a possible wake-up before we poll fetches.
                 wakeupTrigger.maybeTriggerWakeup();
 
+                // Make sure the network thread can tell the application is actively polling
+                checkInFlightPoll(timer, firstPass);
+                firstPass = false;
                 final ShareFetch<K, V> fetch = pollForFetches(timer);
                 if (!fetch.isEmpty()) {
                     currentFetch = fetch;
@@ -647,6 +655,49 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             kafkaShareConsumerMetrics.recordPollEnd(timer.currentTimeMs());
 
             release();
+        }
+    }
+
+    private void checkInFlightPoll(Timer timer, boolean firstPass) {
+        if (firstPass && inFlightPoll != null) {
+            maybeClearPreviousInFlightPoll();
+        }
+
+        boolean newlySubmittedEvent = false;
+
+        if (inFlightPoll == null) {
+            inFlightPoll = new SharePollEvent(calculateDeadlineMs(timer), timer.currentTimeMs());
+            newlySubmittedEvent = true;
+            log.trace("In-flight event {} submitted", inFlightPoll);
+            applicationEventHandler.add(inFlightPoll);
+        }
+
+        timer.update();
+
+        if (inFlightPoll != null) {
+            maybeClearCurrentInFlightPoll(newlySubmittedEvent);
+        }
+    }
+
+    private void maybeClearPreviousInFlightPoll() {
+        if (inFlightPoll.isComplete()) {
+            log.trace("Previous in-flight event {} completed, clearing", inFlightPoll);
+            inFlightPoll = null;
+        } else if (inFlightPoll.isExpired(time)) {
+            log.trace("Previous in-flight event {} expired without completing, clearing", inFlightPoll);
+            inFlightPoll = null;
+        }
+    }
+
+    private void maybeClearCurrentInFlightPoll(boolean newlySubmittedEvent) {
+        if (inFlightPoll.isComplete()) {
+            log.trace("In-flight event {} completed without error, clearing", inFlightPoll);
+            inFlightPoll = null;
+        } else if (!newlySubmittedEvent) {
+            if (inFlightPoll.isExpired(time)) {
+                log.trace("In-flight event {} expired without completing, clearing", inFlightPoll);
+                inFlightPoll = null;
+            }
         }
     }
 
@@ -675,7 +726,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             wakeupTrigger.clearTask();
         }
 
-        return collect(Collections.emptyMap());
+        return collect(Map.of());
     }
 
     private ShareFetch<K, V> collect(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap) {
@@ -797,7 +848,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             Timer requestTimer = time.timer(timeout.toMillis());
             Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap = acknowledgementsToSend();
             if (acknowledgementsMap.isEmpty()) {
-                return Collections.emptyMap();
+                return Map.of();
             } else {
                 ShareAcknowledgeSyncEvent event = new ShareAcknowledgeSyncEvent(acknowledgementsMap, calculateDeadlineMs(requestTimer));
                 applicationEventHandler.add(event);
@@ -994,6 +1045,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
         closeQuietly(kafkaShareConsumerMetrics, "kafka share consumer metrics", firstException);
         closeQuietly(asyncConsumerMetrics, "kafka async consumer metrics", firstException);
+        closeQuietly(shareFetchMetricsManager, "kafka share consumer fetch metrics", firstException);
         closeQuietly(metrics, "consumer metrics", firstException);
         closeQuietly(deserializers, "consumer deserializers", firstException);
         clientTelemetryReporter.ifPresent(reporter -> closeQuietly(reporter, "consumer telemetry reporter", firstException));
@@ -1180,7 +1232,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     /**
      * Initializes the acknowledgement mode based on the configuration.
      */
-    private static ShareAcknowledgementMode initializeAcknowledgementMode(ConsumerConfig config, Logger log) {
+    private static ShareAcknowledgementMode initializeAcknowledgementMode(ConsumerConfig config) {
         String s = config.getString(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG);
         return ShareAcknowledgementMode.fromString(s);
     }
@@ -1223,8 +1275,6 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      * It is possible that {@link ErrorEvent an error} could occur when processing the events. In such
      * cases, the processor will take a reference to the first error, continue to process the remaining
      * events, and then throw the first error that occurred.
-     *
-     * Visible for testing.
      */
     boolean processBackgroundEvents() {
         AtomicReference<KafkaException> firstError = new AtomicReference<>();

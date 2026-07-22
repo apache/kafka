@@ -19,12 +19,13 @@ package org.apache.kafka.common.telemetry.internals;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.TelemetryTooLargeException;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.RecordBatch;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,7 +36,6 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -43,6 +43,9 @@ import java.util.Set;
 import java.util.function.Predicate;
 
 import io.opentelemetry.proto.metrics.v1.MetricsData;
+import io.opentelemetry.proto.metrics.v1.ResourceMetrics;
+import io.opentelemetry.proto.metrics.v1.ScopeMetrics;
+import io.opentelemetry.proto.resource.v1.Resource;
 
 public class ClientTelemetryUtils {
 
@@ -51,6 +54,8 @@ public class ClientTelemetryUtils {
     public static final Predicate<? super MetricKeyable> SELECTOR_NO_METRICS = k -> false;
 
     public static final Predicate<? super MetricKeyable> SELECTOR_ALL_METRICS = k -> true;
+
+    private static final int DECOMPRESS_READ_BUFFER_BYTES = 8 * 1024;
 
     /**
      * Examine the response data and handle different error code accordingly:
@@ -119,7 +124,7 @@ public class ClientTelemetryUtils {
 
     public static List<CompressionType> getCompressionTypesFromAcceptedList(List<Byte> acceptedCompressionTypes) {
         if (acceptedCompressionTypes == null || acceptedCompressionTypes.isEmpty()) {
-            return Collections.emptyList();
+            return List.of();
         }
 
         List<CompressionType> result = new ArrayList<>();
@@ -212,27 +217,47 @@ public class ClientTelemetryUtils {
         }
     }
 
-    public static ByteBuffer decompress(ByteBuffer metrics, CompressionType compressionType) {
+    /**
+     * Assembles and compresses a {@code MetricsData} payload for the given metrics. The io.opentelemetry
+     * types are relocated in the shaded clients jar, so keeping this assembly in main code lets test code
+     * build and compress a payload without referencing io.opentelemetry directly. The layout mirrors the
+     * payload produced by {@link ClientTelemetryReporter} (one resource metric per single point metric).
+     *
+     * @param metrics the metrics to assemble into a {@code MetricsData} payload
+     * @param compressionType the compression to apply
+     * @return the compressed {@code MetricsData} payload
+     */
+    public static ByteBuffer compressMetrics(List<SinglePointMetric> metrics, CompressionType compressionType) throws IOException {
+        MetricsData.Builder builder = MetricsData.newBuilder();
+        for (SinglePointMetric metric : metrics) {
+            builder.addResourceMetrics(ResourceMetrics.newBuilder()
+                .setResource(Resource.newBuilder().build())
+                .addScopeMetrics(ScopeMetrics.newBuilder()
+                    .addMetrics(metric.builder())
+                    .build())
+                .build());
+        }
+        return compress(builder.build(), compressionType);
+    }
+
+    public static ByteBuffer decompress(ByteBuffer metrics, CompressionType compressionType, int maxDecompressedBytes) {
         Compression compression = Compression.of(compressionType).build();
         try (InputStream in = compression.wrapForInput(metrics, RecordBatch.CURRENT_MAGIC_VALUE, BufferSupplier.create());
             ByteBufferOutputStream out = new ByteBufferOutputStream(512)) {
-            byte[] bytes = new byte[metrics.limit() * 2];
+            byte[] bytes = new byte[Math.min(metrics.limit() * 2, DECOMPRESS_READ_BUFFER_BYTES)];
             int nRead;
+            int totalRead = 0;
             while ((nRead = in.read(bytes, 0, bytes.length)) != -1) {
+                totalRead += nRead;
+                if (totalRead > maxDecompressedBytes) {
+                    throw new TelemetryTooLargeException("Decompressed telemetry metrics exceed maximum allowed size: " + maxDecompressedBytes);
+                }
                 out.write(bytes, 0, nRead);
             }
             out.buffer().flip();
             return out.buffer();
         } catch (IOException e) {
             throw new KafkaException("Failed to decompress metrics data", e);
-        }
-    }
-
-    public static MetricsData deserializeMetricsData(ByteBuffer serializedMetricsData) {
-        try {
-            return MetricsData.parseFrom(serializedMetricsData);
-        } catch (IOException e) {
-            throw new KafkaException("Unable to parse MetricsData payload", e);
         }
     }
 

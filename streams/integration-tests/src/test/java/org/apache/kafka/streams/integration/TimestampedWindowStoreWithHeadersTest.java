@@ -102,7 +102,7 @@ public class TimestampedWindowStoreWithHeadersTest {
     }
 
     @BeforeEach
-    public void beforeTest(final TestInfo testInfo) throws InterruptedException {
+    public void beforeTest(final TestInfo testInfo) {
         this.testInfo = testInfo;
         final String uniqueTestName = safeUniqueTestName(testInfo);
         inputStream = "input-stream-" + uniqueTestName;
@@ -199,7 +199,7 @@ public class TimestampedWindowStoreWithHeadersTest {
         // verify changelog topic properties
         final String changelogTopic = props.getProperty(StreamsConfig.APPLICATION_ID_CONFIG) + "-" + STORE_NAME + "-changelog";
         final Properties changelogTopicConfig = CLUSTER.getLogConfig(changelogTopic);
-        assertEquals("compact", changelogTopicConfig.getProperty("cleanup.policy"));
+        assertEquals("compact,delete", changelogTopicConfig.getProperty("cleanup.policy"));
     }
 
     @Test
@@ -375,9 +375,9 @@ public class TimestampedWindowStoreWithHeadersTest {
      */
     @SuppressWarnings("varargs")
     @SafeVarargs
-    private final int produceDataToTopic(final String topic,
-                                         final long timestamp,
-                                         final KeyValue<Integer, String>... keyValues) {
+    private int produceDataToTopic(final String topic,
+                                   final long timestamp,
+                                   final KeyValue<Integer, String>... keyValues) {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             topic,
             Arrays.asList(keyValues),

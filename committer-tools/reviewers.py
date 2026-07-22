@@ -84,7 +84,11 @@ if __name__ == "__main__":
     lines = stream.readlines()
     all_reviewers = defaultdict(int)
     for line in lines:
-        stripped = line.strip().lstrip("Reviewers: ").lstrip("Author: ")
+        stripped = line.strip()
+        if stripped.startswith("Reviewers: "):
+            stripped = stripped[len("Reviewers: "):]
+        elif stripped.startswith("Author: "):
+            stripped = stripped[len("Author: "):]
         reviewers = stripped.split(",")
         for reviewer in reviewers:
             all_reviewers[reviewer.strip()] += 1
@@ -96,6 +100,8 @@ if __name__ == "__main__":
         if m is not None and len(m.groups()) == 2:
             if item[1] > 2:
                 parsed_reviewers.append((m.group("name"), m.group("email"), item[1]))
+
+    parsed_reviewers.sort(key=lambda x: x[2], reverse=True)
 
     selected_reviewers = []
     while True:
@@ -113,7 +119,7 @@ if __name__ == "__main__":
         if not candidates:
             continue
 
-        print("\nPossible matches (in order of most recent):")
+        print("\nPossible matches (in order of most contributions):")
         for i, candidate in zip(range(10), candidates):
             print(f"[{i+1}] {candidate[0]} {candidate[1]} ({candidate[2]})")
 
