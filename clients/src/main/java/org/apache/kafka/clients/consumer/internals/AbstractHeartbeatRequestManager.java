@@ -256,7 +256,18 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
         if (membershipManager().state() == MemberState.UNSUBSCRIBED) {
             return Long.MAX_VALUE;
         }
-        if (pollTimer.isExpired() || (membershipManager().shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight())) {
+        if (pollTimer.isExpired()) {
+            return 0L;
+        }
+        // KAFKA-20253: mirror the guard in poll(). A heartbeat is only sent when the coordinator is known
+        // and the member is in a state that heartbeats. When the coordinator is unavailable (e.g. after a
+        // re-authentication failure) or the member should skip heartbeats (FATAL/FENCED/STALE/UNSUBSCRIBED),
+        // poll() returns EMPTY, so falling through to the timer-based branches below would return 0 (the
+        // heartbeat timer is left permanently expired) and busy-spin both the application and network threads.
+        if (coordinatorRequestManager.coordinator().isEmpty() || membershipManager().shouldSkipHeartbeat()) {
+            return heartbeatRequestState.heartbeatIntervalMs();
+        }
+        if (membershipManager().shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight()) {
             return 0L;
         }
         return Math.min(pollTimer.remainingMs() / 2, heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));

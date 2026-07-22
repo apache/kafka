@@ -72,7 +72,7 @@ versions += [
   jetty: "12.0.34",
   jersey: "3.1.10",
   jgit: "7.6.0.202603022253-r",
-  jline: "3.30.4",
+  jline: "3.30.15",
   jmh: "1.37",
   hamcrest: "3.0",
   scalaLogging: "3.9.6",
@@ -185,7 +185,7 @@ libs += [
   jgitSshApache: "org.eclipse.jgit:org.eclipse.jgit.ssh.apache:$versions.jgit",
   // GPG support for JGit based on BouncyCastle (commit signing)
   jgitGpgBc: "org.eclipse.jgit:org.eclipse.jgit.gpg.bc:$versions.jgit",
-  jline: "org.jline:jline:$versions.jline",
+  jline: "org.jline:jline-reader:$versions.jline",
   jmhCore: "org.openjdk.jmh:jmh-core:$versions.jmh",
   jmhCoreBenchmarks: "org.openjdk.jmh:jmh-core-benchmarks:$versions.jmh",
   jmhGeneratorAnnProcess: "org.openjdk.jmh:jmh-generator-annprocess:$versions.jmh",
