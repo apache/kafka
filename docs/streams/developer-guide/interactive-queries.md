@@ -740,7 +740,7 @@ Instead of a fixed store facade, IQv2 models every query as a first-class [Query
 IQv2 offers several advantages over the original API:
 
   * A single, uniform entry point for every kind of query.
-  * Extensibility: custom state stores can define their own `Query` types, and the runtime forwards unknown queries straight through to the underlying byte store.
+  * Query-level extensibility: custom state stores can handle their own `Query` types (the runtime forwards unknown queries straight through to the underlying byte store), rather than requiring a custom `QueryableStoreType` store facade as the original API does.
   * Rich, per-partition results with typed failure reasons instead of exceptions.
   * Fine-grained consistency control through `Position` and `PositionBound`.
   * The ability to target specific partitions, require active (leader) tasks, override the isolation level, and collect execution information.
@@ -901,7 +901,7 @@ Position position = result.getPosition(); // pass into a later query for monoton
 | --- | --- | --- |
 | Entry point | `store(StoreQueryParameters)` returns a typed, read-only store facade | `query(StateQueryRequest)` returns a `StateQueryResult` |
 | Query surface | Fixed methods on the store facade (`get`, `range`, ...) | First-class `Query` objects |
-| Extensibility | Not extensible | Custom stores can define custom `Query` types |
+| Extensibility | Custom `QueryableStoreType` store facades | Custom `Query` types forwarded to the store |
 | Result granularity | Values from the store facade | A `QueryResult` per partition |
 | Failure reporting | Exceptions (for example, `InvalidStateStoreException`) | Typed `FailureReason` per partition |
 | Consistency control | `enableStaleStores()` toggle | `PositionBound` plus the returned `Position` |
