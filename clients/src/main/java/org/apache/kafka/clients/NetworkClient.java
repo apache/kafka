@@ -804,17 +804,7 @@ public class NetworkClient implements KafkaClient {
         state.compareAndSet(State.ACTIVE, State.CLOSING);
         if (state.compareAndSet(State.CLOSING, State.CLOSED)) {
             cancelBootstrapResolution();
-            if (bootstrapExecutor != null) {
-                bootstrapExecutor.shutdownNow();
-                // Wait briefly for the executor's worker thread to actually terminate. Otherwise
-                // a lingering thread can trip test-side thread-leak detectors even though the
-                // executor has already been shut down.
-                try {
-                    bootstrapExecutor.awaitTermination(1, TimeUnit.SECONDS);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-            }
+            ThreadUtils.shutdownExecutorServiceQuietly(bootstrapExecutor, 1, TimeUnit.SECONDS);
             this.selector.close();
             this.metadataUpdater.close();
             if (telemetrySender != null)
@@ -1362,11 +1352,8 @@ public class NetworkClient implements KafkaClient {
         if (maybeProcessBootstrapResolutionResult(currentTimeMs))
             return;
 
-        // Enforce the timeout BEFORE possibly triggering a new resolution. This allows
-        // bootstrap.resolve.timeout.ms=0 to mean "attempt bootstrap but don't wait for it":
-        // the first poll starts the resolution, the next poll observes the result (or fails
-        // here if the timer has expired and the resolution has not produced a bootstrapped
-        // cluster). maybeStartBootstrapResolution skips if bootstrapException is set, so we
+        // Record a timeout failure before possibly triggering a new resolution.
+        // maybeStartBootstrapResolution skips if bootstrapException is set, so we
         // don't kick off a fresh resolution after the failure has been recorded.
         bootstrapTimer.update(currentTimeMs);
         checkBootstrapTimeout();
