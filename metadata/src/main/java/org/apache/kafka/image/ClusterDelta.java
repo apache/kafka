@@ -46,7 +46,6 @@ public final class ClusterDelta {
     private final HashMap<Integer, Optional<BrokerRegistration>> changedBrokers = new HashMap<>();
     private final HashMap<Integer, Optional<ControllerRegistration>> changedControllers = new HashMap<>();
     private Optional<String> changedClusterId = Optional.empty();
-    private boolean clusterIdChanged = false;
 
     public ClusterDelta(ClusterImage image) {
         this.image = image;
@@ -90,13 +89,12 @@ public final class ClusterDelta {
     }
 
     public void replay(ClusterIdRecord record) {
-        // Enforce the invariant that there is at most one cluster id value seen in a cluster's lifetime
-        if (image.clusterId().isPresent() && !record.clusterId().equals(image.clusterId().get())) {
+        // Enforce the invariant that there is at most one committed cluster id record in a cluster's lifetime
+        if (changedClusterId.isPresent() || image.clusterId().isPresent()) {
             throw new IllegalStateException("ClusterIdRecord already exists in the image. " +
                 "A cluster can only have one ClusterIdRecord.");
         }
         changedClusterId = Optional.of(record.clusterId());
-        clusterIdChanged = true;
     }
 
     public void replay(RegisterBrokerRecord record) {
@@ -172,7 +170,7 @@ public final class ClusterDelta {
     }
 
     public ClusterImage apply() {
-        Optional<String> newClusterId = clusterIdChanged ? changedClusterId : image.clusterId();
+        Optional<String> newClusterId = changedClusterId.isPresent() ? changedClusterId : image.clusterId();
 
         Map<Integer, BrokerRegistration> newBrokers = new HashMap<>(image.brokers().size());
         for (Entry<Integer, BrokerRegistration> entry : image.brokers().entrySet()) {

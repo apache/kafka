@@ -154,8 +154,9 @@ public class BootstrapMetadata {
 
     /**
      * Create a default BootstrapMetadata without a ClusterIdRecord.
-     * This is used as a fallback when reading bootstrap metadata from a directory
-     * that has no bootstrap file (e.g., legacy clusters created before bootstrap files existed).
+     * This is used as a fallback when no bootstrap.checkpoint file exists,
+     * such as for clusters created after KIP-1170, which moved bootstrap
+     * metadata records to the 0-0.checkpoint.
      */
     public static BootstrapMetadata defaultBootstrap() {
         return new BootstrapMetadata(
@@ -235,18 +236,6 @@ public class BootstrapMetadata {
             }
         }
         return false;
-    }
-
-    /**
-     * Returns the cluster ID from the ClusterIdRecord if present.
-     */
-    public Optional<String> clusterId() {
-        for (ApiMessageAndVersion record : records) {
-            if (record.message() instanceof ClusterIdRecord clusterIdRecord) {
-                return Optional.of(clusterIdRecord.clusterId());
-            }
-        }
-        return Optional.empty();
     }
 
     public BootstrapMetadata copyWithFeatureRecord(String featureName, short level) {
