@@ -204,6 +204,19 @@ public class ChunkedByteBufferOutputStreamTest {
     }
 
     @Test
+    public void testAddBuffersRejectsWrongSizeChunks() throws Exception {
+        int chunkSize = 8;
+        BufferPool p = pool(64, chunkSize);
+        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 1), chunkSize, p)) {
+            // A chunk whose capacity doesn't match chunkSize violates the contract, same as the constructor.
+            List<ByteBuffer> wrongSize = Collections.singletonList(ByteBuffer.allocate(chunkSize + 1));
+            assertThrows(IllegalArgumentException.class, () -> stream.addBuffers(wrongSize));
+
+            stream.deallocate();
+        }
+    }
+
+    @Test
     public void testPositionWalksAcrossChunks() throws Exception {
         int chunkSize = 4;
         BufferPool p = pool(32, chunkSize);

@@ -77,12 +77,20 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     private static ByteBuffer validatedFirstChunk(List<ByteBuffer> initialChunks, int chunkSize) {
         if (initialChunks == null || initialChunks.isEmpty())
             throw new IllegalArgumentException("initialChunks must be non-empty");
-        for (ByteBuffer chunk : initialChunks) {
+        validateChunkCapacities(initialChunks, chunkSize);
+        return initialChunks.get(0);
+    }
+
+    /**
+     * Validates that every chunk's capacity equals {@code chunkSize}, which the stream's capacity
+     * bookkeeping relies on.
+     */
+    private static void validateChunkCapacities(List<ByteBuffer> chunks, int chunkSize) {
+        for (ByteBuffer chunk : chunks) {
             if (chunk.capacity() != chunkSize)
                 throw new IllegalArgumentException("each chunk must have capacity " + chunkSize
                     + ", but found a chunk of capacity " + chunk.capacity());
         }
-        return initialChunks.get(0);
     }
 
     @Override
@@ -162,6 +170,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     public void addBuffers(List<ByteBuffer> newChunks) {
         ensureNotDeallocated();
         ensureWritable();
+        validateChunkCapacities(newChunks, chunkSize);
         chunks.addAll(newChunks);
     }
 
