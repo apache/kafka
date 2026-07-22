@@ -25,7 +25,7 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.TopologyDescriber
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.TopologyMetadata;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
-import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndAssignmentImpl;
+import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndStateImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 
@@ -132,7 +132,7 @@ public class StreamsStickyAssignorBenchmark {
         GroupAssignment initialAssignment = new StickyTaskAssignor().assign(groupSpec, topologyDescriber);
         Map<String, MemberAssignment> members = initialAssignment.members();
 
-        Map<String, MemberMetadataAndAssignmentImpl> updatedMemberSpec = new HashMap<>();
+        Map<String, MemberMetadataAndStateImpl> updatedMemberSpec = new HashMap<>();
 
         for (String memberId : groupSpec.memberIds()) {
             MemberAssignment memberAssignment = members.getOrDefault(
@@ -140,7 +140,7 @@ public class StreamsStickyAssignorBenchmark {
                 new MemberAssignment(Map.of(), Map.of())
             );
 
-            updatedMemberSpec.put(memberId, new MemberMetadataAndAssignmentImpl(
+            updatedMemberSpec.put(memberId, new MemberMetadataAndStateImpl(
                 Optional.empty(),
                 Optional.empty(),
                 groupSpec.memberMetadata(memberId).processId(),
@@ -154,7 +154,7 @@ public class StreamsStickyAssignorBenchmark {
             ));
         }
 
-        updatedMemberSpec.put("newMember", new MemberMetadataAndAssignmentImpl(
+        updatedMemberSpec.put("newMember", new MemberMetadataAndStateImpl(
             Optional.empty(),
             Optional.empty(),
             "process-newMember",

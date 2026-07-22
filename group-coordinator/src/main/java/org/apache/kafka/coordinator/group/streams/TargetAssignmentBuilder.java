@@ -24,7 +24,7 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
-import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndAssignmentImpl;
+import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndStateImpl;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 
 import java.util.ArrayList;
@@ -118,7 +118,7 @@ public class TargetAssignmentBuilder {
         this.assignmentConfigs = Objects.requireNonNull(assignmentConfigs);
     }
 
-    static MemberMetadataAndAssignmentImpl createMemberMetadataAndAssignment(
+    static MemberMetadataAndStateImpl createMemberMetadataAndAssignment(
         StreamsGroupMember member,
         MemberTaskOffsets taskOffsets
     ) {
@@ -129,7 +129,7 @@ public class TargetAssignmentBuilder {
         Map<String, Set<Integer>> activeTasks = new HashMap<>();
         currentAssignment.activeTasksWithEpochs().forEach((subtopologyId, partitionsWithEpochs) ->
             activeTasks.put(subtopologyId, new HashSet<>(partitionsWithEpochs.keySet())));
-        return new MemberMetadataAndAssignmentImpl(
+        return new MemberMetadataAndStateImpl(
             member.instanceId(),
             member.rackId(),
             member.processId(),
@@ -225,7 +225,7 @@ public class TargetAssignmentBuilder {
      * @throws TaskAssignorException if the target assignment cannot be computed.
      */
     public TargetAssignmentResult build() throws TaskAssignorException {
-        Map<String, MemberMetadataAndAssignmentImpl> memberMetadataMap = new HashMap<>();
+        Map<String, MemberMetadataAndStateImpl> memberMetadataMap = new HashMap<>();
 
         // Prepare the member metadata for all members.
         members.forEach((memberId, member) -> memberMetadataMap.put(memberId, createMemberMetadataAndAssignment(

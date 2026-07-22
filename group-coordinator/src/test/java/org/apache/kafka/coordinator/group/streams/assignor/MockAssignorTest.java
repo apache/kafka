@@ -65,7 +65,7 @@ public class MockAssignorTest {
     @Test
     public void testDoubleAssignment() {
 
-        final MemberMetadataAndAssignmentImpl memberMetadata1 = new MemberMetadataAndAssignmentImpl(
+        final MemberMetadataAndStateImpl memberMetadata1 = new MemberMetadataAndStateImpl(
             Optional.empty(),
             Optional.empty(),
             "test-process",
@@ -77,7 +77,7 @@ public class MockAssignorTest {
             Map.of()
         );
 
-        final MemberMetadataAndAssignmentImpl memberMetadata2 = new MemberMetadataAndAssignmentImpl(
+        final MemberMetadataAndStateImpl memberMetadata2 = new MemberMetadataAndStateImpl(
             Optional.empty(),
             Optional.empty(),
             "test-process",
@@ -118,7 +118,7 @@ public class MockAssignorTest {
     @Test
     public void testSingleMember() {
 
-        final MemberMetadataAndAssignmentImpl memberMetadata = new MemberMetadataAndAssignmentImpl(
+        final MemberMetadataAndStateImpl memberMetadata = new MemberMetadataAndStateImpl(
             Optional.empty(),
             Optional.empty(),
             "test-process",
@@ -150,7 +150,7 @@ public class MockAssignorTest {
     @Test
     public void testTwoMembersTwoSubtopologies() {
 
-        final MemberMetadataAndAssignmentImpl memberMetadata1 = new MemberMetadataAndAssignmentImpl(
+        final MemberMetadataAndStateImpl memberMetadata1 = new MemberMetadataAndStateImpl(
             Optional.empty(),
             Optional.empty(),
             "test-process",
@@ -162,7 +162,7 @@ public class MockAssignorTest {
             Map.of()
         );
 
-        final MemberMetadataAndAssignmentImpl memberMetadata2 = new MemberMetadataAndAssignmentImpl(
+        final MemberMetadataAndStateImpl memberMetadata2 = new MemberMetadataAndStateImpl(
             Optional.empty(),
             Optional.empty(),
             "test-process",
@@ -203,7 +203,7 @@ public class MockAssignorTest {
     @Test
     public void testTwoMembersTwoSubtopologiesStickiness() {
 
-        final MemberMetadataAndAssignmentImpl memberMetadata1 = new MemberMetadataAndAssignmentImpl(
+        final MemberMetadataAndStateImpl memberMetadata1 = new MemberMetadataAndStateImpl(
             Optional.empty(),
             Optional.empty(),
             "test-process",
@@ -218,7 +218,7 @@ public class MockAssignorTest {
             Map.of()
         );
 
-        final MemberMetadataAndAssignmentImpl memberMetadata2 = new MemberMetadataAndAssignmentImpl(
+        final MemberMetadataAndStateImpl memberMetadata2 = new MemberMetadataAndStateImpl(
             Optional.empty(),
             Optional.empty(),
             "test-process",

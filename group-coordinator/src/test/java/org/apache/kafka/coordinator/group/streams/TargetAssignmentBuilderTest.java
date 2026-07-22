@@ -28,7 +28,7 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.TaskRole;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
-import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndAssignmentImpl;
+import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndStateImpl;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 
@@ -113,12 +113,12 @@ public class TargetAssignmentBuilderTest {
                 Map.of()))
             .build();
 
-        MemberMetadataAndAssignmentImpl memberMetadata = createMemberMetadataAndAssignment(
+        MemberMetadataAndStateImpl memberMetadata = createMemberMetadataAndAssignment(
             member,
             MemberTaskOffsets.EMPTY
         );
 
-        assertEquals(new MemberMetadataAndAssignmentImpl(
+        assertEquals(new MemberMetadataAndStateImpl(
             Optional.of("instanceId"),
             Optional.of("rackId"),
             "processId",
@@ -146,7 +146,7 @@ public class TargetAssignmentBuilderTest {
         Map<String, Map<Integer, Long>> taskOffsets = Map.of(fooSubtopologyId, Map.of(0, 10L));
         Map<String, Map<Integer, Long>> taskEndOffsets = Map.of(fooSubtopologyId, Map.of(0, 20L));
 
-        MemberMetadataAndAssignmentImpl memberMetadata = createMemberMetadataAndAssignment(
+        MemberMetadataAndStateImpl memberMetadata = createMemberMetadataAndAssignment(
             member,
             new MemberTaskOffsets(taskOffsets, taskEndOffsets)
         );
@@ -169,7 +169,7 @@ public class TargetAssignmentBuilderTest {
             .setAssignedTasks(new TasksTupleWithEpochs(Map.of(), Map.of(), Map.of(fooSubtopologyId, Set.of(1, 2, 3))))
             .build();
 
-        MemberMetadataAndAssignmentImpl memberMetadata = createMemberMetadataAndAssignment(
+        MemberMetadataAndStateImpl memberMetadata = createMemberMetadataAndAssignment(
             member,
             MemberTaskOffsets.EMPTY
         );
@@ -465,7 +465,7 @@ public class TargetAssignmentBuilderTest {
 
         public org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult build() {
             // Prepare expected member specs.
-            Map<String, MemberMetadataAndAssignmentImpl> memberMetadataMap = new HashMap<>();
+            Map<String, MemberMetadataAndStateImpl> memberMetadataMap = new HashMap<>();
             members.forEach((memberId, member) ->
                 memberMetadataMap.put(memberId, createMemberMetadataAndAssignment(
                         member,
