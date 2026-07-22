@@ -24,7 +24,7 @@ import java.util.Set;
 
 /**
  * Interface representing the current assignment state for a streams group member, used by the
- * {@link TaskAssignor} to compute a new, sticky target assignment.
+ * {@link TaskAssignor} to compute a new target assignment.
  *
  * <p>The active and standby tasks are the member's current <em>target</em> assignment (the last
  * assignment committed for the member). Using the committed target as the stickiness baseline keeps
