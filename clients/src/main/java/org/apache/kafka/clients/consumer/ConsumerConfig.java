@@ -189,14 +189,14 @@ public class ConsumerConfig extends AbstractConfig {
             "<p>To avoid this, prefer <code>by_duration:&lt;duration&gt;</code>. When a partition has no committed offset, " +
             "<code>by_duration</code> determines the starting position by issuing a <code>ListOffsets</code> lookup for " +
             "<code>now() - duration</code>. If the target timestamp is earlier than the partition's creation time, the lookup " +
-            "returns offset 0, ensuring that records produced during the discovery window are still consumed. Size the duration to cover " +
+            "returns the partition's start offset, ensuring that records produced during the discovery window are still consumed. Size the duration to cover " +
             "the worst-case partition-discovery latency for the group protocol in use:</p>" +
             "<ul><li>With the <code>consumer</code> group protocol (KIP-848), newly assigned partitions are pushed on the next " +
-            "group heartbeat, so a value slightly greater than <code>group.consumer.heartbeat.interval.ms</code> " +
+            "group heartbeat, so a value at least as large as <code>group.consumer.heartbeat.interval.ms</code> " +
             "(server default 5000&nbsp;ms) is sufficient, for example <code>by_duration:PT5S</code>.</li>" +
-            "<li>With the <code>classic</code> group protocol, new partitions are discovered through periodic metadata refresh, " +
-            "so the duration must exceed <code>metadata.max.age.ms</code> (client default 300000&nbsp;ms), " +
-            "for example <code>by_duration:PT5M</code>.</li></ul>" +
+            "<li>With the <code>classic</code> group protocol, new partitions are discovered through periodic metadata refresh " +
+            "and a subsequent rebalance, so the duration must exceed <code>metadata.max.age.ms</code> (client default " +
+            "300000&nbsp;ms) plus the rebalance time, for example <code>by_duration:PT6M</code>.</li></ul>" +
             "<p>Consumers with a valid committed offset are unaffected. The reset applies only to partitions whose offset is " +
             "missing or out of range, so <code>by_duration</code> does not force existing consumers to replay historical data on restart.</p>";
 
