@@ -167,7 +167,11 @@ public class DefaultStateUpdater implements StateUpdater {
                 }
             } catch (final RuntimeException anyOtherException) {
                 handleRuntimeException(anyOtherException);
+            } catch (final Error fatalError) {
+                log.error("A fatal error occurred within the state updater thread", fatalError);
+                throw fatalError;
             } finally {
+                isRunning.set(false);
                 clearInputQueue();
                 clearUpdatingAndPausedTasks();
                 updaterMetrics.clear();
@@ -178,6 +182,10 @@ public class DefaultStateUpdater implements StateUpdater {
         private void clearInputQueue() {
             tasksAndActionsLock.lock();
             try {
+                final StreamsException exception = new StreamsException("State updater thread stopped before the request was processed");
+                tasksAndActions.stream()
+                    .filter(taskAndAction -> taskAndAction.action() == Action.REMOVE)
+                    .forEach(taskAndAction -> taskAndAction.futureForRemove().completeExceptionally(exception));
                 tasksAndActions.clear();
             } finally {
                 tasksAndActionsLock.unlock();
@@ -934,6 +942,7 @@ public class DefaultStateUpdater implements StateUpdater {
 
         tasksAndActionsLock.lock();
         try {
+            ensureStateUpdaterIsRunningIfStarted();
             tasksAndActions.add(TaskAndAction.createAddTask(task));
             tasksAndActionsCondition.signalAll();
         } finally {
@@ -956,12 +965,26 @@ public class DefaultStateUpdater implements StateUpdater {
         final CompletableFuture<RemovedTaskResult> future = new CompletableFuture<>();
         tasksAndActionsLock.lock();
         try {
-            tasksAndActions.add(TaskAndAction.createRemoveTask(taskId, future, suspendReason));
-            tasksAndActionsCondition.signalAll();
+            if (stateUpdaterThread != null && !stateUpdaterThread.isRunning.get()) {
+                future.completeExceptionally(stateUpdaterNotRunningException());
+            } else {
+                tasksAndActions.add(TaskAndAction.createRemoveTask(taskId, future, suspendReason));
+                tasksAndActionsCondition.signalAll();
+            }
         } finally {
             tasksAndActionsLock.unlock();
         }
         return future;
+    }
+
+    private void ensureStateUpdaterIsRunningIfStarted() {
+        if (stateUpdaterThread != null && !stateUpdaterThread.isRunning.get()) {
+            throw stateUpdaterNotRunningException();
+        }
+    }
+
+    private StreamsException stateUpdaterNotRunningException() {
+        return new StreamsException("State updater thread is not running");
     }
 
     @Override

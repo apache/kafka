@@ -50,7 +50,9 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
@@ -160,6 +162,49 @@ class DefaultStateUpdaterTest {
         verifyUpdatingTasks();
         verifyPausedTasks();
         verify(changelogReader).clear();
+    }
+
+    @Test
+    public void shouldFailRequestsAfterStateUpdaterThreadDies() throws Exception {
+        final StreamTask task = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final AssertionError fatalError = new AssertionError("fatal error");
+        doThrow(fatalError).when(changelogReader).restore(anyMap());
+
+        stateUpdater.add(task);
+        stateUpdater.start();
+        waitForCondition(() -> !stateUpdater.isRunning(), VERIFICATION_TIMEOUT, "State updater thread did not stop");
+
+        assertThrows(StreamsException.class, () -> stateUpdater.add(task));
+        final ExecutionException executionException = assertThrows(
+            ExecutionException.class,
+            () -> stateUpdater.remove(task.id(), StandbyUpdateListener.SuspendReason.MIGRATED).get()
+        );
+        assertInstanceOf(StreamsException.class, executionException.getCause());
+    }
+
+    @Test
+    public void shouldFailPendingRemovalWhenStateUpdaterThreadDies() throws Exception {
+        final StreamTask task = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final CountDownLatch restoreStarted = new CountDownLatch(1);
+        final CountDownLatch throwFatalError = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            restoreStarted.countDown();
+            throwFatalError.await();
+            throw new AssertionError("fatal error");
+        }).when(changelogReader).restore(anyMap());
+
+        stateUpdater.add(task);
+        stateUpdater.start();
+        assertTrue(restoreStarted.await(CALL_TIMEOUT, TimeUnit.MILLISECONDS));
+        final CompletableFuture<StateUpdater.RemovedTaskResult> removal =
+            stateUpdater.remove(task.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
+        throwFatalError.countDown();
+
+        final ExecutionException executionException = assertThrows(
+            ExecutionException.class,
+            () -> removal.get(CALL_TIMEOUT, TimeUnit.MILLISECONDS)
+        );
+        assertInstanceOf(StreamsException.class, executionException.getCause());
     }
 
     @Test
