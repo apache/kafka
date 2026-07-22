@@ -362,9 +362,18 @@ public class RequestResponseTest {
     @Test
     public void testClientThrottlesResponsesWithThrottleTime() {
         List<ApiKeys> apiKeys = List.of(
+            ApiKeys.ALTER_PARTITION_REASSIGNMENTS,
+            ApiKeys.ALTER_USER_SCRAM_CREDENTIALS,
+            ApiKeys.BROKER_HEARTBEAT,
+            ApiKeys.BROKER_REGISTRATION,
             ApiKeys.CONSUMER_GROUP_HEARTBEAT,
+            ApiKeys.DESCRIBE_TOPIC_PARTITIONS,
+            ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS,
+            ApiKeys.ELECT_LEADERS,
+            ApiKeys.LIST_PARTITION_REASSIGNMENTS,
             ApiKeys.SHARE_GROUP_HEARTBEAT,
-            ApiKeys.STREAMS_GROUP_HEARTBEAT
+            ApiKeys.STREAMS_GROUP_HEARTBEAT,
+            ApiKeys.UNREGISTER_BROKER
         );
 
         for (ApiKeys apiKey : apiKeys) {
