@@ -21,11 +21,16 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.internal.DefaultRecordBatch;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.server.share.LogReader;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
@@ -33,6 +38,9 @@ import org.apache.kafka.storage.internals.log.LogReadResult;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
@@ -325,5 +333,69 @@ class ShareGroupDLQRecordFetcherTest {
         Map<Long, Record> result = fetcher(param(0L, 2L), 100).fetch().get(10, TimeUnit.SECONDS);
 
         assertTrue(result.isEmpty(), "Expected the fetch to abort before collecting any record from the batch");
+    }
+
+    @Test
+    public void testSingleRecordWithFabricatedLengthRejectedWithoutLargeAllocation() throws Exception {
+        // Distinct from testCompressedBatchExceedingDecompressedBudgetStopsEarly (which uses a real,
+        // legitimately-compressible payload to blow a small budget): here the batch is tiny even once
+        // decompressed - well within budget - but the single record's own declared length lies about how
+        // much data follows it, simulating a maliciously corrupted record rather than a genuinely large
+        // one. Verifies the record is rejected via the bounded buffer's own remaining-capacity check
+        // (DefaultRecord.readFrom throwing InvalidRecordException) rather than the fetcher ever attempting
+        // an allocation sized by the fabricated (here, ~1GB) declared length.
+        whenReadAsync(done(logReadResult(new FetchDataInfo(null, corruptedLengthBatch()), Errors.NONE)));
+
+        Map<Long, Record> result = fetch(param(0L, 0L));
+
+        assertTrue(result.isEmpty(), "Corrupted record must be rejected, not force a large allocation");
+    }
+
+    // Builds a single-record, gzip-compressed batch whose record claims a declared body size (~1GB) far
+    // larger than what actually follows it - fabricating a corrupted length rather than a genuinely large
+    // payload, to exercise DefaultRecord.readFrom's bounds check in isolation from the budget check.
+    private static Records corruptedLengthBatch() throws Exception {
+        // A normal single-record gzip batch, to source real header + compressed record bytes from.
+        MemoryRecords source = MemoryRecords.withRecords(Compression.gzip().build(), record("k", "v"));
+        DefaultRecordBatch batch = (DefaultRecordBatch) source.batches().iterator().next();
+
+        // Decompress the record region to plain bytes.
+        ByteArrayOutputStream plainOut = new ByteArrayOutputStream();
+        try (InputStream in = batch.recordInputStream(BufferSupplier.NO_CACHING)) {
+            in.transferTo(plainOut);
+        }
+        byte[] plain = plainOut.toByteArray();
+
+        // Replace the record's declared body-size varint (its first byte, for a record this small) with
+        // one that claims a huge size, far more than actually remains.
+        ByteBuffer corruptedPlain = ByteBuffer.allocate(plain.length + 8);
+        ByteUtils.writeVarint(1_000_000_000, corruptedPlain);
+        corruptedPlain.put(plain, 1, plain.length - 1);
+        corruptedPlain.flip();
+        byte[] corrupted = new byte[corruptedPlain.remaining()];
+        corruptedPlain.get(corrupted);
+
+        // Re-compress the corrupted plain bytes with the same codec.
+        ByteBufferOutputStream compressedOut = new ByteBufferOutputStream(256);
+        try (OutputStream out = Compression.gzip().build().wrapForOutput(compressedOut, RecordBatch.CURRENT_MAGIC_VALUE)) {
+            out.write(corrupted);
+        }
+        compressedOut.buffer().flip();
+
+        // Splice: the original header (unchanged) + newly-compressed corrupted record region, with the
+        // batch's LENGTH field (Int32 at offset 8: size of everything after the length field itself)
+        // patched to match the new total size.
+        ByteBuffer originalFull = ByteBuffer.allocate(batch.sizeInBytes());
+        batch.writeTo(originalFull);
+        originalFull.flip();
+        originalFull.limit(DefaultRecordBatch.RECORD_BATCH_OVERHEAD);
+
+        ByteBuffer full = ByteBuffer.allocate(DefaultRecordBatch.RECORD_BATCH_OVERHEAD + compressedOut.buffer().remaining());
+        full.put(originalFull);
+        full.put(compressedOut.buffer());
+        full.flip();
+        full.putInt(8, full.limit() - 12);
+
+        return MemoryRecords.readableRecords(full);
     }
 }

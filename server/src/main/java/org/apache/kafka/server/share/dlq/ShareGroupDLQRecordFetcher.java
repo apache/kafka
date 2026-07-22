@@ -75,6 +75,13 @@ import java.util.concurrent.CompletableFuture;
 public class ShareGroupDLQRecordFetcher {
     private static final Logger log = LoggerFactory.getLogger(ShareGroupDLQRecordFetcher.class);
 
+    // Size of the transfer buffer used to pull decompressed bytes out of the codec's stream a chunk at a
+    // time (see decompressBounded). Fixed and deliberately independent of maxDecompressedBytes: it only
+    // affects how many read() calls happen, not whether the budget check is correct, so tying it to the
+    // (policy-configured, potentially large) budget would allocate a scratch buffer sized by configuration
+    // rather than by the data actually being copied. Matches the precedent in ClientTelemetryUtils.decompress.
+    private static final int DECOMPRESS_CHUNK_BYTES = 8 * 1024;
+
     private final LogReader logReader;
     private final Time time;
     private final ShareGroupDLQRecordParameter param;
@@ -85,7 +92,6 @@ public class ShareGroupDLQRecordFetcher {
     private final long startTime;
     private final Map<Long, Record> recordMap;
     private final long maxDecompressedBytes;
-    private final int decompressChunkBytes;
     private final BufferSupplier bufferSupplier = BufferSupplier.create();
     private long decompressedBytes = 0;
     private boolean aborted = false;
@@ -109,7 +115,6 @@ public class ShareGroupDLQRecordFetcher {
         this.recordMap = new HashMap<>(recordCount);
         this.maxBytesMap.put(tp, maxFetchBytes);
         this.maxDecompressedBytes = maxDecompressedBytes;
-        this.decompressChunkBytes = Math.max(1, maxDecompressedBytes / 4);
         this.fetchParams = new FetchParams(
             FetchRequest.CONSUMER_REPLICA_ID,           // -1, reading as a consumer
             -1,                                         // replicaEpoch
@@ -132,9 +137,11 @@ public class ShareGroupDLQRecordFetcher {
         } catch (Throwable e) {
             // Never let an unexpected error - including an OutOfMemoryError from a maliciously
             // compressible record, or an InvalidRecordException/KafkaException from a rejected
-            // malformed one - escape; skip record copy entirely.
-            log.warn("Unexpected error fetching records for {}. Skipping record copy.", param, e);
-            result.complete(Map.of());
+            // malformed one - escape. Uses complete() (not result.complete(Map.of())) so that any
+            // records already collected from earlier batches in this call are still returned, rather
+            // than discarding a partially-successful copy because of one bad batch.
+            log.warn("Unexpected error fetching records for {}. Returning records fetched so far.", param, e);
+            complete();
         }
         return result;
     }
@@ -323,7 +330,7 @@ public class ShareGroupDLQRecordFetcher {
     }
 
     /**
-     * Decompresses the batch's record region into a flat buffer, reading in {@link #decompressChunkBytes}
+     * Decompresses the batch's record region into a flat buffer, reading in {@link #DECOMPRESS_CHUNK_BYTES}
      * chunks and checking the cumulative total against the remaining decompression budget before each chunk
      * is kept - before any record-level parsing happens. A single record with a fabricated huge length can't
      * cause a large allocation this way: parsing only begins once the buffer is already fully bounded, and the
@@ -336,9 +343,10 @@ public class ShareGroupDLQRecordFetcher {
         long budget = maxDecompressedBytes - decompressedBytes;
         if (budget <= 0) return null;
 
+        int chunkBytes = Math.min(batch.sizeInBytes(), DECOMPRESS_CHUNK_BYTES);
         try (InputStream in = batch.recordInputStream(bufferSupplier);
-             ByteBufferOutputStream out = new ByteBufferOutputStream(Math.min(batch.sizeInBytes(), decompressChunkBytes))) {
-            byte[] chunk = new byte[decompressChunkBytes];
+             ByteBufferOutputStream out = new ByteBufferOutputStream(chunkBytes)) {
+            byte[] chunk = new byte[chunkBytes];
             int nRead;
             long total = 0;
             while ((nRead = in.read(chunk, 0, chunk.length)) != -1) {
