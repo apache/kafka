@@ -67,8 +67,9 @@ import java.util.concurrent.CompletableFuture;
  * from ballooning broker heap usage, decompression is bounded by {@code maxDecompressedBytes} (shared across
  * the whole fetch): compressed batches are decompressed into a size-capped flat buffer before any record is
  * parsed (see {@link #decompressBounded}), so even a single record with a fabricated huge length can't force
- * a large allocation. Once the budget is exhausted the fetch stops early and returns whatever was collected
- * so far, same as any other partial-failure case.
+ * a large allocation. A batch that would exceed the remaining budget is simply discarded - its offsets are
+ * skipped, same as any other partial-failure case - and the fetch continues with whatever batches follow,
+ * rather than one oversized batch poisoning the rest of the range.
  *
  * <p>Instances are single-use: create one fetcher per {@link #fetch()} call.
  */
@@ -94,7 +95,6 @@ public class ShareGroupDLQRecordFetcher {
     private final long maxDecompressedBytes;
     private final BufferSupplier bufferSupplier = BufferSupplier.create();
     private long decompressedBytes = 0;
-    private boolean aborted = false;
     // We are fetching data for one TopicIdPartition only. Hence, there is no need to keep recreating
     // the maxBytes map, and we can re-use a single copy. In similar vein, we needn't clear the offsets
     // map either and just update the value corresponding to the TopicIdPartition key across iterations.
@@ -174,8 +174,8 @@ public class ShareGroupDLQRecordFetcher {
             // Safe (non-blocking) because the future is done. readAsync is partial-data tolerant, so it
             // completes normally; any unexpected exceptional completion is caught by fetch().
             long advanced = collect(nextOffset, logReadResult(future.getNow(null)));
-            if (aborted || advanced <= nextOffset) {
-                complete();     // no progress, or decompression budget exhausted - stop
+            if (advanced <= nextOffset) {
+                complete();     // no progress - stop
                 return;
             }
             nextOffset = advanced;
@@ -203,8 +203,8 @@ public class ShareGroupDLQRecordFetcher {
                 return;
             }
             long advanced = collect(readFrom, logReadResult);
-            if (aborted || advanced <= readFrom) {
-                complete();         // no progress, or decompression budget exhausted - stop
+            if (advanced <= readFrom) {
+                complete();         // no progress - stop
             } else {
                 runFrom(advanced);  // resume the loop
             }
@@ -236,14 +236,14 @@ public class ShareGroupDLQRecordFetcher {
 
     /**
      * Adds the records within the requested range to the map and returns the offset to read from next
-     * (never moves backwards). Records below readFrom or above endOffset are ignored. Sets {@link #aborted}
-     * and stops early if the decompression budget ({@link #maxDecompressedBytes}) is exhausted.
+     * (never moves backwards). Records below readFrom or above endOffset are ignored. A batch that would
+     * exceed the decompression budget ({@link #maxDecompressedBytes}) is skipped - its offsets are left
+     * unread - but the loop continues on to whatever batches follow.
      */
     private long collectRecords(Records records, long readFrom) {
         long nextOffset = readFrom;
         for (RecordBatch batch : records.batches()) {
             nextOffset = collectFromBatch(batch, nextOffset);
-            if (aborted) return nextOffset;
         }
         return nextOffset;
     }
@@ -306,8 +306,10 @@ public class ShareGroupDLQRecordFetcher {
     private long collectFromCompressedBatch(DefaultRecordBatch batch, long readFrom) {
         ByteBuffer decompressed = decompressBounded(batch);
         if (decompressed == null) {
-            aborted = true;
-            return readFrom;
+            // This batch alone would exceed the remaining budget: skip past it (its offsets are left
+            // unread) rather than aborting the whole fetch, so later batches - which may well fit - are
+            // still read.
+            return Math.max(readFrom, batch.lastOffset() + 1);
         }
 
         long baseOffset = batch.baseOffset();
@@ -372,7 +374,11 @@ public class ShareGroupDLQRecordFetcher {
      * RecordBatch#streamingIterator}, tracking a cumulative decompressed-bytes total across the whole fetch
      * and stopping once {@link #maxDecompressedBytes} is exceeded. Unlike {@link
      * #collectFromCompressedBatch}, this does not prevent a single oversized record's initial allocation -
-     * it only bounds growth across multiple records/batches.
+     * it only bounds growth across multiple records/batches. Because that allocation already happened (the
+     * byte count reflects real, already-materialized memory rather than data that was rejected before use),
+     * the overshoot is not undone: {@link #decompressedBytes} stays over budget, so later batches on this
+     * path keep getting skipped too. The rest of the current batch is skipped - not the whole fetch - so
+     * later batches (e.g. uncompressed ones, which carry no such risk) are still read.
      */
     private long collectWithCumulativeCap(RecordBatch batch, long readFrom) {
         long nextOffset = readFrom;
@@ -385,10 +391,9 @@ public class ShareGroupDLQRecordFetcher {
                 decompressedBytes += record.sizeInBytes();
                 if (decompressedBytes > maxDecompressedBytes) {
                     log.warn("Decompressed record data for {} exceeded {} bytes at offset {}. " +
-                        "Stopping record copy early to bound memory use.",
+                        "Skipping the rest of this batch to bound memory use.",
                         param, maxDecompressedBytes, record.offset());
-                    aborted = true;
-                    return nextOffset;
+                    return Math.max(nextOffset, batch.lastOffset() + 1);
                 }
 
                 recordMap.put(record.offset(), record);

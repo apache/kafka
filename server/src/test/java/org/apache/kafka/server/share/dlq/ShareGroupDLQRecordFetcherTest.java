@@ -321,7 +321,7 @@ class ShareGroupDLQRecordFetcherTest {
     }
 
     @Test
-    public void testCompressedBatchExceedingDecompressedBudgetStopsEarly() throws Exception {
+    public void testCompressedBatchExceedingDecompressedBudgetSkipsBatch() throws Exception {
         // Highly compressible values so the batch is small on the wire but decompresses well past a
         // tiny budget - simulates a decompression-bomb-shaped batch. The whole batch is decompressed
         // into a bounded buffer before any record is parsed, so exceeding the budget yields none of its
@@ -332,7 +332,64 @@ class ShareGroupDLQRecordFetcherTest {
 
         Map<Long, Record> result = fetcher(param(0L, 2L), 100).fetch().get(10, TimeUnit.SECONDS);
 
-        assertTrue(result.isEmpty(), "Expected the fetch to abort before collecting any record from the batch");
+        assertTrue(result.isEmpty(), "Expected the over-budget batch to be skipped, yielding no records");
+    }
+
+    @Test
+    public void testCompressedBatchExceedingDecompressedBudgetSkippedButLaterBatchStillCollected() throws Exception {
+        // First batch is highly compressible so it alone decompresses well past a tiny budget; the second
+        // batch is uncompressed and carries no decompression risk. Only the first batch's offsets should be
+        // skipped - the fetch must not abort the whole range, so the second batch is still collected.
+        String bigValue = "x".repeat(10_000);
+        MemoryRecords compressedBatch = MemoryRecords.withRecords(0L, Compression.gzip().build(),
+            record("k0", bigValue), record("k1", bigValue), record("k2", bigValue));
+        MemoryRecords uncompressedBatch = MemoryRecords.withRecords(3L, Compression.NONE, record("k3", "v3"));
+
+        whenReadAsync(done(logReadResult(
+            new FetchDataInfo(null, concatBatches(compressedBatch, uncompressedBatch)), Errors.NONE)));
+
+        Map<Long, Record> result = fetcher(param(0L, 3L), 100).fetch().get(10, TimeUnit.SECONDS);
+
+        assertNull(result.get(0L));
+        assertNull(result.get(1L));
+        assertNull(result.get(2L));
+        assertRecord(result, 3L, "k3", "v3");
+    }
+
+    @Test
+    public void testLegacyCompressedBatchExceedingCumulativeCapSkipsBatchButLaterBatchStillCollected() throws Exception {
+        // Legacy magic v0/v1 batches use the cumulative-cap fallback (no bounded-buffer path for that
+        // format). Exceeding the cap should still only skip the rest of the offending batch, not abort the
+        // whole fetch - a later, uncompressed batch remains unaffected.
+        String bigValue = "x".repeat(10_000);
+        MemoryRecords legacyCompressedBatch = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 0L,
+            Compression.gzip().build(), record("k0", bigValue), record("k1", bigValue), record("k2", bigValue));
+        MemoryRecords uncompressedBatch = MemoryRecords.withRecords(3L, Compression.NONE, record("k3", "v3"));
+
+        whenReadAsync(done(logReadResult(
+            new FetchDataInfo(null, concatBatches(legacyCompressedBatch, uncompressedBatch)), Errors.NONE)));
+
+        Map<Long, Record> result = fetcher(param(0L, 3L), 100).fetch().get(10, TimeUnit.SECONDS);
+
+        assertNull(result.get(0L));
+        assertNull(result.get(1L));
+        assertNull(result.get(2L));
+        assertRecord(result, 3L, "k3", "v3");
+    }
+
+    // Concatenates the given batches' on-wire bytes into a single Records, simulating one read returning
+    // multiple consecutive batches.
+    private static Records concatBatches(MemoryRecords... batches) {
+        int size = 0;
+        for (MemoryRecords batch : batches) {
+            size += batch.buffer().remaining();
+        }
+        ByteBuffer combined = ByteBuffer.allocate(size);
+        for (MemoryRecords batch : batches) {
+            combined.put(batch.buffer().duplicate());
+        }
+        combined.flip();
+        return MemoryRecords.readableRecords(combined);
     }
 
     @Test
