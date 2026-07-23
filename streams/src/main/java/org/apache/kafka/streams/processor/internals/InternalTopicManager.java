@@ -578,11 +578,7 @@ public class InternalTopicManager {
                     if (cause instanceof UnsupportedProtocolFieldException) {
                         // An older broker rejected a field we rely on (e.g. the default
                         // replication.factor=-1, which requires CreateTopics request version 4+).
-                        throw new StreamsException(String.format(
-                                "Could not create topic %s, because brokers don't support configuration replication.factor=-1."
-                                        + " You can change the replication.factor config or upgrade your brokers to version 2.4 or newer to avoid this error.",
-                                topicName)
-                        );
+                        throw new StreamsException(cause.getMessage());
                     } else if (cause instanceof TimeoutException) {
                         log.error("Creating topic {} timed out.\n" +
                                 "Error message was: {}", topicName, cause.toString());

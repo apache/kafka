@@ -233,6 +233,7 @@ public class InternalTopicManagerTest {
             public CreateTopicsResult createTopics(final Collection<NewTopic> newTopics,
                                                    final CreateTopicsOptions options) {
                 final CreatableTopic topicToBeCreated = new CreatableTopic();
+                topicToBeCreated.setName(topic1);
                 topicToBeCreated.setAssignments(new CreatableReplicaAssignmentCollection());
                 topicToBeCreated.setNumPartitions((short) 1);
                 // set unsupported replication factor for older brokers
@@ -271,8 +272,8 @@ public class InternalTopicManagerTest {
         );
         assertThat(
             exception.getMessage(),
-            equalTo("Could not create topic " + topic1 + ", because brokers don't support configuration replication.factor=-1."
-                + " You can change the replication.factor config or upgrade your brokers to version 2.4 or newer to avoid this error."));
+            equalTo("The cluster does not support [default partitions/replication for topics [" + topic1 + "]] in CREATE_TOPICS API version 3."
+                + " Upgrade the cluster to CREATE_TOPICS API version >= 4 to enable [default partitions/replication for topics [" + topic1 + "]]."));
     }
 
     @Test
