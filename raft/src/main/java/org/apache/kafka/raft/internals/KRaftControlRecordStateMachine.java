@@ -262,9 +262,8 @@ public final class KRaftControlRecordStateMachine {
 
             // Load the snapshot since the listener is at the start of the log or the log doesn't have the next entry.
             try (BufferSupplier bufferSupplier = BufferSupplier.create();
-                 SnapshotReader<?> reader = RecordsSnapshotReader.ofDecodingStrategy(
+                 SnapshotReader<?> reader = RecordsSnapshotReader.ofControlOnly(
                     rawSnapshot,
-                    RecordsDecodingStrategy.controlOnly(),
                     bufferSupplier,
                     maxBatchSizeBytes,
                     true, // Validate batch CRC

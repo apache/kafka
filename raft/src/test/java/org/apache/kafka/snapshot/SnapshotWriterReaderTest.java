@@ -27,7 +27,6 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.ControlRecord;
 import org.apache.kafka.raft.RaftClientTestContext;
-import org.apache.kafka.raft.internals.RecordsDecodingStrategy;
 import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 
@@ -192,9 +191,9 @@ public final class SnapshotWriterReaderTest {
         OffsetAndEpoch snapshotId,
         int maxBatchSize
     ) {
-        return RecordsSnapshotReader.ofDecodingStrategy(
+        return RecordsSnapshotReader.of(
             context.log.readSnapshot(snapshotId).get(),
-            RecordsDecodingStrategy.dataAndControl(context.serde),
+            context.serde,
             BufferSupplier.create(),
             maxBatchSize,
             true,
@@ -252,9 +251,9 @@ public final class SnapshotWriterReaderTest {
     public static void assertDataSnapshot(List<List<String>> batches, RawSnapshotReader reader) {
         assertDataSnapshot(
             batches,
-            RecordsSnapshotReader.ofDecodingStrategy(
+            RecordsSnapshotReader.of(
                 reader,
-                RecordsDecodingStrategy.dataAndControl(new StringSerde()),
+                new StringSerde(),
                 BufferSupplier.create(),
                 Integer.MAX_VALUE,
                 true,

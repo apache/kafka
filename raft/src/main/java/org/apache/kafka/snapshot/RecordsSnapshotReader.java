@@ -109,6 +109,9 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
         iterator.close();
     }
 
+    /**
+     * Creates a reader that decodes both the control and data records using the given serde.
+     */
     public static <T> RecordsSnapshotReader<T> of(
         RawSnapshotReader snapshot,
         RecordSerde<T> serde,
@@ -117,7 +120,7 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
         boolean doCrcValidation,
         LogContext logContext
     ) {
-        return ofDecodingStrategy(
+        return create(
             snapshot,
             RecordsDecodingStrategy.dataAndControl(serde),
             bufferSupplier,
@@ -127,8 +130,27 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
         );
     }
 
-    // Used within the raft module to pass an explicit decoding strategy.
-    public static <T> RecordsSnapshotReader<T> ofDecodingStrategy(
+    /**
+     * Creates a reader that decodes only the control records and skips the data records.
+     */
+    public static <T> RecordsSnapshotReader<T> ofControlOnly(
+        RawSnapshotReader snapshot,
+        BufferSupplier bufferSupplier,
+        int maxBatchSize,
+        boolean doCrcValidation,
+        LogContext logContext
+    ) {
+        return create(
+            snapshot,
+            RecordsDecodingStrategy.controlOnly(),
+            bufferSupplier,
+            maxBatchSize,
+            doCrcValidation,
+            logContext
+        );
+    }
+
+    private static <T> RecordsSnapshotReader<T> create(
         RawSnapshotReader snapshot,
         RecordsDecodingStrategy<T> decodingStrategy,
         BufferSupplier bufferSupplier,

@@ -80,7 +80,6 @@ import org.apache.kafka.raft.internals.KRaftVersionUpgrade;
 import org.apache.kafka.raft.internals.KafkaRaftMetrics;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.raft.internals.RecordsBatchReader;
-import org.apache.kafka.raft.internals.RecordsDecodingStrategy;
 import org.apache.kafka.raft.internals.RemoveVoterHandler;
 import org.apache.kafka.raft.internals.RequestSendResult;
 import org.apache.kafka.raft.internals.ThresholdPurgatory;
@@ -452,8 +451,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     private Optional<SnapshotReader<T>> latestSnapshot() {
         return log.latestSnapshot().map(reader ->
-            RecordsSnapshotReader.ofDecodingStrategy(reader,
-                RecordsDecodingStrategy.dataAndControl(serde),
+            RecordsSnapshotReader.of(reader,
+                serde,
                 BufferSupplier.create(),
                 MAX_BATCH_SIZE_BYTES,
                 true, /* Validate batch CRC*/

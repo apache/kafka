@@ -27,7 +27,6 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.raft.VoterSetTest;
-import org.apache.kafka.raft.internals.RecordsDecodingStrategy;
 import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.OffsetAndEpoch;
@@ -65,9 +64,9 @@ final class RecordsSnapshotWriterTest {
             snapshot.freeze();
         }
 
-        try (RecordsSnapshotReader<String> reader = RecordsSnapshotReader.ofDecodingStrategy(
+        try (RecordsSnapshotReader<String> reader = RecordsSnapshotReader.of(
                 new MockRawSnapshotReader(snapshotId, buffer.get()),
-                RecordsDecodingStrategy.dataAndControl(STRING_SERDE),
+                STRING_SERDE,
                 BufferSupplier.NO_CACHING,
                 maxBatchSizeBytes,
                 true,
@@ -138,9 +137,9 @@ final class RecordsSnapshotWriterTest {
             snapshot.freeze();
         }
 
-        try (RecordsSnapshotReader<String> reader = RecordsSnapshotReader.ofDecodingStrategy(
+        try (RecordsSnapshotReader<String> reader = RecordsSnapshotReader.of(
                 new MockRawSnapshotReader(snapshotId, buffer.get()),
-                RecordsDecodingStrategy.dataAndControl(STRING_SERDE),
+                STRING_SERDE,
                 BufferSupplier.NO_CACHING,
                 maxBatchSizeBytes,
                 true,
@@ -196,9 +195,9 @@ final class RecordsSnapshotWriterTest {
             snapshot.freeze();
         }
 
-        try (RecordsSnapshotReader<String> reader = RecordsSnapshotReader.ofDecodingStrategy(
+        try (RecordsSnapshotReader<String> reader = RecordsSnapshotReader.of(
                 new MockRawSnapshotReader(snapshotId, buffer.get()),
-                RecordsDecodingStrategy.dataAndControl(STRING_SERDE),
+                STRING_SERDE,
                 BufferSupplier.NO_CACHING,
                 maxBatchSizeBytes,
                 true,
