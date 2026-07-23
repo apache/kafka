@@ -11114,8 +11114,8 @@ public class GroupMetadataManagerTest {
         // empty lists rather than borrowing another member's values).
         StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
         group.updateTaskOffsets(memberId1, new MemberTaskOffsets(
-            Map.of(new org.apache.kafka.coordinator.group.streams.assignor.TaskId(subtopology1, 0), 100L),
-            Map.of(new org.apache.kafka.coordinator.group.streams.assignor.TaskId(subtopology1, 0), 500L)
+            Map.of(subtopology1, Map.of(0, 100L)),
+            Map.of(subtopology1, Map.of(0, 500L))
         ));
 
         List<StreamsGroupDescribeResponseData.DescribedGroup> described = context.sendStreamsGroupDescribe(List.of(groupId));

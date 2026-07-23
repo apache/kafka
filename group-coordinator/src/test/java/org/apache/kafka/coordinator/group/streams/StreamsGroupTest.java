@@ -1232,8 +1232,8 @@ public class StreamsGroupTest {
             .build());
         // Transient, unpersisted per-task offsets reported by the member; the describe path must surface them.
         group.updateTaskOffsets("member1", new MemberTaskOffsets(
-            Map.of(new TaskId("sub-1", 0), 5L),
-            Map.of(new TaskId("sub-1", 0), 9L)
+            Map.of("sub-1", Map.of(0, 5L)),
+            Map.of("sub-1", Map.of(0, 9L))
         ));
         snapshotRegistry.idempotentCreateSnapshot(1);
 
