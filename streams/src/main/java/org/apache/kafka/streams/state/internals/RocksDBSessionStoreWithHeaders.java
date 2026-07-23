@@ -25,6 +25,13 @@ import org.apache.kafka.streams.state.HeadersBytesStore;
  * (via {@code StoreQueryUtils}); header-aware value (de)serialization is performed at the metered
  * layer.
  * <p>
+ * There is deliberately no {@code query()} override to gate query types: the metered wrapper
+ * ({@code MeteredSessionStoreWithHeaders}) intercepts and deserializes every query that would
+ * otherwise be served from this store's raw header-format bytes, delegating downward only queries
+ * that {@code StoreQueryUtils} rejects as {@code UNKNOWN_QUERY_TYPE}. So raw header-format value
+ * bytes are never returned directly to a caller; teaching {@code StoreQueryUtils} to serve a new
+ * query type from session stores would require matching interception at the metered layer.
+ * <p>
  * The storage format for values is: [headersSize(varint)][headersBytes][aggregationBytes]
  *
  * @see RocksDBSessionStore

@@ -147,22 +147,32 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
     ) {
         final long start = time.nanoseconds();
         final QueryResult<R> result;
+        // Queries this store handles itself go through its serdes; anything delegated to the wrapped
+        // store does not, so the two cases report execution info differently.
+        final boolean handledLocally;
 
         if (query instanceof WindowKeyQuery) {
             result = runWindowKeyQuery((WindowKeyQuery<K, ValueTimestampHeaders<V>>) query, positionBound, config);
+            handledLocally = true;
         } else if (query instanceof TimestampedWindowKeyWithHeadersQuery) {
             result = runTimestampedWindowKeyWithHeadersQuery((TimestampedWindowKeyWithHeadersQuery<K, V>) query, positionBound, config);
+            handledLocally = true;
         } else if (query instanceof WindowRangeQuery) {
             result = runWindowRangeQuery((WindowRangeQuery<K, ValueTimestampHeaders<V>>) query, positionBound, config);
+            handledLocally = true;
         } else if (query instanceof TimestampedWindowRangeWithHeadersQuery) {
             result = runTimestampedWindowRangeWithHeadersQuery((TimestampedWindowRangeWithHeadersQuery<K, V>) query, positionBound, config);
+            handledLocally = true;
         } else {
             result = wrapped().query(query, positionBound, config);
+            handledLocally = false;
         }
 
         if (config.isCollectExecutionInfo()) {
             result.addExecutionInfo(
-                "Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
+                "Handled in " + getClass()
+                    + (handledLocally ? " with serdes " + serdes : "")
+                    + " in " + (time.nanoseconds() - start) + "ns");
         }
         return result;
     }

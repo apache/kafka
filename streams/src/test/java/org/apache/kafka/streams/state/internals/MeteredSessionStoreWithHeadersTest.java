@@ -846,6 +846,36 @@ public class MeteredSessionStoreWithHeadersTest {
         }
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    public void shouldTolerateNullValueForTimestampedWindowRangeWithHeadersQuery() {
+        setUp();
+        init();
+
+        // A value that deserializes to null must not NPE: the record surfaces a null value and empty
+        // headers, matching the sibling MeteredSessionStoreWithHeadersIterator.next().
+        final Windowed<Bytes> windowedKeyBytes = new Windowed<>(KEY_BYTES, new SessionWindow(START_TIMESTAMP, END_TIMESTAMP));
+        when(innerStore.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) QueryResult.forResult(new KeyValueIteratorStub<>(
+                Collections.singleton(KeyValue.pair(windowedKeyBytes, (byte[]) null)).iterator())));
+
+        final QueryResult<ReadOnlyRecordIterator<Windowed<String>, String>> result = store.query(
+            TimestampedWindowRangeWithHeadersQuery.<String, String>withKey(KEY),
+            PositionBound.unbounded(),
+            new QueryConfig(false));
+
+        assertTrue(result.isSuccess());
+        try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = result.getResult()) {
+            assertTrue(iterator.hasNext());
+            final ReadOnlyRecord<Windowed<String>, String> record = iterator.next();
+            assertEquals(KEY, record.key().key());
+            assertNull(record.value());
+            assertEquals(END_TIMESTAMP, record.timestamp());
+            assertEquals(new RecordHeaders(), record.headers());
+            assertFalse(iterator.hasNext());
+        }
+    }
+
     @Test
     public void shouldRejectWithWindowStartRangeFormForTimestampedWindowRangeWithHeadersQuery() {
         setUp();

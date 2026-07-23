@@ -26,6 +26,15 @@ import org.apache.kafka.streams.state.TimestampedBytesStore;
  * {@link TimestampedBytesStore} (for timestamp support) and {@link HeadersBytesStore}
  * (for header support) marker interfaces.
  * <p>
+ * IQv2 query handling is inherited (via {@code StoreQueryUtils}); header-aware value
+ * (de)serialization is performed at the metered layer. There is deliberately no {@code query()}
+ * override to gate query types: the metered wrapper ({@code MeteredTimestampedWindowStoreWithHeaders})
+ * intercepts and deserializes every query that would otherwise be served from this store's raw
+ * header-format bytes, delegating downward only queries that {@code StoreQueryUtils} rejects as
+ * {@code UNKNOWN_QUERY_TYPE}. So raw header-format value bytes are never returned directly to a
+ * caller; teaching {@code StoreQueryUtils} to serve a new query type from window stores would
+ * require matching interception at the metered layer.
+ * <p>
  * The storage format for values is: [headersSize(varint)][headersBytes][timestamp(8)][value]
  * <p>
  * This implementation uses segment-level versioning for backward compatibility:

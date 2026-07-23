@@ -417,6 +417,13 @@ public class SessionStoreWithHeadersBuilderTest {
                         info.contains(RocksDBSessionStoreWithHeaders.class.getName())
                             && info.contains(MeteredSessionStoreWithHeaders.class.getName()),
                         "execution info missing an entry: " + info);
+                    // The metered handler reports the serdes it went through for a locally-handled query
+                    // (only the metered layer emits "with serdes"; the native store's entry does not).
+                    assertTrue(info.contains("with serdes"), "metered entry missing serdes detail: " + info);
+                    // The metered entry's duration is measured with the injected (frozen MockTime) clock,
+                    // so it reads a deterministic 0ns; the native store still times with System.nanoTime(),
+                    // so only the metered entry can read " in 0ns". This pins timing to the injected clock.
+                    assertTrue(info.contains(" in 0ns"), "metered timing not from injected clock: " + info);
                 }
             } finally {
                 store.close();

@@ -615,12 +615,12 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
         public ReadOnlyRecord<Windowed<K>, AGG> next() {
             final KeyValue<Windowed<Bytes>, byte[]> next = iter.next();
             final AggregationWithHeaders<AGG> aggregationWithHeaders = deserializeValue(next.value);
-            final Headers headers = aggregationWithHeaders.headers();
+            final Headers headers = aggregationWithHeaders != null ? aggregationWithHeaders.headers() : new RecordHeaders();
             final K key = deserializeKey(next.key.key().get(), headers);
             final Windowed<K> windowedKey = new Windowed<>(key, next.key.window());
             final Record<Windowed<K>, AGG> record = new Record<>(
                 windowedKey,
-                aggregationWithHeaders.aggregation(),
+                aggregationWithHeaders != null ? aggregationWithHeaders.aggregation() : null,
                 windowedKey.window().end(),
                 headers);
             ((RecordHeaders) record.headers()).setReadOnly();
