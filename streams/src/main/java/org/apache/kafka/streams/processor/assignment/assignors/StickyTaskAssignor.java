@@ -45,7 +45,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
+import java.util.function.ToDoubleFunction;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.unmodifiableMap;
@@ -77,6 +79,9 @@ public class StickyTaskAssignor implements TaskAssignor {
 
         assignActive(applicationState, clients.values(), assignmentState, this.mustPreserveActiveTaskAssignment);
         optimizeActive(applicationState, assignmentState);
+        // data is stale after optimizeActive and not used in the standby assignment
+        assignmentState.currentActiveClientWeight.clear();
+        // after optimizeActive, newAssignments might have updated, but not my map
         assignStandby(applicationState, assignmentState);
         optimizeStandby(applicationState, assignmentState);
 
@@ -145,20 +150,19 @@ public class StickyTaskAssignor implements TaskAssignor {
                                      final Collection<KafkaStreamsState> clients,
                                      final AssignmentState assignmentState,
                                      final boolean mustPreserveActiveTaskAssignment) {
-        final int totalCapacity = computeTotalProcessingThreads(clients);
         final Set<TaskId> allTaskIds = applicationState.allTasks().keySet();
-        final int taskCount = allTaskIds.size();
-        final int activeTasksPerThread = taskCount / totalCapacity;
         final Set<TaskId> unassigned = new HashSet<>(allTaskIds);
 
         // first try and re-assign existing active tasks to clients that previously had
         // the same active task
         for (final TaskId taskId : assignmentState.previousActiveAssignment.keySet()) {
-            final ProcessId previousClientForTask = assignmentState.previousActiveAssignment.get(taskId);
             if (allTaskIds.contains(taskId)) {
-                if (mustPreserveActiveTaskAssignment || assignmentState.hasRoomForActiveTask(previousClientForTask, activeTasksPerThread)) {
+                final ProcessId previousClientForTask = assignmentState.previousActiveAssignment.get(taskId);
+                if (mustPreserveActiveTaskAssignment || assignmentState.hasRoomForActiveTask(previousClientForTask, taskId)) {
                     assignmentState.finalizeAssignment(taskId, previousClientForTask, AssignedTask.Type.ACTIVE);
+                    assignmentState.updateClientWeightMap(previousClientForTask, taskId);
                     unassigned.remove(taskId);
+
                 }
             }
         }
@@ -169,23 +173,31 @@ public class StickyTaskAssignor implements TaskAssignor {
             final TaskId taskId = iterator.next();
             final Set<ProcessId> previousClientsForStandbyTask = assignmentState.previousStandbyAssignment.getOrDefault(taskId, new HashSet<>());
             for (final ProcessId client: previousClientsForStandbyTask) {
-                if (assignmentState.hasRoomForActiveTask(client, activeTasksPerThread)) {
+                if (assignmentState.hasRoomForActiveTask(client, taskId)) {
                     assignmentState.finalizeAssignment(taskId, client, AssignedTask.Type.ACTIVE);
+                    assignmentState.updateClientWeightMap(client, taskId);
                     iterator.remove();
                     break;
                 }
             }
         }
 
-        // assign any remaining unassigned tasks
+//        would prefer to assign remaining tasks from highest to lowest partition count
+//        final List<TaskId> sortedTasks = assignmentState.taskInputPartitionCount.entrySet()
+//                .stream().filter(entry -> unassigned.contains(entry.getKey()))
+//                .sorted(Map.Entry.<TaskId, Integer>comparingByValue().reversed())
+//                .map(Map.Entry::getKey)
+//                .collect(Collectors.toList());
         final List<TaskId> sortedTasks = new ArrayList<>(unassigned);
         Collections.sort(sortedTasks);
+
         final Set<ProcessId> candidateClients = clients.stream()
                 .map(KafkaStreamsState::processId)
                 .collect(Collectors.toSet());
         for (final TaskId taskId : sortedTasks) {
-            final ProcessId bestClient = assignmentState.findBestClientForTask(taskId, candidateClients);
+            final ProcessId bestClient = assignmentState.findBestClientForTask(taskId, candidateClients, assignmentState::clientLoadPartitions, assignmentState::shouldBalanceLoadPartitions);
             assignmentState.finalizeAssignment(taskId, bestClient, AssignedTask.Type.ACTIVE);
+            assignmentState.updateClientWeightMap(bestClient, taskId);
         }
     }
 
@@ -200,15 +212,15 @@ public class StickyTaskAssignor implements TaskAssignor {
                 final Set<ProcessId> candidateClients = assignmentState.findClientsWithoutAssignedTask(task.id());
                 if (candidateClients.isEmpty()) {
                     LOG.warn("Unable to assign {} of {} standby tasks for task [{}]. " +
-                             "There is not enough available capacity. You should " +
-                             "increase the number of threads and/or application instances " +
-                             "to maintain the requested number of standby replicas.",
+                            "There is not enough available capacity. You should " +
+                            "increase the number of threads and/or application instances " +
+                            "to maintain the requested number of standby replicas.",
                         numStandbyReplicas - i,
                         numStandbyReplicas, task.id());
                     break;
                 }
-
-                final ProcessId bestClient = assignmentState.findBestClientForTask(task.id(), candidateClients);
+                // use task count, not partitions for standby assignments
+                final ProcessId bestClient = assignmentState.findBestClientForTask(task.id(), candidateClients, assignmentState::clientLoad, (t, u) -> assignmentState.shouldBalanceLoadTasks(t));
                 assignmentState.finalizeAssignment(task.id(), bestClient, AssignedTask.Type.STANDBY);
             }
         }
@@ -235,18 +247,14 @@ public class StickyTaskAssignor implements TaskAssignor {
         return previousStandbyTasks;
     }
 
-    private static int computeTotalProcessingThreads(final Collection<KafkaStreamsState> clients) {
-        int count = 0;
-        for (final KafkaStreamsState client : clients) {
-            count += client.numProcessingThreads();
-        }
-        return count;
-    }
-
     private static class AssignmentState {
         private final Map<ProcessId, KafkaStreamsState> clients;
         private final Map<TaskId, ProcessId> previousActiveAssignment;
         private final Map<TaskId, Set<ProcessId>> previousStandbyAssignment;
+        private final Map<TaskId, Integer> taskInputPartitionCount;
+        private final Map<ProcessId, Integer> currentActiveClientWeight;
+        private final int fairPartitionsPerClientThread;
+        private final int averageTaskWeight;
 
         private final TaskPairs taskPairs;
 
@@ -260,8 +268,19 @@ public class StickyTaskAssignor implements TaskAssignor {
             this.clients = clients;
             this.previousActiveAssignment = unmodifiableMap(previousActiveAssignment);
             this.previousStandbyAssignment = unmodifiableMap(previousStandbyAssignment);
+            this.currentActiveClientWeight = new HashMap<>();
+            this.taskInputPartitionCount = calculateInputPartitionsPerTask(applicationState.allTasks());
+
+            // task weight is partition count
+            final int totalPartitionCount = this.taskInputPartitionCount.values().stream().mapToInt(Integer::intValue).sum();
+            final int totalNumberOfThreads = clients.values().stream().mapToInt(KafkaStreamsState::numProcessingThreads).sum();
+            this.fairPartitionsPerClientThread = totalPartitionCount / totalNumberOfThreads;
 
             final int taskCount = applicationState.allTasks().size();
+            final int safeTaskCount = taskCount == 0 ? 1 : taskCount;
+
+            this.averageTaskWeight = Math.max(totalPartitionCount / safeTaskCount, 1);
+
             final int maxPairs = taskCount * (taskCount - 1) / 2;
             this.taskPairs = new TaskPairs(maxPairs);
 
@@ -297,31 +316,31 @@ public class StickyTaskAssignor implements TaskAssignor {
             this.newAssignments = optimizedAssignments;
         }
 
-        private boolean hasRoomForActiveTask(final ProcessId processId, final int activeTasksPerThread) {
+        private boolean hasRoomForActiveTask(final ProcessId processId, final TaskId taskId) {
+
             final int capacity = clients.get(processId).numProcessingThreads();
-            final int newActiveTaskCount = newAssignments.computeIfAbsent(processId, k -> KafkaStreamsAssignment.of(processId, new HashSet<>()))
-                .tasks().values()
-                .stream().filter(assignedTask -> assignedTask.type() == AssignedTask.Type.ACTIVE)
-                .collect(Collectors.toSet())
-                .size();
-            return newActiveTaskCount < capacity * activeTasksPerThread;
+            final int currentClientPartitionWeight = this.currentActiveClientWeight.getOrDefault(processId, 0);
+            final int addedTaskWeight = taskInputPartitionCount.getOrDefault(taskId, 1);
+
+            // compare absolute weight of current client with best case distribution plus buffer
+            return currentClientPartitionWeight + addedTaskWeight < fairPartitionsPerClientThread * capacity + averageTaskWeight;
         }
 
-        private ProcessId findBestClientForTask(final TaskId taskId, final Set<ProcessId> clientsWithin) {
+        private ProcessId findBestClientForTask(final TaskId taskId, final Set<ProcessId> clientsWithin, final ToDoubleFunction<ProcessId> calculateLoad, final BiPredicate<ProcessId, TaskId> shouldBalance) {
             if (clientsWithin.size() == 1) {
                 return clientsWithin.iterator().next();
             }
 
             final ProcessId previousClient = findLeastLoadedClientWithPreviousActiveOrStandbyTask(
-                taskId, clientsWithin);
+                taskId, clientsWithin, calculateLoad);
             if (previousClient == null) {
-                return findLeastLoadedClient(taskId, clientsWithin);
+                return findLeastLoadedClient(taskId, clientsWithin, calculateLoad);
             }
 
-            if (shouldBalanceLoad(previousClient)) {
-                final ProcessId standby = findLeastLoadedClientWithPreviousStandbyTask(taskId, clientsWithin);
-                if (standby == null || shouldBalanceLoad(standby)) {
-                    return findLeastLoadedClient(taskId, clientsWithin);
+            if (shouldBalance.test(previousClient, taskId)) {
+                final ProcessId standby = findLeastLoadedClientWithPreviousStandbyTask(taskId, clientsWithin, calculateLoad);
+                if (standby == null || shouldBalance.test(standby, taskId)) {
+                    return findLeastLoadedClient(taskId, clientsWithin, calculateLoad);
                 }
                 return standby;
             }
@@ -342,20 +361,56 @@ public class StickyTaskAssignor implements TaskAssignor {
             return totalTaskCount / capacity;
         }
 
-        private ProcessId findLeastLoadedClient(final TaskId taskId, final Set<ProcessId> clientIds) {
+        private double clientLoadPartitions(final ProcessId processId) {
+            final int capacity = clients.get(processId).numProcessingThreads();
+            final double totalPartitionCount = currentActiveClientWeight.getOrDefault(processId, 0);
+            return totalPartitionCount / capacity;
+        }
+
+        private Map<TaskId, Integer> calculateInputPartitionsPerTask(final Map<TaskId, TaskInfo> map) {
+            final Map<TaskId, Integer> taskPartitionCount = new HashMap<>();
+            for (final Map.Entry<TaskId, TaskInfo> entry : map.entrySet()) {
+                int inputPartitionCount = 0;
+                for (final TaskTopicPartition partition : entry.getValue().topicPartitions()) {
+
+                    if (partition.isChangelog())
+                        continue;
+                    inputPartitionCount++;
+                }
+                taskPartitionCount.put(entry.getKey(), Math.max(1, inputPartitionCount));
+            }
+            return taskPartitionCount;
+        }
+
+        private void updateClientWeightMap(final ProcessId client, final TaskId taskId) {
+            currentActiveClientWeight.merge(client, taskInputPartitionCount.getOrDefault(taskId, 1), Integer::sum);
+        }
+
+        private ProcessId findLeastLoadedClient(final TaskId taskId, final Set<ProcessId> clientIds, final ToDoubleFunction<ProcessId> calculateLoad) {
             ProcessId leastLoaded = null;
+            double minLoad = Double.MAX_VALUE;
+
+            ProcessId overallMinLoadClient = null;
+            double minOverallLoad = Double.MAX_VALUE;
+
             for (final ProcessId processId : clientIds) {
-                final double thisClientLoad = clientLoad(processId);
+                final double thisClientLoad = calculateLoad.applyAsDouble(processId);
                 if (thisClientLoad == 0) {
                     return processId;
                 }
 
-                if (leastLoaded == null || thisClientLoad < clientLoad(leastLoaded)) {
+                if (leastLoaded == null || thisClientLoad < minLoad) {
                     final Set<TaskId> assignedTasks = newAssignments.get(processId).tasks().values()
                         .stream().map(AssignedTask::id).collect(Collectors.toSet());
                     if (taskPairs.hasNewPair(taskId, assignedTasks)) {
                         leastLoaded = processId;
+                        minLoad = thisClientLoad;
                     }
+                }
+
+                if (thisClientLoad < minOverallLoad) {
+                    minOverallLoad = thisClientLoad;
+                    overallMinLoadClient = processId;
                 }
             }
 
@@ -363,35 +418,45 @@ public class StickyTaskAssignor implements TaskAssignor {
                 return leastLoaded;
             }
 
-            for (final ProcessId processId : clientIds) {
-                final double thisClientLoad = clientLoad(processId);
-
-                if (leastLoaded == null || thisClientLoad < clientLoad(leastLoaded)) {
-                    leastLoaded = processId;
-                }
-            }
-
-            return leastLoaded;
+            return overallMinLoadClient;
         }
 
         private ProcessId findLeastLoadedClientWithPreviousActiveOrStandbyTask(final TaskId taskId,
-                                                                               final Set<ProcessId> clientsWithin) {
+                                                                               final Set<ProcessId> clientsWithin,
+                                                                               final ToDoubleFunction<ProcessId> calculateLoad) {
             final ProcessId previous = previousActiveAssignment.get(taskId);
             if (previous != null && clientsWithin.contains(previous)) {
                 return previous;
             }
-            return findLeastLoadedClientWithPreviousStandbyTask(taskId, clientsWithin);
+            return findLeastLoadedClientWithPreviousStandbyTask(taskId, clientsWithin, calculateLoad);
         }
 
         private ProcessId findLeastLoadedClientWithPreviousStandbyTask(final TaskId taskId,
-                                                                       final Set<ProcessId> clientsWithin) {
+                                                                       final Set<ProcessId> clientsWithin,
+                                                                       final ToDoubleFunction<ProcessId> calculateLoad) {
             final Set<ProcessId> ids = previousStandbyAssignment.getOrDefault(taskId, new HashSet<>());
             final HashSet<ProcessId> constrainTo = new HashSet<>(ids);
             constrainTo.retainAll(clientsWithin);
-            return findLeastLoadedClient(taskId, constrainTo);
+            return findLeastLoadedClient(taskId, constrainTo, calculateLoad);
         }
 
-        private boolean shouldBalanceLoad(final ProcessId client) {
+        private boolean shouldBalanceLoadPartitions(final ProcessId client, final TaskId taskId) {
+            final double thisClientLoadPartition = clientLoadPartitions(client);
+            final int clientCapacity = clients.get(client).numProcessingThreads();
+            final int newTaskWeight = this.taskInputPartitionCount.get(taskId);
+            // using absolute weights, so I can add the new task weight and buffer correctly
+            if (thisClientLoadPartition * clientCapacity + newTaskWeight < fairPartitionsPerClientThread * clientCapacity + averageTaskWeight) {
+                return false;
+            }
+            for (final ProcessId otherClient : clients.keySet()) {
+                if (clientLoadPartitions(otherClient) < thisClientLoadPartition) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private boolean shouldBalanceLoadTasks(final ProcessId client) {
             final double thisClientLoad = clientLoad(client);
             if (thisClientLoad < 1) {
                 return false;

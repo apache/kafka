@@ -48,6 +48,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment.AssignedTask.Type.ACTIVE;
 import static org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment.AssignedTask.Type.STANDBY;
@@ -66,6 +67,12 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_3_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_3_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_3_2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_0_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_0_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_0_2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_0_3;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_0_4;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_0_5;
 import static org.apache.kafka.streams.processor.internals.assignment.TaskAssignmentUtilsTest.mkStreamState;
 import static org.apache.kafka.streams.processor.internals.assignment.TaskAssignmentUtilsTest.mkTaskInfo;
 import static org.apache.kafka.streams.processor.internals.assignment.TaskAssignmentUtilsTest.processId;
@@ -86,6 +93,56 @@ public class CustomStickyTaskAssignorTest {
     @BeforeEach
     public void setUp() {
         assignor = new StickyTaskAssignor();
+    }
+
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    @ParameterizedTest
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
+    })
+    public void partitionTest(final String rackAwareStrategy) {
+        final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
+                mkStreamState(1, 1, Optional.empty()),
+                mkStreamState(2, 1, Optional.empty())
+        );
+
+        final DefaultTaskTopicPartition ttp1 = new DefaultTaskTopicPartition(TP_0_0, false, false, null);
+        final DefaultTaskTopicPartition ttp2 = new DefaultTaskTopicPartition(TP_0_1, false, false, null);
+        final DefaultTaskTopicPartition ttp3 = new DefaultTaskTopicPartition(TP_0_2, false, false, null);
+        final DefaultTaskTopicPartition ttp4 = new DefaultTaskTopicPartition(TP_0_3, false, false, null);
+        final DefaultTaskTopicPartition ttp5 = new DefaultTaskTopicPartition(TP_0_4, false, false, null);
+        final DefaultTaskTopicPartition ttp6 = new DefaultTaskTopicPartition(TP_0_5, false, false, null);
+
+        final Map<TaskId, TaskInfo> tasks = mkMap(
+                mkEntry(TASK_0_0, new DefaultTaskInfo(TASK_0_0, false, Set.of(), Set.of(ttp1, ttp2, ttp3))),
+                mkEntry(TASK_0_1, new DefaultTaskInfo(TASK_0_1, false, Set.of(), Set.of(ttp4))),
+                mkEntry(TASK_0_2, new DefaultTaskInfo(TASK_0_2, false, Set.of(), Set.of(ttp5))),
+                mkEntry(TASK_0_3, new DefaultTaskInfo(TASK_0_2, false, Set.of(), Set.of(ttp6)))
+        );
+
+        final Map<ProcessId, KafkaStreamsAssignment> assignments = assign(streamStates, tasks, rackAwareStrategy);
+
+        final Set<TaskId> client1Tasks = assignments.get(processId(1)).tasks().values().stream()
+                .filter(t -> t.type() == ACTIVE)
+                .map(AssignedTask::id)
+                .collect(Collectors.toSet());
+        final Set<TaskId> client2Tasks = assignments.get(processId(2)).tasks().values().stream()
+                .filter(t -> t.type() == ACTIVE)
+                .map(AssignedTask::id)
+                .collect(Collectors.toSet());
+
+        final Set<TaskId> allTasks = tasks.keySet();
+
+        // one client should get 1 tasks and the other should have 3
+        assertThat(
+                (client1Tasks.size() == 1 && client2Tasks.size() == 3) ||
+                        (client1Tasks.size() == 3 && client2Tasks.size() == 1),
+                is(true));
+        allTasks.removeAll(client1Tasks);
+        // client2 should have all the remaining tasks not assigned to client 1
+        assertThat(client2Tasks, equalTo(allTasks));
     }
 
     @Timeout(value = 3, unit = TimeUnit.MINUTES)
