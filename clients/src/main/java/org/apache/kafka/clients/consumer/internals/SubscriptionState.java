@@ -115,8 +115,9 @@ public class SubscriptionState {
     /* Default offset reset strategy */
     private final AutoOffsetResetStrategy defaultResetStrategy;
 
-    /* Current listener context to trigger rebalance listener callbacks. */
-    private final AtomicReference<ListenerContext> listenerContext = new AtomicReference<>();
+    /* Current listener context to trigger rebalance listener callbacks. Nonnull - defaults to NULL_LISTENER. */
+    private final AtomicReference<ListenerContext> listenerContext =
+            new AtomicReference<>(ListenerContext.NULL_LISTENER);
 
     private int assignmentId = 0;
 
@@ -247,7 +248,7 @@ public class SubscriptionState {
     }
 
     public synchronized boolean subscribeToShareGroup(Set<String> topics) {
-        this.listenerContext.set(null);
+        this.listenerContext.set(ListenerContext.NULL_LISTENER);
         setSubscriptionType(SubscriptionType.AUTO_TOPICS_SHARE);
         return changeSubscription(topics);
     }
@@ -379,7 +380,7 @@ public class SubscriptionState {
             Objects.requireNonNull(consumer, "Consumer must not be null when a listener is provided");
             this.listenerContext.set(new ListenerContext(listener, consumer));
         } else {
-            this.listenerContext.set(null);
+            this.listenerContext.set(ListenerContext.NULL_LISTENER);
         }
     }
 
@@ -402,7 +403,7 @@ public class SubscriptionState {
         this.assignedTopicIds = Collections.emptySet();
         this.subscribedPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
-        this.listenerContext.set(null);
+        this.listenerContext.set(ListenerContext.NULL_LISTENER);
         this.assignmentId++;
     }
 
@@ -1109,6 +1110,8 @@ public class SubscriptionState {
     }
 
     private static class ListenerContext {
+        private static final ListenerContext NULL_LISTENER = new ListenerContext(null);
+
         /** User-provided listener to be invoked when assignment changes */
         private final RebalanceListener rebalanceListener;
         /** The consumer that last registered a RebalanceListener via {@link Consumer#setRebalanceListener(RebalanceListener)}. */
