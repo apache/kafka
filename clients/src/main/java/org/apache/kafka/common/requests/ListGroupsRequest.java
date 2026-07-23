@@ -59,7 +59,7 @@ public class ListGroupsRequest extends AbstractRequest {
                 boolean containedClassic = typesCopy.remove(GroupType.CLASSIC.toString());
                 boolean containedConsumer = typesCopy.remove(GroupType.CONSUMER.toString());
                 if (!typesCopy.isEmpty() || (!containedClassic && containedConsumer)) {
-                    throw new UnsupportedProtocolFieldException("TypesFilter", apiKey().name(), version, 5);
+                    throw new UnsupportedProtocolFieldException(String.join(",", data.typesFilter()), apiKey().name(), version, 5);
                 }
                 return new ListGroupsRequest(data.duplicate().setTypesFilter(List.of()), version);
             }

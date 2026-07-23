@@ -51,7 +51,8 @@ public class CreateTopicsRequest extends AbstractRequest {
                 .collect(Collectors.toList());
 
             if (!topicsWithDefaults.isEmpty() && version < 4) {
-                throw new UnsupportedProtocolFieldException(String.join(",", topicsWithDefaults),
+                throw new UnsupportedProtocolFieldException(
+                    "default partitions/replication for topics [" + String.join(",", topicsWithDefaults) + "]",
                     apiKey().name(), version, 4);
             }
 

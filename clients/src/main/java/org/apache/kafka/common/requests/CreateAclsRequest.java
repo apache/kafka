@@ -32,7 +32,6 @@ import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -93,8 +92,10 @@ public class CreateAclsRequest extends AbstractRequest {
             final boolean unsupported = data.creations().stream().anyMatch(creation ->
                 creation.resourcePatternType() != PatternType.LITERAL.code());
             if (unsupported) {
-                String unsupportedType = Arrays.stream(PatternType.values())
+                String unsupportedType = data.creations().stream()
+                    .map(creation -> PatternType.fromCode(creation.resourcePatternType()))
                     .filter(type -> type != PatternType.LITERAL)
+                    .distinct()
                     .map(PatternType::name)
                     .collect(Collectors.joining(","));
                 throw new UnsupportedProtocolFieldException(unsupportedType, apiKey().name(), version(), 1);

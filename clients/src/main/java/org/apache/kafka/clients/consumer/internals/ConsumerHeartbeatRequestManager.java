@@ -41,7 +41,6 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
-import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.REGEX_RESOLUTION_NOT_SUPPORTED_MSG;
 
 /**
  * This is the heartbeat request manager for consumer groups.
@@ -102,8 +101,8 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
         if (exception instanceof UnsupportedVersionException) {
             String message = CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG;
             if (exception instanceof UnsupportedProtocolFieldException) {
-                message = REGEX_RESOLUTION_NOT_SUPPORTED_MSG;
-                logger.error("{} regex resolution not supported: {}", heartbeatRequestName(), message);
+                message = errorMessage;
+                logger.error("{} failed due to unsupported protocol field while sending request: {}", heartbeatRequestName(), errorMessage);
             } else {
                 logger.error("{} failed due to unsupported version while sending request: {}", heartbeatRequestName(), errorMessage);
             }

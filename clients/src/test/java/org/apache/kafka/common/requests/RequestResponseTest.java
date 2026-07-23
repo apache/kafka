@@ -700,7 +700,7 @@ public class RequestResponseTest {
 
                 new Builder(data).build((short) 3);
             });
-        assertTrue(exception.getMessage().contains("does not support [foo,bar] in CREATE_TOPICS API version 3"));
+        assertTrue(exception.getMessage().contains("does not support [default partitions/replication for topics [foo,bar]] in CREATE_TOPICS API version 3"));
     }
 
     @Test

@@ -29,9 +29,6 @@ import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 
-import java.util.Arrays;
-import java.util.stream.Collectors;
-
 public class DescribeAclsRequest extends AbstractRequest {
 
     public static class Builder extends AbstractRequest.Builder<DescribeAclsRequest> {
@@ -79,11 +76,7 @@ public class DescribeAclsRequest extends AbstractRequest {
             if (patternType == PatternType.ANY)
                 data.setPatternTypeFilter(PatternType.LITERAL.code());
             else if (patternType != PatternType.LITERAL) {
-                String unsupportedTypes = Arrays.stream(PatternType.values())
-                    .filter(type -> type != PatternType.LITERAL)
-                    .map(PatternType::name)
-                    .collect(Collectors.joining(","));
-                throw new UnsupportedProtocolFieldException(unsupportedTypes, apiKey().name(), version, 1);
+                throw new UnsupportedProtocolFieldException(patternType.name(), apiKey().name(), version, 1);
             }
         }
 

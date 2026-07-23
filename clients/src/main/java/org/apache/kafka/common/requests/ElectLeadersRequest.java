@@ -63,7 +63,7 @@ public class ElectLeadersRequest extends AbstractRequest {
 
         private ElectLeadersRequestData toRequestData(short version) {
             if (electionType != ElectionType.PREFERRED && version == 0) {
-                throw new UnsupportedProtocolFieldException("ElectionType", apiKey().name(), version, 1);
+                throw new UnsupportedProtocolFieldException(electionType.name(), apiKey().name(), version, 1);
             }
 
             ElectLeadersRequestData data = new ElectLeadersRequestData()
