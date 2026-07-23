@@ -45,6 +45,7 @@ import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -198,6 +199,12 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                     props.putAll(clusterTestKit.sslManager().createClientSslConfig());
                     props.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "");
                 }
+            } else if (config().brokerSecurityProtocol() == SecurityProtocol.SSL) {
+                props.putIfAbsent(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SSL.name);
+                if (clusterTestKit.sslManager() != null) {
+                    props.putAll(clusterTestKit.sslManager().createClientSslConfig());
+                    props.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "");
+                }
             }
             return props;
         }
@@ -262,6 +269,15 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         @Override
         public void startBroker(int brokerId) {
             findBrokerOrThrow(brokerId).startup();
+        }
+
+        @Override
+        public void restartBrokersWithSwappedClientListenerPorts(int brokerId1, int brokerId2) {
+            try {
+                clusterTestKit.restartBrokersWithSwappedClientListenerPorts(brokerId1, brokerId2);
+            } catch (IOException e) {
+                throw new AssertionError("Failed while swapping ports for brokers", e);
+            }
         }
 
         @Override
@@ -336,8 +352,15 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                     }
                 }
 
+                Set<String> disabledFeatures = newFeatureLevels.entrySet().stream()
+                    .filter(featureEntry -> featureEntry.getValue() == 0)
+                    .filter(featureEntry -> !featureEntry.getKey().equals(MetadataVersion.FEATURE_NAME))
+                    .map(Map.Entry::getKey)
+                    .collect(Collectors.toSet());
+
                 TestKitNodes nodes = new TestKitNodes.Builder()
                         .setBootstrapMetadata(BootstrapMetadata.fromVersions(clusterConfig.metadataVersion(), newFeatureLevels, "testkit"))
+                        .setDisabledFeatures(disabledFeatures)
                         .setCombined(isCombined)
                         .setNumBrokerNodes(clusterConfig.numBrokers())
                         .setNumDisksPerBroker(clusterConfig.numDisksPerBroker())

@@ -36,18 +36,33 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.query.KeyQuery;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.ResultOrder;
+import org.apache.kafka.streams.query.TimestampedKeyWithHeadersQuery;
+import org.apache.kafka.streams.query.TimestampedRangeQuery;
+import org.apache.kafka.streams.query.TimestampedRangeWithHeadersQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyRecordIterator;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.test.KeyValueIteratorStub;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -58,6 +73,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -82,7 +98,9 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
     private static final RecordHeaders HEADERS = makeHeaders();
     private static final ValueTimestampHeaders<String> VALUE_TIMESTAMP_HEADERS =
         ValueTimestampHeaders.make("value", 97L, HEADERS);
-    private static final byte[] VALUE_TIMESTAMP_HEADERS_BYTES = serializeValueTimestampHeaders();
+    private static final byte[] VALUE_TIMESTAMP_HEADERS_BYTES = serializeValueTimestampHeaders(VALUE_TIMESTAMP_HEADERS);
+    private static final byte[] NEGATIVE_TIMESTAMP_VALUE_TIMESTAMP_HEADERS_BYTES =
+        serializeValueTimestampHeaders(ValueTimestampHeaders.make("value", -1L, HEADERS));
     private final String threadId = Thread.currentThread().getName();
     private final TaskId taskId = new TaskId(0, 0, "My-Topology");
     @Mock
@@ -141,6 +159,33 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
 
     private void init() {
         metered.init(context, metered);
+    }
+
+    // --- skipCache propagation: the TimestampedKeyWithHeadersQuery handler must forward isSkipCache()
+    //     onto the raw KeyQuery it builds, otherwise the caching layer never sees it. ---
+
+    @Test
+    public void shouldPropagateSkipCacheForTimestampedKeyWithHeadersQuery() {
+        setUp();
+        init();
+        assertTrue(forwardedRawKeyQuery(TimestampedKeyWithHeadersQuery.withKey(KEY).skipCache()).isSkipCache());
+    }
+
+    @Test
+    public void shouldNotSkipCacheForTimestampedKeyWithHeadersQueryByDefault() {
+        setUp();
+        init();
+        assertFalse(forwardedRawKeyQuery(TimestampedKeyWithHeadersQuery.withKey(KEY)).isSkipCache());
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private KeyQuery<?, ?> forwardedRawKeyQuery(final Query<?> query) {
+        when(inner.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) QueryResult.forResult(null));
+        metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+        final ArgumentCaptor<KeyQuery> captor = ArgumentCaptor.forClass(KeyQuery.class);
+        verify(inner).query(captor.capture(), any(PositionBound.class), any(QueryConfig.class));
+        return captor.getValue();
     }
 
     @Test
@@ -266,6 +311,166 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
 
         final KafkaMetric metric = metric("range-rate");
         assertTrue((Double) metric.metricValue() > 0);
+    }
+
+    @Test
+    public void shouldPropagateLowerBoundAndDescendingOrderForTimestampedRangeWithHeadersQuery() {
+        setUp();
+        init();
+        final RangeQuery<?, ?> rawQuery = forwardedRawRangeQuery(
+            TimestampedRangeWithHeadersQuery.<String, String>withLowerBound("a").withDescendingKeys());
+        assertEquals(ResultOrder.DESCENDING, rawQuery.resultOrder());
+        assertEquals(Bytes.wrap("a".getBytes()), rawQuery.getLowerBound().get());
+        assertFalse(rawQuery.getUpperBound().isPresent());
+    }
+
+    @Test
+    public void shouldPropagateUpperBoundAndAscendingOrderForTimestampedRangeWithHeadersQuery() {
+        setUp();
+        init();
+        final RangeQuery<?, ?> rawQuery = forwardedRawRangeQuery(
+            TimestampedRangeWithHeadersQuery.<String, String>withUpperBound("z").withAscendingKeys());
+        assertEquals(ResultOrder.ASCENDING, rawQuery.resultOrder());
+        assertFalse(rawQuery.getLowerBound().isPresent());
+        assertEquals(Bytes.wrap("z".getBytes()), rawQuery.getUpperBound().get());
+    }
+
+    @Test
+    public void shouldPropagateNoBoundsAndAnyOrderForTimestampedRangeWithHeadersQuery() {
+        setUp();
+        init();
+        final RangeQuery<?, ?> rawQuery = forwardedRawRangeQuery(
+            TimestampedRangeWithHeadersQuery.withNoBounds());
+        assertEquals(ResultOrder.ANY, rawQuery.resultOrder());
+        assertFalse(rawQuery.getLowerBound().isPresent());
+        assertFalse(rawQuery.getUpperBound().isPresent());
+    }
+
+    @Test
+    public void shouldPropagateBothBoundsAndAnyOrderForTimestampedRangeWithHeadersQuery() {
+        setUp();
+        init();
+        final RangeQuery<?, ?> rawQuery = forwardedRawRangeQuery(
+            TimestampedRangeWithHeadersQuery.withRange("a", "z"));
+        assertEquals(ResultOrder.ANY, rawQuery.resultOrder());
+        assertEquals(Bytes.wrap("a".getBytes()), rawQuery.getLowerBound().get());
+        assertEquals(Bytes.wrap("z".getBytes()), rawQuery.getUpperBound().get());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldPropagateFailureForTimestampedRangeWithHeadersQuery() {
+        setUp();
+        init();
+        final QueryResult<KeyValueIterator<Bytes, byte[]>> rawFailure =
+                QueryResult.forFailure(FailureReason.NOT_UP_TO_BOUND, "not yet caught up");
+        when(inner.query(any(), any(PositionBound.class), any(QueryConfig.class))).thenReturn((QueryResult) rawFailure);
+
+        final QueryResult<ReadOnlyRecordIterator<String, String>> result = metered.query(
+                TimestampedRangeWithHeadersQuery.withNoBounds(), PositionBound.unbounded(), new QueryConfig(false));
+
+        assertFalse(result.isSuccess());
+        assertEquals(FailureReason.NOT_UP_TO_BOUND, result.getFailureReason());
+    }
+
+    // The num-open-iterators gauge is tracked by every metered iterator this store returns from query().
+    // Each query type is served by a different iterator class, so each needs its own 0->1->0 guard:
+    //   - TimestampedRangeWithHeadersQuery -> MeteredTimestampedKeyValueStoreWithHeadersReadOnlyRecordIterator
+    //   - RangeQuery / TimestampedRangeQuery -> MeteredTimestampedKeyValueStoreWithHeadersQueryIterator
+    // (the all()/range() KeyValueIterator path is covered separately by shouldTrackOpenIteratorsMetric).
+
+    @Test
+    public void shouldTrackOpenIteratorsMetricForTimestampedRangeWithHeadersQuery() throws IOException {
+        assertQueryTracksOpenIteratorsMetric(TimestampedRangeWithHeadersQuery.withNoBounds());
+    }
+
+    @Test
+    public void shouldTrackOpenIteratorsMetricForRangeQuery() throws IOException {
+        assertQueryTracksOpenIteratorsMetric(RangeQuery.withNoBounds());
+    }
+
+    @Test
+    public void shouldTrackOpenIteratorsMetricForTimestampedRangeQuery() throws IOException {
+        assertQueryTracksOpenIteratorsMetric(TimestampedRangeQuery.withNoBounds());
+    }
+
+    @SuppressWarnings("unchecked")
+    private void assertQueryTracksOpenIteratorsMetric(final Query<?> query) throws IOException {
+        setUp();
+        when(inner.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+                .thenReturn((QueryResult) QueryResult.forResult(KeyValueIterators.emptyIterator()));
+        init();
+
+        final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
+        assertEquals(0L, (Long) openIteratorsMetric.metricValue());
+
+        // The result iterator type differs per query (ReadOnlyRecordIterator vs KeyValueIterator); both are
+        // Closeable, which is all this gauge check needs.
+        try (Closeable iterator = (Closeable) metered.query(
+                query, PositionBound.unbounded(), new QueryConfig(false)).getResult()) {
+            assertEquals(1L, (Long) openIteratorsMetric.metricValue());
+        }
+
+        assertEquals(0L, (Long) openIteratorsMetric.metricValue());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldDecrementOpenIteratorsTwiceWhenClosedTwiceForTimestampedRangeWithHeadersQuery() {
+        // Documents current behavior: close() is not idempotent, so a caller that (incorrectly) closes
+        // twice double-decrements the gauge. This is a misuse path, not a supported usage pattern.
+        setUp();
+        when(inner.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+                .thenReturn((QueryResult) QueryResult.forResult(KeyValueIterators.emptyIterator()));
+        init();
+
+        final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
+        final QueryResult<ReadOnlyRecordIterator<String, String>> result = metered.query(
+                TimestampedRangeWithHeadersQuery.withNoBounds(), PositionBound.unbounded(), new QueryConfig(false));
+        final ReadOnlyRecordIterator<String, String> iterator = result.getResult();
+
+        iterator.close();
+        assertEquals(0L, (Long) openIteratorsMetric.metricValue());
+        iterator.close();
+        assertEquals(-1L, (Long) openIteratorsMetric.metricValue(), "A second close() double-decrements the gauge");
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldLeaveIteratorOpenWhenNextThrowsAndNotClosedForTimestampedRangeWithHeadersQuery() {
+        // Documents current behavior: an entry with a negative stored timestamp makes next() throw
+        // instead of returning, and that throw does not close the iterator. A caller that catches the
+        // exception without closing (in violation of the class's contract) leaks the open-iterator count.
+        setUp();
+        final KeyValue<Bytes, byte[]> negativeTimestampEntry =
+                KeyValue.pair(KEY_BYTES, NEGATIVE_TIMESTAMP_VALUE_TIMESTAMP_HEADERS_BYTES);
+        when(inner.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+                .thenReturn((QueryResult) QueryResult.forResult(
+                        new KeyValueIteratorStub<>(List.of(negativeTimestampEntry).iterator())));
+        init();
+
+        final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
+        final QueryResult<ReadOnlyRecordIterator<String, String>> result = metered.query(
+                TimestampedRangeWithHeadersQuery.withNoBounds(), PositionBound.unbounded(), new QueryConfig(false));
+        final ReadOnlyRecordIterator<String, String> iterator = result.getResult();
+
+        assertThrows(StreamsException.class, iterator::next);
+        assertEquals(1L, (Long) openIteratorsMetric.metricValue(),
+                "An uncaught/unclosed iterator after next() throws must remain open");
+
+        iterator.close();
+        assertEquals(0L, (Long) openIteratorsMetric.metricValue());
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private RangeQuery<?, ?> forwardedRawRangeQuery(final Query<?> query) {
+        when(inner.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) QueryResult.forResult(
+                new KeyValueIteratorStub<>(List.<KeyValue<Bytes, byte[]>>of().iterator())));
+        metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+        final ArgumentCaptor<RangeQuery> captor = ArgumentCaptor.forClass(RangeQuery.class);
+        verify(inner).query(captor.capture(), any(PositionBound.class), any(QueryConfig.class));
+        return captor.getValue();
     }
 
     @Test
@@ -461,9 +666,9 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
         return headers;
     }
 
-    private static byte[] serializeValueTimestampHeaders() {
+    private static byte[] serializeValueTimestampHeaders(final ValueTimestampHeaders<String> valueTimestampHeaders) {
         final ValueTimestampHeadersSerializer<String> serializer = new ValueTimestampHeadersSerializer<>(Serdes.String().serializer());
-        return serializer.serialize("topic", VALUE_TIMESTAMP_HEADERS);
+        return serializer.serialize("topic", valueTimestampHeaders);
     }
 
     @SuppressWarnings("unchecked")

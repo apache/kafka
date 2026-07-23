@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.transaction;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.record.internal.RecordBatch;
@@ -41,14 +40,6 @@ import java.util.stream.Collectors;
  *    -> value version 0:       [producer_id, producer_epoch, expire_timestamp, status, [topic, [partition] ], timestamp]
  */
 public class TransactionLog {
-
-    // enforce always using
-    //  1. cleanup policy = compact
-    //  2. compression = none
-    //  3. unclean leader election = disabled
-    //  4. required acks = -1 when writing
-    public static final Compression ENFORCED_COMPRESSION = Compression.NONE;
-    public static final short ENFORCED_REQUIRED_ACKS = (short) -1;
 
     /**
      * Generates the bytes for transaction log message key
@@ -102,23 +93,6 @@ public class TransactionLog {
 
         return MessageUtil.toVersionPrefixedBytes(logValueVersion, value);
     }
-
-    /**
-     * Decodes the transaction log messages' key
-     *
-     * @return the transactional id
-     * @throws IllegalStateException if the version is not a valid transaction log key version
-     */
-    public static String readTxnRecordKey(ByteBuffer buffer) {
-        short version = buffer.getShort();
-        if (version == CoordinatorRecordType.TRANSACTION_LOG.id()) {
-            return new TransactionLogKey(new ByteBufferAccessor(buffer), (short) 0).transactionalId();
-        } else {
-            throw new IllegalStateException("Unknown version " + version + " from the transaction log message key");
-        }
-    }
-
-
 
     public sealed interface ReadResult permits TxnRecord, TxnTombstone, UnknownKeyVersion, UnknownValueVersion { }
 

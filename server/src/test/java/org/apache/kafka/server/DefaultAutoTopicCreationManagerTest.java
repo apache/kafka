@@ -132,9 +132,9 @@ public class DefaultAutoTopicCreationManagerTest {
     ) {
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
-                Properties::new,
-                Properties::new,
-                Properties::new,
+                Map::of,
+                Map::of,
+                Map::of,
                 topicCreator,
                 mockTime,
                 testCacheCapacity);
@@ -179,9 +179,9 @@ public class DefaultAutoTopicCreationManagerTest {
     public void testTopicCreationWithMetadataContext() throws UnknownHostException {
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
-                Properties::new,
-                Properties::new,
-                Properties::new,
+                Map::of,
+                Map::of,
+                Map::of,
                 topicCreator,
                 mockTime,
                 testCacheCapacity);
@@ -239,9 +239,9 @@ public class DefaultAutoTopicCreationManagerTest {
 
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
-                Properties::new,
-                Properties::new,
-                Properties::new,
+                Map::of,
+                Map::of,
+                Map::of,
                 topicCreator,
                 mockTime,
                 testCacheCapacity);
@@ -280,9 +280,9 @@ public class DefaultAutoTopicCreationManagerTest {
 
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
-                Properties::new,
-                Properties::new,
-                Properties::new,
+                Map::of,
+                Map::of,
+                Map::of,
                 topicCreator,
                 mockTime,
                 testCacheCapacity);
@@ -306,9 +306,9 @@ public class DefaultAutoTopicCreationManagerTest {
 
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
-                Properties::new,
-                Properties::new,
-                Properties::new,
+                Map::of,
+                Map::of,
+                Map::of,
                 topicCreator,
                 mockTime,
                 testCacheCapacity);
@@ -333,9 +333,9 @@ public class DefaultAutoTopicCreationManagerTest {
     public void testTopicCreationErrorCaching() throws UnknownHostException {
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
-                Properties::new,
-                Properties::new,
-                Properties::new,
+                Map::of,
+                Map::of,
+                Map::of,
                 topicCreator,
                 mockTime,
                 testCacheCapacity);
@@ -367,9 +367,9 @@ public class DefaultAutoTopicCreationManagerTest {
     public void testGetTopicCreationErrorsWithMultipleTopics() throws UnknownHostException {
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
-                Properties::new,
-                Properties::new,
-                Properties::new,
+                Map::of,
+                Map::of,
+                Map::of,
                 topicCreator,
                 mockTime,
                 testCacheCapacity);
@@ -407,9 +407,9 @@ public class DefaultAutoTopicCreationManagerTest {
     public void testErrorCacheTTL() throws UnknownHostException {
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
-                Properties::new,
-                Properties::new,
-                Properties::new,
+                Map::of,
+                Map::of,
+                Map::of,
                 topicCreator,
                 mockTime,
                 testCacheCapacity);
@@ -450,9 +450,9 @@ public class DefaultAutoTopicCreationManagerTest {
         // Create manager with small cache size for testing
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
-                Properties::new,
-                Properties::new,
-                Properties::new,
+                Map::of,
+                Map::of,
+                Map::of,
                 topicCreator,
                 mockTime,
                 3);
@@ -499,9 +499,9 @@ public class DefaultAutoTopicCreationManagerTest {
     public void testTopicsInBackoffAreNotRetried() throws UnknownHostException {
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
-                Properties::new,
-                Properties::new,
-                Properties::new,
+                Map::of,
+                Map::of,
+                Map::of,
                 topicCreator,
                 mockTime,
                 testCacheCapacity);
@@ -539,9 +539,9 @@ public class DefaultAutoTopicCreationManagerTest {
     public void testTopicsOutOfBackoffCanBeRetried() throws UnknownHostException {
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
-                Properties::new,
-                Properties::new,
-                Properties::new,
+                Map::of,
+                Map::of,
+                Map::of,
                 topicCreator,
                 mockTime,
                 testCacheCapacity);
@@ -586,9 +586,9 @@ public class DefaultAutoTopicCreationManagerTest {
     public void testInflightTopicsAreNotRetriedConcurrently() throws UnknownHostException {
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
-                Properties::new,
-                Properties::new,
-                Properties::new,
+                Map::of,
+                Map::of,
+                Map::of,
                 topicCreator,
                 mockTime,
                 testCacheCapacity);
@@ -620,9 +620,9 @@ public class DefaultAutoTopicCreationManagerTest {
     public void testBackoffAndInflightInteraction() throws UnknownHostException {
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
-                Properties::new,
-                Properties::new,
-                Properties::new,
+                Map::of,
+                Map::of,
+                Map::of,
                 topicCreator,
                 mockTime,
                 testCacheCapacity);

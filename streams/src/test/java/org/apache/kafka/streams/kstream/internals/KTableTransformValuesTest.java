@@ -26,6 +26,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
@@ -369,7 +370,7 @@ public class KTableTransformValuesTest {
             .toStream()
             .process(capture);
 
-        driver = new TopologyTestDriver(builder.build(), props(withHeaders));
+        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props(withHeaders)).build();
         final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
 
@@ -400,7 +401,7 @@ public class KTableTransformValuesTest {
             .toStream()
             .process(capture);
 
-        driver = new TopologyTestDriver(builder.build(), props(withHeaders));
+        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props(withHeaders)).build();
         final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
         inputTopic.pipeInput("A", "a", 5L);
@@ -441,7 +442,7 @@ public class KTableTransformValuesTest {
             .toStream()
             .process(capture);
 
-        driver = new TopologyTestDriver(builder.build(), props(withHeaders));
+        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props(withHeaders)).build();
         final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
 
@@ -471,7 +472,7 @@ public class KTableTransformValuesTest {
             .toStream()
             .process(capture);
 
-        driver = new TopologyTestDriver(builder.build(), props(withHeaders));
+        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props(withHeaders)).build();
         final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
 
@@ -500,7 +501,7 @@ public class KTableTransformValuesTest {
             .toStream()
             .process(capture);
 
-        driver = new TopologyTestDriver(builder.build(), props(withHeaders));
+        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props(withHeaders)).build();
         final TestInputTopic<String, String> inputTopic =
             driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
 

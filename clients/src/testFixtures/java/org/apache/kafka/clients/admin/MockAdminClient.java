@@ -39,6 +39,7 @@ import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.DelegationTokenNotFoundException;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.InvalidPrincipalTypeException;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.errors.InvalidRequestException;
@@ -100,6 +101,7 @@ public class MockAdminClient extends AdminClient {
     private final Map<String, Map<String, String>> groupConfigs;
     private final Map<String, String> defaultGroupConfigs;
     private final List<KafkaMetric> addedMetrics = new ArrayList<>();
+    private final Map<String, StreamsGroupDescription> streamsGroupDescriptions = new HashMap<>();
 
     private Node controller;
     private int timeoutNextRequests = 0;
@@ -1470,11 +1472,48 @@ public class MockAdminClient extends AdminClient {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
+    /**
+     * Registers a {@link StreamsGroupDescription} to be returned by {@link #describeStreamsGroups}.
+     */
+    public synchronized void addStreamsGroupDescription(StreamsGroupDescription description) {
+        streamsGroupDescriptions.put(description.groupId(), description);
+    }
+
     @Override
     public synchronized DescribeStreamsGroupsResult describeStreamsGroups(Collection<String> groupIds, DescribeStreamsGroupsOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        Map<String, KafkaFuture<StreamsGroupDescription>> futures = new HashMap<>();
+        for (String groupId : groupIds) {
+            KafkaFutureImpl<StreamsGroupDescription> future = new KafkaFutureImpl<>();
+            StreamsGroupDescription description = streamsGroupDescriptions.get(groupId);
+            if (description != null) {
+                if (!options.includeTopologyDescription()) {
+                    description = withoutTopologyDescription(description);
+                }
+                future.complete(description);
+            } else {
+                future.completeExceptionally(new GroupIdNotFoundException("Group " + groupId + " not found."));
+            }
+            futures.put(groupId, future);
+        }
+        return new DescribeStreamsGroupsResult(futures);
     }
-    
+
+    private static StreamsGroupDescription withoutTopologyDescription(StreamsGroupDescription description) {
+        return new StreamsGroupDescription(
+            description.groupId(),
+            description.groupEpoch(),
+            description.targetAssignmentEpoch(),
+            description.topologyEpoch(),
+            description.subtopologies(),
+            description.members(),
+            description.groupState(),
+            description.coordinator(),
+            description.authorizedOperations(),
+            Optional.empty(),
+            StreamsGroupTopologyDescriptionStatus.NOT_REQUESTED
+        );
+    }
+
     @Override
     public synchronized DescribeClassicGroupsResult describeClassicGroups(Collection<String> groupIds, DescribeClassicGroupsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");

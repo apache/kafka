@@ -99,12 +99,21 @@ public abstract class AbstractWindowBytesStoreTest {
                                                        final boolean retainDuplicates,
                                                        final Serde<K> keySerde,
                                                        final Serde<V> valueSerde);
+    /** Overridden by subclasses to exercise the transactional (staged-write) code path. */
+    boolean transactional() {
+        return false;
+    }
+
     @BeforeEach
     protected void setup() {
-        
+
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, false, Serdes.Integer(), Serdes.String());
 
         recordCollector = new MockRecordCollector();
+        final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
+        if (transactional()) {
+            streamsConfig.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
+        }
         context = new InternalMockProcessorContext<>(
             baseDir,
             Serdes.String(),
@@ -113,7 +122,8 @@ public abstract class AbstractWindowBytesStoreTest {
             new ThreadCache(
                 new LogContext("testCache"),
                 0,
-                new MockStreamsMetrics(new Metrics())));
+                new MockStreamsMetrics(new Metrics())),
+            new StreamsConfig(streamsConfig));
         context.setTime(1L);
 
         windowStore.init(context, windowStore);

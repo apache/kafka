@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -48,6 +49,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -62,6 +64,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -106,6 +109,8 @@ public class DefaultStateUpdater implements StateUpdater {
                                   final StreamsMetricsImpl metrics,
                                   final ChangelogReader changelogReader) {
             super(name);
+            // daemon: internal helper thread must not block JVM shutdown on its own
+            setDaemon(true);
             this.changelogReader = changelogReader;
             this.updaterMetrics = new StateUpdaterMetrics(metrics, name);
             this.metricsConfig = metrics.metricsRegistry().config();
@@ -202,6 +207,8 @@ public class DefaultStateUpdater implements StateUpdater {
 
             final long checkpointStartTimeMs = time.milliseconds();
             maybeCheckpointTasks(checkpointStartTimeMs);
+
+            updateTaskEndOffsetSumSnapshot();
 
             final long waitStartTimeMs = time.milliseconds();
             waitIfAllChangelogsCompletelyRead();
@@ -442,6 +449,43 @@ public class DefaultStateUpdater implements StateUpdater {
             }
         }
 
+        // Current offset sums are sourced from the StateDirectory (see TaskManager#maybeUpdateTaskOffsetSumSnapshot);
+        // end-offsets are not tracked there, so the end-offset-sum is computed here from the changelog reader's
+        // (logical) end-offsets for the tasks the state updater is currently restoring/updating.
+        private void updateTaskEndOffsetSumSnapshot() {
+            final Map<TopicPartition, Long> changelogEndOffsets;
+            if (!updatingTasks.isEmpty()) {
+                changelogEndOffsets = changelogReader.logicalChangelogEndOffsets();
+            } else {
+                changelogEndOffsets = Collections.emptyMap();
+            }
+
+            final Map<StreamsRebalanceData.TaskId, Long> endOffsetSnapshot = new HashMap<>(updatingTasks.size());
+
+            for (final Task task : updatingTasks.values()) {
+                long endSum = 0L; // ok to init with zero, as we have at least one changelog topic partition
+                for (final TopicPartition partition : task.changelogPartitions()) {
+                    final Long endOffset = changelogEndOffsets.get(partition);
+                    if (endOffset == null) {
+                        endSum = Long.MAX_VALUE;
+                        break;
+                    }
+                    if (endSum > Long.MAX_VALUE - endOffset) {
+                        endSum = Long.MAX_VALUE;
+                        break;
+                    }
+                    endSum += endOffset;
+                }
+
+                endOffsetSnapshot.put(
+                    new StreamsRebalanceData.TaskId(String.valueOf(task.id().subtopology()), task.id().partition()),
+                    endSum
+                );
+            }
+
+            taskEndOffsetSumSnapshot.set(Collections.unmodifiableMap(endOffsetSnapshot));
+        }
+
         private void waitIfAllChangelogsCompletelyRead() {
             tasksAndActionsLock.lock();
             try {
@@ -450,8 +494,8 @@ public class DefaultStateUpdater implements StateUpdater {
                     tasksAndActionsCondition.await();
                 }
             } catch (final InterruptedException ignored) {
-                // we never interrupt the thread, but only signal the condition
-                // and hence this exception should never be thrown
+                Thread.currentThread().interrupt();
+                log.warn("State updater thread was interrupted while waiting for changelogs");
             } finally {
                 tasksAndActionsLock.unlock();
                 isIdle.set(false);
@@ -818,6 +862,8 @@ public class DefaultStateUpdater implements StateUpdater {
     private final long commitIntervalMs;
     private long lastCommitMs;
 
+    private final AtomicReference<Map<StreamsRebalanceData.TaskId, Long>> taskEndOffsetSumSnapshot = new AtomicReference<>(Map.of());
+
     private StateUpdaterThread stateUpdaterThread = null;
 
     public DefaultStateUpdater(final String name,
@@ -878,6 +924,8 @@ public class DefaultStateUpdater implements StateUpdater {
                 }
                 stateUpdaterThread = null;
             } catch (final InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+                log.warn("Interrupted while waiting for state updater thread to shut down");
             }
         }
     }
@@ -955,7 +1003,9 @@ public class DefaultStateUpdater implements StateUpdater {
                 now = time.milliseconds();
             }
             return result;
-        } catch (final InterruptedException ignored) {
+        } catch (final InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("StateUpdaterThread was interrupted while waiting", e);
         }
         return result;
     }
@@ -1052,6 +1102,11 @@ public class DefaultStateUpdater implements StateUpdater {
     @Override
     public KafkaFutureImpl<Uuid> restoreConsumerInstanceId(final Duration timeout) {
         return stateUpdaterThread.restoreConsumerInstanceId(timeout);
+    }
+
+    @Override
+    public Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSumSnapshot() {
+        return taskEndOffsetSumSnapshot.get();
     }
 
     public boolean isRunning() {

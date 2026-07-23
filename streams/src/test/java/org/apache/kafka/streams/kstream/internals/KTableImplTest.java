@@ -29,6 +29,7 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.TopologyDescription.Subtopology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.TopologyTestDriverWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -124,7 +125,7 @@ public class KTableImplTest {
         final KTable<String, String> table4 = builder.table(topic2, consumed);
         table4.toStream().process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput("A", "01", 5L);
@@ -194,7 +195,7 @@ public class KTableImplTest {
         final KTable<String, String> table4 = builder.table(topic2, consumed);
         table4.toStream().process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput("A", "01", 5L);
@@ -377,7 +378,7 @@ public class KTableImplTest {
         final var table1Mapped = table1.mapValues(s -> Integer.valueOf(s));
         table1Mapped.filter((key, value) -> (value % 2) == 0);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             assertEquals(0, driver.getAllStateStores().size());
         }
     }
@@ -397,7 +398,7 @@ public class KTableImplTest {
         final var table1MappedFiltered = table1Mapped.filter((key, value) -> (value % 2) == 0);
         table2.join(table1MappedFiltered, (v1, v2) -> v1 + v2);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             assertEquals(2, driver.getAllStateStores().size());
         }
     }

@@ -31,7 +31,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.URL;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -65,7 +64,7 @@ public class JaasOptionsUtils {
         if (Objects.requireNonNull(jaasConfigEntries).size() != 1 || jaasConfigEntries.get(0) == null)
             throw new IllegalArgumentException(String.format("Must supply exactly 1 non-null JAAS mechanism configuration (size was %d)", jaasConfigEntries.size()));
 
-        return Collections.unmodifiableMap(jaasConfigEntries.get(0).getOptions());
+        return Map.copyOf(jaasConfigEntries.get(0).getOptions());
     }
 
     public boolean containsKey(String name) {

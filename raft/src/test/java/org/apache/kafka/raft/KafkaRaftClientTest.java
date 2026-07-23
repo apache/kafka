@@ -59,7 +59,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
@@ -210,7 +209,7 @@ class KafkaRaftClientTest {
                 context.log.endOffset().offset()
             )
         );
-        context.client.poll();
+        context.poll();
 
         // Replica will first transition to unattached, then grant vote, then transition to unattached voted
         assertTrue(context.client.quorum().isUnattachedAndVoted());
@@ -247,7 +246,7 @@ class KafkaRaftClientTest {
                 context.log.endOffset().offset()
             )
         );
-        context.client.poll();
+        context.poll();
 
         // Replica will first transition to unattached, then grant vote, then transition to unattached voted
         assertTrue(context.client.quorum().isUnattachedAndVoted());
@@ -283,7 +282,7 @@ class KafkaRaftClientTest {
                 context.log.endOffset().offset()
             )
         );
-        context.client.poll();
+        context.poll();
 
         // Replica will first transition to unattached, then grant vote, then transition to unattached voted
         assertTrue(
@@ -318,19 +317,19 @@ class KafkaRaftClientTest {
 
         // Election timeout
         context.time.sleep(context.electionTimeoutMs());
-        context.client.poll();
+        context.poll();
 
         // Become unattached with expired election timeout
         assertTrue(context.client.quorum().isUnattached());
         assertEquals(epoch + 1, context.currentEpoch());
 
         // Become prospective immediately
-        context.client.poll();
+        context.poll();
         assertTrue(context.client.quorum().isProspective());
 
         // Become unattached again after election timeout
         context.time.sleep(context.electionTimeoutMs() * 2L);
-        context.client.poll();
+        context.poll();
         assertTrue(context.client.quorum().isUnattached());
         assertEquals(epoch + 1, context.currentEpoch());
     }
@@ -353,7 +352,7 @@ class KafkaRaftClientTest {
         // in which no additional writes are accepted.
         assertEquals(0L, context.log.endOffset().offset());
         context.assertElectedLeader(epoch, localId);
-        context.client.poll();
+        context.poll();
         assertThrows(NotLeaderException.class, () -> context.client.prepareAppend(epoch, List.of("a", "b")));
 
         context.pollUntilRequest();
@@ -363,11 +362,11 @@ class KafkaRaftClientTest {
             request.destination(),
             context.endEpochResponse(epoch, OptionalInt.of(localId))
         );
-        context.client.poll();
+        context.poll();
 
         // The node will transition to unattached with epoch + 1 after election timeout passes
         context.time.sleep(context.electionTimeoutMs());
-        context.client.poll();
+        context.poll();
         assertTrue(context.client.quorum().isUnattached());
         assertEquals(epoch + 1, context.currentEpoch());
         UnattachedState unattached = context.client.quorum().unattachedStateOrThrow();
@@ -497,7 +496,7 @@ class KafkaRaftClientTest {
             endEpochOutbound.destination(),
             context.endEpochResponse(epoch, OptionalInt.of(localId))
         );
-        context.client.poll();
+        context.poll();
         assertEquals(List.of(), context.channel.drainSendQueue());
 
         // Now sleep for the request timeout and verify that we get only one
@@ -528,7 +527,7 @@ class KafkaRaftClientTest {
         // send fetch request when become leader
         int epoch = context.currentEpoch();
         context.deliverRequest(context.fetchRequest(epoch, otherNodeKey, context.log.endOffset().offset(), epoch, 1000));
-        context.client.poll();
+        context.poll();
 
         // append some record, but the fetch in purgatory will still fail
         context.log.appendAsLeader(
@@ -538,13 +537,13 @@ class KafkaRaftClientTest {
 
         // when transition to resign, all request in fetchPurgatory will fail
         context.client.shutdown(1000);
-        context.client.poll();
+        context.poll();
         context.assertSentFetchPartitionResponse(Errors.NOT_LEADER_OR_FOLLOWER, epoch, OptionalInt.of(localId));
         context.assertResignedLeader(epoch, localId);
 
         // shutting down finished
         context.time.sleep(1000);
-        context.client.poll();
+        context.poll();
         assertFalse(context.client.isRunning());
         assertFalse(context.client.isShuttingDown());
     }
@@ -565,11 +564,11 @@ class KafkaRaftClientTest {
 
         int currentEpoch = context.currentEpoch();
         context.client.resign(currentEpoch - 1);
-        context.client.poll();
+        context.poll();
 
         // Ensure we are still leader even after expiration of the election timeout.
         context.time.sleep(context.electionTimeoutMs() * 2L);
-        context.client.poll();
+        context.poll();
         context.assertElectedLeader(currentEpoch, localId);
     }
 
@@ -621,16 +620,16 @@ class KafkaRaftClientTest {
 
         // begin epoch requests sent out every beginQuorumEpochTimeoutMs if replicas have not fetched
         context.time.sleep(context.beginQuorumEpochTimeoutMs);
-        context.client.poll();
+        context.poll();
         context.assertSentBeginQuorumEpochRequest(epoch, Set.of(remoteId1, remoteId2));
 
         int partialDelay = context.beginQuorumEpochTimeoutMs / 2;
         context.time.sleep(partialDelay);
-        context.client.poll();
+        context.poll();
         context.assertSentBeginQuorumEpochRequest(epoch, Set.of());
 
         context.time.sleep(context.beginQuorumEpochTimeoutMs - partialDelay);
-        context.client.poll();
+        context.poll();
         context.assertSentBeginQuorumEpochRequest(epoch, Set.of(remoteId1, remoteId2));
     }
 
@@ -657,7 +656,7 @@ class KafkaRaftClientTest {
 
         // begin epoch requests sent out every beginQuorumEpochTimeoutMs if replicas have not fetched
         context.time.sleep(context.beginQuorumEpochTimeoutMs);
-        context.client.poll();
+        context.poll();
         context.assertSentBeginQuorumEpochRequest(epoch, Set.of(remoteId1, remoteId2));
 
         long partialDelay = context.beginQuorumEpochTimeoutMs / 3;
@@ -666,7 +665,7 @@ class KafkaRaftClientTest {
         context.pollUntilResponse();
 
         context.time.sleep(context.beginQuorumEpochTimeoutMs - partialDelay);
-        context.client.poll();
+        context.poll();
         // leader will not send BeginQuorumEpochRequest again for replica 1 since fetchRequest was received
         // before beginQuorumEpochTimeoutMs time has elapsed
         context.assertSentBeginQuorumEpochRequest(epoch, Set.of(remoteId2));
@@ -674,7 +673,7 @@ class KafkaRaftClientTest {
         context.deliverRequest(context.fetchRequest(epoch, replicaKey1, 0, 0, 0));
         context.pollUntilResponse();
         context.time.sleep(context.beginQuorumEpochTimeoutMs);
-        context.client.poll();
+        context.poll();
         // leader should send BeginQuorumEpochRequest to a node if beginQuorumEpochTimeoutMs time has elapsed
         // without receiving a fetch request from that node
         context.assertSentBeginQuorumEpochRequest(epoch, Set.of(remoteId1, remoteId2));
@@ -704,7 +703,7 @@ class KafkaRaftClientTest {
 
         // fetch timeout is not expired, the leader should not get resigned
         context.time.sleep(resignLeadershipTimeout / 2);
-        context.client.poll();
+        context.poll();
 
         assertFalse(context.client.quorum().isResigned());
 
@@ -714,7 +713,7 @@ class KafkaRaftClientTest {
 
         // Since the fetch timer is reset, the leader should not get resigned
         context.time.sleep(resignLeadershipTimeout / 2);
-        context.client.poll();
+        context.poll();
 
         assertFalse(context.client.quorum().isResigned());
 
@@ -724,7 +723,7 @@ class KafkaRaftClientTest {
 
         // Since the fetch timer is reset, the leader should not get resigned
         context.time.sleep(resignLeadershipTimeout / 2);
-        context.client.poll();
+        context.poll();
 
         assertFalse(context.client.quorum().isResigned());
 
@@ -734,7 +733,7 @@ class KafkaRaftClientTest {
 
         // After this sleep, the fetch timeout should expire since we don't receive fetch request from the majority voters within fetchTimeoutMs
         context.time.sleep(resignLeadershipTimeout / 2);
-        context.client.poll();
+        context.poll();
 
         // The leadership should get resigned now
         assertTrue(context.client.quorum().isResigned());
@@ -755,7 +754,7 @@ class KafkaRaftClientTest {
         // checkQuorum timeout is expired without receiving fetch request from other voters, but since there is only 1 voter,
         // the leader should not get resigned
         context.time.sleep(context.checkQuorumTimeoutMs);
-        context.client.poll();
+        context.poll();
 
         assertFalse(context.client.quorum().isResigned());
     }
@@ -788,11 +787,11 @@ class KafkaRaftClientTest {
         );
 
         context.deliverResponse(request.correlationId(), request.destination(), response);
-        context.client.poll();
+        context.poll();
 
         // Local does not resend `EndQuorumRequest` once the other voter has acknowledged it.
         context.time.sleep(context.retryBackoffMs);
-        context.client.poll();
+        context.poll();
         assertFalse(context.channel.hasSentRequests());
 
         // Any `Fetch` received in the resigned state should result in a NOT_LEADER error.
@@ -814,7 +813,7 @@ class KafkaRaftClientTest {
 
         // Local will become prospective right away
         assertEquals(0, context.client.quorum().unattachedStateOrThrow().electionTimeoutMs());
-        context.client.poll();
+        context.poll();
         assertTrue(context.client.quorum().isProspective());
     }
 
@@ -874,7 +873,7 @@ class KafkaRaftClientTest {
             context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH)
         );
 
-        context.client.poll();
+        context.poll();
         context.assertElectedLeader(epoch, leaderId);
         assertThrows(IllegalStateException.class, () -> context.client.resign(epoch));
     }
@@ -924,7 +923,7 @@ class KafkaRaftClientTest {
         );
 
         // should remain unattached voter
-        context.client.poll();
+        context.poll();
         assertTrue(context.client.quorum().isUnattached());
         assertTrue(context.client.quorum().isVoter());
 
@@ -955,7 +954,7 @@ class KafkaRaftClientTest {
         assertEquals(1L, context.log.firstUnflushedOffset());
 
         // Send BeginQuorumEpoch to voters
-        context.client.poll();
+        context.poll();
         context.assertSentBeginQuorumEpochRequest(1, Set.of(otherNodeId));
 
         Records records = context.log.read(0,
@@ -1007,7 +1006,7 @@ class KafkaRaftClientTest {
         assertEquals(1L, context.log.firstUnflushedOffset());
 
         // Send BeginQuorumEpoch to voters
-        context.client.poll();
+        context.poll();
         context.assertSentBeginQuorumEpochRequest(2, Set.of(firstNodeId, secondNodeId));
 
         Records records = context.log.read(
@@ -1109,7 +1108,7 @@ class KafkaRaftClientTest {
             .withKip853Rpc(true)
             .build();
 
-        context.client.poll();
+        context.poll();
 
         HashMap<ListenerName, InetSocketAddress> leaderListenersMap = new HashMap<>(2);
         leaderListenersMap.put(
@@ -1179,17 +1178,17 @@ class KafkaRaftClientTest {
             )
         );
 
-        context.client.poll();
+        context.poll();
         context.assertSentEndQuorumEpochResponse(Errors.FENCED_LEADER_EPOCH, epoch, OptionalInt.empty());
 
         // Replica should still be candidate until expiration of election timeout
         context.time.sleep(context.electionTimeoutMs() + jitterMs - 1);
-        context.client.poll();
+        context.poll();
         context.assertVotedCandidate(epoch, localId);
 
         // After election timeout, replica will become prospective again
         context.time.sleep(1);
-        context.client.poll();
+        context.poll();
         assertTrue(context.client.quorum().isProspective());
     }
 
@@ -1218,7 +1217,7 @@ class KafkaRaftClientTest {
 
         // Replica should still be leader as long as fetch timeout has not expired
         context.time.sleep(context.fetchTimeoutMs - 1);
-        context.client.poll();
+        context.poll();
         context.assertElectedLeader(epoch, localId);
     }
 
@@ -1250,7 +1249,7 @@ class KafkaRaftClientTest {
         context.assertSentEndQuorumEpochResponse(Errors.NONE, epoch, OptionalInt.of(voter2));
 
         // Should become a prospective immediately
-        context.client.poll();
+        context.poll();
         context.client.quorum().isProspective();
     }
 
@@ -1378,15 +1377,15 @@ class KafkaRaftClientTest {
         context.client.schedulePreparedAppend();
         assertTrue(context.messageQueue.wakeupRequested());
 
-        context.client.poll();
+        context.poll();
         assertEquals(OptionalLong.of(lingerMs), context.messageQueue.lastPollTimeoutMs());
 
         context.time.sleep(20);
-        context.client.poll();
+        context.poll();
         assertEquals(OptionalLong.of(30), context.messageQueue.lastPollTimeoutMs());
 
         context.time.sleep(30);
-        context.client.poll();
+        context.poll();
         assertEquals(2L, context.log.endOffset().offset());
     }
 
@@ -1414,7 +1413,7 @@ class KafkaRaftClientTest {
         context.client.schedulePreparedAppend();
         assertTrue(context.messageQueue.wakeupRequested());
 
-        context.client.poll();
+        context.poll();
         assertFalse(context.messageQueue.wakeupRequested());
         assertEquals(OptionalLong.of(lingerMs), context.messageQueue.lastPollTimeoutMs());
 
@@ -1423,7 +1422,7 @@ class KafkaRaftClientTest {
         context.client.schedulePreparedAppend();
         assertTrue(context.messageQueue.wakeupRequested());
 
-        context.client.poll();
+        context.poll();
         assertEquals(3L, context.log.endOffset().offset());
     }
 
@@ -1451,7 +1450,7 @@ class KafkaRaftClientTest {
         context.pollUntilResponse();
         context.assertSentEndQuorumEpochResponse(Errors.NONE, leaderEpoch, OptionalInt.of(oldLeaderId));
 
-        context.client.poll();
+        context.poll();
         assertTrue(context.client.quorum().isProspective());
         context.assertElectedLeader(leaderEpoch, oldLeaderId);
     }
@@ -1484,14 +1483,14 @@ class KafkaRaftClientTest {
         // The election won't trigger by one round retry backoff
         context.time.sleep(1);
 
-        context.client.poll();
+        context.poll();
         context.assertSentFetchRequest(leaderEpoch, 0, 0, OptionalLong.empty());
 
         context.time.sleep(context.electionBackoffMaxMs);
-        context.client.poll();
+        context.poll();
         assertTrue(context.client.quorum().isProspective());
 
-        context.client.poll();
+        context.poll();
         List<RaftRequest.Outbound> voteRequests = context.collectPreVoteRequests(leaderEpoch, 0, 0);
         assertEquals(2, voteRequests.size());
 
@@ -1519,7 +1518,7 @@ class KafkaRaftClientTest {
         RaftRequest.Outbound request = context.assertSentVoteRequest(epoch, 0, 0L, 1);
 
         context.time.sleep(context.requestTimeoutMs());
-        context.client.poll();
+        context.poll();
         RaftRequest.Outbound retryRequest = context.assertSentVoteRequest(epoch, 0, 0L, 1);
 
         // We will ignore the timed out response if it arrives late
@@ -1528,7 +1527,7 @@ class KafkaRaftClientTest {
             request.destination(),
             context.voteResponse(true, OptionalInt.empty(), 1)
         );
-        context.client.poll();
+        context.poll();
         context.assertVotedCandidate(epoch, localId);
 
         // Become leader after receiving the retry response
@@ -1537,7 +1536,7 @@ class KafkaRaftClientTest {
             retryRequest.destination(),
             context.voteResponse(true, OptionalInt.empty(), 1)
         );
-        context.client.poll();
+        context.poll();
         context.assertElectedLeader(epoch, localId);
     }
 
@@ -1621,7 +1620,7 @@ class KafkaRaftClientTest {
 
         // Sleep a little to ensure that we become a prospective
         context.time.sleep(context.fetchTimeoutMs);
-        context.client.poll();
+        context.poll();
         assertTrue(context.client.quorum().isProspective());
 
         context.deliverRequest(context.voteRequest(epoch + 1, otherNodeKey, epoch, 1));
@@ -1649,7 +1648,7 @@ class KafkaRaftClientTest {
 
         // Sleep a little to ensure that we become a prospective
         context.time.sleep(context.electionTimeoutMs() * 2L);
-        context.client.poll();
+        context.poll();
         assertTrue(context.client.quorum().isProspectiveAndVoted());
         context.assertVotedCandidate(epoch, votedCandidateKey.id());
 
@@ -1718,7 +1717,7 @@ class KafkaRaftClientTest {
 
         context.deliverRequest(context.voteRequest(leaderEpoch, otherNodeKey, leaderEpoch - 1, 1));
 
-        context.client.poll();
+        context.poll();
 
         context.assertSentVoteResponse(Errors.NONE, leaderEpoch, OptionalInt.of(localId), false);
         context.assertElectedLeader(leaderEpoch, localId);
@@ -1740,7 +1739,7 @@ class KafkaRaftClientTest {
         int epoch = context.currentEpoch();
 
         // First poll has no high watermark advance
-        context.client.poll();
+        context.poll();
         assertEquals(OptionalLong.empty(), context.client.highWatermark());
         assertEquals(1L, context.log.endOffset().offset());
 
@@ -1754,7 +1753,7 @@ class KafkaRaftClientTest {
         List<String> records = List.of("a", "b", "c");
         long offset = context.client.prepareAppend(epoch, records);
         context.client.schedulePreparedAppend();
-        context.client.poll();
+        context.poll();
         assertEquals(OptionalLong.of(0L), context.listener.lastCommitOffset());
 
         // Let the follower send a fetch, it should advance the high watermark
@@ -1791,7 +1790,7 @@ class KafkaRaftClientTest {
 
         // Send a fetch request for an end offset and epoch which has diverged
         context.deliverRequest(context.fetchRequest(epoch, otherNodeKey, 6, 2, 500));
-        context.client.poll();
+        context.poll();
 
         // Expect that the leader replies immediately with a diverging epoch
         FetchResponseData.PartitionData partitionResponse = context.assertSentFetchPartitionResponse();
@@ -1818,7 +1817,7 @@ class KafkaRaftClientTest {
         context.pollUntilRequest();
 
         context.deliverRequest(context.voteRequest(leaderEpoch, otherNodeKey, leaderEpoch - 1, 1));
-        context.client.poll();
+        context.poll();
         context.assertSentVoteResponse(Errors.NONE, leaderEpoch, OptionalInt.empty(), false);
         context.assertVotedCandidate(leaderEpoch, localId);
     }
@@ -1857,7 +1856,7 @@ class KafkaRaftClientTest {
             context.voteResponse(false, OptionalInt.empty(), 1)
         );
 
-        context.client.poll();
+        context.poll();
         assertTrue(candidate.epochElection().isVoteRejected());
 
         // Election is lost, but local replica should still remember that it has voted
@@ -1866,12 +1865,12 @@ class KafkaRaftClientTest {
         // Even though candidacy was rejected, local replica will backoff for remaining election timeout
         // before transitioning to prospective and starting a new election.
         context.time.sleep(context.electionTimeoutMs() + jitter - 1);
-        context.client.poll();
+        context.poll();
         context.assertVotedCandidate(epoch, localId);
 
         // After election timeout expires, become a prospective again
         context.time.sleep(1);
-        context.client.poll();
+        context.poll();
         assertTrue(context.client.quorum().isProspective());
         ProspectiveState prospective = context.client.quorum().prospectiveStateOrThrow();
         context.pollUntilRequest();
@@ -1911,7 +1910,7 @@ class KafkaRaftClientTest {
 
         // If election times out, replica transition to prospective without any additional backoff
         context.time.sleep(candidate.remainingElectionTimeMs(context.time.milliseconds()));
-        context.client.poll();
+        context.poll();
         assertTrue(context.client.quorum().isProspective());
 
         ProspectiveState prospective = context.client.quorum().prospectiveStateOrThrow();
@@ -1984,9 +1983,9 @@ class KafkaRaftClientTest {
         context.assertSentFetchRequest(epoch, 1L, lastEpoch, OptionalLong.empty());
 
         context.time.sleep(context.fetchTimeoutMs);
-        context.client.poll();
+        context.poll();
         assertTrue(context.client.quorum().isProspective());
-        context.client.poll();
+        context.poll();
         context.assertSentPreVoteRequest(epoch, lastEpoch, 1L, 1);
     }
 
@@ -2084,7 +2083,7 @@ class KafkaRaftClientTest {
             context.fetchResponse(epoch, leaderNodeId, MemoryRecords.EMPTY, 0L, responseError)
         );
 
-        context.client.poll();
+        context.poll();
         assertTrue(context.client.quorum().isFollower());
     }
 
@@ -2112,7 +2111,7 @@ class KafkaRaftClientTest {
             context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH)
         );
 
-        context.client.poll();
+        context.poll();
         context.assertElectedLeader(epoch, leaderId);
     }
 
@@ -2143,7 +2142,7 @@ class KafkaRaftClientTest {
             fetchRequest.destination(),
             context.fetchResponse(-1, -1, MemoryRecords.EMPTY, -1, Errors.UNKNOWN_SERVER_ERROR)
         );
-        context.client.poll();
+        context.poll();
 
         context.time.sleep(context.retryBackoffMs);
         context.pollUntilRequest();
@@ -2157,7 +2156,7 @@ class KafkaRaftClientTest {
             fetchRequest.destination(),
             context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH)
         );
-        context.client.poll();
+        context.poll();
 
         context.assertElectedLeader(epoch, leaderId);
     }
@@ -2194,7 +2193,7 @@ class KafkaRaftClientTest {
         );
 
         // unattached observer becomes a follower after discovering leader
-        context.client.poll();
+        context.poll();
         context.assertElectedLeader(epoch, leaderId);
     }
 
@@ -2217,7 +2216,7 @@ class KafkaRaftClientTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.client.poll();
+        context.poll();
 
         // observer will send fetch to the leader
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
@@ -2226,7 +2225,7 @@ class KafkaRaftClientTest {
 
         // if request times out, observer will retry to a bootstrap server
         context.time.sleep(context.requestTimeoutMs());
-        context.client.poll();
+        context.poll();
         fetchRequest = context.assertSentFetchRequest();
         assertNotEquals(leaderId, fetchRequest.destination().id());
         assertTrue(context.bootstrapIds.contains(fetchRequest.destination().id()));
@@ -2234,7 +2233,7 @@ class KafkaRaftClientTest {
 
         // observer will retry to the leader
         context.time.sleep(context.requestTimeoutMs());
-        context.client.poll();
+        context.poll();
         fetchRequest = context.assertSentFetchRequest();
         assertEquals(leaderId, fetchRequest.destination().id());
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
@@ -2274,7 +2273,7 @@ class KafkaRaftClientTest {
             context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH)
         );
 
-        context.client.poll();
+        context.poll();
         context.assertElectedLeader(epoch, leaderId);
 
         // Expect a fetch request to the leader
@@ -2300,7 +2299,7 @@ class KafkaRaftClientTest {
             context.fetchResponse(epoch, leaderId, records, 0L, Errors.NONE)
         );
 
-        context.client.poll();
+        context.poll();
 
         // Deliver the same delayed responses from the bootstrap server and assume that it is the leader
         records = context.buildBatch(0L, 3, List.of("a", "b"));
@@ -2311,7 +2310,7 @@ class KafkaRaftClientTest {
         );
 
         // This poll should not fail when handling the duplicate response from the bootstrap server
-        context.client.poll();
+        context.poll();
     }
 
     @ParameterizedTest
@@ -2348,7 +2347,7 @@ class KafkaRaftClientTest {
             context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH)
         );
 
-        context.client.poll();
+        context.poll();
         context.assertElectedLeader(epoch, leaderId);
 
         // Expect a fetch request to the leader
@@ -2369,7 +2368,7 @@ class KafkaRaftClientTest {
         // At this point toLeaderFetchRequest has timed out but retryToBootstrapServerFetchRequest
         // is still waiting for a response.
         // Confirm that no new fetch request has been sent
-        context.client.poll();
+        context.poll();
         assertFalse(context.channel.hasSentRequests());
     }
 
@@ -2434,7 +2433,7 @@ class KafkaRaftClientTest {
         context.unattachedToLeader();
 
         // First poll has no high watermark advance.
-        context.client.poll();
+        context.poll();
         assertEquals(OptionalLong.empty(), context.client.highWatermark());
         assertEquals(1L, context.log.endOffset().offset());
 
@@ -2712,11 +2711,11 @@ class KafkaRaftClientTest {
 
         ReplicaKey observerKey = replicaKey(localId + 2, withKip853Rpc);
         context.deliverRequest(context.voteRequest(epoch - 1, observerKey, 0, 0));
-        context.client.poll();
+        context.poll();
         context.assertSentVoteResponse(Errors.FENCED_LEADER_EPOCH, epoch, OptionalInt.of(localId), false);
 
         context.deliverRequest(context.voteRequest(epoch, observerKey, 0, 0));
-        context.client.poll();
+        context.poll();
         context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(localId), false);
     }
 
@@ -2783,12 +2782,12 @@ class KafkaRaftClientTest {
         // Follower sends a fetch which cannot be satisfied immediately
         int maxWaitTimeMs = 500;
         context.deliverRequest(context.fetchRequest(epoch, otherNodeKey, 1L, epoch, maxWaitTimeMs));
-        context.client.poll();
+        context.poll();
         assertEquals(0, context.channel.drainSendQueue().size());
 
         // After expiration of the max wait time, the fetch returns an empty record set
         context.time.sleep(maxWaitTimeMs);
-        context.client.poll();
+        context.poll();
         MemoryRecords fetchedRecords = context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
         assertEquals(0, fetchedRecords.sizeInBytes());
     }
@@ -2810,14 +2809,14 @@ class KafkaRaftClientTest {
 
         // Follower sends a fetch which cannot be satisfied immediately
         context.deliverRequest(context.fetchRequest(epoch, otherNodeKey, 1L, epoch, 500));
-        context.client.poll();
+        context.poll();
         assertEquals(0, context.channel.drainSendQueue().size());
 
         // Append some records that can fulfill the Fetch request
         String[] appendRecords = new String[]{"a", "b", "c"};
         context.client.prepareAppend(epoch, List.of(appendRecords));
         context.client.schedulePreparedAppend();
-        context.client.poll();
+        context.poll();
 
         MemoryRecords fetchedRecords = context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
         RaftClientTestContext.assertMatchingRecords(appendRecords, fetchedRecords);
@@ -2841,7 +2840,7 @@ class KafkaRaftClientTest {
 
         // Follower sends a fetch which cannot be satisfied immediately
         context.deliverRequest(context.fetchRequest(epoch, voterKey2, 1L, epoch, 500));
-        context.client.poll();
+        context.poll();
         assertTrue(context.channel.drainSendQueue().stream()
             .noneMatch(msg -> msg.data() instanceof FetchResponseData));
 
@@ -2880,7 +2879,7 @@ class KafkaRaftClientTest {
 
         // Now await the fetch timeout and become prospective
         context.time.sleep(context.fetchTimeoutMs);
-        context.client.poll();
+        context.poll();
         assertTrue(context.client.quorum().isProspective());
 
         // The fetch response from the old leader returns, but it should be ignored
@@ -2891,7 +2890,7 @@ class KafkaRaftClientTest {
             context.fetchResponse(epoch, otherNodeId, records, 0L, Errors.NONE)
         );
 
-        context.client.poll();
+        context.poll();
         assertEquals(0, context.log.endOffset().offset());
         context.expectAndGrantPreVotes(epoch);
     }
@@ -2920,7 +2919,7 @@ class KafkaRaftClientTest {
 
         // Now receive a BeginEpoch from `voter3`
         context.deliverRequest(context.beginEpochRequest(epoch + 1, voter3));
-        context.client.poll();
+        context.poll();
         context.assertElectedLeader(epoch + 1, voter3);
 
         // The fetch response from the old leader returns, but it should be ignored
@@ -2932,7 +2931,7 @@ class KafkaRaftClientTest {
             response
         );
 
-        context.client.poll();
+        context.poll();
         assertEquals(0, context.log.endOffset().offset());
         context.assertElectedLeader(epoch + 1, voter3);
     }
@@ -2961,7 +2960,7 @@ class KafkaRaftClientTest {
 
         // While the vote requests are still inflight, we receive a BeginEpoch for the same epoch
         context.deliverRequest(context.beginEpochRequest(epoch + 1, voter3));
-        context.client.poll();
+        context.poll();
         context.assertElectedLeaderAndVotedKey(
             epoch + 1,
             voter3,
@@ -2983,7 +2982,7 @@ class KafkaRaftClientTest {
             voteResponse2
         );
 
-        context.client.poll();
+        context.poll();
         context.assertElectedLeaderAndVotedKey(
             epoch + 1,
             voter3,
@@ -3109,7 +3108,7 @@ class KafkaRaftClientTest {
             fetchRequest2.destination(),
             context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.NOT_LEADER_OR_FOLLOWER)
         );
-        context.client.poll();
+        context.poll();
 
         context.assertElectedLeader(epoch, leaderId);
     }
@@ -3154,7 +3153,7 @@ class KafkaRaftClientTest {
             fetchRequest2.destination(),
             context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH)
         );
-        context.client.poll();
+        context.poll();
 
         context.assertElectedLeader(epoch, leaderId);
     }
@@ -3175,7 +3174,7 @@ class KafkaRaftClientTest {
 
         // Now shutdown
         int shutdownTimeoutMs = 5000;
-        CompletableFuture<Void> shutdownFuture = context.client.shutdown(shutdownTimeoutMs);
+        var shutdownFuture = context.client.shutdown(shutdownTimeoutMs).toCompletableFuture();
 
         // We should still be running until we have had a chance to send EndQuorumEpoch
         assertTrue(context.client.isShuttingDown());
@@ -3191,14 +3190,14 @@ class KafkaRaftClientTest {
         // We should still be able to handle vote requests during graceful shutdown
         // in order to help the new leader get elected
         context.deliverRequest(context.voteRequest(epoch + 1, otherNodeKey, epoch, 1L));
-        context.client.poll();
+        context.poll();
         context.assertSentVoteResponse(Errors.NONE, epoch + 1, OptionalInt.empty(), true);
 
         // Graceful shutdown completes when a new leader is elected
         context.deliverRequest(context.beginEpochRequest(2, otherNodeKey.id()));
 
         TestUtils.waitForCondition(() -> {
-            context.client.poll();
+            context.poll();
             return !context.client.isRunning();
         }, 5000, "Client failed to shutdown before expiration of timeout");
         assertFalse(context.client.isShuttingDown());
@@ -3229,7 +3228,7 @@ class KafkaRaftClientTest {
         // Append some records, so that the close follower will be able to advance further.
         context.client.prepareAppend(epoch, List.of("foo", "bar"));
         context.client.schedulePreparedAppend();
-        context.client.poll();
+        context.poll();
 
         context.deliverRequest(context.fetchRequest(epoch, closeFollower, 3L, epoch, 0));
         context.pollUntilResponse();
@@ -3391,7 +3390,7 @@ class KafkaRaftClientTest {
         long nextFetchOffset = fetchOffset + records.size();
         context.client.prepareAppend(epoch, records);
         context.client.schedulePreparedAppend();
-        context.client.poll();
+        context.poll();
 
         context.time.sleep(100);
         context.deliverRequest(context.describeQuorumRequest());
@@ -3531,7 +3530,7 @@ class KafkaRaftClientTest {
         List<String> records = List.of("foo", "bar");
         context.client.prepareAppend(epoch, records);
         context.client.schedulePreparedAppend();
-        context.client.poll();
+        context.poll();
 
         context.deliverRequest(context.describeQuorumRequest());
         context.pollUntilResponse();
@@ -3607,7 +3606,7 @@ class KafkaRaftClientTest {
         List<String> batch = List.of("foo", "bar");
         context.client.prepareAppend(epoch, batch);
         context.client.schedulePreparedAppend();
-        context.client.poll();
+        context.poll();
         long fetchOffset = withBootstrapSnapshot ? 5L : 3L;
         long followerFetchTime = context.time.milliseconds();
         context.deliverRequest(context.fetchRequest(epoch, follower, fetchOffset, epoch, 0));
@@ -3714,7 +3713,7 @@ class KafkaRaftClientTest {
 
         // Now shutdown
         int shutdownTimeoutMs = 5000;
-        CompletableFuture<Void> shutdownFuture = context.client.shutdown(shutdownTimeoutMs);
+        var shutdownFuture = context.client.shutdown(shutdownTimeoutMs).toCompletableFuture();
 
         // We should still be running until we have had a chance to send EndQuorumEpoch
         assertTrue(context.client.isRunning());
@@ -3729,7 +3728,7 @@ class KafkaRaftClientTest {
         // The shutdown timeout is hit before we receive any requests or responses indicating an epoch bump
         context.time.sleep(shutdownTimeoutMs);
 
-        context.client.poll();
+        context.poll();
         assertFalse(context.client.isRunning());
         assertTrue(shutdownFuture.isCompletedExceptionally());
         assertFutureThrows(TimeoutException.class, shutdownFuture);
@@ -3749,14 +3748,14 @@ class KafkaRaftClientTest {
             .build();
         context.assertElectedLeader(epoch, otherNodeId);
 
-        context.client.poll();
+        context.poll();
 
         int shutdownTimeoutMs = 5000;
-        CompletableFuture<Void> shutdownFuture = context.client.shutdown(shutdownTimeoutMs);
+        var shutdownFuture = context.client.shutdown(shutdownTimeoutMs).toCompletableFuture();
         assertTrue(context.client.isRunning());
         assertFalse(shutdownFuture.isDone());
 
-        context.client.poll();
+        context.poll();
         assertFalse(context.client.isRunning());
         assertTrue(shutdownFuture.isDone());
         assertNull(shutdownFuture.get());
@@ -3774,16 +3773,16 @@ class KafkaRaftClientTest {
             .withUnknownLeader(5)
             .withKip853Rpc(withKip853Rpc)
             .build();
-        context.client.poll();
+        context.poll();
         context.assertUnknownLeaderAndNoVotedCandidate(5);
 
         // Observer shutdown should complete immediately even if the
         // current leader is unknown
-        CompletableFuture<Void> shutdownFuture = context.client.shutdown(5000);
+        var shutdownFuture = context.client.shutdown(5000).toCompletableFuture();
         assertTrue(context.client.isRunning());
         assertFalse(shutdownFuture.isDone());
 
-        context.client.poll();
+        context.poll();
         assertFalse(context.client.isRunning());
         assertTrue(shutdownFuture.isDone());
         assertNull(shutdownFuture.get());
@@ -3798,12 +3797,12 @@ class KafkaRaftClientTest {
             .build();
 
         context.assertElectedLeader(1, localId);
-        context.client.poll();
+        context.poll();
         assertEquals(0, context.channel.drainSendQueue().size());
         int shutdownTimeoutMs = 5000;
         context.client.shutdown(shutdownTimeoutMs);
         assertTrue(context.client.isRunning());
-        context.client.poll();
+        context.poll();
         assertFalse(context.client.isRunning());
     }
 
@@ -3832,7 +3831,7 @@ class KafkaRaftClientTest {
             response
         );
 
-        context.client.poll();
+        context.poll();
         assertEquals(2L, context.log.endOffset().offset());
         assertEquals(2L, context.log.firstUnflushedOffset());
     }
@@ -3863,7 +3862,7 @@ class KafkaRaftClientTest {
             response
         );
 
-        context.client.poll();
+        context.poll();
         assertEquals(2L, context.log.endOffset().offset());
         long firstUnflushedOffset = canBecomeVoter ? 2L : 0L;
         assertEquals(firstUnflushedOffset, context.log.firstUnflushedOffset());
@@ -3898,7 +3897,7 @@ class KafkaRaftClientTest {
             fetchQuorumRequest.destination(),
             fetchResponse
         );
-        context.client.poll();
+        context.poll();
         assertEquals(0L, context.log.endOffset().offset());
         assertEquals(OptionalLong.of(0L), context.client.highWatermark());
 
@@ -3912,7 +3911,7 @@ class KafkaRaftClientTest {
             fetchQuorumRequest.destination(),
             fetchResponse
         );
-        context.client.poll();
+        context.poll();
         assertEquals(2L, context.log.endOffset().offset());
         assertEquals(OptionalLong.of(0L), context.client.highWatermark());
 
@@ -3931,7 +3930,7 @@ class KafkaRaftClientTest {
             fetchQuorumRequest.destination(),
             fetchResponse
         );
-        context.client.poll();
+        context.poll();
         assertEquals(2L, context.log.endOffset().offset());
         assertEquals(OptionalLong.of(2L), context.client.highWatermark());
     }
@@ -3960,13 +3959,13 @@ class KafkaRaftClientTest {
 
         context.deliverRequest(context.fetchRequest(epoch, otherNodeKey, 0L, 0, 500));
 
-        context.client.poll();
+        context.poll();
 
         // The BeginEpoch request eventually times out. We should not send another one.
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
         context.time.sleep(context.requestTimeoutMs());
 
-        context.client.poll();
+        context.poll();
 
         List<RaftRequest.Outbound> sentMessages = context.channel.drainSendQueue();
         assertEquals(0, sentMessages.size());
@@ -3992,14 +3991,14 @@ class KafkaRaftClientTest {
         String[] appendRecords = new String[]{"a", "b", "c"};
 
         // First poll has no high watermark advance
-        context.client.poll();
+        context.poll();
         assertEquals(OptionalLong.of(1L), context.client.highWatermark());
 
         context.client.prepareAppend(context.currentEpoch(), List.of(appendRecords));
         context.client.schedulePreparedAppend();
 
         // Then poll the appended data with leader change record
-        context.client.poll();
+        context.poll();
         assertEquals(OptionalLong.of(4L), context.client.highWatermark());
 
         // Now try reading it
@@ -4087,12 +4086,12 @@ class KafkaRaftClientTest {
         context.deliverResponse(request.correlationId(), request.destination(), response);
 
         // Poll again to complete truncation
-        context.client.poll();
+        context.poll();
         assertEquals(2L, context.log.endOffset().offset());
         assertEquals(2L, context.log.firstUnflushedOffset());
 
         // Now we should be fetching
-        context.client.poll();
+        context.poll();
         context.assertSentFetchRequest(epoch, 2L, lastEpoch, context.client.highWatermark());
     }
 
@@ -4128,7 +4127,7 @@ class KafkaRaftClientTest {
 
         context.client.prepareAppend(epoch, List.of("a", "b", "c"));
         context.client.schedulePreparedAppend();
-        context.client.poll();
+        context.poll();
 
         assertEquals(4L, getMetric(context.metrics, "high-watermark").metricValue());
         assertEquals(4L, getMetric(context.metrics, "log-end-offset").metricValue());
@@ -4154,7 +4153,7 @@ class KafkaRaftClientTest {
             .build();
 
         context.unattachedToLeader();
-        context.client.poll();
+        context.poll();
         int epoch = context.currentEpoch();
 
         // After becoming leader, we expect the `LeaderChange` record to be appended.
@@ -4169,7 +4168,7 @@ class KafkaRaftClientTest {
         // be exposed until it is able to reach the start of the leader epoch,
         // so we are unable to deliver committed data or fire `handleLeaderChange`.
         context.deliverRequest(context.fetchRequest(epoch, otherNodeKey, 0L, 0, 0));
-        context.client.poll();
+        context.poll();
         assertEquals(OptionalInt.empty(), context.listener.currentClaimedEpoch());
         assertEquals(OptionalLong.empty(), context.listener.lastCommitOffset());
 
@@ -4178,11 +4177,11 @@ class KafkaRaftClientTest {
         // listener. Note that the `LeaderChange` control record is included
         // in the committed batches.
         context.deliverRequest(context.fetchRequest(epoch, otherNodeKey, 1L, epoch, 0));
-        context.client.poll();
+        context.poll();
         assertEquals(OptionalLong.of(0), context.listener.lastCommitOffset());
 
         // Poll again now that the listener has caught up to the HWM
-        context.client.poll();
+        context.poll();
         assertEquals(OptionalInt.of(epoch), context.listener.currentClaimedEpoch());
         assertEquals(0, context.listener.claimedEpochStartOffset(epoch));
     }
@@ -4211,7 +4210,7 @@ class KafkaRaftClientTest {
             .build();
 
         context.unattachedToLeader();
-        context.client.poll();
+        context.poll();
 
         // After becoming leader, we expect the `LeaderChange` record to be appended
         // in addition to the initial 9 records in the log.
@@ -4226,7 +4225,7 @@ class KafkaRaftClientTest {
         // be exposed until it is able to reach the start of the leader epoch,
         // so we are unable to deliver committed data or fire `handleLeaderChange`.
         context.deliverRequest(context.fetchRequest(epoch, otherNodeKey, 3L, 1, 500));
-        context.client.poll();
+        context.poll();
         assertEquals(OptionalInt.empty(), context.listener.currentClaimedEpoch());
         assertEquals(OptionalLong.empty(), context.listener.lastCommitOffset());
 
@@ -4277,7 +4276,7 @@ class KafkaRaftClientTest {
             .build();
 
         context.unattachedToLeader();
-        context.client.poll();
+        context.poll();
         assertEquals(10L, context.log.endOffset().offset());
 
         // Let the initial listener catch up
@@ -4320,7 +4319,7 @@ class KafkaRaftClientTest {
             .build();
 
         context.unattachedToLeader();
-        context.client.poll();
+        context.poll();
         assertEquals(10L, context.log.endOffset().offset());
 
         // Let the initial listener catch up
@@ -4336,7 +4335,7 @@ class KafkaRaftClientTest {
         // Write to the log and show that the default listener gets updated...
         assertEquals(10L, context.client.prepareAppend(epoch, List.of("a")));
         context.client.schedulePreparedAppend();
-        context.client.poll();
+        context.poll();
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
         context.pollUntil(() -> OptionalLong.of(10).equals(context.listener.lastCommitOffset()));
         // ... but unregister listener doesn't
@@ -4371,7 +4370,7 @@ class KafkaRaftClientTest {
             fetchRequest.destination(),
             context.fetchResponse(epoch, otherNodeId, batch1, 0L, Errors.NONE)
         );
-        context.client.poll();
+        context.poll();
 
         // The listener should not have seen any data
         assertEquals(OptionalLong.of(0L), context.client.highWatermark());
@@ -4392,7 +4391,7 @@ class KafkaRaftClientTest {
             fetchRequest.destination(),
             context.fetchResponse(epoch, otherNodeId, batch2, 3L, Errors.NONE)
         );
-        context.client.poll();
+        context.poll();
 
         // The listener should have seen only the data from the first batch
         assertEquals(OptionalLong.of(3L), context.client.highWatermark());
@@ -4423,7 +4422,7 @@ class KafkaRaftClientTest {
         // Start off as the leader and receive a fetch to initialize the high watermark
         context.unattachedToLeader();
         context.deliverRequest(context.fetchRequest(epoch, otherNodeKey, 10L, epoch, 500));
-        context.client.poll();
+        context.poll();
         assertEquals(OptionalLong.of(10L), context.client.highWatermark());
 
         // Now we receive a vote request which transitions us to the 'voted' state
@@ -4438,7 +4437,7 @@ class KafkaRaftClientTest {
             OptionalInt.of(localId)
         );
         context.client.register(secondListener);
-        context.client.poll();
+        context.poll();
         context.assertVotedCandidate(candidateEpoch, otherNodeKey.id());
 
         // Note the offset is 9 because from offsets 0 to 8 there are data records,
@@ -4485,7 +4484,7 @@ class KafkaRaftClientTest {
         // Timeout the election and become prospective then candidate
         context.unattachedToCandidate();
         int candidateEpoch = epoch + 2;
-        context.client.poll();
+        context.poll();
         context.assertVotedCandidate(candidateEpoch, localId);
 
         // Register another listener and verify that it catches up
@@ -4493,7 +4492,7 @@ class KafkaRaftClientTest {
             OptionalInt.of(localId)
         );
         context.client.register(secondListener);
-        context.client.poll();
+        context.poll();
         context.assertVotedCandidate(candidateEpoch, localId);
 
         // Note the offset is 9 because from offsets 0 to 8 there are data records,
@@ -4527,7 +4526,7 @@ class KafkaRaftClientTest {
             OptionalInt.of(localId)
         );
         context.client.register(secondListener);
-        context.client.poll();
+        context.poll();
 
         // Expected leader change notification
         LeaderAndEpoch expectedLeaderAndEpoch = new LeaderAndEpoch(OptionalInt.empty(), epoch);
@@ -4562,7 +4561,7 @@ class KafkaRaftClientTest {
             OptionalInt.of(localId)
         );
         context.client.register(secondListener);
-        context.client.poll();
+        context.poll();
 
         LeaderAndEpoch expectedLeaderAndEpoch = new LeaderAndEpoch(OptionalInt.of(otherNodeId), epoch);
         assertEquals(expectedLeaderAndEpoch, secondListener.currentLeaderAndEpoch());
@@ -4583,7 +4582,7 @@ class KafkaRaftClientTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.client.poll();
+        context.poll();
         assertTrue(context.client.quorum().isResigned());
         assertEquals(LeaderAndEpoch.UNKNOWN, context.listener.currentLeaderAndEpoch());
 
@@ -4592,7 +4591,7 @@ class KafkaRaftClientTest {
             OptionalInt.of(localId)
         );
         context.client.register(secondListener);
-        context.client.poll();
+        context.poll();
 
         assertTrue(context.client.quorum().isResigned());
         assertEquals(LeaderAndEpoch.UNKNOWN, secondListener.currentLeaderAndEpoch());
@@ -4629,7 +4628,7 @@ class KafkaRaftClientTest {
             fetchRequest1.destination(),
             context.fetchResponse(5, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH)
         );
-        context.client.poll();
+        context.poll();
         context.assertElectedLeader(leaderEpoch, leaderId);
 
         // Second fetch goes to the discovered leader
@@ -4646,7 +4645,7 @@ class KafkaRaftClientTest {
             fetchRequest2.destination(),
             context.fetchResponse(leaderEpoch, leaderId, batch1, 0L, Errors.NONE)
         );
-        context.client.poll();
+        context.poll();
         assertEquals(3L, context.log.endOffset().offset());
         assertEquals(3, context.log.lastFetchedEpoch());
     }

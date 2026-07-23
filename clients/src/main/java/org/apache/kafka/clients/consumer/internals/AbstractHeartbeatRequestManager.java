@@ -256,7 +256,18 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
         if (membershipManager().state() == MemberState.UNSUBSCRIBED) {
             return Long.MAX_VALUE;
         }
-        if (pollTimer.isExpired() || (membershipManager().shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight())) {
+        if (pollTimer.isExpired()) {
+            return 0L;
+        }
+        // KAFKA-20253: mirror the guard in poll(). A heartbeat is only sent when the coordinator is known
+        // and the member is in a state that heartbeats. When the coordinator is unavailable (e.g. after a
+        // re-authentication failure) or the member should skip heartbeats (FATAL/FENCED/STALE/UNSUBSCRIBED),
+        // poll() returns EMPTY, so falling through to the timer-based branches below would return 0 (the
+        // heartbeat timer is left permanently expired) and busy-spin both the application and network threads.
+        if (coordinatorRequestManager.coordinator().isEmpty() || membershipManager().shouldSkipHeartbeat()) {
+            return heartbeatRequestState.heartbeatIntervalMs();
+        }
+        if (membershipManager().shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight()) {
             return 0L;
         }
         return Math.min(pollTimer.remainingMs() / 2, heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));
@@ -345,7 +356,14 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
 
     private void onResponse(final R response, final long currentTimeMs) {
         if (errorForResponse(response) == Errors.NONE) {
-            heartbeatRequestState.updateHeartbeatIntervalMs(heartbeatIntervalForResponse(response));
+            long previousHeartbeatIntervalMs = heartbeatRequestState.heartbeatIntervalMs();
+            long heartbeatIntervalMs = heartbeatIntervalForResponse(response);
+            // The heartbeat interval is a group config owned by the broker, so log it when it changes to give
+            // visibility into the value the coordinator is applying (it is not derivable from client config).
+            if (heartbeatIntervalMs != previousHeartbeatIntervalMs) {
+                logger.info("Member {} received heartbeat interval {}ms from the group coordinator", membershipManager().memberId(), heartbeatIntervalMs);
+            }
+            heartbeatRequestState.updateHeartbeatIntervalMs(heartbeatIntervalMs);
             heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
             membershipManager().onHeartbeatSuccess(response);
             return;
@@ -445,7 +463,6 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
                 if (membershipManager().state() == MemberState.UNSUBSCRIBED) {
                     logger.info("{} received GROUP_ID_NOT_FOUND for group {} while unsubscribed. ",
                             heartbeatRequestName(), membershipManager().groupId());
-                    membershipManager().onHeartbeatRequestSkipped();
                 } else {
                     // Else, this is a fatal error, we should throw it and transition to fatal state.
                     logger.error("{} failed due to unexpected error {}: {}", heartbeatRequestName(), error, errorMessage);

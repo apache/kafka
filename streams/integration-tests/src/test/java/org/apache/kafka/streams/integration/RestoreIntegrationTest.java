@@ -187,6 +187,15 @@ public class RestoreIntegrationTest {
         return streamsConfiguration;
     }
 
+    // Enables transactional state stores (KIP-892) when requested. Transactional stores are only supported
+    // under exactly-once, so this also sets the processing guarantee to EXACTLY_ONCE_V2.
+    private static void maybeSetTransactionalStateStores(final Properties props, final boolean transactional) {
+        if (transactional) {
+            props.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
+            props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        }
+    }
+
     @AfterEach
     public void shutdown() throws Exception {
         if (kafkaStreams != null) {
@@ -397,9 +406,21 @@ public class RestoreIntegrationTest {
         assertThat(numReceived.get(), equalTo(offsetLimitDelta * 2));
     }
 
+    // Adds a transactional dimension on top of (useNewProtocol, withHeaders). When transactional is true the
+    // state stores are transactional (KIP-892), which requires EXACTLY_ONCE_V2 processing guarantee. This
+    // exercises the transactional-store lifecycle over the changelog restore path.
     @ParameterizedTest
-    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
-    public void shouldRestoreStateFromChangelogTopic(final boolean useNewProtocol, final boolean withHeaders) throws Exception {
+    @CsvSource({
+        "false, false, false",
+        "false, true, false",
+        "true, false, false",
+        "true, true, false",
+        "false, false, true",
+        "true, false, true"
+    })
+    public void shouldRestoreStateFromChangelogTopic(final boolean useNewProtocol,
+                                                     final boolean withHeaders,
+                                                     final boolean transactional) throws Exception {
         final String changelog = appId + "-store-changelog";
         CLUSTER.createTopic(changelog, 2, 1);
 
@@ -412,6 +433,7 @@ public class RestoreIntegrationTest {
             props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
         }
         StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
+        maybeSetTransactionalStateStores(props, transactional);
 
         // restoring from 1000 to 5000, and then process from 5000 to 10000 on each of the two partitions
         final int offsetCheckpointed = 1000;
