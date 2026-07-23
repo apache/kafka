@@ -43,6 +43,7 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
@@ -658,6 +659,42 @@ public class StreamThreadTest {
         thread.runOnceWithoutProcessingThreads();
 
         Mockito.verify(taskManager, never()).process(Mockito.anyInt(), Mockito.any());
+    }
+
+    @Test
+    public void shouldThrowStateUpdaterFatalErrorBeforePolling() {
+        final StreamsConfig config = new StreamsConfig(configProps(false, false));
+        final TaskManager taskManager = mock(TaskManager.class);
+        final AssertionError fatalError = new AssertionError("fatal error");
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        doThrow(fatalError).when(taskManager).maybeThrowFatalStateUpdaterError();
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        thread = buildStreamThread(mainConsumer, taskManager, config, topologyMetadata);
+        thread.setState(State.STARTING);
+
+        assertSame(fatalError, assertThrows(AssertionError.class, thread::runOnceWithoutProcessingThreads));
+        verify(mainConsumer, never()).poll(any());
+    }
+
+    @Test
+    public void shouldThrowStateUpdaterFatalErrorWhenItWakesUpPolling() {
+        final StreamsConfig config = new StreamsConfig(configProps(false, false));
+        final TaskManager taskManager = mock(TaskManager.class);
+        final AssertionError fatalError = new AssertionError("fatal error");
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        doNothing().doThrow(fatalError).when(taskManager).maybeThrowFatalStateUpdaterError();
+        when(mainConsumer.poll(any())).thenThrow(new WakeupException());
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        thread = buildStreamThread(mainConsumer, taskManager, config, topologyMetadata);
+        thread.setState(State.STARTING);
+
+        assertSame(fatalError, assertThrows(AssertionError.class, thread::runOnceWithoutProcessingThreads));
     }
 
     @Test

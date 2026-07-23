@@ -131,6 +131,11 @@ public interface StateUpdater {
     void shutdown(final Duration timeout);
 
     /**
+     * Throws the fatal error that terminated the state updater thread, if any.
+     */
+    void maybeThrowFatalError();
+
+    /**
      * Adds a task (active or standby) to the state updater.
      *
      * This method does not block until the task is added to the state updater.

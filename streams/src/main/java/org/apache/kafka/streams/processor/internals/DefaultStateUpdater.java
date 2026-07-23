@@ -169,6 +169,8 @@ public class DefaultStateUpdater implements StateUpdater {
                 handleRuntimeException(anyOtherException);
             } catch (final Error fatalError) {
                 log.error("A fatal error occurred within the state updater thread", fatalError);
+                DefaultStateUpdater.this.fatalError.compareAndSet(null, fatalError);
+                streamThreadWakeup.run();
                 throw fatalError;
             } finally {
                 isRunning.set(false);
@@ -347,7 +349,6 @@ public class DefaultStateUpdater implements StateUpdater {
         private void handleRuntimeException(final RuntimeException runtimeException) {
             log.error("An unexpected error occurred within the state updater thread: {}", String.valueOf(runtimeException));
             addToExceptionsAndFailedTasksThenClearUpdatingAndPausedTasks(runtimeException);
-            isRunning.set(false);
         }
 
         private void handleTaskCorruptedException(final TaskCorruptedException taskCorruptedException) {
@@ -854,6 +855,7 @@ public class DefaultStateUpdater implements StateUpdater {
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final ChangelogReader changelogReader;
     private final TopologyMetadata topologyMetadata;
+    private final Runnable streamThreadWakeup;
     private final Queue<TaskAndAction> tasksAndActions = new LinkedList<>();
     private final Lock tasksAndActionsLock = new ReentrantLock();
     private final Condition tasksAndActionsCondition = tasksAndActionsLock.newCondition();
@@ -869,6 +871,7 @@ public class DefaultStateUpdater implements StateUpdater {
     private long lastCommitMs;
 
     private final AtomicReference<Map<StreamsRebalanceData.TaskId, Long>> taskEndOffsetSumSnapshot = new AtomicReference<>(Map.of());
+    private final AtomicReference<Error> fatalError = new AtomicReference<>();
 
     private StateUpdaterThread stateUpdaterThread = null;
 
@@ -878,13 +881,15 @@ public class DefaultStateUpdater implements StateUpdater {
                                final Consumer<byte[], byte[]> restoreConsumer,
                                final ChangelogReader changelogReader,
                                final TopologyMetadata topologyMetadata,
-                               final Time time) {
+                               final Time time,
+                               final Runnable streamThreadWakeup) {
         this.time = time;
         this.name = name;
         this.metrics = metrics;
         this.restoreConsumer = restoreConsumer;
         this.changelogReader = changelogReader;
         this.topologyMetadata = topologyMetadata;
+        this.streamThreadWakeup = streamThreadWakeup;
         this.commitIntervalMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
 
         final String logPrefix = String.format("state-updater [%s] ", name);
@@ -933,6 +938,14 @@ public class DefaultStateUpdater implements StateUpdater {
                 Thread.currentThread().interrupt();
                 log.warn("Interrupted while waiting for state updater thread to shut down");
             }
+        }
+    }
+
+    @Override
+    public void maybeThrowFatalError() {
+        final Error error = fatalError.get();
+        if (error != null) {
+            throw error;
         }
     }
 

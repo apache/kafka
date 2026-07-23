@@ -863,6 +863,10 @@ public class TaskManager {
             && !tasks.hasPendingTasksToInit();
     }
 
+    public void maybeThrowFatalStateUpdaterError() {
+        stateUpdater.maybeThrowFatalError();
+    }
+
     private void recycleTaskFromStateUpdater(final Task task,
                                              final Set<TopicPartition> inputPartitions,
                                              final Set<Task> tasksToCloseDirty,

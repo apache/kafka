@@ -116,7 +116,7 @@ class DefaultStateUpdaterTest {
     private final ChangelogReader changelogReader = mock(ChangelogReader.class);
     private final TopologyMetadata topologyMetadata = unnamedTopology().build();
     private final DefaultStateUpdater stateUpdater =
-        new DefaultStateUpdater("test-state-updater", metrics, config, null, changelogReader, topologyMetadata, time);
+        new DefaultStateUpdater("test-state-updater", metrics, config, null, changelogReader, topologyMetadata, time, () -> { });
 
     @AfterEach
     public void tearDown() {
@@ -174,6 +174,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.start();
         waitForCondition(() -> !stateUpdater.isRunning(), VERIFICATION_TIMEOUT, "State updater thread did not stop");
 
+        assertEquals(fatalError, assertThrows(AssertionError.class, stateUpdater::maybeThrowFatalError));
         assertThrows(StreamsException.class, () -> stateUpdater.add(task));
         final ExecutionException executionException = assertThrows(
             ExecutionException.class,
@@ -1592,7 +1593,7 @@ class DefaultStateUpdaterTest {
     public void shouldNotAutoCheckpointTasksIfIntervalNotElapsed() {
         // we need to use a non auto-ticking timer here to control how much time elapsed exactly
         final Time time = new MockTime();
-        final DefaultStateUpdater stateUpdater = new DefaultStateUpdater("test-state-updater", metrics, config, null, changelogReader, topologyMetadata, time);
+        final DefaultStateUpdater stateUpdater = new DefaultStateUpdater("test-state-updater", metrics, config, null, changelogReader, topologyMetadata, time, () -> { });
         try {
             final StreamTask task1 = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
             final StreamTask task2 = statefulTask(TASK_0_2, Set.of(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
@@ -1837,7 +1838,7 @@ class DefaultStateUpdaterTest {
     @Test
     public void shouldRemoveMetricsWithoutInterference() {
         final DefaultStateUpdater stateUpdater2 =
-            new DefaultStateUpdater("test-state-updater2", metrics, config, null, changelogReader, topologyMetadata, time);
+            new DefaultStateUpdater("test-state-updater2", metrics, config, null, changelogReader, topologyMetadata, time, () -> { });
         final List<MetricName> threadMetrics = getMetricNames("test-state-updater");
         final List<MetricName> threadMetrics2 = getMetricNames("test-state-updater2");
 

@@ -41,6 +41,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -486,7 +487,8 @@ public class StreamThread extends Thread implements ProcessingThread {
                 topologyMetadata,
                 time,
                 clientId,
-                threadIdx
+                threadIdx,
+                () -> referenceContainer.mainConsumer.wakeup()
             );
 
         final TaskManager taskManager = new TaskManager(
@@ -672,7 +674,8 @@ public class StreamThread extends Thread implements ProcessingThread {
                                                         final TopologyMetadata topologyMetadata,
                                                         final Time time,
                                                         final String clientId,
-                                                        final int threadIdx) {
+                                                        final int threadIdx,
+                                                        final Runnable streamThreadWakeup) {
         final String name = clientId + STATE_UPDATER_ID_SUBSTRING + threadIdx;
         return new DefaultStateUpdater(
             name,
@@ -681,7 +684,8 @@ public class StreamThread extends Thread implements ProcessingThread {
             restoreConsumer,
             changelogReader,
             topologyMetadata,
-            time
+            time,
+            streamThreadWakeup
         );
     }
 
@@ -1544,12 +1548,16 @@ public class StreamThread extends Thread implements ProcessingThread {
         ConsumerRecords<byte[], byte[]> records = ConsumerRecords.empty();
 
         lastPollMs = now;
+        taskManager.maybeThrowFatalStateUpdaterError();
 
         try {
             records = mainConsumer.poll(pollTime);
         } catch (final InvalidOffsetException e) {
             log.info("Found no valid offset for {} partitions, resetting.", e.partitions().size());
             resetOffsets(e.partitions(), e);
+        } catch (final WakeupException e) {
+            taskManager.maybeThrowFatalStateUpdaterError();
+            throw e;
         }
 
         return records;
