@@ -1230,6 +1230,11 @@ public class StreamsGroupTest {
             .setAssignedTasks(TasksTupleWithEpochs.EMPTY)
             .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
             .build());
+        // Transient, unpersisted per-task offsets reported by the member; the describe path must surface them.
+        group.updateTaskOffsets("member1", new MemberTaskOffsets(
+            Map.of(new TaskId("sub-1", 0), 5L),
+            Map.of(new TaskId("sub-1", 0), 9L)
+        ));
         snapshotRegistry.idempotentCreateSnapshot(1);
 
         StreamsGroupDescribeResponseData.DescribedGroup describedGroup = group.asDescribedGroup(1);
@@ -1254,6 +1259,14 @@ public class StreamsGroupTest {
 
         assertEquals(1, describedGroup.members().size());
         assertEquals("member1", describedGroup.members().get(0).memberId());
+        assertEquals(
+            List.of(new StreamsGroupDescribeResponseData.TaskOffset().setSubtopologyId("sub-1").setPartition(0).setOffset(5L)),
+            describedGroup.members().get(0).taskOffsets()
+        );
+        assertEquals(
+            List.of(new StreamsGroupDescribeResponseData.TaskOffset().setSubtopologyId("sub-1").setPartition(0).setOffset(9L)),
+            describedGroup.members().get(0).taskEndOffsets()
+        );
     }
 
     @Test

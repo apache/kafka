@@ -34,6 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -65,8 +66,8 @@ public class ReplicaManagerLogReader implements LogReader {
     public CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> readAsync(
             FetchParams fetchParams,
             Set<TopicIdPartition> partitionsToFetch,
-            LinkedHashMap<TopicIdPartition, Long> topicPartitionFetchOffsets,
-            LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes,
+            Map<TopicIdPartition, Long> topicPartitionFetchOffsets,
+            Map<TopicIdPartition, Integer> partitionMaxBytes,
             boolean readRemote) {
 
         if (partitionsToFetch.isEmpty()) {
@@ -125,8 +126,8 @@ public class ReplicaManagerLogReader implements LogReader {
     LinkedHashMap<TopicIdPartition, LogReadResult> read(
         FetchParams fetchParams,
         Set<TopicIdPartition> partitionsToFetch,
-        LinkedHashMap<TopicIdPartition, Long> topicPartitionFetchOffsets,
-        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes
+        Map<TopicIdPartition, Long> topicPartitionFetchOffsets,
+        Map<TopicIdPartition, Integer> partitionMaxBytes
     ) {
         if (partitionsToFetch.isEmpty()) {
             return new LinkedHashMap<>();
