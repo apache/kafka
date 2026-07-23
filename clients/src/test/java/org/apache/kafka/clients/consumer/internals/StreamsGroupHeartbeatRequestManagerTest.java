@@ -2849,6 +2849,44 @@ class StreamsGroupHeartbeatRequestManagerTest {
         }
     }
 
+    @Test
+    public void testNoWarningWhenClientTagsPresent() {
+        try (
+            final MockedConstruction<HeartbeatRequestState> ignored = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
+            final LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister(StreamsGroupHeartbeatRequestManager.class)
+        ) {
+            logAppender.setClassLogger(StreamsGroupHeartbeatRequestManager.class, Level.WARN);
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+            when(membershipManager.groupId()).thenReturn(GROUP_ID);
+            when(membershipManager.memberId()).thenReturn(MEMBER_ID);
+            when(membershipManager.memberEpoch()).thenReturn(MEMBER_EPOCH);
+            when(membershipManager.groupInstanceId()).thenReturn(Optional.of(INSTANCE_ID));
+
+            // The client supplies all required rack-aware tags (e.g. zone and cluster), so the broker returns a
+            // heartbeat with no MISSING_CLIENT_TAGS status and nothing should be logged.
+            final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+            assertEquals(1, result.unsentRequests.size());
+
+            final ClientResponse response = new ClientResponse(
+                new RequestHeader(ApiKeys.STREAMS_GROUP_HEARTBEAT, (short) 1, "", 1),
+                null, "-1", time.milliseconds(), time.milliseconds(), false, null, null,
+                new StreamsGroupHeartbeatResponse(
+                    new StreamsGroupHeartbeatResponseData()
+                        .setHeartbeatIntervalMs((int) RECEIVED_HEARTBEAT_INTERVAL_MS)
+                        .setStatus(List.of())
+                )
+            );
+            result.unsentRequests.get(0).handler().onComplete(response);
+
+            assertTrue(logAppender.getMessages("WARN").stream()
+                    .noneMatch(m -> m.contains("Missing required client tags")),
+                "No MISSING_CLIENT_TAGS warning should be logged when the client provides the required tags");
+        }
+    }
+
     private static void assertTaskIdsEquals(final List<StreamsGroupHeartbeatRequestData.TaskIds> expected,
                                             final List<StreamsGroupHeartbeatRequestData.TaskIds> actual) {
         List<StreamsGroupHeartbeatRequestData.TaskIds> sortedExpected = expected.stream()
