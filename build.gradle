@@ -2180,6 +2180,12 @@ project(':clients:clients-integration-tests') {
     archivesName = "kafka-clients-integration-tests"
   }
 
+  configurations {
+    // To prevent a UniqueResourceException due the same resource existing in both
+    // org.apache.directory.api/api-all and org.apache.directory.api/api-ldap-schema-data
+    testImplementation.exclude module: 'api-ldap-schema-data'
+  }
+
   dependencies {
     testImplementation libs.metrics
     testImplementation libs.slf4jApi
@@ -2200,12 +2206,18 @@ project(':clients:clients-integration-tests') {
     implementation project(':transaction-coordinator')
     testImplementation project(':test-common:test-common-util')
 
+    testImplementation libs.bcpkix
+    testImplementation(libs.apacheda) {
+      exclude group: 'xml-apis', module: 'xml-apis'
+      exclude module: 'mina-core'
+    }
     testImplementation libs.apachedsCoreApi
     testImplementation libs.apachedsInterceptorKerberos
     testImplementation libs.apachedsProtocolShared
     testImplementation libs.apachedsProtocolKerberos
     testImplementation libs.apachedsProtocolLdap
     testImplementation libs.apachedsLdifPartition
+    testImplementation libs.apachedsJdbmPartition
     testImplementation libs.junitJupiter
     testImplementation libs.junitPlatformSuiteEngine
 

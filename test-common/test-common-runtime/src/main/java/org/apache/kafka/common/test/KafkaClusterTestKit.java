@@ -240,25 +240,35 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 props.putIfAbsent(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, "PLAIN");
                 props.putIfAbsent(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, "PLAIN");
                 props.putIfAbsent(KRaftConfigs.SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG, "PLAIN");
-                props.putIfAbsent(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, StandardAuthorizer.class.getName());
-                props.putIfAbsent(StandardAuthorizer.ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "false");
-                props.putIfAbsent(StandardAuthorizer.SUPER_USERS_CONFIG, "User:" + JaasUtils.KAFKA_PLAIN_ADMIN);
+                maybeSetPlainAuthorizerProps(props);
             } else if (securityProtocol.equals(SecurityProtocol.SASL_SSL.name)) {
                 props.putIfAbsent(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, "PLAIN");
                 props.putIfAbsent(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, "PLAIN");
                 props.putIfAbsent(KRaftConfigs.SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG, "PLAIN");
-                props.putIfAbsent(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, StandardAuthorizer.class.getName());
-                props.putIfAbsent(StandardAuthorizer.ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "false");
-                props.putIfAbsent(StandardAuthorizer.SUPER_USERS_CONFIG, "User:" + JaasUtils.KAFKA_PLAIN_ADMIN);
+                maybeSetPlainAuthorizerProps(props);
                 sslConfig.forEach(props::putIfAbsent);
             } else if (securityProtocol.equals(SecurityProtocol.SSL.name)) {
                 sslConfig.forEach(props::putIfAbsent);
             }
         }
 
+        private void maybeSetPlainAuthorizerProps(Map<String, Object> props) {
+            if (isPlainSaslMechanism(props)) {
+                props.putIfAbsent(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, StandardAuthorizer.class.getName());
+                props.putIfAbsent(StandardAuthorizer.ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "false");
+                props.putIfAbsent(StandardAuthorizer.SUPER_USERS_CONFIG, "User:" + JaasUtils.KAFKA_PLAIN_ADMIN);
+            }
+        }
+
+        private boolean isPlainSaslMechanism(Map<String, Object> props) {
+            Object mechanism = props.get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
+            return mechanism == null || mechanism.toString().equalsIgnoreCase("PLAIN");
+        }
+
         private Optional<File> maybeSetupJaasFile() throws Exception {
-            if (brokerSecurityProtocol.equals(SecurityProtocol.SASL_PLAINTEXT.name) ||
-                    brokerSecurityProtocol.equals(SecurityProtocol.SASL_SSL.name)) {
+            if ((brokerSecurityProtocol.equals(SecurityProtocol.SASL_PLAINTEXT.name) ||
+                    brokerSecurityProtocol.equals(SecurityProtocol.SASL_SSL.name)) &&
+                    isPlainSaslMechanism(configProps)) {
                 File file = JaasUtils.writeJaasContextsToFile(Set.of(
                     new JaasUtils.JaasSection(JaasUtils.KAFKA_SERVER_CONTEXT_NAME,
                         List.of(

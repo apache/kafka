@@ -30,7 +30,7 @@ import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 
 import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 
@@ -50,12 +50,10 @@ import static org.apache.kafka.clients.ClientsTestUtils.BaseConsumerTestcase.tes
 import static org.apache.kafka.clients.ClientsTestUtils.BaseConsumerTestcase.testCoordinatorFailover;
 import static org.apache.kafka.clients.ClientsTestUtils.BaseConsumerTestcase.testSimpleConsumption;
 import static org.apache.kafka.clients.CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG;
-import static org.apache.kafka.clients.CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.SaslPlaintextConsumerTest.MECHANISMS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_MECHANISM;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG;
@@ -129,8 +127,8 @@ public class SaslPlaintextConsumerTest {
         cluster.createTopic(ClientsTestUtils.BaseConsumerTestcase.TOPIC, 2, (short) ClientsTestUtils.BaseConsumerTestcase.BROKER_COUNT);
     }
     
-    @AfterEach
-    public void teardown() {
+    @AfterAll
+    public static void teardown() {
         if (kdc != null)
             kdc.stop();
         // Important if tests leak consumers, producers or brokers
@@ -153,9 +151,6 @@ public class SaslPlaintextConsumerTest {
     )
     public void testAsyncConsumerSimpleConsumption() throws InterruptedException {
         testSimpleConsumption(cluster, Map.of(
-                SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name,
-                SASL_MECHANISM, MECHANISMS,
-//                SASL_JAAS_CONFIG, jaasClientLoginModule(clientSaslMechanism),
                 GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT))
         );
     }
@@ -165,9 +160,6 @@ public class SaslPlaintextConsumerTest {
     )
     public void testClassicConsumerClusterResourceListener() throws InterruptedException {
         testClusterResourceListener(cluster, Map.of(
-            SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name,
-            SASL_MECHANISM, MECHANISMS,
-//            SASL_JAAS_CONFIG, jaasClientLoginModule(clientSaslMechanism),
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT))
         );
     }
@@ -177,9 +169,6 @@ public class SaslPlaintextConsumerTest {
     )
     public void testAsyncConsumerClusterResourceListener() throws InterruptedException {
         testClusterResourceListener(cluster, Map.of(
-            SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name,
-            SASL_MECHANISM, MECHANISMS,
-//            SASL_JAAS_CONFIG, jaasClientLoginModule(clientSaslMechanism),
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT))
         );
     }
@@ -189,9 +178,6 @@ public class SaslPlaintextConsumerTest {
     )
     public void testClassicConsumerCoordinatorFailover() throws InterruptedException {
         Map<String, Object> config = Map.of(
-            SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name,
-            SASL_MECHANISM, MECHANISMS,
-//            SASL_JAAS_CONFIG, jaasClientLoginModule(clientSaslMechanism),
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT),
             SESSION_TIMEOUT_MS_CONFIG, 5001,
             HEARTBEAT_INTERVAL_MS_CONFIG, 1000,
@@ -206,9 +192,6 @@ public class SaslPlaintextConsumerTest {
     )
     public void testAsyncConsumeCoordinatorFailover() throws InterruptedException {
         Map<String, Object> config = Map.of(
-            SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name,
-            SASL_MECHANISM, MECHANISMS,
-//            SASL_JAAS_CONFIG, jaasClientLoginModule(clientSaslMechanism),
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT),
             // Use higher poll timeout to avoid consumer leaving the group due to timeout
             MAX_POLL_INTERVAL_MS_CONFIG, 15000
