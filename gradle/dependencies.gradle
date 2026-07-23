@@ -192,7 +192,7 @@ libs += [
   junitJupiter: "org.junit.jupiter:junit-jupiter:$versions.junit",
   junitJupiterApi: "org.junit.jupiter:junit-jupiter-api:$versions.junit",
   junitPlatformSuiteEngine: "org.junit.platform:junit-platform-suite-engine:$versions.junitPlatform",
-  junitPlatformLanucher: "org.junit.platform:junit-platform-launcher:$versions.junitPlatform",
+  junitPlatformLauncher: "org.junit.platform:junit-platform-launcher:$versions.junitPlatform",
   hamcrest: "org.hamcrest:hamcrest:$versions.hamcrest",
   kafkaStreams_0110: "org.apache.kafka:kafka-streams:$versions.kafka_0110",
   kafkaStreams_10: "org.apache.kafka:kafka-streams:$versions.kafka_10",

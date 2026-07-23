@@ -145,7 +145,7 @@ ext {
 
   runtimeTestLibs = [
     libs.slf4jLog4j2,
-    libs.junitPlatformLanucher,
+    libs.junitPlatformLauncher,
     libs.jacksonDataformatYaml,
     project(":test-common:test-common-util")
   ]
@@ -1691,7 +1691,7 @@ project(':test-common:test-common-util') {
   }
 
   dependencies {
-    implementation libs.junitPlatformLanucher
+    implementation libs.junitPlatformLauncher
     implementation libs.junitJupiterApi
     implementation libs.junitJupiter
     implementation libs.slf4jApi
@@ -1725,7 +1725,7 @@ project(':test-common:test-common-runtime') {
     implementation project(':raft')
     implementation project(':storage')
 
-    implementation libs.junitPlatformLanucher
+    implementation libs.junitPlatformLauncher
     implementation libs.junitJupiter
     implementation libs.jacksonDataformatYaml
     implementation libs.slf4jApi
