@@ -2657,7 +2657,6 @@ project(':tools') {
     testImplementation project(':server')
     testImplementation project(':core')
     testImplementation testFixtures(project(':server'))
-    testImplementation project(':core').sourceSets.test.output
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':test-common:test-common-util')
