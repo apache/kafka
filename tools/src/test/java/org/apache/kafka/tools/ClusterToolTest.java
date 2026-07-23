@@ -16,12 +16,19 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.MockAdminClient;
+import org.apache.kafka.common.message.ApiMessageType;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.test.TestUtils;
 
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
@@ -36,12 +43,16 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.Arrays;
+import java.util.EnumSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -185,6 +196,80 @@ public class ClusterToolTest {
             )
         );
         assertEquals("--config and --command-config cannot be specified together.", ex.getMessage());
+    }
+
+    @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
+        @ClusterConfigProperty(key = ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, value = "true"),
+    })
+    public void testApiVersionsCommandOutputUsingBrokerServer(ClusterInstance clusterInstance) {
+        testApiVersionsCommandOutput(clusterInstance, false);
+    }
+
+    @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
+        @ClusterConfigProperty(key = ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, value = "true"),
+    })
+    public void testApiVersionsCommandOutputUsingController(ClusterInstance clusterInstance) {
+        testApiVersionsCommandOutput(clusterInstance, true);
+    }
+
+    private void testApiVersionsCommandOutput(ClusterInstance clusterInstance, boolean usingBootstrapController) {
+        String output = ToolsTestUtils.grabConsoleOutput(() -> {
+            if (usingBootstrapController) {
+                assertDoesNotThrow(() -> ClusterTool.execute("api-versions", "--bootstrap-controller", clusterInstance.bootstrapControllers()));
+            } else {
+                assertDoesNotThrow(() -> ClusterTool.execute("api-versions", "--bootstrap-server", clusterInstance.bootstrapServers()));
+            }
+        });
+        Iterator<String> lineIter = Arrays.stream(output.split("\n")).iterator();
+        assertTrue(lineIter.hasNext());
+        ApiMessageType.ListenerType listenerType = usingBootstrapController ?
+                ApiMessageType.ListenerType.CONTROLLER : ApiMessageType.ListenerType.BROKER;
+
+        if (usingBootstrapController) {
+            int id = clusterInstance.type() == Type.CO_KRAFT ? 0 : 3000;
+            assertEquals(clusterInstance.bootstrapControllers() + " (id: " + id + " rack: null isFenced: false) -> (", lineIter.next());
+        } else {
+            assertEquals(clusterInstance.bootstrapServers() + " (id: 0 rack: null isFenced: false) -> (", lineIter.next());
+        }
+
+        EnumSet<ApiKeys> apiKeys = EnumSet.copyOf(ApiKeys.clientApis());
+
+        // Controller will return all apis
+        if (listenerType == ApiMessageType.ListenerType.CONTROLLER) {
+            apiKeys.addAll(ApiKeys.controllerApis());
+        }
+
+        Iterator<ApiKeys> apiKeysIter = apiKeys.iterator();
+
+        NodeApiVersions nodeApiVersions = new NodeApiVersions(
+                ApiVersionsResponse.filterApis(listenerType, true, true),
+                List.of());
+        while (apiKeysIter.hasNext()) {
+            ApiKeys apiKey = apiKeysIter.next();
+            String terminator = apiKeysIter.hasNext() ? "," : "";
+            StringBuilder lineBuilder = new StringBuilder().append("\t");
+            if (apiKey.inScope(listenerType)) {
+                ApiVersion apiVersion = nodeApiVersions.apiVersion(apiKey);
+                assertNotNull(apiVersion, "No apiVersion found for " + apiKey);
+
+                String versionRangeStr = (apiVersion.minVersion() == apiVersion.maxVersion()) ?
+                        String.valueOf(apiVersion.minVersion()) :
+                        apiVersion.minVersion() + " to " + apiVersion.maxVersion();
+                short usableVersion = nodeApiVersions.latestUsableVersion(apiKey);
+                if (apiKey == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS || apiKey == ApiKeys.PUSH_TELEMETRY) {
+                    lineBuilder.append(apiKey.name).append("(").append(apiKey.id).append("): UNSUPPORTED").append(terminator);
+                } else {
+                    lineBuilder.append(apiKey.name).append("(").append(apiKey.id).append("): ").append(versionRangeStr).append(" [usable: ").append(usableVersion).append("]").append(terminator);
+                }
+            } else {
+                lineBuilder.append(apiKey.name).append("(").append(apiKey.id).append("): UNSUPPORTED").append(terminator);
+            }
+            assertTrue(lineIter.hasNext());
+            assertEquals(lineBuilder.toString(), lineIter.next());
+        }
+        assertTrue(lineIter.hasNext());
+        assertEquals(")", lineIter.next());
+        assertFalse(lineIter.hasNext());
     }
 
     @Test

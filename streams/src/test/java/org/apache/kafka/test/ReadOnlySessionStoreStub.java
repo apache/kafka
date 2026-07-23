@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
@@ -37,6 +38,7 @@ import java.util.TreeMap;
 public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V>, StateStore {
     private final NavigableMap<K, List<KeyValue<Windowed<K>, V>>> sessions = new TreeMap<>();
     private boolean open = true;
+    public IsolationLevel isolationLevel;
 
     public void put(final Windowed<K> sessionKey, final V value) {
         if (!sessions.containsKey(sessionKey.key())) {
@@ -216,5 +218,11 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
 
     public void setOpen(final boolean open) {
         this.open = open;
+    }
+
+    @Override
+    public ReadOnlySessionStore<K, V> readOnly(final IsolationLevel level) {
+        this.isolationLevel = level;
+        return this;
     }
 }

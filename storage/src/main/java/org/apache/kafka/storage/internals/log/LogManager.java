@@ -605,7 +605,7 @@ public class LogManager {
     /**
      * Recover and load all logs in the given data directories
      */
-    public void loadLogs(LogConfig defaultConfig, Map<String, LogConfig> topicConfigOverrides, Function<UnifiedLog, Boolean> isStray) throws Throwable {
+    public void loadLogs(LogConfig defaultConfig, Map<String, LogConfig> topicConfigOverrides, Function<UnifiedLog, Boolean> isStray) throws Exception {
         LOG.info("Loading logs from log dirs {}", liveLogDirs);
         long startMs = time.hiResClockMs();
         List<ExecutorService> threadPools = new ArrayList<>();
@@ -726,7 +726,7 @@ public class LogManager {
             );
         } catch (ExecutionException e) {
             LOG.error("There was an error in one of the threads during logs loading", e.getCause());
-            throw e.getCause();
+            throw (Exception) e.getCause();
         } finally {
             removeLogRecoveryMetrics();
             threadPools.forEach(ExecutorService::shutdown);
@@ -768,14 +768,14 @@ public class LogManager {
     }
 
     // Visible for testing
-    public void startup(Set<String> topicNames) throws Throwable {
+    public void startup(Set<String> topicNames) throws Exception {
         startup(topicNames, l -> false);
     }
 
     /**
      *  Start the background threads to flush logs and do log cleanup
      */
-    public void startup(Set<String> topicNames, Function<UnifiedLog, Boolean> isStray) throws Throwable {
+    public void startup(Set<String> topicNames, Function<UnifiedLog, Boolean> isStray) throws Exception {
         // ensure consistency between default config and overrides
         LogConfig defaultConfig = currentDefaultConfig;
         startupWithConfigOverrides(defaultConfig, fetchTopicConfigOverrides(defaultConfig, topicNames), isStray);
@@ -805,7 +805,7 @@ public class LogManager {
 
     private void startupWithConfigOverrides(LogConfig defaultConfig,
                                             Map<String, LogConfig> topicConfigOverrides,
-                                            Function<UnifiedLog, Boolean> isStray) throws Throwable {
+                                            Function<UnifiedLog, Boolean> isStray) throws Exception {
         loadLogs(defaultConfig, topicConfigOverrides, isStray); // this could take a while if shutdown was not clean
 
         // Schedule the cleanup task to delete old logs

@@ -14,9 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collections;
 import java.util.Objects;
@@ -26,6 +28,7 @@ import java.util.stream.Collectors;
 /**
  * A description of the assignments of a specific group member.
  */
+@InterfaceAudience.Public
 public class MemberAssignment {
     private final Set<TopicPartition> topicPartitions;
 

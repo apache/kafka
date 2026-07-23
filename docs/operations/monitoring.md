@@ -1,6 +1,6 @@
 ---
 title: Monitoring
-description: Monitoring
+description: Kafka metrics and JMX monitoring for brokers, clients, and components.
 weight: 7
 tags: ['kafka', 'docs']
 aliases: 
@@ -1344,6 +1344,214 @@ kafka.server:type=group-coordinator-metrics,name=streams-group-rebalance-count
 <td>
 
 Total number of Streams Group Rebalances
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Set Success Rate
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-set-success-rate
+</td>  
+<td>
+
+The rate of successful setTopology plugin calls (driven by client topology-description pushes)
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Set Success Count
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-set-success-count
+</td>  
+<td>
+
+The total number of successful setTopology plugin calls
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Set Error Rate
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-set-error-rate
+</td>  
+<td>
+
+The rate of failed setTopology plugin calls
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Set Error Count
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-set-error-count
+</td>  
+<td>
+
+The total number of failed setTopology plugin calls
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Get Success Rate
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-get-success-rate
+</td>  
+<td>
+
+The rate of successful getTopology plugin calls (driven by describe requests)
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Get Success Count
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-get-success-count
+</td>  
+<td>
+
+The total number of successful getTopology plugin calls
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Get Error Rate
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-get-error-rate
+</td>  
+<td>
+
+The rate of failed getTopology plugin calls
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Get Error Count
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-get-error-count
+</td>  
+<td>
+
+The total number of failed getTopology plugin calls
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Delete Success Rate
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-delete-success-rate
+</td>  
+<td>
+
+The rate of successful deleteTopology plugin calls (driven by group deletion and cleanup)
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Delete Success Count
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-delete-success-count
+</td>  
+<td>
+
+The total number of successful deleteTopology plugin calls
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Delete Error Rate
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-delete-error-rate
+</td>  
+<td>
+
+The rate of failed deleteTopology plugin calls
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Delete Error Count
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-delete-error-count
+</td>  
+<td>
+
+The total number of failed deleteTopology plugin calls
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Cleanup Cycle Rate
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-cleanup-cycle-rate
+</td>  
+<td>
+
+The rate of periodic topology-description cleanup cycles run by the coordinator
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Cleanup Cycle Count
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-cleanup-cycle-count
+</td>  
+<td>
+
+The total number of periodic topology-description cleanup cycles run by the coordinator
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Cleanup Eligible Rate
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-cleanup-eligible-rate
+</td>  
+<td>
+
+The rate of groups found eligible for plugin-state deletion by the cleanup scan
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Cleanup Eligible Count
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-cleanup-eligible-count
+</td>  
+<td>
+
+The total number of groups found eligible for plugin-state deletion by the cleanup scan
 </td> </tr>  
 <tr>  
 <td>
@@ -5081,7 +5289,7 @@ kafka.streams:type=stream-topic-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),pr
 
 ### State Store Metrics
 
-All the following metrics have a recording level of `debug`, except for the `record-e2e-latency-*` metrics which have a recording level `trace` and `num-open-iterators` which has recording level `info`. Note that the `store-scope` value is specified in `StoreSupplier#metricsScope()` for user's customized state stores; for built-in state stores, currently we have: 
+All the following metrics have a recording level of `debug`, except for the `record-e2e-latency-*` metrics which have a recording level `trace` and `num-open-iterators` and `num-keys` which have recording level `info`. Note that the `store-scope` value is specified in `StoreSupplier#metricsScope()` for user's customized state stores; for built-in state stores, currently we have: 
 
   * `in-memory-state`
   * `in-memory-lru-state`
@@ -5634,6 +5842,19 @@ num-open-iterators
 <td>
 
 The current number of iterators on the store that have been created, but not yet closed.
+</td>  
+<td>
+
+kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)
+</td> </tr>  
+<tr>  
+<td>
+
+num-keys
+</td>  
+<td>
+
+The current number of keys in the in-memory state store. Only reported for in-memory state stores; not available for RocksDB-backed stores.
 </td>  
 <td>
 

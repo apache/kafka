@@ -149,8 +149,10 @@ class ActiveTaskCreator {
                 taskId,
                 Task.TaskType.ACTIVE,
                 eosEnabled(applicationConfig),
+                applicationConfig.getBoolean(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG),
                 logContext,
                 stateDirectory,
+                time,
                 topology.storeToChangelogTopic(),
                 partitions,
                 upgradeFrom);
