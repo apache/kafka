@@ -846,6 +846,33 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    public void shouldThrowForNullStoredValueForTimestampedWindowRangeWithHeadersQuery() {
+        setUp();
+        store.init(context, store);
+
+        // A ReadOnlyRecord carries the stored event-time; a value that deserializes to null has none,
+        // so the entry cannot be represented and next() throws (rather than NPE-ing on the null value).
+        final Windowed<Bytes> windowedKeyBytes = new Windowed<>(KEY_BYTES, new TimeWindow(1_000L, 5_000L));
+        when(innerStoreMock.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) QueryResult.forResult(
+                windowRangeIterator(List.of(KeyValue.pair(windowedKeyBytes, (byte[]) null)))));
+
+        final QueryResult<ReadOnlyRecordIterator<Windowed<String>, String>> result = store.query(
+            TimestampedWindowRangeWithHeadersQuery.<String, String>withWindowStartRange(
+                Instant.ofEpochMilli(0), Instant.ofEpochMilli(10_000)),
+            PositionBound.unbounded(),
+            new QueryConfig(false));
+
+        assertTrue(result.isSuccess());
+        try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = result.getResult()) {
+            assertTrue(iterator.hasNext());
+            final StreamsException exception = assertThrows(StreamsException.class, iterator::next);
+            assertTrue(exception.getMessage().contains("its value is null"), exception.getMessage());
+        }
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private WindowRangeQuery<?, ?> forwardedRawRangeQuery(final Query<?> query) {
         when(innerStoreMock.query(any(), any(PositionBound.class), any(QueryConfig.class)))
             .thenReturn((QueryResult) QueryResult.forResult(windowRangeIterator(List.of())));

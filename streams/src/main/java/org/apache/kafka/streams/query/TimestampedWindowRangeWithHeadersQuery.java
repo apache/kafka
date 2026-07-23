@@ -25,6 +25,7 @@ import org.apache.kafka.streams.state.SessionStoreWithHeaders;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 
 import java.time.Instant;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -114,6 +115,7 @@ public final class TimestampedWindowRangeWithHeadersQuery<K, V> implements Query
      * @param <V> The type of the value that will be retrieved
      */
     public static <K, V> TimestampedWindowRangeWithHeadersQuery<K, V> withKey(final K key) {
+        Objects.requireNonNull(key, "the key should not be null");
         return new TimestampedWindowRangeWithHeadersQuery<>(Optional.of(key), Optional.empty(), Optional.empty());
     }
 

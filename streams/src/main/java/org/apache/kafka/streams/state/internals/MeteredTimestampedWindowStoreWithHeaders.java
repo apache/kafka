@@ -645,10 +645,13 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
      * <p>A {@link ReadOnlyRecord} timestamp is contractually non-negative, so an entry with a
      * negative stored timestamp cannot be represented -- for example a {@code WithHeaders} store
      * built over a plain, non-timestamped window supplier surfaces entries with
-     * {@code NO_TIMESTAMP} (-1). This mirrors the rule the point/range headers queries apply. But
-     * because a lazily-evaluated iterator has already returned a successful {@link QueryResult}
-     * before any entry is read, such an entry cannot be surfaced as a query-level failure; it is
-     * instead reported by throwing a {@link StreamsException} while advancing the iterator.
+     * {@code NO_TIMESTAMP} (-1). This mirrors the rule the point/range headers queries apply. A
+     * value that deserializes to null has no event-time either and is reported the same way (though,
+     * unlike {@code NO_TIMESTAMP}, that is a fail-fast safety net -- a native store cannot hold a
+     * null value). But because a lazily-evaluated iterator has already returned a successful
+     * {@link QueryResult} before any entry is read, such an entry cannot be surfaced as a query-level
+     * failure; it is instead reported by throwing a {@link StreamsException} while advancing the
+     * iterator.
      *
      * <p>Because {@link #next()} can throw mid-iteration, the caller must always close this iterator
      * (via try-with-resources or a {@code finally} block) even when iteration throws: a caller that
@@ -692,8 +695,19 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
         public ReadOnlyRecord<Windowed<K>, V> next() {
             final KeyValue<RawKey, byte[]> next = iter.next();
             final ValueTimestampHeaders<V> valueTimestampHeaders = deserializeValue(next.value);
-            final Headers headers = valueTimestampHeaders.headers();
+            // A ReadOnlyRecord carries the stored event-time, so an entry that has none cannot be
+            // represented. A value that deserializes to null has no event-time, so it is reported the
+            // same way as a negative/absent timestamp (below). The headers deref is guarded so we can
+            // build the error message rather than NPE. This is a fail-fast safety net: a null value is
+            // unreachable for a native store (a null value cannot be stored).
+            final Headers headers = valueTimestampHeaders != null ? valueTimestampHeaders.headers() : new RecordHeaders();
             final Windowed<K> windowedKey = toWindowedKey.apply(next.key, headers);
+            if (valueTimestampHeaders == null) {
+                throw new StreamsException(
+                    "Cannot represent the stored record for key [" + windowedKey.key()
+                        + "] and window [" + windowedKey.window() + "] as a ReadOnlyRecord:"
+                        + " its value is null.");
+            }
             if (valueTimestampHeaders.timestamp() < 0) {
                 throw new StreamsException(
                     "Cannot represent the stored record for key [" + windowedKey.key()
