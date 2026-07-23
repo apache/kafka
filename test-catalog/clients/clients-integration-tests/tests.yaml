@@ -358,6 +358,7 @@ org.apache.kafka.clients.consumer.ShareConsumerCallbackTest:
 org.apache.kafka.clients.consumer.ShareConsumerDLQTest:
 - testDlqCopiesRecordsReadFromRemoteAndLocalStorage
 - testDlqCopiesRecordsReadFromRemoteStorage
+- testDlqCopyRecordSkippedWhenDecompressedSizeExceedsDlqMaxMessageBytes
 - testDlqNotTriggeredWhenGatedOff
 - testDlqRecordsRoutedToCorrectDlqPartition
 - testDlqRespectsDlqTopicMaxMessageBytesNotEqToSourceTopic
