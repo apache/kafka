@@ -630,12 +630,11 @@ public class ClusterControlManager {
 
     public void replay(UnregisterControllerRecord record) {
         int controllerId = record.controllerId();
-        ControllerRegistration registration = controllerRegistrations.get(controllerId);
+        ControllerRegistration registration = controllerRegistrations.remove(controllerId);
         if (registration == null) {
             throw new RuntimeException(String.format("Unable to replay %s: no controller " +
                 "registration found for that id", record));
         } else {
-            controllerRegistrations.remove(controllerId);
             log.info("Replayed {}", record);
         }
     }

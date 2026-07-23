@@ -232,7 +232,7 @@ When using controller endpoints use the --bootstrap-controller flag:
 $ bin/kafka-metadata-quorum.sh --bootstrap-controller localhost:9093 remove-controller --controller-id <id> --controller-directory-id <directory-id>
 ```
 
-To also unregister the controller from the cluster metadata after it has been removed from the voter set, pass the `--unregister` flag: 
+To remove a KRaft voter and then unregister that controller from the cluster, pass the `--unregister` flag: 
 
 ```bash
 $ bin/kafka-metadata-quorum.sh --bootstrap-server localhost:9092 remove-controller --controller-id <id> --controller-directory-id <directory-id> --unregister

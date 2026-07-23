@@ -2164,7 +2164,7 @@ public final class QuorumController implements Controller {
     ) {
         return appendWriteEvent("unregisterController", context.deadlineNs(),
             () -> {
-                if (nodeId == controllerId && isActiveController()) {
+                if (nodeId == controllerId) {
                     throw new InvalidRequestException("Controller cannot unregister itself while it is active.");
                 }
                 return clusterControl.unregisterController(controllerId);
