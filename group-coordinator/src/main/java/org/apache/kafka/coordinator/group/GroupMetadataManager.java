@@ -2221,7 +2221,7 @@ public class GroupMetadataManager {
         if (assignmentUpdate == AssignmentUpdate.NONE && group.state() == StreamsGroup.StreamsGroupState.STABLE) {
             // We are not computing a new target assignment later, thus we try to refine the current target assignment
             // into an intermediate assignment (with warm-up tasks) the member should be reconciled towards.
-            refinedAssignment = maybeRefineAssignment( // no-op for now
+            refinedAssignment = maybeRefineAssignment(// no-op for now
                 updatedMember,
                 group.targetAssignment(),
                 group.taskOffsets(),
@@ -2284,7 +2284,7 @@ public class GroupMetadataManager {
         // yet reconciled (a rebalance is still in progress) -- refine the target assignment into an intermediate
         // assignment (with warm-up tasks) the member should be reconciled towards.
         if (refinedAssignment == null) {
-            refinedAssignment = maybeRefineAssignment( // no-op for now
+            refinedAssignment = maybeRefineAssignment(// no-op for now
                 updatedMember,
                 updateTargetAssignmentResult.targetAssignment,
                 group.taskOffsets(),
