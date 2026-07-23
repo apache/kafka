@@ -78,24 +78,23 @@ public class ConnectInternalTopics {
             var internalTopicsConfig = new InternalTopicsConfig(workerProperties);
             internalTopicsConfig.validateTopicNames();
             out.println("Running create command for internal topics");
-            runCommand(internalTopicsConfig, out, err);
+            runCommand(internalTopicsConfig, out);
         } else {
             throw new ArgumentParserException("Unrecognized subcommand: '" + subcommand + "'", parser);
         }
     }
 
-    private static void runCommand(InternalTopicsConfig config, PrintStream out, PrintStream err) {
+    private static void runCommand(InternalTopicsConfig config, PrintStream out) {
         var adminProps = new HashMap<>(config.originals());
         out.println("Admin properties loaded for topic admin");
         try (var sharedAdmin = new SharedTopicAdmin(adminProps)) {
-            createInternalTopic(sharedAdmin, buildOffsetTopicSettings(config, out), out, err);
-            createInternalTopic(sharedAdmin, buildConfigTopicSettings(config, out), out, err);
-            createInternalTopic(sharedAdmin, buildStatusTopicSettings(config, out), out, err);
+            createInternalTopic(sharedAdmin, buildOffsetTopicSettings(config, out), out);
+            createInternalTopic(sharedAdmin, buildConfigTopicSettings(config, out), out);
+            createInternalTopic(sharedAdmin, buildStatusTopicSettings(config, out), out);
         }
     }
 
-    @SuppressWarnings("unused")
-    private static void createInternalTopic(SharedTopicAdmin sharedAdmin, TopicSettings settings, PrintStream out, PrintStream err) {
+    private static void createInternalTopic(SharedTopicAdmin sharedAdmin, TopicSettings settings, PrintStream out) {
         out.println("Creating internal topic: " + settings.topicName);
         var topicDescription = TopicAdmin.defineTopic(settings.topicName)
                 .config(settings.topicSettings)
@@ -177,12 +176,12 @@ public class ConnectInternalTopics {
                         "")
                 .define(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG,
                         ConfigDef.Type.INT,
-                        25,
+                        DistributedConfig.OFFSET_STORAGE_PARTITIONS_DEFAULT,
                         ConfigDef.Importance.LOW,
                         "")
                 .define(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG,
                         ConfigDef.Type.SHORT,
-                        (short) 3,
+                        DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_DEFAULT,
                         ConfigDef.Importance.LOW,
                         "")
                 .define(DistributedConfig.CONFIG_TOPIC_CONFIG,
@@ -191,7 +190,7 @@ public class ConnectInternalTopics {
                         "")
                 .define(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG,
                         ConfigDef.Type.SHORT,
-                        (short) 3,
+                        DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_DEFAULT,
                         ConfigDef.Importance.LOW,
                         "")
                 .define(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG,
@@ -200,12 +199,12 @@ public class ConnectInternalTopics {
                         "")
                 .define(DistributedConfig.STATUS_STORAGE_PARTITIONS_CONFIG,
                         ConfigDef.Type.INT,
-                        5,
+                        DistributedConfig.STATUS_STORAGE_PARTITIONS_DEFAULT,
                         ConfigDef.Importance.LOW,
                         "")
                 .define(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG,
                         ConfigDef.Type.SHORT,
-                        (short) 3,
+                        DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_DEFAULT,
                         ConfigDef.Importance.LOW,
                         "");
 

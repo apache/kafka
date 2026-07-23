@@ -143,12 +143,14 @@ public final class DistributedConfig extends WorkerConfig {
      * <code>offset.storage.partitions</code>
      */
     public static final String OFFSET_STORAGE_PARTITIONS_CONFIG = OFFSET_STORAGE_PREFIX + PARTITIONS_SUFFIX;
+    public static final int OFFSET_STORAGE_PARTITIONS_DEFAULT = 25;
     private static final String OFFSET_STORAGE_PARTITIONS_CONFIG_DOC = "The number of partitions used when creating the offset storage topic";
 
     /**
      * <code>offset.storage.replication.factor</code>
      */
     public static final String OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG = OFFSET_STORAGE_PREFIX + REPLICATION_FACTOR_SUFFIX;
+    public static final short OFFSET_STORAGE_REPLICATION_FACTOR_DEFAULT = 3;
     private static final String OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG_DOC = "Replication factor used when creating the offset storage topic";
 
     /**
@@ -161,6 +163,7 @@ public final class DistributedConfig extends WorkerConfig {
      * <code>config.storage.replication.factor</code>
      */
     public static final String CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG = CONFIG_STORAGE_PREFIX + REPLICATION_FACTOR_SUFFIX;
+    public static final short CONFIG_STORAGE_REPLICATION_FACTOR_DEFAULT = 3;
     private static final String CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG_DOC = "Replication factor used when creating the configuration storage topic";
 
     /**
@@ -173,12 +176,14 @@ public final class DistributedConfig extends WorkerConfig {
      * <code>status.storage.partitions</code>
      */
     public static final String STATUS_STORAGE_PARTITIONS_CONFIG = STATUS_STORAGE_PREFIX + PARTITIONS_SUFFIX;
+    public static final int STATUS_STORAGE_PARTITIONS_DEFAULT = 5;
     private static final String STATUS_STORAGE_PARTITIONS_CONFIG_DOC = "The number of partitions used when creating the status storage topic";
 
     /**
      * <code>status.storage.replication.factor</code>
      */
     public static final String STATUS_STORAGE_REPLICATION_FACTOR_CONFIG = STATUS_STORAGE_PREFIX + REPLICATION_FACTOR_SUFFIX;
+    public static final short STATUS_STORAGE_REPLICATION_FACTOR_DEFAULT = 3;
     private static final String STATUS_STORAGE_REPLICATION_FACTOR_CONFIG_DOC = "Replication factor used when creating the status storage topic";
 
     /**
@@ -189,7 +194,7 @@ public final class DistributedConfig extends WorkerConfig {
     public static final String CONNECT_PROTOCOL_DEFAULT = ConnectProtocolCompatibility.SESSIONED.toString();
 
 
-    public static final String INTERNAL_TOPICS_CREATION_ENABLE_CONFIG = "internal.topics.creation.enable";
+    public static final String INTERNAL_TOPICS_CREATION_ENABLE_CONFIG = "internal.topics.automatic.creation.enable";
     public static final String INTERNAL_TOPICS_CREATION_ENABLE_DOC = "Whether to automatically create internal topics used by Connect, such as the offset, config, and status topics. "
             + "If set to false, these topics must be created manually before starting the Connect worker.";
     public static final Boolean INTERNAL_TOPICS_CREATION_ENABLE_DEFAULT = true;
@@ -446,13 +451,13 @@ public final class DistributedConfig extends WorkerConfig {
                     OFFSET_STORAGE_TOPIC_CONFIG_DOC)
             .define(OFFSET_STORAGE_PARTITIONS_CONFIG,
                     ConfigDef.Type.INT,
-                    25,
+                    OFFSET_STORAGE_PARTITIONS_DEFAULT,
                     PARTITIONS_VALIDATOR,
                     ConfigDef.Importance.LOW,
                     OFFSET_STORAGE_PARTITIONS_CONFIG_DOC)
             .define(OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG,
                     ConfigDef.Type.SHORT,
-                    (short) 3,
+                    OFFSET_STORAGE_REPLICATION_FACTOR_DEFAULT,
                     REPLICATION_FACTOR_VALIDATOR,
                     ConfigDef.Importance.LOW,
                     OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG_DOC)
@@ -462,7 +467,7 @@ public final class DistributedConfig extends WorkerConfig {
                     CONFIG_TOPIC_CONFIG_DOC)
             .define(CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG,
                     ConfigDef.Type.SHORT,
-                    (short) 3,
+                    CONFIG_STORAGE_REPLICATION_FACTOR_DEFAULT,
                     REPLICATION_FACTOR_VALIDATOR,
                     ConfigDef.Importance.LOW,
                     CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG_DOC)
@@ -472,13 +477,13 @@ public final class DistributedConfig extends WorkerConfig {
                     STATUS_STORAGE_TOPIC_CONFIG_DOC)
             .define(STATUS_STORAGE_PARTITIONS_CONFIG,
                     ConfigDef.Type.INT,
-                    5,
+                    STATUS_STORAGE_PARTITIONS_DEFAULT,
                     PARTITIONS_VALIDATOR,
                     ConfigDef.Importance.LOW,
                     STATUS_STORAGE_PARTITIONS_CONFIG_DOC)
             .define(STATUS_STORAGE_REPLICATION_FACTOR_CONFIG,
                     ConfigDef.Type.SHORT,
-                    (short) 3,
+                    STATUS_STORAGE_REPLICATION_FACTOR_DEFAULT,
                     REPLICATION_FACTOR_VALIDATOR,
                     ConfigDef.Importance.LOW,
                     STATUS_STORAGE_REPLICATION_FACTOR_CONFIG_DOC)

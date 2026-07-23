@@ -402,7 +402,7 @@ public class WorkerConfig extends AbstractConfig {
     }
 
     public boolean internalTopicsCreationEnabled() {
-        return false;
+        return true;
     }
 
     /**

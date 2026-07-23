@@ -63,6 +63,9 @@ public class ConnectInternalTopicsTest {
             assertTopicPartitions(adminClient, CONFIG_TOPIC_NAME, 1);
             assertTopicPartitions(adminClient, STATUS_TOPIC_NAME, 5);
             assertTopicPartitions(adminClient, OFFSET_TOPIC_NAME, 25);
+            assertTopicReplicationFactor(adminClient, CONFIG_TOPIC_NAME, (short) 3);
+            assertTopicReplicationFactor(adminClient, STATUS_TOPIC_NAME, (short) 3);
+            assertTopicReplicationFactor(adminClient, OFFSET_TOPIC_NAME, (short) 3);
         }
     }
 
@@ -127,6 +130,9 @@ public class ConnectInternalTopicsTest {
             assertTopicConfig(adminClient, CONFIG_TOPIC_NAME, "retention.ms", "1000");
             assertTopicConfig(adminClient, STATUS_TOPIC_NAME, "retention.ms", "2000");
             assertTopicConfig(adminClient, OFFSET_TOPIC_NAME, "retention.ms", "3000");
+            assertTopicReplicationFactor(adminClient, CONFIG_TOPIC_NAME, (short) 3);
+            assertTopicReplicationFactor(adminClient, STATUS_TOPIC_NAME, (short) 3);
+            assertTopicReplicationFactor(adminClient, OFFSET_TOPIC_NAME, (short) 3);
         }
     }
 
@@ -153,6 +159,9 @@ public class ConnectInternalTopicsTest {
             assertTopicPartitions(adminClient, CONFIG_TOPIC_NAME, 1);
             assertTopicPartitions(adminClient, STATUS_TOPIC_NAME, 5);
             assertTopicPartitions(adminClient, OFFSET_TOPIC_NAME, 25);
+            assertTopicReplicationFactor(adminClient, CONFIG_TOPIC_NAME, (short) 1);
+            assertTopicReplicationFactor(adminClient, STATUS_TOPIC_NAME, (short) 3);
+            assertTopicReplicationFactor(adminClient, OFFSET_TOPIC_NAME, (short) 3);
         }
     }
 
@@ -175,6 +184,13 @@ public class ConnectInternalTopicsTest {
         var describeResult = admin.describeConfigs(Collections.singleton(resource));
         var config = describeResult.all().get().get(resource);
         assertEquals(expectedValue, config.get(configKey).value());
+    }
+
+    private static void assertTopicReplicationFactor(Admin admin, String topic, short expectedReplicationFactor) throws Exception {
+        var topicDescriptionFuture = admin.describeTopics(Collections.singleton(topic)).topicNameValues().get(topic);
+        var topicDescription = topicDescriptionFuture.get();
+        var replicationFactor = topicDescription.partitions().get(0).replicas().size();
+        assertEquals(expectedReplicationFactor, replicationFactor);
     }
 
     private static void assertTopicPartitions(Admin admin, String topic, int expectedPartitions) throws Exception {
