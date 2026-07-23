@@ -27,7 +27,6 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.Change;
@@ -517,7 +516,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
     // bytes, so unwrap it when the in-memory encoding is the headers-aware format.
     private byte[] plainPriorValueForBuffered(final Bytes key) {
         final byte[] priorValue = internalPriorValueForBuffered(key);
-        return storeHeaders ? unwrapHeadersFormatToPlainValue(priorValue) : priorValue;
+        return storeHeaders ? Utils.rawPlainValue(priorValue) : priorValue;
     }
 
     // Normalizes a restored buffer value so its value parts match the encoding currently used
@@ -532,9 +531,9 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
             // unknown, so we use empty headers and the record-context timestamp.
             final long timestamp = value.context().timestamp();
             return new BufferValue(
-                wrapPlainValueAsHeadersFormat(value.priorValue(), timestamp),
-                wrapPlainValueAsHeadersFormat(value.oldValue(), timestamp),
-                wrapPlainValueAsHeadersFormat(value.newValue(), timestamp),
+                Utils.rawValueTimestampHeaders(value.priorValue(), timestamp),
+                Utils.rawValueTimestampHeaders(value.oldValue(), timestamp),
+                Utils.rawValueTimestampHeaders(value.newValue(), timestamp),
                 value.context()
             );
         }
@@ -594,35 +593,6 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
         return valueSerde.innerSerde().deserializer().deserialize(changelogTopic, fallbackHeaders, bytes);
     }
 
-    // Wraps a plain value part as a ValueTimestampHeaders blob ([headersSize=0][timestamp][value])
-    // without needing a value serde. Used to normalize restored V0-V3 records to the in-memory
-    // encoding used when header stores are enabled.
-    private static byte[] wrapPlainValueAsHeadersFormat(final byte[] plainValue, final long timestamp) {
-        if (plainValue == null) {
-            return null;
-        }
-        final ByteBuffer buffer = ByteBuffer.allocate(ByteUtils.sizeOfVarint(0) + Long.BYTES + plainValue.length);
-        ByteUtils.writeVarint(0, buffer); // empty headers
-        buffer.putLong(timestamp);
-        buffer.put(plainValue);
-        return buffer.array();
-    }
-
-    // Strips the ValueTimestampHeaders wrapper ([headersSize][headers][timestamp]) from a value
-    // part, leaving the plain value bytes. Used to normalize restored V4 records to the in-memory
-    // encoding used when header stores are disabled.
-    private static byte[] unwrapHeadersFormatToPlainValue(final byte[] headersFormatValue) {
-        if (headersFormatValue == null) {
-            return null;
-        }
-        final ByteBuffer buffer = ByteBuffer.wrap(headersFormatValue);
-        final int headersSize = ByteUtils.readVarint(buffer);
-        buffer.position(buffer.position() + headersSize + Long.BYTES);
-        final byte[] plainValue = new byte[buffer.remaining()];
-        buffer.get(plainValue);
-        return plainValue;
-    }
-
     @Override
     public boolean put(final long time,
                        final Record<K, Change<V>> record,
@@ -632,9 +602,9 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
 
         // The record's own headers (not the processing context's) describe the new value and must be
         // the ones forwarded for this key on eviction.
-        final RecordHeaders newHeaders = new RecordHeaders(record.headers());
-        final long newTimestamp = record.timestamp();
-        final Bytes serializedKey = Bytes.wrap(keySerde.serializer().serialize(changelogTopic, newHeaders, record.key()));
+        final RecordHeaders headers = new RecordHeaders(record.headers());
+        final long timestamp = record.timestamp();
+        final Bytes serializedKey = Bytes.wrap(keySerde.serializer().serialize(changelogTopic, headers, record.key()));
         final BufferValue buffered = getBuffered(serializedKey);
 
         // The context stored with the entry carries the currently-processed record's headers; these
@@ -645,7 +615,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
             recordContext.offset(),
             recordContext.partition(),
             recordContext.topic(),
-            newHeaders
+            headers
         );
 
         // The old value's original headers/timestamp are not carried by the incoming record. On an
@@ -662,10 +632,10 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
         }
 
         final Change<V> change = record.value();
-        final byte[] newValue = serializeValuePart(change.newValue, newTimestamp, newHeaders);
+        final byte[] newValue = serializeValuePart(change.newValue, timestamp, headers);
         // In plain mode the old value is still serialized with the current record's headers, exactly
         // as before, so the stored bytes are unchanged for non-header stores.
-        final byte[] oldValue = serializeValuePart(change.oldValue, oldTimestamp, storeHeaders ? oldHeaders : newHeaders);
+        final byte[] oldValue = serializeValuePart(change.oldValue, oldTimestamp, storeHeaders ? oldHeaders : headers);
         final byte[] serializedPriorValue = buffered == null ? oldValue : buffered.priorValue();
 
         cleanPut(

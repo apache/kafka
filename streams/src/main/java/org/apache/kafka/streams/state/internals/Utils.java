@@ -108,6 +108,27 @@ public class Utils {
     }
 
     /**
+     * Build a serialized ValueTimestampHeaders with empty headers from a plain value and a timestamp.
+     * This is the inverse of {@link #rawPlainValue(byte[])} for the empty-headers case.
+     *
+     * Format conversion:
+     * Input:  [value], timestamp
+     * Output: [headersSize(varint)=0][timestamp(8)][value]
+     */
+    public static byte[] rawValueTimestampHeaders(final byte[] rawPlainValue, final long timestamp) {
+        if (rawPlainValue == null) {
+            return null;
+        }
+
+        final ByteBuffer buffer = ByteBuffer.allocate(
+            ByteUtils.sizeOfVarint(0) + StateSerdes.TIMESTAMP_SIZE + rawPlainValue.length);
+        ByteUtils.writeVarint(0, buffer); // empty headers
+        buffer.putLong(timestamp);
+        buffer.put(rawPlainValue);
+        return buffer.array();
+    }
+
+    /**
      * Extract raw timestamped value (timestamp + value) from serialized ValueTimestampHeaders.
      * This strips the headers portion but keeps timestamp and value intact.
      *
