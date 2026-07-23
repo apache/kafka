@@ -618,14 +618,27 @@ public class GroupCoordinatorConfigTest {
         GroupCoordinatorConfig nonEmptyTagsConfig = createConfig(configs);
         assertEquals(List.of("zone", "cluster"), nonEmptyTagsConfig.streamsGroupRackAwareAssignmentTags());
 
+        // surrounding whitespace is trimmed: " zone , cluster " parses and returns two clean tags
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, " zone , cluster ");
+        GroupCoordinatorConfig whitespaceTagsConfig = createConfig(configs);
+        assertEquals(List.of("zone", "cluster"), whitespaceTagsConfig.streamsGroupRackAwareAssignmentTags());
+
         // rejects empty entries in the list
         configs.clear();
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone, ");
-        assertThrows(ConfigException.class, () -> createConfig(configs));
+        assertEquals("Configuration 'group.streams.rack.aware.assignment.tags' values must not be empty.",
+            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
 
         // duplicate tag keys make the broker refuse to start
         configs.clear();
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,zone");
+        assertEquals("group.streams.rack.aware.assignment.tags must not contain duplicate tag keys.",
+            assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+
+        // duplicate tag keys are detected regardless of surrounding whitespace
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, " zone , zone ");
         assertEquals("group.streams.rack.aware.assignment.tags must not contain duplicate tag keys.",
             assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
     }

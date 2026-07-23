@@ -353,14 +353,30 @@ public class GroupConfigTest {
     @Test
     public void testStreamsRackAwareAssignmentTagsValidation() {
         // Duplicate rack-aware assignment tags are rejected rather than silently de-duplicated.
-        Map<String, String> props = createValidGroupConfig();
-        props.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,zone");
-        doTestInvalidProps(props, InvalidConfigurationException.class);
+        Map<String, String> duplicateProps = createValidGroupConfig();
+        duplicateProps.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,zone");
+        assertEquals("streams.rack.aware.assignment.tags must not contain duplicate tag keys.",
+            assertThrows(InvalidConfigurationException.class,
+                () -> GroupConfig.validate(duplicateProps, createGroupCoordinatorConfig(), createShareGroupConfig())).getMessage());
+
+        // Duplicates are detected regardless of surrounding whitespace.
+        Map<String, String> whitespaceDuplicateProps = createValidGroupConfig();
+        whitespaceDuplicateProps.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, " zone , zone ");
+        assertEquals("streams.rack.aware.assignment.tags must not contain duplicate tag keys.",
+            assertThrows(InvalidConfigurationException.class,
+                () -> GroupConfig.validate(whitespaceDuplicateProps, createGroupCoordinatorConfig(), createShareGroupConfig())).getMessage());
 
         // Distinct rack-aware assignment tags are accepted.
-        props = createValidGroupConfig();
-        props.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,cluster");
-        doTestValidProps(props);
+        Map<String, String> distinctProps = createValidGroupConfig();
+        distinctProps.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,cluster");
+        doTestValidProps(distinctProps);
+
+        // Surrounding whitespace is trimmed: " zone , cluster " parses and returns two clean tags.
+        Map<String, String> whitespaceProps = createValidGroupConfig();
+        whitespaceProps.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, " zone , cluster ");
+        doTestValidProps(whitespaceProps);
+        assertEquals(Optional.of(List.of("zone", "cluster")),
+            new GroupConfig(whitespaceProps).streamsRackAwareAssignmentTags());
     }
 
     private void doTestInvalidProps(Map<String, String> props, Class<? extends Exception> exceptionClassName) {
