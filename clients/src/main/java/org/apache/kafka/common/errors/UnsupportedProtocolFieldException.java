@@ -16,6 +16,15 @@
  */
 package org.apache.kafka.common.errors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
+/**
+ * Indicates that a request contains a field or field value that is not supported by the API version
+ * negotiated with the broker, and that a higher version would be required to use it. This is a more
+ * specific subtype of {@link UnsupportedVersionException} that lets callers distinguish an unsupported
+ * field from a wholly unsupported API version.
+ */
+@InterfaceAudience.Public
 public class UnsupportedProtocolFieldException extends UnsupportedVersionException {
     private static final long serialVersionUID = 1L;
 
