@@ -42,10 +42,10 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.RecordVersion;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.PrimitiveRef;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.common.utils.internals.PrimitiveRef;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.RequestLocal;
 import org.apache.kafka.server.common.TransactionVersion;
@@ -957,7 +957,7 @@ public class UnifiedLog implements AutoCloseable {
             localLog.checkIfMemoryMappedBufferClosed();
             producerExpireCheck.cancel(true);
             maybeHandleIOException(
-                    () -> "Error while renaming dir for " + topicPartition() + " in dir " + dir().getParent(),
+                    () -> "Error while taking producer state snapshot for " + topicPartition() + " in dir " + dir().getParent(),
                     () -> {
                         // We take a snapshot at the last written offset to hopefully avoid the need to scan the log
                         // after restarting and to ensure that we cannot inadvertently hit the upgrade optimization
@@ -1180,7 +1180,7 @@ public class UnifiedLog implements AutoCloseable {
                                             // to be consistent with pre-compression bytesRejectedRate recording
                                             brokerTopicStats.topicStats(topicPartition().topic()).bytesRejectedRate().mark(records.sizeInBytes());
                                             brokerTopicStats.allTopicsStats().bytesRejectedRate().mark(records.sizeInBytes());
-                                            throw new RecordTooLargeException("Message batch size is " + batch.sizeInBytes() + " bytes in append to" +
+                                            throw new RecordTooLargeException("Message batch size is " + batch.sizeInBytes() + " bytes in append to " +
                                                     "partition " + topicPartition() + " which exceeds the maximum configured size of " + config().maxMessageSize() + ".");
                                         }
                                     });
@@ -2151,7 +2151,7 @@ public class UnifiedLog implements AutoCloseable {
             long maxOffsetInMessages = appendInfo.lastOffset();
 
             if (segment.shouldRoll(new RollParams(config().maxSegmentMs(), config().segmentSize(), appendInfo.maxTimestamp(), appendInfo.lastOffset(), messagesSize, now))) {
-                logger.debug("Rolling new log segment (log_size = {}/{}}, " +
+                logger.debug("Rolling new log segment (log_size = {}/{}, " +
                           "offset_index_size = {}/{}, " +
                           "time_index_size = {}/{}, " +
                           "inactive_time_ms = {}/{}).",
@@ -2321,7 +2321,7 @@ public class UnifiedLog implements AutoCloseable {
     // visible for testing
     public void flushProducerStateSnapshot(Path snapshot) {
         maybeHandleIOException(
-                () -> "Error while deleting producer state snapshot " + snapshot + " for " + topicPartition() + " in dir " + dir().getParent(),
+                () -> "Error while flushing producer state snapshot " + snapshot + " for " + topicPartition() + " in dir " + dir().getParent(),
                 () -> {
                     Utils.flushFileIfExists(snapshot);
                     return null;

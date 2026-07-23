@@ -34,8 +34,8 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.CloseableIterator;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 
 import org.slf4j.Logger;
 

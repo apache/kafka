@@ -621,7 +621,20 @@ public final class DistributedConfig extends WorkerConfig {
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
         CommonClientConfigs.warnDisablingExponentialBackoff(this);
+        warnIfConnectionsMaxIdleMsLowerThanRebalanceTimeoutMs();
         return super.postProcessParsedConfig(parsedValues);
+    }
+
+    private void warnIfConnectionsMaxIdleMsLowerThanRebalanceTimeoutMs() {
+        long connectionsMaxIdleMs = getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG);
+        int rebalanceTimeoutMs = getInt(REBALANCE_TIMEOUT_MS_CONFIG);
+        if (connectionsMaxIdleMs >= 0 && connectionsMaxIdleMs < rebalanceTimeoutMs) {
+            log.warn("Configuration '{}' with value '{}' is lower than configuration '{}' with value '{}'. " +
+                    "This may cause the connection to the group coordinator to be closed during an ongoing rebalance, " +
+                    "which can prolong or disrupt group rejoin.",
+                CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG, connectionsMaxIdleMs,
+                REBALANCE_TIMEOUT_MS_CONFIG, rebalanceTimeoutMs);
+        }
     }
 
     public DistributedConfig(Map<String, String> props) {

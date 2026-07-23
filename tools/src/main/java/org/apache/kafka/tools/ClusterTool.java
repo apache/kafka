@@ -16,12 +16,15 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DescribeClusterOptions;
+import org.apache.kafka.clients.admin.DescribeFeaturesOptions;
+import org.apache.kafka.clients.admin.internals.InternalDescribeFeaturesResult;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.server.util.CommandLineUtils;
 
 import net.sourceforge.argparse4j.ArgumentParsers;
@@ -34,9 +37,12 @@ import net.sourceforge.argparse4j.inf.Subparsers;
 
 import java.io.PrintStream;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
@@ -75,7 +81,9 @@ public class ClusterTool {
                 .help("Unregister a broker.");
         Subparser listEndpoints = subparsers.addParser("list-endpoints")
                 .help("List endpoints");
-        for (Subparser subpparser : List.of(clusterIdParser, unregisterParser, listEndpoints)) {
+        Subparser apiVersionsParser = subparsers.addParser("api-versions")
+                .help("Get information about the api versions of the brokers or controllers.");
+        for (Subparser subpparser : List.of(clusterIdParser, unregisterParser, listEndpoints, apiVersionsParser)) {
             MutuallyExclusiveGroup connectionOptions = subpparser.addMutuallyExclusiveGroup().required(true);
             connectionOptions.addArgument("--bootstrap-server", "-b")
                     .action(store())
@@ -138,6 +146,12 @@ public class ClusterTool {
                         throw new IllegalArgumentException("The option --include-fenced-brokers is only supported with --bootstrap-server option");
                     }
                     listEndpoints(System.out, adminClient, listControllerEndpoints, includeFencedBrokers);
+                }
+                break;
+            }
+            case "api-versions": {
+                try (Admin adminClient = Admin.create(properties)) {
+                    apiVersionsCommand(System.out, adminClient);
                 }
                 break;
             }
@@ -207,5 +221,27 @@ public class ClusterTool {
                 throw ee;
             }
         }
+    }
+
+    static void apiVersionsCommand(PrintStream stream, Admin adminClient) throws Exception {
+        Collection<Node> nodes = adminClient.describeCluster().nodes().get();
+        Map<Node, InternalDescribeFeaturesResult> nodeApiVersions = new TreeMap<>(Comparator.comparingInt(Node::id));
+        nodes.forEach(node -> {
+            InternalDescribeFeaturesResult result = (InternalDescribeFeaturesResult) adminClient.describeFeatures(
+                    new DescribeFeaturesOptions().nodeId(node.id()));
+            nodeApiVersions.put(node, result);
+        });
+
+        nodeApiVersions.forEach((broker, future) -> {
+            try {
+                NodeApiVersions apiVersions = future.nodeApiVersions().get();
+                stream.print(broker + " -> " + apiVersions.toString(true) + "\n");
+            } catch (ExecutionException e) {
+                stream.print(broker + " -> ERROR: " + e.getCause() + "\n");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                stream.print(broker + " -> ERROR: " + e + "\n");
+            }
+        });
     }
 }

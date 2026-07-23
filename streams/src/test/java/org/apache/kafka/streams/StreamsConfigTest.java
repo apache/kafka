@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -82,6 +83,7 @@ import static org.apache.kafka.streams.StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFF
 import static org.apache.kafka.streams.StreamsConfig.STATE_DIR_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.adminClientPrefix;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
@@ -241,6 +243,22 @@ public class StreamsConfigTest {
         assertNull(returnedProps.get(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG));
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"", StreamsConfig.CONSUMER_PREFIX, StreamsConfig.MAIN_CONSUMER_PREFIX})
+    public void shouldAllowStaticMembershipWhenStreamsProtocolUsed(final String prefix) {
+        props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+        props.put(prefix + ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "static-member-1");
+
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final Map<String, Object> mainConsumerConfigs =
+            streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+
+        assertThat(
+            mainConsumerConfigs.get(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG),
+            equalTo("static-member-1-" + threadIdx)
+        );
+    }
+
     @Test
     public void consumerConfigMustContainStreamPartitionAssignorConfig() {
         props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 42);
@@ -249,7 +267,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, 9);
         props.put(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, 99_999L);
         props.put(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, 7L);
-        props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "dummy:host");
+        props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "dummy:8080");
         props.put(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG), 1024 * 1024);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> returnedProps = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
@@ -264,7 +282,7 @@ public class StreamsConfigTest {
             returnedProps.get(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG)
         );
         assertEquals(7L, returnedProps.get(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG));
-        assertEquals("dummy:host", returnedProps.get(StreamsConfig.APPLICATION_SERVER_CONFIG));
+        assertEquals("dummy:8080", returnedProps.get(StreamsConfig.APPLICATION_SERVER_CONFIG));
         assertEquals(1024 * 1024, returnedProps.get(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG)));
     }
 
@@ -1036,6 +1054,40 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "HeAdErS");
         config = new StreamsConfig(props);
         assertEquals("HeAdErS", config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG));
+    }
+
+    @Test
+    public void shouldUseDefaultInteractiveQueryIsolationLevelWhenNotSpecified() {
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals(IsolationLevel.READ_UNCOMMITTED, config.defaultInteractiveQueryIsolationLevel());
+    }
+
+    @Test
+    public void shouldAcceptValidInteractiveQueryIsolationLevels() {
+        props.put(StreamsConfig.DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG, "READ_UNCOMMITTED");
+        assertEquals(IsolationLevel.READ_UNCOMMITTED, new StreamsConfig(props).defaultInteractiveQueryIsolationLevel());
+
+        props.put(StreamsConfig.DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG, "READ_COMMITTED");
+        assertEquals(IsolationLevel.READ_COMMITTED, new StreamsConfig(props).defaultInteractiveQueryIsolationLevel());
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionForInvalidInteractiveQueryIsolationLevel() {
+        props.put(StreamsConfig.DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG, "FOO");
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertTrue(exception.getMessage().contains("Invalid value FOO for configuration default.interactive.query.isolation.level"));
+    }
+
+    @Test
+    public void shouldAcceptInteractiveQueryIsolationLevelCaseInsensitively() {
+        props.put(StreamsConfig.DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG, "read_uncommitted");
+        assertEquals(IsolationLevel.READ_UNCOMMITTED, new StreamsConfig(props).defaultInteractiveQueryIsolationLevel());
+
+        props.put(StreamsConfig.DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG, "read_committed");
+        assertEquals(IsolationLevel.READ_COMMITTED, new StreamsConfig(props).defaultInteractiveQueryIsolationLevel());
+
+        props.put(StreamsConfig.DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG, "Read_Committed");
+        assertEquals(IsolationLevel.READ_COMMITTED, new StreamsConfig(props).defaultInteractiveQueryIsolationLevel());
     }
 
     @Test
@@ -1828,23 +1880,6 @@ public class StreamsConfigTest {
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"", StreamsConfig.CONSUMER_PREFIX, StreamsConfig.MAIN_CONSUMER_PREFIX})
-    public void shouldThrowConfigExceptionWhenStreamsProtocolUsedWithStaticMembership(final String prefix) {
-        final Properties props = new Properties();
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:9092");
-        props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
-        props.put(prefix + ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "static-member-1");
-
-        final ConfigException exception = assertThrows(
-            ConfigException.class,
-            () -> new StreamsConfig(props)
-        );
-        assertTrue(exception.getMessage().contains("Streams rebalance protocol does not support static membership. " +
-            "Please set group.protocol=classic or remove group.instance.id from the configuration."));
-    }
-
     @Test
     public void shouldSetDefaultDeadLetterQueue() {
         final StreamsConfig config = new StreamsConfig(props);
@@ -1866,6 +1901,22 @@ public class StreamsConfigTest {
         }
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"dummy:host", "dummy:9999999999999999999999999", "dummy", "dummy:", ":port", ":", ":8080"})
+    public void shouldThrowConfigExceptionWithInvalidApplicationServerConfigValue(final String applicationServerConfig) {
+        props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, applicationServerConfig);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "127.0.0.1:8080", "localhost:8080", "[::1]:8080", "http://localhost:8080"})
+    public void shouldAcceptWithValidApplicationServerConfigValue(final String applicationServerConfigValue) {
+        props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, applicationServerConfigValue);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final Map<String, Object> returnedProps = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+        assertEquals(applicationServerConfigValue, returnedProps.get(StreamsConfig.APPLICATION_SERVER_CONFIG));
+    }
+
     @SuppressWarnings("deprecation")
     @Test
     public void shouldNotLogWarningWhenProcessingExceptionHandlerIsEnabledOnGlobalThread() {
@@ -1876,6 +1927,18 @@ public class StreamsConfigTest {
 
             assertEquals(0, streamsConfigLogs.getMessages().size());
         }
+    }
+
+    @Test
+    public void shouldDisableTransactionalStateStoresByDefault() {
+        assertFalse(streamsConfig.getBoolean(TRANSACTIONAL_STATE_STORES_CONFIG));
+    }
+
+    @Test
+    public void shouldEnableTransactionalStateStoresWhenConfigured() {
+        props.put(TRANSACTIONAL_STATE_STORES_CONFIG, true);
+        streamsConfig = new StreamsConfig(props);
+        assertTrue(streamsConfig.getBoolean(TRANSACTIONAL_STATE_STORES_CONFIG));
     }
 
     static class MisconfiguredSerde implements Serde<Object> {

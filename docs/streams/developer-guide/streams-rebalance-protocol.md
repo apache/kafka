@@ -1,6 +1,6 @@
 ---
 title: Streams Rebalance Protocol
-description:
+description: Kafka Streams rebalance protocol behavior, migration paths, and limitations.
 weight: 14
 tags: ['kafka', 'docs']
 aliases:
@@ -47,13 +47,15 @@ The following features are available in the current release:
 
 * **CLI Integration**: You can list, describe, and delete streams groups via the [bin/kafka-streams-groups.sh](/{version}/streams/developer-guide/kafka-streams-group-sh/) script.
 
+* **Topology Description Plugin**: Brokers can record a human-readable description of each streams group's processing topology via a pluggable backend, configured with `group.streams.topology.description.plugin.class`. The recorded topology can be inspected via the [`Admin`](/{version}/javadoc/org/apache/kafka/clients/admin/Admin.html) interface or `kafka-streams-groups.sh --describe --topology`. See the [Topology Description Plugin](/{version}/streams/developer-guide/topology-description-plugin/) documentation for details.
+
 * **Offline Migration**: After shutting down all members and waiting for their `session.timeout.ms` to expire (or forcing an explicit group leave), a classic group can be converted to a streams group and a streams group can be converted to a classic group. The only broker-side group data that will be preserved are the committed offsets. Internal topics (changelog and repartition topics) will continue to exist as regular Kafka topics.
+
+* **Static Membership**: Streams applications can configure `group.instance.id` when using `group.protocol=streams`. Kafka Streams derives unique group instance IDs for its stream threads internally.
 
 # What's Not Supported in This Version
 
 The following features are not yet available and should be avoided when using the new protocol:
-
-* **Static Membership**: Setting a client `instance.id` will be rejected.
 
 * **Topology Updates**: If a topology is changed significantly (e.g., by adding new source topics or changing the number of subtopologies), a new streams group must be created.
 
@@ -117,6 +119,7 @@ The following broker configurations control the behavior of streams groups. For 
 * [`group.streams.num.standby.replicas`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.num.standby.replicas): The default number of standby replicas for each task.
 * [`group.streams.max.standby.replicas`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.max.standby.replicas): Maximum for dynamic configurations of the standby replica configuration.
 * [`group.streams.initial.rebalance.delay.ms`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.initial.rebalance.delay.ms): The first rebalance of a new (ie, previously empty) group is delayed by this amount to allow more members to join the group.
+* [`group.streams.topology.description.plugin.class`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.topology.description.plugin.class): The fully qualified class name of a `StreamsGroupTopologyDescriptionPlugin` implementation. When not set, the [topology description feature](/{version}/streams/developer-guide/topology-description-plugin/) is disabled.
 
 ## Group Configuration
 
@@ -178,6 +181,10 @@ The main differences from consumer group APIs are:
 ## kafka-streams-groups.sh
 
 A new tool called `bin/kafka-streams-groups.sh` is added for working with streams groups. It replaces `bin/kafka-streams-application-reset.sh` for streams groups and can be used to list, describe, and delete streams groups. See the [kafka-streams-groups.sh documentation](/{version}/streams/developer-guide/kafka-streams-group-sh/) for detailed usage information.
+
+## Topology Description
+
+When a topology description plugin is configured on the brokers via `group.streams.topology.description.plugin.class`, the group coordinator records a human-readable description of each streams group's processing topology, pushed automatically by the Kafka Streams clients. The description can be retrieved via `Admin#describeStreamsGroups` or `kafka-streams-groups.sh --describe --topology`. See the [Topology Description Plugin](/{version}/streams/developer-guide/topology-description-plugin/) documentation for the push/describe workflow, plugin implementation guidelines, and troubleshooting.
 
 # Architecture and How It Works
 
@@ -254,4 +261,4 @@ Similarly, you can convert a streams group back to a classic group by following 
 
 **Warning:** Online migration (migrating while the application is running) is not available in this version. Plan for a maintenance window when migrating between protocols.
 
-**Warning:** Due to a critical broker-side bug in the offline migration code ([KAFKA-20254](https://issues.apache.org/jira/browse/KAFKA-20254)), we recommend against doing migrations from classic to streams groups in 4.2.0. Newly created streams groups are not impacted. The fix will be targeted for a future release.
+**Warning:** Due to a critical broker-side bug in the offline migration code ([KAFKA-20254](https://issues.apache.org/jira/browse/KAFKA-20254)), we recommend against doing migrations from classic to streams groups in 4.2.0. Newly created streams groups are not impacted. The fix is available in 4.2.1.

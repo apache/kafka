@@ -1,6 +1,6 @@
 ---
 title: Core Concepts
-description: 
+description: Core Kafka Streams concepts, including topologies, time, state, windowing, and processing guarantees.
 weight: 4
 tags: ['kafka', 'docs']
 aliases: 

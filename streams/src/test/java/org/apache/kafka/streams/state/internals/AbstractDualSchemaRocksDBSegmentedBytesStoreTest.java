@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.header.Headers;
@@ -25,12 +26,13 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
@@ -1680,6 +1682,120 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         final File windowDir = new File(stateDir, storeName);
 
         return Set.of(Objects.requireNonNull(windowDir.list()));
+    }
+
+    @Test
+    public void readCommittedShouldHideStagedWritesUntilCommit() {
+        initTransactional();
+        final String key = "a";
+        final Bytes storeKey = serializeKey(new Windowed<>(key, windows[0]));
+
+        bytesStore.put(storeKey, serializeValue(10L));
+        bytesStore.commit(Map.of());
+
+        // Stage an overwrite that is not yet committed.
+        bytesStore.put(storeKey, serializeValue(50L));
+
+        // Point get: READ_UNCOMMITTED sees the staged value; READ_COMMITTED sees the last committed value.
+        assertEquals(50L, deserializeValue(timeOrdered().readOnly(IsolationLevel.READ_UNCOMMITTED).get(storeKey)));
+        assertEquals(10L, deserializeValue(timeOrdered().readOnly(IsolationLevel.READ_COMMITTED).get(storeKey)));
+
+        // Range fetch (exercises SegmentIterator's isolation routing) must respect the same visibility.
+        assertEquals(
+            List.of(KeyValue.pair(new Windowed<>(key, windows[0]), 50L)),
+            toListAndCloseIterator(timeOrdered().readOnly(IsolationLevel.READ_UNCOMMITTED).fetch(Bytes.wrap(key.getBytes()), 0, windows[0].start())));
+        assertEquals(
+            List.of(KeyValue.pair(new Windowed<>(key, windows[0]), 10L)),
+            toListAndCloseIterator(timeOrdered().readOnly(IsolationLevel.READ_COMMITTED).fetch(Bytes.wrap(key.getBytes()), 0, windows[0].start())));
+    }
+
+    @Test
+    public void commitShouldMakeStagedWritesVisibleToReadCommitted() {
+        initTransactional();
+        final Bytes storeKey = serializeKey(new Windowed<>("a", windows[0]));
+
+        bytesStore.put(storeKey, serializeValue(50L));
+        // Before commit, READ_COMMITTED cannot see the staged write.
+        assertNull(timeOrdered().readOnly(IsolationLevel.READ_COMMITTED).get(storeKey));
+
+        bytesStore.commit(Map.of());
+
+        // After commit, both isolation levels converge on the now-durable value.
+        assertEquals(50L, deserializeValue(timeOrdered().readOnly(IsolationLevel.READ_COMMITTED).get(storeKey)));
+        assertEquals(50L, deserializeValue(timeOrdered().readOnly(IsolationLevel.READ_UNCOMMITTED).get(storeKey)));
+    }
+
+    @Test
+    public void stagedWritesShouldNotAdvanceCommittedPositionUntilCommit() {
+        initTransactional();
+
+        context.setRecordContext(new ProcessorRecordContext(0, 1L, 0, "input", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[0])), serializeValue(10L));
+        bytesStore.commit(Map.of());
+
+        context.setRecordContext(new ProcessorRecordContext(0, 5L, 0, "input", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>("b", windows[0])), serializeValue(20L));
+
+        // committed position stays at the last committed offset; the merged position reflects the staged write.
+        assertEquals(Map.of(0, 1L), bytesStore.getCommittedPosition().getPartitionPositions("input"));
+        assertEquals(Map.of(0, 5L), bytesStore.getPosition().getPartitionPositions("input"));
+
+        bytesStore.commit(Map.of());
+        assertEquals(Map.of(0, 5L), bytesStore.getCommittedPosition().getPartitionPositions("input"));
+    }
+
+    @Test
+    public void approximateNumUncommittedBytesShouldReflectStagedWrites() {
+        initTransactional();
+        assertEquals(0, bytesStore.approximateNumUncommittedBytes());
+
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[0])), serializeValue(10L));
+        final long staged = bytesStore.approximateNumUncommittedBytes();
+        assertTrue(staged > 0, "a staged write should contribute uncommitted bytes");
+
+        bytesStore.commit(Map.of());
+        // commit flushes the staged data, so uncommitted bytes drop below the staged size (a small residual remains, as for any RocksDBStore).
+        assertTrue(bytesStore.approximateNumUncommittedBytes() < staged, "commit should flush staged writes");
+    }
+
+    @Test
+    public void nonTransactionalStoreShouldReadIdenticallyAcrossIsolationLevels() {
+        // before() already initialised the store under a non-transactional context.
+        final Bytes storeKey = serializeKey(new Windowed<>("a", windows[0]));
+        bytesStore.put(storeKey, serializeValue(10L));
+
+        assertEquals(10L, deserializeValue(timeOrdered().readOnly(IsolationLevel.READ_UNCOMMITTED).get(storeKey)));
+        assertEquals(10L, deserializeValue(timeOrdered().readOnly(IsolationLevel.READ_COMMITTED).get(storeKey)));
+    }
+
+    @SuppressWarnings("unchecked")
+    private AbstractRocksDBTimeOrderedSegmentedBytesStore<KeyValueSegment> timeOrdered() {
+        return (AbstractRocksDBTimeOrderedSegmentedBytesStore<KeyValueSegment>) bytesStore;
+    }
+
+    private void initTransactional() {
+        // Re-open under a transactional EOS context so writes stage until commit().
+        bytesStore.close();
+        bytesStore = getBytesStore();
+        context = getTransactionalEOSProcessorContext();
+        bytesStore.init(context, bytesStore);
+    }
+
+    private InternalMockProcessorContext<?, ?> getTransactionalEOSProcessorContext() {
+        final Properties streamsProps = StreamsTestUtils.getStreamsConfig();
+        streamsProps.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        streamsProps.setProperty(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, "true");
+        return new InternalMockProcessorContext<>(
+                stateDir,
+                Serdes.String(),
+                Serdes.Long(),
+                new MockRecordCollector(),
+                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
+                new StreamsConfig(streamsProps));
+    }
+
+    private Long deserializeValue(final byte[] value) {
+        return new LongDeserializer().deserialize("", value);
     }
 
     private Bytes serializeKey(final Windowed<String> key) {

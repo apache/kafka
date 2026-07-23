@@ -43,8 +43,8 @@ import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
-import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.ExactlyOnceSupport;
@@ -720,7 +720,16 @@ public class MirrorSourceConnector extends SourceConnector {
         String source = replicationPolicy.topicSource(topic);
         if (source == null) {
             return false;
-        } else if (source.equals(sourceAndTarget.target())) {
+        }
+
+        final boolean condition;
+        if (replicationPolicy instanceof IdentityReplicationPolicy) {
+            condition = source.equals(sourceAndTarget.target());
+        } else {
+            condition = source.equals(sourceAndTarget.source()) || source.equals(sourceAndTarget.target());
+        }
+
+        if (condition) {
             return true;
         } else {
             String upstreamTopic = replicationPolicy.upstreamTopic(topic);

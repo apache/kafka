@@ -33,9 +33,11 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StandbyUpdateListener.SuspendReason;
@@ -62,6 +64,7 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -1044,6 +1047,33 @@ public class StoreChangelogReaderTest {
     }
 
     @Test
+    public void changelogEndOffsetsShouldFallBackToStoreMetadataWhenLogicalChangelogMetadataIsNull() {
+        // Verifies the 3-step fallback chain in changelogEndOffsets():
+        //   1) ChangelogMetadata.restoreEndOffset (preferred)
+        //   2) StateStoreMetadata.endOffset (physical Fetch high-water-mark)
+        //   3) null  (caller treats as MAX_VALUE — conservative for warm-up promotion)
+        // This test wires a standby with restoreEndOffset == null but
+        // storeMetadata.endOffset == 42L → fallback returns 42L.
+        setupStandbyStateManager();
+        when(storeMetadata.endOffset()).thenReturn(42L);
+
+        changelogReader.register(tp, standbyStateManager);
+
+        assertNull(changelogReader.changelogMetadata(tp).endOffset());
+        assertEquals(Long.valueOf(42L), changelogReader.logicalChangelogEndOffsets().get(tp));
+    }
+
+    @Test
+    public void logicalChangelogEndOffsetsShouldReturnNullWhenBothSourcesUnknown() {
+        setupStandbyStateManager();
+        when(storeMetadata.endOffset()).thenReturn(null);
+
+        changelogReader.register(tp, standbyStateManager);
+
+        assertNull(changelogReader.logicalChangelogEndOffsets().get(tp));
+    }
+
+    @Test
     public void shouldRestoreToLimitInStandbyState() {
         setupStandbyStateManager();
         setupStoreMetadata();
@@ -1436,8 +1466,9 @@ public class StoreChangelogReaderTest {
     public void shouldSeekByTimestampForWindowedStoreWithoutCheckpoint() {
         final long retentionMs = Duration.ofHours(2).toMillis();
         final long offsetForTimestamp = 42L;
+        final long latestRecordTimestamp = 10_000_000L;
+        final long endOffset = 100L;
 
-        // Use a MockConsumer subclass that supports offsetsForTimes
         final MockConsumer<byte[], byte[]> timestampConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(final Map<TopicPartition, Long> timestampsToSearch) {
@@ -1447,7 +1478,6 @@ public class StoreChangelogReaderTest {
             }
         };
 
-        // Set up mocks - storeMetadata returns null offset (no checkpoint) and positive retentionPeriod
         final StateStoreMetadata windowStoreMetadata = mock(StateStoreMetadata.class);
         final ProcessorStateManager windowStateManager = mock(ProcessorStateManager.class);
         final StateStore windowStore = mock(StateStore.class);
@@ -1463,7 +1493,15 @@ public class StoreChangelogReaderTest {
         when(windowStateManager.taskId()).thenReturn(taskId);
 
         timestampConsumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
-        adminClient.updateEndOffsets(Collections.singletonMap(tp, 100L));
+        timestampConsumer.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+
+        // schedule adding the record during poll, after the partition is assigned
+        timestampConsumer.schedulePollTask(() -> timestampConsumer.addRecord(new ConsumerRecord<>(
+            tp.topic(), tp.partition(), endOffset - 1,
+            latestRecordTimestamp, TimestampType.CREATE_TIME,
+            0, 0, new byte[0], new byte[0],
+            new RecordHeaders(), Optional.empty())));
 
         final StoreChangelogReader reader =
             new StoreChangelogReader(time, config, logContext, adminClient, timestampConsumer, callback, standbyListener);
@@ -1477,8 +1515,9 @@ public class StoreChangelogReaderTest {
     @Test
     public void shouldSeekToBeginningWhenBrokerReturnsNullForOffsetsForTimes() {
         final long retentionMs = Duration.ofHours(2).toMillis();
+        final long latestRecordTimestamp = 10_000_000L;
+        final long endOffset = 100L;
 
-        // Use a MockConsumer subclass that returns null for offsetsForTimes
         final MockConsumer<byte[], byte[]> timestampConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(final Map<TopicPartition, Long> timestampsToSearch) {
@@ -1503,7 +1542,15 @@ public class StoreChangelogReaderTest {
         when(windowStateManager.taskId()).thenReturn(taskId);
 
         timestampConsumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
-        adminClient.updateEndOffsets(Collections.singletonMap(tp, 100L));
+        timestampConsumer.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+
+        // schedule adding the record during poll, after the partition is assigned
+        timestampConsumer.schedulePollTask(() -> timestampConsumer.addRecord(new ConsumerRecord<>(
+            tp.topic(), tp.partition(), endOffset - 1,
+            latestRecordTimestamp, TimestampType.CREATE_TIME,
+            0, 0, new byte[0], new byte[0],
+            new RecordHeaders(), Optional.empty())));
 
         final StoreChangelogReader reader =
             new StoreChangelogReader(time, config, logContext, adminClient, timestampConsumer, callback, standbyListener);

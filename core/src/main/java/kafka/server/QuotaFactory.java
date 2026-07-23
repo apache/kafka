@@ -27,6 +27,7 @@ import org.apache.kafka.server.config.QuotaConfig;
 import org.apache.kafka.server.config.ReplicationQuotaManagerConfig;
 import org.apache.kafka.server.quota.ClientQuotaCallback;
 import org.apache.kafka.server.quota.ClientQuotaManager;
+import org.apache.kafka.server.quota.ClientRequestQuotaManager;
 import org.apache.kafka.server.quota.ControllerMutationQuotaManager;
 import org.apache.kafka.server.quota.QuotaType;
 import org.apache.kafka.server.quota.ReplicaQuota;

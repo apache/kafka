@@ -42,6 +42,7 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
@@ -192,9 +193,9 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
         final String innerJoinType = "INNER";
         final String queryableName = innerJoinType + "-store1";
 
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfigTwo, withHeaders);
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfigThree, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfigTwo, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfigThree, withHeaders);
 
         streams = prepareTopologyWithNonSingletonPartitions(queryableName, streamsConfig);
         streamsTwo = prepareTopologyWithNonSingletonPartitions(queryableName, streamsConfigTwo);
@@ -221,9 +222,9 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
         final String innerJoinType = "INNER";
         final String queryableName = innerJoinType + "-store1";
 
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfigTwo, withHeaders);
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfigThree, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfigTwo, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfigThree, withHeaders);
 
         streams = prepareTopology(queryableName, streamsConfig);
         streamsTwo = prepareTopology(queryableName, streamsConfigTwo);

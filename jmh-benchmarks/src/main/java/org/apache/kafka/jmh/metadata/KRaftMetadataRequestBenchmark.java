@@ -19,9 +19,6 @@ package org.apache.kafka.jmh.metadata;
 
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
-import kafka.server.AutoTopicCreationManager;
-import kafka.server.ClientRequestQuotaManager;
-import kafka.server.ForwardingManager;
 import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
 import kafka.server.QuotaFactory;
@@ -52,17 +49,21 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.metadata.KRaftMetadataCache;
 import org.apache.kafka.metadata.MockConfigRepository;
+import org.apache.kafka.network.Request;
 import org.apache.kafka.network.RequestConvertToJson;
 import org.apache.kafka.network.metrics.RequestChannelMetrics;
 import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.raft.QuorumConfig;
+import org.apache.kafka.server.AutoTopicCreationManager;
 import org.apache.kafka.server.ClientMetricsManager;
 import org.apache.kafka.server.FetchManager;
+import org.apache.kafka.server.ForwardingManager;
 import org.apache.kafka.server.SimpleApiVersionManager;
 import org.apache.kafka.server.common.FinalizedFeatures;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.quota.ClientQuotaManager;
+import org.apache.kafka.server.quota.ClientRequestQuotaManager;
 import org.apache.kafka.server.quota.ControllerMutationQuotaManager;
 import org.apache.kafka.server.quota.ReplicationQuotaManager;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
@@ -88,8 +89,6 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
-
-import scala.Option;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -128,7 +127,7 @@ public class KRaftMetadataRequestBenchmark {
     @Param({"10", "20", "50"})
     private int partitionCount;
     private KafkaApis kafkaApis;
-    private RequestChannel.Request allTopicMetadataRequest;
+    private Request allTopicMetadataRequest;
 
     @Setup(Level.Trial)
     public void setup() {
@@ -210,7 +209,7 @@ public class KRaftMetadataRequestBenchmark {
                 setApiVersionManager(new SimpleApiVersionManager(
                         ApiMessageType.ListenerType.BROKER,
                         false,
-                        () -> FinalizedFeatures.fromKRaftVersion(MetadataVersion.latestTesting()))).
+                        () -> FinalizedFeatures.fromMetadataVersion(MetadataVersion.latestTesting()))).
                 setGroupConfigManager(groupConfigManager).
                 build();
     }
@@ -221,7 +220,7 @@ public class KRaftMetadataRequestBenchmark {
         metrics.close();
     }
 
-    private RequestChannel.Request buildAllTopicMetadataRequest() {
+    private Request buildAllTopicMetadataRequest() {
         MetadataRequest metadataRequest = MetadataRequest.Builder.allTopics().build();
         RequestHeader header = new RequestHeader(metadataRequest.apiKey(), metadataRequest.version(), "", 0);
         ByteBuffer bodyBuffer = metadataRequest.serialize().buffer();
@@ -229,7 +228,7 @@ public class KRaftMetadataRequestBenchmark {
         RequestContext context = new RequestContext(header, "1", null, principal,
                 ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
                 SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false);
-        return new RequestChannel.Request(1, context, 0, MemoryPool.NONE, bodyBuffer, requestChannelMetrics, Option.empty());
+        return new Request(1, context, 0, MemoryPool.NONE, bodyBuffer, requestChannelMetrics);
     }
 
     @Benchmark
@@ -239,8 +238,6 @@ public class KRaftMetadataRequestBenchmark {
 
     @Benchmark
     public String testRequestToJson() {
-        Option<com.fasterxml.jackson.databind.JsonNode> option = allTopicMetadataRequest.requestLog();
-        Optional<com.fasterxml.jackson.databind.JsonNode> optional = option.isDefined() ? Optional.of(option.get()) : Optional.empty();
-        return RequestConvertToJson.requestDesc(allTopicMetadataRequest.header(), optional, allTopicMetadataRequest.isForwarded()).toString();
+        return RequestConvertToJson.requestDesc(allTopicMetadataRequest.header(), allTopicMetadataRequest.requestLog(), allTopicMetadataRequest.isForwarded()).toString();
     }
 }

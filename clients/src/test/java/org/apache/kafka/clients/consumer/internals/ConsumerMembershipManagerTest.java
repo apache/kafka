@@ -40,9 +40,9 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -962,6 +962,50 @@ public class ConsumerMembershipManagerTest {
         verifyReconciliationTriggeredAndCompleted(membershipManager, Arrays.asList(topicId1Partition0, topicId2Partition0));
     }
 
+    /**
+     * When the resolvable subset of the target equals the current assignment but some topic ids
+     * remain unresolved, the partial acknowledgement must fire exactly once per target epoch -
+     * regardless of which thread invokes maybeReconcile. The first attempt (background or
+     * foreground) acks the resolvable fragment; subsequent attempts must stay in RECONCILING
+     * to avoid emitting redundant heartbeats.
+     */
+    @Test
+    public void testPartialAckNotRepeatedOnBackgroundReconcileWhenMetadataMissing() {
+        Uuid topicId1 = Uuid.randomUuid();
+        String topic1 = "topic1";
+        final TopicIdPartition topicId1Partition0 = new TopicIdPartition(topicId1, new TopicPartition(topic1, 0));
+
+        Uuid topicId2 = Uuid.randomUuid();
+
+        ConsumerMembershipManager membershipManager =
+            mockMemberSuccessfullyReceivesAndAcksAssignment(topicId1, topic1, Collections.singletonList(0));
+
+        membershipManager.onHeartbeatRequestGenerated();
+        assertEquals(MemberState.STABLE, membershipManager.state());
+        when(subscriptionState.assignedPartitions()).thenReturn(getTopicPartitions(Collections.singleton(topicId1Partition0)));
+        clearInvocations(membershipManager, subscriptionState);
+
+        Map<Uuid, SortedSet<Integer>> newAssignment = Map.of(topicId1, mkSortedSet(0), topicId2, mkSortedSet(0));
+        receiveAssignment(newAssignment, membershipManager);
+
+        // First reconcile from the background thread acks the resolvable fragment, no need to wait for consumer.poll.
+        membershipManager.maybeReconcile(false);
+        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
+
+        membershipManager.onHeartbeatRequestGenerated();
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
+        assertEquals(Collections.singleton(topicId2), membershipManager.topicsAwaitingReconciliation());
+
+        // Until a new target arrives or new metadata resolves topicId2, further reconciles from either
+        // thread must stay in RECONCILING - no redundant acks.
+        for (int i = 0; i < 5; i++) {
+            membershipManager.maybeReconcile(false);
+            assertEquals(MemberState.RECONCILING, membershipManager.state());
+            membershipManager.maybeReconcile(true);
+            assertEquals(MemberState.RECONCILING, membershipManager.state());
+        }
+    }
+
     // Tests the case where topic metadata is not available at the time of the assignment,
     // but is made available later.
     @Test
@@ -992,7 +1036,6 @@ public class ConsumerMembershipManagerTest {
 
         receiveAssignment(newAssignment, membershipManager);
         membershipManager.maybeReconcile(false);
-
         // No full reconciliation triggered, but assignment needs to be acknowledged.
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         assertTrue(membershipManager.shouldHeartbeatNow());
@@ -1246,6 +1289,45 @@ public class ConsumerMembershipManagerTest {
         verify(subscriptionState).unsubscribe();
         assertTrue(leaveResult1.isDone());
         assertEquals(MemberState.STALE, membershipManager.state());
+    }
+
+    /**
+     * Test that when unsubscribe/leaveGroup is called during an ongoing reconciliation and the pending
+     * assignment event is completed exceptionally, the member can still rejoin and start
+     * a new reconciliation.
+     */
+    @Test
+    public void testLeaveGroupDuringReconciliationThenRejoin() {
+        Uuid topicId = Uuid.randomUuid();
+        String topicName = "topic1";
+        ConsumerMembershipManager membershipManager = createMembershipManagerJoiningGroup();
+        mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, topicName, Collections.emptyList());
+
+        // Start reconciliation - assignment event is pending
+        receiveAssignment(topicId, Collections.singletonList(0), membershipManager);
+        membershipManager.maybeReconcile(true);
+        PartitionsAssignedEvent pendingAssignmentEvent = (PartitionsAssignedEvent) backgroundEventQueue.poll();
+        assertNotNull(pendingAssignmentEvent);
+
+        // Call leaveGroup while reconciliation is in progress
+        mockLeaveGroup();
+        membershipManager.leaveGroup();
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+
+        // Complete the pending assignment event exceptionally (simulating unsubscribe skipping it)
+        pendingAssignmentEvent.future().completeExceptionally(
+            new KafkaException("Assignment event skipped because consumer is unsubscribing"));
+
+        // Complete leave and rejoin
+        membershipManager.onHeartbeatRequestGenerated();
+        clearInvocations(membershipManager);
+        mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, topicName, Collections.emptyList());
+        membershipManager.transitionToJoining();
+
+        // Receive assignment - verify new reconciliation starts
+        receiveAssignment(topicId, Collections.singletonList(0), membershipManager);
+        membershipManager.maybeReconcile(true);
+        verifyReconciliationTriggered(membershipManager);
     }
 
     @Test

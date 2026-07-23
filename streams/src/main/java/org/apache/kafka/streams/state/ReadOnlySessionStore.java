@@ -14,9 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.state;
 
-
+import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.kstream.Windowed;
 
 import java.time.Instant;
@@ -28,6 +30,7 @@ import java.time.Instant;
  * @param <K>   the key type
  * @param <AGG> the aggregated value type
  */
+@InterfaceAudience.Public
 public interface ReadOnlySessionStore<K, AGG> {
 
     /**
@@ -416,5 +419,13 @@ public interface ReadOnlySessionStore<K, AGG> {
     default KeyValueIterator<Windowed<K>, AGG> backwardFetch(final K keyFrom, final K keyTo) {
         throw new UnsupportedOperationException(
             "This API is not supported by this implementation of ReadOnlySessionStore.");
+    }
+
+    /**
+     * Return a read-only view of this store bound to the given {@link IsolationLevel}.
+     * See {@link ReadOnlyKeyValueStore#readOnly(IsolationLevel)} for semantics.
+     */
+    default ReadOnlySessionStore<K, AGG> readOnly(final IsolationLevel isolationLevel) {
+        return this;
     }
 }

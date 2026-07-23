@@ -14,13 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.tools.api;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.nio.ByteBuffer;
 
 /**
  * The long decoder translates bytes into longs.
  */
+@InterfaceAudience.Public
 public class LongDecoder implements Decoder<Long> {
     @Override
     public Long fromBytes(byte[] bytes) {

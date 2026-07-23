@@ -16,16 +16,17 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.ByteUtils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
@@ -37,6 +38,7 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
@@ -61,6 +63,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.CoreMatchers.sameInstance;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasEntry;
 import static org.mockito.Mockito.mock;
@@ -262,6 +265,30 @@ public class ChangeLoggingKeyValueBytesStoreTest {
         assertThat(position.getPartitionPositions(INPUT_TOPIC_NAME), is(notNullValue()));
         assertThat(position.getPartitionPositions(INPUT_TOPIC_NAME), hasEntry(0, 100L));
 
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldDelegateReadOnlyUncommittedToInner() {
+        final KeyValueStore<Bytes, byte[]> innerMock = mock(KeyValueStore.class);
+        final ChangeLoggingKeyValueBytesStore outer = new ChangeLoggingKeyValueBytesStore(innerMock);
+        final ReadOnlyKeyValueStore<Bytes, byte[]> view = mock(ReadOnlyKeyValueStore.class);
+        when(innerMock.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(view);
+
+        assertThat(outer.readOnly(IsolationLevel.READ_UNCOMMITTED), sameInstance(view));
+        verify(innerMock).readOnly(IsolationLevel.READ_UNCOMMITTED);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldDelegateReadOnlyCommittedToInner() {
+        final KeyValueStore<Bytes, byte[]> innerMock = mock(KeyValueStore.class);
+        final ChangeLoggingKeyValueBytesStore outer = new ChangeLoggingKeyValueBytesStore(innerMock);
+        final ReadOnlyKeyValueStore<Bytes, byte[]> view = mock(ReadOnlyKeyValueStore.class);
+        when(innerMock.readOnly(IsolationLevel.READ_COMMITTED)).thenReturn(view);
+
+        assertThat(outer.readOnly(IsolationLevel.READ_COMMITTED), sameInstance(view));
+        verify(innerMock).readOnly(IsolationLevel.READ_COMMITTED);
     }
 
     private StreamsConfig streamsConfigMock() {

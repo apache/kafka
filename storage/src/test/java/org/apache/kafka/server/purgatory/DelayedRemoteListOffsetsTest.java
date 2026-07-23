@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server.purgatory;
 
-import kafka.utils.TestUtils;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
@@ -26,6 +25,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+import org.apache.kafka.server.util.ServerTestUtils;
 import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.storage.internals.log.AsyncOffsetReadFutureHolder;
 import org.apache.kafka.storage.internals.log.OffsetResultHolder;
@@ -66,7 +66,7 @@ public class DelayedRemoteListOffsetsTest {
     @AfterEach
     public void afterEach() throws Exception {
         purgatory.shutdown();
-        TestUtils.clearYammerMetrics();
+        ServerTestUtils.clearYammerMetrics();
     }
 
     @Test

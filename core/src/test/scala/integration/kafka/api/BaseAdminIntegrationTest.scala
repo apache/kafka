@@ -58,7 +58,10 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
   override def setUp(testInfo: TestInfo): Unit = {
     this.testInfo = testInfo
     super.setUp(testInfo)
-    waitUntilBrokerMetadataIsPropagated(brokers)
+    val expectedBrokerIds = brokers.map(_.config.brokerId).toSet
+    waitUntilTrue(() => brokers.forall(server =>
+      expectedBrokerIds.forall(server.dataPlaneRequestProcessor.metadataCache.hasAliveBroker(_))
+    ), "Timed out waiting for broker metadata to propagate to all servers", 15000)
   }
 
   @AfterEach

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.query;
 
+import org.apache.kafka.streams.query.internals.FailedQueryResult;
 import org.apache.kafka.streams.query.internals.SucceededQueryResult;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -32,6 +33,7 @@ class StateQueryResultTest {
     StateQueryResult<String> stringStateQueryResult;
     final QueryResult<String> noResultsFound = new SucceededQueryResult<>(null);
     final QueryResult<String> validResult = new SucceededQueryResult<>("Foo");
+    final QueryResult<String> invalidResult = new FailedQueryResult<>(FailureReason.DOES_NOT_EXIST, "Does not exist");
 
     @BeforeEach
     public void setUp() {
@@ -50,6 +52,13 @@ class StateQueryResultTest {
         stringStateQueryResult.addResult(0, validResult);
         final QueryResult<String> result = stringStateQueryResult.getOnlyPartitionResult();
         assertThat("Valid query results still works", result.getResult(), is("Foo"));
+    }
+
+    @Test
+    void getOnlyPartitionResultWithSingleFailureResultTest() {
+        stringStateQueryResult.addResult(0, invalidResult);
+        final QueryResult<String> result = stringStateQueryResult.getOnlyPartitionResult();
+        assertThat("Invalid query result should be a failure", result.isFailure(), is(true));
     }
 
     @Test

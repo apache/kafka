@@ -657,7 +657,23 @@ public class NamedTopologyIntegrationTest {
 
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, COUNT_OUTPUT, 5), equalTo(COUNT_OUTPUT_DATA));
         assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, SUM_OUTPUT, 5), equalTo(SUM_OUTPUT_DATA));
+
+        TestUtils.waitForCondition(
+                () -> streams.areAllLocalTasksRunningForTopology(TOPOLOGY_1),
+                () -> "Not all local tasks for topology " + TOPOLOGY_1
+                        + " are initialized and in RUNNING state before remove. "
+                        + "streamsState=" + streams.state()
+                        + ", localThreads=" + streams.metadataForLocalThreads()
+        );
         streams.removeNamedTopology(TOPOLOGY_1, true).all().get();
+        
+        TestUtils.waitForCondition(
+                () -> !streams.hasAnyLocalTaskForTopology(TOPOLOGY_1),
+                () -> "Topology " + TOPOLOGY_1
+                        + " still has local tasks after remove. "
+                        + "streamsState=" + streams.state()
+                        + ", localThreads=" + streams.metadataForLocalThreads()
+        );
         streams.cleanUpNamedTopology(TOPOLOGY_1);
 
         CLUSTER.getAllTopicsInCluster().stream().filter(t -> t.contains("-changelog") || t.contains("-repartition")).forEach(t -> {

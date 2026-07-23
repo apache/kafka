@@ -22,7 +22,7 @@ import org.apache.kafka.common.message.ControllerRegistrationResponseData
 import org.apache.kafka.common.metadata.{FeatureLevelRecord, RegisterControllerRecord}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ControllerRegistrationResponse
-import org.apache.kafka.common.utils.ExponentialBackoff
+import org.apache.kafka.common.utils.internals.ExponentialBackoff
 import org.apache.kafka.image.loader.{LogDeltaManifest, SnapshotManifest}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.{ListenerInfo, RecordTestUtils, VersionRange}

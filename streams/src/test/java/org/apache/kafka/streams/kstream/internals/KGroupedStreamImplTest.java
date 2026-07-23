@@ -24,6 +24,7 @@ import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -221,7 +222,7 @@ public class KGroupedStreamImplTest {
     }
 
     private void doCountSlidingWindows(final MockApiProcessorSupplier<Windowed<String>, Long, Void, Void> supplier) {
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput("1", "A", 500L);
@@ -316,7 +317,7 @@ public class KGroupedStreamImplTest {
     }
 
     private void doAggregateSessionWindows(final MockApiProcessorSupplier<Windowed<String>, Integer, Void, Void> supplier) {
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput("1", "1", 10);
@@ -384,7 +385,7 @@ public class KGroupedStreamImplTest {
                 Materialized.with(null, Serdes.Integer()));
         table.toStream().process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput("1", "1", 10);
@@ -407,7 +408,7 @@ public class KGroupedStreamImplTest {
     }
 
     private void doCountSessionWindows(final MockApiProcessorSupplier<Windowed<String>, Long, Void, Void> supplier) {
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput("1", "1", 10);
@@ -453,7 +454,7 @@ public class KGroupedStreamImplTest {
     }
 
     private void doReduceSessionWindows(final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier) {
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput("1", "A", 10);
@@ -593,7 +594,7 @@ public class KGroupedStreamImplTest {
     public void shouldCountAndMaterializeResults() {
         groupedStream.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count").withKeySerde(Serdes.String()));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             processData(driver);
 
             {
@@ -618,7 +619,7 @@ public class KGroupedStreamImplTest {
         groupedStream.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count").withKeySerde(Serdes.String()));
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamAggregate.class);
-             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+             final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
 
             processData(driver);
 
@@ -638,7 +639,7 @@ public class KGroupedStreamImplTest {
                 .withKeySerde(Serdes.String())
                 .withValueSerde(Serdes.String()));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             processData(driver);
 
             {
@@ -668,7 +669,7 @@ public class KGroupedStreamImplTest {
         );
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamReduce.class);
-             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+             final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
 
             processData(driver);
 
@@ -689,7 +690,7 @@ public class KGroupedStreamImplTest {
                 .withKeySerde(Serdes.String())
                 .withValueSerde(Serdes.String()));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             processData(driver);
 
             {
@@ -717,7 +718,7 @@ public class KGroupedStreamImplTest {
             .toStream()
             .process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             processData(driver);
 
             assertThat(
@@ -745,7 +746,7 @@ public class KGroupedStreamImplTest {
     }
 
     private void doCountWindowed(final MockApiProcessorSupplier<Windowed<String>, Long, Void, Void> supplier) {
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput("1", "A", 0L);

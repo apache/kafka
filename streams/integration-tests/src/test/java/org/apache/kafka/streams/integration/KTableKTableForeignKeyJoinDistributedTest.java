@@ -32,6 +32,7 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
@@ -165,8 +166,8 @@ public class KTableKTableForeignKeyJoinDistributedTest {
         final Properties streamsConfiguration1 = getStreamsConfiguration(safeTestName);
         final Properties streamsConfiguration2 = getStreamsConfiguration(safeTestName);
 
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration1, withHeaders);
-        IntegrationTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration2, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration1, withHeaders);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration2, withHeaders);
 
         //Each streams client needs to have it's own StreamsBuilder in order to simulate
         //a truly distributed run

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -104,6 +105,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
     private final int maxMessages;
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
     private int consumedMessages = 0;
+    private final int closeTimeoutMs;
 
     public VerifiableConsumer(KafkaConsumer<String, String> consumer,
                               PrintStream out,
@@ -111,7 +113,8 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                               int maxMessages,
                               boolean useAutoCommit,
                               boolean useAsyncCommit,
-                              boolean verbose) {
+                              boolean verbose,
+                              int closeTimeoutMs) {
         this.consumer = consumer;
         this.out = out;
         this.topic = topic;
@@ -119,6 +122,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         this.useAutoCommit = useAutoCommit;
         this.useAsyncCommit = useAsyncCommit;
         this.verbose = verbose;
+        this.closeTimeoutMs = closeTimeoutMs;
         addKafkaSerializerModule();
     }
 
@@ -252,7 +256,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             // Log the error so it goes to the service log and not stdout
             log.error("Error during processing, terminating consumer process: ", t);
         } finally {
-            consumer.close();
+            consumer.close(CloseOptions.timeout(Duration.ofMillis(closeTimeoutMs)));
             printJson(new ShutdownComplete());
             shutdownLatch.countDown();
         }
@@ -602,6 +606,15 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             .metavar("ENABLE-AUTOCOMMIT")
             .help("Enable offset auto-commit on consumer");
 
+        parser.addArgument("--close-timeout")
+                .action(store())
+                .required(false)
+                .type(Integer.class)
+                .setDefault(30000)
+                .dest("closeTimeout")
+                .metavar("CLOSE-TIMEOUT-MS")
+                .help("Timeout in milliseconds for closing the consumer (default: 30000)");
+
         parser.addArgument("--reset-policy")
             .action(store())
             .required(false)
@@ -643,6 +656,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         Namespace res = parser.parseArgs(args);
 
         boolean useAutoCommit = res.getBoolean("useAutoCommit");
+        int closeTimeout = res.getInt("closeTimeout");
         String configFile = res.getString("consumer.config");
         String commandConfigFile = res.getString("commandConfigFile");
         String brokerHostAndPort = res.getString("bootstrapServer");
@@ -716,7 +730,8 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 maxMessages,
                 useAutoCommit,
                 false,
-                verbose);
+                verbose,
+                closeTimeout);
     }
 
     public static void main(String[] args) {

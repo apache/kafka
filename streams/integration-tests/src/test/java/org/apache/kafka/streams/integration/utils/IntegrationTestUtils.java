@@ -18,6 +18,7 @@ package org.apache.kafka.streams.integration.utils;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
+import org.apache.kafka.clients.admin.StreamsGroupDescription;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -277,20 +278,6 @@ public class IntegrationTestUtils {
             cluster.deleteAllTopics();
         } catch (final RuntimeException e) {
             LOG.warn("Ignoring failure to clean test state");
-        }
-    }
-
-    /**
-     * Configures the DSL store format to use headers if enabled.
-     * This is a helper method to reduce boilerplate in parameterized tests that test both
-     * with and without headers mode.
-     *
-     * @param streamsConfig The streams configuration properties to modify
-     * @param withHeaders Whether to enable headers mode
-     */
-    public static void maybeSetDslStoreFormatHeaders(final Properties streamsConfig, final boolean withHeaders) {
-        if (withHeaders) {
-            streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
         }
     }
 
@@ -998,6 +985,22 @@ public class IntegrationTestUtils {
         }
     }
 
+    private static class StreamGroupInactiveCondition implements TestCondition {
+        private final Admin adminClient;
+        private final String applicationId;
+
+        private StreamGroupInactiveCondition(final Admin adminClient,
+                                               final String applicationId) {
+            this.adminClient = adminClient;
+            this.applicationId = applicationId;
+        }
+
+        @Override
+        public boolean conditionMet() {
+            return isEmptyStreamGroup(adminClient, applicationId);
+        }
+    }
+
     public static void waitForEmptyConsumerGroup(final Admin adminClient,
                                                  final String applicationId,
                                                  final long timeoutMs) throws Exception {
@@ -1008,11 +1011,37 @@ public class IntegrationTestUtils {
         );
     }
 
+    public static void waitForEmptyStreamGroup(final Admin adminClient,
+                                                 final String applicationId,
+                                                 final long timeoutMs) throws Exception {
+        TestUtils.waitForCondition(
+                new IntegrationTestUtils.StreamGroupInactiveCondition(adminClient, applicationId),
+                timeoutMs,
+                "Test stream group " + applicationId + " still active even after waiting " + timeoutMs + " ms."
+        );
+    }
+
     public static boolean isEmptyConsumerGroup(final Admin adminClient,
                                                final String applicationId) {
         try {
             final ConsumerGroupDescription groupDescription =
                     adminClient.describeConsumerGroups(singletonList(applicationId))
+                            .describedGroups()
+                            .get(applicationId)
+                            .get();
+            return groupDescription.members().isEmpty();
+        } catch (final ExecutionException e) {
+            return e.getCause() instanceof GroupIdNotFoundException;
+        } catch (final InterruptedException e) {
+            return false;
+        }
+    }
+
+    public static boolean isEmptyStreamGroup(final Admin adminClient,
+                                             final String applicationId) {
+        try {
+            final StreamsGroupDescription groupDescription =
+                    adminClient.describeStreamsGroups(singletonList(applicationId))
                             .describedGroups()
                             .get(applicationId)
                             .get();
@@ -1183,10 +1212,9 @@ public class IntegrationTestUtils {
         consumer.subscribe(singletonList(topic));
         final int pollIntervalMs = 100;
         consumerRecords = new ArrayList<>();
-        int totalPollTimeMs = 0;
-        while (totalPollTimeMs < waitTime &&
+        final long deadline = System.currentTimeMillis() + waitTime;
+        while (System.currentTimeMillis() < deadline &&
             continueConsuming(consumerRecords.size(), maxMessages)) {
-            totalPollTimeMs += pollIntervalMs;
             final ConsumerRecords<K, V> records = consumer.poll(Duration.ofMillis(pollIntervalMs));
 
             for (final ConsumerRecord<K, V> record : records) {

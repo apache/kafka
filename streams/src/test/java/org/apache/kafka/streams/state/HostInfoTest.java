@@ -19,6 +19,8 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.common.config.ConfigException;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
@@ -49,5 +51,11 @@ public class HostInfoTest {
     @Test
     public void shouldThrowConfigExceptionForNonsenseEndPoint() {
         assertThrows(ConfigException.class, () -> HostInfo.buildFromEndpoint("nonsense"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"dummy:host", "dummy:9999999999999999999999999", "dummy", "dummy:", ":port", ":", ":8080"})
+    public void shouldThrowConfigExceptionWithInvalidEndpoint(final String invalidEndpoint) {
+        assertThrows(ConfigException.class, () -> HostInfo.buildFromEndpoint(invalidEndpoint));
     }
 }

@@ -17,7 +17,7 @@
 
 package org.apache.kafka.shell.command;
 
-import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.shell.InteractiveShell;
 import org.apache.kafka.shell.state.MetadataShellState;
 

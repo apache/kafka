@@ -27,6 +27,8 @@ import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
+import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
+import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.SimpleAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
@@ -38,10 +40,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
+import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class GroupCoordinatorConfigTest {
@@ -569,6 +574,35 @@ public class GroupCoordinatorConfigTest {
         configs.clear();
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT);
         createConfig(configs);
+
+
+        // group.streams.num.warmup.replicas
+
+        // cannot be negative
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG, -1);
+        assertEquals("Invalid value -1 for configuration group.streams.num.warmup.replicas: Value must be at least 0",
+            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+
+        // can be MAX
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_MAX_WARMUP_REPLICAS_DEFAULT);
+        createConfig(configs);
+
+        // cannot be larger than MAX
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_MAX_WARMUP_REPLICAS_DEFAULT + 1);
+        assertEquals("group.streams.num.warmup.replicas must be less than or equal to group.streams.max.warmup.replicas",
+            assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+
+
+        // group.streams.max.warmup.replicas
+
+        // cannot be negative
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG, -1);
+        assertEquals("Invalid value -1 for configuration group.streams.max.warmup.replicas: Value must be at least 0",
+            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
     }
 
     @Test
@@ -722,6 +756,158 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG, 20000);
         GroupCoordinatorConfig config = createConfig(configs);
         assertEquals(20000, config.streamsGroupMinTaskOffsetIntervalMs());
+    }
+
+    @Test
+    public void testStreamsGroupNumWarmupReplicasDefaultValue() {
+        Map<String, Object> configs = new HashMap<>();
+        GroupCoordinatorConfig config = createConfig(configs);
+        assertEquals(2, config.streamsGroupNumWarmupReplicas());
+        assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_DEFAULT,
+            config.streamsGroupNumWarmupReplicas());
+    }
+
+    @Test
+    public void testStreamsGroupNumWarmupReplicasCustomValue() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG, 5);
+        GroupCoordinatorConfig config = createConfig(configs);
+        assertEquals(5, config.streamsGroupNumWarmupReplicas());
+    }
+
+    @Test
+    public void testStreamsGroupMaxWarmupReplicasDefaultValue() {
+        Map<String, Object> configs = new HashMap<>();
+        GroupCoordinatorConfig config = createConfig(configs);
+        assertEquals(20, config.streamsGroupMaxWarmupReplicas());
+        assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_MAX_WARMUP_REPLICAS_DEFAULT,
+            config.streamsGroupMaxWarmupReplicas());
+    }
+
+    @Test
+    public void testStreamsGroupMaxWarmupReplicasCustomValue() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG, 30);
+        GroupCoordinatorConfig config = createConfig(configs);
+        assertEquals(30, config.streamsGroupMaxWarmupReplicas());
+    }
+
+    @Test
+    public void testDLQAutoCreateTopicsEnableDefaultValue() {
+        Map<String, Object> configs = new HashMap<>();
+        GroupCoordinatorConfig config = createConfig(configs);
+        assertEquals(false, config.errorsDLQAutoCreateTopicsEnable());
+        assertEquals(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_DEFAULT,
+            config.errorsDLQAutoCreateTopicsEnable());
+    }
+
+    @Test
+    public void testDLQAutoCreateTopicsEnableCustomValue() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG, true);
+        GroupCoordinatorConfig config = createConfig(configs);
+        assertEquals(true, config.errorsDLQAutoCreateTopicsEnable());
+    }
+
+    @Test
+    public void testDLQTopicNamePrefixDefaultValue() {
+        Map<String, Object> configs = new HashMap<>();
+        GroupCoordinatorConfig config = createConfig(configs);
+        assertEquals("dlq.", config.errorsDLQTopicNamePrefix());
+        assertEquals(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_DEFAULT,
+            config.errorsDLQTopicNamePrefix());
+    }
+
+    @Test
+    public void testDLQTopicNamePrefixCustomValue() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG, "my-dlq-");
+        GroupCoordinatorConfig config = createConfig(configs);
+        assertEquals("my-dlq-", config.errorsDLQTopicNamePrefix());
+    }
+
+    @Test
+    public void testStreamsGroupTopologyDescriptionPluginDefaultIsNull() {
+        GroupCoordinatorConfig config = createConfig(new HashMap<>());
+        assertNull(config.streamsGroupTopologyDescriptionPlugin(Map.of()));
+    }
+
+    @Test
+    public void testStreamsGroupTopologyDescriptionPluginLoadedAndConfigured() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
+            TestTopologyDescriptionPlugin.class.getName());
+        GroupCoordinatorConfig config = createConfig(configs);
+
+        StreamsGroupTopologyDescriptionPlugin plugin =
+            config.streamsGroupTopologyDescriptionPlugin(Map.of());
+        assertInstanceOf(TestTopologyDescriptionPlugin.class, plugin);
+        assertNotNull(((TestTopologyDescriptionPlugin) plugin).configs);
+    }
+
+    @Test
+    public void testStreamsGroupTopologyDescriptionPluginAcceptsClassObject() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
+            TestTopologyDescriptionPlugin.class);
+        GroupCoordinatorConfig config = createConfig(configs);
+
+        assertInstanceOf(TestTopologyDescriptionPlugin.class,
+            config.streamsGroupTopologyDescriptionPlugin(Map.of()));
+    }
+
+    @Test
+    public void testStreamsGroupTopologyDescriptionPluginReceivesAdditionalConfigs() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
+            TestTopologyDescriptionPlugin.class);
+        GroupCoordinatorConfig config = createConfig(configs);
+
+        try (TestTopologyDescriptionPlugin plugin = (TestTopologyDescriptionPlugin)
+            config.streamsGroupTopologyDescriptionPlugin(Map.of("injected.handle", "value"))) {
+            assertEquals("value", plugin.configs.get("injected.handle"));
+        }
+    }
+
+    @Test
+    public void testStreamsGroupTopologyDescriptionPluginReturnsFreshInstancePerCall() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
+            TestTopologyDescriptionPlugin.class);
+        GroupCoordinatorConfig config = createConfig(configs);
+
+        StreamsGroupTopologyDescriptionPlugin first =
+            config.streamsGroupTopologyDescriptionPlugin(Map.of());
+        StreamsGroupTopologyDescriptionPlugin second =
+            config.streamsGroupTopologyDescriptionPlugin(Map.of());
+        assertNotSame(first, second);
+    }
+
+    public static class TestTopologyDescriptionPlugin implements StreamsGroupTopologyDescriptionPlugin {
+        public Map<String, ?> configs;
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            this.configs = configs;
+        }
+
+        @Override
+        public CompletableFuture<Void> setTopology(String groupId, int topologyEpoch, StreamsGroupTopologyDescription description) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        @Override
+        public CompletableFuture<Void> deleteTopology(String groupId) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        @Override
+        public java.util.concurrent.CompletableFuture<StreamsGroupTopologyDescription> getTopology(String groupId, int topologyEpoch) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        @Override
+        public void close() { }
     }
 
     public static GroupCoordinatorConfig createConfig(Map<String, Object> configs) {

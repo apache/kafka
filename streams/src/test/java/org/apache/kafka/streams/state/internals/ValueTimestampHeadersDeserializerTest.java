@@ -21,7 +21,6 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
@@ -182,28 +181,6 @@ public class ValueTimestampHeadersDeserializerTest {
         assertNotNull(header);
         assertEquals("key1", header.key());
         assertNull(header.value());
-    }
-
-    @Test
-    public void shouldExtractValue() {
-        final Headers headers = new RecordHeaders()
-            .add("key1", "value1".getBytes());
-        final ValueTimestampHeaders<String> original =
-            ValueTimestampHeaders.make("test-value", 123456789L, headers);
-
-        final byte[] serialized = serializer.serialize(TOPIC, original);
-
-        try (final Serde<String> stringSerde = Serdes.String()) {
-            final String value = ValueTimestampHeadersDeserializer.value(serialized, stringSerde.deserializer());
-            assertNotNull(value);
-            assertEquals("test-value", value);
-        }
-    }
-
-    @Test
-    public void shouldReturnNullForRawValueWhenInputIsNull() {
-        final ValueTimestampHeaders<String> value = ValueTimestampHeadersDeserializer.value(null, deserializer);
-        assertNull(value);
     }
 
     @ParameterizedTest

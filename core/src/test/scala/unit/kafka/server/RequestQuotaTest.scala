@@ -35,7 +35,8 @@ import org.apache.kafka.common.record.internal._
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.{PatternType, ResourceType => AdminResourceType}
 import org.apache.kafka.common.security.auth._
-import org.apache.kafka.common.utils.{Sanitizer, SecurityUtils}
+import org.apache.kafka.common.utils.internals.SecurityUtils
+import org.apache.kafka.common.utils.internals.Sanitizer
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.network.Session
@@ -472,12 +473,12 @@ class RequestQuotaTest extends BaseRequestTest {
           new WriteTxnMarkersRequest.Builder(java.util.List.of[WriteTxnMarkersRequest.TxnMarkerEntry])
 
         case ApiKeys.TXN_OFFSET_COMMIT =>
-          new TxnOffsetCommitRequest.Builder(
-            "test-transactional-id",
-            "test-txn-group",
-            2,
-            0,
-            util.Map.of[TopicPartition, TxnOffsetCommitRequest.CommittedOffset],
+          TxnOffsetCommitRequest.Builder.forTopicNames(
+            new TxnOffsetCommitRequestData()
+              .setTransactionalId("test-transactional-id")
+              .setGroupId("test-txn-group")
+              .setProducerId(2)
+              .setProducerEpoch(0),
             true
           )
 
@@ -756,6 +757,9 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.STREAMS_GROUP_DESCRIBE =>
           new StreamsGroupDescribeRequest.Builder(new StreamsGroupDescribeRequestData())
+
+        case ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE =>
+          new StreamsGroupTopologyDescriptionUpdateRequest.Builder(new StreamsGroupTopologyDescriptionUpdateRequestData())
 
         case ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS =>
           new DescribeShareGroupOffsetsRequest.Builder(new DescribeShareGroupOffsetsRequestData())

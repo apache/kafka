@@ -32,10 +32,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class MetadataQuorumCommandErrorTest {
 
     @Test
-    public void testPropertiesFileDoesNotExists() {
+    public void testPropertiesFileDoesNotExist() {
         assertEquals(1,
             MetadataQuorumCommand.mainNoExit("--bootstrap-server", "localhost:9092", "--command-config", "admin.properties", "describe"));
-        assertEquals("Properties file admin.properties does not exists!",
+        assertEquals("Properties file admin.properties does not exist.",
             ToolsTestUtils.captureStandardErr(() ->
                 MetadataQuorumCommand.mainNoExit("--bootstrap-server", "localhost:9092", "--command-config", "admin.properties", "describe")));
     }

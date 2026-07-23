@@ -28,15 +28,18 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -56,8 +59,9 @@ public class KTableKTableForeignKeyJoinScenarioTest {
     private static final String RIGHT_TABLE = "right_table";
     private static final String OUTPUT = "output-topic";
 
-    @Test
-    public void shouldWorkWithDefaultSerdes() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldWorkWithDefaultSerdes(final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Integer, String> aTable = builder.table("A");
         final KTable<Integer, String> bTable = builder.table("B");
@@ -76,11 +80,12 @@ public class KTableKTableForeignKeyJoinScenarioTest {
 
         finalJoinResult.toStream().to("output");
 
-        validateTopologyCanProcessData(builder);
+        validateTopologyCanProcessData(builder, withHeaders);
     }
 
-    @Test
-    public void shouldWorkWithDefaultAndConsumedSerdes() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldWorkWithDefaultAndConsumedSerdes(final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Integer, String> aTable = builder.table("A", Consumed.with(Serdes.Integer(), Serdes.String()));
         final KTable<Integer, String> bTable = builder.table("B");
@@ -99,11 +104,12 @@ public class KTableKTableForeignKeyJoinScenarioTest {
 
         finalJoinResult.toStream().to("output");
 
-        validateTopologyCanProcessData(builder);
+        validateTopologyCanProcessData(builder, withHeaders);
     }
 
-    @Test
-    public void shouldWorkWithDefaultAndJoinResultSerdes() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldWorkWithDefaultAndJoinResultSerdes(final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Integer, String> aTable = builder.table("A");
         final KTable<Integer, String> bTable = builder.table("B");
@@ -124,11 +130,12 @@ public class KTableKTableForeignKeyJoinScenarioTest {
 
         finalJoinResult.toStream().to("output");
 
-        validateTopologyCanProcessData(builder);
+        validateTopologyCanProcessData(builder, withHeaders);
     }
 
-    @Test
-    public void shouldWorkWithDefaultAndEquiJoinResultSerdes() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldWorkWithDefaultAndEquiJoinResultSerdes(final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Integer, String> aTable = builder.table("A");
         final KTable<Integer, String> bTable = builder.table("B");
@@ -148,11 +155,12 @@ public class KTableKTableForeignKeyJoinScenarioTest {
 
         finalJoinResult.toStream().to("output");
 
-        validateTopologyCanProcessData(builder);
+        validateTopologyCanProcessData(builder, withHeaders);
     }
 
-    @Test
-    public void shouldWorkWithDefaultAndProducedSerdes() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldWorkWithDefaultAndProducedSerdes(final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Integer, String> aTable = builder.table("A");
         final KTable<Integer, String> bTable = builder.table("B");
@@ -171,16 +179,18 @@ public class KTableKTableForeignKeyJoinScenarioTest {
 
         finalJoinResult.toStream().to("output", Produced.with(Serdes.Integer(), Serdes.String()));
 
-        validateTopologyCanProcessData(builder);
+        validateTopologyCanProcessData(builder, withHeaders);
     }
 
-    @Test
-    public void shouldUseExpectedTopicsWithSerde() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldUseExpectedTopicsWithSerde(final boolean withHeaders) {
         final String applicationId = "ktable-ktable-joinOnForeignKey";
         final Properties streamsConfig = mkProperties(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, applicationId),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
         ));
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
 
         final UniqueTopicSerdeScope serdeScope = new UniqueTopicSerdeScope();
         final StreamsBuilder builder = new StreamsBuilder();
@@ -207,7 +217,7 @@ public class KTableKTableForeignKeyJoinScenarioTest {
 
 
         final Topology topology = builder.build(streamsConfig);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(streamsConfig).build()) {
             final TestInputTopic<Integer, String> leftInput = driver.createInputTopic(LEFT_TABLE, new IntegerSerializer(), new StringSerializer());
             final TestInputTopic<Integer, String> rightInput = driver.createInputTopic(RIGHT_TABLE, new IntegerSerializer(), new StringSerializer());
             leftInput.pipeInput(2, "lhsValue1|1");
@@ -234,8 +244,9 @@ public class KTableKTableForeignKeyJoinScenarioTest {
         )));
     }
 
-    @Test
-    public void shouldWorkWithCompositeKeyAndProducerIdInValue() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldWorkWithCompositeKeyAndProducerIdInValue(final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         // Left table keyed by <producer_id, product_id>
@@ -260,7 +271,7 @@ public class KTableKTableForeignKeyJoinScenarioTest {
 
         joined.toStream().to("output");
 
-        try (final TopologyTestDriver driver = createTopologyTestDriver(builder)) {
+        try (final TopologyTestDriver driver = createTopologyTestDriver(builder, withHeaders)) {
             final TestInputTopic<String, String> leftInput = driver.createInputTopic(
                 "left_table",
                 new StringSerializer(),
@@ -295,8 +306,9 @@ public class KTableKTableForeignKeyJoinScenarioTest {
         }
     }
 
-    @Test
-    public void shouldWorkWithCompositeKeyAndBiFunctionExtractor() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldWorkWithCompositeKeyAndBiFunctionExtractor(final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         // Left table keyed by <producer_id, product_id>
@@ -321,7 +333,7 @@ public class KTableKTableForeignKeyJoinScenarioTest {
 
         joined.toStream().to("output");
 
-        try (final TopologyTestDriver driver = createTopologyTestDriver(builder)) {
+        try (final TopologyTestDriver driver = createTopologyTestDriver(builder, withHeaders)) {
             final TestInputTopic<String, String> leftInput = driver.createInputTopic(
                 "left_table",
                 new StringSerializer(),
@@ -355,22 +367,24 @@ public class KTableKTableForeignKeyJoinScenarioTest {
         }
     }
 
-    private TopologyTestDriver createTopologyTestDriver(final StreamsBuilder builder) {
+    private TopologyTestDriver createTopologyTestDriver(final StreamsBuilder builder, final boolean withHeaders) {
         final Properties config = new Properties();
         config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
         config.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
         config.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
         config.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        return new TopologyTestDriver(builder.build(), config);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(config, withHeaders);
+        return new TopologyTestDriverBuilder(builder.build()).withConfig(config).build();
     }
 
-    private void validateTopologyCanProcessData(final StreamsBuilder builder) {
+    private void validateTopologyCanProcessData(final StreamsBuilder builder, final boolean withHeaders) {
         final Properties config = new Properties();
         config.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class.getName());
         config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
         config.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
-        try (final TopologyTestDriver topologyTestDriver = new TopologyTestDriver(builder.build(), config)) {
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(config, withHeaders);
+        try (final TopologyTestDriver topologyTestDriver = new TopologyTestDriverBuilder(builder.build()).withConfig(config).build()) {
             final TestInputTopic<Integer, String> aTopic = topologyTestDriver.createInputTopic("A", new IntegerSerializer(), new StringSerializer());
             final TestInputTopic<Integer, String> bTopic = topologyTestDriver.createInputTopic("B", new IntegerSerializer(), new StringSerializer());
             final TestOutputTopic<Integer, String> output = topologyTestDriver.createOutputTopic("output", new IntegerDeserializer(), new StringDeserializer());

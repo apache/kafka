@@ -27,6 +27,7 @@ import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.TopologyTestDriverWrapper;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -46,7 +47,8 @@ import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -69,16 +71,18 @@ public class KTableKTableLeftJoinTest {
     private final String topic2 = "topic2";
     private final String output = "output";
     private final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
-    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
+    private Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
-    private StreamsBuilder createStreamBuilderInMemory() {
+    private StreamsBuilder createStreamBuilderInMemory(final boolean withHeaders) {
         props.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class.getName());
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
         return new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
     }
 
-    @Test
-    public void testJoin() {
-        final StreamsBuilder builder = createStreamBuilderInMemory();
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testJoin(final boolean withHeaders) {
+        final StreamsBuilder builder = createStreamBuilderInMemory(withHeaders);
 
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
@@ -93,7 +97,7 @@ public class KTableKTableLeftJoinTest {
         assertEquals(1, copartitionGroups.size());
         assertEquals(Set.of(topic1, topic2), copartitionGroups.iterator().next());
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<Integer, String> inputTopic1 =
                     driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
@@ -197,9 +201,10 @@ public class KTableKTableLeftJoinTest {
         }
     }
 
-    @Test
-    public void testNotSendingOldValue() {
-        final StreamsBuilder builder = createStreamBuilderInMemory();
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testNotSendingOldValue(final boolean withHeaders) {
+        final StreamsBuilder builder = createStreamBuilderInMemory(withHeaders);
 
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
@@ -214,7 +219,7 @@ public class KTableKTableLeftJoinTest {
 
         final Topology topology = builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(props).build()) {
             final TestInputTopic<Integer, String> inputTopic1 =
                     driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
@@ -313,9 +318,10 @@ public class KTableKTableLeftJoinTest {
         }
     }
 
-    @Test
-    public void testSendingOldValue() {
-        final StreamsBuilder builder = createStreamBuilderInMemory();
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testSendingOldValue(final boolean withHeaders) {
+        final StreamsBuilder builder = createStreamBuilderInMemory(withHeaders);
 
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
@@ -438,8 +444,9 @@ public class KTableKTableLeftJoinTest {
      * It is based on a fairly complicated join used by the developer that reported the bug.
      * Before the fix this would trigger an IllegalStateException.
      */
-    @Test
-    public void shouldNotThrowIllegalStateExceptionWhenMultiCacheEvictions() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldNotThrowIllegalStateExceptionWhenMultiCacheEvictions(final boolean withHeaders) {
         final String agg = "agg";
         final String tableOne = "tableOne";
         final String tableTwo = "tableTwo";
@@ -449,7 +456,7 @@ public class KTableKTableLeftJoinTest {
         final String tableSix = "tableSix";
         final String[] inputs = {agg, tableOne, tableTwo, tableThree, tableFour, tableFive, tableSix};
 
-        final StreamsBuilder builder = createStreamBuilderInMemory();
+        final StreamsBuilder builder = createStreamBuilderInMemory(withHeaders);
         final Consumed<Long, String> consumed = Consumed.with(Serdes.Long(), Serdes.String());
         final KTable<Long, String> aggTable = builder
             .table(agg, consumed, Materialized.as(Stores.inMemoryKeyValueStore("agg-base-store")))
@@ -481,7 +488,7 @@ public class KTableKTableLeftJoinTest {
             .leftJoin(eight, MockValueJoiner.TOSTRING_JOINER)
             .mapValues(mapper);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final String[] values = {
                 "a", "AA", "BBB", "CCCC", "DD", "EEEEEEEE", "F", "GGGGGGGGGGGGGGG", "HHH", "IIIIIIIIII",
                 "J", "KK", "LLLL", "MMMMMMMMMMMMMMMMMMMMMM", "NNNNN", "O", "P", "QQQQQ", "R", "SSSS",
@@ -501,9 +508,10 @@ public class KTableKTableLeftJoinTest {
         }
     }
 
-    @Test
-    public void shouldLogAndMeterSkippedRecordsDueToNullLeftKey() {
-        final StreamsBuilder builder = createStreamBuilderInMemory();
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldLogAndMeterSkippedRecordsDueToNullLeftKey(final boolean withHeaders) {
+        final StreamsBuilder builder = createStreamBuilderInMemory(withHeaders);
 
         @SuppressWarnings("unchecked")
         final Processor<String, Change<String>, String, Change<Object>> join = new KTableKTableLeftJoin<>(
