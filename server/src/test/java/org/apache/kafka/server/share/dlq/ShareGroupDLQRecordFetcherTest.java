@@ -321,6 +321,86 @@ class ShareGroupDLQRecordFetcherTest {
     }
 
     @Test
+    public void testFetchStopsOnceEnoughContentCollectedWithoutScanningWholeRange() throws Exception {
+        // A large range (0..100), but budget only for about one record's worth. Uncompressed data
+        // carries no decompression risk and so is never rejected by the decompression-bomb bound -
+        // this test is about a different, newer bound: once enough usable content has been
+        // collected for one caller-sized "round" (maxDecompressedBytes, reused as a target output
+        // size), the fetch stops issuing further reads rather than scanning all the way to
+        // endOffset looking for more. Without this, an all-uncompressed range would always be
+        // fully walked regardless of how much of it the caller could actually use.
+        String value = "v".repeat(50);
+        whenReadAsync(done(success(record("k0", value))));
+
+        Map<Long, Record> result = fetcher(param(0L, 100L), 10).fetch().get(10, TimeUnit.SECONDS);
+
+        assertEquals(1, result.size());
+        assertRecord(result, 0L, "k0", value);
+        verify(logReader, times(1)).readAsync(any(), anySet(), any(), any(), anyBoolean());
+    }
+
+    @Test
+    public void testMultipleBatchesInSingleReadStopAtBudgetBetweenBatches() throws Exception {
+        // Two uncompressed batches concatenated into ONE read response - the first batch alone
+        // already reaches budget. collectRecords() must stop BEFORE starting the second batch (not
+        // just wait for runFrom()'s between-reads check), or a single read containing many batches
+        // could collect well past budget before that check ever runs again.
+        String value = "v".repeat(50);
+        MemoryRecords batch0 = MemoryRecords.withRecords(0L, Compression.NONE, record("k0", value));
+        MemoryRecords batch1 = MemoryRecords.withRecords(1L, Compression.NONE, record("k1", value));
+
+        whenReadAsync(done(logReadResult(new FetchDataInfo(null, concatBatches(batch0, batch1)), Errors.NONE)));
+
+        Map<Long, Record> result = fetcher(param(0L, 1L), 10).fetch().get(10, TimeUnit.SECONDS);
+
+        assertEquals(1, result.size());
+        assertRecord(result, 0L, "k0", value);
+        assertNull(result.get(1L), "Second batch must not be collected once the first alone reached budget");
+    }
+
+    @Test
+    public void testUncompressedBatchStopsMidBatchOnceBudgetReached() throws Exception {
+        // A single uncompressed batch with several records, budget only for about the first two -
+        // collectUncompressed() must stop mid-batch, not just between batches/reads, since a single
+        // uncompressed batch carries no decompression risk and so has no other size cap of its own.
+        // The check runs after adding each record (same "include the crossing record, then stop"
+        // pattern used elsewhere in this class), so the record that pushes collectedBytes over
+        // budget is itself still included - only records after that one are excluded.
+        String value = "v".repeat(50);
+        whenReadAsync(done(success(record("k0", value), record("k1", value), record("k2", value))));
+
+        Map<Long, Record> result = fetcher(param(0L, 2L), 65).fetch().get(10, TimeUnit.SECONDS);
+
+        assertRecord(result, 0L, "k0", value);
+        assertRecord(result, 1L, "k1", value);
+        assertNull(result.get(2L), "Budget was reached partway through the batch; the record after that must not be collected");
+    }
+
+    @Test
+    public void testCompressedBatchAfterUncompressedRespectsCombinedBudget() throws Exception {
+        // The first batch is uncompressed and alone consumes most of the budget. The second batch
+        // is compressed and, judged purely against decompressedBytes (still 0 at this point), would
+        // easily fit - but must still be rejected because collectedBytes (from the uncompressed
+        // batch) has already spent most of the shared budget. Proves decompressBounded() gates on
+        // both counters, not just the one it directly increments (decompressedBytes) - without this,
+        // the same budget would effectively be granted twice: once for uncompressed data, again for
+        // compressed data, in the same round.
+        String uncompressedValue = "v".repeat(150);
+        String compressedValue = "x".repeat(80);
+        MemoryRecords uncompressedBatch = MemoryRecords.withRecords(0L, Compression.NONE, record("k0", uncompressedValue));
+        MemoryRecords compressedBatch = MemoryRecords.withRecords(1L, Compression.gzip().build(), record("k1", compressedValue));
+
+        whenReadAsync(done(logReadResult(
+            new FetchDataInfo(null, concatBatches(uncompressedBatch, compressedBatch)), Errors.NONE)));
+
+        Map<Long, Record> result = fetcher(param(0L, 1L), 200).fetch().get(10, TimeUnit.SECONDS);
+
+        assertRecord(result, 0L, "k0", uncompressedValue);
+        assertNull(result.get(1L),
+            "Compressed batch must be rejected - the combined budget is already nearly spent by the uncompressed batch");
+    }
+
+    @Test
     public void testCompressedBatchExceedingDecompressedBudgetSkipsBatch() throws Exception {
         // Highly compressible values so the batch is small on the wire but decompresses well past a
         // tiny budget - simulates a decompression-bomb-shaped batch. The whole batch is decompressed

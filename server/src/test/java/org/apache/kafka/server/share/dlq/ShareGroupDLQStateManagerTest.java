@@ -54,8 +54,10 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatcher;
 import org.mockito.Mockito;
 
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -65,6 +67,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
@@ -97,9 +100,12 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -1716,6 +1722,62 @@ class ShareGroupDLQStateManagerTest {
         verify(mockMetrics, times(3)).recordDLQProduce(GROUP_ID);
     }
 
+    @Test
+    public void testCompleteHandlerSafelyIsolatesOneHandlersUncaughtExceptionFromOthers() {
+        // Simulates the coalesced-response callback in SendThread.generateRequests(), which invokes
+        // completeHandlerSafely() once per handler sharing one produce response. If one handler's
+        // onComplete() throws, that must not prevent other handlers in the same batch from being
+        // notified (which would otherwise leave their dlq() futures hanging forever), and the
+        // offending handler's own future must still be explicitly failed rather than left hanging.
+        stateManager = builder().build();
+        ShareGroupDLQStateManager.ProduceRequestHandler throwing =
+            spy(newHandlerForCoalesceTest(stateManager, GROUP_ID, 0));
+        throwing.populateDLQTopicData();
+        doThrow(new RuntimeException("boom")).when(throwing).onComplete(any());
+
+        ShareGroupDLQStateManager.ProduceRequestHandler normal =
+            spy(newHandlerForCoalesceTest(stateManager, GROUP_ID, 1));
+        normal.populateDLQTopicData();
+
+        // A null response is a valid, already-handled input to onComplete() (see its own null
+        // check) and lets this test avoid needing a real ClientResponse.
+        List.of(throwing, normal).forEach(handler ->
+            ShareGroupDLQStateManager.completeHandlerSafely(handler, null));
+
+        verify(throwing).onComplete(null);
+        verify(throwing).requestErrorResponse(any(RuntimeException.class));
+        verify(normal).onComplete(null);
+        verify(normal, never()).requestErrorResponse(any());
+    }
+
+    @Test
+    public void testResolveRoundSurvivesSynchronousExceptionFromMaybeFetchRecordData() throws Exception {
+        // maybeFetchRecordData() begins with a synchronous cache-helper call
+        // (isShareGroupDlqCopyRecordEnabled) before ever returning a future. If that call throws -
+        // e.g. a cache-helper bug - resolveRound() must not let the exception escape synchronously:
+        // for round 2 onward this method is called directly from handleProduceResponse() on the
+        // sender thread, inside a RequestCompletionHandler callback, where an uncaught exception can
+        // (depending on the internal response-delivery path) propagate all the way to the broker's
+        // fatal-error handling rather than just failing this one handler.
+        ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
+        when(cacheHelper.isShareGroupDlqCopyRecordEnabled(GROUP_ID)).thenThrow(new RuntimeException("cache helper boom"));
+        stateManager = builder().withCacheHelper(cacheHelper).build();
+
+        ShareGroupDLQStateManager.ProduceRequestHandler handler = newHandlerForCoalesceTest(stateManager, GROUP_ID, 0);
+        handler.populateDLQTopicData();
+
+        CompletableFuture<Void> resolved = handler.resolveRound();
+
+        assertNull(resolved.get(5, TimeUnit.SECONDS),
+            "resolveRound() must complete normally even when maybeFetchRecordData() throws synchronously");
+
+        // Falls back to headers-only for this round, same as any other failed-fetch case.
+        ProduceRequestData.TopicProduceData topicData = handler.topicProduceData();
+        Record record = ((MemoryRecords) topicData.partitionData().get(0).records()).records().iterator().next();
+        assertFalse(record.hasKey());
+        assertFalse(record.hasValue());
+    }
+
     // --- DLQ record with copy record enabled ---
 
     private static FetchDataInfo recordsInfo(SimpleRecord... records) {
@@ -1727,11 +1789,50 @@ class ShareGroupDLQStateManagerTest {
         return new LogReadResult(info, Optional.empty(), 0L, 0L, 0L, 0L, -1L, OptionalLong.empty(), error);
     }
 
-    private static CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> asyncReadMap(
+    private static LinkedHashMap<TopicIdPartition, LogReadResult> resultMap(
             TopicIdPartition topicIdPartition, LogReadResult result) {
         LinkedHashMap<TopicIdPartition, LogReadResult> map = new LinkedHashMap<>();
         map.put(topicIdPartition, result);
-        return CompletableFuture.completedFuture(map);
+        return map;
+    }
+
+    private static CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> asyncReadMap(
+            TopicIdPartition topicIdPartition, LogReadResult result) {
+        return CompletableFuture.completedFuture(resultMap(topicIdPartition, result));
+    }
+
+    // Concatenates the given batches' on-wire bytes into a single MemoryRecords, simulating one
+    // read returning multiple consecutive batches.
+    private static MemoryRecords concatBatches(List<MemoryRecords> batches) {
+        int size = batches.stream().mapToInt(b -> b.buffer().remaining()).sum();
+        ByteBuffer combined = ByteBuffer.allocate(size);
+        batches.forEach(b -> combined.put(b.buffer().duplicate()));
+        combined.flip();
+        return MemoryRecords.readableRecords(combined);
+    }
+
+    // Stubs logReader.readAsync to behave like a real log keyed by starting offset: a read
+    // requesting offset N returns only the batches at index >= N (batchesByOffset.get(i) is the
+    // batch whose base offset is i), never earlier ones - unlike a stub that always returns the
+    // same fixed blob regardless of the requested position, which would waste each round's fresh
+    // decompression budget re-decompressing already-consumed batches.
+    private static void whenReadAsyncFromLog(LogReader logReader, TopicIdPartition topicIdPartition,
+                                              List<MemoryRecords> batchesByOffset) {
+        when(logReader.readAsync(any(), anySet(), any(), any(), anyBoolean())).thenAnswer(invocation -> {
+            Map<TopicIdPartition, Long> offsets = invocation.getArgument(2);
+            int fromIndex = (int) Math.min(offsets.get(topicIdPartition), batchesByOffset.size());
+            MemoryRecords records = fromIndex >= batchesByOffset.size()
+                ? MemoryRecords.EMPTY
+                : concatBatches(batchesByOffset.subList(fromIndex, batchesByOffset.size()));
+            return asyncReadMap(topicIdPartition, logReadResult(new FetchDataInfo(null, records), Errors.NONE));
+        });
+    }
+
+    // Matches the offsets map argument of readAsync() when it requests starting from the given
+    // offset for the given partition - lets tests assert readAsync was (or wasn't) called for a
+    // specific round's window, rather than relying on call order/count alone.
+    private static ArgumentMatcher<Map<TopicIdPartition, Long>> offsetsRequesting(TopicIdPartition topicIdPartition, long offset) {
+        return offsets -> offsets != null && Objects.equals(offsets.get(topicIdPartition), offset);
     }
 
     // Stubs logReader.readAsync to return, in order, the given per-call results for the partition,
@@ -1829,12 +1930,195 @@ class ShareGroupDLQStateManagerTest {
             stateManager.start();
             assertNull(stateManager.dlq(param, 1L, 5L, maxAttempts).get(5, TimeUnit.SECONDS));
 
-            // Records are resolved once, before enqueue, and the memoized result is reused on every
-            // (re)send. So despite three produce attempts the source log is read exactly once.
+            // param() fits entirely in one produce round here (no chunking), so all three attempts
+            // are retries of round 1: records are resolved once for that round, before enqueue, and
+            // the memoized result is reused on every retry. So despite three produce attempts the
+            // source log is read exactly once - a genuinely new round (not exercised by this test)
+            // would trigger its own, separate readAsync call.
             verify(logReader, times(1)).readAsync(any(), anySet(), any(), any(), anyBoolean());
             verify(mockMetrics, times(maxAttempts)).recordDLQProduce(GROUP_ID);
             verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
             verify(mockMetrics, never()).recordDLQProduceFailed(any());
+        } finally {
+            Utils.closeQuietly(realTimer, "shareGroupDLQTestTimer");
+        }
+    }
+
+    @Test
+    public void testDlqRecordCopyRoundBudgetResetAcrossMultipleProduceRounds() throws Exception {
+        // Each source record's value is highly compressible (gzip) but decompresses to 400 bytes -
+        // comfortably within one round's decompression budget (maxDecompressedBytes, derived from
+        // dlqTopicMaxMessageBytes), but not within two rounds' worth combined. The resulting DLQ
+        // record (400-byte value plus DLQ headers) also exceeds maxMessageBytes on its own, which -
+        // via topicProduceData()'s single-record floor - forces exactly one offset per produce
+        // round, giving 3 rounds for param()'s 3-offset range.
+        //
+        // Contrast with the pre-per-round design: a single decompression budget shared across the
+        // whole 3-offset range would let only offset 0 fit, permanently starving offsets 1 and 2 -
+        // regardless of how many produce rounds followed, since the whole range was only ever
+        // fetched once. With a fresh budget reset every round, all three offsets get real content.
+        int maxMessageBytes = 600;
+        ShareGroupDLQRecordParameter param = param();
+        TopicIdPartition tp = param.topicIdPartition();
+
+        List<MemoryRecords> batchesByOffset = new ArrayList<>();
+        List<byte[]> keys = new ArrayList<>();
+        List<byte[]> values = new ArrayList<>();
+        for (long offset = 0; offset <= 2; offset++) {
+            byte[] key = ("k" + offset).getBytes(StandardCharsets.UTF_8);
+            byte[] value = ("x".repeat(400) + offset).getBytes(StandardCharsets.UTF_8);
+            keys.add(key);
+            values.add(value);
+            batchesByOffset.add(MemoryRecords.withRecords(offset, Compression.gzip().build(),
+                new SimpleRecord(MOCK_TIME.milliseconds(), key, value)));
+        }
+
+        LogReader logReader = mock(LogReader.class);
+        whenReadAsyncFromLog(logReader, tp, batchesByOffset);
+
+        ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
+        when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
+        when(cacheHelper.dlqTopicMaxMessageBytes(anyString())).thenReturn(maxMessageBytes);
+
+        MockClient client = new MockClient(MOCK_TIME);
+        List<ProduceRequest> capturedProduces = new ArrayList<>();
+        MockClient.RequestMatcher captureProduce = body -> {
+            if (body instanceof ProduceRequest pr) {
+                capturedProduces.add(pr);
+                return true;
+            }
+            return false;
+        };
+        client.prepareResponseFrom(captureProduce, successfulProduceResponse(0), DEFAULT_LEADER);
+        client.prepareResponseFrom(captureProduce, successfulProduceResponse(0), DEFAULT_LEADER);
+        client.prepareResponseFrom(captureProduce, successfulProduceResponse(0), DEFAULT_LEADER);
+
+        stateManager = builder().withClient(client).withLogReader(logReader).withCacheHelper(cacheHelper).build();
+        stateManager.start();
+        assertNull(stateManager.dlq(param).get(10, TimeUnit.SECONDS));
+
+        assertEquals(3, capturedProduces.size(), "Expected one produce round per offset");
+        Map<String, String> sharedHeaders = Map.of(
+            HEADER_DLQ_ERRORS_TOPIC, "source-topic",
+            HEADER_DLQ_ERRORS_PARTITION, "0",
+            HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
+            HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
+            HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
+        );
+        for (int round = 0; round < 3; round++) {
+            assertDlqProduceRecordHeaders(capturedProduces.get(round), Map.of(
+                0, new ExpectedDlqPartition(round, round, sharedHeaders, List.of(keys.get(round)), List.of(values.get(round)))
+            ));
+        }
+        verify(logReader, times(3)).readAsync(any(), anySet(), any(), any(), anyBoolean());
+    }
+
+    @Test
+    public void testDlqRecordCopyFirstProduceRoundGoesOutBeforeLaterRoundResolves() throws Exception {
+        // Forces exactly one offset per produce round (topicProduceData()'s single-record floor,
+        // see testDlqChunksOverMaxMessageBytesAcrossMultipleProduceRequests). Round 1's read is
+        // already resolved; round 2's read is held pending to simulate an in-flight (e.g.
+        // remote-storage) fetch - proving round 1's produce goes out without waiting for round 2
+        // to resolve, rather than the whole range being resolved eagerly before anything is sent.
+        ShareGroupDLQRecordParameter param = new ShareGroupDLQRecordParameter(
+            GROUP_ID, new TopicIdPartition(SOURCE_TOPIC_ID, 0, "source-topic"),
+            0L, 1L, Optional.of((short) 1), Optional.of(new RuntimeException("simulated cause")));
+        TopicIdPartition tp = param.topicIdPartition();
+
+        // Round 1's own fetch window covers the WHOLE param range (offsets 0 and 1, since round 1
+        // always starts at param.firstOffset()) - but since maxDecompressedBytes is reused as the
+        // fetch's target output size (see ShareGroupDLQRecordFetcher), and it's tiny here (1 byte,
+        // same as dlqTopicMaxMessageBytes below), round 1's fetch stops on its own right after
+        // collecting offset 0's record, without needing to look for offset 1 at all. The genuinely
+        // separate, held-pending read only comes later, from round 2's own resolveRound() call
+        // (triggered by round 1's successful produce response).
+        LogReader logReader = mock(LogReader.class);
+        CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> round1Read = asyncReadMap(tp,
+            logReadResult(recordsInfo(new SimpleRecord(MOCK_TIME.milliseconds(),
+                "k0".getBytes(StandardCharsets.UTF_8), "v0".getBytes(StandardCharsets.UTF_8))), Errors.NONE));
+        CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> round2Read = new CompletableFuture<>();
+        when(logReader.readAsync(any(), anySet(), any(), any(), anyBoolean()))
+            .thenReturn(round1Read)
+            .thenReturn(round2Read);
+
+        ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
+        when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
+        when(cacheHelper.dlqTopicMaxMessageBytes(anyString())).thenReturn(1);
+
+        MockClient client = new MockClient(MOCK_TIME);
+        List<ProduceRequest> capturedProduces = new ArrayList<>();
+        MockClient.RequestMatcher captureProduce = body -> {
+            if (body instanceof ProduceRequest pr) {
+                capturedProduces.add(pr);
+                return true;
+            }
+            return false;
+        };
+        client.prepareResponseFrom(captureProduce, successfulProduceResponse(0), DEFAULT_LEADER);
+        client.prepareResponseFrom(captureProduce, successfulProduceResponse(0), DEFAULT_LEADER);
+
+        stateManager = builder().withClient(client).withLogReader(logReader).withCacheHelper(cacheHelper).build();
+        stateManager.start();
+        CompletableFuture<Void> dlqFuture = stateManager.dlq(param);
+
+        TestUtils.waitForCondition(() -> capturedProduces.size() == 1, TestUtils.DEFAULT_MAX_WAIT_MS,
+            "Expected round 1's produce request to go out while round 2's fetch is still pending");
+        assertFalse(dlqFuture.isDone(), "Overall future must not complete until round 2 resolves and is sent");
+
+        round2Read.complete(resultMap(tp, logReadResult(recordsInfo(new SimpleRecord(MOCK_TIME.milliseconds(),
+            "k1".getBytes(StandardCharsets.UTF_8), "v1".getBytes(StandardCharsets.UTF_8))), Errors.NONE)));
+
+        assertNull(dlqFuture.get(10, TimeUnit.SECONDS));
+        assertEquals(2, capturedProduces.size(), "Expected round 2's produce request once its fetch resolved");
+    }
+
+    @Test
+    public void testDlqRecordCopyRetryOfSameRoundDoesNotRefetchButNewRoundDoes() throws Exception {
+        int maxAttempts = 3;
+        Timer realTimer = new SystemTimerReaper("shareGroupDLQTestTimer", new SystemTimer("shareGroupDLQTestTimer"));
+        try {
+            // 2-offset range, 1-byte max message bytes forces exactly one offset per round (same
+            // trick as testDlqChunksOverMaxMessageBytesAcrossMultipleProduceRequests), giving
+            // round 1 = offset 0, round 2 = offset 1.
+            ShareGroupDLQRecordParameter param = new ShareGroupDLQRecordParameter(
+                GROUP_ID, new TopicIdPartition(SOURCE_TOPIC_ID, 0, "source-topic"),
+                0L, 1L, Optional.of((short) 1), Optional.of(new RuntimeException("simulated cause")));
+            TopicIdPartition tp = param.topicIdPartition();
+
+            List<MemoryRecords> batchesByOffset = List.of(
+                MemoryRecords.withRecords(0L, Compression.NONE,
+                    new SimpleRecord(MOCK_TIME.milliseconds(), "k0".getBytes(StandardCharsets.UTF_8), "v0".getBytes(StandardCharsets.UTF_8))),
+                MemoryRecords.withRecords(1L, Compression.NONE,
+                    new SimpleRecord(MOCK_TIME.milliseconds(), "k1".getBytes(StandardCharsets.UTF_8), "v1".getBytes(StandardCharsets.UTF_8)))
+            );
+            LogReader logReader = mock(LogReader.class);
+            whenReadAsyncFromLog(logReader, tp, batchesByOffset);
+
+            ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
+            when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
+            when(cacheHelper.dlqTopicMaxMessageBytes(anyString())).thenReturn(1);
+
+            MockClient client = new MockClient(MOCK_TIME);
+            // Round 1 attempt 1: disconnect (retriable). Round 1 attempt 2: success. Round 2: success.
+            client.prepareResponseFrom(body -> body instanceof ProduceRequest, null, DEFAULT_LEADER, true);
+            client.prepareResponseFrom(body -> body instanceof ProduceRequest, successfulProduceResponse(0), DEFAULT_LEADER);
+            client.prepareResponseFrom(body -> body instanceof ProduceRequest, successfulProduceResponse(0), DEFAULT_LEADER);
+
+            stateManager = builder()
+                .withClient(client)
+                .withLogReader(logReader)
+                .withCacheHelper(cacheHelper)
+                .withTimer(realTimer)
+                .build();
+            stateManager.start();
+            assertNull(stateManager.dlq(param, 1L, 5L, maxAttempts).get(10, TimeUnit.SECONDS));
+
+            // Despite round 1 needing 2 produce attempts (1 retry), its window (offset 0) is only
+            // fetched once - the retry reuses the already-resolved data (see dlqTopicExists()).
+            // Round 2's window (offset 1) is a genuinely new round and gets its own, separate fetch.
+            verify(logReader, times(1)).readAsync(any(), anySet(), argThat(offsetsRequesting(tp, 0L)), any(), anyBoolean());
+            verify(logReader, times(1)).readAsync(any(), anySet(), argThat(offsetsRequesting(tp, 1L)), any(), anyBoolean());
+            verify(logReader, times(2)).readAsync(any(), anySet(), any(), any(), anyBoolean());
         } finally {
             Utils.closeQuietly(realTimer, "shareGroupDLQTestTimer");
         }

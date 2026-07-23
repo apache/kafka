@@ -71,6 +71,14 @@ import java.util.concurrent.CompletableFuture;
  * skipped, same as any other partial-failure case - and the fetch continues with whatever batches follow,
  * rather than one oversized batch poisoning the rest of the range.
  *
+ * <p>{@code maxDecompressedBytes} does double duty as the target amount of usable content for this fetch:
+ * once the records actually collected (compressed or not) reach that many bytes, {@link #runFrom} stops
+ * issuing further reads rather than continuing to walk the rest of the requested range. Callers only ever
+ * need one message's worth of records at a time (see {@code ShareGroupDLQStateManager}, which resolves one
+ * produce round at a time and passes its {@code dlqTopicMaxMessageBytes} as this budget), so reading further
+ * would just be discarded work - this also means an all-uncompressed range, which carries no decompression
+ * risk and so isn't otherwise capped, still stops at a sane point instead of scanning to {@code lastOffset}.
+ *
  * <p>Instances are single-use: create one fetcher per {@link #fetch()} call.
  */
 public class ShareGroupDLQRecordFetcher {
@@ -95,6 +103,10 @@ public class ShareGroupDLQRecordFetcher {
     private final long maxDecompressedBytes;
     private final BufferSupplier bufferSupplier = BufferSupplier.create();
     private long decompressedBytes = 0;
+    // Cumulative sizeInBytes() of every record actually collected into recordMap so far, regardless
+    // of whether it came from a compressed or uncompressed batch - see the class-level doc on why this
+    // (not just decompressedBytes, which only tracks the compressed case) is what gates runFrom()'s loop.
+    private long collectedBytes = 0;
     // We are fetching data for one TopicIdPartition only. Hence, there is no need to keep recreating
     // the maxBytes map, and we can re-use a single copy. In similar vein, we needn't clear the offsets
     // map either and just update the value corresponding to the TopicIdPartition key across iterations.
@@ -151,10 +163,14 @@ public class ShareGroupDLQRecordFetcher {
      * complete (local data, or remote data already resolved) the loop continues in place; when it is still
      * pending (remote read in flight) the loop returns and is resumed from the callback - so the synchronous
      * path never recurses and the async path resumes on a fresh stack (the remote storage reader thread).
+     *
+     * <p>Also stops once {@link #collectedBytes} reaches {@link #maxDecompressedBytes} - there's no need to
+     * keep reading once enough usable content has been collected for the caller's purposes (see the
+     * class-level doc), even if {@link #endOffset} hasn't been reached yet.
      */
     private void runFrom(long startFrom) {
         long nextOffset = startFrom;
-        while (nextOffset <= endOffset) {
+        while (nextOffset <= endOffset && collectedBytes < maxDecompressedBytes) {
             offsets.put(tp, nextOffset);
 
             CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> future =
@@ -239,10 +255,16 @@ public class ShareGroupDLQRecordFetcher {
      * (never moves backwards). Records below readFrom or above endOffset are ignored. A batch that would
      * exceed the decompression budget ({@link #maxDecompressedBytes}) is skipped - its offsets are left
      * unread - but the loop continues on to whatever batches follow.
+     *
+     * <p>Also stops before starting a new batch once {@link #collectedBytes} already reaches {@link
+     * #maxDecompressedBytes} - a single read can return many batches (up to {@code maxFetchBytes}
+     * worth), so this check can't wait for {@link #runFrom}'s between-reads check alone, or a read
+     * containing several batches could collect well past budget before that check ever runs again.
      */
     private long collectRecords(Records records, long readFrom) {
         long nextOffset = readFrom;
         for (RecordBatch batch : records.batches()) {
+            if (collectedBytes >= maxDecompressedBytes) return nextOffset;
             nextOffset = collectFromBatch(batch, nextOffset);
         }
         return nextOffset;
@@ -272,7 +294,13 @@ public class ShareGroupDLQRecordFetcher {
             if (record.offset() < readFrom) continue;
             if (record.offset() > endOffset) return nextOffset;
             recordMap.put(record.offset(), record);
+            collectedBytes += record.sizeInBytes();
             nextOffset = Math.max(nextOffset, record.offset() + 1); // never moves backwards
+            // A single uncompressed batch carries no decompression risk on its own (see
+            // collectFromBatch), but it can still be large enough on its own to blow well past
+            // maxDecompressedBytes if left unchecked here - stop mid-batch once enough is collected,
+            // same as collectRecords does between batches.
+            if (collectedBytes >= maxDecompressedBytes) return nextOffset;
         }
         return nextOffset;
     }
@@ -326,6 +354,7 @@ public class ShareGroupDLQRecordFetcher {
             if (record.offset() < readFrom) continue;
             if (record.offset() > endOffset) return nextOffset;
             recordMap.put(record.offset(), record);
+            collectedBytes += record.sizeInBytes();
             nextOffset = Math.max(nextOffset, record.offset() + 1); // never moves backwards
         }
         return nextOffset;
@@ -342,7 +371,13 @@ public class ShareGroupDLQRecordFetcher {
      *         budget ({@link #maxDecompressedBytes}, shared across the whole fetch) is already exhausted.
      */
     private ByteBuffer decompressBounded(DefaultRecordBatch batch) {
-        long budget = maxDecompressedBytes - decompressedBytes;
+        // Gates on whichever of the two counters is higher: decompressedBytes alone would ignore
+        // whatever's already been retained from uncompressed batches in this same fetch (they never
+        // touch decompressedBytes), which would let this batch decompress a full extra budget's
+        // worth on top of that. collectedBytes alone would ignore decompression work already done
+        // but then discarded by the readFrom/endOffset filters below (decompressedBytes can exceed
+        // collectedBytes in that case). Taking the max is conservative against both gaps.
+        long budget = maxDecompressedBytes - Math.max(decompressedBytes, collectedBytes);
         if (budget <= 0) return null;
 
         int chunkBytes = Math.min(batch.sizeInBytes(), DECOMPRESS_CHUNK_BYTES);
@@ -389,7 +424,10 @@ public class ShareGroupDLQRecordFetcher {
                 if (record.offset() > endOffset) return nextOffset;
 
                 decompressedBytes += record.sizeInBytes();
-                if (decompressedBytes > maxDecompressedBytes) {
+                // See decompressBounded() for why this gates on the max of both counters, not just
+                // decompressedBytes: collectedBytes may already be near budget from uncompressed
+                // batches this decompression-work counter has no visibility into.
+                if (Math.max(decompressedBytes, collectedBytes) > maxDecompressedBytes) {
                     log.warn("Decompressed record data for {} exceeded {} bytes at offset {}. " +
                         "Skipping the rest of this batch to bound memory use.",
                         param, maxDecompressedBytes, record.offset());
@@ -397,6 +435,7 @@ public class ShareGroupDLQRecordFetcher {
                 }
 
                 recordMap.put(record.offset(), record);
+                collectedBytes += record.sizeInBytes();
                 nextOffset = Math.max(nextOffset, record.offset() + 1);
             }
         }
