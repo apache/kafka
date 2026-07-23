@@ -2358,11 +2358,11 @@ public class GroupMetadataManager {
                 )
         ));
 
-        String rackAwareTagsValue = currentAssignmentConfigs.getOrDefault("rack.aware.assignment.tags", "");
+        String rackAwareTagsValue = currentAssignmentConfigs.getOrDefault("rack.aware.assignment.tags", "").trim();
         // The MISSING_CLIENT_TAGS status (code 6) requires version 1 of the RPC: version 0 clients
         // throw on unknown status codes, so it must not be sent to them.
         if (requestApiVersion >= 1 && !rackAwareTagsValue.isEmpty()) {
-            List<String> requiredTags = Arrays.asList(rackAwareTagsValue.split(",", -1));
+            List<String> requiredTags = Arrays.asList(rackAwareTagsValue.split("\\s*,\\s*", -1));
             Set<String> memberTagKeys = updatedMember.clientTags().keySet();
             List<String> missingTags = requiredTags.stream()
                 .filter(tag -> !memberTagKeys.contains(tag))

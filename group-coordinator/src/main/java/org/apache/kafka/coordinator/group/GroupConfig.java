@@ -453,7 +453,7 @@ public final class GroupConfig extends AbstractConfig {
      *
      * @param newGroupConfig         The new group config overrides.
      */
-    public static void validateNames(Map<String, ?> newGroupConfig) {
+    public static void validateNames(Map<String, String> newGroupConfig) {
         Set<String> names = configNames();
         for (String name : newGroupConfig.keySet()) {
             if (!names.contains(name)) {
@@ -471,7 +471,7 @@ public final class GroupConfig extends AbstractConfig {
      * @param shareGroupConfig       The share group config.
      */
     public static void validate(
-        Map<String, ?> newGroupConfig,
+        Map<String, String> newGroupConfig,
         GroupCoordinatorConfig groupCoordinatorConfig,
         ShareGroupConfig shareGroupConfig
     ) {
@@ -494,18 +494,13 @@ public final class GroupConfig extends AbstractConfig {
      *
      * @param newGroupConfig The new unparsed group config overrides.
      */
-    private static void validateNoDuplicateRackAwareAssignmentTags(Map<String, ?> newGroupConfig) {
-        Object rawValue = newGroupConfig.get(STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
+    private static void validateNoDuplicateRackAwareAssignmentTags(Map<String, String> newGroupConfig) {
+        String rawValue = newGroupConfig.get(STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
         if (rawValue == null) {
             return;
         }
-        List<String> rawTags;
-        if (rawValue instanceof List) {
-            rawTags = ((List<?>) rawValue).stream().map(Object::toString).toList();
-        } else {
-            String trimmed = rawValue.toString().trim();
-            rawTags = trimmed.isEmpty() ? List.of() : List.of(trimmed.split("\\s*,\\s*", -1));
-        }
+        String trimmed = rawValue.trim();
+        List<String> rawTags = trimmed.isEmpty() ? List.of() : List.of(trimmed.split("\\s*,\\s*", -1));
         if (Set.copyOf(rawTags).size() != rawTags.size()) {
             throw new InvalidConfigurationException(
                 STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG + " must not contain duplicate tag keys.");

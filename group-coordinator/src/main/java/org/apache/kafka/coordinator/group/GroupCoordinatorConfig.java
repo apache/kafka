@@ -778,14 +778,11 @@ public class GroupCoordinatorConfig {
      * Returns the rack-aware assignment tags exactly as configured, before {@link ConfigDef} removes duplicates.
      */
     private List<String> rawRackAwareAssignmentTags() {
-        Object rawValue = config.originals().get(STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
+        String rawValue = (String) config.originals().get(STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
         if (rawValue == null) {
             return List.of();
         }
-        if (rawValue instanceof List) {
-            return ((List<?>) rawValue).stream().map(Object::toString).collect(Collectors.toList());
-        }
-        String trimmed = rawValue.toString().trim();
+        String trimmed = rawValue.trim();
         return trimmed.isEmpty() ? List.of() : List.of(trimmed.split("\\s*,\\s*", -1));
     }
 
