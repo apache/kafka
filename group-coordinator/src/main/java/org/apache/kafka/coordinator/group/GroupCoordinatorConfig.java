@@ -29,6 +29,8 @@ import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescri
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.SimpleAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
+import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
+import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -386,6 +388,19 @@ public class GroupCoordinatorConfig {
     public static final String STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DOC = "The maximum interval between assignment updates for a streams group.";
     public static final int STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT = 15000;
 
+    private static final List<TaskAssignor> STREAMS_GROUP_BUILTIN_ASSIGNORS = List.of(
+        new StickyTaskAssignor()
+    );
+    public static final String STREAMS_GROUP_ASSIGNORS_CONFIG = "group.streams.assignors";
+    public static final String STREAMS_GROUP_ASSIGNORS_DOC = "The server side task assignors for streams groups as a list of either names for builtin assignors or full class names for custom assignors. " +
+        "The first one in the list is considered as the default assignor to be used in the case where the streams group does not specify an assignor. " +
+        "Changing the default assignor does not trigger a rebalance for existing groups; the new default takes effect on the next rebalance. " +
+        "The supported builtin assignors are: " + STREAMS_GROUP_BUILTIN_ASSIGNORS.stream().map(TaskAssignor::name).collect(Collectors.joining(", ")) + ".";
+    public static final List<String> STREAMS_GROUP_ASSIGNORS_DEFAULT = STREAMS_GROUP_BUILTIN_ASSIGNORS
+        .stream()
+        .map(TaskAssignor::name)
+        .toList();
+
     public static final String STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG = "group.streams.assignor.offload.enable";
     public static final String STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DOC = "Whether to offload streams group assignment to a group coordinator background thread.";
     public static final boolean STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT = true;
@@ -502,6 +517,7 @@ public class GroupCoordinatorConfig {
         .define(STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_DOC)
         .define(STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_DOC)
         .define(STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DOC)
+        .define(STREAMS_GROUP_ASSIGNORS_CONFIG, LIST, STREAMS_GROUP_ASSIGNORS_DEFAULT, ConfigDef.ValidList.anyNonDuplicateValues(false, false), MEDIUM, STREAMS_GROUP_ASSIGNORS_DOC)
         .define(STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, BOOLEAN, STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT, MEDIUM, STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DOC)
         .define(STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DOC)
         .define(STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DOC)
@@ -577,6 +593,7 @@ public class GroupCoordinatorConfig {
     private final int streamsGroupNumWarmupReplicas;
     private final int streamsGroupMaxWarmupReplicas;
     private final long streamsGroupAcceptableRecoveryLag;
+    private final List<TaskAssignor> streamsGroupAssignors;
 
     private final AbstractConfig config;
 
@@ -647,6 +664,7 @@ public class GroupCoordinatorConfig {
         this.streamsGroupNumWarmupReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG);
         this.streamsGroupMaxWarmupReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG);
         this.streamsGroupAcceptableRecoveryLag = config.getLong(GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_CONFIG);
+        this.streamsGroupAssignors = streamsGroupAssignors(config);
         this.config = config;
 
         checkConstraints();
@@ -866,6 +884,56 @@ public class GroupCoordinatorConfig {
         } catch (Exception e) {
             for (ConsumerGroupPartitionAssignor assignor : assignors) {
                 maybeCloseQuietly(assignor, "AutoCloseable object constructed and configured during failed call to consumerGroupAssignors");
+            }
+            throw e;
+        }
+
+        return assignors;
+    }
+
+    protected List<TaskAssignor> streamsGroupAssignors(
+        AbstractConfig config
+    ) {
+        Map<String, TaskAssignor> defaultAssignors = STREAMS_GROUP_BUILTIN_ASSIGNORS
+            .stream()
+            .collect(Collectors.toMap(TaskAssignor::name, Function.identity()));
+
+        List<TaskAssignor> assignors = new ArrayList<>();
+
+        try {
+            for (Object object : config.getList(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG)) {
+                TaskAssignor assignor;
+
+                if (object instanceof String klass) {
+                    assignor = defaultAssignors.get(klass);
+                    if (assignor == null) {
+                        try {
+                            assignor = Utils.newInstance(klass, TaskAssignor.class);
+                        } catch (ClassNotFoundException e) {
+                            throw new KafkaException("Class " + klass + " cannot be found", e);
+                        } catch (ClassCastException e) {
+                            throw new KafkaException(klass + " is not an instance of " + TaskAssignor.class.getName());
+                        }
+                    }
+                } else if (object instanceof Class<?> klass) {
+                    Object o = Utils.newInstance((Class<?>) klass);
+                    if (!(o instanceof TaskAssignor)) {
+                        throw new KafkaException(klass + " is not an instance of " + TaskAssignor.class.getName());
+                    }
+                    assignor = (TaskAssignor) o;
+                } else {
+                    throw new KafkaException("Unexpected element of type " + object.getClass().getName() + ", expected String or Class");
+                }
+
+                assignors.add(assignor);
+
+                if (assignor instanceof Configurable configurable) {
+                    configurable.configure(config.originals());
+                }
+            }
+        } catch (Exception e) {
+            for (TaskAssignor assignor : assignors) {
+                maybeCloseQuietly(assignor, "AutoCloseable object constructed and configured during failed call to streamsGroupAssignors");
             }
             throw e;
         }
@@ -1409,5 +1477,12 @@ public class GroupCoordinatorConfig {
      */
     public long streamsGroupAcceptableRecoveryLag() {
         return streamsGroupAcceptableRecoveryLag;
+    }
+
+    /**
+     * The streams group task assignors.
+     */
+    public List<TaskAssignor> streamsGroupAssignors() {
+        return streamsGroupAssignors;
     }
 }
