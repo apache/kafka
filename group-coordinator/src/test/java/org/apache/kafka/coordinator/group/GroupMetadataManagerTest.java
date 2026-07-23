@@ -30108,8 +30108,9 @@ public class GroupMetadataManagerTest {
      * This matches what streamsGroupAssignmentConfigs() would return.
      */
     private Map<String, String> getDefaultAssignmentConfigs() {
-        Map<String, String> configs = new TreeMap<>();
-        configs.put("num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT));
-        return configs;
+        // Use the same default value as GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT
+        return new TreeMap<>(Map.of(
+            "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT)
+        ));
     }
 }

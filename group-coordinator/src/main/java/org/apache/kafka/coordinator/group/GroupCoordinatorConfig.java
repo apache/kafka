@@ -388,7 +388,7 @@ public class GroupCoordinatorConfig {
 
     public static final String STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG = "group.streams.rack.aware.assignment.tags";
     public static final String STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT = "";
-    public static final String STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DOC = "List of client tag keys used to distribute standby replicas across Kafka Streams instances. When configured, the broker-side assignor will make a best-effort to distribute standby tasks over each client tag dimension.";
+    public static final String STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DOC = "List of client tag keys used to distribute standby replicas across Kafka Streams instances. When configured, and the used broker-side assignor supports it, it will make a best-effort to distribute standby tasks over each client tag dimension.";
 
     public static final String STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG = "group.streams.assignor.offload.enable";
     public static final String STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DOC = "Whether to offload streams group assignment to a group coordinator background thread.";

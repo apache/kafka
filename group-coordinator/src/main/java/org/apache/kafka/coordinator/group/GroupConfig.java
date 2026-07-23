@@ -307,7 +307,7 @@ public final class GroupConfig extends AbstractConfig {
             LIST,
             GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT,
             ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-            MEDIUM,
+            LOW,
             GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DOC)
         .define(STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG,
             LONG,
