@@ -1514,8 +1514,9 @@ org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilderTest:
 - testAssignmentHasNotChanged
 - testAssignmentSwapped
 - testBuildEmptyAssignmentWhenTopologyNotReady
-- testCreateAssignmentMemberSpec
-- testCreateAssignmentMemberSpecPopulatesTaskOffsets
+- testCreateMemberMetadataAndState
+- testCreateMemberMetadataAndStatePopulatesTaskOffsets
+- testCreateMemberMetadataAndStateSourcesWarmupTasksFromCurrentAssignment
 - testEmpty
 - testPartialAssignmentUpdate
 org.apache.kafka.coordinator.group.streams.TasksTupleTest:
@@ -1551,7 +1552,11 @@ org.apache.kafka.coordinator.group.streams.TopologyMetadataTest:
 - testSubtopologies
 - testTopology
 org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImplTest:
-- testMembers
+- testConfigs
+- testMemberAssignmentState
+- testMemberIds
+- testMemberMetadata
+- testMemberNotFound
 org.apache.kafka.coordinator.group.streams.assignor.MockAssignorTest:
 - testBasicScenario
 - testDoubleAssignment
