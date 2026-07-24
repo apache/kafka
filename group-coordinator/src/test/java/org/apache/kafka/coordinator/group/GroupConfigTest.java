@@ -154,6 +154,20 @@ public class GroupConfigTest {
         doTestInvalidProps(props, InvalidConfigurationException.class);
     }
 
+    @Test
+    public void testStreamsAssignorNameEvaluateIsLenient() {
+        // The Admin path (validate) rejects an unknown assignor name...
+        Map<String, String> props = createValidGroupConfig();
+        props.put(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "does-not-exist");
+        doTestInvalidProps(props, InvalidConfigurationException.class);
+
+        // ...but the metadata-replay path (evaluate) accepts it, so a value that was valid when set
+        // survives a broker restart even if the assignor was later removed from the broker config.
+        Properties replayed = new Properties();
+        replayed.setProperty(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "does-not-exist");
+        assertDoesNotThrow(() -> GroupConfig.evaluate(replayed, "group", createGroupCoordinatorConfig(), createShareGroupConfig()));
+    }
+
     private void assertPropertyInvalid(String name, Object... values) {
         for (Object value : values) {
             Properties props = new Properties();

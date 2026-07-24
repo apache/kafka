@@ -79,6 +79,7 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse.Status;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.LogContext;
@@ -18780,6 +18781,45 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testStreamsGroupDefaultsToFirstAssignorWhenNoStickyConfigured() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        // The broker registers only a custom assignor (no builtin "sticky"); it is the default.
+        MockTaskAssignor customAssignor = new MockTaskAssignor("custom");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(customAssignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 2)
+                .buildCoordinatorMetadataImage())
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .build();
+        customAssignor.prepareGroupAssignment(
+            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
+
+        // The group does not select an assignor; resolution must not assume "sticky" exists.
+        context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        // The first (and only) configured assignor computed the assignment — no NPE from a missing "sticky".
+        assertFalse(customAssignor.lastPassedAssignmentConfigs().isEmpty());
+    }
+
+    @Test
     public void testStreamsGroupAssignorSelectedByGroupConfig() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
@@ -18855,16 +18895,23 @@ public class GroupMetadataManagerTest {
         groupConfig.setProperty(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "does-not-exist");
         context.updateGroupConfig(groupId, groupConfig);
 
-        context.streamsGroupHeartbeat(
-            new StreamsGroupHeartbeatRequestData()
-                .setGroupId(groupId)
-                .setMemberId(memberId)
-                .setMemberEpoch(0)
-                .setRebalanceTimeoutMs(1500)
-                .setTopology(topology)
-                .setActiveTasks(List.of())
-                .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()));
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(GroupMetadataManager.class)) {
+            context.streamsGroupHeartbeat(
+                new StreamsGroupHeartbeatRequestData()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId)
+                    .setMemberEpoch(0)
+                    .setRebalanceTimeoutMs(1500)
+                    .setTopology(topology)
+                    .setActiveTasks(List.of())
+                    .setStandbyTasks(List.of())
+                    .setWarmupTasks(List.of()));
+
+            // A warning names the unavailable assignor and the fallback.
+            assertEquals(1, appender.getMessages("WARN").stream()
+                .filter(msg -> msg.contains("The configured task assignor 'does-not-exist' is not available"))
+                .count());
+        }
 
         // The coordinator falls back to the default (first) assignor.
         assertFalse(defaultAssignor.lastPassedAssignmentConfigs().isEmpty());
