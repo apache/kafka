@@ -2014,7 +2014,7 @@ class ShareGroupDLQStateManagerTest {
         // see testDlqChunksOverMaxMessageBytesAcrossMultipleProduceRequests). Round 1's read is
         // already resolved; round 2's read is held pending to simulate an in-flight (e.g.
         // remote-storage) fetch - proving round 1's produce goes out without waiting for round 2
-        // to resolve, rather than the whole range being resolved eagerly before anything is sent.
+        // to resolve.
         ShareGroupDLQRecordParameter param = new ShareGroupDLQRecordParameter(
             GROUP_ID, new TopicIdPartition(SOURCE_TOPIC_ID, 0, "source-topic"),
             0L, 1L, Optional.of((short) 1), Optional.of(new RuntimeException("simulated cause")));

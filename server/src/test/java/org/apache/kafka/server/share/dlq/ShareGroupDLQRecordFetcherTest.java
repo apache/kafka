@@ -324,7 +324,7 @@ class ShareGroupDLQRecordFetcherTest {
     public void testFetchStopsOnceEnoughContentCollectedWithoutScanningWholeRange() throws Exception {
         // A large range (0..100), but budget only for about one record's worth. Uncompressed data
         // carries no decompression risk and so is never rejected by the decompression-bomb bound -
-        // this test is about a different, newer bound: once enough usable content has been
+        // this test targets the separate output-size bound: once enough usable content has been
         // collected for one caller-sized "round" (maxDecompressedBytes, reused as a target output
         // size), the fetch stops issuing further reads rather than scanning all the way to
         // endOffset looking for more. Without this, an all-uncompressed range would always be

@@ -855,8 +855,7 @@ public class ShareGroupDLQStateManager {
             // param itself is never mutated - headers()/topicProduceData() rely on its original,
             // unwindowed firstOffset/lastOffset for the handler's whole lifetime. Build a throwaway
             // windowed copy only to scope this round's fetch (and its decompression budget) to what's
-            // left to send, so a large range gets a fresh budget per round instead of one shared budget
-            // for the entire range.
+            // left to send.
             ShareGroupDLQRecordParameter window;
             if (fromOffset == param.firstOffset()) {
                 window = param;
