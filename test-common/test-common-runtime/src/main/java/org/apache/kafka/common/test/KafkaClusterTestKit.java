@@ -262,7 +262,11 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
         private boolean isPlainSaslMechanism(Map<String, Object> props) {
             Object mechanism = props.get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
-            return mechanism == null || mechanism.toString().equalsIgnoreCase("PLAIN");
+            if (mechanism == null) return true;
+            for (String m : mechanism.toString().split(",")) {
+                if (m.trim().equalsIgnoreCase("PLAIN")) return true;
+            }
+            return false;
         }
 
         private Optional<File> maybeSetupJaasFile() throws Exception {

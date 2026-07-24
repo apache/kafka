@@ -221,8 +221,12 @@ public interface ClusterInstance {
     }
 
     default String clientSaslMechanism() {
-        String mechanism = config().serverProperties().get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
-        return mechanism == null ? "PLAIN" : mechanism;
+        String mechanisms = config().serverProperties().get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
+        if (mechanisms == null) return "PLAIN";
+        for (String m : mechanisms.split(",")) {
+            if (m.trim().equalsIgnoreCase("PLAIN")) return "PLAIN";
+        }
+        return mechanisms.split(",")[0].trim();
     }
 
     Map<String, Object> setClientSslConfig(Map<String, Object> configs);
