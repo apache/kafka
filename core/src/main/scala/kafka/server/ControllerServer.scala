@@ -250,6 +250,13 @@ class ControllerServer(
           setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
             TimeUnit.MILLISECONDS)).
           setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs).
+          setLeaderImbalanceElectionMaxPerRun(config.leaderImbalanceElectionMaxPerRun).
+          setLeaderImbalanceElectionThrottleIntervalNs(
+            if (config.leaderImbalanceElectionThrottleIntervalMs > 0)
+              OptionalLong.of(TimeUnit.NANOSECONDS.convert(config.leaderImbalanceElectionThrottleIntervalMs, TimeUnit.MILLISECONDS))
+            else
+              OptionalLong.empty()
+          ).
           setMaxIdleIntervalNs(maxIdleIntervalNs).
           setMetrics(quorumControllerMetrics).
           setCreateTopicPolicy(createTopicPolicy.toJava).

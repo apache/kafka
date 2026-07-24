@@ -26,6 +26,7 @@ import org.apache.kafka.storage.internals.log.LogConfig;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
+import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
@@ -119,6 +120,39 @@ public class ReplicationConfigs {
     public static final int LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_DEFAULT = 300;
     public static final String LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_DOC = "The frequency with which the partition rebalance check is triggered by the controller";
 
+    public static final String LEADER_IMBALANCE_ELECTION_ALGORITHM_CONFIG = "leader.imbalance.election.algorithm";
+    public static final String LEADER_IMBALANCE_ELECTION_ALGORITHM_DEFAULT = "immediate";
+    public static final String LEADER_IMBALANCE_ELECTION_ALGORITHM_DOC = "Algorithm used by the periodic preferred-leader-election task. " +
+        "<code>immediate</code> is the current behavior: elect as soon as the preferred replica is in ISR for a given partition. " +
+        "<code>wait-for-sync</code> skips preferred election for a broker when too many of its preferred partitions are still out of sync " +
+        "(see <code>leader.imbalance.election.wait.for.sync.threshold.percent</code> and <code>leader.imbalance.election.wait.for.sync.max.wait.ms</code>).";
+
+    public static final String LEADER_IMBALANCE_ELECTION_WAIT_FOR_SYNC_THRESHOLD_PERCENT_CONFIG = "leader.imbalance.election.wait.for.sync.threshold.percent";
+    public static final int LEADER_IMBALANCE_ELECTION_WAIT_FOR_SYNC_THRESHOLD_PERCENT_DEFAULT = 0;
+    public static final String LEADER_IMBALANCE_ELECTION_WAIT_FOR_SYNC_THRESHOLD_PERCENT_DOC = "Only used when <code>leader.imbalance.election.algorithm</code> = <code>wait-for-sync</code>. " +
+        "A broker's preferred-leader elections are deferred when the fraction of its imbalanced preferred partitions that are out of ISR exceeds this percentage. " +
+        "0 is the strictest setting (defer if any preferred partition is out of sync). " +
+        "Use a small positive value (e.g. 5) to avoid one straggler partition holding the entire broker's rebalance hostage.";
+
+    public static final String LEADER_IMBALANCE_ELECTION_WAIT_FOR_SYNC_MAX_WAIT_MS_CONFIG = "leader.imbalance.election.wait.for.sync.max.wait.ms";
+    public static final long LEADER_IMBALANCE_ELECTION_WAIT_FOR_SYNC_MAX_WAIT_MS_DEFAULT = 1800000L;
+    public static final String LEADER_IMBALANCE_ELECTION_WAIT_FOR_SYNC_MAX_WAIT_MS_DOC = "Only used when <code>leader.imbalance.election.algorithm</code> = <code>wait-for-sync</code>. " +
+        "Safety escape hatch: a broker that has been continuously gated for longer than this duration is released regardless of its in-sync state. " +
+        "0 disables the escape hatch (gate indefinitely).";
+
+    public static final String LEADER_IMBALANCE_ELECTION_MAX_PER_RUN_CONFIG = "leader.imbalance.election.max.per.run";
+    public static final int LEADER_IMBALANCE_ELECTION_MAX_PER_RUN_DEFAULT = 1000;
+    public static final String LEADER_IMBALANCE_ELECTION_MAX_PER_RUN_DOC = "Maximum number of preferred-leader elections performed per run of the periodic balancer. " +
+        "Replaces the hardcoded internal constant MAX_ELECTIONS_PER_IMBALANCE.";
+
+    public static final String LEADER_IMBALANCE_ELECTION_THROTTLE_INTERVAL_MS_CONFIG = "leader.imbalance.election.throttle.interval.ms";
+    public static final long LEADER_IMBALANCE_ELECTION_THROTTLE_INTERVAL_MS_DEFAULT = 0L;
+    public static final String LEADER_IMBALANCE_ELECTION_THROTTLE_INTERVAL_MS_DOC = "When greater than 0, if a balancer run reaches <code>leader.imbalance.election.max.per.run</code> " +
+        "the next run is deferred by this interval instead of being rescheduled immediately. " +
+        "0 preserves the current immediate-reschedule behavior. " +
+        "Composes additively with <code>leader.imbalance.check.interval.seconds</code>: when capped, the next run fires at now + throttle.interval.ms; " +
+        "when not capped, the regular periodic schedule applies.";
+
     public static final String UNCLEAN_LEADER_ELECTION_INTERVAL_MS_CONFIG = "unclean.leader.election.interval.ms";
     public static final long UNCLEAN_LEADER_ELECTION_INTERVAL_MS_DEFAULT = TimeUnit.MINUTES.toMillis(5);
     public static final String UNCLEAN_LEADER_ELECTION_INTERVAL_MS_DOC = "The frequency with which the controller checks if it should perform an unclean leader election for leaderless partitions.";
@@ -166,6 +200,11 @@ public class ReplicationConfigs {
             .define(DELETE_RECORDS_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG, INT, DELETE_RECORDS_PURGATORY_PURGE_INTERVAL_REQUESTS_DEFAULT, MEDIUM, DELETE_RECORDS_PURGATORY_PURGE_INTERVAL_REQUESTS_DOC)
             .define(AUTO_LEADER_REBALANCE_ENABLE_CONFIG, BOOLEAN, AUTO_LEADER_REBALANCE_ENABLE_DEFAULT, HIGH, AUTO_LEADER_REBALANCE_ENABLE_DOC)
             .define(LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_CONFIG, LONG, LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_DEFAULT, atLeast(1), HIGH, LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_DOC)
+            .define(LEADER_IMBALANCE_ELECTION_ALGORITHM_CONFIG, STRING, LEADER_IMBALANCE_ELECTION_ALGORITHM_DEFAULT, ConfigDef.ValidString.in("immediate", "wait-for-sync"), MEDIUM, LEADER_IMBALANCE_ELECTION_ALGORITHM_DOC)
+            .define(LEADER_IMBALANCE_ELECTION_WAIT_FOR_SYNC_THRESHOLD_PERCENT_CONFIG, INT, LEADER_IMBALANCE_ELECTION_WAIT_FOR_SYNC_THRESHOLD_PERCENT_DEFAULT, ConfigDef.Range.between(0, 100), LOW, LEADER_IMBALANCE_ELECTION_WAIT_FOR_SYNC_THRESHOLD_PERCENT_DOC)
+            .define(LEADER_IMBALANCE_ELECTION_WAIT_FOR_SYNC_MAX_WAIT_MS_CONFIG, LONG, LEADER_IMBALANCE_ELECTION_WAIT_FOR_SYNC_MAX_WAIT_MS_DEFAULT, atLeast(0), LOW, LEADER_IMBALANCE_ELECTION_WAIT_FOR_SYNC_MAX_WAIT_MS_DOC)
+            .define(LEADER_IMBALANCE_ELECTION_MAX_PER_RUN_CONFIG, INT, LEADER_IMBALANCE_ELECTION_MAX_PER_RUN_DEFAULT, atLeast(1), MEDIUM, LEADER_IMBALANCE_ELECTION_MAX_PER_RUN_DOC)
+            .define(LEADER_IMBALANCE_ELECTION_THROTTLE_INTERVAL_MS_CONFIG, LONG, LEADER_IMBALANCE_ELECTION_THROTTLE_INTERVAL_MS_DEFAULT, atLeast(0), MEDIUM, LEADER_IMBALANCE_ELECTION_THROTTLE_INTERVAL_MS_DOC)
             .defineInternal(UNCLEAN_LEADER_ELECTION_INTERVAL_MS_CONFIG, LONG, UNCLEAN_LEADER_ELECTION_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, UNCLEAN_LEADER_ELECTION_INTERVAL_MS_DOC)
             .define(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, BOOLEAN, LogConfig.DEFAULT_UNCLEAN_LEADER_ELECTION_ENABLE, HIGH, UNCLEAN_LEADER_ELECTION_ENABLE_DOC)
             .define(INTER_BROKER_SECURITY_PROTOCOL_CONFIG, STRING, INTER_BROKER_SECURITY_PROTOCOL_DEFAULT, ConfigDef.ValidString.in(Utils.enumOptions(SecurityProtocol.class)), MEDIUM, INTER_BROKER_SECURITY_PROTOCOL_DOC)
