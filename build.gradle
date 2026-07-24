@@ -4134,6 +4134,7 @@ gradle.projectsEvaluated {
     'metadata': ':metadata',
     'raft': ':raft',
     'connect/runtime': ':connect:runtime',
+    'core': ':core',
   ]
   allprojects { proj ->
     proj.configurations.all { config ->
