@@ -165,16 +165,19 @@ public class RocksDBTimestampedWindowStoreWithHeadersTest {
 
         final QueryResult<WindowStoreIterator<byte[]>> result = windowStore.query(query, positionBound, config);
 
-        // Verify: Execution info was collected
-        assertFalse(result.getExecutionInfo().isEmpty(), "Expected execution info to be collected");
-        assertTrue(
-                result.getExecutionInfo().get(0).contains("Handled in"),
-                "Expected execution info to contain handling information"
-        );
-        assertTrue(
-                result.getExecutionInfo().get(0).contains(RocksDBTimestampedWindowStoreWithHeaders.class.getName()),
-                "Expected execution info to mention the class name"
-        );
+        // The query succeeds and returns an open store iterator, so close it to avoid a leak.
+        try (WindowStoreIterator<byte[]> iterator = result.getResult()) {
+            // Verify: Execution info was collected
+            assertFalse(result.getExecutionInfo().isEmpty(), "Expected execution info to be collected");
+            assertTrue(
+                    result.getExecutionInfo().get(0).contains("Handled in"),
+                    "Expected execution info to contain handling information"
+            );
+            assertTrue(
+                    result.getExecutionInfo().get(0).contains(RocksDBTimestampedWindowStoreWithHeaders.class.getName()),
+                    "Expected execution info to mention the class name"
+            );
+        }
     }
 
     @Test
@@ -189,7 +192,10 @@ public class RocksDBTimestampedWindowStoreWithHeadersTest {
 
         final QueryResult<WindowStoreIterator<byte[]>> result = windowStore.query(query, positionBound, config);
 
-        // Verify: No execution info was collected
-        assertTrue(result.getExecutionInfo().isEmpty(), "Expected no execution info to be collected");
+        // The query succeeds and returns an open store iterator, so close it to avoid a leak.
+        try (WindowStoreIterator<byte[]> iterator = result.getResult()) {
+            // Verify: No execution info was collected
+            assertTrue(result.getExecutionInfo().isEmpty(), "Expected no execution info to be collected");
+        }
     }
 }

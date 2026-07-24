@@ -119,10 +119,13 @@ public class RocksDBTimeOrderedSessionStoreWithHeadersTest {
         final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> result =
             sessionStore.query(query, PositionBound.unbounded(), new QueryConfig(true));
 
-        assertFalse(result.getExecutionInfo().isEmpty());
-        assertTrue(result.getExecutionInfo().get(0).contains("Handled in"));
-        assertTrue(result.getExecutionInfo().get(0).contains(
-            RocksDBTimeOrderedSessionStoreWithHeaders.class.getName()));
+        // The query now succeeds and returns an open store iterator, so close it to avoid a leak.
+        try (KeyValueIterator<Windowed<Bytes>, byte[]> iterator = result.getResult()) {
+            assertFalse(result.getExecutionInfo().isEmpty());
+            assertTrue(result.getExecutionInfo().get(0).contains("Handled in"));
+            assertTrue(result.getExecutionInfo().get(0).contains(
+                RocksDBTimeOrderedSessionStoreWithHeaders.class.getName()));
+        }
     }
 
     @Test
@@ -133,6 +136,8 @@ public class RocksDBTimeOrderedSessionStoreWithHeadersTest {
         final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> result =
             sessionStore.query(query, PositionBound.unbounded(), new QueryConfig(false));
 
-        assertTrue(result.getExecutionInfo().isEmpty());
+        try (KeyValueIterator<Windowed<Bytes>, byte[]> iterator = result.getResult()) {
+            assertTrue(result.getExecutionInfo().isEmpty());
+        }
     }
 }

@@ -160,10 +160,13 @@ public class RocksDBTimeOrderedWindowStoreWithHeadersTest {
         final QueryResult<WindowStoreIterator<byte[]>> result =
             windowStore.query(query, PositionBound.unbounded(), new QueryConfig(true));
 
-        assertFalse(result.getExecutionInfo().isEmpty());
-        assertTrue(result.getExecutionInfo().get(0).contains("Handled in"));
-        assertTrue(result.getExecutionInfo().get(0).contains(
-            RocksDBTimeOrderedWindowStoreWithHeaders.class.getName()));
+        // The query succeeds and returns an open store iterator, so close it to avoid a leak.
+        try (WindowStoreIterator<byte[]> iterator = result.getResult()) {
+            assertFalse(result.getExecutionInfo().isEmpty());
+            assertTrue(result.getExecutionInfo().get(0).contains("Handled in"));
+            assertTrue(result.getExecutionInfo().get(0).contains(
+                RocksDBTimeOrderedWindowStoreWithHeaders.class.getName()));
+        }
     }
 
     @Test
@@ -176,6 +179,8 @@ public class RocksDBTimeOrderedWindowStoreWithHeadersTest {
         final QueryResult<WindowStoreIterator<byte[]>> result =
             windowStore.query(query, PositionBound.unbounded(), new QueryConfig(false));
 
-        assertTrue(result.getExecutionInfo().isEmpty());
+        try (WindowStoreIterator<byte[]> iterator = result.getResult()) {
+            assertTrue(result.getExecutionInfo().isEmpty());
+        }
     }
 }
