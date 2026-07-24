@@ -132,10 +132,26 @@ public class GroupConfigTest {
                 assertPropertyInvalid(name, "not_a_number", "1.0");
             } else if (GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_boolean");
-            } else if (!GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG.equals(name)) {
+            } else if (!GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG.equals(name)
+                    && !GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG.equals(name)) {
+                // Free-form string configs (no ConfigDef validator) accept any value at construction
+                // time; their values are validated separately in GroupConfig.validate.
                 assertPropertyInvalid(name, "not_a_number", "-0.1");
             }
         });
+    }
+
+    @Test
+    public void testStreamsAssignorNameValidation() {
+        // A registered assignor name is accepted.
+        Map<String, String> props = createValidGroupConfig();
+        props.put(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "sticky");
+        doTestValidProps(props);
+
+        // An unknown assignor name is rejected with INVALID_CONFIG.
+        props = createValidGroupConfig();
+        props.put(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "does-not-exist");
+        doTestInvalidProps(props, InvalidConfigurationException.class);
     }
 
     private void assertPropertyInvalid(String name, Object... values) {

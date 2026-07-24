@@ -200,6 +200,32 @@ public class GroupCoordinatorConfigTest {
         }
     }
 
+    public static class StickyNamedTaskAssignor implements TaskAssignor {
+        @Override
+        public String name() {
+            // Collides with the builtin "sticky" assignor.
+            return "sticky";
+        }
+
+        @Override
+        public org.apache.kafka.coordinator.group.streams.assignor.GroupAssignment assign(
+            org.apache.kafka.coordinator.group.streams.assignor.GroupSpec groupSpec,
+            org.apache.kafka.coordinator.group.streams.assignor.TopologyDescriber topologyDescriber
+        ) {
+            return null;
+        }
+    }
+
+    @Test
+    public void testStreamsGroupAssignorsWithDuplicateNamesFails() {
+        // Two distinct assignors resolving to the same name must fail startup, even when one is a
+        // builtin and the other is a custom assignor.
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG,
+            List.of("sticky", StickyNamedTaskAssignor.class.getName()));
+        assertThrows(KafkaException.class, () -> createConfig(configs));
+    }
+
     @Test
     public void testStreamsGroupAssignorFullClassNames() {
         // The full class name of the assignors is part of our public api. Hence,
