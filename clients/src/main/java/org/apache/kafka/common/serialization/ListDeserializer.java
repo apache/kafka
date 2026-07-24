@@ -28,6 +28,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -189,7 +190,12 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
                     continue;
                 }
                 byte[] payload = new byte[entrySize];
-                if (dis.read(payload) == -1) {
+                try {
+                    // Use readFully (not read) so a stream truncated mid-entry is detected: read(byte[]) may
+                    // return a partial count without reaching EOF, which would silently leave the tail of the
+                    // payload zero-filled and hand a corrupted entry to the inner deserializer.
+                    dis.readFully(payload);
+                } catch (EOFException e) {
                     log.error("Ran out of bytes in serialized list");
                     log.trace("Deserialized list so far: {}", deserializedList); // avoid logging actual data above TRACE level since it may contain sensitive information
                     throw new SerializationException("End of the stream was reached prematurely");
