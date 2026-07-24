@@ -3206,6 +3206,7 @@ org.apache.kafka.clients.producer.internals.ProducerMetadataTest:
 - testMetadataUpdateWaitTime
 - testMetadataWaitAbortedOnFatalException
 - testRequestUpdateForTopic
+- testRetainTopic
 - testTimeToNextUpdateOverwriteBackoff
 - testTopicExpiry
 org.apache.kafka.clients.producer.internals.RecordAccumulatorTest:
