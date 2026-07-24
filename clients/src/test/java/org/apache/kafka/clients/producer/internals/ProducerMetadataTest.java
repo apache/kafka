@@ -23,8 +23,8 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -302,6 +302,34 @@ public class ProducerMetadataTest {
         now += 1000;
         metadata.updateWithCurrentRequestVersion(responseWithTopics(Set.of(topic1, topic2)), false, now);
         assertFalse(metadata.updateRequested());
+    }
+
+    @Test
+    public void testRetainTopic() {
+        final String unknownTopic = "unknown-topic";
+        final String newTopic = "new-topic";
+        final String activeTopic = "active-topic";
+
+        // A topic that was never added isn't retained.
+        assertFalse(metadata.retainTopic(unknownTopic, false, 0));
+
+        // A "new" topic (added but not yet resolved by an update) is retained even past its
+        // nominal expiry, since it hasn't had a chance to be fetched yet.
+        metadata.add(newTopic, 0);
+        assertTrue(metadata.newTopics().contains(newTopic));
+        assertTrue(metadata.retainTopic(newTopic, false, METADATA_IDLE_MS * 10));
+
+        // Once resolved (no longer "new"), a topic that hasn't reached its idle expiry is retained.
+        metadata.add(activeTopic, 0);
+        metadata.updateWithCurrentRequestVersion(responseWithTopics(Set.of(newTopic, activeTopic)), true, 0);
+        assertFalse(metadata.newTopics().contains(activeTopic));
+        assertTrue(metadata.retainTopic(activeTopic, false, METADATA_IDLE_MS - 1));
+
+        // Past its idle expiry, the topic is evicted: retainTopic() returns false and actually
+        // removes the topic, so a subsequent call also returns false.
+        assertFalse(metadata.retainTopic(activeTopic, false, METADATA_IDLE_MS));
+        assertFalse(metadata.containsTopic(activeTopic));
+        assertFalse(metadata.retainTopic(activeTopic, false, METADATA_IDLE_MS));
     }
 
     private MetadataResponse responseWithCurrentTopics() {

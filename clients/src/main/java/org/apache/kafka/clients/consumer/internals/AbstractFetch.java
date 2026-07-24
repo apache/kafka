@@ -34,11 +34,11 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 import org.slf4j.helpers.MessageFormatter;
@@ -155,6 +155,8 @@ public abstract class AbstractFetch implements Closeable {
             final FetchResponse response = (FetchResponse) resp.responseBody();
             final FetchSessionHandler handler = sessionHandler(fetchTarget.id());
 
+            metricsManager.recordLatency(resp.destination(), resp.requestLatencyMs());
+
             if (handler == null) {
                 log.error("Unable to find FetchSessionHandler for node {}. Ignoring fetch response.",
                         fetchTarget.id());
@@ -249,8 +251,6 @@ public abstract class AbstractFetch implements Closeable {
                     }
                 );
             }
-
-            metricsManager.recordLatency(resp.destination(), resp.requestLatencyMs());
         } finally {
             removePendingFetchRequest(fetchTarget, data.metadata().sessionId());
         }

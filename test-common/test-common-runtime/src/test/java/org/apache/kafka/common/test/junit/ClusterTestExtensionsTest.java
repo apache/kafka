@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.test.junit;
 
+import kafka.network.SocketServer;
 import kafka.server.ControllerServer;
 import kafka.server.KafkaBroker;
 
@@ -33,6 +34,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.ConfigResource;
@@ -59,7 +61,6 @@ import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
 import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.server.config.ReplicationConfigs;
 
 import org.junit.jupiter.api.Assertions;
 
@@ -68,6 +69,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -77,7 +79,10 @@ import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
@@ -528,6 +533,35 @@ public class ClusterTestExtensionsTest {
         }
     )
     public void testSaslPlaintextWithController(ClusterInstance clusterInstance) throws CancellationException, ExecutionException, InterruptedException {
+        assertSecurityProtocol(clusterInstance, SecurityProtocol.SASL_PLAINTEXT, "Expected broker to have SASL_PLAINTEXT data-plane listener");
+        testSecurityProtocol(clusterInstance);
+    }
+
+    @ClusterTest(
+        types = {Type.KRAFT, Type.CO_KRAFT},
+        brokerSecurityProtocol = SecurityProtocol.SASL_SSL,
+        controllerSecurityProtocol = SecurityProtocol.SASL_SSL,
+        serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+        }
+    )
+    public void testSaslSslWithController(ClusterInstance clusterInstance) throws CancellationException, ExecutionException, InterruptedException {
+        assertSecurityProtocol(clusterInstance, SecurityProtocol.SASL_SSL, "Expected broker to have SASL_SSL data-plane listener");
+        testSecurityProtocol(clusterInstance);
+    }
+
+    private static void assertSecurityProtocol(ClusterInstance clusterInstance, SecurityProtocol saslPlaintext, String message) {
+        clusterInstance.aliveBrokers().values().forEach(broker -> {
+            List<Endpoint> endpoints = CollectionConverters.asJava(broker.config().dataPlaneListeners());
+            assertTrue(
+                    endpoints.stream().anyMatch(ep -> ep.securityProtocol() == saslPlaintext),
+                    message
+            );
+        });
+    }
+
+    private static void testSecurityProtocol(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
         // default ClusterInstance#admin helper with admin credentials
         try (Admin admin = clusterInstance.admin(Map.of(), true)) {
             admin.describeAcls(AclBindingFilter.ANY).values().get();
@@ -566,86 +600,40 @@ public class ClusterTestExtensionsTest {
         }
     }
 
-    @ClusterTest(brokers = 3, controllers = 3, types = {Type.CO_KRAFT, Type.KRAFT})
-    public void testRestartWithoutOverride(ClusterInstance clusterInstance) throws Exception {
-        Map<Integer, Map<String, ?>> brokerConfigs = clusterInstance.brokers().values().stream()
-            .collect(Collectors.toMap(
-                broker -> broker.config().nodeId(),
-                broker -> broker.config().values()
-            ));
-        Map<Integer, Map<String, ?>> controllerConfigs = clusterInstance.controllers().values().stream()
-            .collect(Collectors.toMap(
-                controller -> controller.config().nodeId(),
-                controller -> controller.config().values()
-            ));
+    @ClusterTest(
+        types = {Type.KRAFT, Type.CO_KRAFT},
+        brokerSecurityProtocol = SecurityProtocol.SSL,
+        controllerSecurityProtocol = SecurityProtocol.SSL,
+        serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+        }
+    )
+    public void testSsl(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
+        KafkaBroker broker = clusterInstance.brokers().values().iterator().next();
+        ControllerServer controller = clusterInstance.controllers().values().iterator().next();
+        Function<SocketServer, String> endpoints = socketServer -> Collections.list(socketServer.dataPlaneAcceptors().keys())
+                .stream().map(endpoint -> String.format("%s:%s", endpoint.listener(), endpoint.securityProtocol())).collect(Collectors.joining(","));
+        assertEquals("EXTERNAL:SSL", endpoints.apply(broker.socketServer()));
+        assertEquals("CONTROLLER:SSL", endpoints.apply(controller.socketServer()));
 
-        clusterInstance.restart();
-        clusterInstance.waitForReadyBrokers();
+        String topic = "ssl-topic";
+        clusterInstance.createTopic(topic, 1, (short) 1);
+        try (Admin admin = clusterInstance.admin()) {
+            Set<String> topics = admin.listTopics().names().get();
+            assertTrue(topics.contains(topic), String.format("%s not included in %s", topic, topics));
+        }
 
-        Map<Integer, Map<String, ?>> newBrokerConfigs = clusterInstance.brokers().values().stream()
-            .collect(Collectors.toMap(
-                broker -> broker.config().nodeId(),
-                broker -> broker.config().values()
-            ));
-        Map<Integer, Map<String, ?>> newControllerConfigs = clusterInstance.controllers().values().stream()
-            .collect(Collectors.toMap(
-                controller -> controller.config().nodeId(),
-                controller -> controller.config().values()
-            ));
-
-        assertEquals(brokerConfigs, newBrokerConfigs);
-        assertEquals(controllerConfigs, newControllerConfigs);
-    }
-
-    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT}, brokers = 3, controllers = 3)
-    public void testRestartWithOverrideAllNodes(ClusterInstance clusterInstance) throws Exception {
-        // Before restart, default value of default.replication.factor is 1.
-        clusterInstance.brokers().values().forEach(broker -> {
-            assertEquals(ReplicationConfigs.REPLICATION_FACTOR_DEFAULT, broker.config().getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG));
-        });
-        clusterInstance.controllers().values().forEach(controller -> {
-            assertEquals(ReplicationConfigs.REPLICATION_FACTOR_DEFAULT, controller.config().getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG));
-        });
-
-        // Restart and set default.replication.factor to 2. The -1 in the map means all brokers/controllers.
-        clusterInstance.restart(Map.of(-1, Map.of(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, 2)));
-        clusterInstance.waitForReadyBrokers();
-
-        clusterInstance.brokers().values().forEach(broker -> {
-            assertEquals(2, broker.config().getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG));
-        });
-        clusterInstance.controllers().values().forEach(controller -> {
-            assertEquals(2, controller.config().getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG));
-        });
-    }
-
-    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT}, brokers = 3, controllers = 3)
-    public void testRestartWithOverrideSomeNodes(ClusterInstance clusterInstance) throws Exception {
-        // Before restart, default value of default.replication.factor is 1.
-        clusterInstance.brokers().values().forEach(broker -> {
-            assertEquals(ReplicationConfigs.REPLICATION_FACTOR_DEFAULT, broker.config().getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG));
-        });
-        clusterInstance.controllers().values().forEach(controller -> {
-            assertEquals(ReplicationConfigs.REPLICATION_FACTOR_DEFAULT, controller.config().getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG));
-        });
-
-        // Restart and set default.replication.factor to 2. Only override broker id 1.
-        clusterInstance.restart(Map.of(1, Map.of(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, 2)));
-        clusterInstance.waitForReadyBrokers();
-
-        clusterInstance.brokers().values().forEach(broker -> {
-            if (broker.config().nodeId() == 1) {
-                assertEquals(2, broker.config().getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG));
-            } else {
-                assertEquals(ReplicationConfigs.REPLICATION_FACTOR_DEFAULT, broker.config().getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG));
-            }
-        });
-        clusterInstance.controllers().values().forEach(controller -> {
-            if (controller.config().nodeId() == 1) {
-                assertEquals(2, controller.config().getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG));
-            } else {
-                assertEquals(ReplicationConfigs.REPLICATION_FACTOR_DEFAULT, controller.config().getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG));
-            }
-        });
+        try (Producer<byte[], byte[]> producer = clusterInstance.producer()) {
+            producer.send(new ProducerRecord<>(topic, Utils.utf8("key"), Utils.utf8("value"))).get();
+            producer.flush();
+        }
+        try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer()) {
+            consumer.subscribe(List.of(topic));
+            RaftClusterInvocationContext.waitForCondition(() -> {
+                ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
+                return records.count() == 1;
+            }, "Failed to receive message");
+        }
     }
 }

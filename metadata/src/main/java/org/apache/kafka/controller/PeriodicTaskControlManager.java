@@ -17,8 +17,8 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.controller.errors.PeriodicControlTaskException;
 
 import org.slf4j.Logger;

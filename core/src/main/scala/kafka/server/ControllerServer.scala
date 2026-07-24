@@ -20,7 +20,7 @@ package kafka.server
 import kafka.network.SocketServer
 import kafka.raft.KafkaRaftManager
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicConfigPublisher, KRaftMetadataCachePublisher}
+import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicConfigPublisher}
 
 import scala.collection.immutable
 import kafka.utils.Logging
@@ -30,11 +30,12 @@ import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
-import org.apache.kafka.common.utils.{LogContext, Utils}
+import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.internals.LogContext
 import org.apache.kafka.common.{ClusterResource, Endpoint, Uuid}
 import org.apache.kafka.controller.metrics.{ControllerMetadataMetricsPublisher, QuorumControllerMetrics}
 import org.apache.kafka.controller.{Controller, QuorumController, QuorumFeatures}
-import org.apache.kafka.image.publisher.{ControllerRegistrationsPublisher, MetadataPublisher}
+import org.apache.kafka.image.publisher.{ControllerRegistrationsPublisher, KRaftMetadataCachePublisher, MetadataPublisher}
 import org.apache.kafka.metadata.{KafkaConfigSchema, KRaftMetadataCache, ListenerInfo}
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
@@ -142,8 +143,7 @@ class ControllerServer(
 
       linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", time)
       if (linuxIoMetricsCollector.usable()) {
-        metricsGroup.newGauge("linux-disk-read-bytes", () => linuxIoMetricsCollector.readBytes())
-        metricsGroup.newGauge("linux-disk-write-bytes", () => linuxIoMetricsCollector.writeBytes())
+        linuxIoMetricsCollector.registerMetrics(metricsGroup)
       }
 
       authorizerPlugin = config.createNewAuthorizer(metrics, ProcessRole.ControllerRole.toString)
@@ -161,9 +161,15 @@ class ControllerServer(
       val apiVersionManager = new SimpleApiVersionManager(
         ListenerType.CONTROLLER,
         config.unstableApiVersionsEnabled,
-        () => featuresPublisher.features().setFinalizedLevel(
-          KRaftVersion.FEATURE_NAME,
-          raftManager.client.kraftVersion().featureLevel())
+        () => {
+          val features = featuresPublisher.features()
+          if (!features.isUnknown)
+            features.setFinalizedLevel(
+              KRaftVersion.FEATURE_NAME,
+              raftManager.client.kraftVersion().featureLevel())
+          else
+            features
+        }
       )
 
       //  metrics will be set to null when closing a controller, so we should recreate it for testing

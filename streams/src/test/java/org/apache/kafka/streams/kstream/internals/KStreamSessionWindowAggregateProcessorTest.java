@@ -22,8 +22,8 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogCaptureAppender.Event;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsConfig;
@@ -105,8 +105,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
         return Stream.of(
             Arguments.of(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, true),
             Arguments.of(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, false),
-            Arguments.of(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, true),
-            Arguments.of(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, false)
+            Arguments.of(EmitStrategy.StrategyType.ON_WINDOW_CLOSE, true),
+            Arguments.of(EmitStrategy.StrategyType.ON_WINDOW_CLOSE, false)
         );
     }
 

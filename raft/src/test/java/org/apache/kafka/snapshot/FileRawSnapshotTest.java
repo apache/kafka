@@ -23,6 +23,7 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.record.internal.UnalignedFileRecords;
 import org.apache.kafka.common.record.internal.UnalignedMemoryRecords;
+import org.apache.kafka.common.requests.ByteBufferChannel;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier.GrowableBufferSupplier;
 import org.apache.kafka.server.common.OffsetAndEpoch;
@@ -157,12 +158,12 @@ public final class FileRawSnapshotTest {
             UnalignedFileRecords record1 = (UnalignedFileRecords) snapshot.slice(0, totalSize / 2);
             UnalignedFileRecords record2 = (UnalignedFileRecords) snapshot.slice(totalSize / 2, totalSize - totalSize / 2);
 
-            assertEquals(buffer1, TestUtils.toBuffer(record1));
-            assertEquals(buffer2, TestUtils.toBuffer(record2));
+            assertEquals(buffer1, ByteBufferChannel.toBuffer(record1));
+            assertEquals(buffer2, ByteBufferChannel.toBuffer(record2));
 
             ByteBuffer readBuffer = ByteBuffer.allocate(record1.sizeInBytes() + record2.sizeInBytes());
-            readBuffer.put(TestUtils.toBuffer(record1));
-            readBuffer.put(TestUtils.toBuffer(record2));
+            readBuffer.put(ByteBufferChannel.toBuffer(record1));
+            readBuffer.put(ByteBufferChannel.toBuffer(record2));
             readBuffer.flip();
             assertEquals(expectedBuffer, readBuffer);
         }

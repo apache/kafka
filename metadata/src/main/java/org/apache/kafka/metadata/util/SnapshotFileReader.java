@@ -23,8 +23,8 @@ import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.record.internal.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.Record;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
@@ -58,7 +58,6 @@ public final class SnapshotFileReader implements AutoCloseable {
     private final CompletableFuture<Void> caughtUpFuture;
     private FileRecords fileRecords;
     private Iterator<FileChannelRecordBatch> batchIterator;
-    private final MetadataRecordSerde serde = new MetadataRecordSerde();
     private long lastOffset = -1L;
     private volatile OptionalLong highWaterMark = OptionalLong.empty();
 
@@ -155,7 +154,7 @@ public final class SnapshotFileReader implements AutoCloseable {
         for (Record record : batch) {
             ByteBufferAccessor accessor = new ByteBufferAccessor(record.value());
             try {
-                ApiMessageAndVersion messageAndVersion = serde.read(accessor, record.valueSize());
+                ApiMessageAndVersion messageAndVersion = MetadataRecordSerde.INSTANCE.read(accessor, record.valueSize());
                 messages.add(messageAndVersion);
             } catch (Throwable e) {
                 log.error("unable to read metadata record at offset {}", record.offset(), e);

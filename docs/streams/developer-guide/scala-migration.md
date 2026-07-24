@@ -1,7 +1,7 @@
 ---
 title: Migrating from Streams Scala to Java API
-description:
-weight: 16
+description: Migration guidance from the Kafka Streams Scala API to the Java API.
+weight: 17
 tags: ['kafka', 'docs']
 aliases:
 keywords:

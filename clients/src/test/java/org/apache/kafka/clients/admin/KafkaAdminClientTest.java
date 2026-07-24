@@ -173,6 +173,8 @@ import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
+import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.AddRaftVoterRequest;
 import org.apache.kafka.common.requests.AddRaftVoterResponse;
 import org.apache.kafka.common.requests.AlterClientQuotasResponse;
@@ -297,8 +299,10 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -912,21 +916,24 @@ public class KafkaAdminClientTest {
         // which prevents AdminClient from being able to send the initial metadata request
 
         Cluster cluster = Cluster.bootstrap(singletonList(new InetSocketAddress("localhost", 8121)));
-        Map<Node, Long> unreachableNodes = Collections.singletonMap(cluster.nodes().get(0), 200L);
+        Node bootstrapNode = cluster.nodes().get(0);
+        Map<Node, Long> unreachableNodes = Collections.singletonMap(bootstrapNode, 200L);
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM, cluster,
                 AdminClientUnitTestEnv.clientConfigs(AdminClientConfig.METADATA_RECOVERY_STRATEGY_CONFIG, metadataRecoveryStrategy.name), unreachableNodes)) {
             Cluster discoveredCluster = mockCluster(3, 0);
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-            env.kafkaClient().prepareResponse(body -> body instanceof MetadataRequest,
+            // Bind responses to specific destinations so MockClient delivery does not depend on
+            // the iteration order of AdminClient's callsToSend map (which is keyed by Node).
+            env.kafkaClient().prepareResponseFrom(body -> body instanceof MetadataRequest,
                     RequestTestUtils.metadataResponse(discoveredCluster.nodes(), discoveredCluster.clusterResource().clusterId(),
-                            1, Collections.emptyList()));
+                            1, Collections.emptyList()), bootstrapNode);
             if (metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP) {
-                env.kafkaClient().prepareResponse(body -> body instanceof MetadataRequest,
-                        RequestTestUtils.metadataResponse(discoveredCluster.nodes(),
-                                discoveredCluster.clusterResource().clusterId(), 1, Collections.emptyList()));
+                env.kafkaClient().prepareResponseFrom(body -> body instanceof MetadataRequest,
+                        RequestTestUtils.metadataResponse(discoveredCluster.nodes(), discoveredCluster.clusterResource().clusterId(),
+                                1, Collections.emptyList()), bootstrapNode);
             }
-            env.kafkaClient().prepareResponse(body -> body instanceof CreateTopicsRequest,
-                prepareCreateTopicsResponse("myTopic", Errors.NONE));
+            env.kafkaClient().prepareResponseFrom(body -> body instanceof CreateTopicsRequest,
+                prepareCreateTopicsResponse("myTopic", Errors.NONE), discoveredCluster.nodeById(1));
 
             KafkaFuture<Void> future = env.adminClient().createTopics(
                     singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
@@ -8365,6 +8372,113 @@ public class KafkaAdminClientTest {
         }
     }
 
+    /**
+     * Reproduces the scenario where the partition leader cache holds an entry pointing at a broker
+     * that has since left the cluster (for example after a broker is recycled with a new id). The
+     * cached leader sends the request straight to the fulfillment stage, but the admin client can
+     * never route it because the broker is no longer in the metadata. Without re-running the lookup,
+     * the call would sit unassigned until the request deadline expires and fail with
+     * "Timed out waiting for a node assignment". The admin client should instead re-resolve the
+     * leader and complete the request.
+     */
+    @Test
+    public void testListOffsetsRetriesLookupWhenCachedLeaderLeavesCluster() throws Exception {
+        Node node0 = new Node(0, "localhost", 8120);
+        Node node1 = new Node(1, "localhost", 8121);
+        final TopicPartition tp0 = new TopicPartition("foo", 0);
+
+        // Initially foo-0 is led by node1.
+        final Cluster initialCluster = new Cluster("mockClusterId", asList(node0, node1),
+            singletonList(new PartitionInfo("foo", 0, node1, new Node[]{node0, node1}, new Node[]{node0, node1})),
+            emptySet(), emptySet(), node0);
+        // After node1 leaves the cluster, foo-0 is led by node0.
+        final Cluster shrunkCluster = new Cluster("mockClusterId", singletonList(node0),
+            singletonList(new PartitionInfo("foo", 0, node0, new Node[]{node0}, new Node[]{node0})),
+            emptySet(), emptySet(), node0);
+
+        MockTime time = new MockTime();
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, initialCluster,
+                newStrMap(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "5000",
+                          AdminClientConfig.METADATA_MAX_AGE_CONFIG, "50"))) {
+            MockClient mockClient = env.kafkaClient();
+            mockClient.setNodeApiVersions(NodeApiVersions.create());
+
+            // First call: the lookup resolves foo-0 to node1 and caches it, then the offsets fetch
+            // succeeds on node1.
+            mockClient.prepareResponse(body -> body instanceof MetadataRequest,
+                prepareMetadataResponse(initialCluster, Errors.NONE));
+            mockClient.prepareResponseFrom(listOffsetsResponse(tp0, 100L), node1);
+            assertEquals(100L, env.adminClient().listOffsets(singletonMap(tp0, OffsetSpec.latest()))
+                .all().get().get(tp0).offset());
+
+            // Drop node1 from the admin client's metadata via the periodic broker-info refresh.
+            // Waiting for a second refresh guarantees the first one has been fully processed.
+            AtomicInteger refreshes = new AtomicInteger();
+            TestUtils.waitForCondition(() -> {
+                time.sleep(20);
+                if (respondToBrokerInfoRefresh(mockClient, shrunkCluster))
+                    refreshes.incrementAndGet();
+                return refreshes.get() >= 2;
+            }, "Timed out waiting for the broker-info metadata refresh to drop node1");
+
+            // Second call: the cache still points foo-0 at node1, which is gone. The admin client
+            // must re-resolve the leader (now node0) rather than getting stuck until the deadline.
+            ListOffsetsResult result = env.adminClient().listOffsets(singletonMap(tp0, OffsetSpec.latest()));
+            TestUtils.waitForCondition(() -> {
+                time.sleep(20);
+                // Keep node1 out of the metadata, re-resolve foo-0 to node0, and satisfy the fetch.
+                respondToBrokerInfoRefresh(mockClient, shrunkCluster);
+                respondToTopicMetadata(mockClient, "foo", shrunkCluster);
+                respondToListOffsets(mockClient, tp0, 200L, node0);
+                return result.all().isDone();
+            }, "Timed out waiting for listOffsets to recover after the cached leader left the cluster");
+
+            assertEquals(200L, result.all().get().get(tp0).offset());
+        }
+    }
+
+    private static ListOffsetsResponse listOffsetsResponse(TopicPartition tp, long offset) {
+        return new ListOffsetsResponse(new ListOffsetsResponseData().setTopics(singletonList(
+            ListOffsetsResponse.singletonListOffsetsTopicResponse(tp, Errors.NONE, -1L, offset, 5))));
+    }
+
+    /**
+     * Respond out of order to the first in-flight request matching {@code matcher} with
+     * {@code response}. Returns true if a matching request was found and answered.
+     */
+    private static boolean respondToInFlightRequest(MockClient mockClient,
+                                                    Predicate<ClientRequest> matcher,
+                                                    AbstractResponse response) {
+        for (ClientRequest request : mockClient.requests()) {
+            if (matcher.test(request)) {
+                mockClient.respondToRequest(request, response);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean respondToBrokerInfoRefresh(MockClient mockClient, Cluster cluster) {
+        return respondToInFlightRequest(mockClient, request -> {
+            AbstractRequest body = request.requestBuilder().build();
+            return body instanceof MetadataRequest && ((MetadataRequest) body).topics().isEmpty();
+        }, prepareMetadataResponse(cluster, Errors.NONE));
+    }
+
+    private static boolean respondToTopicMetadata(MockClient mockClient, String topic, Cluster cluster) {
+        return respondToInFlightRequest(mockClient, request -> {
+            AbstractRequest body = request.requestBuilder().build();
+            return body instanceof MetadataRequest && ((MetadataRequest) body).topics().contains(topic);
+        }, prepareMetadataResponse(cluster, Errors.NONE));
+    }
+
+    private static boolean respondToListOffsets(MockClient mockClient, TopicPartition tp, long offset, Node node) {
+        return respondToInFlightRequest(mockClient,
+            request -> request.requestBuilder().build() instanceof ListOffsetsRequest
+                && request.destination().equals(node.idString()),
+            listOffsetsResponse(tp, offset));
+    }
+
     @Test
     public void testListOffsetsRetriableErrors() throws Exception {
 
@@ -10957,52 +11071,6 @@ public class KafkaAdminClientTest {
             assertTrue(collection.contains(element), "Did not find " + element);
         }
         assertEquals(elements.length, collection.size(), "There are unexpected extra elements in the collection.");
-    }
-
-    public static KafkaAdminClient createInternal(AdminClientConfig config, KafkaAdminClient.TimeoutProcessorFactory timeoutProcessorFactory) {
-        return KafkaAdminClient.createInternal(config, timeoutProcessorFactory);
-    }
-
-    public static class FailureInjectingTimeoutProcessorFactory extends KafkaAdminClient.TimeoutProcessorFactory {
-
-        private int numTries = 0;
-
-        private int failuresInjected = 0;
-
-        @Override
-        public KafkaAdminClient.TimeoutProcessor create(long now) {
-            return new FailureInjectingTimeoutProcessor(now);
-        }
-
-        synchronized boolean shouldInjectFailure() {
-            numTries++;
-            if (numTries == 1) {
-                failuresInjected++;
-                return true;
-            }
-            return false;
-        }
-
-        public synchronized int failuresInjected() {
-            return failuresInjected;
-        }
-
-        public final class FailureInjectingTimeoutProcessor extends KafkaAdminClient.TimeoutProcessor {
-            public FailureInjectingTimeoutProcessor(long now) {
-                super(now);
-            }
-
-            boolean callHasExpired(KafkaAdminClient.Call call) {
-                if ((!call.isInternal()) && shouldInjectFailure()) {
-                    log.debug("Injecting timeout for {}.", call);
-                    return true;
-                } else {
-                    boolean ret = super.callHasExpired(call);
-                    log.debug("callHasExpired({}) = {}", call, ret);
-                    return ret;
-                }
-            }
-        }
     }
 
     @ParameterizedTest

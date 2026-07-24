@@ -23,14 +23,15 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.ExponentialBackoff;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
@@ -105,6 +106,11 @@ public class TaskManager {
     private final Set<TaskId> lockedTaskDirectories = new HashSet<>();
 
     private final Map<TaskId, BackoffRecord> taskIdToBackoffRecord = new HashMap<>();
+
+    // Published by the stream thread (via maybeUpdateTaskOffsetSumSnapshot) and read lock-free by the
+    // streams-protocol heartbeat thread. Covers standby, warmup, restoring-active and dormant tasks; running-active
+    // tasks are omitted (their assignment is not offset-driven, and they are caught up by definition).
+    private final AtomicReference<Map<StreamsRebalanceData.TaskId, Long>> taskOffsetSumSnapshot = new AtomicReference<>(Map.of());
 
     private final ActiveTaskCreator activeTaskCreator;
     private final StandbyTaskCreator standbyTaskCreator;
@@ -280,6 +286,7 @@ public class TaskManager {
 
                     // we need to enforce a checkpoint that removes the corrupted partitions
                     if (markAsCorrupted) {
+                        task.markChangelogAsCorrupted(task.changelogPartitions());
                         task.postCommit(true);
                     }
                 } catch (final RuntimeException swallow) {
@@ -429,8 +436,8 @@ public class TaskManager {
                     if (exception instanceof TaskMigratedException) {
                         lastTaskMigrated = (TaskMigratedException) exception;
                     } else if (exception instanceof TaskCorruptedException) {
-                        log.warn("Encounter corrupted task " + taskId + ", will group it with other corrupted tasks " +
-                            "and handle together", exception);
+                        log.warn("Encounter corrupted task {}, will group it with other corrupted tasks " +
+                            "and handle together", taskId, exception);
                         aggregatedCorruptedTaskIds.add(taskId);
                     } else {
                         ((StreamsException) exception).setTaskId(taskId);
@@ -1034,104 +1041,119 @@ public class TaskManager {
         final Set<TaskId> lockedTaskIds = activeRunningTaskIterable().stream().map(Task::id).collect(Collectors.toSet());
         maybeLockTasks(lockedTaskIds);
 
-        boolean revokedTasksNeedCommit = false;
-        for (final StreamTask task : activeRunningTaskIterable()) {
-            if (remainingRevokedPartitions.containsAll(task.inputPartitions())) {
-                // when the task input partitions are included in the revoked list,
-                // this is an active task and should be revoked
-
-                revokedActiveTasks.add(task);
-                remainingRevokedPartitions.removeAll(task.inputPartitions());
-
-                revokedTasksNeedCommit |= task.commitNeeded();
-            } else if (task.commitNeeded()) {
-                commitNeededActiveTasks.add(task);
-            }
-        }
-
-        revokeTasksInStateUpdater(remainingRevokedPartitions);
-
-        if (!remainingRevokedPartitions.isEmpty()) {
-            log.debug("The following revoked partitions {} are missing from the current task partitions. It could "
-                          + "potentially be due to race condition of consumer detecting the heartbeat failure, or the tasks " +
-                         "have been cleaned up by the handleAssignment callback.", remainingRevokedPartitions);
-        }
-
-        if (revokedTasksNeedCommit) {
-            prepareCommitAndAddOffsetsToMap(revokedActiveTasks, consumedOffsetsPerTask);
-            // if we need to commit any revoking task then we just commit all of those needed committing together
-            prepareCommitAndAddOffsetsToMap(commitNeededActiveTasks, consumedOffsetsPerTask);
-        }
-
-        // even if commit failed, we should still continue and complete suspending those tasks, so we would capture
-        // any exception and rethrow it at the end. some exceptions may be handled immediately and then swallowed,
-        // as such we just need to skip those dirty tasks in the checkpoint
+        // After locking, everything must be inside try-finally to guarantee suspend and unlock.
         final Set<Task> dirtyTasks = new TreeSet<>(Comparator.comparing(Task::id));
+        final Set<Task> tasksToSkipPostCommit = new TreeSet<>(Comparator.comparing(Task::id));
+        boolean revokedTasksNeedCommit = false;
+        boolean prepareCommitSucceeded = false;
         try {
-            if (revokedTasksNeedCommit) {
-                // in handleRevocation we must call commitOffsetsOrTransaction() directly rather than
-                // commitAndFillInConsumedOffsetsAndMetadataPerTaskMap() to make sure we don't skip the
-                // offset commit because we are in a rebalance
-                taskExecutor.commitOffsetsOrTransaction(consumedOffsetsPerTask);
-            }
-        } catch (final TaskCorruptedException e) {
-            log.warn("Some tasks were corrupted when trying to commit offsets, these will be cleaned and revived: {}",
-                     e.corruptedTasks());
+            for (final StreamTask task : activeRunningTaskIterable()) {
+                if (remainingRevokedPartitions.containsAll(task.inputPartitions())) {
+                    // when the task input partitions are included in the revoked list,
+                    // this is an active task and should be revoked
 
-            // If we hit a TaskCorruptedException it must be EOS, just handle the cleanup for those corrupted tasks right here
-            dirtyTasks.addAll(tasks.initializedTasks(e.corruptedTasks()));
-            closeDirtyAndRevive(dirtyTasks, true);
-        } catch (final TimeoutException e) {
-            log.warn("Timed out while trying to commit all tasks during revocation, these will be cleaned and revived");
+                    revokedActiveTasks.add(task);
+                    remainingRevokedPartitions.removeAll(task.inputPartitions());
 
-            // If we hit a TimeoutException it must be ALOS, just close dirty and revive without wiping the state
-            dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
-            closeDirtyAndRevive(dirtyTasks, false);
-        } catch (final RuntimeException e) {
-            log.error("Exception caught while committing those revoked tasks " + revokedActiveTasks, e);
-            firstException.compareAndSet(null, e);
-            dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
-        }
-
-        // we enforce checkpointing upon suspending a task: if it is resumed later we just proceed normally, if it is
-        // going to be closed we would checkpoint by then
-        for (final Task task : revokedActiveTasks) {
-            if (!dirtyTasks.contains(task)) {
-                try {
-                    task.postCommit(true);
-                } catch (final RuntimeException e) {
-                    log.error("Exception caught while post-committing task " + task.id(), e);
-                    maybeSetFirstException(false, maybeWrapTaskException(e, task.id()), firstException);
+                    revokedTasksNeedCommit |= task.commitNeeded();
+                } else if (task.commitNeeded()) {
+                    commitNeededActiveTasks.add(task);
                 }
             }
-        }
 
-        if (revokedTasksNeedCommit) {
-            for (final Task task : commitNeededActiveTasks) {
-                if (!dirtyTasks.contains(task)) {
+            revokeTasksInStateUpdater(remainingRevokedPartitions);
+
+            if (!remainingRevokedPartitions.isEmpty()) {
+                log.debug("The following revoked partitions {} are missing from the current task partitions. It could "
+                              + "potentially be due to race condition of consumer detecting the heartbeat failure, or the tasks " +
+                             "have been cleaned up by the handleAssignment callback.", remainingRevokedPartitions);
+            }
+
+            if (revokedTasksNeedCommit) {
+                try {
+                    prepareCommitAndAddOffsetsToMap(revokedActiveTasks, consumedOffsetsPerTask);
+                    // if we need to commit any revoking task then we just commit all of those needed committing together
+                    prepareCommitAndAddOffsetsToMap(commitNeededActiveTasks, consumedOffsetsPerTask);
+                    prepareCommitSucceeded = true;
+                } catch (final RuntimeException e) {
+                    log.error("Exception caught while preparing to commit revoked tasks {} and commit-needed tasks {}", revokedActiveTasks, commitNeededActiveTasks, e);
+                    maybeSetFirstException(false, e, firstException);
+                    tasksToSkipPostCommit.addAll(revokedActiveTasks);
+                    tasksToSkipPostCommit.addAll(commitNeededActiveTasks);
+                }
+            }
+
+            try {
+                if (revokedTasksNeedCommit && prepareCommitSucceeded) {
+                    // in handleRevocation we must call commitOffsetsOrTransaction() directly rather than
+                    // commitAndFillInConsumedOffsetsAndMetadataPerTaskMap() to make sure we don't skip the
+                    // offset commit because we are in a rebalance
+                    taskExecutor.commitOffsetsOrTransaction(consumedOffsetsPerTask);
+                }
+            } catch (final TaskCorruptedException e) {
+                log.warn("Some tasks were corrupted when trying to commit offsets, these will be cleaned and revived: {}",
+                         e.corruptedTasks());
+
+                // If we hit a TaskCorruptedException it must be EOS, just handle the cleanup for those corrupted tasks right here
+                dirtyTasks.addAll(tasks.initializedTasks(e.corruptedTasks()));
+                closeDirtyAndRevive(dirtyTasks, true);
+            } catch (final TimeoutException e) {
+                log.warn("Timed out while trying to commit all tasks during revocation, these will be cleaned and revived");
+
+                // If we hit a TimeoutException it must be ALOS, just close dirty and revive without wiping the state
+                dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
+                closeDirtyAndRevive(dirtyTasks, false);
+            } catch (final RuntimeException e) {
+                log.error("Exception caught while committing those revoked tasks {}", revokedActiveTasks, e);
+                maybeSetFirstException(false, e, firstException);
+                dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
+            }
+
+            // we enforce checkpointing upon suspending a task: if it is resumed later we just proceed normally, if it is
+            // going to be closed we would checkpoint by then
+            for (final Task task : revokedActiveTasks) {
+                if (!dirtyTasks.contains(task) && !tasksToSkipPostCommit.contains(task)) {
                     try {
-                        // for non-revoking active tasks, we should not enforce checkpoint
-                        // since if it is EOS enabled, no checkpoint should be written while
-                        // the task is in RUNNING tate
-                        task.postCommit(false);
+                        task.postCommit(true);
                     } catch (final RuntimeException e) {
-                        log.error("Exception caught while post-committing task " + task.id(), e);
+                        log.error("Exception caught while post-committing task {}", task.id(), e);
                         maybeSetFirstException(false, maybeWrapTaskException(e, task.id()), firstException);
                     }
                 }
             }
-        }
 
-        for (final Task task : revokedActiveTasks) {
+            if (revokedTasksNeedCommit) {
+                for (final Task task : commitNeededActiveTasks) {
+                    if (!dirtyTasks.contains(task) && !tasksToSkipPostCommit.contains(task)) {
+                        try {
+                            // for non-revoking active tasks, we should not enforce checkpoint
+                            // since if it is EOS enabled, no checkpoint should be written while
+                            // the task is in RUNNING state
+                            task.postCommit(false);
+                        } catch (final RuntimeException e) {
+                            log.error("Exception caught while post-committing task {}", task.id(), e);
+                            maybeSetFirstException(false, maybeWrapTaskException(e, task.id()), firstException);
+                        }
+                    }
+                }
+            }
+        } finally {
+            for (final Task task : revokedActiveTasks) {
+                try {
+                    task.suspend();
+                } catch (final RuntimeException e) {
+                    log.error("Caught the following exception while trying to suspend revoked task {}", task.id(), e);
+                    maybeSetFirstException(false, maybeWrapTaskException(e, task.id()), firstException);
+                }
+            }
+
             try {
-                task.suspend();
+                maybeUnlockTasks(lockedTaskIds);
             } catch (final RuntimeException e) {
-                log.error("Caught the following exception while trying to suspend revoked task " + task.id(), e);
-                maybeSetFirstException(false, maybeWrapTaskException(e, task.id()), firstException);
+                log.error("Exception caught while unlocking tasks {}", lockedTaskIds, e);
+                maybeSetFirstException(false, e, firstException);
             }
         }
-
-        maybeUnlockTasks(lockedTaskIds);
 
         if (firstException.get() != null) {
             throw firstException.get();
@@ -1231,6 +1253,52 @@ public class TaskManager {
         if (schedulingTaskManager != null) {
             schedulingTaskManager.signalTaskExecutors();
         }
+    }
+
+    /**
+     * Returns the per-task changelog offset-sum snapshot for the streams-protocol rebalance. Safe to invoke from any
+     * thread; the snapshot is refreshed by the stream thread via {@link #maybeUpdateTaskOffsetSumSnapshot()}.
+     */
+    public Map<StreamsRebalanceData.TaskId, Long> taskOffsetSumSnapshot() {
+        return taskOffsetSumSnapshot.get();
+    }
+
+    /**
+     * Recomputes the offset-sum snapshot reported to the streams-group coordinator from the offset sums maintained in
+     * the {@link StateDirectory}, which already cover all stateful tasks with state on disk (standby, warmup,
+     * restoring-active and dormant) using a conservative (per-partition lower-bound) sum. Running-active tasks are
+     * excluded: their assignment is not offset-driven and they are caught up by definition.
+     */
+    public void maybeUpdateTaskOffsetSumSnapshot() {
+        final Set<TaskId> runningActiveTasks = new HashSet<>();
+        for (final Task task : allTasks().values()) {
+            if (task.isActive() && task.state() == State.RUNNING) {
+                runningActiveTasks.add(task.id());
+            }
+        }
+
+        final Map<TaskId, Long> offsetSums = stateDirectory.taskOffsetSums();
+        final Map<StreamsRebalanceData.TaskId, Long> snapshot = new HashMap<>(offsetSums.size());
+        for (final Map.Entry<TaskId, Long> entry : offsetSums.entrySet()) {
+            final TaskId taskId = entry.getKey();
+            if (runningActiveTasks.contains(taskId)) {
+                continue;
+            }
+            snapshot.put(
+                new StreamsRebalanceData.TaskId(String.valueOf(taskId.subtopology()), taskId.partition()),
+                entry.getValue()
+            );
+        }
+
+        taskOffsetSumSnapshot.set(Collections.unmodifiableMap(snapshot));
+    }
+
+    /**
+     * Returns the per-task changelog end-offset-sum snapshot published by the state updater.
+     * Safe to invoke from any thread.
+     */
+    public Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSumSnapshot() {
+        return stateUpdater.taskEndOffsetSumSnapshot();
     }
 
     /**
@@ -1384,14 +1452,14 @@ public class TaskManager {
         executeAndMaybeSwallow(
             clean,
             () -> closeAndCleanUpTasks(activeTasks, standbyTasks, clean),
-            e -> firstException.compareAndSet(null, e),
+            e -> maybeSetFirstException(false, e, firstException),
             e -> log.warn("Ignoring an exception while unlocking remaining task directories.", e)
         );
 
         executeAndMaybeSwallow(
             clean,
             activeTaskCreator::close,
-            e -> firstException.compareAndSet(null, e),
+            e -> maybeSetFirstException(false, e, firstException),
             e -> log.warn("Ignoring an exception while closing thread producer.", e)
         );
 
@@ -1402,7 +1470,7 @@ public class TaskManager {
         executeAndMaybeSwallow(
             clean,
             this::releaseLockedUnassignedTaskDirectories,
-            e -> firstException.compareAndSet(null, e),
+            e -> maybeSetFirstException(false, e, firstException),
             e -> log.warn("Ignoring an exception while unlocking remaining task directories.", e)
         );
 
@@ -1511,10 +1579,10 @@ public class TaskManager {
                 tasksToCloseDirty.add(task);
             } catch (final StreamsException e) {
                 e.setTaskId(task.id());
-                firstException.compareAndSet(null, e);
+                maybeSetFirstException(false, e, firstException);
                 tasksToCloseDirty.add(task);
             } catch (final RuntimeException e) {
-                firstException.compareAndSet(null, new StreamsException(e, task.id()));
+                maybeSetFirstException(false, new StreamsException(e, task.id()), firstException);
                 tasksToCloseDirty.add(task);
             }
         }
@@ -1527,7 +1595,7 @@ public class TaskManager {
             try {
                 taskExecutor.commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
             } catch (final RuntimeException e) {
-                log.error("Exception caught while committing tasks " + consumedOffsetsAndMetadataPerTask.keySet(), e);
+                log.error("Exception caught while committing tasks {}", consumedOffsetsAndMetadataPerTask.keySet(), e);
                 // TODO: should record the task ids when handling this exception
                 maybeSetFirstException(false, e, firstException);
 
@@ -1551,7 +1619,7 @@ public class TaskManager {
                 try {
                     task.postCommit(true);
                 } catch (final RuntimeException e) {
-                    log.error("Exception caught while post-committing task " + task.id(), e);
+                    log.error("Exception caught while post-committing task {}", task.id(), e);
                     maybeSetFirstException(false, maybeWrapTaskException(e, task.id()), firstException);
                     tasksToCloseDirty.add(task);
                     tasksToCloseClean.remove(task);
@@ -1631,6 +1699,38 @@ public class TaskManager {
         return ret;
     }
 
+    // VisibleForTesting
+    boolean hasAnyTaskForTopology(final String topologyName) {
+        return allTasks().keySet().stream().anyMatch(taskId -> topologyName.equals(taskId.topologyName()));
+    }
+
+    /**
+     * Returns {@code true} if every task for the given topology is initialized and in
+     * {@link State#RUNNING}.
+     *
+     * <p>If there are no tasks for the given topology, this method returns {@code true}.
+     *
+     * @param topologyName the topology name
+     * @return {@code true} if all matching tasks are initialized and in {@link State#RUNNING},
+     *         or if there are no matching tasks; {@code false} otherwise
+     */
+    // VisibleForTesting
+    boolean areAllTasksRunningForTopology(final String topologyName) {
+        final Map<TaskId, Task> allTasks = allTasks();
+        final Set<TaskId> initializedTaskIds = tasks.allInitializedTaskIds();
+
+        for (final Map.Entry<TaskId, Task> entry : allTasks.entrySet()) {
+            final TaskId taskId = entry.getKey();
+            if (topologyName.equals(taskId.topologyName())) {
+                if (!initializedTaskIds.contains(taskId) || entry.getValue().state() != State.RUNNING) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+    
     /**
      * Returns tasks owned by the stream thread.
      * This does not return any tasks currently owned by the state updater.
@@ -1640,6 +1740,14 @@ public class TaskManager {
         // not bothering with an unmodifiable map, since the tasks themselves are mutable, but
         // if any outside code modifies the map or the tasks, it would be a severe transgression.
         return tasks.allInitializedTasksPerId();
+    }
+
+    long totalUncommittedBytes() {
+        long total = 0;
+        for (final Task task : allRunningTasks().values()) {
+            total += task.approximateNumUncommittedBytes();
+        }
+        return total;
     }
 
     Set<Task> readOnlyAllTasks() {
@@ -2016,7 +2124,11 @@ public class TaskManager {
                                         final RuntimeException exception,
                                         final AtomicReference<RuntimeException> firstException) {
         if (!ignoreTaskMigrated || !(exception instanceof TaskMigratedException)) {
-            firstException.compareAndSet(null, exception);
+            if (!firstException.compareAndSet(null, exception)) {
+                if (exception != firstException.get()) {
+                    firstException.get().addSuppressed(exception);
+                }
+            }
         }
     }
 

@@ -17,8 +17,8 @@
 package org.apache.kafka.common.compress;
 
 import org.apache.kafka.common.record.internal.RecordBatch;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.internals.ChunkedBytesStream;
 
 import net.jpountz.xxhash.XXHashFactory;

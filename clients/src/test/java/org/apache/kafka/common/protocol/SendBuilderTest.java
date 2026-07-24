@@ -23,8 +23,8 @@ import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.record.internal.UnalignedMemoryRecords;
+import org.apache.kafka.common.requests.ByteBufferChannel;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 
@@ -52,7 +52,7 @@ public class SendBuilderTest {
         zeroCopyBuffer.put(overwrittenData);
         zeroCopyBuffer.rewind();
 
-        ByteBuffer buffer = TestUtils.toBuffer(send);
+        ByteBuffer buffer = ByteBufferChannel.toBuffer(send);
         assertEquals(8 + data.length, buffer.remaining());
         assertEquals(5, buffer.getInt());
         assertEquals("bar", getString(buffer, data.length));
@@ -77,7 +77,7 @@ public class SendBuilderTest {
         assertEquals(2, buffer.position());
 
         Send send = builder.build();
-        ByteBuffer readBuffer = TestUtils.toBuffer(send);
+        ByteBuffer readBuffer = ByteBufferChannel.toBuffer(send);
         assertEquals("yolo", getString(readBuffer, 4));
     }
 
@@ -96,7 +96,7 @@ public class SendBuilderTest {
         buffer.rewind();
         MemoryRecords overwrittenRecords = createRecords(buffer, "bar");
 
-        ByteBuffer readBuffer = TestUtils.toBuffer(send);
+        ByteBuffer readBuffer = ByteBufferChannel.toBuffer(send);
         assertEquals(5, readBuffer.getInt());
         assertEquals(overwrittenRecords, getRecords(readBuffer, records.sizeInBytes()));
         assertEquals(15, readBuffer.getInt());
@@ -127,7 +127,7 @@ public class SendBuilderTest {
         buffer.rewind();
         MemoryRecords overwrittenRecords = createRecords(buffer, "bar");
 
-        ByteBuffer readBuffer = TestUtils.toBuffer(send);
+        ByteBuffer readBuffer = ByteBufferChannel.toBuffer(send);
         assertEquals(5, readBuffer.getInt());
         assertEquals(overwrittenRecords, getRecords(readBuffer, records.sizeInBytes()));
         assertEquals(15, readBuffer.getInt());

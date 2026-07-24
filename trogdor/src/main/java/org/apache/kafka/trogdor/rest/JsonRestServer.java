@@ -210,7 +210,7 @@ public class JsonRestServer {
                 is.close();
                 return new HttpResponse<>(result, null);
             } else {
-                // If the resposne code was not in the 200s, we assume that this is an error
+                // If the response code was not in the 200s, we assume that this is an error
                 // response.
                 InputStream es = connection.getErrorStream();
                 if (es == null) {

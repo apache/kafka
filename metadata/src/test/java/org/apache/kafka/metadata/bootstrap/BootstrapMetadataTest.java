@@ -19,14 +19,21 @@ package org.apache.kafka.metadata.bootstrap;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.NoOpRecord;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.metadata.util.BatchFileWriter;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.MetadataVersionTestUtils;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.io.UncheckedIOException;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 import static org.apache.kafka.server.common.MetadataVersion.FEATURE_NAME;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV3;
@@ -44,6 +51,31 @@ public class BootstrapMetadataTest {
         new ApiMessageAndVersion(new FeatureLevelRecord().
             setName(FEATURE_NAME).
             setFeatureLevel((short) 7), (short) 0));
+
+    static class BootstrapTestDirectory implements AutoCloseable {
+        private final Path directory;
+
+        static BootstrapTestDirectory createDirectory() {
+            return new BootstrapTestDirectory();
+        }
+
+        private BootstrapTestDirectory() {
+            this.directory = TestUtils.tempDirectory().toPath();
+        }
+
+        Path path() {
+            return directory;
+        }
+
+        Path binaryBootstrapPath() {
+            return directory.resolve(BootstrapMetadata.BINARY_BOOTSTRAP_FILENAME);
+        }
+
+        @Override
+        public void close() throws Exception {
+            Utils.delete(directory.toFile());
+        }
+    }
 
     @Test
     public void testFromVersion() {
@@ -133,4 +165,73 @@ public class BootstrapMetadataTest {
             + " to " + MetadataVersion.latestTesting().featureLevel() + ".",
                 assertThrows(RuntimeException.class, bootstrapMetadata::metadataVersion).getMessage());
     }
+
+    @Test
+    public void testReadFromEmptyDirectory() throws Exception {
+        try (BootstrapTestDirectory testDirectory = BootstrapTestDirectory.createDirectory()) {
+            assertEquals(BootstrapMetadata.fromVersion(MetadataVersion.latestProduction(),
+                    "the default bootstrap"),
+                BootstrapMetadata.fromDirectory(testDirectory.path()));
+        }
+    }
+
+    @Test
+    public void testMissingDirectory() {
+        assertEquals("No such directory as ./non/existent/directory",
+            assertThrows(IllegalStateException.class, () ->
+                BootstrapMetadata.fromDirectory(Path.of("./non/existent/directory"))).getMessage());
+    }
+
+    @Test
+    public void testFromDirectoryWithLegacyBootstrapCheckpoint() throws Exception {
+        try (BootstrapTestDirectory testDirectory = BootstrapTestDirectory.createDirectory()) {
+            Path checkpointPath = testDirectory.binaryBootstrapPath();
+            BootstrapMetadata expected = BootstrapMetadata.fromVersion(IBP_3_3_IV3, "test");
+            try (BatchFileWriter writer = BatchFileWriter.open(checkpointPath)) {
+                writer.append(expected.records());
+            }
+            BootstrapMetadata result = BootstrapMetadata.fromDirectory(testDirectory.path());
+            assertEquals(expected.records(), result.records());
+        }
+    }
+
+    @Test
+    public void testFromCheckpointFileNotFound() {
+        Path nonExistent = Path.of("/tmp/does_not_exist_bootstrap.checkpoint");
+        assertThrows(UncheckedIOException.class,
+            () -> BootstrapMetadata.fromCheckpointFile(nonExistent));
+    }
+
+    @Test
+    public void testFromVersions() {
+        Map<String, Short> features = new TreeMap<>();
+        features.put("foo", (short) 2);
+        features.put("bar", (short) 1);
+        BootstrapMetadata bm = BootstrapMetadata.fromVersions(MetadataVersion.latestProduction(), features, "test");
+        assertEquals(List.of(
+            new ApiMessageAndVersion(new FeatureLevelRecord()
+                .setName(FEATURE_NAME)
+                .setFeatureLevel(MetadataVersion.latestProduction().featureLevel()), (short) 0),
+            new ApiMessageAndVersion(new FeatureLevelRecord()
+                .setName("bar")
+                .setFeatureLevel((short) 1), (short) 0),
+            new ApiMessageAndVersion(new FeatureLevelRecord()
+                .setName("foo")
+                .setFeatureLevel((short) 2), (short) 0)),
+            bm.records()
+        );
+    }
+
+    @Test
+    public void testFromVersionsExcludesZeroLevelFeatures() {
+        Map<String, Short> features = Map.of("foo", (short) 0);
+        BootstrapMetadata bm = BootstrapMetadata.fromVersions(MetadataVersion.latestProduction(), features, "test");
+        assertEquals(List.of(
+            new ApiMessageAndVersion(new FeatureLevelRecord()
+                .setName(FEATURE_NAME)
+                .setFeatureLevel(MetadataVersion.latestProduction().featureLevel()), (short) 0)),
+            bm.records()
+        );
+    }
+
 }
