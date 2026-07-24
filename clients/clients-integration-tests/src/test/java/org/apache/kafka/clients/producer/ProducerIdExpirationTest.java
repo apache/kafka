@@ -198,8 +198,10 @@ public class ProducerIdExpirationTest {
                 Integer.MAX_VALUE,
                 DEFAULT_MAX_WAIT_MS
             );
-            assertEquals(2, records.size(), "Consumed more records than expected");
-            records.forEach(ProducerIdExpirationTest::assertCommittedAndGetValue);
+            assertEquals(
+                List.of("4", "3"),
+                records.stream().map(ProducerIdExpirationTest::assertCommittedAndGetValue).toList()
+            );
         } finally {
             producer.close();
             consumer.close(CloseOptions.timeout(Duration.ofSeconds(1)));
