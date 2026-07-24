@@ -29,6 +29,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -59,21 +60,13 @@ public class DefaultStreamPartitionerTest {
         assertEquals(Collections.singleton(BuiltInPartitioner.partitionForKey(expectedKeyBytes, NUM_PARTITIONS)), partition.get());
     }
 
-    @SuppressWarnings({"unchecked", "removal"})
+    @SuppressWarnings({"unchecked"})
     @Test
-    public void shouldFallbackToEmptyHeadersForDeprecatedMethod() {
+    public void shouldThrowUnsupportedOperationExceptionForDeprecatedMethod() {
         final Serializer<String> keySerializer = mock(Serializer.class);
         final DefaultStreamPartitioner<String, String> defaultStreamPartitioner = new DefaultStreamPartitioner<>(keySerializer);
-        final byte[] expectedKeyBytes = "serializedKey".getBytes();
-        final RecordHeaders emptyHeaders = new RecordHeaders();
 
-        when(keySerializer.serialize(TOPIC, emptyHeaders, KEY)).thenReturn(expectedKeyBytes);
-
-        final Optional<Set<Integer>> partition = defaultStreamPartitioner.partitions(TOPIC, KEY, VALUE, NUM_PARTITIONS);
-
-        verify(keySerializer).serialize(TOPIC, emptyHeaders, KEY);
-        assertTrue(partition.isPresent());
-        assertEquals(Collections.singleton(BuiltInPartitioner.partitionForKey(expectedKeyBytes, NUM_PARTITIONS)), partition.get());
+        assertThrows(UnsupportedOperationException.class, () -> defaultStreamPartitioner.partitions(TOPIC, KEY, VALUE, NUM_PARTITIONS));
     }
 
     @SuppressWarnings("unchecked")

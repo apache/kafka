@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.streams.processor;
 
-import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.Topology;
 
 import java.util.Optional;
