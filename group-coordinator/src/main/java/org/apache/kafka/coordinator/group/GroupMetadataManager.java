@@ -510,6 +510,11 @@ public class GroupMetadataManager {
     private final Map<String, TaskAssignor> streamsGroupAssignors;
 
     /**
+     * The default streams group task assignor used.
+     */
+    private final TaskAssignor defaultStreamsGroupAssignor;
+
+    /**
      * The metadata image.
      */
     private CoordinatorMetadataImage metadataImage;
@@ -579,6 +584,7 @@ public class GroupMetadataManager {
         this.shareGroupStatePartitionMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
         this.groupConfigManager = groupConfigManager;
         this.shareGroupAssignor = shareGroupAssignor;
+        this.defaultStreamsGroupAssignor = streamsGroupAssignors.get(0);
         this.streamsGroupAssignors = streamsGroupAssignors.stream().collect(Collectors.toMap(TaskAssignor::name, Function.identity()));
         this.topicRegexResolver = new TopicRegexResolver(() -> authorizerPlugin, this.time);
         this.topicHashCache = new HashMap<>();
@@ -9726,9 +9732,25 @@ public class GroupMetadataManager {
 
     /**
      * Get the assignor of the provided streams group.
+     *
+     * <p>The assignor is selected by the group-level {@link GroupConfig#STREAMS_ASSIGNOR_NAME_CONFIG}
+     * configuration. When the group does not select an assignor, the broker's default assignor
+     * (the first entry of {@code group.streams.assignors}) is used. If the selected assignor is no
+     * longer registered on the broker, the coordinator falls back to the default and logs a warning.
      */
     private TaskAssignor streamsGroupAssignor(String groupId) {
-        return streamsGroupAssignors.get("sticky");
+        Optional<String> configuredName = groupConfigManager.groupConfig(groupId)
+            .flatMap(GroupConfig::streamsAssignorName);
+        if (configuredName.isPresent()) {
+            TaskAssignor assignor = streamsGroupAssignors.get(configuredName.get());
+            if (assignor != null) {
+                return assignor;
+            }
+            log.warn("[GroupId {}] The configured task assignor '{}' is not available; " +
+                    "falling back to the default assignor '{}'.",
+                groupId, configuredName.get(), defaultStreamsGroupAssignor.name());
+        }
+        return defaultStreamsGroupAssignor;
     }
 
     /**

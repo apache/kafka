@@ -37,6 +37,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -896,6 +897,7 @@ public class GroupCoordinatorConfig {
             .collect(Collectors.toMap(TaskAssignor::name, Function.identity()));
 
         List<TaskAssignor> assignors = new ArrayList<>();
+        Set<String> assignorNames = new HashSet<>();
 
         try {
             for (String klass : config.getList(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG)) {
@@ -908,6 +910,11 @@ public class GroupCoordinatorConfig {
                     } catch (ClassCastException e) {
                         throw new KafkaException(klass + " is not an instance of " + TaskAssignor.class.getName());
                     }
+                }
+
+                if (!assignorNames.add(assignor.name())) {
+                    throw new KafkaException("Multiple assignors configured in " + STREAMS_GROUP_ASSIGNORS_CONFIG +
+                        " have the same name '" + assignor.name() + "'. Assignor names, whether builtin or custom, must be unique.");
                 }
 
                 assignors.add(assignor);
@@ -1469,5 +1476,12 @@ public class GroupCoordinatorConfig {
      */
     public List<TaskAssignor> streamsGroupAssignors() {
         return streamsGroupAssignors;
+    }
+
+    /**
+     * The set of registered streams group task assignor names.
+     */
+    public Set<String> streamsGroupAssignorNames() {
+        return streamsGroupAssignors.stream().map(TaskAssignor::name).collect(Collectors.toSet());
     }
 }
