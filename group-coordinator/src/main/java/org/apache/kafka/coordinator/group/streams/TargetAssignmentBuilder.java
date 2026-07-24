@@ -304,7 +304,7 @@ public class TargetAssignmentBuilder {
                 copyTasks(newMemberAssignment.activeTasks()),
                 copyTasks(newMemberAssignment.standbyTasks()),
                 // Warm-up tasks are not assigned by the assignor; they are decided during reconciliation.
-                Map.of()
+                new HashMap<>()
             );
         } else {
             return TasksTuple.EMPTY;
