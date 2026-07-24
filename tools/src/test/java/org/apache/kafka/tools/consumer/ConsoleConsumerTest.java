@@ -493,7 +493,7 @@ public class ConsoleConsumerTest {
     private Consumer<byte[], byte[]> createGroupMetaDataConsumer(ClusterInstance cluster, GroupProtocol groupProtocol) {
         Properties props = consumerProps(cluster);
         props.put(AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(GROUP_PROTOCOL_CONFIG, groupProtocol.name);
+        props.put(GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         return new KafkaConsumer<>(props);
     }
     
