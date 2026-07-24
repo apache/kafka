@@ -17,6 +17,8 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.MockConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -24,24 +26,39 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.internals.Runtime;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.GlobalStateManager;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
+import org.apache.kafka.streams.processor.internals.ProcessorTopology;
+import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
+import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamTask;
+import org.apache.kafka.streams.processor.internals.StreamsProducer;
+import org.apache.kafka.streams.processor.internals.Task;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
-
+import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -63,7 +80,7 @@ final class SinglePartitionRuntime implements Runtime {
     private final Map<TopicPartition, AtomicLong> offsetsByTopicOrPatternPartition;
     private final MockProducer<byte[], byte[]> producer;
     private final Time wallClockTime;
-    private final Host host;
+    private final Runtime.Host host;
 
     SinglePartitionRuntime(final StreamTask task,
                            final InternalTopologyBuilder internalTopologyBuilder,
@@ -81,6 +98,219 @@ final class SinglePartitionRuntime implements Runtime {
         this.producer = producer;
         this.wallClockTime = wallClockTime;
         this.host = host;
+    }
+
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    static SinglePartitionRuntime create(final StreamsConfig streamsConfig,
+                                         final StreamsMetricsImpl streamsMetrics,
+                                         final ThreadCache cache,
+                                         final TaskConfig taskConfig,
+                                         final TaskId taskId,
+                                         final ProcessorTopology processorTopology,
+                                         final InternalTopologyBuilder internalTopologyBuilder,
+                                         final GlobalStateManager globalStateManager,
+                                         final Map<String, TopicPartition> partitionsByInputTopic,
+                                         final Map<TopicPartition, AtomicLong> offsetsByTopicOrPatternPartition,
+                                         final MockConsumer<byte[], byte[]> consumer,
+                                         final StreamsProducer testDriverProducer,
+                                         final MockProducer<byte[], byte[]> producer,
+                                         final StateDirectory stateDirectory,
+                                         final Time wallClockTime,
+                                         final LogContext logContext,
+                                         final Host host) {
+        return createInternal(
+            streamsConfig,
+            streamsMetrics,
+            cache,
+            taskConfig,
+            taskId,
+            processorTopology,
+            internalTopologyBuilder,
+            globalStateManager,
+            partitionsByInputTopic,
+            offsetsByTopicOrPatternPartition,
+            consumer,
+            testDriverProducer,
+            producer,
+            stateDirectory,
+            wallClockTime,
+            logContext,
+            host
+        );
+    }
+
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    private static SinglePartitionRuntime createInternal(final StreamsConfig streamsConfig,
+                                                         final StreamsMetricsImpl streamsMetrics,
+                                                         final ThreadCache cache,
+                                                         final TaskConfig taskConfig,
+                                                         final TaskId taskId,
+                                                         final ProcessorTopology processorTopology,
+                                                         final InternalTopologyBuilder internalTopologyBuilder,
+                                                         final GlobalStateManager globalStateManager,
+                                                         final Map<String, TopicPartition> partitionsByInputTopic,
+                                                         final Map<TopicPartition, AtomicLong> offsetsByTopicOrPatternPartition,
+                                                         final MockConsumer<byte[], byte[]> consumer,
+                                                         final StreamsProducer testDriverProducer,
+                                                         final MockProducer<byte[], byte[]> producer,
+                                                         final StateDirectory stateDirectory,
+                                                         final Time wallClockTime,
+                                                         final LogContext logContext,
+                                                         final Host host) {
+        return createFromContext(new SinglePartitionRuntimeContext(
+            streamsConfig,
+            streamsMetrics,
+            cache,
+            taskConfig,
+            taskId,
+            processorTopology,
+            internalTopologyBuilder,
+            globalStateManager,
+            partitionsByInputTopic,
+            offsetsByTopicOrPatternPartition,
+            consumer,
+            testDriverProducer,
+            producer,
+            stateDirectory,
+            wallClockTime,
+            logContext,
+            host
+        ));
+    }
+
+    private static SinglePartitionRuntime createFromContext(final SinglePartitionRuntimeContext context) {
+        final StreamTask task = buildTask(context);
+
+        return new SinglePartitionRuntime(
+            task,
+            context.internalTopologyBuilder,
+            context.globalStateManager,
+            context.partitionsByInputTopic,
+            context.offsetsByTopicOrPatternPartition,
+            context.producer,
+            context.wallClockTime,
+            context.host);
+    }
+
+    private static StreamTask buildTask(final SinglePartitionRuntimeContext context) {
+        if (context.partitionsByInputTopic.isEmpty()) {
+            return null;
+        }
+
+        context.consumer.assign(context.partitionsByInputTopic.values());
+        final Map<TopicPartition, Long> startOffsets = new HashMap<>();
+        for (final TopicPartition topicPartition : context.partitionsByInputTopic.values()) {
+            startOffsets.put(topicPartition, 0L);
+        }
+        context.consumer.updateBeginningOffsets(startOffsets);
+
+        final ProcessorStateManager stateManager = new ProcessorStateManager(
+            context.taskId,
+            Task.TaskType.ACTIVE,
+            StreamsConfig.EXACTLY_ONCE_V2.equals(context.streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)),
+            context.streamsConfig.getBoolean(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG),
+            context.logContext,
+            context.stateDirectory,
+            context.wallClockTime,
+            context.processorTopology.storeToChangelogTopic(),
+            new HashSet<>(context.partitionsByInputTopic.values()));
+
+        final RecordCollector recordCollector = new RecordCollectorImpl(
+            context.logContext,
+            context.taskId,
+            context.testDriverProducer,
+            context.streamsConfig.productionExceptionHandler(),
+            context.streamsMetrics,
+            context.processorTopology
+        );
+
+        final InternalProcessorContext<?, ?> processorContext = new ProcessorContextImpl(
+            context.taskId,
+            context.streamsConfig,
+            stateManager,
+            context.streamsMetrics,
+            context.cache
+        );
+
+        final StreamTask task = new StreamTask(
+            context.taskId,
+            new HashSet<>(context.partitionsByInputTopic.values()),
+            context.processorTopology,
+            context.consumer,
+            context.taskConfig,
+            context.streamsMetrics,
+            context.stateDirectory,
+            context.cache,
+            context.wallClockTime,
+            stateManager,
+            recordCollector,
+            processorContext,
+            context.logContext,
+            false
+        );
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+        for (final TopicPartition tp : task.inputPartitions()) {
+            task.updateNextOffsets(tp, new OffsetAndMetadata(0, Optional.empty(), ""));
+        }
+        return task;
+    }
+
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    private static class SinglePartitionRuntimeContext {
+        final StreamsConfig streamsConfig;
+        final StreamsMetricsImpl streamsMetrics;
+        final ThreadCache cache;
+        final TaskConfig taskConfig;
+        final TaskId taskId;
+        final ProcessorTopology processorTopology;
+        final InternalTopologyBuilder internalTopologyBuilder;
+        final GlobalStateManager globalStateManager;
+        final Map<String, TopicPartition> partitionsByInputTopic;
+        final Map<TopicPartition, AtomicLong> offsetsByTopicOrPatternPartition;
+        final MockConsumer<byte[], byte[]> consumer;
+        final StreamsProducer testDriverProducer;
+        final MockProducer<byte[], byte[]> producer;
+        final StateDirectory stateDirectory;
+        final Time wallClockTime;
+        final LogContext logContext;
+        final Host host;
+
+        SinglePartitionRuntimeContext(final StreamsConfig streamsConfig,
+                                      final StreamsMetricsImpl streamsMetrics,
+                                      final ThreadCache cache,
+                                      final TaskConfig taskConfig,
+                                      final TaskId taskId,
+                                      final ProcessorTopology processorTopology,
+                                      final InternalTopologyBuilder internalTopologyBuilder,
+                                      final GlobalStateManager globalStateManager,
+                                      final Map<String, TopicPartition> partitionsByInputTopic,
+                                      final Map<TopicPartition, AtomicLong> offsetsByTopicOrPatternPartition,
+                                      final MockConsumer<byte[], byte[]> consumer,
+                                      final StreamsProducer testDriverProducer,
+                                      final MockProducer<byte[], byte[]> producer,
+                                      final StateDirectory stateDirectory,
+                                      final Time wallClockTime,
+                                      final LogContext logContext,
+                                      final Host host) {
+            this.streamsConfig = streamsConfig;
+            this.streamsMetrics = streamsMetrics;
+            this.cache = cache;
+            this.taskConfig = taskConfig;
+            this.taskId = taskId;
+            this.processorTopology = processorTopology;
+            this.internalTopologyBuilder = internalTopologyBuilder;
+            this.globalStateManager = globalStateManager;
+            this.partitionsByInputTopic = partitionsByInputTopic;
+            this.offsetsByTopicOrPatternPartition = offsetsByTopicOrPatternPartition;
+            this.consumer = consumer;
+            this.testDriverProducer = testDriverProducer;
+            this.producer = producer;
+            this.stateDirectory = stateDirectory;
+            this.wallClockTime = wallClockTime;
+            this.logContext = logContext;
+            this.host = host;
+        }
     }
 
     @Override

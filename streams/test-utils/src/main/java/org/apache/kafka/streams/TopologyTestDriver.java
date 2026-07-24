@@ -42,7 +42,6 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
-import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
@@ -59,17 +58,10 @@ import org.apache.kafka.streams.processor.internals.GlobalProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.GlobalStateManager;
 import org.apache.kafka.streams.processor.internals.GlobalStateManagerImpl;
 import org.apache.kafka.streams.processor.internals.GlobalStateUpdateTask;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
-import org.apache.kafka.streams.processor.internals.RecordCollector;
-import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
-import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamsProducer;
-import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.query.Position;
@@ -107,7 +99,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -234,7 +225,7 @@ public class TopologyTestDriver implements Closeable {
     private GlobalStateUpdateTask globalStateTask;
     private GlobalStateManager globalStateManager;
 
-    private final Runtime runtime;
+    private final org.apache.kafka.streams.internals.Runtime runtime;
 
     private StateDirectory stateDirectory;
     private Metrics metrics;
@@ -373,16 +364,24 @@ public class TopologyTestDriver implements Closeable {
         );
 
         setupGlobalTask(mockWallClockTime, streamsConfig, streamsMetrics, cache);
-        final StreamTask task = setupTask(streamsConfig, streamsMetrics, cache, internalTopologyBuilder.topologyConfigs().getTaskConfig());
-        runtime = new SinglePartitionRuntime(
-                task,
+        runtime = SinglePartitionRuntime.create(
+                streamsConfig,
+                streamsMetrics,
+                cache,
+                internalTopologyBuilder.topologyConfigs().getTaskConfig(),
+                TASK_ID,
+                processorTopology,
                 internalTopologyBuilder,
                 globalStateManager,
                 partitionsByInputTopic,
                 offsetsByTopicOrPatternPartition,
+                consumer,
+                testDriverProducer,
                 producer,
+                stateDirectory,
                 mockWallClockTime,
-                new Runtime.Host() {
+                logContext,
+                new org.apache.kafka.streams.internals.Runtime.Host() {
                     @Override
                     public void commit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
                         TopologyTestDriver.this.commit(offsets);
@@ -508,72 +507,6 @@ public class TopologyTestDriver implements Closeable {
         } else {
             globalStateManager = null;
             globalStateTask = null;
-        }
-    }
-
-    private StreamTask setupTask(final StreamsConfig streamsConfig,
-                                 final StreamsMetricsImpl streamsMetrics,
-                                 final ThreadCache cache,
-                                 final TaskConfig taskConfig) {
-        if (!partitionsByInputTopic.isEmpty()) {
-            consumer.assign(partitionsByInputTopic.values());
-            final Map<TopicPartition, Long> startOffsets = new HashMap<>();
-            for (final TopicPartition topicPartition : partitionsByInputTopic.values()) {
-                startOffsets.put(topicPartition, 0L);
-            }
-            consumer.updateBeginningOffsets(startOffsets);
-
-            final ProcessorStateManager stateManager = new ProcessorStateManager(
-                TASK_ID,
-                Task.TaskType.ACTIVE,
-                StreamsConfig.EXACTLY_ONCE_V2.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)),
-                streamsConfig.getBoolean(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG),
-                logContext,
-                stateDirectory,
-                mockWallClockTime,
-                processorTopology.storeToChangelogTopic(),
-                new HashSet<>(partitionsByInputTopic.values()));
-            final RecordCollector recordCollector = new RecordCollectorImpl(
-                logContext,
-                TASK_ID,
-                testDriverProducer,
-                streamsConfig.productionExceptionHandler(),
-                streamsMetrics,
-                processorTopology
-            );
-
-            final InternalProcessorContext<?, ?> context = new ProcessorContextImpl(
-                TASK_ID,
-                streamsConfig,
-                stateManager,
-                streamsMetrics,
-                cache
-            );
-
-            final StreamTask task = new StreamTask(
-                TASK_ID,
-                new HashSet<>(partitionsByInputTopic.values()),
-                processorTopology,
-                consumer,
-                taskConfig,
-                streamsMetrics,
-                stateDirectory,
-                cache,
-                mockWallClockTime,
-                stateManager,
-                recordCollector,
-                context,
-                logContext,
-                false
-            );
-            task.initializeIfNeeded();
-            task.completeRestoration(noOpResetter -> { });
-            for (final TopicPartition tp: task.inputPartitions()) {
-                task.updateNextOffsets(tp, new OffsetAndMetadata(0, Optional.empty(), ""));
-            }
-            return task;
-        } else {
-            return null;
         }
     }
 

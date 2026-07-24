@@ -14,12 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams;
+package org.apache.kafka.streams.internals;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 
@@ -30,7 +31,7 @@ import java.util.Map;
  * quiescence, and resolves state stores.
  *
  */
-interface Runtime {
+public interface Runtime {
 
     /**
      * Pipe a single record into the topology and drive processing until no more work is immediately
