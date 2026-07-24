@@ -126,7 +126,7 @@ public class ShareCompletedFetchTest {
         // No records have been delivered to the application yet.
         assertFalse(completedFetch.hasPendingAcknowledgements());
 
-        // Once the record have been delivered, their acknowledgements are outstanding even though the fetch is consumed.
+        // Once the records have been delivered, their acknowledgements are outstanding even though the fetch is consumed.
         ShareInFlightBatch<String, String> batch = completedFetch.fetchRecords(deserializers, 10, true);
         assertEquals(numRecords, batch.getInFlightRecords().size());
         assertTrue(completedFetch.isConsumed());

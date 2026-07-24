@@ -178,7 +178,7 @@ public class ShareFetchBuffer implements AutoCloseable {
     }
 
     /**
-     * Return the set of {@link TopicIdPartition partitions} for which we have data in the buffer.
+     * Return the set of {@link TopicIdPartition partitions} for which we have data in the buffer or pending acknowledgements.
      *
      * @return {@link TopicIdPartition Partition} set
      */

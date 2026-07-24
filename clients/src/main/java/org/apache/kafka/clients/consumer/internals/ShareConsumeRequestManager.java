@@ -247,8 +247,10 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             }
         }
 
-        // The set of nodes which will have records buffers for the consumer to consume and acknowledge.
+        // Calculate the set of nodes which have records buffered for the consumer to consume and acknowledge.
         // Even when assignments change, we do not close the share sessions which have buffered records.
+        // This also does bookkeeping of the nodes which had pending acknowledgements in case they have become
+        // eligible for cleaning up.
         Set<Integer> bufferedNodes = shareFetchBuffer.bufferedNodes();
 
         // Iterate over the session handlers to see if there are acknowledgements to be sent for partitions
