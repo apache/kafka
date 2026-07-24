@@ -29,11 +29,11 @@ import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssign
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.SimpleAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
-import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
 
 import org.junit.jupiter.api.Test;
 
@@ -192,9 +192,9 @@ public class GroupCoordinatorConfigTest {
         }
 
         @Override
-        public org.apache.kafka.coordinator.group.streams.assignor.GroupAssignment assign(
-            org.apache.kafka.coordinator.group.streams.assignor.GroupSpec groupSpec,
-            org.apache.kafka.coordinator.group.streams.assignor.TopologyDescriber topologyDescriber
+        public org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment assign(
+            org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec groupSpec,
+            org.apache.kafka.coordinator.group.api.streams.assignor.TopologyDescriber topologyDescriber
         ) {
             return null;
         }
@@ -208,9 +208,9 @@ public class GroupCoordinatorConfigTest {
         }
 
         @Override
-        public org.apache.kafka.coordinator.group.streams.assignor.GroupAssignment assign(
-            org.apache.kafka.coordinator.group.streams.assignor.GroupSpec groupSpec,
-            org.apache.kafka.coordinator.group.streams.assignor.TopologyDescriber topologyDescriber
+        public org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment assign(
+            org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec groupSpec,
+            org.apache.kafka.coordinator.group.api.streams.assignor.TopologyDescriber topologyDescriber
         ) {
             return null;
         }
