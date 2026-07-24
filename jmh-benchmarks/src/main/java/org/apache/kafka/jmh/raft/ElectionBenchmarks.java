@@ -37,10 +37,7 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Benchmarks for the leader-election path. The outer class is intentionally not a JMH {@code @State}:
- * each benchmark declares the starting state it needs as a nested {@code @State} parameter, so
- * different election scenarios (e.g. a future Prospective or Candidate start) can have their own
- * setup without forcing a single shared {@code @Setup} on the whole class.
+ * Benchmarks for the leader-election path.
  */
 @BenchmarkMode(Mode.SingleShotTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)

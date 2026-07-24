@@ -17,6 +17,7 @@
 package org.apache.kafka.jmh.raft;
 
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.raft.RaftClientBenchmarkContext;
 import org.apache.kafka.raft.RaftClientTestContext;
 
@@ -27,19 +28,18 @@ import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.Mode;
 import org.openjdk.jmh.annotations.OutputTimeUnit;
+import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Benchmarks for the leader request-handling path. The outer class is intentionally not a JMH
- * {@code @State}: each benchmark declares the starting state it needs as a nested {@code @State}
- * parameter, so future leader scenarios (e.g. a lagging-follower fetch or a commit) can have their own
- * setup without forcing a single shared {@code @Setup} on the whole class.
+ * Benchmarks for the leader request-handling path.
  */
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
@@ -49,17 +49,74 @@ import java.util.concurrent.TimeUnit;
 public class LeaderBenchmarks {
 
     /**
-     * Starting state: the local node is leader with the high watermark at the log end.
+     * <p>Only read-only, non-mutating RPCs belong here.
+     */
+    public enum LeaderInboundRpc {
+        /**
+         * A no-wait FETCH from a fully caught-up follower.
+         */
+        NO_WAIT_FETCH_AT_HWM(Optional.empty(), Optional.of(ApiKeys.FETCH)) {
+            @Override
+            ApiMessage build(RaftClientBenchmarkContext benchmark) {
+                RaftClientTestContext context = benchmark.testContext();
+                return context.fetchRequest(
+                    context.currentEpoch(),
+                    benchmark.remoteVoters().get(0),
+                    benchmark.logEndOffset(),
+                    context.currentEpoch(),
+                    0);
+            }
+        },
+
+        /**
+         * A FETCH from a follower that is behind.
+         */
+        FETCH_FROM_BEHIND(Optional.empty(), Optional.of(ApiKeys.FETCH)) {
+            @Override
+            ApiMessage build(RaftClientBenchmarkContext benchmark) {
+                RaftClientTestContext context = benchmark.testContext();
+                return context.fetchRequest(
+                    context.currentEpoch(),
+                    benchmark.remoteVoters().get(0),
+                    1L,
+                    context.currentEpoch(),
+                    0);
+            }
+        },
+
+        /** A DESCRIBE_QUORUM admin query: the leader returns the current quorum state (read-only). */
+        DESCRIBE_QUORUM(Optional.empty(), Optional.of(ApiKeys.DESCRIBE_QUORUM)) {
+            @Override
+            ApiMessage build(RaftClientBenchmarkContext benchmark) {
+                return benchmark.testContext().describeQuorumRequest();
+            }
+        };
+
+        final Optional<ApiKeys> expectedRequest;
+        final Optional<ApiKeys> expectedResponse;
+
+        LeaderInboundRpc(Optional<ApiKeys> expectedRequest, Optional<ApiKeys> expectedResponse) {
+            this.expectedRequest = expectedRequest;
+            this.expectedResponse = expectedResponse;
+        }
+
+        abstract ApiMessage build(RaftClientBenchmarkContext benchmark);
+    }
+
+    /**
+     * Starting state: the local node is leader with the high watermark at the log end. The {@code rpc}
+     * param selects which inbound request the benchmark delivers; the request is built once in setup.
      */
     @State(Scope.Thread)
     public static class LeaderWithHwmAtLogEnd {
         static final int VOTER_COUNT = 3;
 
+        @Param
+        public LeaderInboundRpc rpc;
+
         RaftClientBenchmarkContext benchmark;
         RaftClientTestContext context;
-
-        int epoch;
-        long endOffset;
+        ApiMessage request;
 
         @Setup(Level.Trial)
         public void setup() throws Exception {
@@ -69,32 +126,101 @@ public class LeaderBenchmarks {
                 RaftClientBenchmarkContext.DEFAULT_KRAFT_VERSION,
                 RaftClientBenchmarkContext.DEFAULT_RAFT_PROTOCOL);
             context = benchmark.testContext();
+            context.client.prepareAppend(context.currentEpoch(), List.of("a", "b", "c", "d", "e"));
+            context.client.schedulePreparedAppend();
+            context.poll();
             context.advanceLocalLeaderHighWatermarkToLogEndOffset();
-            epoch = context.currentEpoch();
-            endOffset = benchmark.logEndOffset();
+            request = rpc.build(benchmark);
             benchmark.zeroCountersOnSetup();
         }
     }
 
     /**
-     * Leader handles a FETCH from a fully caught-up follower (fetch offset == log end offset) that asks
-     * not to wait ({@code maxWaitMs = 0}), so the leader replies immediately rather than deferring.
-     *
-     * <p>Note: a real caught-up follower long-polls with {@code maxWaitMs > 0}, and such a fetch is
-     * <em>deferred</em> (held until new data arrives or the wait times out) — it would not produce an
-     * immediate response. This benchmark deliberately uses {@code maxWaitMs = 0} to measure the
-     * immediate-reply path.
+     * Leader handles one inbound RPC (selected by the {@code rpc} param) and replies.
      */
     @Benchmark
-    public void handleNoWaitFetchFromCaughtUpFollower(
+    public void handleInboundRpc(
         LeaderWithHwmAtLogEnd state,
         KRaftBenchmarkingCounters counters
     ) throws InterruptedException {
-        state.context.deliverRequest(
-            state.context.fetchRequest(
-                state.epoch, state.benchmark.remoteVoters().get(0), state.endOffset, state.epoch, 0));
+        state.context.deliverRequest(state.request);
         state.context.pollUntilResponse();
 
-        counters.collectDeltasAndDrainRPCs(state.benchmark, Optional.empty(), Optional.of(ApiKeys.FETCH));
+        counters.collectDeltasAndDrainRPCs(state.benchmark, state.rpc.expectedRequest, state.rpc.expectedResponse);
+    }
+
+    /**
+     * Inbound RPCs that transition a leader out of its term, one benchmark row each. Each constant
+     * mutates the node's durable state.
+     */
+    public enum LeaderTransitioningRpc {
+        /**
+         * A BEGIN_QUORUM_EPOCH at a higher epoch: the leader learns of a new leader, steps down to
+         * follower, and acknowledges with a BEGIN_QUORUM_EPOCH response.
+         */
+        HIGHER_EPOCH_BEGIN_QUORUM_EPOCH(Optional.empty(), Optional.of(ApiKeys.BEGIN_QUORUM_EPOCH)) {
+            @Override
+            ApiMessage build(RaftClientBenchmarkContext benchmark) {
+                RaftClientTestContext context = benchmark.testContext();
+                int newLeaderId = benchmark.remoteVoters().get(0).id();
+                return context.beginEpochRequest(context.currentEpoch() + 1, newLeaderId);
+            }
+        };
+
+        final Optional<ApiKeys> expectedRequest;
+        final Optional<ApiKeys> expectedResponse;
+
+        LeaderTransitioningRpc(Optional<ApiKeys> expectedRequest, Optional<ApiKeys> expectedResponse) {
+            this.expectedRequest = expectedRequest;
+            this.expectedResponse = expectedResponse;
+        }
+
+        abstract ApiMessage build(RaftClientBenchmarkContext benchmark);
+    }
+
+    /**
+     * Starting state: a freshly elected leader, rebuilt per invocation because the measured RPC
+     * transitions it out of its term (state-consuming).
+     */
+    @State(Scope.Thread)
+    public static class LeaderBeforeTransition {
+        static final int VOTER_COUNT = 3;
+
+        @Param
+        public LeaderTransitioningRpc rpc;
+
+        RaftClientBenchmarkContext benchmark;
+        RaftClientTestContext context;
+        ApiMessage request;
+
+        @Setup(Level.Invocation)
+        public void setup() throws Exception {
+            benchmark = RaftClientBenchmarkContext.leader(
+                VOTER_COUNT,
+                0,
+                RaftClientBenchmarkContext.DEFAULT_KRAFT_VERSION,
+                RaftClientBenchmarkContext.DEFAULT_RAFT_PROTOCOL);
+            context = benchmark.testContext();
+            request = rpc.build(benchmark);
+            benchmark.zeroCountersOnSetup();
+        }
+    }
+
+    /**
+     * Leader handles an inbound RPC that transitions it out of its term.
+     */
+    @Benchmark
+    @BenchmarkMode(Mode.SingleShotTime)
+    @Warmup(iterations = RaftClientBenchmarkContext.SINGLE_SHOT_WARMUP_ITERATIONS)
+    @Measurement(iterations = RaftClientBenchmarkContext.SINGLE_SHOT_MEASUREMENT_ITERATIONS)
+    @Fork(RaftClientBenchmarkContext.SINGLE_SHOT_FORKS)
+    public void handleTransitioningRpc(
+        LeaderBeforeTransition state,
+        KRaftBenchmarkingCounters counters
+    ) throws InterruptedException {
+        state.context.deliverRequest(state.request);
+        state.context.pollUntilResponse();
+
+        counters.collectDeltasAndDrainRPCs(state.benchmark, state.rpc.expectedRequest, state.rpc.expectedResponse);
     }
 }

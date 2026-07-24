@@ -1653,7 +1653,7 @@ public final class RaftClientTestContext {
         );
     }
 
-    BeginQuorumEpochRequestData beginEpochRequest(int epoch, int leaderId) {
+    public BeginQuorumEpochRequestData beginEpochRequest(int epoch, int leaderId) {
         return beginEpochRequest(clusterId, epoch, leaderId);
     }
 
@@ -2076,7 +2076,7 @@ public final class RaftClientTestContext {
         );
     }
 
-    DescribeQuorumRequestData describeQuorumRequest() {
+    public DescribeQuorumRequestData describeQuorumRequest() {
         return RaftUtil.singletonDescribeQuorumRequest(metadataPartition);
     }
 
