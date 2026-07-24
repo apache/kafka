@@ -237,8 +237,8 @@ public class GroupCoordinatorConfigTest {
         assertInstanceOf(CustomTaskAssignor.class, assignors.get(0));
         assertNotNull(((CustomTaskAssignor) assignors.get(0)).configs);
 
-        // Test with classes.
-        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, List.of(StickyTaskAssignor.class, CustomTaskAssignor.class));
+        // Test list of strings (builtin short name and custom class name).
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, List.of("sticky", CustomTaskAssignor.class.getName()));
         config = createConfig(configs);
         assignors = config.streamsGroupAssignors();
         assertEquals(2, assignors.size());
