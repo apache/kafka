@@ -14,30 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.streams.assignor;
 
 /**
- * Server side task assignor used by streams groups.
+ * Provides the public API for broker-side custom task assignors used by Kafka Streams groups.
  */
-public interface TaskAssignor {
-
-    /**
-     * Unique name for this assignor.
-     */
-    String name();
-
-    /**
-     * Assigns tasks to group members based on the given assignment specification and topic metadata.
-     *
-     * @param groupSpec         The assignment spec which includes member metadata.
-     * @param topologyDescriber The task metadata describer.
-     * @return The new assignment for the group.
-     *
-     * @throws TaskAssignorException For empty groups
-     */
-    GroupAssignment assign(
-        GroupSpec groupSpec,
-        TopologyDescriber topologyDescriber
-    ) throws TaskAssignorException;
-
-}
+package org.apache.kafka.coordinator.group.api.streams.assignor;

@@ -97,6 +97,9 @@ import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAss
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
@@ -148,8 +151,6 @@ import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.TaskRole;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
-import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
-import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorException;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
@@ -11113,8 +11114,8 @@ public class GroupMetadataManagerTest {
         // empty lists rather than borrowing another member's values).
         StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
         group.updateTaskOffsets(memberId1, new MemberTaskOffsets(
-            Map.of(new org.apache.kafka.coordinator.group.streams.assignor.TaskId(subtopology1, 0), 100L),
-            Map.of(new org.apache.kafka.coordinator.group.streams.assignor.TaskId(subtopology1, 0), 500L)
+            Map.of(subtopology1, Map.of(0, 100L)),
+            Map.of(subtopology1, Map.of(0, 500L))
         ));
 
         List<StreamsGroupDescribeResponseData.DescribedGroup> described = context.sendStreamsGroupDescribe(List.of(groupId));
@@ -19056,8 +19057,8 @@ public class GroupMetadataManagerTest {
         StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
         assertEquals(
             new org.apache.kafka.coordinator.group.streams.MemberTaskOffsets(
-                Map.of(new org.apache.kafka.coordinator.group.streams.assignor.TaskId(subtopology1, 0), 10L),
-                Map.of(new org.apache.kafka.coordinator.group.streams.assignor.TaskId(subtopology1, 0), 20L)
+                Map.of(subtopology1, Map.of(0, 10L)),
+                Map.of(subtopology1, Map.of(0, 20L))
             ),
             group.taskOffsets(memberId)
         );
@@ -19082,8 +19083,8 @@ public class GroupMetadataManagerTest {
         assertEquals(List.of(), result.records());
         assertEquals(
             new org.apache.kafka.coordinator.group.streams.MemberTaskOffsets(
-                Map.of(new org.apache.kafka.coordinator.group.streams.assignor.TaskId(subtopology1, 0), 12L),
-                Map.of(new org.apache.kafka.coordinator.group.streams.assignor.TaskId(subtopology1, 0), 20L)
+                Map.of(subtopology1, Map.of(0, 12L)),
+                Map.of(subtopology1, Map.of(0, 20L))
             ),
             group.taskOffsets(memberId)
         );
@@ -19674,8 +19675,8 @@ public class GroupMetadataManagerTest {
             )
             .build();
 
-        assignor.prepareGroupAssignment(new org.apache.kafka.coordinator.group.streams.assignor.GroupAssignment(Map.of(
-            memberId, org.apache.kafka.coordinator.group.streams.assignor.MemberAssignment.empty()
+        assignor.prepareGroupAssignment(new org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment(Map.of(
+            memberId, new MemberAssignment(Map.of(), Map.of())
         )));
 
         // Member joins the streams group.

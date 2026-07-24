@@ -14,23 +14,45 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.streams.assignor;
+package org.apache.kafka.coordinator.group.api.streams.assignor;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.InterfaceStability;
+
+import java.util.Collection;
 import java.util.Map;
 
 /**
  * The group metadata specifications required to compute the target assignment.
  */
+@InterfaceAudience.Public
+@InterfaceStability.Evolving
 public interface GroupSpec {
 
     /**
-     * @return Member metadata keyed by member Id.
+     * @return The member Ids of all members in the group.
      */
-    Map<String, AssignmentMemberSpec> members();
+    Collection<String> memberIds();
+
+    /**
+     * Gets the static metadata for a given member.
+     *
+     * @param memberId The member Id.
+     * @return The static member metadata.
+     */
+    MemberAssignmentMetadata memberMetadata(String memberId);
+
+    /**
+     * Gets the current assignment state for a given member.
+     *
+     * @param memberId The member Id.
+     * @return The current member assignment state.
+     */
+    MemberAssignmentState memberAssignmentState(String memberId);
 
     /**
      * @return Any configurations passed to the assignor.
      */
-    Map<String, String> assignmentConfigs();
+    Map<String, String> configs();
 
 }
