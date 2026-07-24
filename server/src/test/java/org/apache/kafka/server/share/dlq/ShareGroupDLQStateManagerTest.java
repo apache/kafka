@@ -1952,11 +1952,6 @@ class ShareGroupDLQStateManagerTest {
         // record (400-byte value plus DLQ headers) also exceeds maxMessageBytes on its own, which -
         // via topicProduceData()'s single-record floor - forces exactly one offset per produce
         // round, giving 3 rounds for param()'s 3-offset range.
-        //
-        // Contrast with the pre-per-round design: a single decompression budget shared across the
-        // whole 3-offset range would let only offset 0 fit, permanently starving offsets 1 and 2 -
-        // regardless of how many produce rounds followed, since the whole range was only ever
-        // fetched once. With a fresh budget reset every round, all three offsets get real content.
         int maxMessageBytes = 600;
         ShareGroupDLQRecordParameter param = param();
         TopicIdPartition tp = param.topicIdPartition();
