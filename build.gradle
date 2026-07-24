@@ -145,7 +145,7 @@ ext {
 
   runtimeTestLibs = [
     libs.slf4jLog4j2,
-    libs.junitPlatformLanucher,
+    libs.junitPlatformLauncher,
     libs.jacksonDataformatYaml,
     project(":test-common:test-common-util")
   ]
@@ -1040,9 +1040,6 @@ project(':server') {
   apply plugin: 'java-test-fixtures'
 
   dependencies {
-    compileOnly libs.bndlib
-    compileOnly libs.spotbugs
-
     implementation libs.commonsValidator
 
     implementation project(':clients')
@@ -1122,7 +1119,6 @@ project(':server') {
 
 project(':core') {
   apply plugin: 'scala'
-  apply plugin: 'java-test-fixtures'
 
   // scaladoc generation is configured at the sub-module level with an artifacts
   // block (cf. see streams-scala). If scaladoc generation is invoked explicitly
@@ -1178,7 +1174,6 @@ project(':core') {
 
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
-    implementation libs.jacksonDataformatCsv
     implementation libs.jacksonJDK8Datatypes
     implementation libs.jacksonDataformatYaml
     implementation libs.joptSimple
@@ -1222,22 +1217,8 @@ project(':core') {
     testImplementation libs.apachedsMavibotPartition
     testImplementation libs.apachedsJdbmPartition
     testImplementation libs.junitJupiter
-    testImplementation libs.caffeine
     testImplementation testLog4j2Libs
     testImplementation libs.mockOAuth2Server
-
-    testFixturesImplementation testFixtures(project(':server-common'))
-    testFixturesImplementation project(':server')
-    testFixturesImplementation testFixtures(project(':metadata'))
-    testFixturesImplementation project(':storage')
-    testFixturesImplementation project(':group-coordinator')
-    testFixturesImplementation project(':transaction-coordinator')
-    testFixturesImplementation project(':raft')
-    testFixturesImplementation testFixtures(project(':clients'))
-    testFixturesImplementation libs.junitJupiter
-    testFixturesImplementation libs.scalaLogging
-    testFixturesImplementation libs.metrics
-    testFixturesImplementation libs.mockitoCore
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -1461,14 +1442,6 @@ project(':core') {
         srcDirs = ["src/test/java", "src/test/scala"]
       }
     }
-    testFixtures {
-      java {
-        srcDirs = []
-      }
-      scala {
-        srcDirs = ["src/testFixtures/java", "src/testFixtures/scala"]
-      }
-    }
   }
 }
 
@@ -1492,7 +1465,6 @@ project(':metadata') {
       exclude group: 'commons-io', module: 'commons-io'
     }
     implementation libs.jacksonDatabind
-    implementation libs.jacksonJDK8Datatypes
     implementation libs.metrics
     implementation libs.slf4jApi
 
@@ -1621,9 +1593,7 @@ project(':group-coordinator') {
     implementation project(':storage')
     implementation project(':coordinator-common')
     implementation libs.jacksonDatabind
-    implementation libs.jacksonJDK8Datatypes
     implementation libs.metrics
-    implementation libs.hdrHistogram
     implementation libs.re2j
     implementation libs.slf4jApi
     implementation libs.hash4j
@@ -1636,7 +1606,6 @@ project(':group-coordinator') {
     testImplementation testFixtures(project(':clients'))
     testImplementation testFixtures(project(':server-common'))
     testImplementation testFixtures(project(':coordinator-common'))
-    testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
@@ -1722,7 +1691,7 @@ project(':test-common:test-common-util') {
   }
 
   dependencies {
-    implementation libs.junitPlatformLanucher
+    implementation libs.junitPlatformLauncher
     implementation libs.junitJupiterApi
     implementation libs.junitJupiter
     implementation libs.slf4jApi
@@ -1756,7 +1725,7 @@ project(':test-common:test-common-runtime') {
     implementation project(':raft')
     implementation project(':storage')
 
-    implementation libs.junitPlatformLanucher
+    implementation libs.junitPlatformLauncher
     implementation libs.junitJupiter
     implementation libs.jacksonDataformatYaml
     implementation libs.slf4jApi
@@ -1984,7 +1953,6 @@ project(':generator') {
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
-    implementation libs.jacksonJakartarsJsonProvider
     implementation libs.jgit
     implementation libs.jgitSshApache
     implementation libs.jgitGpgBc
@@ -2026,7 +1994,6 @@ project(':clients') {
     shadowed libs.slf4jApi
 
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
-    compileOnly libs.jacksonJDK8Datatypes
     compileOnly libs.jose4j          // for SASL/OAUTHBEARER JWT validation; only used by broker
 
     testFixturesImplementation project(':test-common:test-common-util')
@@ -2040,16 +2007,12 @@ project(':clients') {
     testImplementation project(':test-common:test-common-util')
     testImplementation libs.jacksonJakartarsJsonProvider
     testImplementation libs.jose4j
-    testImplementation libs.spotbugs
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation libs.testcontainersKeycloak
     testImplementation libs.testcontainersJunitJupiter
 
-    testCompileOnly libs.bndlib
-
     testRuntimeOnly libs.jacksonDatabind
-    testRuntimeOnly libs.jacksonJDK8Datatypes
     testRuntimeOnly runtimeTestLibs
 
     generator project(':generator')
@@ -2212,18 +2175,15 @@ project(':clients:clients-integration-tests') {
     testImplementation project(':server')
     testImplementation project(':storage')
     testImplementation testFixtures(project(':storage'))
-    testImplementation testFixtures(project(':core'))
     testImplementation testFixtures(project(':clients'))
     implementation project(':server-common')
     testImplementation testFixtures(project(':server-common'))
-    testImplementation project(':metadata')
     implementation project(':group-coordinator')
     implementation project(':group-coordinator:group-coordinator-api')
     implementation project(':transaction-coordinator')
     testImplementation project(':test-common:test-common-util')
 
     testImplementation libs.junitJupiter
-    testImplementation libs.junitPlatformSuiteEngine
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -2263,7 +2223,6 @@ project(':raft') {
     testImplementation testFixtures(project(':server-common'))
     testImplementation project(':clients')
     testImplementation testFixtures(project(':clients'))
-    testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
@@ -2367,7 +2326,6 @@ project(':server-common') {
 
     testImplementation project(':clients')
     testImplementation testFixtures(project(':clients'))
-    testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
@@ -2509,7 +2467,6 @@ project(':storage') {
     testImplementation project(':clients')
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':core')
-    testImplementation testFixtures(project(':core'))
     testImplementation testFixtures(project(':storage:storage-api'))
     testImplementation project(':metadata')
     testImplementation project(':test-common:test-common-internal-api')
@@ -2520,10 +2477,8 @@ project(':storage') {
     testImplementation testFixtures(project(':server-common'))
     testImplementation testFixtures(project(':metadata'))
     testImplementation project(':transaction-coordinator')
-    testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    testImplementation libs.bcpkix
     testImplementation testLog4j2Libs
 
     testRuntimeOnly runtimeTestLibs
@@ -2690,22 +2645,17 @@ project(':tools') {
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonDataformatCsv
-    implementation libs.jacksonJDK8Datatypes
     implementation libs.joptSimple
     implementation libs.slf4jApi
     implementation libs.re2j
 
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
-    implementation libs.jacksonJakartarsJsonProvider
-
-    compileOnly libs.spotbugs
 
     testImplementation project(':clients')
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':server')
     testImplementation project(':core')
     testImplementation testFixtures(project(':server'))
-    testImplementation testFixtures(project(':core'))
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':test-common:test-common-util')
@@ -2722,7 +2672,6 @@ project(':tools') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
-    testImplementation libs.bcpkix // required by the clients test module, but we have to specify it explicitly as gradle does not include the transitive test dependency automatically
     testImplementation(libs.jfreechart) {
       exclude group: 'junit', module: 'junit'
     }
@@ -2788,7 +2737,6 @@ project(':trogdor') {
     testImplementation testLog4j2Libs
 
     testRuntimeOnly runtimeTestLibs
-    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   javadoc {
@@ -2816,7 +2764,6 @@ project(':shell') {
   dependencies {
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
-    implementation libs.jacksonJDK8Datatypes
     implementation libs.jline
     implementation libs.slf4jApi
     implementation project(':server-common')
@@ -2826,14 +2773,10 @@ project(':shell') {
     implementation project(':raft')
     implementation project(':server')
 
-    implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
-    implementation libs.jacksonJakartarsJsonProvider
-
     testImplementation project(':clients')
     testImplementation project(':core')
     testImplementation project(':server-common')
     testImplementation testFixtures(project(':server-common'))
-    testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
     testImplementation testLog4j2Libs
 
@@ -2879,12 +2822,9 @@ project(':streams') {
 
     // testCompileOnly prevents streams from exporting a dependency on test-utils, which would cause a dependency cycle
     testCompileOnly project(':streams:test-utils')
-    testCompileOnly libs.bndlib
 
     testImplementation testFixtures(project(':clients'))
-    testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
-    testImplementation libs.bcpkix
     testImplementation libs.hamcrest
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
@@ -3030,7 +2970,6 @@ project(':streams:streams-scala') {
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':streams:test-utils')
 
-    testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation testLog4j2Libs
@@ -3087,7 +3026,6 @@ project(':streams:integration-tests') {
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':tools')
     testImplementation project(':transaction-coordinator')
-    testImplementation libs.bcpkix
     testImplementation libs.hamcrest
     testImplementation libs.junitJupiter
     testImplementation libs.junitPlatformSuiteEngine // supports suite test
@@ -3111,7 +3049,6 @@ project(':streams:test-utils') {
     implementation libs.slf4jApi
 
     testImplementation testFixtures(project(':clients'))
-    testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.hamcrest
@@ -3623,7 +3560,6 @@ project(':jmh-benchmarks') {
 
     implementation libs.jmhCore
     annotationProcessor libs.jmhGeneratorAnnProcess
-    implementation libs.jmhCoreBenchmarks
     implementation libs.jacksonDatabind
     implementation libs.metrics
     implementation libs.mockitoCore
@@ -3742,7 +3678,6 @@ project(':connect:json') {
     api project(':connect:api')
 
     api libs.jacksonDatabind
-    api libs.jacksonJDK8Datatypes
     api libs.jacksonBlackbird
 
     implementation libs.slf4jApi
@@ -3817,8 +3752,6 @@ project(':connect:runtime') {
     implementation libs.mavenArtifact
     implementation libs.swaggerAnnotations
 
-    compileOnly libs.bndlib
-    compileOnly libs.spotbugs
 
     // We use this library to generate OpenAPI docs for the REST API, but we don't want or need it at compile
     // or run time. So, we add it to a separate configuration, which we use later on during docs generation
@@ -3854,14 +3787,11 @@ project(':connect:runtime') {
     testImplementation project(':connect:test-plugins')
     testImplementation testFixtures(project(':server-common'))
 
-    testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter
     testImplementation libs.httpclient
     testImplementation testLog4j2Libs
-
-    testCompileOnly libs.bndlib
 
     testRuntimeOnly libs.bcpkix
     testRuntimeOnly runtimeTestLibs
@@ -4006,7 +3936,6 @@ project(':connect:basic-auth-extension') {
     implementation libs.jakartaRsApi
     implementation libs.jakartaAnnotationApi
 
-    testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
     testImplementation libs.junitJupiter
     testImplementation testLog4j2Libs
@@ -4047,8 +3976,6 @@ project(':connect:mirror') {
 
     implementation libs.argparse4j
     implementation libs.slf4jApi
-    implementation libs.jacksonAnnotations
-    implementation libs.jacksonJakartarsJsonProvider
     implementation libs.jerseyContainerServlet
     implementation libs.jerseyHk2
     implementation libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
@@ -4069,7 +3996,6 @@ project(':connect:mirror') {
 
     testImplementation testLog4j2Libs
     testImplementation libs.junitJupiter
-    testImplementation libs.bndlib
     testImplementation libs.mockitoCore
     testImplementation testFixtures(project(':clients'))
     testImplementation testFixtures(project(':connect:runtime'))
