@@ -403,10 +403,13 @@ public class RequestResponseTest {
             for (short version : apiKey.allVersions()) {
                 boolean responseHasThrottleTime =
                     apiKey.messageType.responseSchemas()[version].get("throttle_time_ms") != null;
+                short firstPostKip219Version = postKip219Version.getOrDefault(apiKey, apiKey.oldestVersion());
                 boolean shouldClientThrottle = responseHasThrottleTime &&
-                    version >= postKip219Version.getOrDefault(apiKey, apiKey.oldestVersion());
+                    version >= firstPostKip219Version;
                 assertEquals(shouldClientThrottle, getResponse(apiKey, version).shouldClientThrottle(version),
-                    apiKey + " version " + version);
+                    "Unexpected shouldClientThrottle result for " + apiKey + " version " + version +
+                        ": responseHasThrottleTime=" + responseHasThrottleTime +
+                        ", firstPostKip219Version=" + firstPostKip219Version);
             }
         }
     }
