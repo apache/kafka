@@ -149,10 +149,6 @@ public class ResetIntegrationTest {
         }
     }
 
-    // ---------------------------------------------------------------------------------------------
-    // Same scenarios as above, but exercising the command line SSL setup for the reset tool.
-    // ---------------------------------------------------------------------------------------------
-
     @ClusterTest(brokerSecurityProtocol = SecurityProtocol.SSL, controllerSecurityProtocol = SecurityProtocol.SSL)
     public void testResetWhenInternalTopicsAreSpecifiedWithSsl(ClusterInstance cluster) throws Exception {
         final Map<String, Object> sslConfig = cluster.setClientSslConfig(new HashMap<>());
@@ -192,10 +188,6 @@ public class ResetIntegrationTest {
             runReprocessingFromScratchWithIntermediateUserTopic(cluster, admin, sslConfig, true, appId);
         }
     }
-
-    // ---------------------------------------------------------------------------------------------
-    // Argument validation against a running cluster
-    // ---------------------------------------------------------------------------------------------
 
     @ClusterTest
     public void shouldNotAllowToResetWhileStreamsIsRunning(ClusterInstance cluster) throws Exception {
@@ -592,10 +584,6 @@ public class ResetIntegrationTest {
             cleanGlobal(cluster, null, false, null, null, appId);
         }
     }
-
-    // ---------------------------------------------------------------------------------------------
-    // Helpers
-    // ---------------------------------------------------------------------------------------------
 
     private String generateAppId() {
         return APP_ID_PREFIX + "-" + TestUtils.randomString(10);
