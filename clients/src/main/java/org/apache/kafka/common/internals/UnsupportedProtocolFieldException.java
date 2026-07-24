@@ -14,9 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.errors;
+package org.apache.kafka.common.internals;
 
-import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 
 /**
  * Indicates that a request contains a field or field value that is not supported by the API version
@@ -24,7 +24,6 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
  * specific subtype of {@link UnsupportedVersionException} that lets callers distinguish an unsupported
  * field from a wholly unsupported API version.
  */
-@InterfaceAudience.Public
 public class UnsupportedProtocolFieldException extends UnsupportedVersionException {
     private static final long serialVersionUID = 1L;
 

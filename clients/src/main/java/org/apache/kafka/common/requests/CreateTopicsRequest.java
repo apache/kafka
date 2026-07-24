@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.errors.UnsupportedProtocolFieldException;
+import org.apache.kafka.common.internals.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
