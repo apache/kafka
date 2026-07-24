@@ -244,9 +244,9 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                         throw new IllegalStateException("needsNewBatch path reached without an allocated buffer stream");
                     // Reuse the new-batch size estimate as the write-limit basis.
                     // TODO: review when compression is supported.
-                    final NewBatchBuffer pending = newBatch;
+                    final NewBatchBuffer pendingNewBatch = newBatch;
                     appendResult = appendNewBatch(topic, effectivePartition, dq, timestamp, key, value, headers, callbacks,
-                            () -> chunkedRecordsBuilder(pending.stream, pending.size), nowMs);
+                            () -> chunkedRecordsBuilder(pendingNewBatch.stream, pendingNewBatch.firstAppendSize), nowMs);
                     if (appendResult.needsNewBatch())
                         throw new IllegalStateException("appendNewBatch must not return a needsNewBatch result");
                     if (appendResult.needsBufferExtension()) {
@@ -340,11 +340,11 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
      */
     private static final class NewBatchBuffer {
         final ChunkedByteBufferOutputStream stream;
-        final int size;
+        final int firstAppendSize;
 
-        NewBatchBuffer(ChunkedByteBufferOutputStream stream, int size) {
+        NewBatchBuffer(ChunkedByteBufferOutputStream stream, int firstAppendSize) {
             this.stream = stream;
-            this.size = size;
+            this.firstAppendSize = firstAppendSize;
         }
     }
 }

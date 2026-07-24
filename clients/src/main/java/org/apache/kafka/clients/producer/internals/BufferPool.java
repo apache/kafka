@@ -50,11 +50,11 @@ public class BufferPool {
     static final String WAIT_TIME_SENSOR_NAME = "bufferpool-wait-time";
 
     /**
-     * Which allocation method a pool serves: {@link #SINGLE} accepts only {@link #allocate} (the full
-     * strategy), {@link #CHUNKED} only {@link #allocateChunks} (the incremental strategy). Fixed at
+     * Which allocation method a pool serves: {@link #FULL} accepts only {@link #allocate} (the full
+     * strategy), {@link #INCREMENTAL} only {@link #allocateChunks} (the incremental strategy). Fixed at
      * construction so the two are never mixed on the same pool.
      */
-    public enum AllocationMode { SINGLE, CHUNKED }
+    public enum AllocationMode { FULL, INCREMENTAL }
 
     private final long totalMemory;
     private final int poolableSize;
@@ -82,7 +82,7 @@ public class BufferPool {
      * @param metricGrpName logical group name for metrics
      */
     public BufferPool(long memory, int poolableSize, Metrics metrics, Time time, String metricGrpName) {
-        this(memory, poolableSize, metrics, time, metricGrpName, AllocationMode.SINGLE);
+        this(memory, poolableSize, metrics, time, metricGrpName, AllocationMode.FULL);
     }
 
     /**
@@ -134,9 +134,9 @@ public class BufferPool {
      *         forever)
      */
     public ByteBuffer allocate(int size, long maxTimeToBlockMs) throws InterruptedException {
-        if (allocationMode != AllocationMode.SINGLE)
-            throw new IllegalStateException("allocate() is not supported on a " + allocationMode
-                + " buffer pool; use allocateChunks()");
+        if (allocationMode != AllocationMode.FULL)
+            throw new IllegalStateException("allocate() is not supported in " + allocationMode
+                + " allocation mode; use allocateChunks()");
         if (size > this.totalMemory)
             throw new IllegalArgumentException("Attempt to allocate " + size
                                                + " bytes, but there is a hard limit of "
@@ -275,9 +275,9 @@ public class BufferPool {
      * @throws KafkaException           if the pool is closed during the wait
      */
     public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
-        if (allocationMode != AllocationMode.CHUNKED)
-            throw new IllegalStateException("allocateChunks() is not supported on a " + allocationMode
-                + " buffer pool; use allocate()");
+        if (allocationMode != AllocationMode.INCREMENTAL)
+            throw new IllegalStateException("allocateChunks() is not supported in " + allocationMode
+                + " allocation mode; use allocate()");
         if (totalSize <= 0)
             throw new IllegalArgumentException("totalSize must be positive: " + totalSize);
 

@@ -487,7 +487,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         PRODUCER_METRIC_GROUP_NAME,
                         time,
                         transactionManager,
-                        new BufferPool(this.totalMemorySize, ChunkedRecordAccumulator.CHUNK_SIZE, metrics, time, PRODUCER_METRIC_GROUP_NAME, BufferPool.AllocationMode.CHUNKED));
+                        new BufferPool(this.totalMemorySize, ChunkedRecordAccumulator.CHUNK_SIZE, metrics, time, PRODUCER_METRIC_GROUP_NAME, BufferPool.AllocationMode.INCREMENTAL));
             } else {
                 this.accumulator = new RecordAccumulator(logContext,
                         batchSize,
@@ -501,7 +501,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         PRODUCER_METRIC_GROUP_NAME,
                         time,
                         transactionManager,
-                        new BufferPool(this.totalMemorySize, batchSize, metrics, time, PRODUCER_METRIC_GROUP_NAME, BufferPool.AllocationMode.SINGLE));
+                        new BufferPool(this.totalMemorySize, batchSize, metrics, time, PRODUCER_METRIC_GROUP_NAME, BufferPool.AllocationMode.FULL));
             }
 
             this.errors = this.metrics.sensor("errors");

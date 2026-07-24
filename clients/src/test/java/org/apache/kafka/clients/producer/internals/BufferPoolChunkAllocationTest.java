@@ -55,7 +55,7 @@ public class BufferPoolChunkAllocationTest {
 
     private BufferPool pool(long totalMemory, int chunkSize) {
         String metricGroup = "producer-metrics";
-        return new BufferPool(totalMemory, chunkSize, metrics, time, metricGroup, BufferPool.AllocationMode.CHUNKED);
+        return new BufferPool(totalMemory, chunkSize, metrics, time, metricGroup, BufferPool.AllocationMode.INCREMENTAL);
     }
 
     /** Single-chunk request returns a list of one buffer at the chunk size. */
@@ -342,7 +342,7 @@ public class BufferPoolChunkAllocationTest {
             } catch (Throwable th) {
                 err.set(th);
             }
-        }, "slow-success");
+        }, "chunked-waiter");
         t.start();
 
         TestUtils.waitForCondition(() -> p.queued() == 1, "waiter should be parked on the pool's queue");

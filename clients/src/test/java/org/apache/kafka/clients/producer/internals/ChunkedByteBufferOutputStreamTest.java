@@ -44,7 +44,7 @@ public class ChunkedByteBufferOutputStreamTest {
 
     private BufferPool pool(long total, int chunkSize) {
         String metricGroup = "test";
-        return new BufferPool(total, chunkSize, metrics, time, metricGroup, BufferPool.AllocationMode.CHUNKED);
+        return new BufferPool(total, chunkSize, metrics, time, metricGroup, BufferPool.AllocationMode.INCREMENTAL);
     }
 
     private List<ByteBuffer> chunks(BufferPool pool, int chunkSize, int count) throws InterruptedException {
