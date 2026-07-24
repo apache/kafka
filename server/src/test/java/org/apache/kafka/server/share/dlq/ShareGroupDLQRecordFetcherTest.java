@@ -37,6 +37,9 @@ import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogReadResult;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -44,11 +47,14 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -89,7 +95,14 @@ class ShareGroupDLQRecordFetcherTest {
     }
 
     private Map<Long, Record> fetch(ShareGroupDLQRecordParameter param) throws Exception {
-        return fetcher(param).fetch().get(10, TimeUnit.SECONDS);
+        return fetcher(param).fetch().get(10, TimeUnit.SECONDS).records();
+    }
+
+    // The exact on-wire size of a single uncompressed record, computed via the real API rather than
+    // hardcoded, so budget-boundary tests can align a budget precisely with a record's own size.
+    private static int recordSizeInBytes(SimpleRecord simpleRecord) {
+        MemoryRecords batch = MemoryRecords.withRecords(Compression.NONE, simpleRecord);
+        return batch.batches().iterator().next().iterator().next().sizeInBytes();
     }
 
     // ---- helpers ----
@@ -255,12 +268,12 @@ class ShareGroupDLQRecordFetcherTest {
         CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> pending = new CompletableFuture<>();
         when(logReader.readAsync(any(), anySet(), any(), any(), anyBoolean())).thenReturn(pending);
 
-        CompletableFuture<Map<Long, Record>> resultFuture = fetcher(param(0L, 2L)).fetch();
+        CompletableFuture<ShareGroupDLQRecordFetcher.FetchResult> resultFuture = fetcher(param(0L, 2L)).fetch();
         assertFalse(resultFuture.isDone(), "Fetch should be waiting on the pending read");
 
         pending.complete(resultMap(success(record("k0", "v0"), record("k1", "v1"), record("k2", "v2"))));
 
-        Map<Long, Record> result = resultFuture.get(10, TimeUnit.SECONDS);
+        Map<Long, Record> result = resultFuture.get(10, TimeUnit.SECONDS).records();
         assertEquals(3, result.size());
         assertRecord(result, 0L, "k0", "v0");
         assertRecord(result, 1L, "k1", "v1");
@@ -272,13 +285,13 @@ class ShareGroupDLQRecordFetcherTest {
         CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> pending = new CompletableFuture<>();
         when(logReader.readAsync(any(), anySet(), any(), any(), anyBoolean())).thenReturn(pending);
 
-        CompletableFuture<Map<Long, Record>> resultFuture = fetcher(param(0L, 2L)).fetch();
+        CompletableFuture<ShareGroupDLQRecordFetcher.FetchResult> resultFuture = fetcher(param(0L, 2L)).fetch();
         assertFalse(resultFuture.isDone());
 
         // Completing with no records makes no progress, so the resumed loop stops and completes empty.
         pending.complete(resultMap(success()));
 
-        assertTrue(resultFuture.get(10, TimeUnit.SECONDS).isEmpty());
+        assertTrue(resultFuture.get(10, TimeUnit.SECONDS).records().isEmpty());
     }
 
     @Test
@@ -286,14 +299,14 @@ class ShareGroupDLQRecordFetcherTest {
         CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> pending = new CompletableFuture<>();
         when(logReader.readAsync(any(), anySet(), any(), any(), anyBoolean())).thenReturn(pending);
 
-        CompletableFuture<Map<Long, Record>> resultFuture = fetcher(param(0L, 2L)).fetch();
+        CompletableFuture<ShareGroupDLQRecordFetcher.FetchResult> resultFuture = fetcher(param(0L, 2L)).fetch();
 
         // An unexpected error while processing the resumed records must not escape the callback.
         Records throwing = mock(Records.class);
         when(throwing.batches()).thenThrow(new RuntimeException("boom"));
         pending.complete(resultMap(logReadResult(new FetchDataInfo(null, throwing), Errors.NONE)));
 
-        assertTrue(resultFuture.get(10, TimeUnit.SECONDS).isEmpty());
+        assertTrue(resultFuture.get(10, TimeUnit.SECONDS).records().isEmpty());
     }
 
     @Test
@@ -320,38 +333,116 @@ class ShareGroupDLQRecordFetcherTest {
         assertRecord(result, 2L, "k2", "v2");
     }
 
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("compressedBatchCases")
+    public void testCompressedBatchPossibilitiesReturnCorrectMapAndOffset(
+            String description, List<SimpleRecord> batchRecords, int maxDecompressedBytes,
+            Set<Long> expectedPresentOffsets, long expectedLastResolvedOffset) throws Exception {
+        MemoryRecords batch = MemoryRecords.withRecords(0L, Compression.gzip().build(),
+            batchRecords.toArray(new SimpleRecord[0]));
+        whenReadAsync(done(logReadResult(new FetchDataInfo(null, batch), Errors.NONE)));
+
+        long lastOffset = batchRecords.size() - 1;
+        ShareGroupDLQRecordFetcher.FetchResult result =
+            fetcher(param(0L, lastOffset), maxDecompressedBytes).fetch().get(10, TimeUnit.SECONDS);
+
+        assertEquals(expectedPresentOffsets.size(), result.records().size(), description);
+        for (long offset = 0; offset <= lastOffset; offset++) {
+            Record record = result.records().get(offset);
+            if (expectedPresentOffsets.contains(offset)) {
+                assertTrue(record != null, description + ": expected offset " + offset + " to be present");
+                SimpleRecord expected = batchRecords.get((int) offset);
+                assertArrayEquals(toArray(expected.key()), toArray(record.key()), description);
+                assertArrayEquals(toArray(expected.value()), toArray(record.value()), description);
+            } else {
+                assertNull(record, description + ": expected offset " + offset + " to be absent");
+            }
+        }
+        assertEquals(expectedLastResolvedOffset, result.lastResolvedOffset(), description);
+    }
+
+    // Covers every shape of compressed-batch decompression outcome: a single record that fits, a single
+    // record that can never fit on its own, several small records that individually fit but collectively
+    // exceed the budget, and a mix of one oversized record alongside several individually-fitting ones -
+    // in the last two cases, decompressBounded() rejects the whole batch (see its class-level doc), so
+    // even the individually-fitting records within it are excluded, not just the oversized one.
+    private static Stream<Arguments> compressedBatchCases() {
+        SimpleRecord small0 = record("k0", "v".repeat(20));
+        SimpleRecord small1 = record("k1", "v".repeat(20));
+        SimpleRecord small2 = record("k2", "v".repeat(20));
+        SimpleRecord small3 = record("k3", "v".repeat(20));
+        SimpleRecord small4 = record("k4", "v".repeat(20));
+        SimpleRecord big0 = record("k0", "v".repeat(2000));
+        int smallSize = recordSizeInBytes(small0);
+
+        return Stream.of(
+            Arguments.of("single small record fits within budget",
+                List.of(small0), smallSize, Set.of(0L), 0L),
+            Arguments.of("single large record can never fit and is permanently excluded",
+                List.of(big0), smallSize, Set.of(), 0L),
+            Arguments.of("multiple small records all fit within budget",
+                List.of(small0, small1, small2), smallSize * 3, Set.of(0L, 1L, 2L), 2L),
+            Arguments.of("many small records whose combined size exceeds budget - whole batch excluded",
+                List.of(small0, small1, small2, small3, small4), smallSize * 3, Set.of(), 4L),
+            Arguments.of("combination of one large and several small records - whole batch excluded",
+                List.of(big0, small1, small2, small3, small4), smallSize * 3, Set.of(), 4L)
+        );
+    }
+
+    @Test
+    public void testSingleReadWithUncompressedMagicV2AndLegacyCompressedBatchesAllCollected() throws Exception {
+        // One read returning three consecutive batches, each using a different collection path in
+        // collectFromBatch()'s dispatch: uncompressed (collectUncompressed), magic v2 compressed
+        // (collectFromCompressedBatch, the bounded-buffer path), and legacy magic v0/v1 compressed
+        // (collectWithCumulativeCap, the streaming fallback). All comfortably fit within budget, so this
+        // is purely about correct dispatch and offset/content tracking across a heterogeneous sequence,
+        // not budget edge cases (already covered by the batch-specific tests).
+        MemoryRecords uncompressedBatch = MemoryRecords.withRecords(0L, Compression.NONE, record("k0", "v0"));
+        MemoryRecords magicV2CompressedBatch = MemoryRecords.withRecords(1L, Compression.gzip().build(), record("k1", "v1"));
+        MemoryRecords legacyCompressedBatch = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 2L,
+            Compression.gzip().build(), record("k2", "v2"));
+
+        whenReadAsync(done(logReadResult(new FetchDataInfo(null,
+            concatBatches(uncompressedBatch, magicV2CompressedBatch, legacyCompressedBatch)), Errors.NONE)));
+
+        Map<Long, Record> result = fetcher(param(0L, 2L), 10_000).fetch().get(10, TimeUnit.SECONDS).records();
+
+        assertEquals(3, result.size());
+        assertRecord(result, 0L, "k0", "v0");
+        assertRecord(result, 1L, "k1", "v1");
+        assertRecord(result, 2L, "k2", "v2");
+    }
+
     @Test
     public void testFetchStopsOnceEnoughContentCollectedWithoutScanningWholeRange() throws Exception {
-        // A large range (0..100), but budget only for about one record's worth. Uncompressed data
-        // carries no decompression risk and so is never rejected by the decompression-bomb bound -
-        // this test targets the separate output-size bound: once enough usable content has been
-        // collected for one caller-sized "round" (maxDecompressedBytes, reused as a target output
-        // size), the fetch stops issuing further reads rather than scanning all the way to
-        // endOffset looking for more. Without this, an all-uncompressed range would always be
-        // fully walked regardless of how much of it the caller could actually use.
-        String value = "v".repeat(50);
-        whenReadAsync(done(success(record("k0", value))));
+        // A large range (0..100), but a budget sized to exactly the one record's own size: once that
+        // record is collected the target has been reached, and the fetch stops issuing further reads
+        // rather than scanning all the way to endOffset looking for more.
+        SimpleRecord simpleRecord = record("k0", "v".repeat(50));
+        int recordSize = recordSizeInBytes(simpleRecord);
+        whenReadAsync(done(success(simpleRecord)));
 
-        Map<Long, Record> result = fetcher(param(0L, 100L), 10).fetch().get(10, TimeUnit.SECONDS);
+        Map<Long, Record> result = fetcher(param(0L, 100L), recordSize).fetch().get(10, TimeUnit.SECONDS).records();
 
         assertEquals(1, result.size());
-        assertRecord(result, 0L, "k0", value);
+        assertRecord(result, 0L, "k0", "v".repeat(50));
         verify(logReader, times(1)).readAsync(any(), anySet(), any(), any(), anyBoolean());
     }
 
     @Test
     public void testMultipleBatchesInSingleReadStopAtBudgetBetweenBatches() throws Exception {
-        // Two uncompressed batches concatenated into ONE read response - the first batch alone
-        // already reaches budget. collectRecords() must stop BEFORE starting the second batch (not
-        // just wait for runFrom()'s between-reads check), or a single read containing many batches
-        // could collect well past budget before that check ever runs again.
+        // Two uncompressed batches concatenated into ONE read response - the first batch alone already
+        // reaches the budget. collectRecords() must stop BEFORE starting the second batch (not just wait
+        // for runFrom()'s between-reads check), or a single read containing many batches could keep being
+        // processed past the point where the fetch should have stopped.
         String value = "v".repeat(50);
         MemoryRecords batch0 = MemoryRecords.withRecords(0L, Compression.NONE, record("k0", value));
         MemoryRecords batch1 = MemoryRecords.withRecords(1L, Compression.NONE, record("k1", value));
+        int recordSize = recordSizeInBytes(record("k0", value));
 
         whenReadAsync(done(logReadResult(new FetchDataInfo(null, concatBatches(batch0, batch1)), Errors.NONE)));
 
-        Map<Long, Record> result = fetcher(param(0L, 1L), 10).fetch().get(10, TimeUnit.SECONDS);
+        Map<Long, Record> result = fetcher(param(0L, 1L), recordSize).fetch().get(10, TimeUnit.SECONDS).records();
 
         assertEquals(1, result.size());
         assertRecord(result, 0L, "k0", value);
@@ -360,31 +451,31 @@ class ShareGroupDLQRecordFetcherTest {
 
     @Test
     public void testUncompressedBatchStopsMidBatchOnceBudgetReached() throws Exception {
-        // A single uncompressed batch with several records, budget only for about the first two -
-        // collectUncompressed() must stop mid-batch, not just between batches/reads, since a single
-        // uncompressed batch carries no decompression risk and so has no other size cap of its own.
-        // The check runs after adding each record (same "include the crossing record, then stop"
-        // pattern used elsewhere in this class), so the record that pushes collectedBytes over
-        // budget is itself still included - only records after that one are excluded.
+        // A single uncompressed batch with several records, budget sized to exactly the first record's
+        // own size - collectUncompressed() must stop mid-batch, not just between batches/reads, since a
+        // single uncompressed batch carries no decompression risk and so has no other size cap of its own.
+        // The record that would push collectedBytes over budget is excluded (not included), and the fetch
+        // stops there rather than examining records after it in the same batch.
         String value = "v".repeat(50);
+        int recordSize = recordSizeInBytes(record("k0", value));
         whenReadAsync(done(success(record("k0", value), record("k1", value), record("k2", value))));
 
-        Map<Long, Record> result = fetcher(param(0L, 2L), 65).fetch().get(10, TimeUnit.SECONDS);
+        Map<Long, Record> result = fetcher(param(0L, 2L), recordSize).fetch().get(10, TimeUnit.SECONDS).records();
 
+        assertEquals(1, result.size());
         assertRecord(result, 0L, "k0", value);
-        assertRecord(result, 1L, "k1", value);
-        assertNull(result.get(2L), "Budget was reached partway through the batch; the record after that must not be collected");
+        assertNull(result.get(1L), "Budget was reached after the first record; one that doesn't fit alongside it must not be collected");
+        assertNull(result.get(2L), "The fetch stops at the first record that doesn't fit; later records in the same batch must not be examined");
     }
 
     @Test
     public void testCompressedBatchAfterUncompressedRespectsCombinedBudget() throws Exception {
-        // The first batch is uncompressed and alone consumes most of the budget. The second batch
-        // is compressed and, judged purely against decompressedBytes (still 0 at this point), would
-        // easily fit - but must still be rejected because collectedBytes (from the uncompressed
-        // batch) has already spent most of the shared budget. Proves decompressBounded() gates on
-        // both counters, not just the one it directly increments (decompressedBytes) - without this,
-        // the same budget would effectively be granted twice: once for uncompressed data, again for
-        // compressed data, in the same round.
+        // The first batch is uncompressed and alone consumes most of the budget. The second batch is
+        // compressed and, on its own, decompresses to well within the full budget - decompression succeeds
+        // - but it still must not be collected, because it doesn't fit alongside collectedBytes from the
+        // uncompressed batch already retained this fetch. Proves the per-record fit check gates on
+        // collectedBytes accumulated across every batch in the fetch, not just what the current batch
+        // itself decompresses to.
         String uncompressedValue = "v".repeat(150);
         String compressedValue = "x".repeat(80);
         MemoryRecords uncompressedBatch = MemoryRecords.withRecords(0L, Compression.NONE, record("k0", uncompressedValue));
@@ -393,33 +484,75 @@ class ShareGroupDLQRecordFetcherTest {
         whenReadAsync(done(logReadResult(
             new FetchDataInfo(null, concatBatches(uncompressedBatch, compressedBatch)), Errors.NONE)));
 
-        Map<Long, Record> result = fetcher(param(0L, 1L), 200).fetch().get(10, TimeUnit.SECONDS);
+        Map<Long, Record> result = fetcher(param(0L, 1L), 200).fetch().get(10, TimeUnit.SECONDS).records();
 
         assertRecord(result, 0L, "k0", uncompressedValue);
         assertNull(result.get(1L),
-            "Compressed batch must be rejected - the combined budget is already nearly spent by the uncompressed batch");
+            "Compressed batch must not be collected - it doesn't fit alongside what the uncompressed batch already retained");
+    }
+
+    @Test
+    public void testOversizedUncompressedRecordExcludedButLaterRecordStillCollected() throws Exception {
+        // The first record's own size exceeds the entire budget on its own - it can never fit, in this
+        // fetch or any other - so it's permanently excluded rather than blocking the smaller record after
+        // it, which fits comfortably since the excluded record never consumed any of collectedBytes.
+        SimpleRecord small = record("k1", "v1");
+        int budget = recordSizeInBytes(small);
+        whenReadAsync(done(success(record("k0", "v".repeat(500)), small)));
+
+        Map<Long, Record> result = fetcher(param(0L, 1L), budget).fetch().get(10, TimeUnit.SECONDS).records();
+
+        assertNull(result.get(0L), "A record whose own size exceeds the budget must be permanently excluded");
+        assertRecord(result, 1L, "k1", "v1");
+    }
+
+    @Test
+    public void testHardStopPreventsFurtherReads() throws Exception {
+        // Once a record is found that doesn't fit alongside what's already been collected, the fetch stops
+        // immediately - it must not attempt further reads for the rest of the range, even though offsets
+        // remain unexamined. Everything from that point on is left untouched for a fresh fetch to retry.
+        String value = "v".repeat(50);
+        int recordSize = recordSizeInBytes(record("k0", value));
+        whenReadAsync(
+            done(logReadResult(new FetchDataInfo(null,
+                MemoryRecords.withRecords(0L, Compression.NONE, record("k0", value))), Errors.NONE)),
+            done(logReadResult(new FetchDataInfo(null,
+                MemoryRecords.withRecords(1L, Compression.NONE, record("k1", value))), Errors.NONE)),
+            done(logReadResult(new FetchDataInfo(null,
+                MemoryRecords.withRecords(2L, Compression.NONE, record("k2", value))), Errors.NONE)));
+
+        ShareGroupDLQRecordFetcher.FetchResult result =
+            fetcher(param(0L, 10L), recordSize + 1).fetch().get(10, TimeUnit.SECONDS);
+
+        assertEquals(1, result.records().size());
+        assertRecord(result.records(), 0L, "k0", value);
+        assertEquals(0L, result.lastResolvedOffset(), "Only the first record was resolved; the rest must be left for a fresh fetch");
+        verify(logReader, times(2)).readAsync(any(), anySet(), any(), any(), anyBoolean());
     }
 
     @Test
     public void testCompressedBatchExceedingDecompressedBudgetSkipsBatch() throws Exception {
         // Highly compressible values so the batch is small on the wire but decompresses well past a
         // tiny budget - simulates a decompression-bomb-shaped batch. The whole batch is decompressed
-        // into a bounded buffer before any record is parsed, so exceeding the budget yields none of its
-        // records rather than a partial subset.
+        // into a bounded buffer before any record is parsed, so a batch that can never fit within the
+        // budget is permanently excluded, yielding none of its records rather than a partial subset.
         String bigValue = "x".repeat(10_000);
         whenReadAsync(done(success(Compression.gzip().build(),
             record("k0", bigValue), record("k1", bigValue), record("k2", bigValue))));
 
-        Map<Long, Record> result = fetcher(param(0L, 2L), 100).fetch().get(10, TimeUnit.SECONDS);
+        ShareGroupDLQRecordFetcher.FetchResult result =
+            fetcher(param(0L, 2L), 100).fetch().get(10, TimeUnit.SECONDS);
 
-        assertTrue(result.isEmpty(), "Expected the over-budget batch to be skipped, yielding no records");
+        assertTrue(result.records().isEmpty(), "Expected the over-budget batch to be skipped, yielding no records");
+        assertEquals(2L, result.lastResolvedOffset(), "The whole excluded batch must count as resolved so it is never retried");
     }
 
     @Test
     public void testCompressedBatchExceedingDecompressedBudgetSkippedButLaterBatchStillCollected() throws Exception {
         // First batch is highly compressible so it alone decompresses well past a tiny budget; the second
         // batch is uncompressed and carries no decompression risk. Only the first batch's offsets should be
-        // skipped - the fetch must not abort the whole range, so the second batch is still collected.
+        // permanently excluded - the fetch must not abort the whole range, so the second batch is still
+        // collected.
         String bigValue = "x".repeat(10_000);
         MemoryRecords compressedBatch = MemoryRecords.withRecords(0L, Compression.gzip().build(),
             record("k0", bigValue), record("k1", bigValue), record("k2", bigValue));
@@ -428,7 +561,7 @@ class ShareGroupDLQRecordFetcherTest {
         whenReadAsync(done(logReadResult(
             new FetchDataInfo(null, concatBatches(compressedBatch, uncompressedBatch)), Errors.NONE)));
 
-        Map<Long, Record> result = fetcher(param(0L, 3L), 100).fetch().get(10, TimeUnit.SECONDS);
+        Map<Long, Record> result = fetcher(param(0L, 3L), 100).fetch().get(10, TimeUnit.SECONDS).records();
 
         assertNull(result.get(0L));
         assertNull(result.get(1L));
@@ -439,7 +572,8 @@ class ShareGroupDLQRecordFetcherTest {
     @Test
     public void testLegacyCompressedBatchExceedingCumulativeCapSkipsBatchButLaterBatchStillCollected() throws Exception {
         // Legacy magic v0/v1 batches use the cumulative-cap fallback (no bounded-buffer path for that
-        // format). Exceeding the cap should still only skip the rest of the offending batch, not abort the
+        // format). Each record's own size is checked individually as it's decompressed: a record that can
+        // never fit on its own is permanently excluded, but the scan continues rather than aborting the
         // whole fetch - a later, uncompressed batch remains unaffected.
         String bigValue = "x".repeat(10_000);
         MemoryRecords legacyCompressedBatch = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 0L,
@@ -449,7 +583,7 @@ class ShareGroupDLQRecordFetcherTest {
         whenReadAsync(done(logReadResult(
             new FetchDataInfo(null, concatBatches(legacyCompressedBatch, uncompressedBatch)), Errors.NONE)));
 
-        Map<Long, Record> result = fetcher(param(0L, 3L), 100).fetch().get(10, TimeUnit.SECONDS);
+        Map<Long, Record> result = fetcher(param(0L, 3L), 100).fetch().get(10, TimeUnit.SECONDS).records();
 
         assertNull(result.get(0L));
         assertNull(result.get(1L));
