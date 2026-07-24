@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -41,7 +42,9 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG;
@@ -101,6 +104,50 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
             final String appId = generateAppId();
             prepare(cluster, null, appId);
             runReprocessingFromScratchWithIntermediateUserTopic(cluster, admin, null, true, appId);
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Same scenarios as above, but exercising the command line SSL setup for the reset tool.
+    // ---------------------------------------------------------------------------------------------
+
+    @ClusterTest(brokerSecurityProtocol = SecurityProtocol.SSL, controllerSecurityProtocol = SecurityProtocol.SSL)
+    public void testResetWhenInternalTopicsAreSpecifiedWithSsl(ClusterInstance cluster) throws Exception {
+        final Map<String, Object> sslConfig = cluster.setClientSslConfig(new HashMap<>());
+        try (Admin admin = cluster.admin()) {
+            final String appId = generateAppId();
+            prepare(cluster, sslConfig, appId);
+            runResetWhenInternalTopicsAreSpecified(cluster, admin, sslConfig, appId);
+        }
+    }
+
+    @ClusterTest(brokerSecurityProtocol = SecurityProtocol.SSL, controllerSecurityProtocol = SecurityProtocol.SSL)
+    public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopicWithSsl(ClusterInstance cluster) throws Exception {
+        final Map<String, Object> sslConfig = cluster.setClientSslConfig(new HashMap<>());
+        try (Admin admin = cluster.admin()) {
+            final String appId = generateAppId();
+            prepare(cluster, sslConfig, appId);
+            runReprocessingFromScratchWithoutIntermediateUserTopic(cluster, admin, sslConfig, appId);
+        }
+    }
+
+    @ClusterTest(brokerSecurityProtocol = SecurityProtocol.SSL, controllerSecurityProtocol = SecurityProtocol.SSL)
+    public void testReprocessingFromScratchAfterResetWithIntermediateUserTopicWithSsl(ClusterInstance cluster) throws Exception {
+        final Map<String, Object> sslConfig = cluster.setClientSslConfig(new HashMap<>());
+        try (Admin admin = cluster.admin()) {
+            final String appId = generateAppId();
+            prepare(cluster, sslConfig, appId);
+            runReprocessingFromScratchWithIntermediateUserTopic(cluster, admin, sslConfig, false, appId);
+        }
+    }
+
+    @ClusterTest(brokerSecurityProtocol = SecurityProtocol.SSL, controllerSecurityProtocol = SecurityProtocol.SSL)
+    public void testReprocessingFromScratchAfterResetWithIntermediateInternalTopicWithSsl(ClusterInstance cluster) throws Exception {
+        final Map<String, Object> sslConfig = cluster.setClientSslConfig(new HashMap<>());
+        try (Admin admin = cluster.admin()) {
+            final String appId = generateAppId();
+            prepare(cluster, sslConfig, appId);
+            runReprocessingFromScratchWithIntermediateUserTopic(cluster, admin, sslConfig, true, appId);
         }
     }
 
