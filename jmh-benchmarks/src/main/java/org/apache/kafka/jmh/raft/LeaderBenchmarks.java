@@ -51,13 +51,13 @@ public class LeaderBenchmarks {
     /**
      * <p>Only read-only, non-mutating RPCs belong here.
      */
-    public enum LeaderInboundRpc {
+    public enum LeaderInboundRpc implements BenchmarkRpc {
         /**
          * A no-wait FETCH from a fully caught-up follower.
          */
         NO_WAIT_FETCH_AT_HWM(Optional.empty(), Optional.of(ApiKeys.FETCH)) {
             @Override
-            ApiMessage build(RaftClientBenchmarkContext benchmark) {
+            public ApiMessage build(RaftClientBenchmarkContext benchmark) {
                 RaftClientTestContext context = benchmark.testContext();
                 return context.fetchRequest(
                     context.currentEpoch(),
@@ -73,7 +73,7 @@ public class LeaderBenchmarks {
          */
         FETCH_FROM_BEHIND(Optional.empty(), Optional.of(ApiKeys.FETCH)) {
             @Override
-            ApiMessage build(RaftClientBenchmarkContext benchmark) {
+            public ApiMessage build(RaftClientBenchmarkContext benchmark) {
                 RaftClientTestContext context = benchmark.testContext();
                 return context.fetchRequest(
                     context.currentEpoch(),
@@ -87,20 +87,28 @@ public class LeaderBenchmarks {
         /** A DESCRIBE_QUORUM admin query: the leader returns the current quorum state (read-only). */
         DESCRIBE_QUORUM(Optional.empty(), Optional.of(ApiKeys.DESCRIBE_QUORUM)) {
             @Override
-            ApiMessage build(RaftClientBenchmarkContext benchmark) {
+            public ApiMessage build(RaftClientBenchmarkContext benchmark) {
                 return benchmark.testContext().describeQuorumRequest();
             }
         };
 
-        final Optional<ApiKeys> expectedRequest;
-        final Optional<ApiKeys> expectedResponse;
+        private final Optional<ApiKeys> expectedRequest;
+        private final Optional<ApiKeys> expectedResponse;
 
         LeaderInboundRpc(Optional<ApiKeys> expectedRequest, Optional<ApiKeys> expectedResponse) {
             this.expectedRequest = expectedRequest;
             this.expectedResponse = expectedResponse;
         }
 
-        abstract ApiMessage build(RaftClientBenchmarkContext benchmark);
+        @Override
+        public Optional<ApiKeys> expectedRequest() {
+            return expectedRequest;
+        }
+
+        @Override
+        public Optional<ApiKeys> expectedResponse() {
+            return expectedResponse;
+        }
     }
 
     /**
@@ -146,36 +154,44 @@ public class LeaderBenchmarks {
         state.context.deliverRequest(state.request);
         state.context.pollUntilResponse();
 
-        counters.collectDeltasAndDrainRPCs(state.benchmark, state.rpc.expectedRequest, state.rpc.expectedResponse);
+        counters.collectDeltasAndDrainRPCs(state.benchmark, state.rpc.expectedRequest(), state.rpc.expectedResponse());
     }
 
     /**
      * Inbound RPCs that transition a leader out of its term, one benchmark row each. Each constant
      * mutates the node's durable state.
      */
-    public enum LeaderTransitioningRpc {
+    public enum LeaderTransitioningRpc implements BenchmarkRpc {
         /**
          * A BEGIN_QUORUM_EPOCH at a higher epoch: the leader learns of a new leader, steps down to
          * follower, and acknowledges with a BEGIN_QUORUM_EPOCH response.
          */
         HIGHER_EPOCH_BEGIN_QUORUM_EPOCH(Optional.empty(), Optional.of(ApiKeys.BEGIN_QUORUM_EPOCH)) {
             @Override
-            ApiMessage build(RaftClientBenchmarkContext benchmark) {
+            public ApiMessage build(RaftClientBenchmarkContext benchmark) {
                 RaftClientTestContext context = benchmark.testContext();
                 int newLeaderId = benchmark.remoteVoters().get(0).id();
                 return context.beginEpochRequest(context.currentEpoch() + 1, newLeaderId);
             }
         };
 
-        final Optional<ApiKeys> expectedRequest;
-        final Optional<ApiKeys> expectedResponse;
+        private final Optional<ApiKeys> expectedRequest;
+        private final Optional<ApiKeys> expectedResponse;
 
         LeaderTransitioningRpc(Optional<ApiKeys> expectedRequest, Optional<ApiKeys> expectedResponse) {
             this.expectedRequest = expectedRequest;
             this.expectedResponse = expectedResponse;
         }
 
-        abstract ApiMessage build(RaftClientBenchmarkContext benchmark);
+        @Override
+        public Optional<ApiKeys> expectedRequest() {
+            return expectedRequest;
+        }
+
+        @Override
+        public Optional<ApiKeys> expectedResponse() {
+            return expectedResponse;
+        }
     }
 
     /**
@@ -221,6 +237,6 @@ public class LeaderBenchmarks {
         state.context.deliverRequest(state.request);
         state.context.pollUntilResponse();
 
-        counters.collectDeltasAndDrainRPCs(state.benchmark, state.rpc.expectedRequest, state.rpc.expectedResponse);
+        counters.collectDeltasAndDrainRPCs(state.benchmark, state.rpc.expectedRequest(), state.rpc.expectedResponse());
     }
 }
