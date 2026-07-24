@@ -3489,6 +3489,7 @@ org.apache.kafka.streams.processor.internals.assignment.CustomStickyTaskAssignor
 - shouldAssignTopicGroupIdEvenlyAcrossClientsWithNoStandByTasks
 - shouldAssignTopicGroupIdEvenlyAcrossClientsWithStandByTasks
 - shouldBalanceActiveAndStandbyTasksAcrossAvailableClients
+- shouldConvergeWithinTwoRoundsWhenScalingUp
 - shouldEvenlyDistributeByTaskIdAndPartition
 - shouldKeepActiveTaskStickinessWhenMoreClientThanActiveTasks
 - shouldMigrateActiveTasksToNewProcessWithoutChangingAllAssignments
@@ -3496,6 +3497,7 @@ org.apache.kafka.streams.processor.internals.assignment.CustomStickyTaskAssignor
 - shouldNotHaveSameAssignmentOnAnyTwoHosts
 - shouldNotHaveSameAssignmentOnAnyTwoHostsWhenThereArePreviousActiveTasks
 - shouldNotMigrateActiveTaskToOtherProcess
+- shouldRetainFairShareOfPreviousTasksWhenScalingUp
 org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignorTest:
 - shouldViolateBalanceToPreserveActiveTaskStickiness
 org.apache.kafka.streams.processor.internals.assignment.GraphTest:
