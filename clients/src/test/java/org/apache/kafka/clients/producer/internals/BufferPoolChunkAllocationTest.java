@@ -241,9 +241,8 @@ public class BufferPoolChunkAllocationTest {
         // Wait for tSingle to also be parked.
         TestUtils.waitForCondition(() -> p.queued() == 2, "single-chunk waiter joined after the multi-chunk one");
 
-        // Now free chunks one at a time, allowing the multi-chunk request to accumulate.
+        // Free the two chunks the multi request needs.
         p.deallocate(h1);
-        Thread.sleep(50);
         p.deallocate(h2);
         // Both freed — the FIFO leader (multi) should claim both before the single-chunk waiter
         // gets any. The multi completes first.
@@ -302,8 +301,9 @@ public class BufferPoolChunkAllocationTest {
         p.deallocate(h1);
         p.deallocate(h2);
 
-        // Give the waiter a moment to wake, take the 2 chunks, and re-enter the wait before it times out.
-        Thread.sleep(100);
+        // Rely on availableMemory being 0 to confirm the waiter has taken both freed chunks.
+        TestUtils.waitForCondition(() -> p.availableMemory() == 0,
+            "waiter should have taken both freed chunks");
 
         t.join();
         assertInstanceOf(BufferExhaustedException.class, err.get(), "expected BufferExhaustedException, got " + err.get());
