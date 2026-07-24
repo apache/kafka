@@ -56,6 +56,10 @@ public class JaasTestUtils {
             return modules;
         }
 
+        public String getContextName() {
+            return contextName;
+        }
+
         @Override
         public String toString() {
             return String.format("%s {\n  %s\n};\n",

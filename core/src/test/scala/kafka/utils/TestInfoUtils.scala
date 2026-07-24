@@ -16,8 +16,19 @@
  */
 package kafka.utils
 
+import java.lang.reflect.Method
+import java.util
+import java.util.Optional
+
 import org.junit.jupiter.api.TestInfo
 import org.apache.kafka.clients.consumer.GroupProtocol
+
+class EmptyTestInfo extends TestInfo {
+  override def getDisplayName: String = ""
+  override def getTags: util.Set[String] = java.util.Set.of()
+  override def getTestClass: Optional[Class[_]] = Optional.empty()
+  override def getTestMethod: Optional[Method] = Optional.empty()
+}
 
 object TestInfoUtils {
 
