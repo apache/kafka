@@ -24,28 +24,32 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 public class GroupSpecImplTest {
 
-    private Map<String, AssignmentMemberSpec> members;
+    private Map<String, MemberMetadataAndStateImpl> members;
+    private MemberMetadataAndStateImpl member;
     private GroupSpecImpl groupSpec;
 
     @BeforeEach
     void setUp() {
         members = new HashMap<>();
 
-        members.put("test-member", new AssignmentMemberSpec(
+        member = new MemberMetadataAndStateImpl(
             Optional.of("test-instance"),
             Optional.of("test-rack"),
-            Map.of(),
-            Map.of(),
-            Map.of(),
             "test-process",
             Map.of(),
             Map.of(),
+            Map.of(),
+            Map.of(),
+            Map.of(),
             Map.of()
-        ));
+        );
+        members.put("test-member", member);
 
         groupSpec = new GroupSpecImpl(
             members,
@@ -54,8 +58,29 @@ public class GroupSpecImplTest {
     }
 
     @Test
-    void testMembers() {
-        assertEquals(members, groupSpec.members());
+    void testMemberIds() {
+        assertEquals(members.keySet(), groupSpec.memberIds());
+    }
+
+    @Test
+    void testMemberMetadata() {
+        assertEquals(member, groupSpec.memberMetadata("test-member"));
+    }
+
+    @Test
+    void testMemberAssignmentState() {
+        assertEquals(member, groupSpec.memberAssignmentState("test-member"));
+    }
+
+    @Test
+    void testMemberNotFound() {
+        assertThrows(IllegalArgumentException.class, () -> groupSpec.memberMetadata("unknown"));
+        assertThrows(IllegalArgumentException.class, () -> groupSpec.memberAssignmentState("unknown"));
+    }
+
+    @Test
+    void testConfigs() {
+        assertTrue(groupSpec.configs().isEmpty());
     }
 
 }

@@ -1118,10 +1118,6 @@ object TestUtils extends Logging {
     new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, key, value, util.Set.of(header))
   }
 
-  def producerRecordWithExpectedTransactionStatus(topic: String, partition: Integer, key: String, value: String, willBeCommitted: Boolean): ProducerRecord[Array[Byte], Array[Byte]] = {
-    producerRecordWithExpectedTransactionStatus(topic, partition, asBytes(key), asBytes(value), willBeCommitted)
-  }
-
   // Collect the current positions for all partition in the consumers current assignment.
   def consumerPositions(consumer: Consumer[Array[Byte], Array[Byte]]) : Map[TopicPartition, OffsetAndMetadata]  = {
     val offsetsToCommit = new mutable.HashMap[TopicPartition, OffsetAndMetadata]()

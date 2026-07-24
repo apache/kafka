@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.streams.assignor;
+package org.apache.kafka.coordinator.group.api.streams.assignor;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -22,12 +25,14 @@ import java.util.NoSuchElementException;
 /**
  * The topology describer is used by the {@link TaskAssignor} to get topic and task metadata of the group's topology.
  */
+@InterfaceAudience.Public
+@InterfaceStability.Evolving
 public interface TopologyDescriber {
 
     /**
-     * Map of topic names to topic metadata.
+     * The IDs of all subtopologies in the group's topology.
      *
-     * @return The list of subtopologies IDs.
+     * @return The list of subtopology IDs.
      */
     List<String> subtopologies();
 
