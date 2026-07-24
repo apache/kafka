@@ -396,10 +396,7 @@ public class GroupCoordinatorConfig {
         "The first one in the list is considered as the default assignor to be used in the case where the streams group does not specify an assignor. " +
         "Changing the default assignor does not trigger a rebalance for existing groups; the new default takes effect on the next rebalance. " +
         "The supported builtin assignors are: " + STREAMS_GROUP_BUILTIN_ASSIGNORS.stream().map(TaskAssignor::name).collect(Collectors.joining(", ")) + ".";
-    public static final List<String> STREAMS_GROUP_ASSIGNORS_DEFAULT = STREAMS_GROUP_BUILTIN_ASSIGNORS
-        .stream()
-        .map(TaskAssignor::name)
-        .toList();
+    public static final List<String> STREAMS_GROUP_ASSIGNORS_DEFAULT = List.of(new StickyTaskAssignor().name());
 
     public static final String STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG = "group.streams.assignor.offload.enable";
     public static final String STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DOC = "Whether to offload streams group assignment to a group coordinator background thread.";
@@ -894,35 +891,23 @@ public class GroupCoordinatorConfig {
     protected List<TaskAssignor> streamsGroupAssignors(
         AbstractConfig config
     ) {
-        Map<String, TaskAssignor> defaultAssignors = STREAMS_GROUP_BUILTIN_ASSIGNORS
+        Map<String, TaskAssignor> builtinAssignors = STREAMS_GROUP_BUILTIN_ASSIGNORS
             .stream()
             .collect(Collectors.toMap(TaskAssignor::name, Function.identity()));
 
         List<TaskAssignor> assignors = new ArrayList<>();
 
         try {
-            for (Object object : config.getList(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG)) {
-                TaskAssignor assignor;
-
-                if (object instanceof String klass) {
-                    assignor = defaultAssignors.get(klass);
-                    if (assignor == null) {
-                        try {
-                            assignor = Utils.newInstance(klass, TaskAssignor.class);
-                        } catch (ClassNotFoundException e) {
-                            throw new KafkaException("Class " + klass + " cannot be found", e);
-                        } catch (ClassCastException e) {
-                            throw new KafkaException(klass + " is not an instance of " + TaskAssignor.class.getName());
-                        }
-                    }
-                } else if (object instanceof Class<?> klass) {
-                    Object o = Utils.newInstance((Class<?>) klass);
-                    if (!(o instanceof TaskAssignor)) {
+            for (String klass : config.getList(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG)) {
+                TaskAssignor assignor = builtinAssignors.get(klass);
+                if (assignor == null) {
+                    try {
+                        assignor = Utils.newInstance(klass, TaskAssignor.class);
+                    } catch (ClassNotFoundException e) {
+                        throw new KafkaException("Class " + klass + " cannot be found", e);
+                    } catch (ClassCastException e) {
                         throw new KafkaException(klass + " is not an instance of " + TaskAssignor.class.getName());
                     }
-                    assignor = (TaskAssignor) o;
-                } else {
-                    throw new KafkaException("Unexpected element of type " + object.getClass().getName() + ", expected String or Class");
                 }
 
                 assignors.add(assignor);
