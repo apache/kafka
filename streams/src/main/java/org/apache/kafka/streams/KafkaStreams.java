@@ -1370,6 +1370,7 @@ public class KafkaStreams implements AutoCloseable {
     private ScheduledExecutorService setupStateDirCleaner() {
         return Executors.newSingleThreadScheduledExecutor(r -> {
             final Thread thread = new Thread(r, clientId + "-CleanupThread");
+            // daemon: background cleanup must not block JVM shutdown
             thread.setDaemon(true);
             return thread;
         });
@@ -1380,6 +1381,7 @@ public class KafkaStreams implements AutoCloseable {
         if (RecordingLevel.forName(config.getString(METRICS_RECORDING_LEVEL_CONFIG)) == RecordingLevel.DEBUG) {
             return Executors.newSingleThreadScheduledExecutor(r -> {
                 final Thread thread = new Thread(r, clientId + "-RocksDBMetricsRecordingTrigger");
+                // daemon: background metrics recording must not block JVM shutdown
                 thread.setDaemon(true);
                 return thread;
             });
@@ -1620,6 +1622,7 @@ public class KafkaStreams implements AutoCloseable {
 
         final Thread shutdownThread = shutdownHelper(false, timeoutMs, operation);
 
+        // daemon: the shutdown thread itself must not prevent JVM exit
         shutdownThread.setDaemon(true);
         shutdownThread.start();
 
@@ -1638,6 +1641,7 @@ public class KafkaStreams implements AutoCloseable {
         } else {
             final Thread shutdownThread = shutdownHelper(true, -1, org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
 
+            // daemon: the shutdown thread itself must not prevent JVM exit
             shutdownThread.setDaemon(true);
             shutdownThread.start();
         }

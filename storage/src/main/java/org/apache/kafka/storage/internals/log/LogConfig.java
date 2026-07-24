@@ -627,7 +627,7 @@ public class LogConfig extends AbstractConfig {
         }
     }
 
-    private static void validateRemoteCopyLagTime(Map<?, ?> props) {
+    private static void validateRemoteCopyLagTime(Map<String, ?> props) {
         Long retentionMs = (Long) props.get(TopicConfig.RETENTION_MS_CONFIG);
         Long localRetentionMs = (Long) props.get(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
         Long remoteCopyLagMs = (Long) props.get(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG);
@@ -640,7 +640,7 @@ public class LogConfig extends AbstractConfig {
         }
     }
 
-    private static void validateRemoteCopyLagSize(Map<?, ?> props) {
+    private static void validateRemoteCopyLagSize(Map<String, ?> props) {
         Long retentionBytes = (Long) props.get(TopicConfig.RETENTION_BYTES_CONFIG);
         Long localRetentionBytes = (Long) props.get(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG);
         Long remoteCopyLagBytes = (Long) props.get(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG);

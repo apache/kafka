@@ -794,7 +794,15 @@ public class ShareGroupDLQStateManager {
             if (!cacheHelper.isShareGroupDlqCopyRecordEnabled(param.groupId())) {
                 return CompletableFuture.completedFuture(Map.of());
             }
-            return new ShareGroupDLQRecordFetcher(logReader, time, param, DLQ_MAX_FETCH_BYTES).fetch();
+            // Bounds decompression memory against a pathologically compressible source record: there's
+            // no point retaining more decompressed data than the DLQ topic could ever accept anyway, and
+            // (unlike the user's own topic config) this value isn't controlled by whoever produced the
+            // record being copied. Falls back to DLQ_MAX_FETCH_BYTES in the (defensive-only) case the DLQ
+            // topic isn't resolvable here - copy-record being enabled implies one is configured in practice.
+            int maxDecompressedBytes = cacheHelper.shareGroupDlqTopic(param.groupId())
+                .map(cacheHelper::dlqTopicMaxMessageBytes)
+                .orElse(DLQ_MAX_FETCH_BYTES);
+            return new ShareGroupDLQRecordFetcher(logReader, time, param, DLQ_MAX_FETCH_BYTES, maxDecompressedBytes).fetch();
         }
     }
 
