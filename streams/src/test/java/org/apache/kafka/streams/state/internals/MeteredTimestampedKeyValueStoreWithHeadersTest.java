@@ -32,6 +32,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -878,6 +879,8 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
     public void shouldReturnRightEntriesForHeaderDependentSerdeInPrefixScan() {
         setUp();
         reset(inner);
+        final ThreadCache cache = new ThreadCache(new LogContext("testCache"), 1024L, context.metrics());
+        when(context.cache()).thenReturn(cache);
         when(context.headers()).thenReturn(HEADERS);
 
         final InMemoryKeyValueStore inMemoryStore = new InMemoryKeyValueStore(STORE_NAME);
@@ -899,7 +902,7 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
         };
 
         final MeteredTimestampedKeyValueStoreWithHeaders<String, String> store = new MeteredTimestampedKeyValueStoreWithHeaders<>(
-            inMemoryStore,
+            new CachingKeyValueStoreWithHeaders(inMemoryStore),
             "scope",
             new MockTime(),
             Serdes.serdeFrom(headerDependentSerializer, Serdes.String().deserializer()),
