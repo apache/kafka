@@ -30,6 +30,7 @@ import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TopologyDescriber;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.SimpleAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
@@ -194,7 +195,7 @@ public class GroupCoordinatorConfigTest {
         @Override
         public org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment assign(
             org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec groupSpec,
-            org.apache.kafka.coordinator.group.api.streams.assignor.TopologyDescriber topologyDescriber
+            TopologyDescriber topologyDescriber
         ) {
             return null;
         }
@@ -210,7 +211,7 @@ public class GroupCoordinatorConfigTest {
         @Override
         public org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment assign(
             org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec groupSpec,
-            org.apache.kafka.coordinator.group.api.streams.assignor.TopologyDescriber topologyDescriber
+            TopologyDescriber topologyDescriber
         ) {
             return null;
         }
@@ -223,6 +224,14 @@ public class GroupCoordinatorConfigTest {
         Map<String, Object> configs = new HashMap<>();
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG,
             List.of("sticky", StickyNamedTaskAssignor.class.getName()));
+        assertThrows(KafkaException.class, () -> createConfig(configs));
+    }
+
+    @Test
+    public void testStreamsGroupAssignorsWithUnknownClassFails() {
+        // An entry that is neither a builtin short name nor a loadable class name must fail startup.
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, "org.apache.kafka.NonExistentAssignor");
         assertThrows(KafkaException.class, () -> createConfig(configs));
     }
 
@@ -263,7 +272,8 @@ public class GroupCoordinatorConfigTest {
         assertInstanceOf(CustomTaskAssignor.class, assignors.get(0));
         assertNotNull(((CustomTaskAssignor) assignors.get(0)).configs);
 
-        // Test list of strings (builtin short name and custom class name).
+        // Test a combination (builtin short name and custom class name) supplied as a programmatic
+        // list of strings.
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, List.of("sticky", CustomTaskAssignor.class.getName()));
         config = createConfig(configs);
         assignors = config.streamsGroupAssignors();
@@ -271,17 +281,14 @@ public class GroupCoordinatorConfigTest {
         assertInstanceOf(StickyTaskAssignor.class, assignors.get(0));
         assertInstanceOf(CustomTaskAssignor.class, assignors.get(1));
 
-        // Test combination of short name and class.
+        // Test the same combination supplied as a comma-separated string (the form the broker
+        // config is always delivered in).
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, "sticky, " + CustomTaskAssignor.class.getName());
         config = createConfig(configs);
         assignors = config.streamsGroupAssignors();
         assertEquals(2, assignors.size());
         assertInstanceOf(StickyTaskAssignor.class, assignors.get(0));
         assertInstanceOf(CustomTaskAssignor.class, assignors.get(1));
-
-        // Test unknown class.
-        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, "org.apache.kafka.NonExistentAssignor");
-        assertThrows(KafkaException.class, () -> createConfig(configs));
     }
 
     @Test

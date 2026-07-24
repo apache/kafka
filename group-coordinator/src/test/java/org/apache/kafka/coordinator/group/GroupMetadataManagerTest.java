@@ -18737,6 +18737,49 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testStreamsGroupUsesBrokerDefaultAssignorWhenGroupUnset() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        // The broker registers two assignors; the first ("sticky") is the default.
+        MockTaskAssignor defaultAssignor = new MockTaskAssignor("sticky");
+        MockTaskAssignor customAssignor = new MockTaskAssignor("custom");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(defaultAssignor, customAssignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 2)
+                .buildCoordinatorMetadataImage())
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .build();
+        defaultAssignor.prepareGroupAssignment(
+            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
+        customAssignor.prepareGroupAssignment(
+            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
+
+        // The group does not select an assignor (streams.assignor.name is unset).
+        context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        // The broker's default (first) assignor computed the assignment.
+        assertFalse(defaultAssignor.lastPassedAssignmentConfigs().isEmpty());
+        assertTrue(customAssignor.lastPassedAssignmentConfigs().isEmpty());
+    }
+
+    @Test
     public void testStreamsGroupAssignorSelectedByGroupConfig() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
