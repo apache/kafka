@@ -153,6 +153,148 @@ public class TimestampedToHeadersWindowStoreAdapterTest {
     }
 
     @Test
+    public void shouldConvertValueOnFetchWithInstantBounds() {
+        final Bytes key = new Bytes("key".getBytes());
+        final byte[] timestampedValue = "value".getBytes();
+        underlyingStore.put(key, timestampedValue, 1000L);
+
+        try (final WindowStoreIterator<byte[]> iterator =
+                 adapter.fetch(key, Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L))) {
+            assertConvertedValue(iterator, timestampedValue);
+        }
+    }
+
+    @Test
+    public void shouldConvertValueOnBackwardFetchWithInstantBounds() {
+        final Bytes key = new Bytes("key".getBytes());
+        final byte[] timestampedValue = "value".getBytes();
+        underlyingStore.put(key, timestampedValue, 1000L);
+
+        try (final WindowStoreIterator<byte[]> iterator =
+                 adapter.backwardFetch(key, Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L))) {
+            assertConvertedValue(iterator, timestampedValue);
+        }
+    }
+
+    @Test
+    public void shouldConvertValueOnKeyRangeFetch() {
+        final Bytes key = new Bytes("key".getBytes());
+        final byte[] timestampedValue = "value".getBytes();
+        underlyingStore.put(key, timestampedValue, 1000L);
+
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
+                 adapter.fetch(key, key, 0L, 10000L)) {
+            assertConvertedValue(iterator, timestampedValue);
+        }
+    }
+
+    @Test
+    public void shouldConvertValueOnKeyRangeFetchWithInstantBounds() {
+        final Bytes key = new Bytes("key".getBytes());
+        final byte[] timestampedValue = "value".getBytes();
+        underlyingStore.put(key, timestampedValue, 1000L);
+
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
+                 adapter.fetch(key, key, Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L))) {
+            assertConvertedValue(iterator, timestampedValue);
+        }
+    }
+
+    @Test
+    public void shouldConvertValueOnKeyRangeBackwardFetch() {
+        final Bytes key = new Bytes("key".getBytes());
+        final byte[] timestampedValue = "value".getBytes();
+        underlyingStore.put(key, timestampedValue, 1000L);
+
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
+                 adapter.backwardFetch(key, key, 0L, 10000L)) {
+            assertConvertedValue(iterator, timestampedValue);
+        }
+    }
+
+    @Test
+    public void shouldConvertValueOnKeyRangeBackwardFetchWithInstantBounds() {
+        final Bytes key = new Bytes("key".getBytes());
+        final byte[] timestampedValue = "value".getBytes();
+        underlyingStore.put(key, timestampedValue, 1000L);
+
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
+                 adapter.backwardFetch(key, key, Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L))) {
+            assertConvertedValue(iterator, timestampedValue);
+        }
+    }
+
+    @Test
+    public void shouldConvertValueOnFetchAllWithInstantBounds() {
+        final Bytes key = new Bytes("key".getBytes());
+        final byte[] timestampedValue = "value".getBytes();
+        underlyingStore.put(key, timestampedValue, 1000L);
+
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
+                 adapter.fetchAll(Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L))) {
+            assertConvertedValue(iterator, timestampedValue);
+        }
+    }
+
+    @Test
+    public void shouldConvertValueOnBackwardFetchAll() {
+        final Bytes key = new Bytes("key".getBytes());
+        final byte[] timestampedValue = "value".getBytes();
+        underlyingStore.put(key, timestampedValue, 1000L);
+
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
+                 adapter.backwardFetchAll(0L, 10000L)) {
+            assertConvertedValue(iterator, timestampedValue);
+        }
+    }
+
+    @Test
+    public void shouldConvertValueOnBackwardFetchAllWithInstantBounds() {
+        final Bytes key = new Bytes("key".getBytes());
+        final byte[] timestampedValue = "value".getBytes();
+        underlyingStore.put(key, timestampedValue, 1000L);
+
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
+                 adapter.backwardFetchAll(Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L))) {
+            assertConvertedValue(iterator, timestampedValue);
+        }
+    }
+
+    @Test
+    public void shouldConvertValueOnAll() {
+        final Bytes key = new Bytes("key".getBytes());
+        final byte[] timestampedValue = "value".getBytes();
+        underlyingStore.put(key, timestampedValue, 1000L);
+
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = adapter.all()) {
+            assertConvertedValue(iterator, timestampedValue);
+        }
+    }
+
+    @Test
+    public void shouldConvertValueOnBackwardAll() {
+        final Bytes key = new Bytes("key".getBytes());
+        final byte[] timestampedValue = "value".getBytes();
+        underlyingStore.put(key, timestampedValue, 1000L);
+
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = adapter.backwardAll()) {
+            assertConvertedValue(iterator, timestampedValue);
+        }
+    }
+
+    private static void assertConvertedValue(final WindowStoreIterator<byte[]> iterator, final byte[] timestampedValue) {
+        assertTrue(iterator.hasNext(), "Expected the stored window to be returned");
+        assertArrayEquals(convertToHeaderFormat(timestampedValue), iterator.next().value,
+            "Expected the timestamped value to be converted to the headers format");
+    }
+
+    private static void assertConvertedValue(final KeyValueIterator<Windowed<Bytes>, byte[]> iterator, final byte[] timestampedValue) {
+        assertTrue(iterator.hasNext(), "Expected the stored window to be returned");
+        assertArrayEquals(convertToHeaderFormat(timestampedValue), iterator.next().value,
+            "Expected the timestamped value to be converted to the headers format");
+    }
+
+    @Test
     public void shouldHandleWindowKeyQuerySuccessfully() {
         // Build a typed window store using timestamped window store (adapter wraps it)
         final TimestampedWindowStoreWithHeaders<String, String> store = Stores.timestampedWindowStoreWithHeadersBuilder(

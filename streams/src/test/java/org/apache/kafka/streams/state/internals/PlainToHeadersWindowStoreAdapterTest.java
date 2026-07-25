@@ -152,6 +152,148 @@ public class PlainToHeadersWindowStoreAdapterTest {
     }
 
     @Test
+    public void shouldConvertValueOnFetchWithInstantBounds() {
+        final Bytes key = new Bytes("key".getBytes());
+        final byte[] plainValue = "value".getBytes();
+        underlyingStore.put(key, plainValue, 1000L);
+
+        try (final WindowStoreIterator<byte[]> iterator =
+                 adapter.fetch(key, Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L))) {
+            assertConvertedValue(iterator, plainValue);
+        }
+    }
+
+    @Test
+    public void shouldConvertValueOnBackwardFetchWithInstantBounds() {
+        final Bytes key = new Bytes("key".getBytes());
+        final byte[] plainValue = "value".getBytes();
+        underlyingStore.put(key, plainValue, 1000L);
+
+        try (final WindowStoreIterator<byte[]> iterator =
+                 adapter.backwardFetch(key, Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L))) {
+            assertConvertedValue(iterator, plainValue);
+        }
+    }
+
+    @Test
+    public void shouldConvertValueOnKeyRangeFetch() {
+        final Bytes key = new Bytes("key".getBytes());
+        final byte[] plainValue = "value".getBytes();
+        underlyingStore.put(key, plainValue, 1000L);
+
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
+                 adapter.fetch(key, key, 0L, 10000L)) {
+            assertConvertedValue(iterator, plainValue);
+        }
+    }
+
+    @Test
+    public void shouldConvertValueOnKeyRangeFetchWithInstantBounds() {
+        final Bytes key = new Bytes("key".getBytes());
+        final byte[] plainValue = "value".getBytes();
+        underlyingStore.put(key, plainValue, 1000L);
+
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
+                 adapter.fetch(key, key, Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L))) {
+            assertConvertedValue(iterator, plainValue);
+        }
+    }
+
+    @Test
+    public void shouldConvertValueOnKeyRangeBackwardFetch() {
+        final Bytes key = new Bytes("key".getBytes());
+        final byte[] plainValue = "value".getBytes();
+        underlyingStore.put(key, plainValue, 1000L);
+
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
+                 adapter.backwardFetch(key, key, 0L, 10000L)) {
+            assertConvertedValue(iterator, plainValue);
+        }
+    }
+
+    @Test
+    public void shouldConvertValueOnKeyRangeBackwardFetchWithInstantBounds() {
+        final Bytes key = new Bytes("key".getBytes());
+        final byte[] plainValue = "value".getBytes();
+        underlyingStore.put(key, plainValue, 1000L);
+
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
+                 adapter.backwardFetch(key, key, Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L))) {
+            assertConvertedValue(iterator, plainValue);
+        }
+    }
+
+    @Test
+    public void shouldConvertValueOnFetchAllWithInstantBounds() {
+        final Bytes key = new Bytes("key".getBytes());
+        final byte[] plainValue = "value".getBytes();
+        underlyingStore.put(key, plainValue, 1000L);
+
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
+                 adapter.fetchAll(Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L))) {
+            assertConvertedValue(iterator, plainValue);
+        }
+    }
+
+    @Test
+    public void shouldConvertValueOnBackwardFetchAll() {
+        final Bytes key = new Bytes("key".getBytes());
+        final byte[] plainValue = "value".getBytes();
+        underlyingStore.put(key, plainValue, 1000L);
+
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
+                 adapter.backwardFetchAll(0L, 10000L)) {
+            assertConvertedValue(iterator, plainValue);
+        }
+    }
+
+    @Test
+    public void shouldConvertValueOnBackwardFetchAllWithInstantBounds() {
+        final Bytes key = new Bytes("key".getBytes());
+        final byte[] plainValue = "value".getBytes();
+        underlyingStore.put(key, plainValue, 1000L);
+
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
+                 adapter.backwardFetchAll(Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L))) {
+            assertConvertedValue(iterator, plainValue);
+        }
+    }
+
+    @Test
+    public void shouldConvertValueOnAll() {
+        final Bytes key = new Bytes("key".getBytes());
+        final byte[] plainValue = "value".getBytes();
+        underlyingStore.put(key, plainValue, 1000L);
+
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = adapter.all()) {
+            assertConvertedValue(iterator, plainValue);
+        }
+    }
+
+    @Test
+    public void shouldConvertValueOnBackwardAll() {
+        final Bytes key = new Bytes("key".getBytes());
+        final byte[] plainValue = "value".getBytes();
+        underlyingStore.put(key, plainValue, 1000L);
+
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = adapter.backwardAll()) {
+            assertConvertedValue(iterator, plainValue);
+        }
+    }
+
+    private static void assertConvertedValue(final WindowStoreIterator<byte[]> iterator, final byte[] plainValue) {
+        assertTrue(iterator.hasNext(), "Expected the stored window to be returned");
+        assertArrayEquals(convertFromPlainToHeaderFormat(plainValue), iterator.next().value,
+            "Expected the plain value to be converted to the headers format");
+    }
+
+    private static void assertConvertedValue(final KeyValueIterator<Windowed<Bytes>, byte[]> iterator, final byte[] plainValue) {
+        assertTrue(iterator.hasNext(), "Expected the stored window to be returned");
+        assertArrayEquals(convertFromPlainToHeaderFormat(plainValue), iterator.next().value,
+            "Expected the plain value to be converted to the headers format");
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     public void shouldHandleWindowKeyQuerySuccessfully() {
         final TimestampedWindowStoreWithHeaders<String, String> store = Stores.timestampedWindowStoreWithHeadersBuilder(

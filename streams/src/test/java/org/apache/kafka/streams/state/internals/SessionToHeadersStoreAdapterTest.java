@@ -27,6 +27,7 @@ import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 
@@ -234,6 +235,25 @@ public class SessionToHeadersStoreAdapterTest {
         final QueryResult<Void> result = adapter.query(query, PositionBound.unbounded(), new QueryConfig(false));
         assertTrue(result.isFailure());
         assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, result.getFailureReason());
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    public void shouldConvertValueOnWindowRangeQuery() {
+        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = innerIteratorWithRawValue();
+        final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> innerResult =
+            QueryResult.forResult(innerIter);
+        when(innerStore.query(any(WindowRangeQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) innerResult);
+
+        final WindowRangeQuery<Bytes, byte[]> query = WindowRangeQuery.withKey(KEY);
+        final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> result =
+            adapter.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.isSuccess(), "Expected WindowRangeQuery to succeed");
+        // Assert on the converted value, not just the iterator type: this proves
+        // the sessionToHeaders conversion (empty headers prepended) is wired here.
+        assertAddsEmptyHeaders(result.getResult());
     }
 
     @SuppressWarnings("unchecked")
