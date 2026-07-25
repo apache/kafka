@@ -1113,13 +1113,7 @@ public class KafkaStreamsTest {
         final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
-        final StreamPartitioner<String, Object> simplePartitioner = new StreamPartitioner<>() {
-            @SuppressWarnings("removal")
-            @Override
-            public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
-                return Optional.of(Collections.singleton(0));
-            }
-        };
+        final StreamPartitioner<String, Object> simplePartitioner = new SimplePartitioner();
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             assertThrows(StreamsNotStartedException.class, () -> streams.queryMetadataForKey("store", "key", simplePartitioner));
             streams.start();
@@ -2111,6 +2105,19 @@ public class KafkaStreamsTest {
                 // verify that stateDirectory constructor was called
                 assertFalse(stateDirectoryMockedConstruction.constructed().isEmpty());
             }
+        }
+    }
+
+    private static class SimplePartitioner implements StreamPartitioner<String, Object> {
+        @SuppressWarnings("removal")
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+            throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
+        }
+
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final Headers headers, final int numPartitions) {
+            return Optional.of(Collections.singleton(0));
         }
     }
 }

@@ -136,30 +136,8 @@ public class StreamsMetadataStateTest {
         topologyMetadata.buildAndRewriteTopology();
         metadataState = new StreamsMetadataState(topologyMetadata, hostOne, logContext);
         metadataState.onChange(hostToActivePartitions, hostToStandbyPartitions, partitionInfos);
-        partitioner = new StreamPartitioner<>() {
-            @SuppressWarnings("removal")
-            @Override
-            public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
-                return Optional.of(Collections.singleton(1));
-            }
-        };
+        partitioner = new FixedPartitionPartitioner(1);
         storeNames = Set.of("table-one", "table-two", "merged-table", globalTable);
-    }
-
-    static class MultiValuedPartitioner implements StreamPartitioner<String, Object> {
-        @SuppressWarnings("removal")
-        @Override
-        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
-            throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
-        }
-
-        @Override
-        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final Headers headers, final int numPartitions) {
-            final Set<Integer> partitions = new HashSet<>();
-            partitions.add(0);
-            partitions.add(1);
-            return Optional.of(partitions);
-        }
     }
 
     @Test
@@ -256,10 +234,13 @@ public class StreamsMetadataStateTest {
             Collections.singletonMap(tp4, new PartitionInfo("topic-three", 1, null, null, null)));
 
         final KeyQueryMetadata expected = new KeyQueryMetadata(hostThree, Set.of(hostTwo), 0);
-        final KeyQueryMetadata actual = metadataState.keyQueryMetadataForKey("table-three",
-                                                                    "the-key",
-                                                                    new RecordHeaders(),
-                                                                    Serdes.String().serializer());
+        final KeyQueryMetadata actual = metadataState.keyQueryMetadataForKey(
+                "table-three",
+                "the-key",
+                new RecordHeaders(),
+                Serdes.String().serializer()
+        );
+
         assertEquals(expected, actual);
     }
 
@@ -273,10 +254,12 @@ public class StreamsMetadataStateTest {
 
         final KeyQueryMetadata expected = new KeyQueryMetadata(hostTwo, Collections.emptySet(), 1);
 
-        final KeyQueryMetadata actual = metadataState.keyQueryMetadataForKey("table-three",
+        final KeyQueryMetadata actual = metadataState.keyQueryMetadataForKey(
+                "table-three",
                 "the-key",
                 new RecordHeaders(),
-                partitioner);
+                partitioner
+        );
         assertEquals(expected, actual);
         assertEquals(1, actual.partition());
     }
@@ -290,16 +273,23 @@ public class StreamsMetadataStateTest {
                 Collections.singletonMap(tp4, new PartitionInfo("topic-three", 1, null, null, null)));
 
 
-        assertThrows(IllegalArgumentException.class, () -> metadataState.keyQueryMetadataForKey("table-three",
+        assertThrows(IllegalArgumentException.class, () -> metadataState.keyQueryMetadataForKey(
+                "table-three",
                 "the-key",
                 new RecordHeaders(),
-                new MultiValuedPartitioner()));
+                new MultiValuedPartitioner()
+        ));
     }
 
     @Test
     public void shouldReturnNotAvailableWhenClusterIsEmpty() {
         metadataState.onChange(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
-        final KeyQueryMetadata result = metadataState.keyQueryMetadataForKey("table-one", "a", new RecordHeaders(), Serdes.String().serializer());
+        final KeyQueryMetadata result = metadataState.keyQueryMetadataForKey(
+                "table-one",
+                "a",
+                new RecordHeaders(),
+                Serdes.String().serializer()
+        );
         assertEquals(KeyQueryMetadata.NOT_AVAILABLE, result);
     }
 
@@ -313,46 +303,76 @@ public class StreamsMetadataStateTest {
 
         final KeyQueryMetadata expected = new KeyQueryMetadata(hostTwo, Set.of(hostOne), 2);
 
-        final KeyQueryMetadata actual = metadataState.keyQueryMetadataForKey("merged-table",  "the-key", new RecordHeaders(),
-                new StreamPartitioner<>() {
-                    @SuppressWarnings("removal")
-                    @Override
-                    public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
-                        return Optional.of(Collections.singleton(2));
-                    }
-                });
+        final KeyQueryMetadata actual = metadataState.keyQueryMetadataForKey(
+                "merged-table",
+                "the-key",
+                new RecordHeaders(),
+                new FixedPartitionPartitioner(2)
+        );
 
         assertEquals(expected, actual);
     }
 
     @Test
     public void shouldReturnNullOnGetWithKeyWhenStoreDoesntExist() {
-        final KeyQueryMetadata actual = metadataState.keyQueryMetadataForKey("not-a-store",
+        final KeyQueryMetadata actual = metadataState.keyQueryMetadataForKey(
+                "not-a-store",
                 "key",
                 new RecordHeaders(),
-                Serdes.String().serializer());
+                Serdes.String().serializer()
+        );
         assertNull(actual);
     }
 
     @Test
     public void shouldThrowWhenKeyIsNull() {
-        assertThrows(NullPointerException.class, () -> metadataState.keyQueryMetadataForKey("table-three", null, new RecordHeaders(), Serdes.String().serializer()));
+        assertThrows(NullPointerException.class, () -> metadataState.keyQueryMetadataForKey(
+                "table-three",
+                null,
+                new RecordHeaders(),
+                Serdes.String().serializer()
+        ));
     }
 
     @Test
     public void shouldThrowWhenSerializerIsNull() {
-        assertThrows(NullPointerException.class, () -> metadataState.keyQueryMetadataForKey("table-three", "key", new RecordHeaders(), (Serializer<Object>) null));
+        assertThrows(NullPointerException.class, () -> metadataState.keyQueryMetadataForKey(
+                "table-three",
+                "key",
+                new RecordHeaders(),
+                (Serializer<Object>) null
+        ));
     }
 
     @Test
     public void shouldThrowIfStoreNameIsNull() {
-        assertThrows(NullPointerException.class, () -> metadataState.keyQueryMetadataForKey(null, "key", new RecordHeaders(), Serdes.String().serializer()));
+        assertThrows(NullPointerException.class, () -> metadataState.keyQueryMetadataForKey(
+                null,
+                "key",
+                new RecordHeaders(),
+                Serdes.String().serializer()
+        ));
     }
 
     @SuppressWarnings("unchecked")
     @Test
     public void shouldThrowIfStreamPartitionerIsNull() {
-        assertThrows(NullPointerException.class, () -> metadataState.keyQueryMetadataForKey(null, "key", new RecordHeaders(), (StreamPartitioner) null));
+        assertThrows(NullPointerException.class, () -> metadataState.keyQueryMetadataForKey(
+                null,
+                "key",
+                new RecordHeaders(),
+                (StreamPartitioner) null
+        ));
+    }
+
+    @Test
+    public void shouldThrowIfHeadersIsNull() {
+        assertThrows(NullPointerException.class, () -> metadataState.keyQueryMetadataForKey(
+                "table-three",
+                "key",
+                null,
+                Serdes.String().serializer()
+        ));
     }
 
     @Test
@@ -376,7 +396,12 @@ public class StreamsMetadataStateTest {
 
     @Test
     public void shouldGetQueryMetadataForGlobalStoreWithKey() {
-        final KeyQueryMetadata metadata = metadataState.keyQueryMetadataForKey(globalTable, "key", new RecordHeaders(), Serdes.String().serializer());
+        final KeyQueryMetadata metadata = metadataState.keyQueryMetadataForKey(
+                globalTable,
+                "key",
+                new RecordHeaders(),
+                Serdes.String().serializer()
+        );
         assertEquals(hostOne, metadata.activeHost());
         assertTrue(metadata.standbyHosts().isEmpty());
     }
@@ -389,12 +414,22 @@ public class StreamsMetadataStateTest {
             logContext
         );
         streamsMetadataState.onChange(hostToActivePartitions, hostToStandbyPartitions, partitionInfos);
-        assertNotNull(streamsMetadataState.keyQueryMetadataForKey(globalTable, "key", new RecordHeaders(), Serdes.String().serializer()));
+        assertNotNull(streamsMetadataState.keyQueryMetadataForKey(
+                globalTable,
+                "key",
+                new RecordHeaders(),
+                Serdes.String().serializer()
+        ));
     }
 
     @Test
     public void shouldGetQueryMetadataForGlobalStoreWithKeyAndPartitioner() {
-        final KeyQueryMetadata metadata = metadataState.keyQueryMetadataForKey(globalTable, "key", new RecordHeaders(), partitioner);
+        final KeyQueryMetadata metadata = metadataState.keyQueryMetadataForKey(
+                globalTable,
+                "key",
+                new RecordHeaders(),
+                partitioner
+        );
         assertEquals(hostOne, metadata.activeHost());
         assertTrue(metadata.standbyHosts().isEmpty());
     }
@@ -407,7 +442,12 @@ public class StreamsMetadataStateTest {
             logContext
         );
         streamsMetadataState.onChange(hostToActivePartitions, hostToStandbyPartitions, partitionInfos);
-        assertNotNull(streamsMetadataState.keyQueryMetadataForKey(globalTable, "key", new RecordHeaders(), partitioner));
+        assertNotNull(streamsMetadataState.keyQueryMetadataForKey(
+                globalTable,
+                "key",
+                new RecordHeaders(),
+                partitioner)
+        );
     }
 
     @Test
@@ -417,11 +457,28 @@ public class StreamsMetadataStateTest {
 
         @SuppressWarnings("unchecked")
         final StreamPartitioner<String, Object> mockPartitioner = mock(StreamPartitioner.class);
-        when(mockPartitioner.partitions(eq("topic-three"), eq("the-key"), eq(null), eq(headers), anyInt())).thenReturn(Optional.of(Collections.singleton(0)));
+        when(mockPartitioner.partitions(
+                eq("topic-three"),
+                eq("the-key"),
+                eq(null),
+                eq(headers),
+                anyInt()
+        )).thenReturn(Optional.of(Collections.singleton(0)));
 
-        metadataState.keyQueryMetadataForKey("table-three", "the-key", headers, mockPartitioner);
+        metadataState.keyQueryMetadataForKey(
+                "table-three",
+                "the-key",
+                headers,
+                mockPartitioner
+        );
 
-        verify(mockPartitioner).partitions("topic-three", "the-key", null, headers, 1);
+        verify(mockPartitioner).partitions(
+                "topic-three",
+                "the-key",
+                null,
+                headers,
+                1
+        );
     }
 
     @Test
@@ -446,5 +503,40 @@ public class StreamsMetadataStateTest {
         }
 
         assertFalse(metadataState.allMetadata().isEmpty(), "encapsulation broken");
+    }
+
+    private static class MultiValuedPartitioner implements StreamPartitioner<String, Object> {
+        @SuppressWarnings("removal")
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+            throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
+        }
+
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final Headers headers, final int numPartitions) {
+            final Set<Integer> partitions = new HashSet<>();
+            partitions.add(0);
+            partitions.add(1);
+            return Optional.of(partitions);
+        }
+    }
+
+    private static class FixedPartitionPartitioner implements StreamPartitioner<String, Object> {
+        private final int partition;
+
+        FixedPartitionPartitioner(final int partition) {
+            this.partition = partition;
+        }
+
+        @SuppressWarnings("removal")
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+            throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
+        }
+
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final Headers headers, final int numPartitions) {
+            return Optional.of(Collections.singleton(partition));
+        }
     }
 }
