@@ -40,6 +40,7 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.streams.KafkaStreams;
@@ -113,44 +114,11 @@ public class ResetIntegrationTest {
     private Map<String, Object> producerConfig;
     private long recordTimestamp;
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest,
+        @ClusterTest(brokerSecurityProtocol = SecurityProtocol.SSL, controllerSecurityProtocol = SecurityProtocol.SSL)
+    })
     public void testResetWhenInternalTopicsAreSpecified(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.admin()) {
-            final String appId = generateAppId();
-            prepare(cluster, null, appId);
-            runResetWhenInternalTopicsAreSpecified(cluster, admin, null, appId);
-        }
-    }
-
-    @ClusterTest
-    public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.admin()) {
-            final String appId = generateAppId();
-            prepare(cluster, null, appId);
-            runReprocessingFromScratchWithoutIntermediateUserTopic(cluster, admin, null, appId);
-        }
-    }
-
-    @ClusterTest
-    public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.admin()) {
-            final String appId = generateAppId();
-            prepare(cluster, null, appId);
-            runReprocessingFromScratchWithIntermediateUserTopic(cluster, admin, null, false, appId);
-        }
-    }
-
-    @ClusterTest
-    public void testReprocessingFromScratchAfterResetWithIntermediateInternalTopic(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.admin()) {
-            final String appId = generateAppId();
-            prepare(cluster, null, appId);
-            runReprocessingFromScratchWithIntermediateUserTopic(cluster, admin, null, true, appId);
-        }
-    }
-
-    @ClusterTest(brokerSecurityProtocol = SecurityProtocol.SSL, controllerSecurityProtocol = SecurityProtocol.SSL)
-    public void testResetWhenInternalTopicsAreSpecifiedWithSsl(ClusterInstance cluster) throws Exception {
         final Map<String, Object> sslConfig = cluster.setClientSslConfig(new HashMap<>());
         try (Admin admin = cluster.admin()) {
             final String appId = generateAppId();
@@ -159,8 +127,11 @@ public class ResetIntegrationTest {
         }
     }
 
-    @ClusterTest(brokerSecurityProtocol = SecurityProtocol.SSL, controllerSecurityProtocol = SecurityProtocol.SSL)
-    public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopicWithSsl(ClusterInstance cluster) throws Exception {
+    @ClusterTests({
+        @ClusterTest,
+        @ClusterTest(brokerSecurityProtocol = SecurityProtocol.SSL, controllerSecurityProtocol = SecurityProtocol.SSL)
+    })
+    public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic(ClusterInstance cluster) throws Exception {
         final Map<String, Object> sslConfig = cluster.setClientSslConfig(new HashMap<>());
         try (Admin admin = cluster.admin()) {
             final String appId = generateAppId();
@@ -169,8 +140,11 @@ public class ResetIntegrationTest {
         }
     }
 
-    @ClusterTest(brokerSecurityProtocol = SecurityProtocol.SSL, controllerSecurityProtocol = SecurityProtocol.SSL)
-    public void testReprocessingFromScratchAfterResetWithIntermediateUserTopicWithSsl(ClusterInstance cluster) throws Exception {
+    @ClusterTests({
+        @ClusterTest,
+        @ClusterTest(brokerSecurityProtocol = SecurityProtocol.SSL, controllerSecurityProtocol = SecurityProtocol.SSL)
+    })
+    public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic(ClusterInstance cluster) throws Exception {
         final Map<String, Object> sslConfig = cluster.setClientSslConfig(new HashMap<>());
         try (Admin admin = cluster.admin()) {
             final String appId = generateAppId();
@@ -179,8 +153,11 @@ public class ResetIntegrationTest {
         }
     }
 
-    @ClusterTest(brokerSecurityProtocol = SecurityProtocol.SSL, controllerSecurityProtocol = SecurityProtocol.SSL)
-    public void testReprocessingFromScratchAfterResetWithIntermediateInternalTopicWithSsl(ClusterInstance cluster) throws Exception {
+    @ClusterTests({
+        @ClusterTest,
+        @ClusterTest(brokerSecurityProtocol = SecurityProtocol.SSL, controllerSecurityProtocol = SecurityProtocol.SSL)
+    })
+    public void testReprocessingFromScratchAfterResetWithIntermediateInternalTopic(ClusterInstance cluster) throws Exception {
         final Map<String, Object> sslConfig = cluster.setClientSslConfig(new HashMap<>());
         try (Admin admin = cluster.admin()) {
             final String appId = generateAppId();
@@ -745,7 +722,7 @@ public class ResetIntegrationTest {
             parameterList.add(INTERMEDIATE_USER_TOPIC);
         }
 
-        if (sslConfig != null) {
+        if (sslConfig != null && !sslConfig.isEmpty()) {
             final File configFile = TestUtils.tempFile();
             try (BufferedWriter writer = new BufferedWriter(new FileWriter(configFile))) {
                 for (final Map.Entry<String, Object> entry : sslConfig.entrySet()) {
