@@ -140,7 +140,8 @@ public class SaslServerAuthenticator implements Authenticator {
     private SaslServer saslServer;
     private String saslMechanism;
     // The authenticated principal is connection-scoped. Cache it after the first build since principal() is invoked
-    // for every request. Re-authentication installs a new SaslServerAuthenticator, and therefore a fresh cache.
+    // for every request. It is only accessed by the Processor thread, so no synchronization is needed.
+    // Re-authentication installs a new SaslServerAuthenticator, and therefore a fresh cache.
     private KafkaPrincipal principal;
 
     // buffers used in `authenticate`

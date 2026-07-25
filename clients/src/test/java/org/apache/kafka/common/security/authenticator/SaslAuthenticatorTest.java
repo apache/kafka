@@ -178,6 +178,7 @@ public class SaslAuthenticatorTest {
         saslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
         credentialCache = new CredentialCache();
         TestLogin.loginCount.set(0);
+        CountingKafkaPrincipalBuilder.buildCount = 0;
     }
 
     @AfterEach
@@ -225,21 +226,20 @@ public class SaslAuthenticatorTest {
         configureMechanisms("PLAIN", Collections.singletonList("PLAIN"));
         saslServerConfigs.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
                 CountingKafkaPrincipalBuilder.class);
-        CountingKafkaPrincipalBuilder.BUILD_COUNT.set(0);
 
         server = createEchoServer(securityProtocol);
         createClientConnection(securityProtocol, node);
         checkClientConnection(node);
         server.selector().channels().get(0).principal();
         server.selector().channels().get(0).principal();
-        assertEquals(1, CountingKafkaPrincipalBuilder.BUILD_COUNT.get(),
+        assertEquals(1, CountingKafkaPrincipalBuilder.buildCount,
                 "Principal should be built only once for repeated access on a connection");
 
         time.sleep((long) (CONNECTIONS_MAX_REAUTH_MS_VALUE * 1.1));
         checkClientConnection(node);
         server.verifyReauthenticationMetrics(1, 0);
         server.selector().channels().get(0).principal();
-        assertEquals(2, CountingKafkaPrincipalBuilder.BUILD_COUNT.get(),
+        assertEquals(2, CountingKafkaPrincipalBuilder.buildCount,
                 "A successful re-authentication should build and cache a new principal");
     }
 
@@ -2801,12 +2801,12 @@ public class SaslAuthenticatorTest {
     }
 
     public static class CountingKafkaPrincipalBuilder implements KafkaPrincipalBuilder {
-        private static final AtomicInteger BUILD_COUNT = new AtomicInteger();
+        private static int buildCount;
 
         @Override
         public KafkaPrincipal build(AuthenticationContext context) {
             SaslAuthenticationContext saslContext = (SaslAuthenticationContext) context;
-            BUILD_COUNT.incrementAndGet();
+            buildCount++;
             return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, saslContext.server().getAuthorizationID());
         }
 
