@@ -121,9 +121,6 @@ public class LogConfig extends AbstractConfig {
                 return super.getConfigValue(key, headerName);
         }
 
-        public Optional<String> serverConfigName(String configName) {
-            return Optional.ofNullable(ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.get(configName));
-        }
     }
 
     // Visible for testing
@@ -141,8 +138,6 @@ public class LogConfig extends AbstractConfig {
     public static final boolean DEFAULT_PREALLOCATE = false;
 
     public static final boolean DEFAULT_REMOTE_STORAGE_ENABLE = false;
-    public static final boolean DEFAULT_REMOTE_LOG_COPY_DISABLE_CONFIG = false;
-    public static final boolean DEFAULT_REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = false;
     public static final long DEFAULT_LOCAL_RETENTION_BYTES = -2; // It indicates the value to be derived from RetentionBytes
     public static final long DEFAULT_LOCAL_RETENTION_MS = -2; // It indicates the value to be derived from RetentionMs
 
