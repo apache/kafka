@@ -155,6 +155,28 @@ public class GroupConfigTest {
     }
 
     @Test
+    public void testStreamsAssignorNameSelectsCustomAssignor() {
+        // A custom assignor registered on the broker can be selected by its name.
+        GroupCoordinatorConfig groupCoordinatorConfig = createGroupCoordinatorConfig(Map.of(
+            GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG,
+            "sticky," + GroupCoordinatorConfigTest.CustomTaskAssignor.class.getName()
+        ));
+
+        Map<String, String> props = createValidGroupConfig();
+        props.put(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "CustomTaskAssignor");
+        assertDoesNotThrow(() -> GroupConfig.validate(props, groupCoordinatorConfig, createShareGroupConfig()));
+
+        // The built-in assignor is still selectable alongside it.
+        props.put(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "sticky");
+        assertDoesNotThrow(() -> GroupConfig.validate(props, groupCoordinatorConfig, createShareGroupConfig()));
+
+        // The custom assignor's class name is not a valid selector; only its name() is.
+        props.put(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, GroupCoordinatorConfigTest.CustomTaskAssignor.class.getName());
+        assertThrows(InvalidConfigurationException.class,
+            () -> GroupConfig.validate(props, groupCoordinatorConfig, createShareGroupConfig()));
+    }
+
+    @Test
     public void testStreamsAssignorNameEvaluateIsLenient() {
         // The Admin path (validate) rejects an unknown assignor name...
         Map<String, String> props = createValidGroupConfig();
@@ -887,15 +909,21 @@ public class GroupConfigTest {
     }
 
     private GroupCoordinatorConfig createGroupCoordinatorConfig() {
+        return createGroupCoordinatorConfig(Map.of());
+    }
+
+    private GroupCoordinatorConfig createGroupCoordinatorConfig(Map<String, Object> overrides) {
+        Map<String, Object> configs = new HashMap<>(Map.of(
+            GroupCoordinatorConfig.CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 1000,
+            GroupCoordinatorConfig.SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 1000,
+            GroupCoordinatorConfig.STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 1000
+        ));
+        configs.putAll(overrides);
         return GroupCoordinatorConfigTest.createGroupCoordinatorConfig(
             OFFSET_METADATA_MAX_SIZE,
             OFFSETS_RETENTION_CHECK_INTERVAL_MS,
             OFFSETS_RETENTION_MINUTES,
-            Map.of(
-                GroupCoordinatorConfig.CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 1000,
-                GroupCoordinatorConfig.SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 1000,
-                GroupCoordinatorConfig.STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 1000
-            )
+            configs
         );
     }
 

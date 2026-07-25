@@ -20,6 +20,7 @@ import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.utils.Utils;
@@ -389,6 +390,8 @@ public class GroupCoordinatorConfig {
     public static final String STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DOC = "The maximum interval between assignment updates for a streams group.";
     public static final int STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT = 15000;
 
+    // The first entry is the default assignor for groups that do not select one. New built-in
+    // assignors must be appended so that the default does not change for existing groups.
     private static final List<TaskAssignor> STREAMS_GROUP_BUILTIN_ASSIGNORS = List.of(
         new StickyTaskAssignor()
     );
@@ -397,7 +400,10 @@ public class GroupCoordinatorConfig {
         "The first one in the list is considered as the default assignor to be used in the case where the streams group does not specify an assignor. " +
         "Changing the default assignor does not trigger a rebalance for existing groups; the new default takes effect on the next rebalance. " +
         "The supported builtin assignors are: " + STREAMS_GROUP_BUILTIN_ASSIGNORS.stream().map(TaskAssignor::name).collect(Collectors.joining(", ")) + ".";
-    public static final List<String> STREAMS_GROUP_ASSIGNORS_DEFAULT = List.of(new StickyTaskAssignor().name());
+    public static final List<String> STREAMS_GROUP_ASSIGNORS_DEFAULT = STREAMS_GROUP_BUILTIN_ASSIGNORS
+        .stream()
+        .map(TaskAssignor::name)
+        .toList();
 
     public static final String STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG = "group.streams.assignor.offload.enable";
     public static final String STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DOC = "Whether to offload streams group assignment to a group coordinator background thread.";
@@ -592,6 +598,7 @@ public class GroupCoordinatorConfig {
     private final int streamsGroupMaxWarmupReplicas;
     private final long streamsGroupAcceptableRecoveryLag;
     private final List<TaskAssignor> streamsGroupAssignors;
+    private final List<String> streamsGroupAssignorNames;
 
     private final AbstractConfig config;
 
@@ -663,6 +670,7 @@ public class GroupCoordinatorConfig {
         this.streamsGroupMaxWarmupReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG);
         this.streamsGroupAcceptableRecoveryLag = config.getLong(GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_CONFIG);
         this.streamsGroupAssignors = streamsGroupAssignors(config);
+        this.streamsGroupAssignorNames = this.streamsGroupAssignors.stream().map(TaskAssignor::name).toList();
         this.config = config;
 
         checkConstraints();
@@ -900,21 +908,30 @@ public class GroupCoordinatorConfig {
         Set<String> assignorNames = new HashSet<>();
 
         try {
-            for (String klass : config.getList(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG)) {
-                TaskAssignor assignor = builtinAssignors.get(klass);
+            // `configuredAssignor` is either the name of a built-in assignor,
+            // or a fully qualified class name of a custom assignor
+            for (String configuredAssignor : config.getList(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG)) {
+                TaskAssignor assignor = builtinAssignors.get(configuredAssignor);
                 if (assignor == null) {
                     try {
-                        assignor = Utils.newInstance(klass, TaskAssignor.class);
+                        assignor = Utils.newInstance(configuredAssignor, TaskAssignor.class);
                     } catch (ClassNotFoundException e) {
-                        throw new KafkaException("Class " + klass + " cannot be found", e);
+                        throw new ConfigException(STREAMS_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
+                            "Class cannot be found");
                     } catch (ClassCastException e) {
-                        throw new KafkaException(klass + " is not an instance of " + TaskAssignor.class.getName());
+                        throw new ConfigException(STREAMS_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
+                            "Class is not an instance of " + TaskAssignor.class.getName());
+                    } catch (KafkaException e) {
+                        // Utils#newInstance reports instantiation failures, for example a missing
+                        // public no-argument constructor, without naming the config that caused them.
+                        throw new ConfigException(STREAMS_GROUP_ASSIGNORS_CONFIG, configuredAssignor, e.getMessage());
                     }
                 }
 
                 if (!assignorNames.add(assignor.name())) {
-                    throw new KafkaException("Multiple assignors configured in " + STREAMS_GROUP_ASSIGNORS_CONFIG +
-                        " have the same name '" + assignor.name() + "'. Assignor names, whether builtin or custom, must be unique.");
+                    throw new ConfigException(STREAMS_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
+                        "Assignor name '" + assignor.name() + "' is already registered by another configured assignor. " +
+                            "Assignor names, whether built-in or custom, must be unique");
                 }
 
                 assignors.add(assignor);
@@ -1479,9 +1496,9 @@ public class GroupCoordinatorConfig {
     }
 
     /**
-     * The set of registered streams group task assignor names.
+     * The names of the registered streams group task assignors, in configured order.
      */
-    public Set<String> streamsGroupAssignorNames() {
-        return streamsGroupAssignors.stream().map(TaskAssignor::name).collect(Collectors.toSet());
+    public List<String> streamsGroupAssignorNames() {
+        return streamsGroupAssignorNames;
     }
 }

@@ -27,6 +27,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -111,7 +112,6 @@ public final class GroupConfig extends AbstractConfig {
     public static final String STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG = "streams.acceptable.recovery.lag";
 
     public static final String STREAMS_ASSIGNOR_NAME_CONFIG = "streams.assignor.name";
-    public static final String STREAMS_ASSIGNOR_NAME_DEFAULT = null;
     public static final String STREAMS_ASSIGNOR_NAME_DOC = "The task assignor to use for this streams group, selected by short name from the assignors registered via the broker configuration " +
         GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG + ". When unset, the group defaults to the first assignor configured in the broker's " +
         GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG + " setting.";
@@ -313,7 +313,7 @@ public final class GroupConfig extends AbstractConfig {
             GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DOC)
         .define(STREAMS_ASSIGNOR_NAME_CONFIG,
             STRING,
-            STREAMS_ASSIGNOR_NAME_DEFAULT,
+            null,
             MEDIUM,
             STREAMS_ASSIGNOR_NAME_DOC)
 
@@ -614,7 +614,7 @@ public final class GroupConfig extends AbstractConfig {
         // The selected streams assignor must be one of the assignors registered on the broker.
         if (parsed.containsKey(STREAMS_ASSIGNOR_NAME_CONFIG)) {
             String assignorName = (String) parsed.get(STREAMS_ASSIGNOR_NAME_CONFIG);
-            Set<String> registeredAssignors = groupCoordinatorConfig.streamsGroupAssignorNames();
+            List<String> registeredAssignors = groupCoordinatorConfig.streamsGroupAssignorNames();
             if (!registeredAssignors.contains(assignorName)) {
                 throw new InvalidConfigurationException(STREAMS_ASSIGNOR_NAME_CONFIG + " '" + assignorName +
                     "' is not a registered task assignor. Registered assignors are: " + registeredAssignors + ".");
