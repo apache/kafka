@@ -540,11 +540,6 @@ org.apache.kafka.tools.ResetIntegrationTest:
 - testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic
 - testResetWhenInternalTopicsAreSpecified
 - testResetWhenLongSessionTimeoutConfiguredWithForceOption
-org.apache.kafka.tools.ResetIntegrationWithSslTest:
-- testReprocessingFromScratchAfterResetWithIntermediateInternalTopic
-- testReprocessingFromScratchAfterResetWithIntermediateUserTopic
-- testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic
-- testResetWhenInternalTopicsAreSpecified
 org.apache.kafka.tools.ShareConsumerPerformanceTest:
 - testBootstrapServerNotPresent
 - testClientIdOverride

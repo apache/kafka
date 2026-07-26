@@ -30,6 +30,7 @@ org.apache.kafka.coordinator.group.GroupConfigTest:
 - testInvalidConfigName
 - testInvalidProps
 - testNotValidatedWhenNotConfigured
+- testStreamsRackAwareAssignmentTagsValidation
 - testValidShareAutoOffsetResetValues
 - testValidShareIsolationLevelValues
 - testValidateWithAllGroupTypeConfigs
@@ -498,6 +499,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testGenerateRecordsOnNewClassicGroupFailureTransformsError
 - testGenerationIdIncrementsOnRebalance
 - testGetDifferentStaticMemberIdAfterEachRejoin
+- testGroupConfigOverridesBrokerRackAwareAssignmentTags
 - testGroupEpochBumpWhenNewStaticMemberJoins
 - testGroupIdsByTopics
 - testGroupStuckInRebalanceTimeoutDueToNonjoinedStaticMember
@@ -577,6 +579,9 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testMemberIdGeneration
 - testMemberJoinsEmptyConsumerGroup
 - testMemberJoinsEmptyStreamsGroup
+- testMissingClientTagsStatusNotReturnedToVersion0Clients
+- testMissingClientTagsStatusReportsOnlyMissingTags
+- testMissingClientTagsStatusWhenRackAwareTagsConfigured
 - testNewJoiningMemberTriggersNewTargetAssignment
 - testNewMemberFailureAfterJoinGroupCompletion
 - testNewMemberIsRejectedWithMaximumMembersIsReached
@@ -587,6 +592,8 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testNewStaticMemberIsRejectedWhenConsumerGroupIsFull
 - testNoConversionWhenSizeExceedsClassicMaxGroupSize
 - testNoGroupEpochBumpWhenStaticMemberTemporarilyLeaves
+- testNoMissingClientTagsStatusWhenAllTagsPresent
+- testNoMissingClientTagsStatusWhenRackAwareTagsNotConfigured
 - testOnLoaded
 - testOnLoadedExceedGroupMaxSizeTriggersRebalance
 - testOnLoadedSchedulesClassicGroupMemberHeartbeats
@@ -599,6 +606,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testPartitionAssignorExceptionOnRegularHeartbeat
 - testPendingMemberBatchLeaveGroup
 - testPendingMembersLeaveGroup
+- testRackAwareAssignmentTagsRejectsEmptyTags
 - testRebalanceCompletesBeforeMemberJoins
 - testRebalanceDoesNotTimeOutWhenAllSyncAreReceived
 - testRebalanceTimeoutExpiration

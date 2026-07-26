@@ -37,6 +37,8 @@ org.apache.kafka.streams.KafkaStreamsTest:
 - shouldNotReturnDeadThreads
 - shouldNotSetGlobalRestoreListenerAfterStarting
 - shouldNotTriggerRecordingOfRocksDBMetricsIfRecordingLevelIsInfo
+- shouldPropagatePartitionerAndHeadersToStreamsMetadataState
+- shouldPropagateSerializerAndHeadersToStreamsMetadataState
 - shouldRemoveThread
 - shouldReturnAdminInstanceID
 - shouldReturnEmptyLocalStorePartitionLags
@@ -1331,6 +1333,7 @@ org.apache.kafka.streams.kstream.internals.KTableImplTest:
 - testStateStore
 - testStateStoreLazyEval
 org.apache.kafka.streams.kstream.internals.KTableKTableForeignKeyJoinScenarioTest:
+- shouldPropagateHeadersToCustomForeignKeyJoinPartitioners
 - shouldUseExpectedTopicsWithSerde
 - shouldWorkWithCompositeKeyAndBiFunctionExtractor
 - shouldWorkWithCompositeKeyAndProducerIdInValue
@@ -1563,7 +1566,8 @@ org.apache.kafka.streams.kstream.internals.UnlimitedWindowTest:
 - cannotCompareUnlimitedWindowWithDifferentWindowType
 - shouldAlwaysOverlap
 org.apache.kafka.streams.kstream.internals.WindowedStreamPartitionerTest:
-- testCopartitioning
+- shouldThrowUnsupportedOperationExceptionForDeprecatedMethod
+- testCopartitioningWithHeaders
 org.apache.kafka.streams.kstream.internals.foreignkeyjoin.CombinedKeySchemaTest:
 - nonNullPrimaryKeySerdeTest
 - nullForeignKeySerdeTest
@@ -1879,6 +1883,10 @@ org.apache.kafka.streams.processor.internals.DefaultStateUpdaterTest:
 - shouldUpdateSingleStandbyTask
 - shouldUpdateStandbyTaskAfterAllActiveStatefulTasksFailed
 - shouldUpdateStandbyTaskAfterAllActiveStatefulTasksRemoved
+org.apache.kafka.streams.processor.internals.DefaultStreamPartitionerTest:
+- shouldPropagateHeadersToSerializer
+- shouldReturnEmptyOptionalWhenSerializedKeyIsNull
+- shouldThrowUnsupportedOperationExceptionForDeprecatedMethod
 org.apache.kafka.streams.processor.internals.DefaultStreamsRebalanceListenerTest:
 - testOnAllTasksLost
 - testOnAllTasksLostRecordsMetrics
@@ -2458,6 +2466,7 @@ org.apache.kafka.streams.processor.internals.RecordCollectorTest:
 - shouldNotThrowStreamsExceptionOnSubsequentCallIfASendFailsWithContinueExceptionHandler
 - shouldNotThrowTaskCorruptedExceptionOnUnknownTopicOrPartitionExceptionUsingAlwaysContinueExceptionHandler
 - shouldPassThroughRecordHeaderToSerializer
+- shouldPropagateHeadersToPartitioner
 - shouldRecordRecordsAndBytesProduced
 - shouldResumeWithDeadLetterQueueRecords
 - shouldResumeWithoutDeadLetterQueueRecords
@@ -2973,10 +2982,12 @@ org.apache.kafka.streams.processor.internals.StreamsMetadataStateTest:
 - shouldHaveGlobalStoreInAllMetadata
 - shouldNotReturnMutableReferenceToInternalAllMetadataCollection
 - shouldNotThrowExceptionWhenOnChangeNotCalled
+- shouldPropagateHeadersToPartitioner
 - shouldReturnAllMetadataThatRemainsValidAfterChange
 - shouldReturnEmptyCollectionOnGetAllInstancesWithStoreWhenStoreDoesntExist
 - shouldReturnNotAvailableWhenClusterIsEmpty
 - shouldReturnNullOnGetWithKeyWhenStoreDoesntExist
+- shouldThrowIfHeadersIsNull
 - shouldThrowIfStoreNameIsNull
 - shouldThrowIfStoreNameIsNullOnGetAllInstancesWithStore
 - shouldThrowIfStreamPartitionerIsNull
@@ -5369,6 +5380,7 @@ org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStoreWithHead
 - shouldPropagateUpperBoundAndAscendingOrderForTimestampedRangeWithHeadersQuery
 - shouldPutAllToInnerStoreAndRecordPutAllMetric
 - shouldPutIfAbsentAndRecordPutIfAbsentMetric
+- shouldReturnRightEntriesForHeaderDependentSerdeInPrefixScan
 - shouldSetFlushListenerOnWrappedCachingStore
 - shouldTimeIteratorDuration
 - shouldTrackOldestOpenIteratorTimestamp
