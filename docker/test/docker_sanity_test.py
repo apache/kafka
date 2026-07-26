@@ -205,6 +205,38 @@ class DockerSanityTest(unittest.TestCase):
         
         self.assertEqual(total_errors, [])
 
+
+class DockerConfigureTest(unittest.TestCase):
+    IMAGE="apache/kafka"
+    FIXTURES_DIR="."
+
+    def test_ssl_controller_listener_configures_keystore(self):
+        command = [
+            "docker", "run", "--rm",
+            "--volume", f"{self.FIXTURES_DIR}/fixtures/secrets:/etc/kafka/secrets:ro",
+            "--env", "CLUSTER_ID=4L6g3nShT-eMCtK--X86sw",
+            "--env", "KAFKA_PROCESS_ROLES=controller",
+            "--env", "KAFKA_LISTENERS=CONTROLLER://:9093",
+            "--env", "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:SSL",
+            "--env", "KAFKA_SSL_KEYSTORE_FILENAME=kafka01.keystore.jks",
+            "--env", "KAFKA_SSL_KEY_CREDENTIALS=kafka_ssl_key_creds",
+            "--env", "KAFKA_SSL_KEYSTORE_CREDENTIALS=kafka_keystore_creds",
+            "--env", "KAFKA_SSL_TRUSTSTORE_FILENAME=kafka.truststore.jks",
+            "--env", "KAFKA_SSL_TRUSTSTORE_CREDENTIALS=kafka_truststore_creds",
+            "--env", "KAFKA_SSL_CLIENT_AUTH=required",
+            self.IMAGE,
+            "bash", "-c",
+            "source /etc/kafka/docker/configure && "
+            "test \"$KAFKA_SSL_KEYSTORE_LOCATION\" = "
+            "/etc/kafka/secrets/kafka01.keystore.jks && "
+            "test \"$KAFKA_SSL_KEY_PASSWORD\" = abcdefgh && "
+            "test \"$KAFKA_SSL_TRUSTSTORE_LOCATION\" = "
+            "/etc/kafka/secrets/kafka.truststore.jks && "
+            "test \"$KAFKA_SSL_TRUSTSTORE_PASSWORD\" = abcdefgh",
+        ]
+        subprocess.run(command, check=True)
+
+
 class DockerSanityTestCombinedMode(DockerSanityTest):
     def setUp(self) -> None:
         self.start_compose(f"{self.FIXTURES_DIR}/{constants.COMBINED_MODE_COMPOSE}")
@@ -225,10 +257,12 @@ def run_tests(image, mode, fixtures_dir):
     DockerSanityTest.IMAGE = image
     DockerSanityTest.FIXTURES_DIR = fixtures_dir
     DockerSanityTest.MODE = mode
+    DockerConfigureTest.IMAGE = image
+    DockerConfigureTest.FIXTURES_DIR = fixtures_dir
 
     test_classes_to_run = []
     if mode == "jvm" or mode == "native":
-        test_classes_to_run = [DockerSanityTestCombinedMode, DockerSanityTestIsolatedMode]
+        test_classes_to_run = [DockerConfigureTest, DockerSanityTestCombinedMode, DockerSanityTestIsolatedMode]
     
     loader = unittest.TestLoader()
     suites_list = []
