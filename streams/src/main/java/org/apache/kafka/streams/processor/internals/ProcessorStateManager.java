@@ -438,6 +438,15 @@ public class ProcessorStateManager implements StateManager {
         return stores.values().stream().anyMatch(m -> m.corrupted);
     }
 
+    /**
+     * @return whether this state manager currently has any registered state stores. After
+     *         {@link #close()} the registered stores are cleared, so an empty result means
+     *         there is nothing left to close.
+     */
+    boolean hasRegisteredStores() {
+        return !stores.isEmpty();
+    }
+
     void markChangelogAsCorrupted(final Collection<TopicPartition> partitions) {
         final Collection<TopicPartition> partitionsToMarkAsCorrupted = new LinkedList<>(partitions);
         for (final StateStoreMetadata storeMetadata : stores.values()) {
