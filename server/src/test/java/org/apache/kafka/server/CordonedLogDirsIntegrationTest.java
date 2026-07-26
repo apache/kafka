@@ -427,11 +427,8 @@ public class CordonedLogDirsIntegrationTest {
             // Cordon the log dir we're going to decommission and move any replicas hosted on it elsewhere
             setCordonedLogDirs(admin, List.of(logDirToRemove), brokerResource);
             Set<TopicPartition> partitionsToMove = new HashSet<>();
-            TestUtils.waitForCondition(() -> {
-                LogDirDescription description = admin.describeLogDirs(List.of(brokerId)).allDescriptions().get().get(brokerId).get(logDirToRemove);
-                partitionsToMove.addAll(description.replicaInfos().keySet());
-                return true;
-            }, 10_000, "Unable to describe log dir " + logDirToRemove);
+            LogDirDescription description = admin.describeLogDirs(List.of(brokerId)).allDescriptions().get().get(brokerId).get(logDirToRemove);
+            partitionsToMove.addAll(description.replicaInfos().keySet());
             if (!partitionsToMove.isEmpty()) {
                 int target = clusterInstance.brokerIds().stream().filter(id -> id != brokerId).findFirst().get();
                 movePartitions(admin, partitionsToMove, brokerId, Optional.of(logDirToRemove), target);
