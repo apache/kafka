@@ -2923,6 +2923,7 @@ org.apache.kafka.streams.processor.internals.StreamThreadTest:
 - shouldRouteRemainInGroupToRemainInGroupForStreamsProtocol
 - shouldShutdownTaskManagerOnClose
 - shouldShutdownTaskManagerOnCloseWithoutStart
+- shouldThrottleEnforceRebalanceOnRepeatedShutdownRequestsUnderClassicProtocol
 - shouldThrowTaskMigratedExceptionHandlingRevocation
 - shouldThrowTaskMigratedExceptionHandlingTaskLost
 - shouldTimeOutOnMainConsumerInstanceId
