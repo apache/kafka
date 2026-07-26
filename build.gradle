@@ -2018,10 +2018,6 @@ project(':clients') {
     generator project(':generator')
   }
 
-  tasks.withType(GenerateModuleMetadata) {
-    enabled = false
-  }
-
   task createVersionFile() {
     def receiptFile = file("${layout.buildDirectory.get().asFile.path}/kafka/$buildVersionFileName")
     inputs.property "commitId", commitId
