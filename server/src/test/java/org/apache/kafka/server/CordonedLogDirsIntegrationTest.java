@@ -429,10 +429,9 @@ public class CordonedLogDirsIntegrationTest {
             Set<TopicPartition> partitionsToMove = new HashSet<>();
             LogDirDescription description = admin.describeLogDirs(List.of(brokerId)).allDescriptions().get().get(brokerId).get(logDirToRemove);
             partitionsToMove.addAll(description.replicaInfos().keySet());
-            if (!partitionsToMove.isEmpty()) {
-                int target = clusterInstance.brokerIds().stream().filter(id -> id != brokerId).findFirst().get();
-                movePartitions(admin, partitionsToMove, brokerId, Optional.of(logDirToRemove), target);
-            }
+            assertFalse(partitionsToMove.isEmpty());
+            int target = clusterInstance.brokerIds().stream().filter(id -> id != brokerId).findFirst().get();
+            movePartitions(admin, partitionsToMove, brokerId, Optional.of(logDirToRemove), target);
 
             // Uncordon log dirs
             setCordonedLogDirs(admin, List.of(), brokerResource);
