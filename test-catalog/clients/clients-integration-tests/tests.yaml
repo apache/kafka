@@ -39,6 +39,17 @@ org.apache.kafka.clients.admin.AdminFenceProducersTest:
 - testFenceAfterProducerCommit
 - testFenceBeforeProducerCommit
 - testFenceProducerTimeoutMs
+org.apache.kafka.clients.admin.AdminMetadataTest:
+- testDescribeCluster
+- testDescribeNonExistingTopic
+- testDescribeTopicsWithIds
+- testDescribeTopicsWithNames
+- testDescribeTopicsWithOptionPartitionSizeLimitPerResponse
+- testDescribeTopicsWithOptionTimeoutMs
+- testListNodes
+- testListNodesWithFencedBroker
+- testListTopicsWithOptionListInternal
+- testListTopicsWithOptionTimeoutMs
 org.apache.kafka.clients.admin.AutoTopicCreationTest:
 - testAutoCreateTopicWithDefaultConfig
 - testAutoCreateTopicWithExplicitBrokerConfig
