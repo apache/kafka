@@ -3743,6 +3743,104 @@ public class ReplicationControlManagerTest {
     }
 
     /**
+     * With wait-for-sync and threshold.percent=5:
+     * - A broker with ~4.8% out-of-ISR preferred partitions (1 OOS out of 21 total,
+     *   1*100=100 ≤ 5*21=105) is NOT gated — elections proceed.
+     * - A broker with ~5.3% out-of-ISR preferred partitions (1 OOS out of 19 total,
+     *   1*100=100 > 5*19=95) IS gated — no elections.
+     */
+    @Test
+    public void testWaitForSyncThresholdBoundaryAtFivePercent() {
+        // Case 1: 21 imbalanced partitions, 1 OOS = 4.8% < 5% — should NOT be gated.
+        {
+            ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+                .setElectionAlgorithm("wait-for-sync")
+                .setWaitForSyncThresholdPercent(5)
+                .setWaitForSyncMaxWaitMs(0)
+                .build();
+            ctx.registerBrokers(0, 1, 2);
+            ctx.unfenceBrokers(1, 2);
+            int[][] assignments = new int[21][];
+            for (int i = 0; i < 21; i++) {
+                assignments[i] = new int[]{0, 1, 2};
+            }
+            Uuid fooId = ctx.createTestTopic("foo", assignments).topicId();
+            ctx.unfenceBrokers(0);
+            // Add broker 0 to ISR for partitions 1-20; partition 0 stays out of ISR (1 OOS).
+            for (int i = 1; i < 21; i++) {
+                ctx.alterPartition(new TopicIdPartition(fooId, i), 1,
+                    isrWithDefaultEpoch(0, 1, 2), LeaderRecoveryState.RECOVERED);
+            }
+            ControllerResult<Boolean> result = ctx.replicationControl.maybeBalancePartitionLeaders();
+            assertTrue(result.records().size() > 0,
+                "1/21 ≈ 4.8% OOS is below the 5% threshold — broker should not be gated");
+        }
+
+        // Case 2: 19 imbalanced partitions, 1 OOS = 5.3% > 5% — should BE gated.
+        {
+            ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+                .setElectionAlgorithm("wait-for-sync")
+                .setWaitForSyncThresholdPercent(5)
+                .setWaitForSyncMaxWaitMs(0)
+                .build();
+            ctx.registerBrokers(0, 1, 2);
+            ctx.unfenceBrokers(1, 2);
+            int[][] assignments = new int[19][];
+            for (int i = 0; i < 19; i++) {
+                assignments[i] = new int[]{0, 1, 2};
+            }
+            Uuid barId = ctx.createTestTopic("bar", assignments).topicId();
+            ctx.unfenceBrokers(0);
+            // Add broker 0 to ISR for partitions 1-18; partition 0 stays out of ISR (1 OOS).
+            for (int i = 1; i < 19; i++) {
+                ctx.alterPartition(new TopicIdPartition(barId, i), 1,
+                    isrWithDefaultEpoch(0, 1, 2), LeaderRecoveryState.RECOVERED);
+            }
+            ControllerResult<Boolean> result = ctx.replicationControl.maybeBalancePartitionLeaders();
+            assertEquals(0, result.records().size(),
+                "1/19 ≈ 5.3% OOS is above the 5% threshold — broker should be gated");
+        }
+    }
+
+    /**
+     * The immediate algorithm (default) elects a preferred leader for every partition
+     * where the preferred replica is currently in ISR, without any gate based on the
+     * broker's overall out-of-ISR ratio. This verifies byte-identical behavior to
+     * pre-KIP operation: mixed in-sync / out-of-sync partitions on the same broker
+     * get only the eligible ones elected.
+     */
+    @Test
+    public void testImmediateAlgorithmElectsEligiblePartitionsRegardlessOfOosRatio() {
+        // Default algorithm is "immediate" — no gating on OOS ratio.
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(1, 2);
+        // Broker 0 preferred for 4 partitions (all imbalanced after fenced creation).
+        Uuid fooId = ctx.createTestTopic("foo", new int[][]{
+            new int[]{0, 1, 2}, new int[]{0, 1, 2},
+            new int[]{0, 1, 2}, new int[]{0, 1, 2}
+        }).topicId();
+        ctx.unfenceBrokers(0);
+        // Broker 0 joins ISR for p0 and p1 only — OOS ratio = 2/4 = 50%.
+        // wait-for-sync would gate here; immediate must not.
+        ctx.alterPartition(new TopicIdPartition(fooId, 0), 1,
+            isrWithDefaultEpoch(0, 1, 2), LeaderRecoveryState.RECOVERED);
+        ctx.alterPartition(new TopicIdPartition(fooId, 1), 1,
+            isrWithDefaultEpoch(0, 1, 2), LeaderRecoveryState.RECOVERED);
+
+        ControllerResult<Boolean> result = ctx.replicationControl.maybeBalancePartitionLeaders();
+
+        // Exactly 2 elections: p0 and p1 (broker 0 in ISR). p2 and p3 skipped (OOS).
+        assertEquals(2, result.records().size(),
+            "immediate algorithm should elect all partitions where preferred is in ISR");
+        Set<Integer> electedPartitions = result.records().stream()
+            .map(r -> ((PartitionChangeRecord) r.message()).partitionId())
+            .collect(Collectors.toSet());
+        assertTrue(electedPartitions.contains(0), "p0 should be elected");
+        assertTrue(electedPartitions.contains(1), "p1 should be elected");
+    }
+
+    /**
      * Round-robin scheduling ensures that when multiple preferred brokers each have
      * imbalanced partitions, elections are spread across brokers rather than exhausting
      * one broker's queue before moving to the next.

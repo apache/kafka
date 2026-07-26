@@ -316,6 +316,39 @@ public class PeriodicTaskControlManagerTest {
         env.manager.deactivate();
     }
 
+    /**
+     * Multiple tasks that have no throttledRescheduleDelayNs each independently reschedule
+     * at immediatePeriodNs (10 ms) when continuation is true. Verifies that the throttle
+     * path introduced for electPreferred does not contaminate other tasks.
+     */
+    @Test
+    public void testMultipleTasksWithoutThrottleEachUseImmediatePeriodOnContinuation() {
+        FakePeriodicTask taskA = new FakePeriodicTask("taskA", MILLISECONDS.toNanos(100));
+        FakePeriodicTask taskB = new FakePeriodicTask("taskB", MILLISECONDS.toNanos(100));
+        taskA.continuation.set(true);
+        taskB.continuation.set(true);
+
+        PeriodicTaskControlManagerTestEnv env = new PeriodicTaskControlManagerTestEnv();
+        env.manager.activate();
+        env.manager.registerTask(taskA.task);
+        env.manager.registerTask(taskB.task);
+
+        // Both fire at t=100ms (period=100ms each).
+        env.advanceTime(100);
+        assertEquals(1, taskA.numCalls.get(), "taskA fires at t=100ms");
+        assertEquals(1, taskB.numCalls.get(), "taskB fires at t=100ms");
+
+        // Both had continuation=true → rescheduled at immediatePeriodNs=10ms.
+        env.advanceTime(5);
+        assertEquals(1, taskA.numCalls.get(), "taskA must not fire before immediatePeriodNs elapses");
+        assertEquals(1, taskB.numCalls.get(), "taskB must not fire before immediatePeriodNs elapses");
+        env.advanceTime(5);
+        assertEquals(2, taskA.numCalls.get(), "taskA fires at t+10ms (immediatePeriodNs)");
+        assertEquals(2, taskB.numCalls.get(), "taskB fires at t+10ms (immediatePeriodNs)");
+
+        env.manager.deactivate();
+    }
+
     @Test
     public void testImmediatePeriodFallbackWhenThrottledRescheduleAbsent() {
         FakePeriodicTask foo = new FakePeriodicTask("foo", MILLISECONDS.toNanos(100));
