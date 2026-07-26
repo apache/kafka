@@ -405,6 +405,10 @@ public class GroupCoordinatorConfig {
         .map(TaskAssignor::name)
         .toList();
 
+    public static final String STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG = "group.streams.rack.aware.assignment.tags";
+    public static final String STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT = "";
+    public static final String STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DOC = "List of client tag keys used to distribute standby replicas across Kafka Streams instances. When configured, and the used broker-side assignor supports it, it will make a best-effort to distribute standby tasks over each client tag dimension.";
+
     public static final String STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG = "group.streams.assignor.offload.enable";
     public static final String STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DOC = "Whether to offload streams group assignment to a group coordinator background thread.";
     public static final boolean STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT = true;
@@ -527,6 +531,7 @@ public class GroupCoordinatorConfig {
         .define(STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DOC)
         .define(STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG, INT, STREAMS_GROUP_NUM_WARMUP_REPLICAS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_NUM_WARMUP_REPLICAS_DOC)
         .define(STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG, INT, STREAMS_GROUP_MAX_WARMUP_REPLICAS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_MAX_WARMUP_REPLICAS_DOC)
+        .define(STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, LIST, STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT, ConfigDef.ValidList.anyNonDuplicateValues(true, false), LOW, STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DOC)
         .define(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG, CLASS, STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_DEFAULT, MEDIUM, STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_DOC)
         .define(STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_CONFIG, LONG, STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DEFAULT, atLeast(0L), MEDIUM, STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DOC);
 
@@ -596,6 +601,7 @@ public class GroupCoordinatorConfig {
     private final int streamsGroupMinTaskOffsetIntervalMs;
     private final int streamsGroupNumWarmupReplicas;
     private final int streamsGroupMaxWarmupReplicas;
+    private final List<String> streamsGroupRackAwareAssignmentTags;
     private final long streamsGroupAcceptableRecoveryLag;
     private final List<TaskAssignor> streamsGroupAssignors;
     private final List<String> streamsGroupAssignorNames;
@@ -661,6 +667,7 @@ public class GroupCoordinatorConfig {
         this.streamsGroupMaxSize = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MAX_SIZE_CONFIG);
         this.streamsGroupNumStandbyReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_CONFIG);
         this.streamsGroupMaxStandbyReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_CONFIG);
+        this.streamsGroupRackAwareAssignmentTags = config.getList(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
         this.streamsGroupInitialRebalanceDelayMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG);
         this.streamsGroupMinAssignmentIntervalMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG);
         this.streamsGroupMaxAssignmentIntervalMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG);
@@ -677,7 +684,12 @@ public class GroupCoordinatorConfig {
     }
 
     private void checkConstraints() {
-        // New group coordinator configs validation.
+        verifyConsumerGroupConfigs();
+        verifyShareGroupConfigs();
+        verifyStreamsGroupConfigs();
+    }
+
+    private void verifyConsumerGroupConfigs() {
         require(consumerGroupMaxHeartbeatIntervalMs >= consumerGroupMinHeartbeatIntervalMs,
                 String.format("%s must be greater than or equal to %s", CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG));
         require(consumerGroupHeartbeatIntervalMs >= consumerGroupMinHeartbeatIntervalMs,
@@ -700,9 +712,9 @@ public class GroupCoordinatorConfig {
                 String.format("%s must be greater than or equal to %s", CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG));
         require(consumerGroupAssignmentIntervalMs() <= consumerGroupMaxAssignmentIntervalMs,
                 String.format("%s must be less than or equal to %s", CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG));
+    }
 
-
-        // Share group configs validation.
+    private void verifyShareGroupConfigs() {
         require(shareGroupMaxHeartbeatIntervalMs >= shareGroupMinHeartbeatIntervalMs,
             String.format("%s must be greater than or equal to %s",
                 SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG));
@@ -738,9 +750,9 @@ public class GroupCoordinatorConfig {
         require(shareGroupAssignmentIntervalMs() <= shareGroupMaxAssignmentIntervalMs,
             String.format("%s must be less than or equal to %s",
                 SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, SHARE_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG));
+    }
 
-
-        // Streams group configs validation.
+    private void verifyStreamsGroupConfigs() {
         require(streamsGroupMaxHeartbeatIntervalMs >= streamsGroupMinHeartbeatIntervalMs,
             String.format("%s must be greater than or equal to %s",
                 STREAMS_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG));
@@ -778,6 +790,24 @@ public class GroupCoordinatorConfig {
             String.format("%s must be greater than or equal to %s", STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG));
         require(streamsGroupNumWarmupReplicas <= streamsGroupMaxWarmupReplicas,
             String.format("%s must be less than or equal to %s", STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG, STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG));
+
+        // ConfigDef silently de-duplicates LIST values during parsing, so inspect the raw value to make
+        // sure a broker configured with duplicate rack-aware assignment tags refuses to start.
+        List<String> rawRackAwareAssignmentTags = rawRackAwareAssignmentTags();
+        require(Set.copyOf(rawRackAwareAssignmentTags).size() == rawRackAwareAssignmentTags.size(),
+            String.format("%s must not contain duplicate tag keys.", STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG));
+    }
+
+    /**
+     * Returns the rack-aware assignment tags exactly as configured, before {@link ConfigDef} removes duplicates.
+     */
+    private List<String> rawRackAwareAssignmentTags() {
+        String rawValue = (String) config.originals().get(STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
+        if (rawValue == null) {
+            return List.of();
+        }
+        String trimmed = rawValue.trim();
+        return trimmed.isEmpty() ? List.of() : List.of(trimmed.split("\\s*,\\s*", -1));
     }
 
     /**
@@ -1416,6 +1446,13 @@ public class GroupCoordinatorConfig {
      */
     public int streamsGroupMaxNumStandbyReplicas() {
         return streamsGroupMaxStandbyReplicas;
+    }
+
+    /**
+     * The list of client tag keys used for rack-aware standby task assignment.
+     */
+    public List<String> streamsGroupRackAwareAssignmentTags() {
+        return streamsGroupRackAwareAssignmentTags;
     }
 
     /**

@@ -34,10 +34,12 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
+import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
 import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
 import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
@@ -103,6 +105,8 @@ public final class GroupConfig extends AbstractConfig {
 
     public static final String STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG = "streams.assignment.interval.ms";
 
+    public static final String STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG = "streams.rack.aware.assignment.tags";
+
     public static final String STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG = "streams.assignor.offload.enable";
 
     public static final String STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG = "streams.task.offset.interval.ms";
@@ -157,6 +161,8 @@ public final class GroupConfig extends AbstractConfig {
     private final Optional<Integer> streamsInitialRebalanceDelayMs;
 
     private final Optional<Integer> streamsAssignmentIntervalMs;
+
+    private final Optional<List<String>> streamsRackAwareAssignmentTags;
 
     private final Optional<Boolean> streamsAssignorOffloadEnable;
 
@@ -305,6 +311,12 @@ public final class GroupConfig extends AbstractConfig {
             atLeast(0),
             MEDIUM,
             GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_DOC)
+        .define(STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
+            LIST,
+            GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT,
+            ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+            LOW,
+            GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DOC)
         .define(STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG,
             LONG,
             GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DEFAULT,
@@ -361,6 +373,7 @@ public final class GroupConfig extends AbstractConfig {
         Map.entry(STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG)),
         Map.entry(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG)),
         Map.entry(STREAMS_NUM_WARMUP_REPLICAS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG)),
+        Map.entry(STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG)),
         Map.entry(STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_CONFIG)),
         Map.entry(STREAMS_ASSIGNOR_NAME_CONFIG, Optional.empty()),
 
@@ -409,6 +422,7 @@ public final class GroupConfig extends AbstractConfig {
         this.streamsNumStandbyReplicas = optionalInt(STREAMS_NUM_STANDBY_REPLICAS_CONFIG);
         this.streamsInitialRebalanceDelayMs = optionalInt(STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG);
         this.streamsAssignmentIntervalMs = optionalInt(STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG);
+        this.streamsRackAwareAssignmentTags = optionalList(STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
         this.streamsAssignorOffloadEnable = optionalBoolean(STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG);
         this.streamsTaskOffsetIntervalMs = optionalInt(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG);
         this.streamsNumWarmupReplicas = optionalInt(STREAMS_NUM_WARMUP_REPLICAS_CONFIG);
@@ -437,6 +451,10 @@ public final class GroupConfig extends AbstractConfig {
         return originals().containsKey(key) ? Optional.of(getString(key)) : Optional.empty();
     }
 
+    private Optional<List<String>> optionalList(String key) {
+        return originals().containsKey(key) ? Optional.of(getList(key)) : Optional.empty();
+    }
+
     public static Optional<Type> configType(String configName) {
         return Optional.ofNullable(CONFIG_DEF.configKeys().get(configName)).map(c -> c.type);
     }
@@ -450,7 +468,7 @@ public final class GroupConfig extends AbstractConfig {
      *
      * @param newGroupConfig         The new group config overrides.
      */
-    public static void validateNames(Map<String, ?> newGroupConfig) {
+    public static void validateNames(Map<String, String> newGroupConfig) {
         Set<String> names = configNames();
         for (String name : newGroupConfig.keySet()) {
             if (!names.contains(name)) {
@@ -468,11 +486,14 @@ public final class GroupConfig extends AbstractConfig {
      * @param shareGroupConfig       The share group config.
      */
     public static void validate(
-        Map<String, ?> newGroupConfig,
+        Map<String, String> newGroupConfig,
         GroupCoordinatorConfig groupCoordinatorConfig,
         ShareGroupConfig shareGroupConfig
     ) {
         validateNames(newGroupConfig);
+        // ConfigDef silently de-duplicates LIST values during parsing, so inspect the raw value to make
+        // sure an alterConfigs request with duplicate rack-aware assignment tags is rejected.
+        validateNoDuplicateRackAwareAssignmentTags(newGroupConfig);
         var parsed = CONFIG_DEF.parse(newGroupConfig);
         parsed.keySet().retainAll(newGroupConfig.keySet());
         validateValues(
@@ -480,6 +501,25 @@ public final class GroupConfig extends AbstractConfig {
             groupCoordinatorConfig,
             shareGroupConfig
         );
+    }
+
+    /**
+     * Rejects an alterConfigs request whose rack-aware assignment tags contain duplicate keys, inspecting the
+     * raw value because {@link ConfigDef} removes duplicates from LIST values before they can be validated.
+     *
+     * @param newGroupConfig The new unparsed group config overrides.
+     */
+    private static void validateNoDuplicateRackAwareAssignmentTags(Map<String, String> newGroupConfig) {
+        String rawValue = newGroupConfig.get(STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
+        if (rawValue == null) {
+            return;
+        }
+        String trimmed = rawValue.trim();
+        List<String> rawTags = trimmed.isEmpty() ? List.of() : List.of(trimmed.split("\\s*,\\s*", -1));
+        if (Set.copyOf(rawTags).size() != rawTags.size()) {
+            throw new InvalidConfigurationException(
+                STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG + " must not contain duplicate tag keys.");
+        }
     }
 
     /**
@@ -1182,6 +1222,13 @@ public final class GroupConfig extends AbstractConfig {
      */
     public Optional<Integer> streamsNumWarmupReplicas() {
         return streamsNumWarmupReplicas;
+    }
+
+    /**
+     * The list of client tag keys used for rack-aware standby task assignment.
+     */
+    public Optional<List<String>> streamsRackAwareAssignmentTags() {
+        return streamsRackAwareAssignmentTags;
     }
 
     /**
