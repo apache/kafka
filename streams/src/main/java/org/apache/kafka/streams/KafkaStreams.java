@@ -30,6 +30,8 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -1785,20 +1787,15 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     /**
-     * Finds the metadata containing the active hosts and standby hosts where the key being queried would reside.
-     *
-     * @param storeName     the {@code storeName} to find metadata for
-     * @param key           the key to find metadata for
-     * @param keySerializer serializer for the key
-     * @param <K>           key type
-     * Returns {@link KeyQueryMetadata} containing all metadata about hosting the given key for the given store,
-     * or {@code null} if no matching metadata could be found.
+     * Finds the metadata containing the active hosts and standby hosts where the key being queried would reside,
+     * without requiring record headers to be provided.
+     * <p>
+     * If your partitioner or serializer makes use of headers, use the {@link #queryMetadataForKey(String, Object, Headers, Serializer) Headers} overload, otherwise the returned metadata may not match where the key actually resides.
      */
     public <K> KeyQueryMetadata queryMetadataForKey(final String storeName,
                                                     final K key,
                                                     final Serializer<K> keySerializer) {
-        validateIsRunningOrRebalancing();
-        return streamsMetadataState.keyQueryMetadataForKey(storeName, key, keySerializer);
+        return queryMetadataForKey(storeName, key, new RecordHeaders(), keySerializer);
     }
 
     /**
@@ -1806,6 +1803,38 @@ public class KafkaStreams implements AutoCloseable {
      *
      * @param storeName     the {@code storeName} to find metadata for
      * @param key           the key to find metadata for
+     * @param headers       the record headers
+     * @param keySerializer serializer for the key
+     * @param <K>           key type
+     * Returns {@link KeyQueryMetadata} containing all metadata about hosting the given key for the given store,
+     * or {@code null} if no matching metadata could be found.
+     */
+    public <K> KeyQueryMetadata queryMetadataForKey(final String storeName,
+                                                    final K key,
+                                                    final Headers headers,
+                                                    final Serializer<K> keySerializer) {
+        validateIsRunningOrRebalancing();
+        return streamsMetadataState.keyQueryMetadataForKey(storeName, key, headers, keySerializer);
+    }
+
+    /**
+     * Finds the metadata containing the active hosts and standby hosts where the key being queried would reside,
+     * using the supplied partitioner and without requiring record headers to be provided.
+     * <p>
+     * If your partitioner or serializer makes use of headers, use the {@link #queryMetadataForKey(String, Object, Headers, StreamPartitioner) Headers} overload, otherwise the returned metadata may not match where the key actually resides.
+     */
+    public <K> KeyQueryMetadata queryMetadataForKey(final String storeName,
+                                                    final K key,
+                                                    final StreamPartitioner<? super K, ?> partitioner) {
+        return queryMetadataForKey(storeName, key, new RecordHeaders(), partitioner);
+    }
+
+    /**
+     * Finds the metadata containing the active hosts and standby hosts where the key being queried would reside.
+     *
+     * @param storeName     the {@code storeName} to find metadata for
+     * @param key           the key to find metadata for
+     * @param headers       the record headers
      * @param partitioner   the partitioner to be used to locate the host for the key
      * @param <K>           key type
      * Returns {@link KeyQueryMetadata} containing all metadata about hosting the given key for the given store, using
@@ -1813,9 +1842,10 @@ public class KafkaStreams implements AutoCloseable {
      */
     public <K> KeyQueryMetadata queryMetadataForKey(final String storeName,
                                                     final K key,
+                                                    final Headers headers,
                                                     final StreamPartitioner<? super K, ?> partitioner) {
         validateIsRunningOrRebalancing();
-        return streamsMetadataState.keyQueryMetadataForKey(storeName, key, partitioner);
+        return streamsMetadataState.keyQueryMetadataForKey(storeName, key, headers, partitioner);
     }
 
     /**
