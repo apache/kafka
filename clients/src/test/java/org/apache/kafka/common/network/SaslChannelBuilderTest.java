@@ -21,12 +21,14 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
 import org.apache.kafka.common.security.authenticator.TestJaasConfig;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
@@ -45,9 +47,14 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.lang.reflect.Field;
+import java.net.InetAddress;
+import java.net.Socket;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.SocketChannel;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 import javax.security.auth.Subject;
@@ -60,6 +67,15 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 
 public class SaslChannelBuilderTest {
@@ -161,6 +177,52 @@ public class SaslChannelBuilderTest {
 
         SaslChannelBuilder saslSslBuilder = createChannelBuilder(SecurityProtocol.SASL_SSL, "PLAIN");
         saslSslBuilder.configure(configs);
+    }
+
+    @Test
+    public void testNonGssapiClientUsesServerAddressWithoutReverseDns() throws Exception {
+        assertClientServerName("PLAIN", "127.0.0.1");
+    }
+
+    @Test
+    public void testGssapiClientUsesServerHostname() throws Exception {
+        assertClientServerName(SaslConfigs.GSSAPI_MECHANISM, "server.example.test");
+    }
+
+    private void assertClientServerName(String saslMechanism, String expectedServerName) throws Exception {
+        SaslChannelBuilder builder = Mockito.spy(createChannelBuilder(SecurityProtocol.SASL_PLAINTEXT, saslMechanism));
+        Map<String, Object> configs = new HashMap<>();
+        if (SaslConfigs.GSSAPI_MECHANISM.equals(saslMechanism)) {
+            configs.put(SaslConfigs.SASL_KERBEROS_SERVICE_NAME, "kafka");
+            configs.putAll(new ConfigDef().withClientSaslSupport().parse(configs));
+        }
+        builder.configure(configs);
+
+        InetAddress serverAddress = InetAddress.getByAddress("server.example.test", new byte[]{127, 0, 0, 1});
+        Socket socket = mock(Socket.class);
+        SocketChannel socketChannel = mock(SocketChannel.class);
+        SelectionKey selectionKey = mock(SelectionKey.class);
+        TransportLayer transportLayer = mock(TransportLayer.class);
+        SaslClientAuthenticator authenticator = mock(SaslClientAuthenticator.class);
+        AtomicReference<String> actualServerName = new AtomicReference<>();
+
+        when(selectionKey.channel()).thenReturn(socketChannel);
+        when(socketChannel.socket()).thenReturn(socket);
+        when(socket.getInetAddress()).thenReturn(serverAddress);
+        doReturn(transportLayer).when(builder).buildTransportLayer(eq("test"), same(selectionKey), same(socketChannel),
+                any(ChannelMetadataRegistry.class));
+        doAnswer(invocation -> {
+            actualServerName.set(invocation.getArgument(3));
+            return authenticator;
+        }).when(builder).buildClientAuthenticator(anyMap(), any(), anyString(), anyString(), anyString(),
+                same(transportLayer), any());
+
+        KafkaChannel channel = builder.buildChannel("test", selectionKey, 1024, MemoryPool.NONE,
+                mock(ChannelMetadataRegistry.class));
+
+        assertEquals(expectedServerName, actualServerName.get());
+        channel.close();
+        builder.close();
     }
 
     private SaslChannelBuilder createGssapiChannelBuilder(Map<String, JaasContext> jaasContexts, GSSManager gssManager) {

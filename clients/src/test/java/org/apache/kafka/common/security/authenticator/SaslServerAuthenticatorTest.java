@@ -82,6 +82,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -170,6 +171,30 @@ public class SaslServerAuthenticatorTest {
     public void testLatestApiVersionsRequest() throws IOException {
         testApiVersionsRequest(ApiKeys.API_VERSIONS.latestVersion(),
                 "apache-kafka-java", AppInfoParser.getVersion());
+    }
+
+    @Test
+    public void testNonKerberosSaslServerUsesServerAddressWithoutReverseDns() throws IOException {
+        String mechanism = SCRAM_SHA_256.mechanismName();
+        SaslServer saslServer = mock(SaslServer.class);
+        TransportLayer transportLayer = mockTransportLayer();
+        InetAddress serverAddress = InetAddress.getByAddress("server.example.test", new byte[]{127, 0, 0, 1});
+        when(transportLayer.socketChannel().socket().getLocalAddress()).thenReturn(serverAddress);
+        Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
+                Collections.singletonList(mechanism));
+
+        try (MockedStatic<Sasl> ignored = Mockito.mockStatic(Sasl.class)) {
+            ignored.when(() -> Sasl.createSaslServer(eq(mechanism), eq("kafka"), anyString(), anyMap(), any()))
+                    .thenReturn(saslServer);
+
+            SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer, mechanism,
+                    new DefaultChannelMetadataRegistry());
+            mockRequest(saslHandshakeRequest(mechanism), transportLayer);
+            authenticator.authenticate();
+
+            ignored.verify(() -> Sasl.createSaslServer(eq(mechanism), eq("kafka"),
+                    eq(serverAddress.getHostAddress()), anyMap(), any()));
+        }
     }
 
     @Test

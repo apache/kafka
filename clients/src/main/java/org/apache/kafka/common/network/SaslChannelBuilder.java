@@ -230,10 +230,13 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                         metadataRegistry);
             } else {
                 LoginManager loginManager = loginManagers.get(clientSaslMechanism);
+                String serverName = SaslConfigs.GSSAPI_MECHANISM.equals(clientSaslMechanism)
+                        ? socket.getInetAddress().getHostName()
+                        : socket.getInetAddress().getHostAddress();
                 authenticatorCreator = () -> buildClientAuthenticator(configs,
                         saslCallbackHandlers.get(clientSaslMechanism),
                         id,
-                        socket.getInetAddress().getHostName(),
+                        serverName,
                         loginManager.serviceName(),
                         finalTransportLayer,
                         subjects.get(clientSaslMechanism));
