@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -31,6 +33,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -38,6 +41,9 @@ import org.mockito.quality.Strictness;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -98,15 +104,14 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
 
         store.put(key1, serializedValue);
 
+        final byte[] expectedRawHeaders = Utils.rawHeaderBytes(serializedValue);
+        final ArgumentCaptor<byte[]> rawHeadersCaptor = ArgumentCaptor.forClass(byte[].class);
         verify(inner).put(key1, serializedValue);
         verify(context).logChange(
-            store.name(),
-            binaryKey,
-            value1,
-            0L,
-            headers,
-            Position.emptyPosition()
+            eq(store.name()), eq(binaryKey), eq(value1), eq(0L),
+            rawHeadersCaptor.capture(), eq(Position.emptyPosition())
         );
+        assertArrayEquals(expectedRawHeaders, rawHeadersCaptor.getValue());
     }
 
     @Test
@@ -122,15 +127,14 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
 
         store.put(key1, serializedValue);
 
+        final byte[] expectedRawHeaders = Utils.rawHeaderBytes(serializedValue);
+        final ArgumentCaptor<byte[]> rawHeadersCaptor = ArgumentCaptor.forClass(byte[].class);
         verify(inner).put(key1, serializedValue);
         verify(context).logChange(
-            store.name(),
-            binaryKey,
-            value1,
-            0L,
-            headers,
-            POSITION
+            eq(store.name()), eq(binaryKey), eq(value1), eq(0L),
+            rawHeadersCaptor.capture(), eq(POSITION)
         );
+        assertArrayEquals(expectedRawHeaders, rawHeadersCaptor.getValue());
     }
 
     @Test
@@ -146,12 +150,7 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
 
         verify(inner).put(key1, null);
         verify(context).logChange(
-            store.name(),
-            binaryKey,
-            null,
-            42L,
-            contextHeaders,
-            Position.emptyPosition()
+            store.name(), binaryKey, null, 42L, contextHeaders, Position.emptyPosition()
         );
     }
 
@@ -167,15 +166,14 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
 
         store.put(key1, serializedValue);
 
+        final byte[] expectedRawHeaders = Utils.rawHeaderBytes(serializedValue);
+        final ArgumentCaptor<byte[]> rawHeadersCaptor = ArgumentCaptor.forClass(byte[].class);
         verify(inner).put(key1, serializedValue);
         verify(context).logChange(
-            store.name(),
-            binaryKey,
-            value1,
-            0L,
-            emptyHeaders,
-            Position.emptyPosition()
+            eq(store.name()), eq(binaryKey), eq(value1), eq(0L),
+            rawHeadersCaptor.capture(), eq(Position.emptyPosition())
         );
+        assertArrayEquals(expectedRawHeaders, rawHeadersCaptor.getValue());
     }
 
     @Test
@@ -191,12 +189,7 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
 
         verify(inner).remove(key1);
         verify(context).logChange(
-            store.name(),
-            binaryKey,
-            null,
-            42L,
-            contextHeaders,
-            Position.emptyPosition()
+            store.name(), binaryKey, null, 42L, contextHeaders, Position.emptyPosition()
         );
     }
 
@@ -215,14 +208,23 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
 
         store.put(key1, serializedValue);
 
+        final byte[] expectedRawHeaders = Utils.rawHeaderBytes(serializedValue);
+        final ArgumentCaptor<byte[]> rawHeadersCaptor = ArgumentCaptor.forClass(byte[].class);
         verify(inner).put(key1, serializedValue);
         verify(context).logChange(
-            store.name(),
-            binaryKey,
-            value1,
-            0L,
-            headers,
-            Position.emptyPosition()
+            eq(store.name()), eq(binaryKey), eq(value1), eq(0L),
+            rawHeadersCaptor.capture(), eq(Position.emptyPosition())
         );
+        assertArrayEquals(expectedRawHeaders, rawHeadersCaptor.getValue());
+    }
+
+    private static void assertHeadersEqual(final Headers expected, final Headers actual) {
+        final Header[] expectedArray = expected.toArray();
+        final Header[] actualArray = actual.toArray();
+        assertEquals(expectedArray.length, actualArray.length, "Header count mismatch");
+        for (int i = 0; i < expectedArray.length; i++) {
+            assertEquals(expectedArray[i].key(), actualArray[i].key(), "Header key mismatch at index " + i);
+            assertArrayEquals(expectedArray[i].value(), actualArray[i].value(), "Header value mismatch at index " + i);
+        }
     }
 }

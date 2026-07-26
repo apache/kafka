@@ -59,7 +59,7 @@ import java.util.Map;
 import static java.time.Instant.ofEpochMilli;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -125,20 +125,18 @@ public class ChangeLoggingTimestampedWindowBytesStoreWithHeadersTest {
 
         verify(inner).put(bytesKey, valueTimestampHeaders, 0);
 
-        final ArgumentCaptor<Headers> headersCaptor = ArgumentCaptor.forClass(Headers.class);
+        final byte[] expectedRawHeaders = Utils.rawHeaderBytes(valueTimestampHeaders);
+        final ArgumentCaptor<byte[]> rawHeadersCaptor = ArgumentCaptor.forClass(byte[].class);
         verify(context).logChange(
             eq(store.name()),
             eq(key),
             eq(value),
             eq(testTimestamp),
-            headersCaptor.capture(),
+            rawHeadersCaptor.capture(),
             eq(Position.emptyPosition())
         );
 
-        final Headers capturedHeaders = headersCaptor.getValue();
-        assertEquals(2, capturedHeaders.toArray().length);
-        assertEquals("value1", new String(capturedHeaders.lastHeader("key1").value()));
-        assertEquals("value2", new String(capturedHeaders.lastHeader("key2").value()));
+        assertArrayEquals(expectedRawHeaders, rawHeadersCaptor.getValue());
     }
 
     @Test
@@ -151,20 +149,18 @@ public class ChangeLoggingTimestampedWindowBytesStoreWithHeadersTest {
 
         verify(inner).put(bytesKey, valueTimestampHeaders, 0);
 
-        final ArgumentCaptor<Headers> headersCaptor = ArgumentCaptor.forClass(Headers.class);
+        final byte[] expectedRawHeaders = Utils.rawHeaderBytes(valueTimestampHeaders);
+        final ArgumentCaptor<byte[]> rawHeadersCaptor = ArgumentCaptor.forClass(byte[].class);
         verify(context).logChange(
             eq(store.name()),
             eq(key),
             eq(value),
             eq(testTimestamp),
-            headersCaptor.capture(),
+            rawHeadersCaptor.capture(),
             eq(POSITION)
         );
 
-        final Headers capturedHeaders = headersCaptor.getValue();
-        assertEquals(2, capturedHeaders.toArray().length);
-        assertEquals("value1", new String(capturedHeaders.lastHeader("key1").value()));
-        assertEquals("value2", new String(capturedHeaders.lastHeader("key2").value()));
+        assertArrayEquals(expectedRawHeaders, rawHeadersCaptor.getValue());
     }
 
     @SuppressWarnings({"resource", "unused"})
@@ -211,20 +207,18 @@ public class ChangeLoggingTimestampedWindowBytesStoreWithHeadersTest {
 
         verify(inner, times(2)).put(bytesKey, valueTimestampHeaders, 0);
 
-        final ArgumentCaptor<Headers> headersCaptor = ArgumentCaptor.forClass(Headers.class);
+        final byte[] expectedRawHeaders = Utils.rawHeaderBytes(valueTimestampHeaders);
+        final ArgumentCaptor<byte[]> rawHeadersCaptor = ArgumentCaptor.forClass(byte[].class);
         verify(context, times(2)).logChange(
             eq(store.name()),
             any(Bytes.class),
             eq(value),
             eq(testTimestamp),
-            headersCaptor.capture(),
+            rawHeadersCaptor.capture(),
             eq(Position.emptyPosition())
         );
 
-        final Headers capturedHeaders = headersCaptor.getValue();
-        assertEquals(2, capturedHeaders.toArray().length);
-        assertEquals("value1", new String(capturedHeaders.lastHeader("key1").value()));
-        assertEquals("value2", new String(capturedHeaders.lastHeader("key2").value()));
+        assertArrayEquals(expectedRawHeaders, rawHeadersCaptor.getValue());
     }
 
     private InternalMockProcessorContext mockContext() {

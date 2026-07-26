@@ -19,6 +19,7 @@ package org.apache.kafka.clients.producer;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.PreSerializedHeaders;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 
 import java.util.Objects;
@@ -59,7 +60,7 @@ public class ProducerRecord<K, V> {
 
     /**
      * Creates a record with a specified timestamp to be sent to a specified topic and partition
-     * 
+     *
      * @param topic The topic the record will be appended to
      * @param partition The partition to which the record should be sent
      * @param timestamp The timestamp of the record, in milliseconds since epoch. If null, the producer will assign
@@ -82,7 +83,12 @@ public class ProducerRecord<K, V> {
         this.key = key;
         this.value = value;
         this.timestamp = timestamp;
-        this.headers = new RecordHeaders(headers);
+        // Preserve an internal PreSerializedHeaders carrier as-is so the producer can take the
+        // raw-bytes write path; copying into a fresh RecordHeaders would force deserialization.
+        // Any other Headers/Iterable is copied defensively as before.
+        this.headers = headers instanceof PreSerializedHeaders
+            ? (PreSerializedHeaders) headers
+            : new RecordHeaders(headers);
     }
 
     /**
@@ -96,7 +102,7 @@ public class ProducerRecord<K, V> {
      * @param value The record contents
      */
     public ProducerRecord(String topic, Integer partition, Long timestamp, K key, V value) {
-        this(topic, partition, timestamp, key, value, null);
+        this(topic, partition, timestamp, key, value, (Iterable<Header>) null);
     }
 
     /**
@@ -109,7 +115,7 @@ public class ProducerRecord<K, V> {
      * @param headers The headers that will be included in the record
      */
     public ProducerRecord(String topic, Integer partition, K key, V value, Iterable<Header> headers) {
-        this(topic, partition, null, key, value, headers);
+        this(topic, partition, (Long) null, key, value, headers);
     }
     
     /**
@@ -121,7 +127,7 @@ public class ProducerRecord<K, V> {
      * @param value The record contents
      */
     public ProducerRecord(String topic, Integer partition, K key, V value) {
-        this(topic, partition, null, key, value, null);
+        this(topic, partition, (Long) null, key, value, (Iterable<Header>) null);
     }
     
     /**
@@ -132,7 +138,7 @@ public class ProducerRecord<K, V> {
      * @param value The record contents
      */
     public ProducerRecord(String topic, K key, V value) {
-        this(topic, null, null, key, value, null);
+        this(topic, null, (Long) null, key, value, (Iterable<Header>) null);
     }
     
     /**
@@ -142,7 +148,7 @@ public class ProducerRecord<K, V> {
      * @param value The record contents
      */
     public ProducerRecord(String topic, V value) {
-        this(topic, null, null, null, value, null);
+        this(topic, null, (Long) null, null, value, (Iterable<Header>) null);
     }
 
     /**

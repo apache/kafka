@@ -555,6 +555,10 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         return RECORD_BATCH_OVERHEAD + DefaultRecord.recordSizeUpperBound(key, value, headers);
     }
 
+    static int estimateBatchSizeUpperBound(ByteBuffer key, ByteBuffer value, byte[] rawSerializedHeaders) {
+        return RECORD_BATCH_OVERHEAD + DefaultRecord.recordSizeUpperBound(key, value, rawSerializedHeaders);
+    }
+
     public static int incrementSequence(int sequence, int increment) {
         if (sequence > Integer.MAX_VALUE - increment)
             return increment - (Integer.MAX_VALUE - sequence) - 1;

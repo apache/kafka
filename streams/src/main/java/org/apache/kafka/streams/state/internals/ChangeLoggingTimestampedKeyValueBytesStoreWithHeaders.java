@@ -22,7 +22,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.List;
 
-import static org.apache.kafka.streams.state.internals.Utils.headers;
+import static org.apache.kafka.streams.state.internals.Utils.rawHeaderBytes;
 import static org.apache.kafka.streams.state.internals.Utils.rawPlainValue;
 import static org.apache.kafka.streams.state.internals.Utils.timestamp;
 
@@ -48,16 +48,14 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders
     public void put(final Bytes key,
                     final byte[] valueTimestampHeaders) {
         wrapped().put(key, valueTimestampHeaders);
-        log(
-            key,
-            rawPlainValue(valueTimestampHeaders),
-            valueTimestampHeaders == null
-                ? internalContext.recordContext().timestamp()
-                : timestamp(valueTimestampHeaders),
-            valueTimestampHeaders == null
-                ? internalContext.recordContext().headers()
-                : headers(valueTimestampHeaders)
-        );
+        if (valueTimestampHeaders == null) {
+            log(key, null, internalContext.recordContext().timestamp(), internalContext.recordContext().headers());
+        } else {
+            internalContext.logChange(
+                name(), key, rawPlainValue(valueTimestampHeaders), timestamp(valueTimestampHeaders),
+                rawHeaderBytes(valueTimestampHeaders), wrapped().getPosition()
+            );
+        }
     }
 
     @Override
@@ -66,16 +64,14 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders
         final byte[] previous = wrapped().putIfAbsent(key, valueTimestampHeaders);
         if (previous == null) {
             // then it was absent
-            log(
-                key,
-                rawPlainValue(valueTimestampHeaders),
-                valueTimestampHeaders == null
-                    ? internalContext.recordContext().timestamp()
-                    : timestamp(valueTimestampHeaders),
-                valueTimestampHeaders == null
-                    ? internalContext.recordContext().headers()
-                    : headers(valueTimestampHeaders)
-            );
+            if (valueTimestampHeaders == null) {
+                log(key, null, internalContext.recordContext().timestamp(), internalContext.recordContext().headers());
+            } else {
+                internalContext.logChange(
+                    name(), key, rawPlainValue(valueTimestampHeaders), timestamp(valueTimestampHeaders),
+                    rawHeaderBytes(valueTimestampHeaders), wrapped().getPosition()
+                );
+            }
         }
         return previous;
     }
@@ -85,16 +81,14 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders
         wrapped().putAll(entries);
         for (final KeyValue<Bytes, byte[]> entry : entries) {
             final byte[] valueTimestampHeaders = entry.value;
-            log(
-                entry.key,
-                rawPlainValue(valueTimestampHeaders),
-                valueTimestampHeaders == null
-                    ? internalContext.recordContext().timestamp()
-                    : timestamp(valueTimestampHeaders),
-                valueTimestampHeaders == null
-                    ? internalContext.recordContext().headers()
-                    : headers(valueTimestampHeaders)
-            );
+            if (valueTimestampHeaders == null) {
+                log(entry.key, null, internalContext.recordContext().timestamp(), internalContext.recordContext().headers());
+            } else {
+                internalContext.logChange(
+                    name(), entry.key, rawPlainValue(valueTimestampHeaders), timestamp(valueTimestampHeaders),
+                    rawHeaderBytes(valueTimestampHeaders), wrapped().getPosition()
+                );
+            }
         }
     }
 

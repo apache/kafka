@@ -20,8 +20,8 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.SessionStore;
 
-import static org.apache.kafka.streams.state.internals.Utils.headers;
 import static org.apache.kafka.streams.state.internals.Utils.rawAggregation;
+import static org.apache.kafka.streams.state.internals.Utils.rawHeaderBytes;
 
 /**
  * Change-logging wrapper for a session bytes store whose values also carry headers.
@@ -57,15 +57,24 @@ public class ChangeLoggingSessionBytesStoreWithHeaders
     @Override
     public void put(final Windowed<Bytes> sessionKey, final byte[] aggregationWithHeaders) {
         wrapped().put(sessionKey, aggregationWithHeaders);
-        internalContext.logChange(
-            name(),
-            SessionKeySchema.toBinary(sessionKey),
-            rawAggregation(aggregationWithHeaders),
-            internalContext.recordContext().timestamp(),
-            aggregationWithHeaders == null
-                ? internalContext.recordContext().headers()
-                : headers(aggregationWithHeaders),
-            wrapped().getPosition()
-        );
+        if (aggregationWithHeaders == null) {
+            internalContext.logChange(
+                name(),
+                SessionKeySchema.toBinary(sessionKey),
+                null,
+                internalContext.recordContext().timestamp(),
+                internalContext.recordContext().headers(),
+                wrapped().getPosition()
+            );
+        } else {
+            internalContext.logChange(
+                name(),
+                SessionKeySchema.toBinary(sessionKey),
+                rawAggregation(aggregationWithHeaders),
+                internalContext.recordContext().timestamp(),
+                rawHeaderBytes(aggregationWithHeaders),
+                wrapped().getPosition()
+            );
+        }
     }
 }

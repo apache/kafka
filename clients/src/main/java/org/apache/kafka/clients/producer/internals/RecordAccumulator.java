@@ -30,11 +30,9 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.record.internal.AbstractRecords;
 import org.apache.kafka.common.record.internal.CompressionRatioEstimator;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -288,13 +286,50 @@ public class RecordAccumulator {
                                      long maxTimeToBlock,
                                      long nowMs,
                                      Cluster cluster) throws InterruptedException {
+        return append(topic, partition, timestamp, key, value, RecordHeadersWriter.of(headers),
+                callbacks, maxTimeToBlock, nowMs, cluster);
+    }
+
+    /**
+     * Append a record whose headers are already serialized in the Kafka record wire format,
+     * bypassing per-header serialization. See {@link RecordHeadersWriter}.
+     */
+    public RecordAppendResult appendWithRawHeaders(String topic,
+                                                   int partition,
+                                                   long timestamp,
+                                                   byte[] key,
+                                                   byte[] value,
+                                                   byte[] rawSerializedHeaders,
+                                                   AppendCallbacks callbacks,
+                                                   long maxTimeToBlock,
+                                                   long nowMs,
+                                                   Cluster cluster) throws InterruptedException {
+        return append(topic, partition, timestamp, key, value, RecordHeadersWriter.ofRaw(rawSerializedHeaders),
+                callbacks, maxTimeToBlock, nowMs, cluster);
+    }
+
+    /**
+     * Single-sourced append flow (partitioning, batching and buffer allocation) shared by the
+     * {@link Header}{@code []} and raw-bytes header paths. Only the header-dependent leaf
+     * operations — record-size estimation and the batch append — are delegated to
+     * {@code headersWriter}.
+     */
+    private RecordAppendResult append(String topic,
+                                      int partition,
+                                      long timestamp,
+                                      byte[] key,
+                                      byte[] value,
+                                      RecordHeadersWriter headersWriter,
+                                      AppendCallbacks callbacks,
+                                      long maxTimeToBlock,
+                                      long nowMs,
+                                      Cluster cluster) throws InterruptedException {
         TopicInfo topicInfo = topicInfoMap.computeIfAbsent(topic, k -> new TopicInfo(createBuiltInPartitioner(logContext, k, batchSize, partitionerRackAware, rack)));
 
         // We keep track of the number of appending thread to make sure we do not miss batches in
         // abortIncompleteBatches().
         appendsInProgress.incrementAndGet();
         ByteBuffer buffer = null;
-        if (headers == null) headers = Record.EMPTY_HEADERS;
         try {
             // Loop to retry in case we encounter partitioner's race conditions.
             while (true) {
@@ -322,7 +357,7 @@ public class RecordAccumulator {
                     if (partitionChanged(topic, topicInfo, partitionInfo, dq, nowMs, cluster))
                         continue;
 
-                    RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
+                    RecordAppendResult appendResult = tryAppend(timestamp, key, value, headersWriter, callbacks, dq, nowMs);
                     if (appendResult != null) {
                         // If queue has incomplete batches we disable switch (see comments in updatePartitionInfo).
                         boolean enableSwitch = allBatchesFull(dq);
@@ -332,8 +367,7 @@ public class RecordAccumulator {
                 }
 
                 if (buffer == null) {
-                    int size = Math.max(this.batchSize, AbstractRecords.estimateSizeInBytesUpperBound(
-                            RecordBatch.CURRENT_MAGIC_VALUE, compression.type(), key, value, headers));
+                    int size = Math.max(this.batchSize, headersWriter.estimateSizeInBytesUpperBound(compression, key, value));
                     log.trace("Allocating a new {} byte message buffer for topic {} partition {} with remaining timeout {}ms", size, topic, effectivePartition, maxTimeToBlock);
                     // This call may block if we exhausted buffer space.
                     buffer = free.allocate(size, maxTimeToBlock);
@@ -348,7 +382,7 @@ public class RecordAccumulator {
                     if (partitionChanged(topic, topicInfo, partitionInfo, dq, nowMs, cluster))
                         continue;
 
-                    RecordAppendResult appendResult = appendNewBatch(topic, effectivePartition, dq, timestamp, key, value, headers, callbacks, buffer, nowMs);
+                    RecordAppendResult appendResult = appendNewBatch(topic, effectivePartition, dq, timestamp, key, value, headersWriter, callbacks, buffer, nowMs);
                     // Set buffer to null, so that deallocate doesn't return it back to free pool, since it's used in the batch.
                     if (appendResult.newBatchCreated)
                         buffer = null;
@@ -373,7 +407,7 @@ public class RecordAccumulator {
      * @param timestamp The timestamp of the record
      * @param key The key for the record
      * @param value The value for the record
-     * @param headers the Headers for the record
+     * @param headersWriter the headers writer for the record
      * @param callbacks The callbacks to execute
      * @param buffer The buffer for the new batch
      * @param nowMs The current time, in milliseconds
@@ -384,13 +418,13 @@ public class RecordAccumulator {
                                               long timestamp,
                                               byte[] key,
                                               byte[] value,
-                                              Header[] headers,
+                                              RecordHeadersWriter headersWriter,
                                               AppendCallbacks callbacks,
                                               ByteBuffer buffer,
                                               long nowMs) {
         assert partition != RecordMetadata.UNKNOWN_PARTITION;
 
-        RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
+        RecordAppendResult appendResult = tryAppend(timestamp, key, value, headersWriter, callbacks, dq, nowMs);
         if (appendResult != null) {
             // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
             return appendResult;
@@ -398,7 +432,7 @@ public class RecordAccumulator {
 
         MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer);
         ProducerBatch batch = new ProducerBatch(new TopicPartition(topic, partition), recordsBuilder, nowMs);
-        FutureRecordMetadata future = Objects.requireNonNull(batch.tryAppend(timestamp, key, value, headers,
+        FutureRecordMetadata future = Objects.requireNonNull(headersWriter.tryAppend(batch, timestamp, key, value,
                 callbacks, nowMs));
 
         dq.addLast(batch);
@@ -428,14 +462,14 @@ public class RecordAccumulator {
      *  and memory records built) in one of the following cases (whichever comes first): right before send,
      *  if it is expired, or when the producer is closed.
      */
-    private RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers,
+    private RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, RecordHeadersWriter headersWriter,
                                          Callback callback, Deque<ProducerBatch> deque, long nowMs) {
         if (closed)
             throw new KafkaException("Producer closed while send in progress");
         ProducerBatch last = deque.peekLast();
         if (last != null) {
             int initialBytes = last.estimatedSizeInBytes();
-            FutureRecordMetadata future = last.tryAppend(timestamp, key, value, headers, callback, nowMs);
+            FutureRecordMetadata future = headersWriter.tryAppend(last, timestamp, key, value, callback, nowMs);
             if (future == null) {
                 last.closeForRecordAppends();
             } else {

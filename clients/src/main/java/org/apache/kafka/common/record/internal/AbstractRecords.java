@@ -143,6 +143,18 @@ public abstract class AbstractRecords implements Records {
             return Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, key, value);
     }
 
+    public static int estimateSizeInBytesUpperBound(byte magic, CompressionType compressionType, byte[] key, byte[] value, byte[] rawSerializedHeaders) {
+        return estimateSizeInBytesUpperBound(magic, compressionType, Utils.wrapNullable(key), Utils.wrapNullable(value), rawSerializedHeaders);
+    }
+
+    public static int estimateSizeInBytesUpperBound(byte magic, CompressionType compressionType, ByteBuffer key,
+                                                    ByteBuffer value, byte[] rawSerializedHeaders) {
+        if (magic >= RecordBatch.MAGIC_VALUE_V2)
+            return DefaultRecordBatch.estimateBatchSizeUpperBound(key, value, rawSerializedHeaders);
+        else
+            throw new IllegalArgumentException("Raw serialized headers are only supported for magic >= V2");
+    }
+
     /**
      * Return the size of the record batch header.
      *

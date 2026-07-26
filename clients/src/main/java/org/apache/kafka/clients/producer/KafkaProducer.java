@@ -61,6 +61,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.PreSerializedHeaders;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.internals.Plugin;
@@ -1169,18 +1170,32 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // take into account broker load, the amount of data produced to each partition, etc.).
             int partition = partition(record, serializedKey, serializedValue, cluster);
 
-            setReadOnly(record.headers());
-            Header[] headers = record.headers().toArray();
-
-            int serializedSize = AbstractRecords.estimateSizeInBytesUpperBound(RecordBatch.CURRENT_MAGIC_VALUE,
-                    compression.type(), serializedKey, serializedValue, headers);
-            ensureValidRecordSize(serializedSize);
             long timestamp = record.timestamp() == null ? nowMs : record.timestamp();
 
-            // Append the record to the accumulator.  Note, that the actual partition may be
-            // calculated there and can be accessed via appendCallbacks.topicPartition.
-            RecordAccumulator.RecordAppendResult result = accumulator.append(record.topic(), partition, timestamp, serializedKey,
-                    serializedValue, headers, appendCallbacks, remainingWaitMs, nowMs, cluster);
+            final RecordAccumulator.RecordAppendResult result;
+            // Fast path: if the record carries headers that are already serialized in the wire
+            // format and were never read/modified (e.g. Kafka Streams changelog writes), hand the
+            // bytes straight to the accumulator without a deserialize/re-serialize round trip. If
+            // anything materialized them (interceptor, serializer, headers() read), rawIfUnmodified()
+            // returns null and we take the normal Header[] path.
+            byte[] rawHeaders = record.headers() instanceof PreSerializedHeaders
+                ? ((PreSerializedHeaders) record.headers()).rawIfUnmodified()
+                : null;
+            if (rawHeaders != null) {
+                int serializedSize = AbstractRecords.estimateSizeInBytesUpperBound(RecordBatch.CURRENT_MAGIC_VALUE,
+                        compression.type(), serializedKey, serializedValue, rawHeaders);
+                ensureValidRecordSize(serializedSize);
+                result = accumulator.appendWithRawHeaders(record.topic(), partition, timestamp, serializedKey,
+                        serializedValue, rawHeaders, appendCallbacks, remainingWaitMs, nowMs, cluster);
+            } else {
+                setReadOnly(record.headers());
+                Header[] headers = record.headers().toArray();
+                int serializedSize = AbstractRecords.estimateSizeInBytesUpperBound(RecordBatch.CURRENT_MAGIC_VALUE,
+                        compression.type(), serializedKey, serializedValue, headers);
+                ensureValidRecordSize(serializedSize);
+                result = accumulator.append(record.topic(), partition, timestamp, serializedKey,
+                        serializedValue, headers, appendCallbacks, remainingWaitMs, nowMs, cluster);
+            }
             assert appendCallbacks.getPartition() != RecordMetadata.UNKNOWN_PARTITION;
 
             // Add the partition to the transaction (if in progress) after it has been successfully

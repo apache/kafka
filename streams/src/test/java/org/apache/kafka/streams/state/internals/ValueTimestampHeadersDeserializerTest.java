@@ -272,6 +272,45 @@ public class ValueTimestampHeadersDeserializerTest {
     }
 
     @Test
+    public void shouldExtractRawHeaderBytesWithHeaders() {
+        final Headers headers = new RecordHeaders()
+            .add("key1", "value1".getBytes())
+            .add("key2", "value2".getBytes());
+        final ValueTimestampHeaders<String> original =
+            ValueTimestampHeaders.make("test-value", 123456789L, headers);
+
+        final byte[] serialized = serializer.serialize(TOPIC, original);
+        final byte[] rawHeaderBytes = Utils.rawHeaderBytes(serialized);
+
+        assertNotNull(rawHeaderBytes);
+        // Re-deserialize the raw bytes to verify they represent the correct headers
+        final Headers roundTripped = HeadersDeserializer.deserialize(rawHeaderBytes);
+        assertEquals(2, roundTripped.toArray().length);
+        assertArrayEquals("value1".getBytes(), roundTripped.lastHeader("key1").value());
+        assertArrayEquals("value2".getBytes(), roundTripped.lastHeader("key2").value());
+    }
+
+    @Test
+    public void shouldExtractEmptyRawHeaderBytes() {
+        final Headers headers = new RecordHeaders();
+        final ValueTimestampHeaders<String> original =
+            ValueTimestampHeaders.make("test-value", 123456789L, headers);
+
+        final byte[] serialized = serializer.serialize(TOPIC, original);
+        final byte[] rawHeaderBytes = Utils.rawHeaderBytes(serialized);
+
+        assertNotNull(rawHeaderBytes);
+        assertEquals(0, rawHeaderBytes.length);
+        final Headers roundTripped = HeadersDeserializer.deserialize(rawHeaderBytes);
+        assertEquals(0, roundTripped.toArray().length);
+    }
+
+    @Test
+    public void shouldReturnNullRawHeaderBytesForNullInput() {
+        assertNull(Utils.rawHeaderBytes(null));
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     public void shouldPassHeadersToDeserializer() {
         final Deserializer<String> mockDeserializer = mock(Deserializer.class);

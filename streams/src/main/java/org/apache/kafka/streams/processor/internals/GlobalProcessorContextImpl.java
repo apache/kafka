@@ -151,6 +151,16 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext<Object,
     }
 
     @Override
+    public void logChange(final String storeName,
+                          final Bytes key,
+                          final byte[] value,
+                          final long timestamp,
+                          final byte[] rawSerializedHeaders,
+                          final Position position) {
+        throw new UnsupportedOperationException("this should not happen: logChange() not supported in global processor context.");
+    }
+
+    @Override
     public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) {
         throw new UnsupportedOperationException("this should not happen: transitionToActive() not supported in global processor context.");
     }

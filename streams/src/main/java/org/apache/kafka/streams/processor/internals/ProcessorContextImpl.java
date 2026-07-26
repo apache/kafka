@@ -16,10 +16,14 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.PreSerializedHeaders;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Cancellable;
@@ -37,6 +41,8 @@ import org.apache.kafka.streams.state.internals.PositionSerde;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -144,6 +150,97 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
             BYTEARRAY_VALUE_SERIALIZER,
             null,
             null);
+    }
+
+    @Override
+    public void logChange(final String storeName,
+                          final Bytes key,
+                          final byte[] value,
+                          final long timestamp,
+                          final byte[] rawSerializedHeaders,
+                          final Position position) {
+        throwUnsupportedOperationExceptionIfStandby("logChange");
+
+        final TopicPartition changelogPartition = stateManager().registeredChangelogPartitionFor(storeName);
+
+        byte[] finalRawHeaders = rawSerializedHeaders;
+        if (consistencyEnabled) {
+            finalRawHeaders = mergeVectorClockIntoRawHeaders(rawSerializedHeaders, position);
+        }
+
+        final byte[] keyBytes = BYTES_KEY_SERIALIZER.serialize(changelogPartition.topic(), null, key);
+        // Wrap the already-serialized header bytes in a lazy carrier so the producer can write them
+        // verbatim, avoiding a deserialize/re-serialize round trip on the changelog hot path.
+        final ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
+            changelogPartition.topic(),
+            changelogPartition.partition(),
+            timestamp,
+            keyBytes,
+            value,
+            new PreSerializedHeaders(finalRawHeaders)
+        );
+
+        collector.send(key, value, null, null, record);
+    }
+
+    /**
+     * Merge the two consistency vector-clock entries into raw serialized header bytes without
+     * deserializing the existing headers. The raw format is [count(varint)][entry1][entry2]...
+     * or empty.
+     * <p>
+     * This sits on the changelog hot path (once per record when consistency is enabled), so it
+     * writes directly into a single exactly-sized {@link ByteBuffer} rather than chaining
+     * {@code ByteArrayOutputStream}/{@code DataOutputStream} and intermediate copies.
+     */
+    private byte[] mergeVectorClockIntoRawHeaders(final byte[] rawHeaders, final Position position) {
+        int existingCount = 0;
+        int existingEntriesOffset = 0;
+        int existingEntriesLength = 0;
+        if (rawHeaders != null && rawHeaders.length > 0) {
+            final ByteBuffer buf = ByteBuffer.wrap(rawHeaders);
+            existingCount = ByteUtils.readVarint(buf);
+            existingEntriesOffset = buf.position();
+            existingEntriesLength = buf.remaining();
+        }
+
+        // The two vector-clock entries appended to every consistency record.
+        final Header versionHeader = ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY;
+        final byte[] versionKey = versionHeader.key().getBytes(StandardCharsets.UTF_8);
+        final byte[] versionValue = versionHeader.value();
+        final byte[] positionKey = ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY
+            .getBytes(StandardCharsets.UTF_8);
+        final byte[] positionValue = PositionSerde.serialize(position).array();
+
+        final int totalSize = ByteUtils.sizeOfVarint(existingCount + 2)
+            + existingEntriesLength
+            + headerEntrySize(versionKey, versionValue)
+            + headerEntrySize(positionKey, positionValue);
+
+        final ByteBuffer out = ByteBuffer.allocate(totalSize);
+        ByteUtils.writeVarint(existingCount + 2, out);
+        if (existingEntriesLength > 0) {
+            out.put(rawHeaders, existingEntriesOffset, existingEntriesLength);
+        }
+        writeHeaderEntry(out, versionKey, versionValue);
+        writeHeaderEntry(out, positionKey, positionValue);
+
+        return out.array();
+    }
+
+    private static int headerEntrySize(final byte[] key, final byte[] value) {
+        return ByteUtils.sizeOfVarint(key.length) + key.length
+            + (value == null ? ByteUtils.sizeOfVarint(-1) : ByteUtils.sizeOfVarint(value.length) + value.length);
+    }
+
+    private static void writeHeaderEntry(final ByteBuffer out, final byte[] key, final byte[] value) {
+        ByteUtils.writeVarint(key.length, out);
+        out.put(key);
+        if (value == null) {
+            ByteUtils.writeVarint(-1, out);
+        } else {
+            ByteUtils.writeVarint(value.length, out);
+            out.put(value);
+        }
     }
 
     private void addVectorClockToHeaders(final Headers headers, final Position position) {

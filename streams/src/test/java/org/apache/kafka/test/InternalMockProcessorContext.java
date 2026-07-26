@@ -18,6 +18,7 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.PreSerializedHeaders;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
@@ -453,6 +454,19 @@ public class InternalMockProcessorContext<KOut, VOut>
             BYTEARRAY_VALUE_SERIALIZER,
             null,
             null);
+    }
+
+    @Override
+    public void logChange(final String storeName,
+                          final Bytes key,
+                          final byte[] value,
+                          final long timestamp,
+                          final byte[] rawSerializedHeaders,
+                          final Position position) {
+        // Materialize the raw header bytes and delegate to the Headers-based overload so the
+        // regular collector path (and consistency vector-clock handling) is exercised in tests.
+        final Headers headers = new PreSerializedHeaders(rawSerializedHeaders);
+        logChange(storeName, key, value, timestamp, headers, position);
     }
 
     private void addVectorClockToHeaders(Headers headers, Position position) {

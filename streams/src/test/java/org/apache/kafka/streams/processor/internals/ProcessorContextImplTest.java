@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -47,11 +50,14 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -66,6 +72,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextImpl.BYTEARRAY_VALUE_SERIALIZER;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextImpl.BYTES_KEY_SERIALIZER;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -560,6 +567,64 @@ public class ProcessorContextImplTest {
             BYTEARRAY_VALUE_SERIALIZER,
             null,
             null);
+    }
+
+    @Test
+    public void shouldMergeVectorClockIntoRawHeadersWhenConsistencyEnabled() {
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        when(stateManager.registeredChangelogPartitionFor(REGISTERED_STORE_NAME)).thenReturn(CHANGELOG_PARTITION);
+
+        final Position position = Position.emptyPosition();
+
+        // A single pre-existing header, serialized in the wire format [count(varint)][entry...].
+        final byte[] existingHeaderBytes = serializeRawHeaders(
+            new RecordHeader("existing", "existing-value".getBytes(StandardCharsets.UTF_8)));
+
+        context = buildProcessorContextImpl(streamsConfigWithConsistencyMock(), stateManager);
+        final StreamTask task = mock(StreamTask.class);
+        context.transitionToActive(task, recordCollector, null);
+
+        context.logChange(REGISTERED_STORE_NAME, KEY_BYTES, VALUE_BYTES, TIMESTAMP, existingHeaderBytes, position);
+
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<ProducerRecord<byte[], byte[]>> recordCaptor =
+            ArgumentCaptor.forClass(ProducerRecord.class);
+        verify(recordCollector).send(any(), any(), any(), any(), recordCaptor.capture());
+
+        // The merged headers must deserialize to the existing header plus the two vector-clock entries.
+        final Header[] merged = recordCaptor.getValue().headers().toArray();
+        assertEquals(3, merged.length);
+
+        assertEquals("existing", merged[0].key());
+        assertArrayEquals("existing-value".getBytes(StandardCharsets.UTF_8), merged[0].value());
+
+        final Header expectedVersion = ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY;
+        assertEquals(expectedVersion.key(), merged[1].key());
+        assertArrayEquals(expectedVersion.value(), merged[1].value());
+
+        assertEquals(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY, merged[2].key());
+        assertArrayEquals(PositionSerde.serialize(position).array(), merged[2].value());
+    }
+
+    private static byte[] serializeRawHeaders(final Header... headers) {
+        final ByteBuffer buffer = ByteBuffer.allocate(1024);
+        ByteUtils.writeVarint(headers.length, buffer);
+        for (final Header header : headers) {
+            final byte[] key = header.key().getBytes(StandardCharsets.UTF_8);
+            ByteUtils.writeVarint(key.length, buffer);
+            buffer.put(key);
+            final byte[] value = header.value();
+            if (value == null) {
+                ByteUtils.writeVarint(-1, buffer);
+            } else {
+                ByteUtils.writeVarint(value.length, buffer);
+                buffer.put(value);
+            }
+        }
+        buffer.flip();
+        final byte[] result = new byte[buffer.remaining()];
+        buffer.get(result);
+        return result;
     }
 
     @Test

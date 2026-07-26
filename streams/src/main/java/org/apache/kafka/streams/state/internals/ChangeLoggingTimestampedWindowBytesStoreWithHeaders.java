@@ -19,7 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.WindowStore;
 
-import static org.apache.kafka.streams.state.internals.Utils.headers;
+import static org.apache.kafka.streams.state.internals.Utils.rawHeaderBytes;
 import static org.apache.kafka.streams.state.internals.Utils.rawPlainValue;
 import static org.apache.kafka.streams.state.internals.Utils.timestamp;
 
@@ -44,17 +44,16 @@ public class ChangeLoggingTimestampedWindowBytesStoreWithHeaders extends ChangeL
     @Override
     void log(final Bytes key,
              final byte[] valueTimestampHeaders) {
-        internalContext.logChange(
-            name(),
-            key,
-            rawPlainValue(valueTimestampHeaders),
-            valueTimestampHeaders != null
-                ? timestamp(valueTimestampHeaders)
-                : internalContext.recordContext().timestamp(),
-            valueTimestampHeaders != null
-                ? headers(valueTimestampHeaders)
-                : internalContext.recordContext().headers(),
-            wrapped().getPosition()
-        );
+        if (valueTimestampHeaders != null) {
+            internalContext.logChange(
+                name(), key, rawPlainValue(valueTimestampHeaders), timestamp(valueTimestampHeaders),
+                rawHeaderBytes(valueTimestampHeaders), wrapped().getPosition()
+            );
+        } else {
+            internalContext.logChange(
+                name(), key, null, internalContext.recordContext().timestamp(),
+                internalContext.recordContext().headers(), wrapped().getPosition()
+            );
+        }
     }
 }
