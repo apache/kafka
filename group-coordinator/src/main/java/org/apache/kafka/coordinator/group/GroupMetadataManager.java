@@ -185,6 +185,7 @@ import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -2049,6 +2050,7 @@ public class GroupMetadataManager {
      * @param clientTags          Used for rack-aware assignment algorithm, or null.
      * @param shutdownApplication Whether all Streams clients in the group should shut down.
      * @param memberEndpointEpoch The last endpoint information epoch seen be the group member.
+     * @param requestApiVersion   The api version of the StreamsGroupHeartbeat request.
      * @return A result containing the StreamsGroupHeartbeat response and a list of records to update the state machine.
      */
     private CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
@@ -2070,7 +2072,8 @@ public class GroupMetadataManager {
         Endpoint userEndpoint,
         List<KeyValue> clientTags,
         boolean shutdownApplication,
-        int memberEndpointEpoch
+        int memberEndpointEpoch,
+        int requestApiVersion
     ) throws ApiException {
         final long currentTimeMs = time.milliseconds();
         final List<CoordinatorRecord> records = new ArrayList<>();
@@ -2354,6 +2357,27 @@ public class GroupMetadataManager {
                         requestingMemberId)
                 )
         ));
+
+        String rackAwareTagsValue = currentAssignmentConfigs.getOrDefault("rack.aware.assignment.tags", "").trim();
+        // The MISSING_CLIENT_TAGS status (code 6) requires version 1 of the RPC: version 0 clients
+        // throw on unknown status codes, so it must not be sent to them.
+        if (requestApiVersion >= 1 && !rackAwareTagsValue.isEmpty()) {
+            List<String> requiredTags = Arrays.asList(rackAwareTagsValue.split("\\s*,\\s*", -1));
+            Set<String> memberTagKeys = updatedMember.clientTags().keySet();
+            List<String> missingTags = requiredTags.stream()
+                .filter(tag -> !memberTagKeys.contains(tag))
+                .collect(Collectors.toList());
+            if (!missingTags.isEmpty()) {
+                returnedStatus.add(
+                    new Status()
+                        .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_CLIENT_TAGS.code())
+                        .setStatusDetail(
+                            String.format("Missing required client tags for rack-aware standby assignment: %s. " +
+                                "Configure them via 'client.tag.<tagKey>' in your Streams config.", missingTags)
+                        )
+                );
+            }
+        }
 
         response.setStatus(returnedStatus);
 
@@ -5483,7 +5507,8 @@ public class GroupMetadataManager {
                 request.userEndpoint(),
                 request.clientTags(),
                 request.shutdownApplication(),
-                request.endpointInformationEpoch()
+                request.endpointInformationEpoch(),
+                context.requestVersion()
             );
         }
     }
@@ -9738,9 +9763,14 @@ public class GroupMetadataManager {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
         final Integer numStandbyReplicas = groupConfig.flatMap(GroupConfig::streamsNumStandbyReplicas)
             .orElse(config.streamsGroupNumStandbyReplicas());
-        return new TreeMap<>(Map.of(
-            "num.standby.replicas", numStandbyReplicas.toString()
-        ));
+        final List<String> rackAwareAssignmentTags = groupConfig.flatMap(GroupConfig::streamsRackAwareAssignmentTags)
+            .orElse(config.streamsGroupRackAwareAssignmentTags());
+        Map<String, String> configs = new TreeMap<>();
+        configs.put("num.standby.replicas", numStandbyReplicas.toString());
+        if (!rackAwareAssignmentTags.isEmpty()) {
+            configs.put("rack.aware.assignment.tags", String.join(",", rackAwareAssignmentTags));
+        }
+        return configs;
     }
 
     private static boolean hasUserEndpointChanged(StreamsGroupMember maybeOldMember, StreamsGroupMember updatedMember) {
