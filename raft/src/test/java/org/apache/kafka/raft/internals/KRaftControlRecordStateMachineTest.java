@@ -22,8 +22,8 @@ import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.internal.MemoryRecords;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.ExternalKRaftMetrics;
 import org.apache.kafka.raft.MockLog;
 import org.apache.kafka.raft.VoterSet;
@@ -34,12 +34,18 @@ import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.spy;
 
 final class KRaftControlRecordStateMachineTest {
     private static final RecordSerde<String> STRING_SERDE = new StringSerde();
@@ -58,7 +64,6 @@ final class KRaftControlRecordStateMachineTest {
             staticVoterSet,
             log,
             STRING_SERDE,
-            BufferSupplier.NO_CACHING,
             1024,
             new LogContext(),
             raftMetrics,
@@ -460,5 +465,81 @@ final class KRaftControlRecordStateMachineTest {
         assertEquals(Optional.empty(), partitionState.voterSetAtOffset(firstVoterSetOffset));
         assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(voterSetOffset));
         assertEquals(4, getNumberOfVoters(metrics).metricValue());
+    }
+
+    @Test
+    void testBufferSupplierCreatedAndClosedOnLogRead() {
+        Metrics metrics = new Metrics();
+        KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        ExternalKRaftMetrics externalMetrics = Mockito.mock(ExternalKRaftMetrics.class);
+        MockLog log = buildLog();
+        VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true));
+        int epoch = 1;
+
+        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet, raftMetrics, externalMetrics);
+
+        // Append a control record so that the log has something to read.
+        VoterSet voterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(4, 5, 6), true));
+        log.appendAsLeader(
+            MemoryRecords.withVotersRecord(
+                log.endOffset().offset(),
+                0,
+                epoch,
+                BufferSupplier.NO_CACHING.get(300),
+                voterSet.toVotersRecord((short) 0)
+            ),
+            epoch
+        );
+
+        BufferSupplier supplier = spy(new BufferSupplier.GrowableBufferSupplier());
+        try (MockedStatic<BufferSupplier> bufferSupplierMock = mockStatic(BufferSupplier.class)) {
+            bufferSupplierMock.when(BufferSupplier::create).thenReturn(supplier);
+
+            partitionState.updateState();
+
+            // The log read creates a BufferSupplier and closes it via try-with-resources.
+            bufferSupplierMock.verify(BufferSupplier::create, Mockito.times(1));
+        }
+
+        Mockito.verify(supplier).close();
+    }
+
+    @Test
+    void testBufferSupplierCreatedOnSnapshotRead() {
+        Metrics metrics = new Metrics();
+        KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        ExternalKRaftMetrics externalMetrics = Mockito.mock(ExternalKRaftMetrics.class);
+        MockLog log = buildLog();
+        VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true));
+        int epoch = 1;
+
+        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet, raftMetrics, externalMetrics);
+
+        // Create a snapshot with control records so that the snapshot has something to read.
+        KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
+        VoterSet voterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(4, 5, 6), true));
+        RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
+            .setRawSnapshotWriter(log.createNewSnapshotUnchecked(new OffsetAndEpoch(10, epoch)).get())
+            .setKraftVersion(kraftVersion)
+            .setVoterSet(Optional.of(voterSet));
+        try (RecordsSnapshotWriter<?> writer = builder.build(STRING_SERDE)) {
+            writer.freeze();
+        }
+        log.truncateToLatestSnapshot();
+
+        List<BufferSupplier> suppliers = new ArrayList<>();
+        try (MockedStatic<BufferSupplier> bufferSupplierMock = mockStatic(BufferSupplier.class)) {
+            bufferSupplierMock.when(BufferSupplier::create).thenAnswer(invocation -> {
+                BufferSupplier supplier = spy(new BufferSupplier.GrowableBufferSupplier());
+                suppliers.add(supplier);
+                return supplier;
+            });
+
+            partitionState.updateState();
+        }
+
+        // Every BufferSupplier created during the read is closed via try-with-resources.
+        assertFalse(suppliers.isEmpty());
+        suppliers.forEach(supplier -> Mockito.verify(supplier).close());
     }
 }

@@ -1220,7 +1220,7 @@ public class TopicCommandTest {
             ToolsTestUtils.removeReplicationThrottleForPartitions(adminClient, brokerIds, Set.of(tp));
             TestUtils.waitForCondition(
                     () -> adminClient.listPartitionReassignments().reassignments().get().isEmpty(),
-                    CLUSTER_WAIT_MS,  String.format("reassignmet not finished after %s ms", CLUSTER_WAIT_MS)
+                    CLUSTER_WAIT_MS,  String.format("reassignment not finished after %s ms", CLUSTER_WAIT_MS)
             );
         }
     }

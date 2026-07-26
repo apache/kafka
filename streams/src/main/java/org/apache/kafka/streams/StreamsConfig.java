@@ -24,6 +24,8 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -43,6 +45,7 @@ import org.apache.kafka.streams.errors.LogAndFailProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.ApplicationServerConfigValidator;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.kstream.SessionWindowedDeserializer;
@@ -157,6 +160,7 @@ import static org.apache.kafka.common.config.ConfigDef.parseType;
  * @see ConsumerConfig
  * @see ProducerConfig
  */
+@InterfaceAudience.Public
 public class StreamsConfig extends AbstractConfig {
 
     private static final Logger log = LoggerFactory.getLogger(StreamsConfig.class);
@@ -397,6 +401,12 @@ public class StreamsConfig extends AbstractConfig {
     public static final String UPGRADE_FROM_42 = UpgradeFromValues.UPGRADE_FROM_42.toString();
 
     /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 4.3.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_43 = UpgradeFromValues.UPGRADE_FROM_43.toString();
+
+    /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for at-least-once processing guarantees.
      */
     @SuppressWarnings("WeakerAccess")
@@ -533,6 +543,15 @@ public class StreamsConfig extends AbstractConfig {
     @Deprecated
     public static final String DEFAULT_DSL_STORE = ROCKS_DB;
 
+    /** {@code default.interactive.query.isolation.level} */
+    public static final String DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG = "default.interactive.query.isolation.level";
+    private static final String DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_DOC = "The default <code>IsolationLevel</code> used by interactive queries. " +
+        "Only meaningful when <code>" + "enable.transactional.statestores" + "</code> is <code>true</code>: " +
+        "<code>READ_UNCOMMITTED</code> reads include writes staged in the transaction buffer since the last commit; " +
+        "<code>READ_COMMITTED</code> reads skip the transaction buffer and return only committed data. " +
+        "IQv1 queries always use this value. IQv2 queries use this value as a default, but can override it per-query.";
+    public static final String DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_DEFAULT = IsolationLevel.READ_UNCOMMITTED.name();
+
     /** {@code dsl.store.suppliers.class } */
     public static final String DSL_STORE_SUPPLIERS_CLASS_CONFIG = "dsl.store.suppliers.class";
     static final String DSL_STORE_SUPPLIERS_CLASS_DOC = "Defines which store implementations to plug in to DSL operators. Must implement the <code>org.apache.kafka.streams.state.DslStoreSuppliers</code> interface.";
@@ -565,6 +584,14 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code enable.metrics.push} */
     @SuppressWarnings("WeakerAccess")
     public static  final String ENABLE_METRICS_PUSH_CONFIG = CommonClientConfigs.ENABLE_METRICS_PUSH_CONFIG;
+
+    /** {@code enable.transactional.statestores} */
+    public static final String TRANSACTIONAL_STATE_STORES_CONFIG = "enable.transactional.statestores";
+    private static final String TRANSACTIONAL_STATE_STORES_DOC = "Whether to enable transactional state stores. " +
+            "When enabled, state stores will buffer writes in a transaction buffer (if supported by the state store implementation), " +
+            "before committing them when the corresponding Kafka changelog transaction has committed. \n" +
+            "Under EOS, state stores will no longer be wiped on-error and rebuilt from scratch. " +
+            "In the event of an error (under either EOS or ALOS), only the writes since the last successful commit will be lost and replayed through the topology.";
     @Deprecated
     public static final String ENABLE_METRICS_PUSH_DOC = "Whether to enable pushing of internal client metrics for (main, restore, and global) consumers, producers, and admin clients." +
         " The cluster must have a client metrics subscription which corresponds to a client.";
@@ -784,6 +811,15 @@ public class StreamsConfig extends AbstractConfig {
     @Deprecated
     public static final String STATESTORE_CACHE_MAX_BYTES_DOC = "Maximum number of memory bytes to be used for statestore cache across all threads";
 
+    /** {@code statestore.uncommitted.max.bytes} */
+    public static final String STATESTORE_UNCOMMITTED_MAX_BYTES_CONFIG = "statestore.uncommitted.max.bytes";
+    private static final String STATESTORE_UNCOMMITTED_MAX_BYTES_DOC =
+        "The maximum number of uncommitted bytes across all transactional state stores on this " +
+        "application instance before an early commit is triggered, regardless of commit.interval.ms. " +
+        "The limit is divided equally across the configured number of stream threads, and the global state thread," +
+        "if the topology has any global stores. Set to -1 to disable. Default is 67108864 (64 MB).";
+    private static final long STATESTORE_UNCOMMITTED_MAX_BYTES_DEFAULT = 67_108_864L;
+
     /** {@code task.assignor.class} */
     @SuppressWarnings("WeakerAccess")
     public static final String TASK_ASSIGNOR_CLASS_CONFIG = "task.assignor.class";
@@ -878,6 +914,12 @@ public class StreamsConfig extends AbstractConfig {
             "Whether to use the configured <code>" + PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + "</code> during global store/KTable processing. " +
                     "Disabled by default. This config will be removed in Kafka Streams 5.0, where global exception handling will be enabled by default";
 
+    /** {@code topology.description.push.enabled} */
+    public static final String TOPOLOGY_DESCRIPTION_PUSH_ENABLED_CONFIG = "topology.description.push.enabled";
+    private static final String TOPOLOGY_DESCRIPTION_PUSH_ENABLED_DOC = "Controls whether the Kafka Streams client sends topology descriptions to the broker when requested. " +
+        "When set to false, the client will not prepare or push topology descriptions. " +
+        "Enabled by default.";
+
     static {
         CONFIG = new ConfigDef()
 
@@ -935,6 +977,12 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0),
                     Importance.MEDIUM,
                     STATESTORE_CACHE_MAX_BYTES_DOC)
+            .define(STATESTORE_UNCOMMITTED_MAX_BYTES_CONFIG,
+                    Type.LONG,
+                    STATESTORE_UNCOMMITTED_MAX_BYTES_DEFAULT,
+                    atLeast(-1),
+                    Importance.LOW,
+                    STATESTORE_UNCOMMITTED_MAX_BYTES_DOC)
             .define(CLIENT_ID_CONFIG,
                     Type.STRING,
                     "",
@@ -1075,6 +1123,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(APPLICATION_SERVER_CONFIG,
                     Type.STRING,
                     "",
+                    new ApplicationServerConfigValidator(),
                     Importance.LOW,
                     APPLICATION_SERVER_DOC)
             .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
@@ -1107,6 +1156,11 @@ public class StreamsConfig extends AbstractConfig {
                     true,
                     Importance.LOW,
                     ENABLE_METRICS_PUSH_DOC)
+            .define(TRANSACTIONAL_STATE_STORES_CONFIG,
+                    Type.BOOLEAN,
+                    false,
+                    Importance.LOW,
+                    TRANSACTIONAL_STATE_STORES_DOC)
             .define(RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG,
                     Type.INT,
                     null,
@@ -1157,6 +1211,14 @@ public class StreamsConfig extends AbstractConfig {
                     ConfigDef.CaseInsensitiveValidString.in(DSL_STORE_FORMAT_DEFAULT, DSL_STORE_FORMAT_HEADERS),
                     Importance.LOW,
                     DSL_STORE_FORMAT_DOC)
+            .define(DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG,
+                    Type.STRING,
+                    DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_DEFAULT,
+                    ConfigDef.CaseInsensitiveValidString.in(
+                        IsolationLevel.READ_UNCOMMITTED.name(),
+                        IsolationLevel.READ_COMMITTED.name()),
+                    Importance.LOW,
+                    DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_DOC)
             .define(DEFAULT_CLIENT_SUPPLIER_CONFIG,
                     Type.CLASS,
                     DefaultKafkaClientSupplier.class.getName(),
@@ -1305,7 +1367,12 @@ public class StreamsConfig extends AbstractConfig {
                     Type.LONG,
                     null,
                     Importance.LOW,
-                    WINDOW_SIZE_MS_DOC);
+                    WINDOW_SIZE_MS_DOC)
+            .define(TOPOLOGY_DESCRIPTION_PUSH_ENABLED_CONFIG,
+                    Type.BOOLEAN,
+                    true,
+                    Importance.MEDIUM,
+                    TOPOLOGY_DESCRIPTION_PUSH_ENABLED_DOC);
     }
 
     // this is the list of configs for underlying clients
@@ -1563,12 +1630,6 @@ public class StreamsConfig extends AbstractConfig {
 
     private void verifyStreamsProtocolCompatibility(final boolean doLog) {
         if (doLog && isStreamsProtocolEnabled()) {
-            final Map<String, Object> mainConsumerConfigs = getMainConsumerConfigs("dummy", "dummy", -1);
-            final String instanceId = (String) mainConsumerConfigs.get(CommonClientConfigs.GROUP_INSTANCE_ID_CONFIG);
-            if (instanceId != null && !instanceId.isEmpty()) {
-                throw new ConfigException("Streams rebalance protocol does not support static membership. "
-                    + "Please set group.protocol=classic or remove group.instance.id from the configuration.");
-            }
             if (getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG) != 0) {
                 log.warn("Warmup replicas are not supported yet with the streams protocol and will be ignored. "
                     + "If you want to use warmup replicas, please set group.protocol=classic.");
@@ -2035,6 +2096,7 @@ public class StreamsConfig extends AbstractConfig {
      *
      * @return Map of the client tags.
      */
+
     @SuppressWarnings("WeakerAccess")
     public Map<String, String> getClientTags() {
         return originalsWithPrefix(CLIENT_TAG_PREFIX).entrySet().stream().collect(
@@ -2103,6 +2165,14 @@ public class StreamsConfig extends AbstractConfig {
     public KafkaClientSupplier getKafkaClientSupplier() {
         return getConfiguredInstance(StreamsConfig.DEFAULT_CLIENT_SUPPLIER_CONFIG,
             KafkaClientSupplier.class);
+    }
+
+    /**
+     * Return the configured default {@link IsolationLevel} used by interactive queries.
+     */
+    public IsolationLevel defaultInteractiveQueryIsolationLevel() {
+        return IsolationLevel.valueOf(
+            getString(DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG).toUpperCase(Locale.ROOT));
     }
 
     /**

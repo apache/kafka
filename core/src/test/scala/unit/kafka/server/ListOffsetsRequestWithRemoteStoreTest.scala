@@ -20,6 +20,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig}
 import org.junit.jupiter.api.TestInfo
 
+import java.util
 import java.util.Properties
 import scala.collection.Seq
 
@@ -38,8 +39,6 @@ class ListOffsetsRequestWithRemoteStoreTest extends ListOffsetsRequestTest {
   }
 
   override def createTopic(numPartitions: Int, replicationFactor: Int): Map[Int, Int] = {
-    val props = new Properties()
-    props.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
-    super.createTopic(topic, numPartitions, replicationFactor, props)
+    super.createTopic(topic, numPartitions, replicationFactor, util.Map.of(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true"))
   }
 }

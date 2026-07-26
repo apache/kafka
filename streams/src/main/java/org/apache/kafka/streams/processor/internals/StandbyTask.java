@@ -45,6 +45,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
  */
 public class StandbyTask extends AbstractTask implements Task {
     private final boolean eosEnabled;
+    private final boolean transactionalStateStoresEnabled;
     private final Sensor closeTaskSensor;
     private final Sensor updateSensor;
     private final StreamsMetricsImpl streamsMetrics;
@@ -86,6 +87,7 @@ public class StandbyTask extends AbstractTask implements Task {
         closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), streamsMetrics);
         updateSensor = TaskMetrics.updateSensor(Thread.currentThread().getName(), id.toString(), streamsMetrics);
         this.eosEnabled = config.eosEnabled;
+        this.transactionalStateStoresEnabled = config.transactionalStateStoresEnabled;
     }
 
     @Override
@@ -271,6 +273,7 @@ public class StandbyTask extends AbstractTask implements Task {
                         logPrefix,
                         clean,
                         eosEnabled,
+                        transactionalStateStoresEnabled,
                         stateMgr,
                         stateDirectory,
                         TaskType.STANDBY

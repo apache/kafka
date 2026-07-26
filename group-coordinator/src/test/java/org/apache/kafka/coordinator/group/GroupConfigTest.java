@@ -30,6 +30,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -50,6 +51,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DEFAULT;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_GROUP_MAX_SESSION_TIMEOUT_MS_DEFAULT;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_GROUP_MAX_WARMUP_REPLICAS_DEFAULT;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DEFAULT;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_DEFAULT;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT;
@@ -127,8 +129,14 @@ public class GroupConfigTest {
                 assertPropertyInvalid(name, "not_a_boolean");
             } else if (GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "1.0");
+            } else if (GroupConfig.STREAMS_NUM_WARMUP_REPLICAS_CONFIG.equals(name)) {
+                assertPropertyInvalid(name, "not_a_number", "1.0");
             } else if (GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_boolean");
+            } else if (GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG.equals(name)) {
+                // This is a free-form list of tag keys, so values like "not_a_number" are valid. Only an
+                // empty tag key (an empty element between commas) is rejected.
+                assertPropertyInvalid(name, "tag1,,tag2");
             } else if (!GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "-0.1");
             }
@@ -322,6 +330,11 @@ public class GroupConfigTest {
         doTestInvalidProps(props, InvalidConfigurationException.class);
         props = createValidGroupConfig();
 
+        // Check for invalid streamsNumWarmupReplicas, > MAX
+        props.put(GroupConfig.STREAMS_NUM_WARMUP_REPLICAS_CONFIG, "50");
+        doTestInvalidProps(props, InvalidConfigurationException.class);
+        props = createValidGroupConfig();
+
         // Check for invalid shareIsolationLevel.
         props.put(GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, "read_commit");
         doTestInvalidProps(props, ConfigException.class);
@@ -337,12 +350,112 @@ public class GroupConfigTest {
         doTestInvalidProps(props, ConfigException.class);
     }
 
+    @Test
+    public void testStreamsRackAwareAssignmentTagsValidation() {
+        // Duplicate rack-aware assignment tags are rejected rather than silently de-duplicated.
+        Map<String, String> duplicateProps = createValidGroupConfig();
+        duplicateProps.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,zone");
+        assertEquals("streams.rack.aware.assignment.tags must not contain duplicate tag keys.",
+            assertThrows(InvalidConfigurationException.class,
+                () -> GroupConfig.validate(duplicateProps, createGroupCoordinatorConfig(), createShareGroupConfig())).getMessage());
+
+        // Duplicates are detected regardless of surrounding whitespace.
+        Map<String, String> whitespaceDuplicateProps = createValidGroupConfig();
+        whitespaceDuplicateProps.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, " zone , zone ");
+        assertEquals("streams.rack.aware.assignment.tags must not contain duplicate tag keys.",
+            assertThrows(InvalidConfigurationException.class,
+                () -> GroupConfig.validate(whitespaceDuplicateProps, createGroupCoordinatorConfig(), createShareGroupConfig())).getMessage());
+
+        // Distinct rack-aware assignment tags are accepted.
+        Map<String, String> distinctProps = createValidGroupConfig();
+        distinctProps.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,cluster");
+        doTestValidProps(distinctProps);
+
+        // Surrounding whitespace is trimmed: " zone , cluster " parses and returns two clean tags.
+        Map<String, String> whitespaceProps = createValidGroupConfig();
+        whitespaceProps.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, " zone , cluster ");
+        doTestValidProps(whitespaceProps);
+        assertEquals(Optional.of(List.of("zone", "cluster")),
+            new GroupConfig(whitespaceProps).streamsRackAwareAssignmentTags());
+    }
+
     private void doTestInvalidProps(Map<String, String> props, Class<? extends Exception> exceptionClassName) {
         assertThrows(exceptionClassName, () -> GroupConfig.validate(props, createGroupCoordinatorConfig(), createShareGroupConfig()));
     }
 
     private void doTestValidProps(Map<String, String> props) {
         assertDoesNotThrow(() -> GroupConfig.validate(props, createGroupCoordinatorConfig(), createShareGroupConfig()));
+    }
+
+    private static Stream<Arguments> outOfRangeValuesAndExpectedMessages() {
+        return Stream.of(
+            // Consumer group configs.
+            Arguments.of(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "1",
+                "consumer.heartbeat.interval.ms must be in the range 5 to 15000 inclusive."),
+            Arguments.of(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "20000",
+                "consumer.heartbeat.interval.ms must be in the range 5 to 15000 inclusive."),
+            Arguments.of(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "1",
+                "consumer.session.timeout.ms must be in the range 45 to 60000 inclusive."),
+            Arguments.of(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "70000",
+                "consumer.session.timeout.ms must be in the range 45 to 60000 inclusive."),
+            Arguments.of(GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, "500",
+                "consumer.assignment.interval.ms must be in the range 1000 to 15000 inclusive."),
+            Arguments.of(GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, "20000",
+                "consumer.assignment.interval.ms must be in the range 1000 to 15000 inclusive."),
+
+            // Share group configs.
+            Arguments.of(GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, "1",
+                "share.heartbeat.interval.ms must be in the range 5 to 15000 inclusive."),
+            Arguments.of(GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, "20000",
+                "share.heartbeat.interval.ms must be in the range 5 to 15000 inclusive."),
+            Arguments.of(GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG, "1",
+                "share.session.timeout.ms must be in the range 45 to 60000 inclusive."),
+            Arguments.of(GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG, "70000",
+                "share.session.timeout.ms must be in the range 45 to 60000 inclusive."),
+            Arguments.of(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, "10000",
+                "share.record.lock.duration.ms must be in the range 15000 to 60000 inclusive."),
+            Arguments.of(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, "70000",
+                "share.record.lock.duration.ms must be in the range 15000 to 60000 inclusive."),
+            Arguments.of(GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG, "11",
+                "share.delivery.count.limit must be in the range 2 to 10 inclusive."),
+            Arguments.of(GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG, "11000",
+                "share.partition.max.record.locks must be in the range 100 to 10000 inclusive."),
+            Arguments.of(GroupConfig.SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG, "500",
+                "share.assignment.interval.ms must be in the range 1000 to 15000 inclusive."),
+            Arguments.of(GroupConfig.SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG, "20000",
+                "share.assignment.interval.ms must be in the range 1000 to 15000 inclusive."),
+
+            // Streams group configs.
+            Arguments.of(GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, "1000",
+                "streams.heartbeat.interval.ms must be in the range 5000 to 15000 inclusive."),
+            Arguments.of(GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, "20000",
+                "streams.heartbeat.interval.ms must be in the range 5000 to 15000 inclusive."),
+            Arguments.of(GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG, "1",
+                "streams.session.timeout.ms must be in the range 45000 to 60000 inclusive."),
+            Arguments.of(GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG, "70000",
+                "streams.session.timeout.ms must be in the range 45000 to 60000 inclusive."),
+            Arguments.of(GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, "5",
+                "streams.num.standby.replicas must be less than or equal to 2"),
+            Arguments.of(GroupConfig.STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, "500",
+                "streams.assignment.interval.ms must be in the range 1000 to 15000 inclusive."),
+            Arguments.of(GroupConfig.STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, "20000",
+                "streams.assignment.interval.ms must be in the range 1000 to 15000 inclusive."),
+            Arguments.of(GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, "1000",
+                "streams.task.offset.interval.ms must be greater than or equal to 15000"),
+            Arguments.of(GroupConfig.STREAMS_NUM_WARMUP_REPLICAS_CONFIG, "50",
+                "streams.num.warmup.replicas must be less than or equal to 20")
+        );
+    }
+
+    @ParameterizedTest(name = "testValidationErrorMessageIncludesBound[{0}={1}]")
+    @MethodSource("outOfRangeValuesAndExpectedMessages")
+    public void testValidationErrorMessageIncludesBound(String key, String value, String expectedMessage) {
+        var props = Map.of(key, value);
+        var exception = assertThrows(
+            InvalidConfigurationException.class,
+            () -> GroupConfig.validate(props, createGroupCoordinatorConfig(), createShareGroupConfig())
+        );
+        assertEquals(expectedMessage, exception.getMessage());
     }
 
     @Test
@@ -368,6 +481,7 @@ public class GroupConfigTest {
         defaultValue.put(GroupConfig.STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, "1250");
         defaultValue.put(GroupConfig.STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false");
         defaultValue.put(GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, "30000");
+        defaultValue.put(GroupConfig.STREAMS_NUM_WARMUP_REPLICAS_CONFIG, "5");
         defaultValue.put(GroupConfig.SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG, "true");
 
         Properties props = new Properties();
@@ -394,6 +508,7 @@ public class GroupConfigTest {
         assertEquals(1250, config.getInt(GroupConfig.STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG));
         assertEquals(false, config.getBoolean(GroupConfig.STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG));
         assertEquals(30000, config.getInt(GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG));
+        assertEquals(5, config.getInt(GroupConfig.STREAMS_NUM_WARMUP_REPLICAS_CONFIG));
         assertEquals(true, config.getBoolean(GroupConfig.SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG));
     }
 
@@ -428,6 +543,7 @@ public class GroupConfigTest {
         assertEquals(Optional.empty(), config.streamsAssignmentIntervalMs());
         assertEquals(Optional.empty(), config.streamsAssignorOffloadEnable());
         assertEquals(Optional.empty(), config.streamsTaskOffsetIntervalMs());
+        assertEquals(Optional.empty(), config.streamsRackAwareAssignmentTags());
 
         // DLQ configs - have defaults from CONFIG_DEF
         assertEquals("", config.errorsDLQTopicName());
@@ -459,6 +575,7 @@ public class GroupConfigTest {
         props.put(GroupConfig.STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, "1250");
         props.put(GroupConfig.STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false");
         props.put(GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, "30000");
+        props.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,cluster");
         props.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "my-dlq-topic");
         props.put(GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, "true");
 
@@ -490,6 +607,7 @@ public class GroupConfigTest {
         assertEquals(Optional.of(1250), config.streamsAssignmentIntervalMs());
         assertEquals(Optional.of(false), config.streamsAssignorOffloadEnable());
         assertEquals(Optional.of(30000), config.streamsTaskOffsetIntervalMs());
+        assertEquals(Optional.of(List.of("zone", "cluster")), config.streamsRackAwareAssignmentTags());
 
         // DLQ configs
         assertEquals("my-dlq-topic", config.errorsDLQTopicName());
@@ -640,13 +758,17 @@ public class GroupConfigTest {
             Arguments.of(
                 GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG,
                 5, STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT
+            ),
+            Arguments.of(
+                GroupConfig.STREAMS_NUM_WARMUP_REPLICAS_CONFIG,
+                25, STREAMS_GROUP_MAX_WARMUP_REPLICAS_DEFAULT
             )
         );
     }
 
     /**
      * Data source for configs with min-only evaluation (no max bound enforced by evaluate).
-     * Each entry: (configKey, tooLow, expectedMax).
+     * Each entry: (configKey, tooLow, expectedMin).
      */
     private static Stream<Arguments> minBoundedConfigs() {
         return Stream.of(
@@ -766,6 +888,7 @@ public class GroupConfigTest {
         props.put(GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, "1");
         props.put(GroupConfig.STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, "3000");
         props.put(GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, "45000");
+        props.put(GroupConfig.STREAMS_NUM_WARMUP_REPLICAS_CONFIG, "3");
         props.put(GroupConfig.SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG, "true");
         return props;
     }

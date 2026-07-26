@@ -113,6 +113,14 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         return getInt(ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG);
     }
 
+    public int controllerSocketTimeoutMs() {
+        return getInt(ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG);
+    }
+
+    public int defaultReplicationFactor() {
+        return getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG);
+    }
+
     public int numRecoveryThreadsPerDataDir() {
         return getInt(ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG);
     }
@@ -341,20 +349,24 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
      * <p>
      * This method exists to support migration from kafka.server.KafkaConfig (Scala/core) to AbstractKafkaConfig (Java/server).
      * When migrating code, replace KafkaConfig references with AbstractKafkaConfig.
+     * Subclasses should override this method to integrate with their dynamic configuration mechanism;
+     * the default implementation is a no-op.
      *
      * @param reconfigurable the component to register for configuration updates
      */
-    public abstract void addReconfigurable(Reconfigurable reconfigurable);
+    public void addReconfigurable(Reconfigurable reconfigurable) { }
 
     /**
      * Unregisters a component from dynamic reconfiguration notifications.
      * <p>
      * This method exists to support migration from kafka.server.KafkaConfig (Scala/core) to AbstractKafkaConfig (Java/server).
      * When migrating code, replace KafkaConfig references with AbstractKafkaConfig.
+     * Subclasses should override this method to integrate with their dynamic configuration mechanism;
+     * the default implementation is a no-op.
      *
      * @param reconfigurable the component to unregister
      */
-    public abstract void removeReconfigurable(Reconfigurable reconfigurable);
+    public void removeReconfigurable(Reconfigurable reconfigurable) { }
 
     /**
      * Determines whether a config entry might be sensitive based on its type.
@@ -628,10 +640,23 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         return millis < 0 ? Long.valueOf(-1) : millis;
     }
 
+    /**
+     * Returns a map of group config names to their broker-level synonym values, used as
+     * defaults when building a {@link GroupConfig} for {@code DescribeConfigs}.
+     * Internal group configs are excluded unless their broker synonym was explicitly configured.
+     *
+     * @return a map of group config names to their corresponding broker-level values
+     */
     public Map<String, Object> extractGroupConfigMap() {
         Map<String, Object> defaults = new HashMap<>();
-        GroupConfig.ALL_GROUP_CONFIG_SYNONYMS.forEach((groupConfigName, brokerConfigName) ->
-            brokerConfigName.ifPresent(name -> defaults.put(groupConfigName, get(name)))
+        Map<String, Object> brokerOriginals = originals();
+        GroupConfig.configNames().forEach(groupConfigName ->
+            GroupConfig.brokerSynonym(groupConfigName).ifPresent(brokerConfigName -> {
+                // Skip internal configs unless they are explicitly configured via the broker synonym.
+                if (!GroupConfig.isInternal(groupConfigName) || brokerOriginals.containsKey(brokerConfigName)) {
+                    defaults.put(groupConfigName, get(brokerConfigName));
+                }
+            })
         );
         return defaults;
     }

@@ -18,7 +18,7 @@
 package org.apache.kafka.connect.connector.policy;
 
 import org.apache.kafka.common.config.ConfigValue;
-import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
 
 import java.util.ArrayList;
 import java.util.List;

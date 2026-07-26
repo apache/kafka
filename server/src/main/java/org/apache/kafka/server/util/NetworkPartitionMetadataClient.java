@@ -31,7 +31,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.ExponentialBackoffManager;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.util.timer.Timer;
@@ -68,6 +67,13 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
     private volatile SendThread sendThread;
     private final Timer timer;
 
+    /**
+     * Creates a new NetworkPartitionMetadataClient.
+     *
+     * <p>The caller retains ownership of the supplied {@link Timer} and is responsible for
+     * closing it. {@link #close()} will not close the timer, allowing it to be shared with
+     * other components.
+     */
     public NetworkPartitionMetadataClient(MetadataCache metadataCache,
                                           Supplier<KafkaClient> networkClientSupplier,
                                           Time time, ListenerName listenerName, Timer timer) {
@@ -149,7 +155,6 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
     public void close() {
         // Only close sendThread if it was initialized. Note, close is called only during broker shutdown, so need
         // for further synchronization here.
-        Utils.closeQuietly(timer, "NetworkPartitionMetadataClient timer");
         if (!initialized.get()) {
             return;
         }

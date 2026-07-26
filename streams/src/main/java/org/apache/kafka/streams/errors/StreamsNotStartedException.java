@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.errors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
 
@@ -24,6 +25,7 @@ import org.apache.kafka.streams.KafkaStreams.State;
  * To query state stores, it's required to first start Kafka Streams via {@link KafkaStreams#start()}.
  * You can retry to query the state after the state transitioned to {@link State RUNNING}.
  */
+@InterfaceAudience.Public
 public class StreamsNotStartedException extends InvalidStateStoreException {
 
     private static final long serialVersionUID = 1L;

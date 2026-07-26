@@ -24,9 +24,9 @@ import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.Records;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.Isolation;
 import org.apache.kafka.raft.LogAppendInfo;
 import org.apache.kafka.raft.LogFetchInfo;
@@ -563,10 +563,10 @@ public class KafkaRaftLog implements RaftLog {
         }
 
         boolean didClean = false;
-        List<OffsetAndEpoch> epoches = new ArrayList<>(snapshots.keySet());
-        for (int i = 0; i < epoches.size() - 1; i++) {
-            OffsetAndEpoch epoch = epoches.get(i);
-            OffsetAndEpoch nextEpoch = epoches.get(i + 1);
+        List<OffsetAndEpoch> epochs = new ArrayList<>(snapshots.keySet());
+        for (int i = 0; i < epochs.size() - 1; i++) {
+            OffsetAndEpoch epoch = epochs.get(i);
+            OffsetAndEpoch nextEpoch = epochs.get(i + 1);
             Optional<SnapshotDeletionReason> reason = predicate.apply(epoch);
             if (reason.isPresent()) {
                 boolean deleted = deleteBeforeSnapshot(nextEpoch, reason.get());
@@ -780,7 +780,7 @@ public class KafkaRaftLog implements RaftLog {
                 }
                 if (latestSnapshotId.isEmpty() || latestSnapshotId.get().offset() < log.logStartOffset()) {
                     throw new IllegalStateException("Inconsistent snapshot state: there must be a snapshot " +
-                            "at an offset larger then the current log start offset " + log.logStartOffset() +
+                            "at an offset larger than the current log start offset " + log.logStartOffset() +
                             ", but the latest snapshot is " + latestSnapshotId);
                 }
             }

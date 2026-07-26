@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.query;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 
 import java.util.HashMap;
@@ -31,6 +32,7 @@ import java.util.stream.Collectors;
  * @param <R> The type of the query result.
  */
 @Evolving
+@InterfaceAudience.Public
 public class StateQueryResult<R> {
 
     private final Map<Integer, QueryResult<R>> partitionResults = new HashMap<>();
@@ -69,8 +71,7 @@ public class StateQueryResult<R> {
             partitionResults
                 .values()
                 .stream()
-                .filter(QueryResult::isSuccess)
-                .filter(r -> r.getResult() != null)
+                .filter(r -> r.isFailure() || r.getResult() != null)
                 .collect(Collectors.toList());
 
         if (nonempty.size() > 1) {

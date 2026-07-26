@@ -49,9 +49,9 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.security.scram.internals.ScramServerCallbackHandler;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.ietf.jgss.GSSContext;
 import org.ietf.jgss.GSSCredential;
@@ -65,7 +65,6 @@ import java.io.IOException;
 import java.net.Socket;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -187,7 +186,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
 
     @Override
     public Set<String> reconfigurableConfigs() {
-        return securityProtocol == SecurityProtocol.SASL_SSL ? SslConfigs.RECONFIGURABLE_CONFIGS : Collections.emptySet();
+        return securityProtocol == SecurityProtocol.SASL_SSL ? SslConfigs.RECONFIGURABLE_CONFIGS : Set.of();
     }
 
     @Override
@@ -223,11 +222,11 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
             Supplier<Authenticator> authenticatorCreator;
             if (connectionMode == ConnectionMode.SERVER) {
                 authenticatorCreator = () -> buildServerAuthenticator(configs,
-                        Collections.unmodifiableMap(saslCallbackHandlers),
+                        Map.copyOf(saslCallbackHandlers),
                         id,
                         finalTransportLayer,
-                        Collections.unmodifiableMap(subjects),
-                        Collections.unmodifiableMap(connectionsMaxReauthMsByMechanism),
+                        Map.copyOf(subjects),
+                        Map.copyOf(connectionsMaxReauthMsByMechanism),
                         metadataRegistry);
             } else {
                 LoginManager loginManager = loginManagers.get(clientSaslMechanism);

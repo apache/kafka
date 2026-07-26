@@ -38,7 +38,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -499,7 +499,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             future.whenComplete(complete(event.future()));
         } else if (requestManagers.streamsMembershipManager.isPresent()) {
             log.debug("Signal the StreamsMembershipManager to leave the streams group since the member is closing");
-            CompletableFuture<Void> future = requestManagers.streamsMembershipManager.get().leaveGroupOnClose();
+            CompletableFuture<Void> future = requestManagers.streamsMembershipManager.get().leaveGroupOnClose(event.membershipOperation());
             future.whenComplete(complete(event.future()));
         }
     }

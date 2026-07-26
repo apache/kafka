@@ -1258,7 +1258,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
     ).build()
 
     val response4 = connectAndReceive[ConsumerGroupHeartbeatResponse](request4)
-    assertEquals(Errors.NONE.code, response3.data.errorCode)
+    assertEquals(Errors.NONE.code, response4.data.errorCode)
 
     val expectedAssignment4 = new ConsumerGroupHeartbeatResponseData.Assignment()
       .setTopicPartitions(List(new ConsumerGroupHeartbeatResponseData.TopicPartitions()
