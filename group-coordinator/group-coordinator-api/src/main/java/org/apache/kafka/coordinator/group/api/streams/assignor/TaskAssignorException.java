@@ -14,13 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.streams.assignor;
+package org.apache.kafka.coordinator.group.api.streams.assignor;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.errors.ApiException;
 
 /**
- * Exception thrown by {@link TaskAssignor#assign(GroupSpec, TopologyDescriber)}}. The exception is only used internally.
+ * Exception thrown by {@link TaskAssignor#assign(GroupSpec, TopologyDescriber)} when the group's tasks
+ * cannot be assigned. Custom {@link TaskAssignor} implementations should throw this exception to signal
+ * an assignment failure.
  */
+@InterfaceAudience.Public
+@InterfaceStability.Evolving
 public class TaskAssignorException extends ApiException {
 
     public TaskAssignorException(String message) {

@@ -48,7 +48,6 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.TaskRole;
-import org.apache.kafka.coordinator.group.streams.assignor.TaskId;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -120,8 +119,8 @@ public class StreamsGroupTest {
         assertEquals(Map.of(), streamsGroup.taskOffsets());
 
         MemberTaskOffsets offsets = new MemberTaskOffsets(
-            Map.of(new TaskId("sub-1", 0), 10L),
-            Map.of(new TaskId("sub-1", 0), 20L)
+            Map.of("sub-1", Map.of(0, 10L)),
+            Map.of("sub-1", Map.of(0, 20L))
         );
         streamsGroup.updateTaskOffsets("member-id", offsets);
 
@@ -130,8 +129,8 @@ public class StreamsGroupTest {
 
         // A new report replaces the previous one.
         MemberTaskOffsets newerOffsets = new MemberTaskOffsets(
-            Map.of(new TaskId("sub-1", 0), 15L),
-            Map.of(new TaskId("sub-1", 0), 25L)
+            Map.of("sub-1", Map.of(0, 15L)),
+            Map.of("sub-1", Map.of(0, 25L))
         );
         streamsGroup.updateTaskOffsets("member-id", newerOffsets);
         assertEquals(newerOffsets, streamsGroup.taskOffsets("member-id"));
@@ -142,8 +141,8 @@ public class StreamsGroupTest {
         StreamsGroup streamsGroup = createStreamsGroup("foo");
         streamsGroup.updateMember(new StreamsGroupMember.Builder("member-id").build());
         streamsGroup.updateTaskOffsets("member-id", new MemberTaskOffsets(
-            Map.of(new TaskId("sub-1", 0), 10L),
-            Map.of(new TaskId("sub-1", 0), 20L)
+            Map.of("sub-1", Map.of(0, 10L)),
+            Map.of("sub-1", Map.of(0, 20L))
         ));
 
         streamsGroup.removeMember("member-id");
@@ -1231,6 +1230,11 @@ public class StreamsGroupTest {
             .setAssignedTasks(TasksTupleWithEpochs.EMPTY)
             .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
             .build());
+        // Transient, unpersisted per-task offsets reported by the member; the describe path must surface them.
+        group.updateTaskOffsets("member1", new MemberTaskOffsets(
+            Map.of("sub-1", Map.of(0, 5L)),
+            Map.of("sub-1", Map.of(0, 9L))
+        ));
         snapshotRegistry.idempotentCreateSnapshot(1);
 
         StreamsGroupDescribeResponseData.DescribedGroup describedGroup = group.asDescribedGroup(1);
@@ -1255,6 +1259,14 @@ public class StreamsGroupTest {
 
         assertEquals(1, describedGroup.members().size());
         assertEquals("member1", describedGroup.members().get(0).memberId());
+        assertEquals(
+            List.of(new StreamsGroupDescribeResponseData.TaskOffset().setSubtopologyId("sub-1").setPartition(0).setOffset(5L)),
+            describedGroup.members().get(0).taskOffsets()
+        );
+        assertEquals(
+            List.of(new StreamsGroupDescribeResponseData.TaskOffset().setSubtopologyId("sub-1").setPartition(0).setOffset(9L)),
+            describedGroup.members().get(0).taskEndOffsets()
+        );
     }
 
     @Test
