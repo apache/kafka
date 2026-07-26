@@ -1118,7 +1118,7 @@ public class AbstractHerderTest {
         testConnectorPluginConfig(
                 "source",
                 SampleSourceConnector::new,
-                SampleSourceConnector::configWithInternalKey,
+                SampleSourceConnector::config,
                 Optional.of(SourceConnectorConfig.configDef())
         );
     }
@@ -1130,6 +1130,37 @@ public class AbstractHerderTest {
                 SampleSourceConnector::new,
                 SampleSourceConnector::configWithCommon,
                 Optional.empty()
+        );
+    }
+
+    @Test
+    public void testSourceConnectorPluginConfigFiltersInternalKeys() throws ClassNotFoundException {
+        String pluginName = "source";
+        AbstractHerder herder = testHerder();
+
+        // Return a connector whose config() declares an internal key so that the filtering
+        // performed by connectorPluginConfig() is actually exercised.
+        SampleSourceConnector connectorWithInternalKey = new SampleSourceConnector() {
+            @Override
+            public ConfigDef config() {
+                return configWithInternalKey();
+            }
+        };
+
+        when(plugins.pluginClass(pluginName, null)).then(invocation -> connectorWithInternalKey.getClass());
+        when(plugins.newPlugin(anyString(), any())).then(invocation -> connectorWithInternalKey);
+        when(herder.plugins()).thenReturn(plugins);
+
+        List<ConfigKeyInfo> configs = herder.connectorPluginConfig(pluginName);
+        assertNotNull(configs);
+
+        // Non-internal keys are still exposed.
+        assertTrue(configs.stream().anyMatch(c -> c.name().equals("required")));
+        // Internal config keys must never appear in the REST response.
+        // This assertion fails if the !configKey.internalConfig filter is removed from connectorPluginConfig.
+        assertFalse(
+                configs.stream().anyMatch(c -> c.name().equals(SampleSourceConnector.INTERNAL_ONLY_CONFIG_KEY)),
+                "Internal config key should not be exposed via connectorPluginConfig"
         );
     }
 
@@ -1194,12 +1225,6 @@ public class AbstractHerderTest {
                         .filter(configKey -> !configKey.internalConfig)
                         .count();
         assertEquals(expectedConfigSize, configs.size());
-        // Internal config keys must never appear in the REST response.
-        // This assertion fails if the !configKey.internalConfig filter is removed from connectorPluginConfig.
-        assertFalse(
-                configs.stream().anyMatch(c -> c.name().equals(SampleSourceConnector.INTERNAL_ONLY_CONFIG_KEY)),
-                "Internal config key should not be exposed via connectorPluginConfig"
-        );
         // Make sure that we used the correct class loader when interacting with the plugin
         verify(plugins).withClassLoader(newPluginInstance.get().getClass().getClassLoader());
     }
