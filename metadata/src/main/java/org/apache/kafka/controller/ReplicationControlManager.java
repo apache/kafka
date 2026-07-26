@@ -686,10 +686,14 @@ public class ReplicationControlManager {
         for (CreatableTopic topic : request.topics()) {
             ApiError error = topicErrors.get(topic.name());
             if (error != null) {
-                data.topics().add(new CreatableTopicResult().
+                CreatableTopicResult result = new CreatableTopicResult().
                     setName(topic.name()).
                     setErrorCode(error.error().code()).
-                    setErrorMessage(error.message()));
+                    setErrorMessage(error.message());
+                if (error.error() == Errors.TOPIC_ALREADY_EXISTS) {
+                    result.setTopicId(topicsByName.get(topic.name()));
+                }
+                data.topics().add(result);
                 resultsBuilder.append(resultsPrefix).append(topic).append(": ").
                     append(error.error()).append(" (").append(error.message()).append(")");
                 resultsPrefix = ", ";
