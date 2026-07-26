@@ -667,6 +667,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
         }
         if (!broker.isShutdown()) {
             broker.shutdown();
+            broker.awaitShutdown();
         }
 
         Map<String, Object> props = new HashMap<>(broker.config().originals());
