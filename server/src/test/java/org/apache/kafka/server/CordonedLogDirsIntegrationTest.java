@@ -432,19 +432,26 @@ public class CordonedLogDirsIntegrationTest {
             int target = clusterInstance.brokerIds().stream().filter(id -> id != brokerId).findFirst().get();
             movePartitions(admin, partitionsToMove, brokerId, Optional.of(logDirToRemove), target);
 
-            // Uncordon log dirs
-            setCordonedLogDirs(admin, List.of(), brokerResource);
+            // Shut down the broker so the log dir can be physically decommissioned while it's offline
+            clusterInstance.brokers().get(brokerId).shutdown();
+            clusterInstance.brokers().get(brokerId).awaitShutdown();
 
-            // Physically decommission the log dir: restart the broker without it in its static log.dirs config
-            Map<String, Object> propOverrides = Map.of(LOG_DIRS_CONFIG, String.join(",", logDirs));
+            // Uncordon the log dir via the controller while the broker is shut down
+            try (Admin controllerAdmin = clusterInstance.admin(Map.of(), true)) {
+                controllerAdmin.incrementalAlterConfigs(cordonedDirsConfig("", brokerResource)).all().get();
+            }
+
+            // Physically decommission the log dir: restart the
+            // broker without it in its static log.dirs config
+            Map<String, Object> propOverrides = Map.of(LOG_DIRS_CONFIG, String.join(",", logDirs), CORDONED_LOG_DIRS_CONFIG, "");
             clusterInstance.restartBroker(brokerId, propOverrides);
             clusterInstance.waitForReadyBrokers();
 
             // The broker restarted with the reduced set of log dirs, and no longer reports the removed one
             assertEquals(logDirs, clusterInstance.brokers().get(brokerId).config().logDirs());
             TestUtils.waitForCondition(() ->
-                    !admin.describeLogDirs(List.of(brokerId)).allDescriptions().get().get(brokerId).containsKey(logDirToRemove),
-                10_000, "Broker " + brokerId + " is still reporting the removed log dir " + logDirToRemove);
+                            !admin.describeLogDirs(List.of(brokerId)).allDescriptions().get().get(brokerId).containsKey(logDirToRemove),
+                    10_000, "Broker " + brokerId + " is still reporting the removed log dir " + logDirToRemove);
 
             // The broker is still fully functional after losing a log dir
             admin.createTopics(newTopic("topic-after-decommission")).all().get();
