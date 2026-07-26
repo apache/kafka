@@ -444,6 +444,18 @@ public class ReplicationControlManager {
      */
     private final Map<Integer, Integer> brokerConsecutiveUngatedRuns = new HashMap<>();
 
+    /**
+     * Cumulative count of times the max-wait escape hatch has released a gated broker.
+     * Monotonically increasing; exposed for JMX via QuorumController.
+     */
+    private long escapeHatchReleaseCount = 0;
+
+    /**
+     * Per-broker count of out-of-sync imbalanced preferred partitions from the last
+     * computeGatedBrokers() run. Empty when algorithm is "immediate". Exposed for JMX.
+     */
+    private final Map<Integer, Integer> lastBrokerOutOfSyncCounts = new HashMap<>();
+
     private ReplicationControlManager(
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
@@ -1862,6 +1874,21 @@ public class ReplicationControlManager {
         return ControllerResult.of(records, records.size() >= maxElectionsPerImbalance);
     }
 
+    /** Returns the number of preferred brokers currently held in the wait-for-sync gate. */
+    int gatedBrokerCount() {
+        return brokerGatedSinceMs.size();
+    }
+
+    /** Returns the cumulative number of times the max-wait escape hatch has fired. */
+    long escapeHatchReleaseCount() {
+        return escapeHatchReleaseCount;
+    }
+
+    /** Returns a snapshot of per-broker out-of-sync preferred partition counts from the last run. */
+    Map<Integer, Integer> brokerOutOfSyncCounts() {
+        return Collections.unmodifiableMap(lastBrokerOutOfSyncCounts);
+    }
+
     /**
      * Compute the set of broker IDs that should be skipped by the preferred-leader balancer
      * this run. Returns an empty set when the algorithm is "immediate".
@@ -1877,6 +1904,7 @@ public class ReplicationControlManager {
      */
     private Set<Integer> computeGatedBrokers() {
         if (!"wait-for-sync".equals(electionAlgorithm)) {
+            lastBrokerOutOfSyncCounts.clear();
             return Collections.emptySet();
         }
 
@@ -1931,6 +1959,7 @@ public class ReplicationControlManager {
                         brokerId, nowMs - gatedSince, waitForSyncMaxWaitMs);
                     brokerGatedSinceMs.remove(brokerId);
                     brokerConsecutiveUngatedRuns.remove(brokerId);
+                    escapeHatchReleaseCount++;
                 } else {
                     gatedBrokers.add(brokerId);
                 }
@@ -1950,6 +1979,12 @@ public class ReplicationControlManager {
                 }
             }
             // else: broker was never gated and does not meet condition — do nothing.
+        }
+
+        // Update per-broker out-of-sync counts for JMX metrics.
+        lastBrokerOutOfSyncCounts.clear();
+        for (Map.Entry<Integer, int[]> e : brokerStats.entrySet()) {
+            lastBrokerOutOfSyncCounts.put(e.getKey(), e.getValue()[0]);
         }
 
         return gatedBrokers;

@@ -1757,7 +1757,15 @@ public final class QuorumController implements Controller {
      */
     private void registerElectPreferred(long checkIntervalNs, OptionalLong throttleIntervalNs) {
         periodicControl.registerTask(new PeriodicTask("electPreferred",
-            replicationControl::maybeBalancePartitionLeaders,
+            () -> {
+                ControllerResult<Boolean> result = replicationControl.maybeBalancePartitionLeaders();
+                controllerMetrics.setPreferredLeaderElectionsPerRun(result.records().size());
+                controllerMetrics.setGatedPreferredLeaderBrokerCount(replicationControl.gatedBrokerCount());
+                controllerMetrics.setPreferredLeaderElectionEscapeHatchCount(replicationControl.escapeHatchReleaseCount());
+                controllerMetrics.updateBrokerOutOfSyncCounts(replicationControl.brokerOutOfSyncCounts());
+                if (result.response()) controllerMetrics.incrementPreferredLeaderElectionThrottledRunCount();
+                return result;
+            },
             checkIntervalNs,
             EnumSet.of(PeriodicTaskFlag.VERBOSE),
             PeriodicTask.DEFAULT_IMMEDIATE_PERIOD_NS,

@@ -26,6 +26,7 @@ import com.yammer.metrics.core.Histogram;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -67,8 +68,17 @@ public class QuorumControllerMetrics implements AutoCloseable {
         "KafkaController", "EventQueueOperationsTimedOutCount");
     private static final MetricName NEW_ACTIVE_CONTROLLERS_COUNT = getMetricName(
         "KafkaController", "NewActiveControllersCount");
+    private static final MetricName PREFERRED_LEADER_ELECTIONS_PER_RUN = getMetricName(
+        "KafkaController", "PreferredLeaderElectionsPerRun");
+    private static final MetricName GATED_PREFERRED_LEADER_BROKER_COUNT = getMetricName(
+        "KafkaController", "GatedPreferredLeaderBrokerCount");
+    private static final MetricName PREFERRED_LEADER_ELECTION_THROTTLED_RUN_COUNT = getMetricName(
+        "KafkaController", "PreferredLeaderElectionThrottledRunCount");
+    private static final MetricName PREFERRED_LEADER_ELECTION_ESCAPE_HATCH_COUNT = getMetricName(
+        "KafkaController", "PreferredLeaderElectionEscapeHatchCount");
 
     private static final String TIME_SINCE_LAST_HEARTBEAT_RECEIVED_METRIC_NAME = "TimeSinceLastHeartbeatReceivedMs";
+    private static final String OUT_OF_SYNC_PREFERRED_PARTITION_COUNT_METRIC_NAME = "OutOfSyncPreferredPartitionCount";
     private static final String BROKER_ID_TAG = "broker";
 
     private final Optional<MetricsRegistry> registry;
@@ -85,7 +95,12 @@ public class QuorumControllerMetrics implements AutoCloseable {
     private final AtomicLong operationsStarted = new AtomicLong(0);
     private final AtomicLong operationsTimedOut = new AtomicLong(0);
     private final AtomicLong newActiveControllers = new AtomicLong(0);
+    private final AtomicLong preferredLeaderElectionsPerRun = new AtomicLong(0);
+    private final AtomicLong gatedPreferredLeaderBrokerCount = new AtomicLong(0);
+    private final AtomicLong preferredLeaderElectionThrottledRunCount = new AtomicLong(0);
+    private final AtomicLong preferredLeaderElectionEscapeHatchCount = new AtomicLong(0);
     private final Map<Integer, Long> brokerContactTimesMs = new ConcurrentHashMap<>();
+    private final Map<Integer, Integer> brokerOutOfSyncCounts = new ConcurrentHashMap<>();
     private final int sessionTimeoutMs;
 
     private Consumer<Long> newHistogram(MetricName name, boolean biased) {
@@ -163,6 +178,30 @@ public class QuorumControllerMetrics implements AutoCloseable {
                 return newActiveControllers();
             }
         }));
+        registry.ifPresent(r -> r.newGauge(PREFERRED_LEADER_ELECTIONS_PER_RUN, new Gauge<Long>() {
+            @Override
+            public Long value() {
+                return preferredLeaderElectionsPerRun();
+            }
+        }));
+        registry.ifPresent(r -> r.newGauge(GATED_PREFERRED_LEADER_BROKER_COUNT, new Gauge<Long>() {
+            @Override
+            public Long value() {
+                return gatedPreferredLeaderBrokerCount();
+            }
+        }));
+        registry.ifPresent(r -> r.newGauge(PREFERRED_LEADER_ELECTION_THROTTLED_RUN_COUNT, new Gauge<Long>() {
+            @Override
+            public Long value() {
+                return preferredLeaderElectionThrottledRunCount();
+            }
+        }));
+        registry.ifPresent(r -> r.newGauge(PREFERRED_LEADER_ELECTION_ESCAPE_HATCH_COUNT, new Gauge<Long>() {
+            @Override
+            public Long value() {
+                return preferredLeaderElectionEscapeHatchCount();
+            }
+        }));
         registry.ifPresent(r -> r.newGauge(AVERAGE_IDLE_RATIO, new Gauge<Double>() {
             @Override
             public Double value() {
@@ -212,6 +251,56 @@ public class QuorumControllerMetrics implements AutoCloseable {
             removeTimeSinceLastHeartbeatMetric(brokerId);
         }
         brokerContactTimesMs.clear();
+    }
+
+    public void updateBrokerOutOfSyncCounts(Map<Integer, Integer> counts) {
+        // Remove metrics for brokers no longer present.
+        List<Integer> toRemove = new ArrayList<>(brokerOutOfSyncCounts.keySet());
+        toRemove.removeAll(counts.keySet());
+        for (int brokerId : toRemove) {
+            registry.ifPresent(r -> r.removeMetric(
+                getBrokerIdTagMetricName(
+                    "KafkaController",
+                    OUT_OF_SYNC_PREFERRED_PARTITION_COUNT_METRIC_NAME,
+                    brokerId
+                )
+            ));
+            brokerOutOfSyncCounts.remove(brokerId);
+        }
+        // Register gauges for new brokers; update counts for existing ones.
+        for (Map.Entry<Integer, Integer> entry : counts.entrySet()) {
+            int brokerId = entry.getKey();
+            if (!brokerOutOfSyncCounts.containsKey(brokerId)) {
+                registry.ifPresent(r -> r.newGauge(
+                    getBrokerIdTagMetricName(
+                        "KafkaController",
+                        OUT_OF_SYNC_PREFERRED_PARTITION_COUNT_METRIC_NAME,
+                        brokerId
+                    ),
+                    new Gauge<Integer>() {
+                        @Override
+                        public Integer value() {
+                            return brokerOutOfSyncCounts.getOrDefault(brokerId, 0);
+                        }
+                    }
+                ));
+            }
+            brokerOutOfSyncCounts.put(brokerId, entry.getValue());
+        }
+    }
+
+    public void removeAllBrokerOutOfSyncCountMetrics() {
+        List<Integer> brokerIds = new ArrayList<>(brokerOutOfSyncCounts.keySet());
+        for (int brokerId : brokerIds) {
+            registry.ifPresent(r -> r.removeMetric(
+                getBrokerIdTagMetricName(
+                    "KafkaController",
+                    OUT_OF_SYNC_PREFERRED_PARTITION_COUNT_METRIC_NAME,
+                    brokerId
+                )
+            ));
+        }
+        brokerOutOfSyncCounts.clear();
     }
 
     public void setActive(boolean active) {
@@ -286,6 +375,38 @@ public class QuorumControllerMetrics implements AutoCloseable {
         return newActiveControllers.get();
     }
 
+    public void setPreferredLeaderElectionsPerRun(long count) {
+        preferredLeaderElectionsPerRun.set(count);
+    }
+
+    public long preferredLeaderElectionsPerRun() {
+        return preferredLeaderElectionsPerRun.get();
+    }
+
+    public void setGatedPreferredLeaderBrokerCount(long count) {
+        gatedPreferredLeaderBrokerCount.set(count);
+    }
+
+    public long gatedPreferredLeaderBrokerCount() {
+        return gatedPreferredLeaderBrokerCount.get();
+    }
+
+    public void incrementPreferredLeaderElectionThrottledRunCount() {
+        preferredLeaderElectionThrottledRunCount.incrementAndGet();
+    }
+
+    public long preferredLeaderElectionThrottledRunCount() {
+        return preferredLeaderElectionThrottledRunCount.get();
+    }
+
+    public void setPreferredLeaderElectionEscapeHatchCount(long count) {
+        preferredLeaderElectionEscapeHatchCount.set(count);
+    }
+
+    public long preferredLeaderElectionEscapeHatchCount() {
+        return preferredLeaderElectionEscapeHatchCount.get();
+    }
+
     public void updateBrokerContactTime(int brokerId) {
         brokerContactTimesMs.put(brokerId, time.milliseconds());
     }
@@ -312,9 +433,14 @@ public class QuorumControllerMetrics implements AutoCloseable {
             EVENT_QUEUE_OPERATIONS_STARTED_COUNT,
             EVENT_QUEUE_OPERATIONS_TIMED_OUT_COUNT,
             NEW_ACTIVE_CONTROLLERS_COUNT,
-            AVERAGE_IDLE_RATIO
+            AVERAGE_IDLE_RATIO,
+            PREFERRED_LEADER_ELECTIONS_PER_RUN,
+            GATED_PREFERRED_LEADER_BROKER_COUNT,
+            PREFERRED_LEADER_ELECTION_THROTTLED_RUN_COUNT,
+            PREFERRED_LEADER_ELECTION_ESCAPE_HATCH_COUNT
         ).forEach(r::removeMetric));
         removeTimeSinceLastHeartbeatMetrics();
+        removeAllBrokerOutOfSyncCountMetrics();
     }
 
     private static MetricName getMetricName(String type, String name) {
