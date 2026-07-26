@@ -185,38 +185,41 @@ class ControllerConfigurationValidatorTest {
   }
 
   @Test
-  def testGroupConfigChangeIgnoresUnchangedOutOfRangeSessionTimeout(): Unit = {
-    val existingConfig = new util.TreeMap[String, String]()
-    existingConfig.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "90000")
+  def testGroupConfigChangeUsesEvaluatedOldSessionTimeout(): Unit = {
+    val oldConfig = new util.TreeMap[String, String]()
+    // The current valid session timeout range is 45000 to 60000 ms.
+    oldConfig.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "90000")
 
-    val newConfig = new util.TreeMap[String, String](existingConfig)
+    val newConfig = new util.TreeMap[String, String](oldConfig)
     newConfig.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "6000")
 
-    validator.validate(new ConfigResource(GROUP, "group"), newConfig, existingConfig)
+    validator.validate(new ConfigResource(GROUP, "group"), newConfig, oldConfig)
   }
 
   @Test
-  def testGroupConfigChangeIgnoresUnchangedOutOfRangeHeartbeatInterval(): Unit = {
-    val existingConfig = new util.TreeMap[String, String]()
-    existingConfig.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "16000")
+  def testGroupConfigChangeUsesEvaluatedOldHeartbeatInterval(): Unit = {
+    val oldConfig = new util.TreeMap[String, String]()
+    // The current valid heartbeat interval range is 5000 to 15000 ms.
+    oldConfig.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "16000")
 
-    val newConfig = new util.TreeMap[String, String](existingConfig)
+    val newConfig = new util.TreeMap[String, String](oldConfig)
     newConfig.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
 
-    validator.validate(new ConfigResource(GROUP, "group"), newConfig, existingConfig)
+    validator.validate(new ConfigResource(GROUP, "group"), newConfig, oldConfig)
   }
 
   @Test
   def testInvalidChangedGroupConfigIsStillRejected(): Unit = {
-    val existingConfig = new util.TreeMap[String, String]()
-    existingConfig.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
+    val oldConfig = new util.TreeMap[String, String]()
+    // The current valid session timeout range is 45000 to 60000 ms.
+    oldConfig.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
 
-    val newConfig = new util.TreeMap[String, String](existingConfig)
+    val newConfig = new util.TreeMap[String, String](oldConfig)
     newConfig.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "90000")
 
     assertEquals("consumer.session.timeout.ms must be in the range 45000 to 60000 inclusive.",
       assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
-        new ConfigResource(GROUP, "group"), newConfig, existingConfig)).getMessage)
+        new ConfigResource(GROUP, "group"), newConfig, oldConfig)).getMessage)
   }
 
   @Test

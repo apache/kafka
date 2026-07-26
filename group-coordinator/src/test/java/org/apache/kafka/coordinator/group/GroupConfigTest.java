@@ -630,26 +630,28 @@ public class GroupConfigTest {
 
     @Test
     public void testAlterValidationIgnoresUnchangedOutOfRangeValue() {
-        Map<String, String> existingConfig = Map.of(
+        // The current valid session timeout range is 45000 to 60000 ms.
+        Map<String, String> oldGroupConfig = Map.of(
             GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "70000"
         );
-        Map<String, String> newConfig = new HashMap<>(existingConfig);
+        Map<String, String> newConfig = new HashMap<>(oldGroupConfig);
         newConfig.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "6000");
 
         assertDoesNotThrow(() -> GroupConfig.validate(
-            newConfig, existingConfig, createGroupCoordinatorConfig(), createShareGroupConfig()));
+            newConfig, oldGroupConfig, "group", createGroupCoordinatorConfig(), createShareGroupConfig()));
     }
 
     @Test
     public void testAlterValidationRejectsChangedOutOfRangeValue() {
-        Map<String, String> existingConfig = Map.of(
+        // The current valid session timeout range is 45000 to 60000 ms.
+        Map<String, String> oldGroupConfig = Map.of(
             GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000"
         );
-        Map<String, String> newConfig = new HashMap<>(existingConfig);
+        Map<String, String> newConfig = new HashMap<>(oldGroupConfig);
         newConfig.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "70000");
 
         assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validate(
-            newConfig, existingConfig, createGroupCoordinatorConfig(), createShareGroupConfig()));
+            newConfig, oldGroupConfig, "group", createGroupCoordinatorConfig(), createShareGroupConfig()));
     }
 
     @Test
