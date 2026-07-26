@@ -306,3 +306,10 @@ Note: `00000000000000000000-0000000000.checkpoint` does not contain cluster meta
 ## ZooKeeper to KRaft Migration
 
 In order to migrate from ZooKeeper to KRaft you need to use a bridge release. The last bridge release is Kafka 3.9. See the [ZooKeeper to KRaft Migration steps](/39/operations/kraft/#zookeeper-to-kraft-migration) in the 3.9 documentation.
+
+The migration includes two intermediate operating modes:
+
+* **Hybrid mode:** KRaft controllers manage a cluster whose brokers still run in ZooKeeper mode. This is the higher-risk mode, so keep it only as long as needed to restart the brokers in KRaft mode.
+* **Dual-write mode:** KRaft brokers write metadata to both ZooKeeper and the KRaft metadata log. This mode is closer to a pure KRaft deployment and can be used to validate client traffic and broker health before completing the migration. It should still be treated as a temporary migration mode rather than a permanent operating state.
+
+Before finalizing the migration, verify that client traffic is unaffected and that broker health is stable. Finalizing the migration is irreversible: after finalization, the cluster cannot be rolled back to ZooKeeper mode.
