@@ -71,7 +71,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -661,7 +660,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
      * @param nodeId         The ID of the broker to restart.
      * @param propOverrides  Configs to override in the broker's static configuration.
      */
-    public void restartBroker(int nodeId, Properties propOverrides) {
+    public void restartBroker(int nodeId, Map<String, Object> propOverrides) {
         BrokerServer broker = brokers.get(nodeId);
         if (broker == null) {
             throw new IllegalArgumentException("Unknown broker ID " + nodeId);
@@ -670,8 +669,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             broker.shutdown();
         }
 
-        Properties props = new Properties();
-        props.putAll(broker.config().originals());
+        Map<String, Object> props = new HashMap<>(broker.config().originals());
         props.putAll(propOverrides);
         KafkaConfig newConfig = new KafkaConfig(props, false);
 

@@ -53,7 +53,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -442,8 +441,7 @@ public class CordonedLogDirsIntegrationTest {
             setCordonedLogDirs(admin, List.of(), brokerResource);
 
             // Physically decommission the log dir: restart the broker without it in its static log.dirs config
-            Properties propOverrides = new Properties();
-            propOverrides.setProperty(LOG_DIRS_CONFIG, String.join(",", remainingLogDirs));
+            Map<String, Object> propOverrides = Map.of(LOG_DIRS_CONFIG, String.join(",", remainingLogDirs));
             clusterInstance.restartBroker(brokerId, propOverrides);
             clusterInstance.waitForReadyBrokers();
 
