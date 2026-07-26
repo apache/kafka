@@ -629,6 +629,30 @@ public class GroupConfigTest {
     }
 
     @Test
+    public void testAlterValidationIgnoresUnchangedOutOfRangeValue() {
+        Map<String, String> existingConfig = Map.of(
+            GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "70000"
+        );
+        Map<String, String> newConfig = new HashMap<>(existingConfig);
+        newConfig.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "6000");
+
+        assertDoesNotThrow(() -> GroupConfig.validate(
+            newConfig, existingConfig, createGroupCoordinatorConfig(), createShareGroupConfig()));
+    }
+
+    @Test
+    public void testAlterValidationRejectsChangedOutOfRangeValue() {
+        Map<String, String> existingConfig = Map.of(
+            GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000"
+        );
+        Map<String, String> newConfig = new HashMap<>(existingConfig);
+        newConfig.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "70000");
+
+        assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validate(
+            newConfig, existingConfig, createGroupCoordinatorConfig(), createShareGroupConfig()));
+    }
+
+    @Test
     public void testInvalidConfigName() {
         Map<String, String> props = new HashMap<>();
         props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10");

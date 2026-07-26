@@ -27,9 +27,12 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -490,6 +493,86 @@ public final class GroupConfig extends AbstractConfig {
     }
 
     /**
+     * Check a group configuration after an alter operation.
+     *
+     * <p>Only values changed by the operation are validated against the current broker-level
+     * bounds. Values that were already stored may be outside those bounds after a broker
+     * configuration change, but they must not prevent an unrelated group configuration from
+     * being updated. Cross-field validation still considers the effective value of every
+     * involved setting.</p>
+     *
+     * @param newGroupConfig         The complete group config after the alter operation.
+     * @param existingGroupConfig    The complete group config before the alter operation.
+     * @param groupCoordinatorConfig The group coordinator config.
+     * @param shareGroupConfig       The share group config.
+     */
+    public static void validate(
+        Map<String, String> newGroupConfig,
+        Map<String, String> existingGroupConfig,
+        GroupCoordinatorConfig groupCoordinatorConfig,
+        ShareGroupConfig shareGroupConfig
+    ) {
+        Map<String, String> changedConfigs = new LinkedHashMap<>();
+        newGroupConfig.forEach((name, value) -> {
+            if (!Objects.equals(value, existingGroupConfig.get(name))) {
+                changedConfigs.put(name, value);
+            }
+        });
+
+        Set<String> changedConfigNames = new HashSet<>(changedConfigs.keySet());
+        existingGroupConfig.keySet().forEach(name -> {
+            if (!newGroupConfig.containsKey(name)) {
+                changedConfigNames.add(name);
+            }
+        });
+
+        // All names in the resulting configuration must still be known, even though only
+        // changed values are subject to value validation.
+        validateNames(newGroupConfig);
+        validateNoDuplicateRackAwareAssignmentTags(changedConfigs);
+        var parsed = CONFIG_DEF.parse(changedConfigs);
+        parsed.keySet().retainAll(changedConfigs.keySet());
+        validateIndividualValues(parsed, groupCoordinatorConfig, shareGroupConfig);
+
+        validateSessionExceedsHeartbeat(
+            newGroupConfig,
+            changedConfigNames,
+            CONSUMER_SESSION_TIMEOUT_MS_CONFIG,
+            groupCoordinatorConfig.consumerGroupSessionTimeoutMs(),
+            groupCoordinatorConfig.consumerGroupMinSessionTimeoutMs(),
+            groupCoordinatorConfig.consumerGroupMaxSessionTimeoutMs(),
+            CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG,
+            groupCoordinatorConfig.consumerGroupHeartbeatIntervalMs(),
+            groupCoordinatorConfig.consumerGroupMinHeartbeatIntervalMs(),
+            groupCoordinatorConfig.consumerGroupMaxHeartbeatIntervalMs()
+        );
+        validateSessionExceedsHeartbeat(
+            newGroupConfig,
+            changedConfigNames,
+            SHARE_SESSION_TIMEOUT_MS_CONFIG,
+            groupCoordinatorConfig.shareGroupSessionTimeoutMs(),
+            groupCoordinatorConfig.shareGroupMinSessionTimeoutMs(),
+            groupCoordinatorConfig.shareGroupMaxSessionTimeoutMs(),
+            SHARE_HEARTBEAT_INTERVAL_MS_CONFIG,
+            groupCoordinatorConfig.shareGroupHeartbeatIntervalMs(),
+            groupCoordinatorConfig.shareGroupMinHeartbeatIntervalMs(),
+            groupCoordinatorConfig.shareGroupMaxHeartbeatIntervalMs()
+        );
+        validateSessionExceedsHeartbeat(
+            newGroupConfig,
+            changedConfigNames,
+            STREAMS_SESSION_TIMEOUT_MS_CONFIG,
+            groupCoordinatorConfig.streamsGroupSessionTimeoutMs(),
+            groupCoordinatorConfig.streamsGroupMinSessionTimeoutMs(),
+            groupCoordinatorConfig.streamsGroupMaxSessionTimeoutMs(),
+            STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG,
+            groupCoordinatorConfig.streamsGroupHeartbeatIntervalMs(),
+            groupCoordinatorConfig.streamsGroupMinHeartbeatIntervalMs(),
+            groupCoordinatorConfig.streamsGroupMaxHeartbeatIntervalMs()
+        );
+    }
+
+    /**
      * Rejects an alterConfigs request whose rack-aware assignment tags contain duplicate keys, inspecting the
      * raw value because {@link ConfigDef} removes duplicates from LIST values before they can be validated.
      *
@@ -517,6 +600,41 @@ public final class GroupConfig extends AbstractConfig {
      * @param shareGroupConfig       The share group config.
      */
     private static void validateValues(
+        Map<String, Object> parsed,
+        GroupCoordinatorConfig groupCoordinatorConfig,
+        ShareGroupConfig shareGroupConfig
+    ) {
+        validateIndividualValues(parsed, groupCoordinatorConfig, shareGroupConfig);
+
+        // Cross-field validations: session timeout must be greater than heartbeat interval.
+        validateSessionExceedsHeartbeat(
+            parsed,
+            CONSUMER_SESSION_TIMEOUT_MS_CONFIG,
+            groupCoordinatorConfig.consumerGroupSessionTimeoutMs(),
+            CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG,
+            groupCoordinatorConfig.consumerGroupHeartbeatIntervalMs()
+        );
+        validateSessionExceedsHeartbeat(
+            parsed,
+            SHARE_SESSION_TIMEOUT_MS_CONFIG,
+            groupCoordinatorConfig.shareGroupSessionTimeoutMs(),
+            SHARE_HEARTBEAT_INTERVAL_MS_CONFIG,
+            groupCoordinatorConfig.shareGroupHeartbeatIntervalMs()
+        );
+        validateSessionExceedsHeartbeat(
+            parsed,
+            STREAMS_SESSION_TIMEOUT_MS_CONFIG,
+            groupCoordinatorConfig.streamsGroupSessionTimeoutMs(),
+            STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG,
+            groupCoordinatorConfig.streamsGroupHeartbeatIntervalMs()
+        );
+    }
+
+    /**
+     * Validates individual group configuration values without checking relationships between
+     * settings. This lets alter validation handle unchanged, out-of-range values separately.
+     */
+    private static void validateIndividualValues(
         Map<String, Object> parsed,
         GroupCoordinatorConfig groupCoordinatorConfig,
         ShareGroupConfig shareGroupConfig
@@ -614,29 +732,6 @@ public final class GroupConfig extends AbstractConfig {
             groupCoordinatorConfig.streamsGroupMaxWarmupReplicas()
         );
 
-        // Cross-field validations: session timeout must be greater than heartbeat interval.
-        validateSessionExceedsHeartbeat(
-            parsed,
-            CONSUMER_SESSION_TIMEOUT_MS_CONFIG,
-            groupCoordinatorConfig.consumerGroupSessionTimeoutMs(),
-            CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG,
-            groupCoordinatorConfig.consumerGroupHeartbeatIntervalMs()
-        );
-        validateSessionExceedsHeartbeat(
-            parsed,
-            SHARE_SESSION_TIMEOUT_MS_CONFIG,
-            groupCoordinatorConfig.shareGroupSessionTimeoutMs(),
-            SHARE_HEARTBEAT_INTERVAL_MS_CONFIG,
-            groupCoordinatorConfig.shareGroupHeartbeatIntervalMs()
-        );
-        validateSessionExceedsHeartbeat(
-            parsed,
-            STREAMS_SESSION_TIMEOUT_MS_CONFIG,
-            groupCoordinatorConfig.streamsGroupSessionTimeoutMs(),
-            STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG,
-            groupCoordinatorConfig.streamsGroupHeartbeatIntervalMs()
-        );
-
         // DLQ validation (KIP-1191)
         // DLQ topic name must not start with "__" (reserved for internal topics)
         String dlqTopicName = (String) parsed.get(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG);
@@ -703,6 +798,55 @@ public final class GroupConfig extends AbstractConfig {
         int value = (Integer) parsed.get(key);
         if (value < min)
             throw new InvalidConfigurationException(key + " must be greater than or equal to " + min);
+    }
+
+    /**
+     * Validates a session/heartbeat relationship for an alter operation. Unchanged values are
+     * clamped to the current broker-level bounds before the relationship is checked because a
+     * broker configuration change may have made the stored value stale.
+     */
+    private static void validateSessionExceedsHeartbeat(
+        Map<String, String> newGroupConfig,
+        Set<String> changedConfigNames,
+        String sessionKey,
+        int defaultSession,
+        int minSession,
+        int maxSession,
+        String heartbeatKey,
+        int defaultHeartbeat,
+        int minHeartbeat,
+        int maxHeartbeat
+    ) {
+        if (!changedConfigNames.contains(sessionKey) && !changedConfigNames.contains(heartbeatKey)) {
+            return;
+        }
+
+        int effectiveSession = effectiveValue(newGroupConfig, sessionKey, defaultSession, minSession, maxSession);
+        int effectiveHeartbeat = effectiveValue(
+            newGroupConfig,
+            heartbeatKey,
+            defaultHeartbeat,
+            minHeartbeat,
+            maxHeartbeat
+        );
+        if (effectiveSession <= effectiveHeartbeat) {
+            throw new InvalidConfigurationException(sessionKey + " must be greater than " + heartbeatKey);
+        }
+    }
+
+    private static int effectiveValue(
+        Map<String, String> groupConfig,
+        String key,
+        int defaultValue,
+        int minValue,
+        int maxValue
+    ) {
+        String rawValue = groupConfig.get(key);
+        if (rawValue == null) {
+            return defaultValue;
+        }
+        int value = Integer.parseInt(rawValue.trim());
+        return Math.max(minValue, Math.min(maxValue, value));
     }
 
     /**

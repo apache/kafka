@@ -185,6 +185,41 @@ class ControllerConfigurationValidatorTest {
   }
 
   @Test
+  def testGroupConfigChangeIgnoresUnchangedOutOfRangeSessionTimeout(): Unit = {
+    val existingConfig = new util.TreeMap[String, String]()
+    existingConfig.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "90000")
+
+    val newConfig = new util.TreeMap[String, String](existingConfig)
+    newConfig.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "6000")
+
+    validator.validate(new ConfigResource(GROUP, "group"), newConfig, existingConfig)
+  }
+
+  @Test
+  def testGroupConfigChangeIgnoresUnchangedOutOfRangeHeartbeatInterval(): Unit = {
+    val existingConfig = new util.TreeMap[String, String]()
+    existingConfig.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "16000")
+
+    val newConfig = new util.TreeMap[String, String](existingConfig)
+    newConfig.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
+
+    validator.validate(new ConfigResource(GROUP, "group"), newConfig, existingConfig)
+  }
+
+  @Test
+  def testInvalidChangedGroupConfigIsStillRejected(): Unit = {
+    val existingConfig = new util.TreeMap[String, String]()
+    existingConfig.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
+
+    val newConfig = new util.TreeMap[String, String](existingConfig)
+    newConfig.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "90000")
+
+    assertEquals("consumer.session.timeout.ms must be in the range 45000 to 60000 inclusive.",
+      assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
+        new ConfigResource(GROUP, "group"), newConfig, existingConfig)).getMessage)
+  }
+
+  @Test
   def testInvalidGroupNameGroupConfig(): Unit = {
     val config = new util.TreeMap[String, String]()
     assertEquals("Default group resources are not allowed.",
