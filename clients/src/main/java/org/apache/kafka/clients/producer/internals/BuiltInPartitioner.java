@@ -409,6 +409,9 @@ public class BuiltInPartitioner {
      * Default hashing function to choose a partition from the serialized key bytes
      */
     public static int partitionForKey(final byte[] serializedKey, final int numPartitions) {
+        if (numPartitions <= 0) {
+            throw new IllegalArgumentException("numPartitions must be > 0, but was " + numPartitions);
+        }
         return Utils.toPositive(Utils.murmur2(serializedKey)) % numPartitions;
     }
 

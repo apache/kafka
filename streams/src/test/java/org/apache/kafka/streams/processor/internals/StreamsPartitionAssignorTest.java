@@ -163,6 +163,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
@@ -1441,6 +1442,7 @@ public class StreamsPartitionAssignorTest {
     public void testOnAssignment(final Map<String, Object> parameterizedConfig) {
         setUp(parameterizedConfig, false);
         taskManager = mock(TaskManager.class);
+        lenient().when(taskManager.topologyMetadata()).thenReturn(topologyMetadata);
 
         final Map<HostInfo, Set<TopicPartition>> hostState = Collections.singletonMap(
             new HostInfo("localhost", 9090),
@@ -1469,6 +1471,36 @@ public class StreamsPartitionAssignorTest {
         assertTrue(topicPartitionInfoCaptor.getValue().containsKey(t3p0));
         assertTrue(topicPartitionInfoCaptor.getValue().containsKey(t3p3));
         assertEquals(2, topicPartitionInfoCaptor.getValue().size());
+    }
+
+    @ParameterizedTest
+    @MethodSource("parameter")
+    public void shouldUpdateMetadataWhenAssignmentMissesStoreSourceTopicMetadata(final Map<String, Object> parameterizedConfig) {
+        final StreamsBuilder streamsBuilder = new StreamsBuilder();
+        streamsBuilder.table("topic1", Materialized.as("store"));
+        builder = TopologyWrapper.getInternalTopologyBuilder(streamsBuilder.build());
+
+        setUp(parameterizedConfig, false);
+        createDefaultMockTaskManager();
+        configureDefaultPartitionAssignor(parameterizedConfig);
+
+        final Map<HostInfo, Set<TopicPartition>> hostState = Collections.singletonMap(
+            new HostInfo("localhost", 9090),
+            Collections.singleton(t2p0)
+        );
+        final AssignmentInfo info = new AssignmentInfo(
+            LATEST_SUPPORTED_VERSION,
+            Collections.singletonList(TASK_0_0),
+            Collections.emptyMap(),
+            hostState,
+            emptyMap(),
+            0
+        );
+        final Assignment assignment = new Assignment(Collections.singletonList(t2p0), info.encode());
+
+        partitionAssignor.onAssignment(assignment, null);
+
+        verify(streamsMetadataState).onChange(eq(hostState), anyMap(), anyMap());
     }
 
     @ParameterizedTest

@@ -400,6 +400,21 @@ public class BuiltInPartitionerTest {
         assertDoesNotThrow(() -> new BuiltInPartitioner(logContext, TOPIC_A, 1, false, ""));
     }
 
+    @Test
+    void testPartitionForKeyReturnsValidPartition() {
+        final byte[] key = "key".getBytes();
+        final int numPartitions = 8;
+        final int partition = BuiltInPartitioner.partitionForKey(key, numPartitions);
+        assertTrue(partition >= 0 && partition < numPartitions);
+    }
+
+    @Test
+    void testPartitionForKeyThrowsIfNumPartitionsNotPositive() {
+        final byte[] key = "key".getBytes();
+        assertThrows(IllegalArgumentException.class, () -> BuiltInPartitioner.partitionForKey(key, 0));
+        assertThrows(IllegalArgumentException.class, () -> BuiltInPartitioner.partitionForKey(key, -1));
+    }
+
 
     private static class SequentialPartitioner extends BuiltInPartitioner {
 

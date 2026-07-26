@@ -1548,6 +1548,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             partitionsByHost.keySet()
         );
 
+        final Set<String> missingSourceTopics =
+            StreamsMetadataState.missingSourceTopicsForMetadata(topicToPartitionInfo, taskManager.topologyMetadata());
+        if (!missingSourceTopics.isEmpty()) {
+            log.info("Missing partition metadata for source topics {} while updating streams metadata; " +
+                    "continuing with stores/topics that have metadata.", missingSourceTopics);
+        }
         streamsMetadataState.onChange(partitionsByHost, standbyPartitionsByHost, topicToPartitionInfo);
 
         // we do not capture any exceptions but just let the exception thrown from consumer.poll directly
