@@ -49,12 +49,12 @@ class DockerSanityTest(unittest.TestCase):
         self.update_file(filename, f"image: {self.IMAGE}", "image: {$IMAGE}")
         self.update_file(f"{self.FIXTURES_DIR}/{constants.SSL_CLIENT_CONFIG}", self.FIXTURES_DIR, "{$DIR}")
 
-    def create_topic(self, topic, topic_config):
+    def create_topic(self, topic, topic_config, list_config=None):
         command = [f"{self.FIXTURES_DIR}/{constants.KAFKA_TOPICS}", "--create", "--topic", topic]
         command.extend(topic_config)
         subprocess.run(command)
         check_command = [f"{self.FIXTURES_DIR}/{constants.KAFKA_TOPICS}", "--list"]
-        check_command.extend(topic_config)
+        check_command.extend(topic_config if list_config is None else list_config)
         output = subprocess.check_output(check_command)
         if topic in output.decode("utf-8"):
             return True
@@ -146,6 +146,36 @@ class DockerSanityTest(unittest.TestCase):
 
         return errors
 
+    def zstd_flow(self):
+        print(f"Running {constants.ZSTD_FLOW_TESTS}")
+        errors = []
+        bootstrap_server = "localhost:9092"
+        topic_config = ["--bootstrap-server", bootstrap_server, "--config", "compression.type=zstd"]
+        list_config = ["--bootstrap-server", bootstrap_server]
+        try:
+            self.assertTrue(self.create_topic(constants.ZSTD_TOPIC, topic_config, list_config))
+        except AssertionError as e:
+            errors.append(constants.ZSTD_ERROR_PREFIX + str(e))
+            return errors
+
+        producer_config = [
+            "--bootstrap-server", bootstrap_server,
+            "--command-property", "compression.type=zstd",
+        ]
+        self.produce_message(constants.ZSTD_TOPIC, producer_config, "key", "message")
+
+        consumer_config = [
+            "--bootstrap-server", bootstrap_server,
+            "--command-property", "auto.offset.reset=earliest",
+        ]
+        message = self.consume_message(constants.ZSTD_TOPIC, consumer_config)
+        try:
+            self.assertEqual(message, "key:message")
+        except AssertionError as e:
+            errors.append(constants.ZSTD_ERROR_PREFIX + str(e))
+
+        return errors
+
     def broker_restart_flow(self):
         print(f"Running {constants.BROKER_RESTART_TESTS}")
         errors = []
@@ -201,6 +231,11 @@ class DockerSanityTest(unittest.TestCase):
             total_errors.extend(self.broker_restart_flow())
         except Exception as e:
             print(constants.BROKER_RESTART_ERROR_PREFIX, str(e))
+            total_errors.append(str(e))
+        try:
+            total_errors.extend(self.zstd_flow())
+        except Exception as e:
+            print(constants.ZSTD_ERROR_PREFIX, str(e))
             total_errors.append(str(e))
         
         self.assertEqual(total_errors, [])
