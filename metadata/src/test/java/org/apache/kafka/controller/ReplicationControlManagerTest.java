@@ -3884,4 +3884,66 @@ public class ReplicationControlManagerTest {
         assertTrue(electedTopics.contains(barId),
             "Broker 1 (bar) should have received one election");
     }
+
+    /**
+     * brokerOutOfSyncCounts() must return the per-broker OOS partition counts computed
+     * during the most recent maybeBalancePartitionLeaders() run. This verifies the data
+     * path that feeds the OutOfSyncPreferredPartitionCount{broker=N} JMX metric.
+     *
+     * Scenario:
+     *  - broker 0 preferred for 3 partitions; broker 1 preferred for 2 partitions
+     *  - broker 0 joins ISR for 1 of 3 → 2 OOS; broker 1 joins none → 2 OOS
+     *  - after that run the map must be {0→2, 1→2}
+     *  - once broker 0 joins all ISRs, re-run clears broker 0 from the map → {1→2}
+     *  - once broker 1 joins all ISRs and elections fire, map is empty
+     */
+    @Test
+    public void testBrokerOutOfSyncCountsReflectsPerBrokerOosState() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+            .setElectionAlgorithm("wait-for-sync")
+            .setWaitForSyncThresholdPercent(0)   // gate on any OOS partition
+            .setWaitForSyncMaxWaitMs(0)           // no escape hatch
+            .build();
+        ReplicationControlManager replication = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(2);   // only replica broker starts active
+        // foo: 3 partitions preferred on broker 0; bar: 2 partitions preferred on broker 1
+        Uuid fooId = ctx.createTestTopic("foo", new int[][]{
+            new int[]{0, 2}, new int[]{0, 2}, new int[]{0, 2}
+        }).topicId();
+        Uuid barId = ctx.createTestTopic("bar", new int[][]{
+            new int[]{1, 2}, new int[]{1, 2}
+        }).topicId();
+        ctx.unfenceBrokers(0, 1);
+        // Broker 0 joins ISR for foo-p0 only (2 OOS remain for broker 0)
+        ctx.alterPartition(new TopicIdPartition(fooId, 0), 2,
+            isrWithDefaultEpoch(0, 2), LeaderRecoveryState.RECOVERED);
+        // Broker 1 joins no ISRs (2 OOS for broker 1)
+
+        replication.maybeBalancePartitionLeaders();
+        assertEquals(Map.of(0, 2, 1, 2), replication.brokerOutOfSyncCounts(),
+            "After first run: broker 0 has 2 OOS, broker 1 has 2 OOS");
+
+        // Broker 0 joins ISR for remaining two foo partitions — now fully in sync
+        ctx.alterPartition(new TopicIdPartition(fooId, 1), 2,
+            isrWithDefaultEpoch(0, 2), LeaderRecoveryState.RECOVERED);
+        ctx.alterPartition(new TopicIdPartition(fooId, 2), 2,
+            isrWithDefaultEpoch(0, 2), LeaderRecoveryState.RECOVERED);
+
+        replication.maybeBalancePartitionLeaders();
+        assertEquals(Map.of(1, 2), replication.brokerOutOfSyncCounts(),
+            "After second run: broker 0 fully in sync (absent from map), broker 1 still has 2 OOS");
+
+        // Broker 1 joins ISR for both bar partitions
+        ctx.alterPartition(new TopicIdPartition(barId, 0), 2,
+            isrWithDefaultEpoch(1, 2), LeaderRecoveryState.RECOVERED);
+        ctx.alterPartition(new TopicIdPartition(barId, 1), 2,
+            isrWithDefaultEpoch(1, 2), LeaderRecoveryState.RECOVERED);
+
+        // Two ungated runs needed for hysteresis before elections fire
+        replication.maybeBalancePartitionLeaders();
+        replication.maybeBalancePartitionLeaders();
+        assertEquals(Map.of(), replication.brokerOutOfSyncCounts(),
+            "After all brokers are in sync: OOS map should be empty");
+    }
 }

@@ -1982,9 +1982,14 @@ public class ReplicationControlManager {
         }
 
         // Update per-broker out-of-sync counts for JMX metrics.
+        // Only include brokers with at least one OOS partition so that fully
+        // recovered brokers are absent from the map (causing their per-broker
+        // JMX gauge to be deregistered by updateBrokerOutOfSyncCounts()).
         lastBrokerOutOfSyncCounts.clear();
         for (Map.Entry<Integer, int[]> e : brokerStats.entrySet()) {
-            lastBrokerOutOfSyncCounts.put(e.getKey(), e.getValue()[0]);
+            if (e.getValue()[0] > 0) {
+                lastBrokerOutOfSyncCounts.put(e.getKey(), e.getValue()[0]);
+            }
         }
 
         return gatedBrokers;
