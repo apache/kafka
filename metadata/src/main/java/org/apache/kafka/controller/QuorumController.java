@@ -206,6 +206,9 @@ public final class QuorumController implements Controller {
         private OptionalLong leaderImbalanceCheckIntervalNs = OptionalLong.empty();
         private int leaderImbalanceElectionMaxPerRun = ReplicationControlManager.MAX_ELECTIONS_PER_IMBALANCE;
         private OptionalLong leaderImbalanceElectionThrottleIntervalNs = OptionalLong.empty();
+        private String leaderImbalanceElectionAlgorithm = "immediate";
+        private int leaderImbalanceElectionWaitForSyncThresholdPercent = 0;
+        private long leaderImbalanceElectionWaitForSyncMaxWaitMs = 1800000L;
         private OptionalLong maxIdleIntervalNs = OptionalLong.empty();
         private long sessionTimeoutNs = ClusterControlManager.DEFAULT_SESSION_TIMEOUT_NS;
         private OptionalLong fenceStaleBrokerIntervalNs = OptionalLong.empty();
@@ -302,6 +305,21 @@ public final class QuorumController implements Controller {
 
         public Builder setLeaderImbalanceElectionThrottleIntervalNs(OptionalLong value) {
             this.leaderImbalanceElectionThrottleIntervalNs = value;
+            return this;
+        }
+
+        public Builder setLeaderImbalanceElectionAlgorithm(String value) {
+            this.leaderImbalanceElectionAlgorithm = value;
+            return this;
+        }
+
+        public Builder setLeaderImbalanceElectionWaitForSyncThresholdPercent(int value) {
+            this.leaderImbalanceElectionWaitForSyncThresholdPercent = value;
+            return this;
+        }
+
+        public Builder setLeaderImbalanceElectionWaitForSyncMaxWaitMs(long value) {
+            this.leaderImbalanceElectionWaitForSyncMaxWaitMs = value;
             return this;
         }
 
@@ -451,6 +469,9 @@ public final class QuorumController implements Controller {
                     leaderImbalanceCheckIntervalNs,
                     leaderImbalanceElectionMaxPerRun,
                     leaderImbalanceElectionThrottleIntervalNs,
+                    leaderImbalanceElectionAlgorithm,
+                    leaderImbalanceElectionWaitForSyncThresholdPercent,
+                    leaderImbalanceElectionWaitForSyncMaxWaitMs,
                     maxIdleIntervalNs,
                     sessionTimeoutNs,
                     fenceStaleBrokerIntervalNs,
@@ -1533,6 +1554,9 @@ public final class QuorumController implements Controller {
         OptionalLong leaderImbalanceCheckIntervalNs,
         int leaderImbalanceElectionMaxPerRun,
         OptionalLong leaderImbalanceElectionThrottleIntervalNs,
+        String leaderImbalanceElectionAlgorithm,
+        int leaderImbalanceElectionWaitForSyncThresholdPercent,
+        long leaderImbalanceElectionWaitForSyncMaxWaitMs,
         OptionalLong maxIdleIntervalNs,
         long sessionTimeoutNs,
         OptionalLong fenceStaleBrokerIntervalNs,
@@ -1616,6 +1640,10 @@ public final class QuorumController implements Controller {
             setDefaultReplicationFactor(defaultReplicationFactor).
             setDefaultNumPartitions(defaultNumPartitions).
             setMaxElectionsPerImbalance(leaderImbalanceElectionMaxPerRun).
+            setElectionAlgorithm(leaderImbalanceElectionAlgorithm).
+            setWaitForSyncThresholdPercent(leaderImbalanceElectionWaitForSyncThresholdPercent).
+            setWaitForSyncMaxWaitMs(leaderImbalanceElectionWaitForSyncMaxWaitMs).
+            setTime(time).
             setConfigurationControl(configurationControl).
             setClusterControl(clusterControl).
             setCreateTopicPolicy(createTopicPolicy).

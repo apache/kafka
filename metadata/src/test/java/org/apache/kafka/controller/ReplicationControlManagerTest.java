@@ -175,6 +175,10 @@ public class ReplicationControlManagerTest {
             private MockTime mockTime = new MockTime();
             private boolean isElrEnabled = false;
             private final Map<String, Object> staticConfig = new HashMap<>();
+            private int maxElectionsPerImbalance = Integer.MAX_VALUE;
+            private String electionAlgorithm = "immediate";
+            private int waitForSyncThresholdPercent = 0;
+            private long waitForSyncMaxWaitMs = 1800000L;
 
             Builder setCreateTopicPolicy(CreateTopicPolicy createTopicPolicy) {
                 this.createTopicPolicy = Optional.of(createTopicPolicy);
@@ -201,12 +205,36 @@ public class ReplicationControlManagerTest {
                 return this;
             }
 
+            Builder setMaxElectionsPerImbalance(int maxElectionsPerImbalance) {
+                this.maxElectionsPerImbalance = maxElectionsPerImbalance;
+                return this;
+            }
+
+            Builder setElectionAlgorithm(String electionAlgorithm) {
+                this.electionAlgorithm = electionAlgorithm;
+                return this;
+            }
+
+            Builder setWaitForSyncThresholdPercent(int waitForSyncThresholdPercent) {
+                this.waitForSyncThresholdPercent = waitForSyncThresholdPercent;
+                return this;
+            }
+
+            Builder setWaitForSyncMaxWaitMs(long waitForSyncMaxWaitMs) {
+                this.waitForSyncMaxWaitMs = waitForSyncMaxWaitMs;
+                return this;
+            }
+
             ReplicationControlTestContext build() {
                 return new ReplicationControlTestContext(metadataVersion,
                     createTopicPolicy,
                     mockTime,
                     isElrEnabled,
-                    staticConfig);
+                    staticConfig,
+                    maxElectionsPerImbalance,
+                    electionAlgorithm,
+                    waitForSyncThresholdPercent,
+                    waitForSyncMaxWaitMs);
             }
         }
 
@@ -231,7 +259,11 @@ public class ReplicationControlManagerTest {
             Optional<CreateTopicPolicy> createTopicPolicy,
             MockTime time,
             boolean isElrEnabled,
-            Map<String, Object> staticConfig
+            Map<String, Object> staticConfig,
+            int maxElectionsPerImbalance,
+            String electionAlgorithm,
+            int waitForSyncThresholdPercent,
+            long waitForSyncMaxWaitMs
         ) {
             this.time = time;
             this.featureControl = new FeatureControlManager.Builder().
@@ -270,7 +302,11 @@ public class ReplicationControlManagerTest {
             this.replicationControl = new ReplicationControlManager.Builder().
                 setSnapshotRegistry(snapshotRegistry).
                 setLogContext(logContext).
-                setMaxElectionsPerImbalance(Integer.MAX_VALUE).
+                setMaxElectionsPerImbalance(maxElectionsPerImbalance).
+                setElectionAlgorithm(electionAlgorithm).
+                setWaitForSyncThresholdPercent(waitForSyncThresholdPercent).
+                setWaitForSyncMaxWaitMs(waitForSyncMaxWaitMs).
+                setTime(time).
                 setConfigurationControl(configurationControl).
                 setClusterControl(clusterControl).
                 setCreateTopicPolicy(createTopicPolicy).
@@ -3539,5 +3575,215 @@ public class ReplicationControlManagerTest {
         int partitionEpoch = ctx.replicationControl.getPartition(fooId, 0).partitionEpoch;
         ctx.replay(List.of(new ApiMessageAndVersion(new ClearElrRecord(), CLEAR_ELR_RECORD.highestSupportedVersion())));
         assertEquals(partitionEpoch, ctx.replicationControl.getPartition(fooId, 0).partitionEpoch);
+    }
+
+    /**
+     * When maxElectionsPerImbalance caps the run, exactly that many election records are
+     * produced and the response signals "more work remains" (true).
+     */
+    @Test
+    public void testMaxPerRunCapsElectionsAndSignalsContinuation() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+            .setMaxElectionsPerImbalance(2)
+            .build();
+        ReplicationControlManager replication = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2);
+        // Broker 0 fenced: all 5 partitions are created with preferred=0 but leader=1 (imbalanced)
+        ctx.unfenceBrokers(1, 2);
+        Uuid fooId = ctx.createTestTopic("foo", new int[][]{
+            new int[]{0, 1, 2}, new int[]{0, 1, 2}, new int[]{0, 1, 2},
+            new int[]{0, 1, 2}, new int[]{0, 1, 2}
+        }).topicId();
+        ctx.unfenceBrokers(0);
+        // Leader (broker 1) reports broker 0 has caught up and joined the ISR for every partition
+        for (int i = 0; i < 5; i++) {
+            ctx.alterPartition(new TopicIdPartition(fooId, i), 1,
+                isrWithDefaultEpoch(0, 1, 2), LeaderRecoveryState.RECOVERED);
+        }
+
+        ControllerResult<Boolean> result = replication.maybeBalancePartitionLeaders();
+
+        assertEquals(2, result.records().size(), "Election cap=2 should produce exactly 2 elections");
+        assertTrue(result.response(), "response=true signals that more elections remain");
+    }
+
+    /**
+     * With wait-for-sync and threshold=0, a preferred broker that is still out of ISR
+     * must be gated — no preferred-leader elections happen for it.
+     */
+    @Test
+    public void testWaitForSyncGatesWhenBrokerIsOutOfSync() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+            .setElectionAlgorithm("wait-for-sync")
+            .setWaitForSyncThresholdPercent(0)   // gate if any partition is out of sync
+            .setWaitForSyncMaxWaitMs(0)           // no escape hatch
+            .build();
+        ReplicationControlManager replication = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2);
+        // Broker 0 fenced: partition imbalanced (preferred=0, leader=1, ISR={1,2})
+        ctx.unfenceBrokers(1, 2);
+        ctx.createTestTopic("foo", new int[][]{new int[]{0, 1, 2}});
+        ctx.unfenceBrokers(0);
+        // Broker 0 is now unfenced but still NOT in ISR (no alterPartition call)
+
+        ControllerResult<Boolean> result = replication.maybeBalancePartitionLeaders();
+
+        assertEquals(0, result.records().size(),
+            "Broker 0 is out of ISR: should be gated, no elections");
+    }
+
+    /**
+     * With wait-for-sync and threshold=0, a preferred broker that is fully in sync
+     * is not gated, and its preferred-leader election proceeds normally.
+     */
+    @Test
+    public void testWaitForSyncAllowsElectionWhenBrokerIsInSync() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+            .setElectionAlgorithm("wait-for-sync")
+            .setWaitForSyncThresholdPercent(0)
+            .setWaitForSyncMaxWaitMs(0)
+            .build();
+        ReplicationControlManager replication = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(1, 2);
+        Uuid fooId = ctx.createTestTopic("foo", new int[][]{new int[]{0, 1, 2}}).topicId();
+        ctx.unfenceBrokers(0);
+        // Leader (broker 1) reports broker 0 has joined the ISR — fully in sync
+        ctx.alterPartition(new TopicIdPartition(fooId, 0), 1,
+            isrWithDefaultEpoch(0, 1, 2), LeaderRecoveryState.RECOVERED);
+
+        ControllerResult<Boolean> result = replication.maybeBalancePartitionLeaders();
+
+        assertEquals(1, result.records().size(),
+            "Broker 0 is in ISR: not gated, election should happen");
+        assertEquals(0, ((PartitionChangeRecord) result.records().get(0).message()).leader(),
+            "Preferred replica (broker 0) should be elected leader");
+    }
+
+    /**
+     * The max-wait escape hatch releases a broker that has been gated beyond
+     * waitForSyncMaxWaitMs even while still above the OOS threshold, allowing
+     * elections for partitions where the preferred replica is already in ISR.
+     */
+    @Test
+    public void testWaitForSyncMaxWaitMsEscapeHatch() {
+        MockTime mockTime = new MockTime();
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+            .setMockTime(mockTime)
+            .setElectionAlgorithm("wait-for-sync")
+            .setWaitForSyncThresholdPercent(0)   // gate on any out-of-sync partition
+            .setWaitForSyncMaxWaitMs(500)
+            .build();
+        ReplicationControlManager replication = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(1, 2);
+        // Two partitions for broker 0: p0 will have broker 0 in ISR, p1 will not
+        Uuid fooId = ctx.createTestTopic("foo", new int[][]{
+            new int[]{0, 1, 2}, new int[]{0, 1, 2}
+        }).topicId();
+        ctx.unfenceBrokers(0);
+        // Only add broker 0 to ISR for partition 0; partition 1 keeps broker 0 out of ISR
+        ctx.alterPartition(new TopicIdPartition(fooId, 0), 1,
+            isrWithDefaultEpoch(0, 1, 2), LeaderRecoveryState.RECOVERED);
+        // OOS ratio = 1/2 = 50% > threshold(0) → broker 0 is gated
+
+        ControllerResult<Boolean> firstResult = replication.maybeBalancePartitionLeaders();
+        assertEquals(0, firstResult.records().size(), "Should be gated on first run");
+
+        // Advance past the max-wait timeout so the escape hatch fires
+        mockTime.sleep(600);
+
+        // Escape hatch: broker still 50% OOS but gated > 500 ms → gate released this run.
+        // Election succeeds only for p0 (where broker 0 is in ISR); p1 produces no record.
+        ControllerResult<Boolean> secondResult = replication.maybeBalancePartitionLeaders();
+        assertEquals(1, secondResult.records().size(),
+            "Escape hatch should allow the in-sync partition to be elected");
+        assertEquals(0, ((PartitionChangeRecord) secondResult.records().get(0).message()).leader(),
+            "Elected leader should be broker 0");
+    }
+
+    /**
+     * After a broker transitions from gated to ungated, hysteresis requires two consecutive
+     * runs below the threshold before the gate is fully released.
+     */
+    @Test
+    public void testWaitForSyncHysteresisRequiresTwoConsecutiveUngatedRuns() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+            .setElectionAlgorithm("wait-for-sync")
+            .setWaitForSyncThresholdPercent(0)   // gate on any out-of-sync partition
+            .setWaitForSyncMaxWaitMs(0)           // no escape hatch
+            .build();
+        ReplicationControlManager replication = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(1, 2);
+        Uuid fooId = ctx.createTestTopic("foo", new int[][]{new int[]{0, 1, 2}}).topicId();
+        ctx.unfenceBrokers(0);
+        // Broker 0 NOT in ISR yet
+
+        // Run 1: broker 0 is out of sync → gated, no election
+        ControllerResult<Boolean> run1 = replication.maybeBalancePartitionLeaders();
+        assertEquals(0, run1.records().size(), "Run 1: gated (broker out of sync)");
+
+        // Leader (broker 1) reports broker 0 has joined the ISR
+        ctx.alterPartition(new TopicIdPartition(fooId, 0), 1,
+            isrWithDefaultEpoch(0, 1, 2), LeaderRecoveryState.RECOVERED);
+
+        // Run 2: broker 0 now in sync but hysteresis (first ungated run) keeps it gated
+        ControllerResult<Boolean> run2 = replication.maybeBalancePartitionLeaders();
+        assertEquals(0, run2.records().size(),
+            "Run 2: hysteresis (first ungated run) — still no election");
+
+        // Run 3: second consecutive ungated run → gate released, election happens
+        ControllerResult<Boolean> run3 = replication.maybeBalancePartitionLeaders();
+        ctx.replay(run3.records());
+        assertEquals(1, run3.records().size(),
+            "Run 3: gate released after 2 ungated runs — election should occur");
+        assertEquals(0, ((PartitionChangeRecord) run3.records().get(0).message()).leader(),
+            "Elected leader should be broker 0");
+    }
+
+    /**
+     * Round-robin scheduling ensures that when multiple preferred brokers each have
+     * imbalanced partitions, elections are spread across brokers rather than exhausting
+     * one broker's queue before moving to the next.
+     */
+    @Test
+    public void testRoundRobinFairnessAcrossBrokers() {
+        // cap=2, two preferred brokers with 3 partitions each → expect 1 election per broker
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+            .setMaxElectionsPerImbalance(2)
+            .build();
+        ReplicationControlManager replication = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2, 3);
+        // Brokers 0 and 1 fenced: all partitions are imbalanced (preferred=0/1, leader=2)
+        ctx.unfenceBrokers(2, 3);
+        // foo: preferred=0, bar: preferred=1
+        Uuid fooId = ctx.createTestTopic("foo", new int[][]{
+            new int[]{0, 2, 3}, new int[]{0, 2, 3}, new int[]{0, 2, 3}
+        }).topicId();
+        Uuid barId = ctx.createTestTopic("bar", new int[][]{
+            new int[]{1, 2, 3}, new int[]{1, 2, 3}, new int[]{1, 2, 3}
+        }).topicId();
+        ctx.unfenceBrokers(0, 1);
+        // Add preferred broker to ISR for every partition (so elections can succeed)
+        for (int i = 0; i < 3; i++) {
+            ctx.alterPartition(new TopicIdPartition(fooId, i), 2,
+                isrWithDefaultEpoch(0, 2, 3), LeaderRecoveryState.RECOVERED);
+            ctx.alterPartition(new TopicIdPartition(barId, i), 2,
+                isrWithDefaultEpoch(1, 2, 3), LeaderRecoveryState.RECOVERED);
+        }
+
+        ControllerResult<Boolean> result = replication.maybeBalancePartitionLeaders();
+
+        assertEquals(2, result.records().size(), "Should perform exactly 2 elections (cap=2)");
+        assertTrue(result.response(), "More elections remain after hitting the cap");
+        // Round-robin must give one election to each preferred broker, not both to the same one
+        Set<Uuid> electedTopics = result.records().stream()
+            .map(r -> ((PartitionChangeRecord) r.message()).topicId())
+            .collect(Collectors.toSet());
+        assertTrue(electedTopics.contains(fooId),
+            "Broker 0 (foo) should have received one election");
+        assertTrue(electedTopics.contains(barId),
+            "Broker 1 (bar) should have received one election");
     }
 }

@@ -250,6 +250,9 @@ class ControllerServer(
           setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
             TimeUnit.MILLISECONDS)).
           setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs).
+          setLeaderImbalanceElectionAlgorithm(config.leaderImbalanceElectionAlgorithm).
+          setLeaderImbalanceElectionWaitForSyncThresholdPercent(config.leaderImbalanceElectionWaitForSyncThresholdPercent).
+          setLeaderImbalanceElectionWaitForSyncMaxWaitMs(config.leaderImbalanceElectionWaitForSyncMaxWaitMs).
           setLeaderImbalanceElectionMaxPerRun(config.leaderImbalanceElectionMaxPerRun).
           setLeaderImbalanceElectionThrottleIntervalNs(
             if (config.leaderImbalanceElectionThrottleIntervalMs > 0)

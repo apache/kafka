@@ -78,6 +78,7 @@ import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
@@ -104,6 +105,7 @@ import org.apache.kafka.timeline.TimelineHashSet;
 import org.slf4j.Logger;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -111,6 +113,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
@@ -158,6 +161,10 @@ public class ReplicationControlManager {
         private int defaultNumPartitions = 1;
 
         private int maxElectionsPerImbalance = MAX_ELECTIONS_PER_IMBALANCE;
+        private String electionAlgorithm = "immediate";
+        private int waitForSyncThresholdPercent = 0;
+        private long waitForSyncMaxWaitMs = 1800000L;
+        private Time time = Time.SYSTEM;
         private ConfigurationControlManager configurationControl = null;
         private ClusterControlManager clusterControl = null;
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
@@ -185,6 +192,26 @@ public class ReplicationControlManager {
 
         Builder setMaxElectionsPerImbalance(int maxElectionsPerImbalance) {
             this.maxElectionsPerImbalance = maxElectionsPerImbalance;
+            return this;
+        }
+
+        Builder setElectionAlgorithm(String electionAlgorithm) {
+            this.electionAlgorithm = electionAlgorithm;
+            return this;
+        }
+
+        Builder setWaitForSyncThresholdPercent(int waitForSyncThresholdPercent) {
+            this.waitForSyncThresholdPercent = waitForSyncThresholdPercent;
+            return this;
+        }
+
+        Builder setWaitForSyncMaxWaitMs(long waitForSyncMaxWaitMs) {
+            this.waitForSyncMaxWaitMs = waitForSyncMaxWaitMs;
+            return this;
+        }
+
+        Builder setTime(Time time) {
+            this.time = time;
             return this;
         }
 
@@ -224,6 +251,10 @@ public class ReplicationControlManager {
                 defaultReplicationFactor,
                 defaultNumPartitions,
                 maxElectionsPerImbalance,
+                electionAlgorithm,
+                waitForSyncThresholdPercent,
+                waitForSyncMaxWaitMs,
+                time,
                 configurationControl,
                 clusterControl,
                 createTopicPolicy,
@@ -378,12 +409,51 @@ public class ReplicationControlManager {
      */
     final KRaftClusterDescriber clusterDescriber = new KRaftClusterDescriber();
 
+    /**
+     * The election algorithm: "immediate" (default) or "wait-for-sync".
+     */
+    private final String electionAlgorithm;
+
+    /**
+     * Threshold percentage for the wait-for-sync gate. A broker is gated when more than this
+     * fraction of its imbalanced preferred partitions are out of ISR.
+     */
+    private final int waitForSyncThresholdPercent;
+
+    /**
+     * Maximum duration in milliseconds that a broker can be continuously gated. After this
+     * elapses the broker is released regardless of ISR state. 0 disables the escape hatch.
+     */
+    private final long waitForSyncMaxWaitMs;
+
+    /**
+     * Clock used for gate timing (gatedSince, max-wait escape hatch).
+     */
+    private final Time time;
+
+    /**
+     * Transient gate state: the wall-clock time (ms) when each broker first entered the gate
+     * in the current gating period. Not timeline-tracked; resets on controller failover.
+     */
+    private final Map<Integer, Long> brokerGatedSinceMs = new HashMap<>();
+
+    /**
+     * Transient gate state: number of consecutive balancer runs in which a currently-gated
+     * broker did not meet the gate condition. Used for hysteresis: a broker is released only
+     * after 2 consecutive such runs.
+     */
+    private final Map<Integer, Integer> brokerConsecutiveUngatedRuns = new HashMap<>();
+
     private ReplicationControlManager(
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
         short defaultReplicationFactor,
         int defaultNumPartitions,
         int maxElectionsPerImbalance,
+        String electionAlgorithm,
+        int waitForSyncThresholdPercent,
+        long waitForSyncMaxWaitMs,
+        Time time,
         ConfigurationControlManager configurationControl,
         ClusterControlManager clusterControl,
         Optional<CreateTopicPolicy> createTopicPolicy,
@@ -394,6 +464,10 @@ public class ReplicationControlManager {
         this.defaultReplicationFactor = defaultReplicationFactor;
         this.defaultNumPartitions = defaultNumPartitions;
         this.maxElectionsPerImbalance = maxElectionsPerImbalance;
+        this.electionAlgorithm = electionAlgorithm;
+        this.waitForSyncThresholdPercent = waitForSyncThresholdPercent;
+        this.waitForSyncMaxWaitMs = waitForSyncMaxWaitMs;
+        this.time = time;
         this.configurationControl = configurationControl;
         this.createTopicPolicy = createTopicPolicy;
         this.featureControl = featureControl;
@@ -1783,44 +1857,186 @@ public class ReplicationControlManager {
      */
     ControllerResult<Boolean> maybeBalancePartitionLeaders() {
         List<ApiMessageAndVersion> records = new ArrayList<>();
-        maybeTriggerLeaderChangeForPartitionsWithoutPreferredLeader(records, maxElectionsPerImbalance);
+        Set<Integer> gatedBrokers = computeGatedBrokers();
+        maybeTriggerLeaderChangeForPartitionsWithoutPreferredLeader(records, maxElectionsPerImbalance, gatedBrokers);
         return ControllerResult.of(records, records.size() >= maxElectionsPerImbalance);
     }
 
+    /**
+     * Compute the set of broker IDs that should be skipped by the preferred-leader balancer
+     * this run. Returns an empty set when the algorithm is "immediate".
+     *
+     * Under "wait-for-sync", a broker is gated when the fraction of its imbalanced preferred
+     * partitions that are out of ISR exceeds waitForSyncThresholdPercent. Hysteresis ensures a
+     * broker stays gated for at least 2 consecutive runs after the condition clears. The
+     * max-wait escape hatch forcibly releases a broker that has been gated longer than
+     * waitForSyncMaxWaitMs (disabled when waitForSyncMaxWaitMs == 0).
+     *
+     * Gate state is transient (not timeline-tracked) and resets on controller failover, which
+     * is acceptable because failover itself re-evaluates the gate from scratch.
+     */
+    private Set<Integer> computeGatedBrokers() {
+        if (!"wait-for-sync".equals(electionAlgorithm)) {
+            return Collections.emptySet();
+        }
+
+        long nowMs = time.milliseconds();
+
+        // Compute per-broker stats: [outOfSyncCount, totalCount] over imbalanced preferred partitions.
+        Map<Integer, int[]> brokerStats = new HashMap<>();
+        for (TopicIdPartition topicPartition : imbalancedPartitions) {
+            TopicControlInfo topic = topics.get(topicPartition.topicId());
+            if (topic == null) continue;
+            PartitionRegistration partition = topic.parts.get(topicPartition.partitionId());
+            if (partition == null) continue;
+
+            int preferredReplica = partition.replicas[0];
+            int[] stats = brokerStats.computeIfAbsent(preferredReplica, k -> new int[2]);
+            stats[1]++; // total
+
+            boolean inIsr = false;
+            for (int r : partition.isr) {
+                if (r == preferredReplica) {
+                    inIsr = true;
+                    break;
+                }
+            }
+            if (!inIsr) stats[0]++; // outOfSync
+        }
+
+        // Clean up state for brokers that no longer have any imbalanced preferred partitions.
+        brokerGatedSinceMs.keySet().retainAll(brokerStats.keySet());
+        brokerConsecutiveUngatedRuns.keySet().retainAll(brokerStats.keySet());
+
+        Set<Integer> gatedBrokers = new HashSet<>();
+        for (Map.Entry<Integer, int[]> entry : brokerStats.entrySet()) {
+            int brokerId = entry.getKey();
+            int outOfSyncCount = entry.getValue()[0];
+            int totalCount    = entry.getValue()[1];
+
+            // Use integer arithmetic to avoid floating point:
+            // outOfSyncCount / totalCount > threshold / 100
+            // ⟺ outOfSyncCount * 100 > threshold * totalCount
+            boolean meetsGateCondition = (long) outOfSyncCount * 100 > (long) waitForSyncThresholdPercent * totalCount;
+
+            if (meetsGateCondition) {
+                // Enter or remain in gate; record when the broker was first gated.
+                brokerGatedSinceMs.putIfAbsent(brokerId, nowMs);
+                brokerConsecutiveUngatedRuns.put(brokerId, 0);
+
+                // Escape hatch: release if continuously gated beyond max wait.
+                long gatedSince = brokerGatedSinceMs.get(brokerId);
+                if (waitForSyncMaxWaitMs > 0 && nowMs - gatedSince >= waitForSyncMaxWaitMs) {
+                    log.info("Broker {} has been gated for {} ms (max {}); releasing via escape hatch.",
+                        brokerId, nowMs - gatedSince, waitForSyncMaxWaitMs);
+                    brokerGatedSinceMs.remove(brokerId);
+                    brokerConsecutiveUngatedRuns.remove(brokerId);
+                } else {
+                    gatedBrokers.add(brokerId);
+                }
+            } else if (brokerGatedSinceMs.containsKey(brokerId)) {
+                // Broker was gated but now meets the condition to be released.
+                // Hysteresis: require 2 consecutive runs below threshold before releasing.
+                int ungatedRuns = brokerConsecutiveUngatedRuns.getOrDefault(brokerId, 0) + 1;
+                brokerConsecutiveUngatedRuns.put(brokerId, ungatedRuns);
+                if (ungatedRuns >= 2) {
+                    log.info("Broker {} has been below the wait-for-sync threshold for {} consecutive " +
+                        "runs; releasing from gate.", brokerId, ungatedRuns);
+                    brokerGatedSinceMs.remove(brokerId);
+                    brokerConsecutiveUngatedRuns.remove(brokerId);
+                } else {
+                    // Still in hysteresis; keep gated for one more run.
+                    gatedBrokers.add(brokerId);
+                }
+            }
+            // else: broker was never gated and does not meet condition — do nothing.
+        }
+
+        return gatedBrokers;
+    }
+
+    /**
+     * Attempt to elect a preferred leader for imbalanced partitions, round-robining across
+     * eligible preferred replicas so that multiple recovering brokers ramp up in parallel
+     * rather than one starving the other.
+     *
+     * @param records       Election records are appended here.
+     * @param maxElections  Stop after this many records have been appended.
+     * @param gatedBrokers  Broker IDs whose partitions must be skipped this run (wait-for-sync gate).
+     *                      Pass {@link Collections#emptySet()} when the gate is not active.
+     */
     void maybeTriggerLeaderChangeForPartitionsWithoutPreferredLeader(
         List<ApiMessageAndVersion> records,
-        int maxElections
+        int maxElections,
+        Set<Integer> gatedBrokers
     ) {
+        // Group imbalanced partitions by preferred replica so we can round-robin across brokers.
+        // Brokers in gatedBrokers are excluded entirely for this run.
+        LinkedHashMap<Integer, ArrayDeque<TopicIdPartition>> candidatesByBroker = new LinkedHashMap<>();
         for (TopicIdPartition topicPartition : imbalancedPartitions) {
-            if (records.size() >= maxElections) {
-                return;
-            }
-
             TopicControlInfo topic = topics.get(topicPartition.topicId());
             if (topic == null) {
                 log.error("Skipping unknown imbalanced topic {}", topicPartition);
                 continue;
             }
-
             PartitionRegistration partition = topic.parts.get(topicPartition.partitionId());
             if (partition == null) {
                 log.error("Skipping unknown imbalanced partition {}", topicPartition);
                 continue;
             }
+            int preferredReplica = partition.replicas[0];
+            if (!gatedBrokers.contains(preferredReplica)) {
+                candidatesByBroker.computeIfAbsent(preferredReplica, k -> new ArrayDeque<>()).add(topicPartition);
+            }
+        }
 
-            // Attempt to perform a preferred leader election
-            new PartitionChangeBuilder(
-                partition,
-                topicPartition.topicId(),
-                topicPartition.partitionId(),
-                new LeaderAcceptor(clusterControl, partition),
-                featureControl.metadataVersionOrThrow(),
-                getTopicEffectiveMinIsr(topic.name),
-                featureControl.isElrFeatureEnabled()
-            )
-                .setElection(PartitionChangeBuilder.Election.PREFERRED)
-                .setDefaultDirProvider(clusterDescriber)
-                .build().ifPresent(records::add);
+        if (candidatesByBroker.isEmpty()) {
+            return;
+        }
+
+        // Round-robin across broker buckets: pick one partition per broker per cycle until
+        // the election cap is reached or all buckets are drained.
+        List<Integer> brokerOrder = new ArrayList<>(candidatesByBroker.keySet());
+        boolean progress = true;
+        outer:
+        while (progress) {
+            progress = false;
+            for (Integer brokerId : brokerOrder) {
+                if (records.size() >= maxElections) {
+                    break outer;
+                }
+                ArrayDeque<TopicIdPartition> bucket = candidatesByBroker.get(brokerId);
+                if (bucket.isEmpty()) {
+                    continue;
+                }
+                TopicIdPartition topicPartition = bucket.poll();
+                progress = true;
+
+                TopicControlInfo topic = topics.get(topicPartition.topicId());
+                if (topic == null) {
+                    log.error("Skipping unknown imbalanced topic {}", topicPartition);
+                    continue;
+                }
+                PartitionRegistration partition = topic.parts.get(topicPartition.partitionId());
+                if (partition == null) {
+                    log.error("Skipping unknown imbalanced partition {}", topicPartition);
+                    continue;
+                }
+
+                // Attempt to perform a preferred leader election
+                new PartitionChangeBuilder(
+                    partition,
+                    topicPartition.topicId(),
+                    topicPartition.partitionId(),
+                    new LeaderAcceptor(clusterControl, partition),
+                    featureControl.metadataVersionOrThrow(),
+                    getTopicEffectiveMinIsr(topic.name),
+                    featureControl.isElrFeatureEnabled()
+                )
+                    .setElection(PartitionChangeBuilder.Election.PREFERRED)
+                    .setDefaultDirProvider(clusterDescriber)
+                    .build().ifPresent(records::add);
+            }
         }
     }
 
