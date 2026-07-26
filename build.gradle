@@ -2667,7 +2667,6 @@ project(':tools') {
     testImplementation testFixtures(project(':storage'))
     testImplementation project(':streams')
     testImplementation testFixtures(project(':streams'))
-    testImplementation testFixtures(project(':streams:integration-tests'))
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
@@ -3019,25 +3018,8 @@ project(':streams:integration-tests') {
     archivesName = "kafka-streams-integration-tests"
   }
 
-  apply plugin: 'java-test-fixtures'
-
   dependencies {
     implementation libs.slf4jApi
-
-    testFixturesImplementation testFixtures(project(':clients'))
-    testFixturesImplementation testFixtures(project(':server-common'))
-    testFixturesImplementation testFixtures(project(':streams'))
-    testFixturesImplementation project(':group-coordinator')
-    testFixturesImplementation project(':server')
-    testFixturesImplementation project(':server-common')
-    testFixturesImplementation project(':storage')
-    testFixturesImplementation project(':streams')
-    testFixturesImplementation project(':streams:test-utils')
-    testFixturesImplementation project(':test-common:test-common-runtime')
-    testFixturesImplementation project(':transaction-coordinator')
-    testFixturesImplementation libs.hamcrest
-    testFixturesImplementation libs.junitJupiter
-    testFixturesImplementation libs.slf4jApi
 
     testImplementation testFixtures(project(':clients'))
     testImplementation testFixtures(project(':streams'))
@@ -3059,11 +3041,6 @@ project(':streams:integration-tests') {
     testImplementation project(':streams:test-utils')
 
     testRuntimeOnly runtimeTestLibs
-    // opentelemetryProto is an implementation dep of ':clients' that gets shaded into the clients
-    // shadow JAR. When testFixtures(project(':clients')) puts raw (unshaded) client class files on
-    // the classpath, ClientTelemetryProvider references the unshaded io.opentelemetry.proto.* classes
-    // directly, so the unshaded JAR must be present at runtime as well.
-    testRuntimeOnly libs.opentelemetryProto
   }
 }
 
