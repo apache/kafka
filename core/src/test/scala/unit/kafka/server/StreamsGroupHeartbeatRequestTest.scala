@@ -24,6 +24,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterFeature, ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
+import org.apache.kafka.coordinator.group.api.streams.assignor.{GroupAssignment, GroupSpec, MemberAssignment, TaskAssignor, TopologyDescriber}
 import org.apache.kafka.common.errors.{InvalidConfigurationException, UnsupportedVersionException}
 import org.apache.kafka.server.common.Feature
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertNull, assertThrows, assertTrue}
@@ -926,6 +927,132 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
     }
   }
 
+  @ClusterTest
+  def testAlterStreamsAssignorNameGroupConfig(): Unit = {
+    val admin = cluster.admin()
+    val groupId = "test-group"
+
+    try {
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
+      )
+
+      val groupConfigResource = new ConfigResource(ConfigResource.Type.GROUP, groupId)
+
+      // The config is unset by default, which means the group uses the broker's default assignor.
+      assertNull(admin.describeConfigs(List(groupConfigResource).asJava).all().get()
+        .get(groupConfigResource).get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG).value())
+
+      // Valid case: the built-in assignor, which is registered by default, is accepted.
+      val validAlterOp = new AlterConfigOp(
+        new ConfigEntry(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "sticky"),
+        AlterConfigOp.OpType.SET
+      )
+      admin.incrementalAlterConfigs(
+        Map(groupConfigResource -> List(validAlterOp).asJavaCollection).asJava
+      ).all().get()
+
+      // Verify the config was persisted. Group config propagation is asynchronous, so wait for it.
+      TestUtils.waitUntilTrue(() => {
+        val describedConfigs = admin.describeConfigs(List(groupConfigResource).asJava).all().get()
+        val assignorName = describedConfigs.get(groupConfigResource).get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG)
+        assignorName != null && assignorName.value() == "sticky"
+      }, s"${GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG} was not updated to the expected value within the timeout period.")
+
+      // Invalid case: a name that is not registered on the broker is rejected with INVALID_CONFIG.
+      val invalidAlterOp = new AlterConfigOp(
+        new ConfigEntry(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "does-not-exist"),
+        AlterConfigOp.OpType.SET
+      )
+      val executionException = assertThrows(classOf[ExecutionException], () =>
+        admin.incrementalAlterConfigs(
+          Map(groupConfigResource -> List(invalidAlterOp).asJavaCollection).asJava
+        ).all().get()
+      )
+      assertTrue(executionException.getCause.isInstanceOf[InvalidConfigurationException],
+        s"Expected InvalidConfigurationException but got ${executionException.getCause}")
+      assertTrue(executionException.getCause.getMessage.contains("'does-not-exist' is not a registered task assignor"),
+        s"Unexpected error message: ${executionException.getCause.getMessage}")
+
+      // The invalid alter is rejected at validation time, so the previously persisted valid value is unchanged.
+      val describedConfigsAfter = admin.describeConfigs(List(groupConfigResource).asJava).all().get()
+      assertEquals("sticky",
+        describedConfigsAfter.get(groupConfigResource).get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG).value())
+
+      // Deleting the config returns the group to the broker's default assignor.
+      val deleteAlterOp = new AlterConfigOp(
+        new ConfigEntry(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, ""),
+        AlterConfigOp.OpType.DELETE
+      )
+      admin.incrementalAlterConfigs(
+        Map(groupConfigResource -> List(deleteAlterOp).asJavaCollection).asJava
+      ).all().get()
+
+      TestUtils.waitUntilTrue(() => {
+        val describedConfigs = admin.describeConfigs(List(groupConfigResource).asJava).all().get()
+        describedConfigs.get(groupConfigResource).get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG).value() == null
+      }, s"${GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG} was not unset within the timeout period.")
+    } finally {
+      admin.close()
+    }
+  }
+
+  @ClusterTest(
+    serverProperties = Array(
+      // The class name has to be spelled out because annotation values must be compile-time constants.
+      new ClusterConfigProperty(
+        key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG,
+        value = "sticky,kafka.server.CustomStreamsTaskAssignor"
+      )
+    )
+  )
+  def testAlterStreamsAssignorNameGroupConfigWithCustomAssignor(): Unit = {
+    val admin = cluster.admin()
+    val groupId = "test-group"
+
+    try {
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
+      )
+
+      val groupConfigResource = new ConfigResource(ConfigResource.Type.GROUP, groupId)
+
+      // A custom assignor registered on the broker is selected by the name it reports.
+      val validAlterOp = new AlterConfigOp(
+        new ConfigEntry(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, CustomStreamsTaskAssignor.NAME),
+        AlterConfigOp.OpType.SET
+      )
+      admin.incrementalAlterConfigs(
+        Map(groupConfigResource -> List(validAlterOp).asJavaCollection).asJava
+      ).all().get()
+
+      TestUtils.waitUntilTrue(() => {
+        val describedConfigs = admin.describeConfigs(List(groupConfigResource).asJava).all().get()
+        val assignorName = describedConfigs.get(groupConfigResource).get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG)
+        assignorName != null && assignorName.value() == CustomStreamsTaskAssignor.NAME
+      }, s"${GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG} was not updated to the expected value within the timeout period.")
+
+      // The custom assignor's class name is not a valid selector; only its name() is.
+      val classNameAlterOp = new AlterConfigOp(
+        new ConfigEntry(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, classOf[CustomStreamsTaskAssignor].getName),
+        AlterConfigOp.OpType.SET
+      )
+      val executionException = assertThrows(classOf[ExecutionException], () =>
+        admin.incrementalAlterConfigs(
+          Map(groupConfigResource -> List(classNameAlterOp).asJavaCollection).asJava
+        ).all().get()
+      )
+      assertTrue(executionException.getCause.isInstanceOf[InvalidConfigurationException],
+        s"Expected InvalidConfigurationException but got ${executionException.getCause}")
+    } finally {
+      admin.close()
+    }
+  }
+
   @ClusterTest(
     types = Array(Type.KRAFT),
     serverProperties = Array(
@@ -1258,4 +1385,18 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
           ).asJava)
       ).asJava)
   }
+}
+
+object CustomStreamsTaskAssignor {
+  val NAME = "custom"
+}
+
+/**
+ * Registered on the broker only so that a group can select it by name; it never computes an assignment.
+ */
+class CustomStreamsTaskAssignor extends TaskAssignor {
+  override def name(): String = CustomStreamsTaskAssignor.NAME
+
+  override def assign(groupSpec: GroupSpec, topologyDescriber: TopologyDescriber): GroupAssignment =
+    new GroupAssignment(java.util.Map.of[String, MemberAssignment]())
 }
