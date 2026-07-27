@@ -38,6 +38,9 @@ import static org.junit.jupiter.api.Assertions.fail;
  */
 public class ActivationRecordsGeneratorTest {
 
+    private static final BootstrapMetadata TEST_BOOTSTRAP =
+        BootstrapMetadata.fromVersion(MetadataVersion.latestProduction(), "test");
+
     @Test
     public void testActivationMessageForEmptyLog() {
         ControllerResult<Void> result;
@@ -170,21 +173,22 @@ public class ActivationRecordsGeneratorTest {
 
         result = ActivationRecordsGenerator.recordsForNonEmptyLog(
             logMsg -> assertEquals("Performing controller activation. No metadata.version feature level " +
-                "record was found in the log. Treating the log as version 3.0-IV1.", logMsg),
+                "record was found in the log. Writing metadata.version " + MetadataVersion.latestProduction() +
+                " from bootstrap source 'test'.", logMsg),
             -1L,
             false,
             buildFeatureControl(MetadataVersion.MINIMUM_KRAFT_VERSION, Optional.empty()),
-            MetadataVersion.MINIMUM_KRAFT_VERSION
+            MetadataVersion.MINIMUM_KRAFT_VERSION, TEST_BOOTSTRAP
         );
         assertTrue(result.isAtomic());
-        assertEquals(0, result.records().size());
+        assertEquals(1, result.records().size());
 
         result = ActivationRecordsGenerator.recordsForNonEmptyLog(
             logMsg -> assertEquals("Performing controller activation.", logMsg),
             -1L,
             false,
             buildFeatureControl(MetadataVersion.IBP_3_3_IV0, Optional.empty()),
-            MetadataVersion.IBP_3_3_IV0
+            MetadataVersion.IBP_3_3_IV0, TEST_BOOTSTRAP
         );
         assertTrue(result.isAtomic());
         assertEquals(0, result.records().size());
@@ -195,7 +199,7 @@ public class ActivationRecordsGeneratorTest {
             -1L,
             false,
             buildFeatureControl(MetadataVersion.IBP_3_4_IV0, Optional.empty()),
-            MetadataVersion.IBP_3_4_IV0
+            MetadataVersion.IBP_3_4_IV0, TEST_BOOTSTRAP
         );
         assertTrue(result.isAtomic());
         assertEquals(0, result.records().size());
@@ -207,7 +211,7 @@ public class ActivationRecordsGeneratorTest {
             42L,
             false,
             buildFeatureControl(MetadataVersion.IBP_3_6_IV1, Optional.empty()),
-            MetadataVersion.IBP_3_6_IV1
+            MetadataVersion.IBP_3_6_IV1, TEST_BOOTSTRAP
         );
         assertTrue(result.isAtomic());
         assertEquals(1, result.records().size());
@@ -221,7 +225,7 @@ public class ActivationRecordsGeneratorTest {
                     42L,
                     false,
                     buildFeatureControl(MetadataVersion.IBP_3_6_IV0, Optional.empty()),
-                    MetadataVersion.IBP_3_6_IV0
+                    MetadataVersion.IBP_3_6_IV0, TEST_BOOTSTRAP
                 )).getMessage()
         );
     }
@@ -238,7 +242,7 @@ public class ActivationRecordsGeneratorTest {
                     -1L,
                     true,
                     buildFeatureControl(MetadataVersion.IBP_3_3_IV0, Optional.empty()),
-                    MetadataVersion.IBP_3_3_IV0
+                    MetadataVersion.IBP_3_3_IV0, TEST_BOOTSTRAP
                 )).getMessage()
         );
 
@@ -250,7 +254,7 @@ public class ActivationRecordsGeneratorTest {
                     -1L,
                     true,
                     buildFeatureControl(MetadataVersion.IBP_3_4_IV0, Optional.empty()),
-                    MetadataVersion.IBP_3_4_IV0
+                    MetadataVersion.IBP_3_4_IV0, TEST_BOOTSTRAP
                 )).getMessage()
         );
 
@@ -262,7 +266,7 @@ public class ActivationRecordsGeneratorTest {
                     -1L,
                     true,
                     buildFeatureControl(MetadataVersion.IBP_3_6_IV1, Optional.empty()),
-                    MetadataVersion.IBP_3_6_IV1
+                    MetadataVersion.IBP_3_6_IV1, TEST_BOOTSTRAP
                 )
             ).getMessage()
         );
@@ -273,7 +277,7 @@ public class ActivationRecordsGeneratorTest {
             -1L,
             true,
             buildFeatureControl(MetadataVersion.IBP_3_6_IV1, Optional.of(ZkMigrationState.PRE_MIGRATION)),
-            MetadataVersion.IBP_3_6_IV1
+            MetadataVersion.IBP_3_6_IV1, TEST_BOOTSTRAP
         );
         assertTrue(result.isAtomic());
         assertEquals(0, result.records().size());
@@ -284,7 +288,7 @@ public class ActivationRecordsGeneratorTest {
             -1L,
             true,
             buildFeatureControl(MetadataVersion.IBP_3_6_IV1, Optional.of(ZkMigrationState.MIGRATION)),
-            MetadataVersion.IBP_3_6_IV1
+            MetadataVersion.IBP_3_6_IV1, TEST_BOOTSTRAP
         );
         assertTrue(result.isAtomic());
         assertEquals(0, result.records().size());
@@ -296,7 +300,7 @@ public class ActivationRecordsGeneratorTest {
             -1L,
             false,
             buildFeatureControl(MetadataVersion.IBP_3_4_IV0, Optional.of(ZkMigrationState.MIGRATION)),
-            MetadataVersion.IBP_3_4_IV0
+            MetadataVersion.IBP_3_4_IV0, TEST_BOOTSTRAP
         );
         assertTrue(result.isAtomic());
         assertEquals(1, result.records().size());
@@ -308,7 +312,7 @@ public class ActivationRecordsGeneratorTest {
             42L,
             false,
             buildFeatureControl(MetadataVersion.IBP_3_6_IV1, Optional.of(ZkMigrationState.MIGRATION)),
-            MetadataVersion.IBP_3_6_IV1
+            MetadataVersion.IBP_3_6_IV1, TEST_BOOTSTRAP
         );
         assertTrue(result.isAtomic());
         assertEquals(2, result.records().size());
@@ -319,7 +323,7 @@ public class ActivationRecordsGeneratorTest {
             -1L,
             false,
             buildFeatureControl(MetadataVersion.IBP_3_4_IV0, Optional.of(ZkMigrationState.POST_MIGRATION)),
-            MetadataVersion.IBP_3_4_IV0
+            MetadataVersion.IBP_3_4_IV0, TEST_BOOTSTRAP
         );
         assertTrue(result.isAtomic());
         assertEquals(0, result.records().size());
@@ -330,7 +334,7 @@ public class ActivationRecordsGeneratorTest {
             42L,
             false,
             buildFeatureControl(MetadataVersion.IBP_3_6_IV1, Optional.of(ZkMigrationState.POST_MIGRATION)),
-            MetadataVersion.IBP_3_6_IV1
+            MetadataVersion.IBP_3_6_IV1, TEST_BOOTSTRAP
         );
         assertTrue(result.isAtomic());
         assertEquals(1, result.records().size());
@@ -342,7 +346,7 @@ public class ActivationRecordsGeneratorTest {
             -1L,
             true,
             buildFeatureControl(MetadataVersion.IBP_3_4_IV0, Optional.of(ZkMigrationState.POST_MIGRATION)),
-            MetadataVersion.IBP_3_4_IV0
+            MetadataVersion.IBP_3_4_IV0, TEST_BOOTSTRAP
         );
         assertTrue(result.isAtomic());
         assertEquals(0, result.records().size());
@@ -354,7 +358,7 @@ public class ActivationRecordsGeneratorTest {
             42L,
             true,
             buildFeatureControl(MetadataVersion.IBP_3_6_IV1, Optional.of(ZkMigrationState.POST_MIGRATION)),
-            MetadataVersion.IBP_3_6_IV1
+            MetadataVersion.IBP_3_6_IV1, TEST_BOOTSTRAP
         );
         assertTrue(result.isAtomic());
         assertEquals(1, result.records().size());
