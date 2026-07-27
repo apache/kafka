@@ -1074,26 +1074,9 @@ public class ProcessorTopologyTest {
         assertEquals(headers, record.headers());
     }
 
+    @SuppressWarnings("deprecation")
     private StreamPartitioner<String, String> constantPartitioner(final Integer partition) {
-        return new StreamPartitioner<String, String>() {
-            @Override
-            public Optional<Set<Integer>> partitions(final String topic,
-                                                    final String key,
-                                                    final String value,
-                                                    final Headers headers,
-                                                    final int numPartitions) {
-                return Optional.of(Collections.singleton(partition));
-            }
-
-            @Override
-            @Deprecated
-            public Optional<Set<Integer>> partitions(final String topic,
-                                                     final String key,
-                                                     final String value,
-                                                     final int numPartitions) {
-                return partitions(topic, key, value, null, numPartitions);
-            }
-        };
+        return (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(partition));
     }
 
     private Topology createSimpleTopology(final int partition) {
