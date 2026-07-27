@@ -52,9 +52,11 @@ public class LeaderBenchmarks {
     /**
      * <p>Only read-only, non-mutating RPCs belong here.
      */
-    public enum LeaderInboundRpc implements BenchmarkRpc {
+    public enum LeaderInboundRpc implements ParameterizedRpc {
         /**
-         * A no-wait FETCH from a fully caught-up follower.
+         * A FETCH from a caught-up voter follower ({@code fetchOffset} = log end offset) with
+         * {@code maxWaitMs = 0}, so the leader replies immediately instead of parking the fetch
+         * until new data arrives; this measures the immediate-reply path.
          */
         NO_WAIT_FETCH_AT_HWM(Optional.empty(), Optional.of(ApiKeys.FETCH)) {
             @Override
@@ -70,9 +72,9 @@ public class LeaderBenchmarks {
         },
 
         /**
-         * A FETCH from a follower that is behind.
+         A FETCH from a follower that is lagging behind the leader's log end offset.
          */
-        FETCH_FROM_BEHIND(Optional.empty(), Optional.of(ApiKeys.FETCH)) {
+        FETCH_FROM_LAGGING_FOLLOWER(Optional.empty(), Optional.of(ApiKeys.FETCH)) {
             @Override
             public ApiMessage build(RaftClientBenchmarkContext benchmark) {
                 RaftClientTestContext context = benchmark.testContext();
@@ -161,7 +163,7 @@ public class LeaderBenchmarks {
      * Inbound RPCs that transition a leader out of its term, one benchmark row each. Each constant
      * mutates the node's durable state.
      */
-    public enum LeaderTransitioningRpc implements BenchmarkRpc {
+    public enum LeaderTransitioningRpc implements ParameterizedRpc {
         /**
          * A BEGIN_QUORUM_EPOCH at a higher epoch: the leader learns of a new leader, steps down to
          * follower, and acknowledges with a BEGIN_QUORUM_EPOCH response.

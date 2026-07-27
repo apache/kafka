@@ -27,17 +27,18 @@ import java.util.Optional;
  * to the node under test, together with the RPCs the node should have left on its send queue once
  * it has handled that request.
  *
- * Each scenario is a constant of an enum that implements this interface, and a benchmark method
- * takes that enum as a JMH {@code @Param}, so JMH runs the method once per constant. Every
- * constant is its own result row and its own regression baseline, and adding a scenario means
- * adding a constant.
+ * Implementations are how the benchmark code is parameterized over the RPC: the same benchmark
+ * method runs against every scenario. Each scenario is a constant of an enum that implements this
+ * interface, and a benchmark method takes that enum as a JMH {@code @Param}, so JMH runs the method
+ * once per constant. Every constant is its own result row and its own regression baseline, and
+ * adding a scenario means adding a constant.
  *
  * A benchmark times only the handling of the request: {@link #build} constructs the request in
  * setup, outside the measured region. {@link #expectedRequest()} and {@link #expectedResponse()}
  * declare the RPCs the node should have left on its send queue afterward; the harness drains
  * exactly those and fails if anything else remains, catching an unintended extra RPC.
  */
-public interface BenchmarkRpc {
+public interface ParameterizedRpc {
 
     ApiMessage build(RaftClientBenchmarkContext benchmark);
 
