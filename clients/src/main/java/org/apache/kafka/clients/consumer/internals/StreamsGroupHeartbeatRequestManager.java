@@ -880,17 +880,14 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             List<TopicPartition> standbyTopicPartitions = getTopicPartitionList(endpoint.standbyPartitions());
             StreamsGroupHeartbeatResponseData.Endpoint userEndpoint = endpoint.userEndpoint();
             StreamsRebalanceData.HostInfo hostInfo = new StreamsRebalanceData.HostInfo(userEndpoint.host(), userEndpoint.port());
-            
             partitionsByHost.merge(
                 hostInfo,
                 new StreamsRebalanceData.EndpointPartitions(activeTopicPartitions, standbyTopicPartitions),
                 (existing, newPartitions) -> {
                     List<TopicPartition> mergedActive = existing.activePartitions();
                     mergedActive.addAll(newPartitions.activePartitions());
-                    
                     List<TopicPartition> mergedStandby = existing.standbyPartitions();
                     mergedStandby.addAll(newPartitions.standbyPartitions());
-                    
                     return new StreamsRebalanceData.EndpointPartitions(mergedActive, mergedStandby);
                 }
             );
