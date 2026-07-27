@@ -327,6 +327,17 @@ public class GroupCoordinatorConfigTest {
     }
 
     @Test
+    public void testStreamsGroupAssignorFullClassNames() {
+        // group.streams.assignors accepts fully qualified class names, so a broker config
+        // may reference a built-in assignor by class name. Moving or renaming the class
+        // would break those configs.
+        assertEquals(
+            "org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor",
+            StickyTaskAssignor.class.getName()
+        );
+    }
+
+    @Test
     public void testStreamsGroupAssignors() {
         Map<String, Object> configs = new HashMap<>();
         GroupCoordinatorConfig config;
