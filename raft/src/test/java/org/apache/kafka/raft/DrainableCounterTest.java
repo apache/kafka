@@ -53,7 +53,8 @@ public final class DrainableCounterTest {
 
         source.addAndGet(6);
         assertEquals(6, counter.drainDelta());
-        // The previous drainDelta() advanced the baseline, so the same increase is not counted twice.
+        // The previous drainDelta() advanced the baseline, so the same increase is not counted
+        // twice.
         assertEquals(0, counter.drainDelta());
     }
 
@@ -78,8 +79,8 @@ public final class DrainableCounterTest {
         source.addAndGet(3);
         assertEquals(3, counter.drainDelta());
 
-        // Draining with the result ignored re-baselines the counter, e.g. to exclude work done while
-        // setting up a benchmark from the measured region.
+        // Draining with the result ignored re-baselines the counter, e.g. to exclude work done
+        // while setting up a benchmark from the measured region.
         source.addAndGet(5);
         counter.drainDelta();
         assertEquals(0, counter.drainDelta());
