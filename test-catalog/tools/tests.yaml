@@ -265,6 +265,8 @@ org.apache.kafka.tools.DumpLogSegmentsTest:
 - testTimeIndexVerifyOnly
 - testTransactionLogMessageParser
 org.apache.kafka.tools.EndToEndLatencyTest:
+- shouldAcceptMinusOneForRecordHeaderValueSize
+- shouldAcceptValidNamedArgs
 - shouldFailWhenConsumerRecordsIsEmpty
 - shouldFailWhenReceivedMoreThanOneRecord
 - shouldFailWhenSentHeaderKeyIsNotEqualToReceived
@@ -272,7 +274,6 @@ org.apache.kafka.tools.EndToEndLatencyTest:
 - shouldFailWhenSentRecordIsNotEqualToReceived
 - shouldFailWhenSentRecordKeyIsNotEqualToReceived
 - shouldPassInValidation
-- shouldPassWithNamedArgs
 - testConvertLegacyArgs
 - testInvalidArgs
 org.apache.kafka.tools.FeatureCommandTest:
