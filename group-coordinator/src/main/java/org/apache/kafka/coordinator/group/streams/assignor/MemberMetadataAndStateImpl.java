@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Implementation of both the {@link MemberAssignmentMetadata} and the {@link MemberAssignmentState}
@@ -56,11 +57,23 @@ public record MemberMetadataAndStateImpl(
         Objects.requireNonNull(rackId);
         Objects.requireNonNull(processId);
         clientTags = Collections.unmodifiableMap(Objects.requireNonNull(clientTags));
-        activeTasks = Collections.unmodifiableMap(Objects.requireNonNull(activeTasks));
-        standbyTasks = Collections.unmodifiableMap(Objects.requireNonNull(standbyTasks));
-        warmupTasks = Collections.unmodifiableMap(Objects.requireNonNull(warmupTasks));
-        taskOffsets = Collections.unmodifiableMap(Objects.requireNonNull(taskOffsets));
-        taskEndOffsets = Collections.unmodifiableMap(Objects.requireNonNull(taskEndOffsets));
+        // These collections belong to the coordinator (the member's current assignment and the offsets reported in
+        // the last heartbeat) and are only unmodifiable at the outer level there, so wrap the nested ones as well.
+        activeTasks = unmodifiableTasks(activeTasks);
+        standbyTasks = unmodifiableTasks(standbyTasks);
+        warmupTasks = unmodifiableTasks(warmupTasks);
+        taskOffsets = unmodifiableOffsets(taskOffsets);
+        taskEndOffsets = unmodifiableOffsets(taskEndOffsets);
+    }
+
+    private static Map<String, Set<Integer>> unmodifiableTasks(Map<String, Set<Integer>> tasks) {
+        return Objects.requireNonNull(tasks).entrySet().stream()
+            .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, entry -> Collections.unmodifiableSet(entry.getValue())));
+    }
+
+    private static Map<String, Map<Integer, Long>> unmodifiableOffsets(Map<String, Map<Integer, Long>> offsets) {
+        return Objects.requireNonNull(offsets).entrySet().stream()
+            .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, entry -> Collections.unmodifiableMap(entry.getValue())));
     }
 
 }
