@@ -443,6 +443,8 @@ public class GroupCoordinatorConfig {
         CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
         SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
         SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG,
+        ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG,
+        ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG,
         STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
         STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG
     );
@@ -581,9 +583,6 @@ public class GroupCoordinatorConfig {
     private final int shareGroupMinAssignmentIntervalMs;
     private final int shareGroupMaxAssignmentIntervalMs;
     private final int shareGroupInitializeRetryIntervalMs;
-    // DLQ configurations
-    private final boolean errorsDLQAutoCreateTopicsEnable;
-    private final String errorsDLQTopicNamePrefix;
     // Streams group configurations
     private final int streamsGroupSessionTimeoutMs;
     private final int streamsGroupMinSessionTimeoutMs;
@@ -654,9 +653,6 @@ public class GroupCoordinatorConfig {
         this.shareGroupMinAssignmentIntervalMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG);
         this.shareGroupMaxAssignmentIntervalMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG);
         this.shareGroupInitializeRetryIntervalMs = Math.max(initializeRetryMs, this.offsetCommitTimeoutMs);
-        // DLQ configurations
-        this.errorsDLQAutoCreateTopicsEnable = config.getBoolean(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG);
-        this.errorsDLQTopicNamePrefix = config.getString(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG);
         // Streams group configurations
         this.streamsGroupSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG);
         this.streamsGroupMinSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG);
@@ -1375,14 +1371,14 @@ public class GroupCoordinatorConfig {
      * Whether automatic creation of DLQ topics is enabled.
      */
     public boolean errorsDLQAutoCreateTopicsEnable() {
-        return errorsDLQAutoCreateTopicsEnable;
+        return config.getBoolean(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG);
     }
 
     /**
      * The required prefix for DLQ topic names.
      */
     public String errorsDLQTopicNamePrefix() {
-        return errorsDLQTopicNamePrefix;
+        return config.getString(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG);
     }
 
     /**

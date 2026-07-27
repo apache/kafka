@@ -171,7 +171,7 @@ public class SenderTest {
     private MockTime time = new MockTime();
     private final int batchSize = 16 * 1024;
     private final ProducerMetadata metadata = new ProducerMetadata(0, 0, Long.MAX_VALUE, TOPIC_IDLE_MS,
-            new LogContext(), new ClusterResourceListeners(), time);
+            new LogContext(), new ClusterResourceListeners());
     private final ApiVersions apiVersions = new ApiVersions();
     private MockClient client = new MockClient(time, metadata);
     private Metrics metrics = null;

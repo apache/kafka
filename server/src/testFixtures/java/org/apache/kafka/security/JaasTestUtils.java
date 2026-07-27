@@ -14,9 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.security;
-
-import kafka.utils.TestUtils;
+package org.apache.kafka.security;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.ScramMechanism;
@@ -25,6 +23,7 @@ import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.internals.Java;
 import org.apache.kafka.test.TestSslUtils;
+import org.apache.kafka.test.TestUtils;
 
 import java.io.BufferedWriter;
 import java.io.File;

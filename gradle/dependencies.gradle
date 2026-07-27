@@ -68,7 +68,7 @@ versions += [
   javassist: "3.30.2-GA",
   // When upgrading Jetty, verify that it does not use the SLF4J 2.x fluent API
   // (e.g. Logger.atDebug()) in production code, as Kafka uses SLF4J 1.7.x.
-  jetty: "12.0.34",
+  jetty: "12.0.37",
   jersey: "3.1.10",
   jgit: "7.6.0.202603022253-r",
   jline: "3.30.16",
