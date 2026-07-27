@@ -68,9 +68,9 @@ public final class RaftClientBenchmarkContext {
     private final DrainableCounter quorumStateWrites;
     private final DrainableCounter quorumStateReads;
 
-    // Responses have no cumulative mock counter. deliverAndCount() counts them here instead of appending to
-    // RaftClientTestContext.sentResponses, so the collection stays bounded when per-invocation
-    // draining is deferred to an iteration teardown.
+    // Responses have no cumulative mock counter. deliverAndAwaitResponse() counts them here instead
+    // of appending to RaftClientTestContext.sentResponses, so the collection stays bounded when
+    // per-invocation draining is deferred to an iteration teardown.
     private final DrainableCounter rpcResponsesSent;
     private int rpcResponsesSentTotal;
     private RaftResponse.Outbound lastResponse;
@@ -268,13 +268,9 @@ public final class RaftClientBenchmarkContext {
 
     /**
      * Benchmark deliver path: hands {@code inbound} to the client, polls until the client produces
-     * its response, and counts that response here (rather than in {@link RaftClientTestContext}),
-     * so the count stays bounded when per-invocation collection is deferred to an iteration
-     * teardown.
-     * Verifies the response matches {@code expectedResponse} when one is given, and rethrows any
-     * failure the client reported while handling the request.
+     * its response, and counts that response.
      */
-    public void deliverAndCount(
+    public void deliverAndAwaitResponse(
         RaftRequest.Inbound inbound,
         Optional<ApiKeys> expectedResponse
     ) throws InterruptedException {
@@ -302,8 +298,8 @@ public final class RaftClientBenchmarkContext {
     }
 
     /**
-     * Number of responses the client has produced via {@link #deliverAndCount} since the last
-     * drain.
+     * Number of responses the client has produced via {@link #deliverAndAwaitResponse} since the
+     * last drain.
      */
     public int getRpcResponsesSentDelta() {
         return rpcResponsesSent.drainDelta();

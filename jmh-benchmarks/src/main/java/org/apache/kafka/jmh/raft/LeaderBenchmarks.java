@@ -155,7 +155,7 @@ public class LeaderBenchmarks {
         LeaderWithHwmAtLogEnd state,
         KRaftBenchmarkingCounters counters
     ) throws InterruptedException {
-        state.benchmark.deliverAndCount(state.request, state.rpc.expectedResponse());
+        state.benchmark.deliverAndAwaitResponse(state.request, state.rpc.expectedResponse());
         counters.recordInvocation(state.benchmark, state.rpc.expectedRequest());
     }
 
@@ -239,7 +239,7 @@ public class LeaderBenchmarks {
         LeaderBeforeTransition state,
         KRaftBenchmarkingCounters counters
     ) throws InterruptedException {
-        state.benchmark.deliverAndCount(state.request, state.rpc.expectedResponse());
+        state.benchmark.deliverAndAwaitResponse(state.request, state.rpc.expectedResponse());
         counters.recordInvocation(state.benchmark, state.rpc.expectedRequest());
     }
 }
