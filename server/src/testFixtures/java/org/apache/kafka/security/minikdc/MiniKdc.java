@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.security.minikdc;
+package org.apache.kafka.security.minikdc;
 
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.Exit;
