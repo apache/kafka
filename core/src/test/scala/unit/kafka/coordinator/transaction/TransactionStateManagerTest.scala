@@ -92,6 +92,7 @@ class TransactionStateManagerTest {
   var txnMetadata2: TransactionMetadata = transactionMetadata(transactionalId2, producerIds(transactionalId2))
 
   var expectedError: Errors = Errors.NONE
+  private val openedSegments = mutable.Buffer[FileRecords]()
 
   @BeforeEach
   def setUp(): Unit = {
@@ -105,6 +106,8 @@ class TransactionStateManagerTest {
 
   @AfterEach
   def tearDown(): Unit = {
+    openedSegments.foreach(_.close())
+    openedSegments.clear()
     transactionManager.shutdown()
   }
 
@@ -1258,6 +1261,48 @@ class TransactionStateManagerTest {
     })
   }
 
+  /**
+   * Backs the log with two segments, the first of them preallocated: it is physically longer than
+   * the records appended to it, and the region past its logical end reads back as zeros. Each
+   * segment is returned by its own read, so a read that is not bounded to its slice runs into that
+   * region and aborts the load before the second segment is reached.
+   */
+  private def prepareTxnLogFromPreallocatedSegment(topicPartition: TopicPartition,
+                                                   firstSegmentRecords: MemoryRecords,
+                                                   secondSegmentRecords: MemoryRecords): Unit = {
+    reset(replicaManager)
+
+    val logMock: UnifiedLog = mock(classOf[UnifiedLog])
+    val preallocatedSegment = FileRecords.open(TestUtils.tempFile(), false, 4096, true)
+    preallocatedSegment.append(firstSegmentRecords)
+    val secondSegment = FileRecords.open(TestUtils.tempFile(), false, 0, false)
+    secondSegment.append(secondSegmentRecords)
+    openedSegments ++= Seq(preallocatedSegment, secondSegment)
+
+    // The loader resumes each read from the next offset of the last batch it replayed, so the
+    // segment boundaries are derived the same way rather than from the record counts.
+    val startOffset = firstSegmentRecords.batches.asScala.head.baseOffset
+    val secondSegmentStartOffset = firstSegmentRecords.batches.asScala.last.nextOffset
+    val endOffset = secondSegmentRecords.batches.asScala.last.nextOffset
+
+    when(replicaManager.getLog(topicPartition)).thenReturn(Some(logMock))
+    when(replicaManager.getLogEndOffset(topicPartition)).thenReturn(Some(endOffset))
+
+    when(logMock.logStartOffset).thenReturn(startOffset)
+    when(logMock.read(ArgumentMatchers.eq(startOffset),
+      anyInt(),
+      ArgumentMatchers.eq(FetchIsolation.LOG_END),
+      ArgumentMatchers.eq(true)))
+      .thenReturn(new FetchDataInfo(new LogOffsetMetadata(startOffset),
+        preallocatedSegment.slice(0, preallocatedSegment.sizeInBytes)))
+    when(logMock.read(ArgumentMatchers.eq(secondSegmentStartOffset),
+      anyInt(),
+      ArgumentMatchers.eq(FetchIsolation.LOG_END),
+      ArgumentMatchers.eq(true)))
+      .thenReturn(new FetchDataInfo(new LogOffsetMetadata(secondSegmentStartOffset),
+        secondSegment.slice(0, secondSegment.sizeInBytes)))
+  }
+
   private def prepareForTxnMessageAppend(error: Errors): Unit = {
     reset(replicaManager)
 
@@ -1349,6 +1394,33 @@ class TransactionStateManagerTest {
     assertEquals(txnMetadata1.state, txnMetadata.state)
     assertEquals(txnMetadata1.topicPartitions, txnMetadata.topicPartitions)
     assertEquals(1, transactionManager.transactionMetadataCache(partitionId).coordinatorEpoch)
+  }
+
+  @Test
+  def testLoadTransactionMetadataFromPreallocatedSegment(): Unit = {
+    txnMetadata1.state(TransactionState.PREPARE_COMMIT)
+    txnMetadata1.addPartitions(util.Set.of(new TopicPartition("topic1", 0)))
+    txnMetadata2.state(TransactionState.ONGOING)
+    txnMetadata2.addPartitions(util.Set.of(new TopicPartition("topic1", 1)))
+
+    // The two transactions are in different segments, so they are loaded by successive reads. A
+    // read that is not bounded to its slice runs into the preallocated tail of the first segment
+    // and aborts the load, which would leave the second transaction missing from the cache.
+    val firstSegmentRecords = MemoryRecords.withRecords(0L, Compression.NONE,
+      new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit(), TV_2)))
+    val secondSegmentRecords = MemoryRecords.withRecords(1L, Compression.NONE,
+      new SimpleRecord(txnMessageKeyBytes2, TransactionLog.valueToBytes(txnMetadata2.prepareNoTransit(), TV_2)))
+
+    prepareTxnLogFromPreallocatedSegment(topicPartition, firstSegmentRecords, secondSegmentRecords)
+
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch = 1, (_, _, _, _) => ())
+
+    assertEquals(0, transactionManager.loadingPartitions.size)
+    assertTrue(transactionManager.transactionMetadataCache.contains(partitionId))
+    val txnMetadataPool = transactionManager.transactionMetadataCache(partitionId).metadataPerTransactionalId
+    assertTrue(txnMetadataPool.containsKey(transactionalId1))
+    assertTrue(txnMetadataPool.containsKey(transactionalId2))
+    assertEquals(txnMetadata2.state, txnMetadataPool.get(transactionalId2).state)
   }
 
   @ParameterizedTest
