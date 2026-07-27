@@ -58,18 +58,29 @@ import java.util.concurrent.CompletableFuture;
  * pending (a remote read in flight) the loop returns and is resumed from the callback - so the calling
  * thread is never blocked on remote storage IO and the synchronous path never recurses.
  *
- * <p>Best-effort: the returned future always completes normally with whatever records could be read.
- * Offsets that cannot be read - locally or remotely - are simply absent from the map, leaving the caller
- * to produce a DLQ record with headers only for them.
+ * <p>Best-effort: the returned future always completes normally with a {@link FetchResult} holding whatever
+ * records could be read, plus the offset through which a definitive outcome was reached this fetch. Offsets
+ * within that boundary that have no entry in {@link FetchResult#records()} were either permanently excluded
+ * because they (or their containing batch) can never fit within {@code maxDecompressedBytes}, or belong to
+ * a range given up on entirely after a genuine failure (a read error, or an unexpected exception) - either
+ * way, the caller should produce a DLQ record with headers only for them. Offsets beyond the boundary were
+ * never examined because this fetch ran out of budget before reaching them, and are eligible for a fresh
+ * fetch with its own full budget.
  *
  * <p>{@code maxFetchBytes} only bounds the compressed, on-the-wire size of each read; a compressed batch
  * can still decompress into something far larger in memory. To keep a pathologically compressible batch
- * from ballooning broker heap usage, decompression is bounded by {@code maxDecompressedBytes} (shared across
- * the whole fetch): compressed batches are decompressed into a size-capped flat buffer before any record is
- * parsed (see {@link #decompressBounded}), so even a single record with a fabricated huge length can't force
- * a large allocation. A batch that would exceed the remaining budget is simply discarded - its offsets are
- * skipped, same as any other partial-failure case - and the fetch continues with whatever batches follow,
- * rather than one oversized batch poisoning the rest of the range.
+ * from ballooning broker heap usage, each batch is decompressed into a size-capped flat buffer before any
+ * record is parsed (see {@link #decompressBounded}), bounded by {@code maxDecompressedBytes} - so even a
+ * single record with a fabricated huge length can't force a large allocation. A batch whose decompressed
+ * size exceeds {@code maxDecompressedBytes} on its own can never fit in any fetch, so it is permanently
+ * excluded rather than retried.
+ *
+ * <p>{@code maxDecompressedBytes} also bounds the total amount of content this fetch collects: once the
+ * records actually collected (compressed or not) reach that many bytes, or a record is found that doesn't
+ * fit alongside what's already been collected, the fetch stops rather than continuing to walk the rest of
+ * the requested range - reading further would just be discarded work, since callers only ever need one
+ * message's worth of records at a time (see {@code ShareGroupDLQStateManager}, which resolves one produce
+ * round at a time and passes its {@code dlqTopicMaxMessageBytes} as this budget).
  *
  * <p>Instances are single-use: create one fetcher per {@link #fetch()} call.
  */
@@ -94,13 +105,27 @@ public class ShareGroupDLQRecordFetcher {
     private final Map<Long, Record> recordMap;
     private final long maxDecompressedBytes;
     private final BufferSupplier bufferSupplier = BufferSupplier.create();
-    private long decompressedBytes = 0;
+    // Cumulative sizeInBytes() of every record actually collected into recordMap so far, regardless of
+    // whether it came from a compressed or uncompressed batch. Compared against maxDecompressedBytes to
+    // decide whether the next record still fits alongside what's already been collected this fetch.
+    private long collectedBytes = 0;
+    // The largest offset such that every offset from param.firstOffset() through it has a definitive,
+    // in-scope outcome this fetch: collected into recordMap, or permanently excluded because it (or its
+    // containing batch) can never fit within maxDecompressedBytes. Never advances past a record or batch
+    // that was merely deferred for not fitting alongside collectedBytes - those, and everything after them,
+    // are left untouched for a fresh fetch (with its own full budget) to attempt. Starts one before the
+    // requested range so a fetch that resolves nothing still reports that correctly.
+    private long lastResolvedOffset;
+    // Set once a record is found that doesn't fit alongside collectedBytes but isn't itself permanently
+    // excluded - signals every loop in this class to stop immediately rather than trying further batches or
+    // reads, since that record and everything after it must be left untouched for a fresh fetch to attempt.
+    private boolean deferredRemainder = false;
     // We are fetching data for one TopicIdPartition only. Hence, there is no need to keep recreating
     // the maxBytes map, and we can re-use a single copy. In similar vein, we needn't clear the offsets
     // map either and just update the value corresponding to the TopicIdPartition key across iterations.
     private final LinkedHashMap<TopicIdPartition, Long> offsets = new LinkedHashMap<>();
     private final LinkedHashMap<TopicIdPartition, Integer> maxBytesMap = new LinkedHashMap<>();
-    private final CompletableFuture<Map<Long, Record>> result = new CompletableFuture<>();
+    private final CompletableFuture<FetchResult> result = new CompletableFuture<>();
     private final FetchParams fetchParams;
 
     public ShareGroupDLQRecordFetcher(LogReader logReader, Time time, ShareGroupDLQRecordParameter param,
@@ -115,6 +140,7 @@ public class ShareGroupDLQRecordFetcher {
         this.recordMap = new HashMap<>(recordCount);
         this.maxBytesMap.put(tp, maxFetchBytes);
         this.maxDecompressedBytes = maxDecompressedBytes;
+        this.lastResolvedOffset = param.firstOffset() - 1;
         this.fetchParams = new FetchParams(
             FetchRequest.CONSUMER_REPLICA_ID,           // -1, reading as a consumer
             -1,                                         // replicaEpoch
@@ -129,19 +155,20 @@ public class ShareGroupDLQRecordFetcher {
     /**
      * Fetches the source records for the configured offset range.
      *
-     * @return A future that always completes normally with the records that could be read, keyed by offset.
+     * @return A future that always completes normally with the records that could be read, plus the
+     *         boundary through which a definitive outcome was reached - see {@link FetchResult}.
      */
-    public CompletableFuture<Map<Long, Record>> fetch() {
+    public CompletableFuture<FetchResult> fetch() {
         try {
             runFrom(param.firstOffset());
         } catch (Throwable e) {
             // Never let an unexpected error - including an OutOfMemoryError from a maliciously
             // compressible record, or an InvalidRecordException/KafkaException from a rejected
-            // malformed one - escape. Uses complete() (not result.complete(Map.of())) so that any
-            // records already collected from earlier batches in this call are still returned, rather
-            // than discarding a partially-successful copy because of one bad batch.
+            // malformed one - escape. Uses completeGivingUpOnRemainder() (not result.complete(...))
+            // so that any records already collected from earlier batches in this call are still
+            // returned, rather than discarding a partially-successful copy because of one bad batch.
             log.warn("Unexpected error fetching records for {}. Returning records fetched so far.", param, e);
-            complete();
+            completeGivingUpOnRemainder();
         }
         return result;
     }
@@ -151,10 +178,14 @@ public class ShareGroupDLQRecordFetcher {
      * complete (local data, or remote data already resolved) the loop continues in place; when it is still
      * pending (remote read in flight) the loop returns and is resumed from the callback - so the synchronous
      * path never recurses and the async path resumes on a fresh stack (the remote storage reader thread).
+     *
+     * <p>Also stops once {@link #shouldStop()} is true - there's no need to keep reading once enough usable
+     * content has been collected for the caller's purposes, or a record has been found that doesn't fit
+     * alongside it, even if {@link #endOffset} hasn't been reached yet.
      */
     private void runFrom(long startFrom) {
         long nextOffset = startFrom;
-        while (nextOffset <= endOffset) {
+        while (nextOffset <= endOffset && !shouldStop()) {
             offsets.put(tp, nextOffset);
 
             CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> future =
@@ -175,12 +206,38 @@ public class ShareGroupDLQRecordFetcher {
             // completes normally; any unexpected exceptional completion is caught by fetch().
             long advanced = collect(nextOffset, logReadResult(future.getNow(null)));
             if (advanced <= nextOffset) {
-                complete();     // no progress - stop
+                completeAfterNoProgress();     // no progress - stop
                 return;
             }
             nextOffset = advanced;
         }
         complete();
+    }
+
+    /**
+     * True once enough content has been collected for the caller's purposes, or a record has been found
+     * that doesn't fit alongside {@link #collectedBytes} - either way, every loop in this class should stop
+     * immediately rather than attempting further batches or reads.
+     */
+    private boolean shouldStop() {
+        return deferredRemainder || collectedBytes >= maxDecompressedBytes;
+    }
+
+    /**
+     * Completes after a read makes no progress. This happens for two very different reasons that need
+     * different handling: {@link #deferredRemainder} being set means a record was found that doesn't fit
+     * alongside {@link #collectedBytes} - a budget-related stop worth retrying fresh, so the boundary is
+     * preserved as-is via {@link #complete()}. Otherwise, nothing advanced because the read itself found
+     * nothing new (an error, an empty result, or a batch containing only already-seen offsets) - a genuine
+     * dead end that a retry with a fresh budget wouldn't fix, so {@link #completeGivingUpOnRemainder()}
+     * gives up on the rest of the range instead of leaving it to be retried forever.
+     */
+    private void completeAfterNoProgress() {
+        if (deferredRemainder) {
+            complete();
+        } else {
+            completeGivingUpOnRemainder();
+        }
     }
 
     /**
@@ -199,21 +256,21 @@ public class ShareGroupDLQRecordFetcher {
         try {
             if (exception != null) {
                 log.warn("Unable to read records at offset {} for {}. Skipping it.", readFrom, param, exception);
-                complete();
+                completeGivingUpOnRemainder();
                 return;
             }
             long advanced = collect(readFrom, logReadResult);
             if (advanced <= readFrom) {
-                complete();         // no progress - stop
+                completeAfterNoProgress();  // no progress - stop
             } else {
-                runFrom(advanced);  // resume the loop
+                runFrom(advanced);          // resume the loop
             }
         } catch (Throwable e) {
             // Never let an unexpected error - including an OutOfMemoryError from a maliciously
             // compressible record, or an InvalidRecordException/KafkaException from a rejected
             // malformed one - escape; return whatever was collected so far.
             log.warn("Unexpected error processing records for {}. Returning records fetched so far.", param, e);
-            complete();
+            completeGivingUpOnRemainder();
         }
     }
 
@@ -236,13 +293,17 @@ public class ShareGroupDLQRecordFetcher {
 
     /**
      * Adds the records within the requested range to the map and returns the offset to read from next
-     * (never moves backwards). Records below readFrom or above endOffset are ignored. A batch that would
-     * exceed the decompression budget ({@link #maxDecompressedBytes}) is skipped - its offsets are left
-     * unread - but the loop continues on to whatever batches follow.
+     * (never moves backwards). Records below readFrom or above endOffset are ignored.
+     *
+     * <p>Also stops before starting a new batch once {@link #shouldStop()} is true - a single read can
+     * return many batches (up to {@code maxFetchBytes} worth), so this check can't wait for {@link
+     * #runFrom}'s between-reads check alone, or a read containing several batches could keep being
+     * processed past the point where the fetch should have stopped.
      */
     private long collectRecords(Records records, long readFrom) {
         long nextOffset = readFrom;
         for (RecordBatch batch : records.batches()) {
+            if (shouldStop()) return nextOffset;
             nextOffset = collectFromBatch(batch, nextOffset);
         }
         return nextOffset;
@@ -271,8 +332,24 @@ public class ShareGroupDLQRecordFetcher {
             // nextOffset backwards.
             if (record.offset() < readFrom) continue;
             if (record.offset() > endOffset) return nextOffset;
+            long recordSize = record.sizeInBytes();
+            if (recordSize > maxDecompressedBytes) {
+                // This one record can never fit within maxDecompressedBytes, in this fetch or any other -
+                // exclude it permanently rather than leaving it for a retry that could never succeed.
+                nextOffset = Math.max(nextOffset, record.offset() + 1);
+                lastResolvedOffset = Math.max(lastResolvedOffset, record.offset());
+                continue;
+            }
+            if (collectedBytes + recordSize > maxDecompressedBytes) {
+                // Fits on its own, but not alongside what's already been collected this fetch - stop here
+                // and leave this record, and everything after it, untouched for a fresh fetch to attempt.
+                deferredRemainder = true;
+                return nextOffset;
+            }
             recordMap.put(record.offset(), record);
+            collectedBytes += recordSize;
             nextOffset = Math.max(nextOffset, record.offset() + 1); // never moves backwards
+            lastResolvedOffset = Math.max(lastResolvedOffset, record.offset());
         }
         return nextOffset;
     }
@@ -306,10 +383,11 @@ public class ShareGroupDLQRecordFetcher {
     private long collectFromCompressedBatch(DefaultRecordBatch batch, long readFrom) {
         ByteBuffer decompressed = decompressBounded(batch);
         if (decompressed == null) {
-            // This batch alone would exceed the remaining budget: skip past it (its offsets are left
-            // unread) rather than aborting the whole fetch, so later batches - which may well fit - are
-            // still read.
-            return Math.max(readFrom, batch.lastOffset() + 1);
+            // The batch's decompressed size exceeds maxDecompressedBytes on its own, so it can never fit -
+            // in this fetch or any other. Exclude it permanently and move on to whatever batches follow.
+            long lastOffsetInRange = Math.min(batch.lastOffset(), endOffset);
+            lastResolvedOffset = Math.max(lastResolvedOffset, lastOffsetInRange);
+            return Math.max(readFrom, lastOffsetInRange + 1);
         }
 
         long baseOffset = batch.baseOffset();
@@ -325,26 +403,38 @@ public class ShareGroupDLQRecordFetcher {
             // nextOffset backwards.
             if (record.offset() < readFrom) continue;
             if (record.offset() > endOffset) return nextOffset;
+            long recordSize = record.sizeInBytes();
+            if (collectedBytes + recordSize > maxDecompressedBytes) {
+                // The whole batch already fit within maxDecompressedBytes on its own (decompression would
+                // have failed above otherwise), so this record only fails to fit alongside what's already
+                // been collected - stop here and leave it, and everything after it, untouched for a fresh
+                // fetch to attempt.
+                deferredRemainder = true;
+                return nextOffset;
+            }
             recordMap.put(record.offset(), record);
+            collectedBytes += recordSize;
             nextOffset = Math.max(nextOffset, record.offset() + 1); // never moves backwards
+            lastResolvedOffset = Math.max(lastResolvedOffset, record.offset());
         }
         return nextOffset;
     }
 
     /**
      * Decompresses the batch's record region into a flat buffer, reading in {@link #DECOMPRESS_CHUNK_BYTES}
-     * chunks and checking the cumulative total against the remaining decompression budget before each chunk
-     * is kept - before any record-level parsing happens. A single record with a fabricated huge length can't
-     * cause a large allocation this way: parsing only begins once the buffer is already fully bounded, and the
-     * buffer-based reader rejects a record whose declared length doesn't fit what's left of it.
+     * chunks and checking the cumulative total against {@link #maxDecompressedBytes} before each chunk is
+     * kept - before any record-level parsing happens. A single record with a fabricated huge length can't
+     * cause a large allocation this way: parsing only begins once the buffer is already fully bounded, and
+     * the buffer-based reader rejects a record whose declared length doesn't fit what's left of it.
      *
-     * @return the bounded, flipped buffer ready for reading, or {@code null} if the remaining decompression
-     *         budget ({@link #maxDecompressedBytes}, shared across the whole fetch) is already exhausted.
+     * <p>Bounded by the full {@code maxDecompressedBytes} regardless of {@link #collectedBytes}: whether a
+     * batch fits is a property of the batch alone, not of how much of the budget earlier batches in this
+     * fetch happened to use, so every batch gets the same, full-sized chance to decompress.
+     *
+     * @return the bounded, flipped buffer ready for reading, or {@code null} if the batch's decompressed
+     *         size exceeds {@link #maxDecompressedBytes} on its own.
      */
     private ByteBuffer decompressBounded(DefaultRecordBatch batch) {
-        long budget = maxDecompressedBytes - decompressedBytes;
-        if (budget <= 0) return null;
-
         int chunkBytes = Math.min(batch.sizeInBytes(), DECOMPRESS_CHUNK_BYTES);
         try (InputStream in = batch.recordInputStream(bufferSupplier);
              ByteBufferOutputStream out = new ByteBufferOutputStream(chunkBytes)) {
@@ -353,14 +443,13 @@ public class ShareGroupDLQRecordFetcher {
             long total = 0;
             while ((nRead = in.read(chunk, 0, chunk.length)) != -1) {
                 total += nRead;
-                if (total > budget) {
-                    log.warn("Decompressed batch data for {} exceeded the {} byte budget. " +
-                        "Stopping record copy early to bound memory use.", param, maxDecompressedBytes);
+                if (total > maxDecompressedBytes) {
+                    log.warn("Decompressed batch data for {} exceeded the {} byte budget on its own. " +
+                        "The batch can never fit and will be permanently skipped.", param, maxDecompressedBytes);
                     return null;
                 }
                 out.write(chunk, 0, nRead);
             }
-            decompressedBytes += total;
             out.buffer().flip();
             return out.buffer();
         } catch (IOException e) {
@@ -371,14 +460,9 @@ public class ShareGroupDLQRecordFetcher {
     /**
      * Fallback used only for legacy magic v0/v1 compressed batches (no bounded-buffer path available for
      * that format - see {@link #asDefaultRecordBatch}): iterates records one at a time via {@link
-     * RecordBatch#streamingIterator}, tracking a cumulative decompressed-bytes total across the whole fetch
-     * and stopping once {@link #maxDecompressedBytes} is exceeded. Unlike {@link
-     * #collectFromCompressedBatch}, this does not prevent a single oversized record's initial allocation -
-     * it only bounds growth across multiple records/batches. Because that allocation already happened (the
-     * byte count reflects real, already-materialized memory rather than data that was rejected before use),
-     * the overshoot is not undone: {@link #decompressedBytes} stays over budget, so later batches on this
-     * path keep getting skipped too. The rest of the current batch is skipped - not the whole fetch - so
-     * later batches (e.g. uncompressed ones, which carry no such risk) are still read.
+     * RecordBatch#streamingIterator}. Unlike {@link #collectFromCompressedBatch}, this does not prevent a
+     * single oversized record's initial allocation before its size is known - it only decides, once a
+     * record has already been decompressed, whether to keep it or discard it.
      */
     private long collectWithCumulativeCap(RecordBatch batch, long readFrom) {
         long nextOffset = readFrom;
@@ -388,24 +472,34 @@ public class ShareGroupDLQRecordFetcher {
                 if (record.offset() < readFrom) continue;
                 if (record.offset() > endOffset) return nextOffset;
 
-                decompressedBytes += record.sizeInBytes();
-                if (decompressedBytes > maxDecompressedBytes) {
-                    log.warn("Decompressed record data for {} exceeded {} bytes at offset {}. " +
-                        "Skipping the rest of this batch to bound memory use.",
-                        param, maxDecompressedBytes, record.offset());
-                    return Math.max(nextOffset, batch.lastOffset() + 1);
+                long recordSize = record.sizeInBytes();
+                if (recordSize > maxDecompressedBytes) {
+                    // This one record can never fit within maxDecompressedBytes, in this fetch or any
+                    // other - exclude it permanently rather than leaving it for a retry that could never
+                    // succeed.
+                    nextOffset = Math.max(nextOffset, record.offset() + 1);
+                    lastResolvedOffset = Math.max(lastResolvedOffset, record.offset());
+                    continue;
+                }
+                if (collectedBytes + recordSize > maxDecompressedBytes) {
+                    // Fits on its own, but not alongside what's already been collected this fetch - stop
+                    // here and leave it, and everything after it, untouched for a fresh fetch to attempt.
+                    deferredRemainder = true;
+                    return nextOffset;
                 }
 
                 recordMap.put(record.offset(), record);
+                collectedBytes += recordSize;
                 nextOffset = Math.max(nextOffset, record.offset() + 1);
+                lastResolvedOffset = Math.max(lastResolvedOffset, record.offset());
             }
         }
         return nextOffset;
     }
 
     /**
-     * Completes the result future with an immutable snapshot of the records collected so far. Offsets
-     * that could not be read are absent from the map; the caller produces a headers-only DLQ record for them.
+     * Completes the result future with an immutable snapshot of the records collected so far, plus the
+     * boundary through which a definitive outcome was reached this fetch.
      */
     private void complete() {
         bufferSupplier.close();
@@ -414,6 +508,32 @@ public class ShareGroupDLQRecordFetcher {
         if (recordCount != recordMap.size()) {
             log.info("Total offsets requested: {}, Records found: {}", recordCount, recordMap.size());
         }
-        result.complete(Map.copyOf(recordMap));
+        result.complete(new FetchResult(Map.copyOf(recordMap), lastResolvedOffset));
+    }
+
+    /**
+     * Like {@link #complete()}, but first treats the entire remaining range - from wherever this fetch got
+     * to, through {@link #endOffset} - as settled. Used when the reason for stopping is a genuine failure
+     * (a read error, an unexpected exception, or a read that made no progress) rather than running out of
+     * budget: unlike a budget-related stop, retrying a failure like this with a fresh budget wouldn't help,
+     * so there's nothing to gain by leaving the remainder for a later fetch to retry - the caller should
+     * treat it as permanently unavailable and produce headers only for it, the same as any offset excluded
+     * for not fitting the decompression budget.
+     */
+    private void completeGivingUpOnRemainder() {
+        lastResolvedOffset = Math.max(lastResolvedOffset, endOffset);
+        complete();
+    }
+
+    /**
+     * @param records the source records that could be read, keyed by offset
+     * @param lastResolvedOffset the largest offset such that every offset from the requested range's start
+     *                           through it has a definitive, in-scope outcome - collected into
+     *                           {@code records}, or permanently excluded because it (or its containing
+     *                           batch) can never fit within the configured decompression budget. Offsets
+     *                           beyond it were never examined and should be retried, with a fresh budget,
+     *                           by a later fetch.
+     */
+    public record FetchResult(Map<Long, Record> records, long lastResolvedOffset) {
     }
 }

@@ -3654,8 +3654,218 @@ The total time the Consumer spent committing offsets in nanoseconds (for AOS).
 </td>  
 <td>
 
-kafka.consumer:type=consumer-metrics,client-id=([-.\w]+)
-</td> </tr> </table>
+kafka.consumer:type=consumer-metrics,client-id=([-.\w]+) 
+</td> </tr>
+<tr>
+<td>
+
+application-event-queue-size
+</td>
+<td>
+
+The current number of events in the queue to send from the application thread to the background thread (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+<tr>
+<td>
+
+application-event-queue-time-avg
+</td>
+<td>
+
+The average time, in ms, that application events are taking to be dequeued (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+<tr>
+<td>
+
+application-event-queue-time-max
+</td>
+<td>
+
+The maximum time, in ms, that application events are taking to be dequeued (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+<tr>
+<td>
+
+application-event-queue-processing-time-avg
+</td>
+<td>
+
+The average time, in ms, that the background thread took to process all available application events (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+<tr>
+<td>
+
+application-event-queue-processing-time-max
+</td>
+<td>
+
+The maximum time, in ms, that the background thread took to process all available application events (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+<tr>
+<td>
+
+application-events-expired-count
+</td>
+<td>
+
+The current number of expired application events (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+<tr>
+<td>
+
+background-event-queue-size
+</td>
+<td>
+
+The current number of events in the queue to send from the background thread to the application thread (consumer protocol).
+</td>
+
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+<tr>
+<td>
+
+background-event-queue-time-avg
+</td>
+<td>
+
+The average time, in ms, that background events are taking to be dequeued (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+<tr>
+<td>
+
+background-event-queue-time-max
+</td>
+<td>
+
+The maximum time, in ms, that background events are taking to be dequeued (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+<tr>
+<td>
+
+background-event-queue-processing-time-avg
+</td>
+<td>
+
+The average time, in ms, that the consumer took to process all available background events (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+<tr>
+<td>
+
+background-event-queue-processing-time-max
+</td>
+<td>
+
+The maximum time, in ms, that the consumer took to process all available background events (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+<tr>
+<td>
+
+time-between-network-thread-poll-max
+</td>
+<td>
+
+The maximum delay, in ms,between invocations of poll in the network thread (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td> </tr>
+<tr>
+<td>
+
+time-between-network-thread-poll-avg
+</td>
+<td>
+
+The average delay, in ms, between invocations of poll in the network thread (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td> </tr>
+<tr>
+<td>
+
+unsent-requests-queue-size
+</td>
+<td>
+
+The current number of unsent requests in the background thread (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+<tr>
+<td>
+
+unsent-requests-queue-time-max
+</td>
+<td>
+
+The maximum time, in ms, that a request remained unsent in the background thread (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+<tr>
+<td>
+
+unsent-requests-queue-time-avg
+</td>
+<td>
+
+The average time, in ms, that requests are taking to be sent in the background thread (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+</table>
 
 ### Consumer Group Metrics  
   

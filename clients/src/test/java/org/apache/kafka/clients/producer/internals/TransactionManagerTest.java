@@ -154,7 +154,7 @@ public class TransactionManagerTest {
     private final LogContext logContext = new LogContext();
     private final MockTime time = new MockTime();
     private final ProducerMetadata metadata = new ProducerMetadata(0, 0, Long.MAX_VALUE, Long.MAX_VALUE,
-            logContext, new ClusterResourceListeners(), time);
+            logContext, new ClusterResourceListeners());
     private final MockClient client = new MockClient(time, metadata);
     private final ApiVersions apiVersions = new ApiVersions();
 
