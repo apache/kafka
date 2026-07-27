@@ -33,7 +33,6 @@ import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.LagInfo;
-import org.apache.kafka.streams.StateListenerStub;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
@@ -84,6 +83,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -1290,6 +1290,20 @@ public class QueryableStateIntegrationTest {
                     incrementIteration();
                 }
             }
+        }
+    }
+
+    /**
+     * A state listener that records how many times each state was entered, so that tests can assert
+     * a rebalance has happened.
+     */
+    private static class StateListenerStub implements KafkaStreams.StateListener {
+        private final Map<KafkaStreams.State, Long> mapStates = new HashMap<>();
+
+        @Override
+        public void onChange(final KafkaStreams.State newState,
+                             final KafkaStreams.State oldState) {
+            mapStates.merge(newState, 1L, Long::sum);
         }
     }
 

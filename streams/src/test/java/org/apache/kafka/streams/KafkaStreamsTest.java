@@ -167,6 +167,16 @@ public class KafkaStreamsTest {
     private MockedConstruction<GlobalStreamThread> globalStreamThreadMockedConstruction;
     private MockedConstruction<Metrics> metricsMockedConstruction;
 
+    private static class StateListenerStub implements KafkaStreams.StateListener {
+        private int numChanges = 0;
+
+        @Override
+        public void onChange(final KafkaStreams.State newState,
+                             final KafkaStreams.State oldState) {
+            numChanges++;
+        }
+    }
+
     @BeforeEach
     public void before(final TestInfo testInfo) throws Exception {
         time = new MockTime();
