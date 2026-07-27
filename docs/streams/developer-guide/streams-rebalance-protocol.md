@@ -41,7 +41,7 @@ The following features are available in the current release:
 
 * **Sticky Task Assignor**: A basic task assignment strategy that minimizes task movement during rebalances is included. It is registered under the name `sticky` and is the default assignor.
 
-* **Custom Task Assignors**: Brokers can be configured with custom task assignors via `group.streams.assignors`, which takes a list of built-in assignor names and fully qualified class names of custom `TaskAssignor` implementations. The first entry is the default assignor. An individual group selects one of the registered assignors by name with the group configuration `streams.assignor.name`; when unset, the group uses the broker default. Custom implementations must be thread-safe, since a single instance is shared across all groups on a broker.
+* **Custom Task Assignors**: Brokers can be configured with custom task assignors via `group.streams.assignors`, which takes a list of built-in assignor names and fully qualified class names of custom `TaskAssignor` implementations. The first entry is the default assignor. An individual group selects one of the registered assignors by name with the group configuration `streams.assignor.name`; when unset, the group uses the first entry of `group.streams.assignors`. Custom implementations must be thread-safe, since a single instance is shared across all groups on a broker.
 
 * **Interactive Query Support**: IQ operations are compatible with the new streams protocol.
 
@@ -136,7 +136,7 @@ The following group-level configurations are available for streams groups:
 * [`streams.heartbeat.interval.ms`](/{version}/configuration/group-configs#groupconfigs_streams.heartbeat.interval.ms): The heartbeat interval given to the members.
 * [`streams.num.standby.replicas`](/{version}/configuration/group-configs#groupconfigs_streams.num.standby.replicas): The number of standby replicas for each task.
 * [`streams.initial.rebalance.delay.ms`](/{version}/configuration/group-configs#groupconfigs_streams.initial.rebalance.delay.ms): The first rebalance of a group is delayed by this amount to allow more members to join the group.
-* [`streams.assignor.name`](/{version}/configuration/group-configs#groupconfigs_streams.assignor.name): The name of the task assignor to use for this group, which must be one of the assignors registered on the broker via `group.streams.assignors`. When unset, the group uses the broker's default assignor.
+* [`streams.assignor.name`](/{version}/configuration/group-configs#groupconfigs_streams.assignor.name): The name of the task assignor to use for this group, which must be one of the assignors registered on the broker via `group.streams.assignors`. When unset, the group uses the first entry of `group.streams.assignors`.
 
 ### Example: Setting Group-Level Configuration
 ```
