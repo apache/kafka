@@ -75,8 +75,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * use serdes that observe every invocation, and assert on what the serdes actually saw rather than
  * only on what reached the output topic.
  *
- * <p>Each scenario carries the headers it expects in the value itself, as {@code origin=<value>};
- * see {@link #stagingValueSerde} for how those headers are put in place.
+ * <p>Each input record carries the headers it expects to see preserved, as {@code origin=<value>},
+ * so every value should always meet its own marker; see {@link #observingSerde}.
  *
  * <h3>Invariants asserted</h3>
  * <ul>
@@ -323,10 +323,10 @@ public class SuppressHeadersScenarioTest {
         builder
             .table(
                 INPUT_TOPIC,
-                Consumed.with(capturingKeySerde(), stagingValueSerde()),
+                Consumed.with(observingSerde("key"), observingSerde("value")),
                 Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("table-store")
-                    .withKeySerde(capturingKeySerde())
-                    .withValueSerde(stagingValueSerde())
+                    .withKeySerde(observingSerde("key"))
+                    .withValueSerde(observingSerde("value"))
                     .withCachingDisabled()
                     .withLoggingDisabled())
             .suppress(untilTimeLimit(Duration.ofSeconds(1), unbounded()).withName(SUPPRESS_NAME))
@@ -340,18 +340,18 @@ public class SuppressHeadersScenarioTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         // reduce((old, latest) -> latest) keeps the aggregate value equal to the latest input value,
-        // so the value -> headers mapping used for staging stays unambiguous, unlike count().
+        // so each aggregate value still identifies the record it came from, unlike count().
         final KTable<Windowed<String>, String> table = builder
-            .stream(INPUT_TOPIC, Consumed.with(capturingKeySerde(), stagingValueSerde()))
-            .groupByKey(Grouped.with(capturingKeySerde(), stagingValueSerde()))
+            .stream(INPUT_TOPIC, Consumed.with(observingSerde("key"), observingSerde("value")))
+            .groupByKey(Grouped.with(observingSerde("key"), observingSerde("value")))
             .windowedBy(useTimeLimit
                 ? TimeWindows.ofSizeWithNoGrace(Duration.ofHours(1))
                 : TimeWindows.ofSizeAndGrace(ofMillis(2L), ofMillis(1L)))
             .reduce(
                 (oldValue, latest) -> DELETE_SENTINEL.equals(latest) ? null : latest,
                 Materialized.<String, String, WindowStore<Bytes, byte[]>>as("windowed-store")
-                    .withKeySerde(capturingKeySerde())
-                    .withValueSerde(stagingValueSerde())
+                    .withKeySerde(observingSerde("key"))
+                    .withValueSerde(observingSerde("value"))
                     .withCachingDisabled());
 
         final KTable<Windowed<String>, String> suppressed = useTimeLimit
@@ -369,54 +369,35 @@ public class SuppressHeadersScenarioTest {
     // ------------------------------------------------------------------ serdes
 
     /**
-     * Value serde that stages the headers each scenario expects, and records every invocation.
+     * Serde that only observes: it records every invocation and the {@link Headers} instance it
+     * was handed, and never modifies them. Assertions are then made against what the buffer actually
+     * passed in, on both the serialize and the deserialize side — a serde that wrote headers of its
+     * own would overwrite the evidence and hide every serialize-side defect.
      *
-     * <p>On serialization it stamps {@code origin=<value>} into the headers object it is handed, so
-     * every value ends up carrying a marker identifying which record it came from. Values are unique
-     * per input record in these scenarios, so the mapping is unambiguous.
+     * <p>Headers reach the buffer the ordinary way: {@code pipe(...)} puts {@code origin=<value>} on
+     * the input record, and the record context carries it into {@code suppress()}. Writes to the
+     * upstream table store appear in the trace with <em>empty</em> headers, because the DSL does not
+     * propagate record headers into a materialized store. That is expected and does not affect these
+     * scenarios: {@code KTableSource} discards the store's headers when it builds the {@code Change},
+     * so the buffer never reads that path.
      *
-     * <p>Stamping is deliberately <em>not</em> conditional on the value being non-null. A record's
-     * headers belong to the record, not to its value: a tombstone still has a key, and that key still
-     * has to be serialized and deserialized, so its headers must survive too. Tombstones are therefore
-     * stamped with {@code origin=<tombstone>} rather than left unstamped.
-     *
-     * <h4>Why stamping is needed at all — workaround for a DSL gap</h4>
-     *
-     * Piping records that carry headers is not enough: the DSL does not currently propagate a
-     * record's headers into a materialized {@code KTable} store, it persists empty headers. What
-     * <em>is</em> persisted is any mutation the value serializer performs on the headers object it is
-     * handed, because the store's serializer snapshots that object after the inner value serializer
-     * has run. Stamping from inside the serializer therefore reaches the store, whereas the input
-     * record's own headers do not.
-     *
-     * <p><b>This workaround should be removed once the DSL propagates record headers into the store.</b>
-     * At that point the input record's headers set via {@code pipe(...)} reach the table on their own,
-     * this serde should be reduced to a pure observer that only records invocations, and the scenarios
-     * should be re-verified against the real propagation path rather than a simulated one. Until then
-     * the stamping is what makes the upstream rows carry distinguishable headers at all.
+     * @param role {@code "key"} or {@code "value"}, recorded with each observation so the trace and
+     *             the invariants can tell the two apart
      */
-    private Serde<String> stagingValueSerde() {
+    private Serde<String> observingSerde(final String role) {
         return new Serde<>() {
             @Override
             public Serializer<String> serializer() {
                 return new Serializer<>() {
                     @Override
                     public byte[] serialize(final String topic, final String data) {
-                        record("value", "SER(no-headers-overload)", topic, data, null);
+                        record(role, "SER(no-headers-overload)", topic, data, null);
                         return raw(data);
                     }
 
                     @Override
                     public byte[] serialize(final String topic, final Headers headers, final String data) {
-                        if (headers != null) {
-                            try {
-                                headers.remove(ORIGIN_HEADER);
-                                headers.add(ORIGIN_HEADER, originOf(data).getBytes(StandardCharsets.UTF_8));
-                            } catch (final IllegalStateException readOnlyHeaders) {
-                                record("value", "SER(headers-read-only)", topic, data, headers);
-                            }
-                        }
-                        record("value", "SER", topic, data, headers);
+                        record(role, "SER", topic, data, headers);
                         return raw(data);
                     }
                 };
@@ -428,14 +409,14 @@ public class SuppressHeadersScenarioTest {
                     @Override
                     public String deserialize(final String topic, final byte[] data) {
                         final String value = str(data);
-                        record("value", "DESER(no-headers-overload)", topic, value, null);
+                        record(role, "DESER(no-headers-overload)", topic, value, null);
                         return value;
                     }
 
                     @Override
                     public String deserialize(final String topic, final Headers headers, final byte[] data) {
                         final String value = str(data);
-                        record("value", "DESER", topic, value, headers);
+                        record(role, "DESER", topic, value, headers);
                         return value;
                     }
                 };
@@ -443,46 +424,7 @@ public class SuppressHeadersScenarioTest {
         };
     }
 
-    /** Key serde that only records invocations; the key carries no staged headers of its own. */
-    private Serde<String> capturingKeySerde() {
-        return new Serde<>() {
-            @Override
-            public Serializer<String> serializer() {
-                return new Serializer<>() {
-                    @Override
-                    public byte[] serialize(final String topic, final String data) {
-                        record("key", "SER(no-headers-overload)", topic, data, null);
-                        return raw(data);
-                    }
 
-                    @Override
-                    public byte[] serialize(final String topic, final Headers headers, final String data) {
-                        record("key", "SER", topic, data, headers);
-                        return raw(data);
-                    }
-                };
-            }
-
-            @Override
-            public Deserializer<String> deserializer() {
-                return new Deserializer<>() {
-                    @Override
-                    public String deserialize(final String topic, final byte[] data) {
-                        final String value = str(data);
-                        record("key", "DESER(no-headers-overload)", topic, value, null);
-                        return value;
-                    }
-
-                    @Override
-                    public String deserialize(final String topic, final Headers headers, final byte[] data) {
-                        final String value = str(data);
-                        record("key", "DESER", topic, value, headers);
-                        return value;
-                    }
-                };
-            }
-        };
-    }
 
     private static byte[] raw(final String s) {
         return s == null ? null : s.getBytes(StandardCharsets.UTF_8);
