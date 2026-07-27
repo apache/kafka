@@ -29,7 +29,7 @@ import java.util.Set;
 @ClusterTestDefaults(types = {Type.KRAFT})
 public class CreateTopicsTest {
 
-    @ClusterTest(brokers = 3, controllers = 3)
+    @ClusterTest(brokers = 3)
     public void testCreateClusterAndCreateAndManyTopics(ClusterInstance cluster) throws Exception {
         try (Admin admin = cluster.admin()) {
             // Create many topics
