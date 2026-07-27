@@ -929,6 +929,12 @@ public class GroupCoordinatorConfig {
         Map<String, TaskAssignor> builtInAssignors = STREAMS_GROUP_BUILTIN_ASSIGNORS
             .stream()
             .collect(Collectors.toMap(TaskAssignor::name, Function.identity()));
+        // A built-in may be configured either by its name or by its class name, so it is recognised
+        // by class rather than by how it was resolved below.
+        Set<Class<? extends TaskAssignor>> builtInAssignorClasses = STREAMS_GROUP_BUILTIN_ASSIGNORS
+            .stream()
+            .map(TaskAssignor::getClass)
+            .collect(Collectors.toSet());
 
         List<TaskAssignor> assignors = new ArrayList<>();
         Set<String> assignorNames = new HashSet<>();
@@ -954,13 +960,19 @@ public class GroupCoordinatorConfig {
                     }
                 }
 
+                assignors.add(assignor);
+
+                if (!builtInAssignorClasses.contains(assignor.getClass()) && builtInAssignors.containsKey(assignor.name())) {
+                    throw new ConfigException(STREAMS_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
+                        "Assignor name '" + assignor.name() + "' is reserved by a built-in assignor. " +
+                            "A custom assignor must not reuse the name of a built-in assignor");
+                }
+
                 if (!assignorNames.add(assignor.name())) {
                     throw new ConfigException(STREAMS_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
                         "Assignor name '" + assignor.name() + "' is already registered by another configured assignor. " +
                             "Assignor names, whether built-in or custom, must be unique");
                 }
-
-                assignors.add(assignor);
 
                 if (assignor instanceof Configurable configurable) {
                     configurable.configure(config.originals());
