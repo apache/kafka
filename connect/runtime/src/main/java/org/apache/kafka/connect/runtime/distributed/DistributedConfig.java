@@ -190,7 +190,7 @@ public final class DistributedConfig extends WorkerConfig {
 
 
     public static final String INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_CONFIG = "internal.topics.automatic.creation.enable";
-    public static final String INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_DOC = "Whether to automatically create internal topics used by Connect. "
+    private static final String INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_DOC = "Whether to automatically create internal topics used by Connect. "
             + "This includes the offset, config, and status topics, as well as connector-specific offset topics "
             + "configured via 'offsets.storage.topic' in the source connector configuration.";
     public static final Boolean INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_DEFAULT = true;
