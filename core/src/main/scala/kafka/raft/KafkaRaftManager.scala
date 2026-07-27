@@ -25,7 +25,7 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
-import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, MetadataRecoveryStrategy, NetworkClient}
+import org.apache.kafka.clients.{ApiVersions, BootstrapConfiguration, ManualMetadataUpdater, MetadataRecoveryStrategy, NetworkClient}
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
@@ -255,7 +255,7 @@ class KafkaRaftManager[T](
       apiVersions,
       logContext,
       MetadataRecoveryStrategy.NONE,
-      NetworkClient.BootstrapConfiguration.DISABLED,
+      BootstrapConfiguration.DISABLED,
       false
     )
 

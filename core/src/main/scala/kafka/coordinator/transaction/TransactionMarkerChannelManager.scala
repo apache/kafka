@@ -100,7 +100,7 @@ object TransactionMarkerChannelManager {
       new ApiVersions,
       logContext,
       MetadataRecoveryStrategy.NONE,
-      NetworkClient.BootstrapConfiguration.DISABLED,
+      BootstrapConfiguration.DISABLED,
       false
     )
 

@@ -109,8 +109,8 @@ public class NetworkClientTest {
     private final TestMetadataUpdater metadataUpdater = new TestMetadataUpdater(Collections.singletonList(node));
     // Declared before the NetworkClient fields because NetworkClient's constructor now eagerly
     // triggers bootstrap resolution and dereferences bootstrapConfiguration during construction.
-    private NetworkClient.BootstrapConfiguration bootstrapConfiguration =
-        NetworkClient.BootstrapConfiguration.enabled(
+    private BootstrapConfiguration bootstrapConfiguration =
+        BootstrapConfiguration.enabled(
             BOOTSTRAP_ADDRESSES,
             ClientDnsLookup.USE_ALL_DNS_IPS,
             10 * 1000,
@@ -171,7 +171,7 @@ public class NetworkClientTest {
 
     private NetworkClient createNetworkClientWithNoVersionDiscovery(Metadata metadata, boolean disableBootstrap) {
         if (disableBootstrap) {
-            bootstrapConfiguration = NetworkClient.BootstrapConfiguration.DISABLED;
+            bootstrapConfiguration = BootstrapConfiguration.DISABLED;
         }
         return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
@@ -191,7 +191,7 @@ public class NetworkClientTest {
     @BeforeEach
     public void setup() {
         selector.reset();
-        bootstrapConfiguration = NetworkClient.BootstrapConfiguration.enabled(
+        bootstrapConfiguration = BootstrapConfiguration.enabled(
             BOOTSTRAP_ADDRESSES,
             ClientDnsLookup.USE_ALL_DNS_IPS,
             CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
@@ -324,7 +324,7 @@ public class NetworkClientTest {
         NetworkClient client = new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
             reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
             defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, true, new ApiVersions(), new LogContext(),
-            MetadataRecoveryStrategy.REBOOTSTRAP, NetworkClient.BootstrapConfiguration.DISABLED, true);
+            MetadataRecoveryStrategy.REBOOTSTRAP, BootstrapConfiguration.DISABLED, true);
 
         // Send the ApiVersionsRequest to the first node
         client.ready(node0, time.milliseconds());
@@ -1566,7 +1566,7 @@ public class NetworkClientTest {
                 new LogContext(), new DefaultHostResolver(),
                 mockTelemetrySender, Long.MAX_VALUE,
                 MetadataRecoveryStrategy.NONE,
-                NetworkClient.BootstrapConfiguration.DISABLED,
+                BootstrapConfiguration.DISABLED,
                 false);
 
         long now = time.milliseconds();
@@ -1680,7 +1680,7 @@ public class NetworkClientTest {
     @Test
     public void testEnsureBootstrappedSuccess() throws InterruptedException {
         Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
-        NetworkClient.BootstrapConfiguration config = NetworkClient.BootstrapConfiguration.enabled(
+        BootstrapConfiguration config = BootstrapConfiguration.enabled(
                 BOOTSTRAP_ADDRESSES,
                 ClientDnsLookup.USE_ALL_DNS_IPS,
                 5000,
@@ -1709,7 +1709,7 @@ public class NetworkClientTest {
         Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
         // Use invalid addresses that cannot be resolved (using RFC 6761 reserved .invalid TLD)
         List<String> invalidAddresses = List.of("unresolvable.invalid:9092");
-        NetworkClient.BootstrapConfiguration config = NetworkClient.BootstrapConfiguration.enabled(
+        BootstrapConfiguration config = BootstrapConfiguration.enabled(
                 invalidAddresses,
                 ClientDnsLookup.USE_ALL_DNS_IPS,
                 5000, // Long bootstrap timeout
@@ -1732,7 +1732,7 @@ public class NetworkClientTest {
     @Test
     public void testEnsureBootstrappedRetryUntilSuccess() throws InterruptedException {
         Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
-        NetworkClient.BootstrapConfiguration config = NetworkClient.BootstrapConfiguration.enabled(
+        BootstrapConfiguration config = BootstrapConfiguration.enabled(
                 BOOTSTRAP_ADDRESSES,
                 ClientDnsLookup.USE_ALL_DNS_IPS,
                 5000,

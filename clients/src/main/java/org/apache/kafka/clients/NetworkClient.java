@@ -21,7 +21,6 @@ import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -1285,37 +1284,6 @@ public class NetworkClient implements KafkaClient {
      */
     private boolean isTelemetryApi(ApiKeys apiKey) {
         return apiKey == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS || apiKey == ApiKeys.PUSH_TELEMETRY;
-    }
-
-    public static class BootstrapConfiguration {
-        public static final BootstrapConfiguration DISABLED =
-            new BootstrapConfiguration(List.of(), null, 0, 0);
-
-        public final List<String> bootstrapServers;
-        public final ClientDnsLookup clientDnsLookup;
-        public final long bootstrapResolveTimeoutMs;
-        public final long retryBackoffMs;
-
-        private BootstrapConfiguration(final List<String> bootstrapServers,
-                                       final ClientDnsLookup clientDnsLookup,
-                                       final long bootstrapResolveTimeoutMs,
-                                       final long retryBackoffMs) {
-            this.bootstrapServers = bootstrapServers;
-            this.clientDnsLookup = clientDnsLookup;
-            this.bootstrapResolveTimeoutMs = bootstrapResolveTimeoutMs;
-            this.retryBackoffMs = retryBackoffMs;
-        }
-
-        public static BootstrapConfiguration enabled(final List<String> bootstrapServers,
-                                                      final ClientDnsLookup clientDnsLookup,
-                                                      final long bootstrapResolveTimeoutMs,
-                                                      final long retryBackoffMs) {
-            for (String url : bootstrapServers) {
-                if (Utils.getHost(url) == null || Utils.getPort(url) == null)
-                    throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
-            }
-            return new BootstrapConfiguration(bootstrapServers, clientDnsLookup, bootstrapResolveTimeoutMs, retryBackoffMs);
-        }
     }
 
     /**

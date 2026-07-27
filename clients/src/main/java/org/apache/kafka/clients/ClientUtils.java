@@ -249,7 +249,7 @@ public final class ClientUtils {
                     logContext);
             ClientDnsLookup dnsLookup = ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG));
 
-            NetworkClient.BootstrapConfiguration bootstrapConfiguration = NetworkClient.BootstrapConfiguration.enabled(
+            BootstrapConfiguration bootstrapConfiguration = BootstrapConfiguration.enabled(
                 bootstrapServers,
                 dnsLookup,
                 config.getLong(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG),

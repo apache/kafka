@@ -617,8 +617,7 @@ public class Metadata implements Closeable {
      * in the last metadata update.
      */
     protected synchronized void maybeThrowFatalException() {
-        if (bootstrapFatalException != null)
-            throw bootstrapFatalException;
+        maybeThrowBootstrapFatalException();
         KafkaException metadataException = this.fatalException;
         if (metadataException != null) {
             fatalException = null;
@@ -636,8 +635,7 @@ public class Metadata implements Closeable {
     }
 
     private void clearErrorsAndMaybeThrowException(Supplier<KafkaException> recoverableExceptionSupplier) {
-        if (bootstrapFatalException != null)
-            throw bootstrapFatalException;
+        maybeThrowBootstrapFatalException();
         KafkaException metadataException = Optional.ofNullable(fatalException).orElseGet(recoverableExceptionSupplier);
         fatalException = null;
         clearRecoverableErrors();

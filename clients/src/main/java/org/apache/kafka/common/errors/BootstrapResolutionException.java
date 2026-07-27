@@ -21,7 +21,11 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Indicates that the {@link org.apache.kafka.clients.NetworkClient} was unable to resolve a DNS address within
- * the time specified by {@link org.apache.kafka.clients.CommonClientConfigs#BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG}
+ * the time specified by {@link org.apache.kafka.clients.CommonClientConfigs#BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG}.
+ * <p>
+ * This is an unrecoverable error: the failure is permanently attached to the client and is re-thrown on every
+ * subsequent API call. Callers must close the client and construct a new one after resolving the underlying
+ * DNS or {@code bootstrap.servers} configuration issue.
  *
  * @see org.apache.kafka.clients.CommonClientConfigs
  */
