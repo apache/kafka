@@ -155,5 +155,4 @@ final class TimeOrderedKeyValueBufferChangelogDeserializationHelper {
         final long time = valueAndTime.getLong();
         return new DeserializationResult(time, key, bufferValue);
     }
-
 }
