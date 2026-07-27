@@ -350,6 +350,50 @@ $ bin/kafka-share-groups.sh --bootstrap-server localhost:9092 --delete --group m
 Deletion of requested share groups ('my-share-group') was successful.
 ```
 
+## Configuring dead-letter queues (DLQ) on share groups
+
+Share group dead-letter queues are enabled if the `share.version` feature at least 2:
+
+```bash
+$ bin/kafka-features.sh --bootstrap-server localhost:9092 describe | grep share.version
+Feature: share.version                             SupportedMinVersion: 0                SupportedMaxVersion: 2                FinalizedVersionLevel: 2                Epoch: 106
+```
+
+Set DLQ topic on share group:
+
+```bash
+$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config "errors.deadletterqueue.topic.name=dlq.gs1dlqtopic" --entity-type groups --entity-name my-share-group
+Completed updating config for group my-share-group.
+```
+
+To enable share group DLQ topic auto creation (default disabled):
+
+```bash
+$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config "errors.deadletterqueue.auto.create.topics.enable=true" --entity-type brokers --entity-default
+Completed updating default config for brokers in the cluster.
+```
+
+To set your own Kafka topic as share group DLQ topic, you must set certain dynamic configs on the DLQ topic post creation. If cluster dynamic config to auto create share group DLQ topic is enabled (`errors.deadletterqueue.auto.create.topics.enable=true`), the configs are attached automatically to the auto created topics.
+
+```bash
+$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config "errors.deadletterqueue.group.enable=true" --entity-type topics --entity-name dlq.gs1dlqtopic
+Completed updating config for topic dlq.gs1dlqtopic.
+```
+
+To change the default `dlq.` share group DLQ topic prefix, set the dynamic cluster config `errors.deadletterqueue.topic.name.prefix` to desired value. The default value is `dlq.`.
+
+```bash
+$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config "errors.deadletterqueue.topic.name.prefix=com.mycompany.dlq." --entity-type brokers --entity-default
+Completed updating default config for brokers in the cluster.
+```
+
+By default, the records written to the DLQ topic just include metadata about the source records such as the topic, partition and offset. You can set the `errors.deadletterqueue.copy.read.enable` configuration for the share group so the source record key and value are copied to the DLQ topic.
+
+```bash
+$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config "errors.deadletterqueue.copy.record.enable=true" --entity-type groups --entity-name my-share-group
+Completed updating config for group my-share-group.
+```
+
 ## Expanding your cluster
 
 Adding servers to a Kafka cluster is easy, just assign them a unique broker id and start up Kafka on your new servers. However these new servers will not automatically be assigned any data partitions, so unless partitions are moved to them they won't be doing any work until new topics are created. So usually when you add machines to your cluster you will want to migrate some existing data to these machines. 
