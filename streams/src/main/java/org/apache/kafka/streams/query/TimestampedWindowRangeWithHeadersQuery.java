@@ -107,6 +107,8 @@ public final class TimestampedWindowRangeWithHeadersQuery<K, V> implements Query
      */
     public static <K, V> TimestampedWindowRangeWithHeadersQuery<K, V> withWindowStartRange(final Instant timeFrom,
                                                                                             final Instant timeTo) {
+        Objects.requireNonNull(timeFrom, "timeFrom should not be null");
+        Objects.requireNonNull(timeTo, "timeTo should not be null");
         return new TimestampedWindowRangeWithHeadersQuery<>(Optional.empty(), Optional.of(timeFrom), Optional.of(timeTo));
     }
 
