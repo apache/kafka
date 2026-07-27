@@ -373,7 +373,7 @@ $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config "e
 Completed updating default config for brokers in the cluster.
 ```
 
-To create and set your own Kafka topic as share group DLQ topic, you must set certain dynamic configs on the DLQ topic post creation. If cluster dynamic config to auto create share group DLQ topic is enabled (`errors.deadletterqueue.auto.create.topics.enable=true`), the configs are attached automatically.
+To set your own Kafka topic as share group DLQ topic, you must set certain dynamic configs on the DLQ topic post creation. If cluster dynamic config to auto create share group DLQ topic is enabled (`errors.deadletterqueue.auto.create.topics.enable=true`), the configs are attached automatically to the auto created topics.
 
 ```bash
 $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config "errors.deadletterqueue.group.enable=true" --entity-type topics --entity-name dlq.gs1dlqtopic
