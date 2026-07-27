@@ -424,8 +424,6 @@ public class SuppressHeadersScenarioTest {
         };
     }
 
-
-
     private static byte[] raw(final String s) {
         return s == null ? null : s.getBytes(StandardCharsets.UTF_8);
     }
