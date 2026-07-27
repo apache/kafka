@@ -37,8 +37,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.streams.state.internals.Utils.hasEmptyHeaders;
+import static org.apache.kafka.streams.state.internals.Utils.rawHeadersTimestampPrefix;
 import static org.apache.kafka.streams.state.internals.Utils.rawPlainValue;
 import static org.apache.kafka.streams.state.internals.Utils.rawTimestampedValue;
+import static org.apache.kafka.streams.state.internals.Utils.rawValueTimestampHeaders;
 import static org.apache.kafka.streams.state.internals.Utils.readBytes;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -184,6 +186,49 @@ public class UtilsTest {
         assertArrayEquals("-value".getBytes(StandardCharsets.UTF_8), tail);
 
         assertThrows(SerializationException.class, () -> readBytes(buf, 1));
+    }
+
+    @Test
+    public void shouldExtractHeadersTimestampPrefixWithHeaders() {
+        final byte[] headers = headersOf(HEADERS);
+        final byte[] input = headersTimestampValueOf(headers, VALUE);
+
+        // The prefix is everything rawPlainValue() strips: [headersSize(varint)][headers][timestamp].
+        final byte[] expected = new byte[headers.length + StateSerdes.TIMESTAMP_SIZE];
+        ByteBuffer.wrap(expected).put(headers).putLong(TIMESTAMP);
+
+        assertArrayEquals(expected, rawHeadersTimestampPrefix(input));
+    }
+
+    @Test
+    public void shouldExtractHeadersTimestampPrefixWithEmptyHeaders() {
+        // Empty headers encode as a single-byte varint, so the prefix is 1 + 8 bytes.
+        final byte[] prefix = rawHeadersTimestampPrefix(timestampedValueWithEmptyHeaders(VALUE));
+
+        assertEquals(MIN_SIZE, prefix.length);
+        assertEquals((byte) 0x00, prefix[0]);
+        assertEquals(TIMESTAMP, ByteBuffer.wrap(prefix, 1, StateSerdes.TIMESTAMP_SIZE).getLong());
+    }
+
+    @Test
+    public void shouldReturnNullForNullRawHeadersTimestampPrefix() {
+        assertNull(rawHeadersTimestampPrefix(null));
+    }
+
+    @Test
+    public void shouldRebuildValueTimestampHeadersFromPrefixAndPlainValue() {
+        final byte[] input = headersTimestampValueOf(headersOf(HEADERS), VALUE);
+
+        // Splitting and rejoining must be lossless, for headers and for the empty-headers case.
+        assertArrayEquals(input, rawValueTimestampHeaders(rawHeadersTimestampPrefix(input), rawPlainValue(input)));
+
+        final byte[] empty = timestampedValueWithEmptyHeaders(VALUE);
+        assertArrayEquals(empty, rawValueTimestampHeaders(rawHeadersTimestampPrefix(empty), rawPlainValue(empty)));
+    }
+
+    @Test
+    public void shouldReturnNullWhenRebuildingFromNullPlainValue() {
+        assertNull(rawValueTimestampHeaders(rawHeadersTimestampPrefix(timestampedValueWithEmptyHeaders(VALUE)), null));
     }
 
     private static byte[] timestampedValueWithEmptyHeaders(final byte[] value) {
