@@ -397,6 +397,8 @@ public class StreamTaskTest {
         verify(stateDirectory, never()).lock(any());
     }
 
+    // Covers the non-transactional case: without transactional state stores, a dirty close under
+    // EOS may have left uncommitted data on disk, so the state directory must be wiped.
     @Test
     public void shouldAttemptToDeleteStateDirectoryWhenCloseDirtyAndEosEnabled() {
         when(stateManager.taskId()).thenReturn(taskId);
@@ -424,6 +426,35 @@ public class StreamTaskTest {
         inOrder.verify(stateManager).close();
         inOrder.verify(stateManager).baseDir();
         inOrder.verify(stateDirectory).unlock(taskId);
+    }
+
+    @Test
+    public void shouldNotWipeStateDirectoryWhenCloseDirtyAndEosEnabledWithTransactionalStateStores() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        when(stateManager.hasCorruptedStores()).thenReturn(false);
+        // Clean up state directory created as part of setup
+        stateDirectory.close();
+        stateDirectory = mock(StateDirectory.class);
+
+        when(stateDirectory.lock(taskId)).thenReturn(true);
+
+        final StreamsConfig config = createConfig(
+            StreamsConfig.EXACTLY_ONCE_V2,
+            "100",
+            LogAndFailExceptionHandler.class,
+            LogAndFailProcessingExceptionHandler.class,
+            FailOnInvalidTimestamp.class,
+            true);
+
+        task = createStatefulTask(config, true, stateManager);
+        task.suspend();
+        task.closeDirty();
+        task = null;
+
+        // With transactional state stores, the state dir should NOT be wiped on dirty close
+        // unless stores are specifically marked as corrupted.
+        verify(stateManager, never()).baseDir();
     }
 
     @Test
