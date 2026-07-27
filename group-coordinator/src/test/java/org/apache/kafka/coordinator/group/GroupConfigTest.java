@@ -30,6 +30,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -132,6 +133,10 @@ public class GroupConfigTest {
                 assertPropertyInvalid(name, "not_a_number", "1.0");
             } else if (GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_boolean");
+            } else if (GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG.equals(name)) {
+                // This is a free-form list of tag keys, so values like "not_a_number" are valid. Only an
+                // empty tag key (an empty element between commas) is rejected.
+                assertPropertyInvalid(name, "tag1,,tag2");
             } else if (!GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "-0.1");
             }
@@ -345,6 +350,35 @@ public class GroupConfigTest {
         doTestInvalidProps(props, ConfigException.class);
     }
 
+    @Test
+    public void testStreamsRackAwareAssignmentTagsValidation() {
+        // Duplicate rack-aware assignment tags are rejected rather than silently de-duplicated.
+        Map<String, String> duplicateProps = createValidGroupConfig();
+        duplicateProps.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,zone");
+        assertEquals("streams.rack.aware.assignment.tags must not contain duplicate tag keys.",
+            assertThrows(InvalidConfigurationException.class,
+                () -> GroupConfig.validate(duplicateProps, createGroupCoordinatorConfig(), createShareGroupConfig())).getMessage());
+
+        // Duplicates are detected regardless of surrounding whitespace.
+        Map<String, String> whitespaceDuplicateProps = createValidGroupConfig();
+        whitespaceDuplicateProps.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, " zone , zone ");
+        assertEquals("streams.rack.aware.assignment.tags must not contain duplicate tag keys.",
+            assertThrows(InvalidConfigurationException.class,
+                () -> GroupConfig.validate(whitespaceDuplicateProps, createGroupCoordinatorConfig(), createShareGroupConfig())).getMessage());
+
+        // Distinct rack-aware assignment tags are accepted.
+        Map<String, String> distinctProps = createValidGroupConfig();
+        distinctProps.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,cluster");
+        doTestValidProps(distinctProps);
+
+        // Surrounding whitespace is trimmed: " zone , cluster " parses and returns two clean tags.
+        Map<String, String> whitespaceProps = createValidGroupConfig();
+        whitespaceProps.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, " zone , cluster ");
+        doTestValidProps(whitespaceProps);
+        assertEquals(Optional.of(List.of("zone", "cluster")),
+            new GroupConfig(whitespaceProps).streamsRackAwareAssignmentTags());
+    }
+
     private void doTestInvalidProps(Map<String, String> props, Class<? extends Exception> exceptionClassName) {
         assertThrows(exceptionClassName, () -> GroupConfig.validate(props, createGroupCoordinatorConfig(), createShareGroupConfig()));
     }
@@ -509,6 +543,7 @@ public class GroupConfigTest {
         assertEquals(Optional.empty(), config.streamsAssignmentIntervalMs());
         assertEquals(Optional.empty(), config.streamsAssignorOffloadEnable());
         assertEquals(Optional.empty(), config.streamsTaskOffsetIntervalMs());
+        assertEquals(Optional.empty(), config.streamsRackAwareAssignmentTags());
 
         // DLQ configs - have defaults from CONFIG_DEF
         assertEquals("", config.errorsDLQTopicName());
@@ -540,6 +575,7 @@ public class GroupConfigTest {
         props.put(GroupConfig.STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, "1250");
         props.put(GroupConfig.STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false");
         props.put(GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, "30000");
+        props.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,cluster");
         props.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "my-dlq-topic");
         props.put(GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, "true");
 
@@ -571,6 +607,7 @@ public class GroupConfigTest {
         assertEquals(Optional.of(1250), config.streamsAssignmentIntervalMs());
         assertEquals(Optional.of(false), config.streamsAssignorOffloadEnable());
         assertEquals(Optional.of(30000), config.streamsTaskOffsetIntervalMs());
+        assertEquals(Optional.of(List.of("zone", "cluster")), config.streamsRackAwareAssignmentTags());
 
         // DLQ configs
         assertEquals("my-dlq-topic", config.errorsDLQTopicName());

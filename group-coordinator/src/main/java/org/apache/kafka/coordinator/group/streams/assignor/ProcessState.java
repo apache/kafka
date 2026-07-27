@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.coordinator.group.streams.assignor;
 
+import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
+
 import java.util.AbstractMap;
 import java.util.HashMap;
 import java.util.HashSet;

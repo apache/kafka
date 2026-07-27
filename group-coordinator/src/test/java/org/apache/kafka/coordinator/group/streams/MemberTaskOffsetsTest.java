@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
-import org.apache.kafka.coordinator.group.streams.assignor.TaskId;
 
 import org.junit.jupiter.api.Test;
 
@@ -30,9 +29,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class MemberTaskOffsetsTest {
 
-    private static StreamsGroupHeartbeatRequestData.TaskOffset taskOffset(final String subtopologyId,
-                                                                          final int partition,
-                                                                          final long offset) {
+    private static StreamsGroupHeartbeatRequestData.TaskOffset taskOffset(
+        final String subtopologyId,
+        final int partition,
+        final long offset
+    ) {
         return new StreamsGroupHeartbeatRequestData.TaskOffset()
             .setSubtopologyId(subtopologyId)
             .setPartition(partition)
@@ -47,11 +48,11 @@ public class MemberTaskOffsetsTest {
         );
 
         assertEquals(
-            Map.of(new TaskId("sub-1", 0), 10L, new TaskId("sub-1", 1), 20L),
+            Map.of("sub-1", Map.of(0, 10L, 1, 20L)),
             result.taskOffsets()
         );
         assertEquals(
-            Map.of(new TaskId("sub-1", 0), 15L, new TaskId("sub-1", 1), 25L),
+            Map.of("sub-1", Map.of(0, 15L, 1, 25L)),
             result.taskEndOffsets()
         );
     }
@@ -76,8 +77,8 @@ public class MemberTaskOffsetsTest {
     @Test
     public void shouldRetainBothMapsWhenBothListsAreNull() {
         MemberTaskOffsets previous = new MemberTaskOffsets(
-            Map.of(new TaskId("sub-1", 0), 10L),
-            Map.of(new TaskId("sub-1", 0), 15L)
+            Map.of("sub-1", Map.of(0, 10L)),
+            Map.of("sub-1", Map.of(0, 15L))
         );
 
         assertEquals(previous, previous.update(null, null));
@@ -87,28 +88,28 @@ public class MemberTaskOffsetsTest {
     @Test
     public void shouldUpdateTaskOffsetsAndRetainTaskEndOffsetsWhenEndOffsetsNull() {
         MemberTaskOffsets previous = new MemberTaskOffsets(
-            Map.of(new TaskId("sub-1", 0), 10L),
-            Map.of(new TaskId("sub-1", 0), 15L)
+            Map.of("sub-1", Map.of(0, 10L)),
+            Map.of("sub-1", Map.of(0, 15L))
         );
 
         MemberTaskOffsets result = previous.update(List.of(taskOffset("sub-1", 0, 12L)), null);
 
-        assertEquals(Map.of(new TaskId("sub-1", 0), 12L), result.taskOffsets());
+        assertEquals(Map.of("sub-1", Map.of(0, 12L)), result.taskOffsets());
         // The end-offsets were not reported, so the previously reported values are retained.
-        assertEquals(Map.of(new TaskId("sub-1", 0), 15L), result.taskEndOffsets());
+        assertEquals(Map.of("sub-1", Map.of(0, 15L)), result.taskEndOffsets());
     }
 
     @Test
     public void shouldUpdateTaskEndOffsetsAndRetainTaskOffsetsWhenOffsetsNull() {
         MemberTaskOffsets previous = new MemberTaskOffsets(
-            Map.of(new TaskId("sub-1", 0), 10L),
-            Map.of(new TaskId("sub-1", 0), 15L)
+            Map.of("sub-1", Map.of(0, 10L)),
+            Map.of("sub-1", Map.of(0, 15L))
         );
 
         MemberTaskOffsets result = previous.update(null, List.of(taskOffset("sub-1", 0, 18L)));
 
         // The offsets were not reported, so the previously reported values are retained.
-        assertEquals(Map.of(new TaskId("sub-1", 0), 10L), result.taskOffsets());
-        assertEquals(Map.of(new TaskId("sub-1", 0), 18L), result.taskEndOffsets());
+        assertEquals(Map.of("sub-1", Map.of(0, 10L)), result.taskOffsets());
+        assertEquals(Map.of("sub-1", Map.of(0, 18L)), result.taskEndOffsets());
     }
 }
