@@ -28,9 +28,7 @@ class DockerSanityTest(unittest.TestCase):
     CONTAINER_RUNTIME="docker"
 
     def compose_command(self):
-        if self.CONTAINER_RUNTIME == "podman":
-            return ["podman", "compose"]
-        return ["docker-compose"]
+        return [f"{self.CONTAINER_RUNTIME}-compose"]
 
     def resume_container(self):
         subprocess.run([self.CONTAINER_RUNTIME, "start", constants.BROKER_CONTAINER])
