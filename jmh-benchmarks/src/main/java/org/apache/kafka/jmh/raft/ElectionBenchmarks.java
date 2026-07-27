@@ -47,9 +47,10 @@ import java.util.concurrent.TimeUnit;
 public class ElectionBenchmarks {
 
     /**
-     * Starting state: the local node is Unattached in a {@code voterCount}-node cluster. The measured
-     * election is a one-way transition to the Leader state, so once it completes there is no Unattached
-     * node left to elect. A fresh context is rebuilt before each invocation to restore the starting state.
+     * Starting state: the local node is Unattached in a {@code voterCount}-node cluster. The
+     * measured election is a one-way transition to the Leader state, so once it completes there is
+     * no Unattached node left to elect. A fresh context is rebuilt before each invocation to
+     * restore the starting state.
      */
     @State(Scope.Thread)
     public static class UnattachedWithMultipleVoters {
@@ -72,9 +73,11 @@ public class ElectionBenchmarks {
 
     /** The local node wins an election and becomes leader. */
     @Benchmark
-    public void electLeader(UnattachedWithMultipleVoters state, KRaftBenchmarkingCounters counters) throws Exception {
+    public void electLeader(
+        UnattachedWithMultipleVoters state,
+        KRaftBenchmarkingCounters counters
+    ) throws Exception {
         state.context.unattachedToLeader();
-
-        counters.collectDeltasAndDrainRPCs(state.benchmark, Optional.empty(), Optional.empty());
+        counters.recordInvocation(state.benchmark, Optional.empty());
     }
 }

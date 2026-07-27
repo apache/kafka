@@ -31,11 +31,11 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public final class RaftClientBenchmarkContext {
-    // Standardized JMH iteration counts, shared by all raft benchmarks so every benchmark of a given
-    // mode is configured identically.
+    // Standardized JMH iteration counts, shared by all raft benchmarks so every benchmark of a
+    // given mode is configured identically.
 
-    // SingleShotTime measures a single operation per iteration, so it needs many iterations to build
-    // a stable distribution.
+    // SingleShotTime measures a single operation per iteration, so it needs many iterations to
+    // build a stable distribution.
     public static final int SINGLE_SHOT_WARMUP_ITERATIONS = 50;
     public static final int SINGLE_SHOT_MEASUREMENT_ITERATIONS = 30;
     public static final int SINGLE_SHOT_FORKS = 5;
@@ -58,14 +58,23 @@ public final class RaftClientBenchmarkContext {
     private final List<ReplicaKey> startingVoters;
     private final List<ReplicaKey> startingObservers;
 
-    // Each tracks one cumulative mock counter as a drainable delta against a baseline. The baseline is
-    // snapshotted at construction and re-baselined by zeroCountersOnSetup() at the end of benchmark setup.
+    // Each tracks one cumulative mock counter as a drainable delta against a baseline. The baseline
+    // is snapshotted at construction and re-baselined by zeroCountersOnSetup() at the end of
+    // benchmark setup.
     private final DrainableCounter logFlushes;
     private final DrainableCounter logReads;
     private final DrainableCounter logTruncations;
     private final DrainableCounter rpcRequestsSent;
     private final DrainableCounter quorumStateWrites;
     private final DrainableCounter quorumStateReads;
+
+    // Responses have no cumulative mock counter. deliverAndCount() counts them here instead of appending to
+    // RaftClientTestContext.sentResponses, so the collection stays bounded when per-invocation
+    // draining is deferred to an iteration teardown.
+    private final DrainableCounter rpcResponsesSent;
+    private int rpcResponsesSentTotal;
+    private RaftResponse.Outbound lastResponse;
+    private Throwable lastResponseException;
 
     private RaftClientBenchmarkContext(
         RaftClientTestContext context,
@@ -85,14 +94,16 @@ public final class RaftClientBenchmarkContext {
         this.rpcRequestsSent = new DrainableCounter(channel::requestsSent);
         this.quorumStateWrites = new DrainableCounter(context::quorumStateWriteCount);
         this.quorumStateReads = new DrainableCounter(context::quorumStateReadCount);
+        this.rpcResponsesSent = new DrainableCounter(() -> rpcResponsesSentTotal);
     }
 
     /**
      * Builds the local node as a voter in the Unattached state (a voter with no leader yet) in a
      * {@code voterCount}-node cluster. The local node is a voter because only a voter can drive the
-     * measured operation {@link RaftClientTestContext#unattachedToLeader()} (on {@link #testContext()})
-     * — an Unattached &rarr; Leader election, a path observers cannot take. A single-voter cluster is
-     * rejected because such a node elects itself at initialization, before any measured poll.
+     * measured operation {@link RaftClientTestContext#unattachedToLeader()} (on
+     * {@link #testContext()}) — an Unattached &rarr; Leader election, a path observers cannot
+     * take. A single-voter cluster is rejected because such a node elects itself at
+     * initialization, before any measured poll.
      */
     public static RaftClientBenchmarkContext unattachedVoter(
         int voterCount,
@@ -100,16 +111,21 @@ public final class RaftClientBenchmarkContext {
         RaftProtocol raftProtocol
     ) throws IOException {
         if (voterCount < 2) {
-            throw new IllegalArgumentException("voterCount must be at least 2; a single voter self-elects at init");
+            throw new IllegalArgumentException(
+                "voterCount must be at least 2; a single voter self-elects at init");
         }
         List<ReplicaKey> voterKeys = replicaKeys(randomReplicaId(), voterCount);
         ReplicaKey local = voterKeys.get(0);
         return new RaftClientBenchmarkContext(
-            buildContext(local, voterKeys, kraftVersion, raftProtocol), local, voterKeys, List.of());
+            buildContext(local, voterKeys, kraftVersion, raftProtocol),
+            local,
+            voterKeys,
+            List.of());
     }
 
     /**
-     * Builds a leader in a cluster of {@code voterCount} voters and {@code observerCount} observers.
+     * Builds a leader in a cluster of {@code voterCount} voters and {@code observerCount}
+     * observers.
      */
     public static RaftClientBenchmarkContext leader(
         int voterCount,
@@ -118,7 +134,8 @@ public final class RaftClientBenchmarkContext {
         RaftProtocol raftProtocol
     ) throws Exception {
         if (voterCount < 2) {
-            throw new IllegalArgumentException("voterCount must be at least 2; a single voter self-elects at init");
+            throw new IllegalArgumentException(
+                "voterCount must be at least 2");
         }
         List<ReplicaKey> voterKeys = replicaKeys(randomReplicaId(), voterCount);
         ReplicaKey local = voterKeys.get(0);
@@ -131,8 +148,8 @@ public final class RaftClientBenchmarkContext {
     }
 
     /**
-     * {@code count} replica keys with consecutive ids starting at {@code startId}, each with a random
-     * directory id.
+     * {@code count} replica keys with consecutive ids starting at {@code startId}, each with a
+     * random directory id.
      */
     private static List<ReplicaKey> replicaKeys(int startId, int count) {
         return IntStream.range(0, count)
@@ -168,13 +185,16 @@ public final class RaftClientBenchmarkContext {
         return context;
     }
 
-    /** The local node's log end offset. Kept here because the {@code log} field is package-private. */
+    /**
+     * The local node's log end offset. Kept here because the {@code log} field is package-private.
+     */
     public long logEndOffset() {
         return log.endOffset().offset();
     }
 
     /**
-     * The starting voters other than the local node, in voter-set order. May be empty (a single-voter cluster whose only voter is the local node).
+     * The starting voters other than the local node, in voter-set order. May be empty (a
+     * single-voter cluster whose only voter is the local node).
      */
     public List<ReplicaKey> remoteVoters() {
         return startingVoters.stream()
@@ -188,9 +208,9 @@ public final class RaftClientBenchmarkContext {
 
     /**
      * Establishes the counter baseline so that work done before this point (building the context,
-     * driving an election in {@code leader()}, or anything else a benchmark does in its setup) is not
-     * attributed to the measured operation. Call this at the <b>end of benchmark setup</b>, just
-     * before the measured region begins.
+     * driving an election in {@code leader()}, or anything else a benchmark does in its setup) is
+     * not attributed to the measured operation. Call this at the <b>end of benchmark setup</b>,
+     * just before the measured region begins.
      */
     public void zeroCountersOnSetup() {
         logFlushes.drainDelta();
@@ -199,6 +219,7 @@ public final class RaftClientBenchmarkContext {
         rpcRequestsSent.drainDelta();
         quorumStateWrites.drainDelta();
         quorumStateReads.drainDelta();
+        rpcResponsesSent.drainDelta();
         channel.drainSendQueue();
         context.drainAllSentResponses();
     }
@@ -232,7 +253,8 @@ public final class RaftClientBenchmarkContext {
         expectedRequest.ifPresent(apiKey -> channel.drainSentRequests(Optional.of(apiKey)));
         if (channel.hasSentRequests()) {
             throw new IllegalStateException(
-                "Unexpected outstanding requests at end of benchmark invocation: " + channel.drainSendQueue());
+                "Unexpected outstanding requests at end of benchmark invocation: "
+                    + channel.drainSendQueue());
         }
     }
 
@@ -245,19 +267,46 @@ public final class RaftClientBenchmarkContext {
     }
 
     /**
-     * Drains the responses the benchmark expects to be in-flight at the end of the invocation (the
-     * given {@code apiKey}, if any), counts them, then asserts no other responses remain. Returns the
-     * number of expected responses drained (0 if none are expected). A leftover response means the
-     * client sent more than the benchmark accounts for.
+     * Benchmark deliver path: hands {@code inbound} to the client, polls until the client produces
+     * its response, and counts that response here (rather than in {@link RaftClientTestContext}),
+     * so the count stays bounded when per-invocation collection is deferred to an iteration
+     * teardown.
+     * Verifies the response matches {@code expectedResponse} when one is given, and rethrows any
+     * failure the client reported while handling the request.
      */
-    public int maybeDrainSentRpcResponses(Optional<ApiKeys> apiKey) {
-        int expected = apiKey.map(key -> context.drainSentResponses(key).size()).orElse(0);
-        int remaining = context.drainAllSentResponses();
-        if (remaining > 0) {
-            throw new IllegalStateException(
-                "Unexpected outstanding responses at end of benchmark invocation: " + remaining);
+    public void deliverAndCount(
+        RaftRequest.Inbound inbound,
+        Optional<ApiKeys> expectedResponse
+    ) throws InterruptedException {
+        int before = rpcResponsesSentTotal;
+        context.client.handle(inbound).whenComplete((response, exception) -> {
+            if (exception != null) {
+                lastResponseException = exception;
+            } else {
+                rpcResponsesSentTotal++;
+                lastResponse = response;
+            }
+        });
+        context.pollUntil(() -> rpcResponsesSentTotal > before || lastResponseException != null);
+        if (lastResponseException != null) {
+            Throwable failure = lastResponseException;
+            lastResponseException = null;
+            throw new IllegalStateException("benchmark request handling failed", failure);
         }
-        return expected;
+        if (expectedResponse.isPresent()
+            && lastResponse.data().apiKey() != expectedResponse.get().id) {
+            throw new IllegalStateException(
+                "expected " + expectedResponse.get() + " response, got apiKey "
+                    + lastResponse.data().apiKey());
+        }
+    }
+
+    /**
+     * Number of responses the client has produced via {@link #deliverAndCount} since the last
+     * drain.
+     */
+    public int getRpcResponsesSentDelta() {
+        return rpcResponsesSent.drainDelta();
     }
 
 }

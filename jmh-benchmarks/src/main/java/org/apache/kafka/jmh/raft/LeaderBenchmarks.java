@@ -20,6 +20,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.raft.RaftClientBenchmarkContext;
 import org.apache.kafka.raft.RaftClientTestContext;
+import org.apache.kafka.raft.RaftRequest;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -84,7 +85,6 @@ public class LeaderBenchmarks {
             }
         },
 
-        /** A DESCRIBE_QUORUM admin query: the leader returns the current quorum state (read-only). */
         DESCRIBE_QUORUM(Optional.empty(), Optional.of(ApiKeys.DESCRIBE_QUORUM)) {
             @Override
             public ApiMessage build(RaftClientBenchmarkContext benchmark) {
@@ -112,8 +112,10 @@ public class LeaderBenchmarks {
     }
 
     /**
-     * Starting state: the local node is leader with the high watermark at the log end. The {@code rpc}
-     * param selects which inbound request the benchmark delivers; the request is built once in setup.
+     * Starting state: the local node is leader with the high watermark at the log end. The
+     * {@code rpc} param selects which inbound request the benchmark delivers. The request is built
+     * and round-tripped through serialization once here, so the measured region starts from a
+     * parsed request on the queue and excludes request parsing.
      */
     @State(Scope.Thread)
     public static class LeaderWithHwmAtLogEnd {
@@ -124,7 +126,7 @@ public class LeaderBenchmarks {
 
         RaftClientBenchmarkContext benchmark;
         RaftClientTestContext context;
-        ApiMessage request;
+        RaftRequest.Inbound request;
 
         @Setup(Level.Trial)
         public void setup() throws Exception {
@@ -138,7 +140,7 @@ public class LeaderBenchmarks {
             context.client.schedulePreparedAppend();
             context.poll();
             context.advanceLocalLeaderHighWatermarkToLogEndOffset();
-            request = rpc.build(benchmark);
+            request = context.inboundRequest(rpc.build(benchmark));
             benchmark.zeroCountersOnSetup();
         }
     }
@@ -151,10 +153,8 @@ public class LeaderBenchmarks {
         LeaderWithHwmAtLogEnd state,
         KRaftBenchmarkingCounters counters
     ) throws InterruptedException {
-        state.context.deliverRequest(state.request);
-        state.context.pollUntilResponse();
-
-        counters.collectDeltasAndDrainRPCs(state.benchmark, state.rpc.expectedRequest(), state.rpc.expectedResponse());
+        state.benchmark.deliverAndCount(state.request, state.rpc.expectedResponse());
+        counters.recordInvocation(state.benchmark, state.rpc.expectedRequest());
     }
 
     /**
@@ -178,7 +178,10 @@ public class LeaderBenchmarks {
         private final Optional<ApiKeys> expectedRequest;
         private final Optional<ApiKeys> expectedResponse;
 
-        LeaderTransitioningRpc(Optional<ApiKeys> expectedRequest, Optional<ApiKeys> expectedResponse) {
+        LeaderTransitioningRpc(
+            Optional<ApiKeys> expectedRequest,
+            Optional<ApiKeys> expectedResponse
+        ) {
             this.expectedRequest = expectedRequest;
             this.expectedResponse = expectedResponse;
         }
@@ -207,7 +210,7 @@ public class LeaderBenchmarks {
 
         RaftClientBenchmarkContext benchmark;
         RaftClientTestContext context;
-        ApiMessage request;
+        RaftRequest.Inbound request;
 
         @Setup(Level.Invocation)
         public void setup() throws Exception {
@@ -217,7 +220,7 @@ public class LeaderBenchmarks {
                 RaftClientBenchmarkContext.DEFAULT_KRAFT_VERSION,
                 RaftClientBenchmarkContext.DEFAULT_RAFT_PROTOCOL);
             context = benchmark.testContext();
-            request = rpc.build(benchmark);
+            request = context.inboundRequest(rpc.build(benchmark));
             benchmark.zeroCountersOnSetup();
         }
     }
@@ -234,9 +237,7 @@ public class LeaderBenchmarks {
         LeaderBeforeTransition state,
         KRaftBenchmarkingCounters counters
     ) throws InterruptedException {
-        state.context.deliverRequest(state.request);
-        state.context.pollUntilResponse();
-
-        counters.collectDeltasAndDrainRPCs(state.benchmark, state.rpc.expectedRequest(), state.rpc.expectedResponse());
+        state.benchmark.deliverAndCount(state.request, state.rpc.expectedResponse());
+        counters.recordInvocation(state.benchmark, state.rpc.expectedRequest());
     }
 }

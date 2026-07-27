@@ -1006,14 +1006,26 @@ public final class RaftClientTestContext {
     }
 
     void deliverRequest(ApiMessage request, short version) {
+        deliverRequest(inboundRequest(request, version));
+    }
+
+    public RaftRequest.Inbound inboundRequest(ApiMessage request) {
+        return inboundRequest(request, raftRequestVersion(request));
+    }
+
+    RaftRequest.Inbound inboundRequest(ApiMessage request, short version) {
         ApiMessage versionedRequest = roundTripApiMessage(request, version);
-        RaftRequest.Inbound inboundRequest = new RaftRequest.Inbound(
+        return new RaftRequest.Inbound(
             channel.listenerName(),
             channel.newCorrelationId(),
             version,
             versionedRequest,
             time.milliseconds()
         );
+    }
+
+    /** Enqueues a pre-built inbound request onto the client and collects its eventual response. */
+    public void deliverRequest(RaftRequest.Inbound inboundRequest) {
         client.handle(inboundRequest).whenComplete((response, exception) -> {
             if (exception != null) {
                 uncaughtExceptions.add(exception);
