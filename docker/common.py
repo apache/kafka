@@ -45,7 +45,7 @@ def build_docker_image_runner(command, image_type, kafka_archive=None):
     try:
         execute(command.split())
     except:
-        raise SystemError("Docker Image Build failed")
+        raise SystemError(f"{container_runtime.capitalize()} image build failed")
     finally:
         shutil.rmtree(temp_dir_path)
 
