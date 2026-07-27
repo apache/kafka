@@ -64,6 +64,8 @@ org.apache.kafka.security.authorizer.AuthorizerTest:
 - testWildCardAcls
 org.apache.kafka.security.authorizer.AuthorizerUtilsTest:
 - testCreateAuthorizer
+org.apache.kafka.security.minikdc.MiniKdcTest:
+- shouldNotStopImmediatelyWhenStarted
 org.apache.kafka.server.AssignmentTest:
 - testAssignmentForNonExistentPartitionIsNotValid
 - testAssignmentForNonExistentTopicIsNotValid
@@ -176,12 +178,13 @@ org.apache.kafka.server.ClientMetricsManagerTest:
 - testUpdateSubscriptionWithNullProperties
 - testUpdateSubscriptionWithPropertiesDeletion
 org.apache.kafka.server.CordonedLogDirsIntegrationTest:
+- testAlterPartitionWithCordonedLogDirs
+- testAlterReplicaWithCordonedLogDirs
 - testCordonUncordonLogDirs
 - testCordonUnknownLogDirs
 - testDecommissionBroker
 - testFeatureNotEnabled
 - testFeatureNotEnabledStaticConfig
-- testReassignWithCordonedLogDirs
 - testStaticCordonUncordonLogDirs
 - testUpdateCordonedDirsViaController
 org.apache.kafka.server.DefaultApiVersionManagerTest:
