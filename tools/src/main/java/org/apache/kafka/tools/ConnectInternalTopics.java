@@ -20,8 +20,8 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.SharedTopicAdmin;
 import org.apache.kafka.connect.util.TopicAdmin;
@@ -52,7 +52,7 @@ public class ConnectInternalTopics {
             var namespace = parser.parseArgs(args);
             var workerProperties = parseWorkerProperties(parser, namespace);
             out.println("Parsed arguments and loaded worker properties");
-            execute(parser, namespace, workerProperties, out, err);
+            execute(parser, namespace, workerProperties, out);
             out.println("Command executed successfully");
             return 0;
         } catch (ArgumentParserException e) {
@@ -68,7 +68,7 @@ public class ConnectInternalTopics {
         }
     }
 
-    private static void execute(ArgumentParser parser, Namespace namespace, Map<String, String> workerProperties, PrintStream out, PrintStream err) throws ArgumentParserException {
+    private static void execute(ArgumentParser parser, Namespace namespace, Map<String, String> workerProperties, PrintStream out) throws ArgumentParserException {
         var subcommand = namespace.getString("subcommand");
         out.println("Subcommand: " + subcommand);
         if (subcommand == null) {
@@ -95,15 +95,18 @@ public class ConnectInternalTopics {
     }
 
     private static void createInternalTopic(SharedTopicAdmin sharedAdmin, TopicSettings settings, PrintStream out) {
-        out.println("Creating internal topic: " + settings.topicName);
         var topicDescription = TopicAdmin.defineTopic(settings.topicName)
                 .config(settings.topicSettings)
                 .compacted()
                 .partitions(settings.partitions)
                 .replicationFactor(settings.replicationFactor)
                 .build();
-        sharedAdmin.topicAdmin().createTopics(topicDescription);
-        out.println("Created internal topic: " + settings.topicName);
+        var created = sharedAdmin.topicAdmin().createTopics(topicDescription);
+        if (created.contains(settings.topicName)) {
+            out.println("Created internal topic: " + settings.topicName);
+        } else {
+            out.println("Internal topic already exists: " + settings.topicName);
+        }
     }
 
     private static TopicSettings buildOffsetTopicSettings(InternalTopicsConfig config, PrintStream out) {
@@ -176,12 +179,12 @@ public class ConnectInternalTopics {
                         "")
                 .define(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG,
                         ConfigDef.Type.INT,
-                        DistributedConfig.OFFSET_STORAGE_PARTITIONS_DEFAULT,
+                        25,
                         ConfigDef.Importance.LOW,
                         "")
                 .define(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG,
                         ConfigDef.Type.SHORT,
-                        DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_DEFAULT,
+                        (short) 3,
                         ConfigDef.Importance.LOW,
                         "")
                 .define(DistributedConfig.CONFIG_TOPIC_CONFIG,
@@ -190,7 +193,7 @@ public class ConnectInternalTopics {
                         "")
                 .define(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG,
                         ConfigDef.Type.SHORT,
-                        DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_DEFAULT,
+                        (short) 3,
                         ConfigDef.Importance.LOW,
                         "")
                 .define(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG,
@@ -199,12 +202,12 @@ public class ConnectInternalTopics {
                         "")
                 .define(DistributedConfig.STATUS_STORAGE_PARTITIONS_CONFIG,
                         ConfigDef.Type.INT,
-                        DistributedConfig.STATUS_STORAGE_PARTITIONS_DEFAULT,
+                        5,
                         ConfigDef.Importance.LOW,
                         "")
                 .define(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG,
                         ConfigDef.Type.SHORT,
-                        DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_DEFAULT,
+                        (short) 3,
                         ConfigDef.Importance.LOW,
                         "");
 

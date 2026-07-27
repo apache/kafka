@@ -252,7 +252,7 @@ public class InternalTopicsIntegrationTest {
         workerProps.put(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
         workerProps.put(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
         workerProps.put(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
-        workerProps.put(DistributedConfig.INTERNAL_TOPICS_CREATION_ENABLE_CONFIG, "false");
+        workerProps.put(DistributedConfig.INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_CONFIG, "false");
         connect = new EmbeddedConnectCluster.Builder().name("connect-cluster-1")
                 .workerProps(workerProps)
                 .numWorkers(0)
