@@ -903,7 +903,8 @@ public class NetworkClient implements KafkaClient {
      * Handle the case when there are no nodes available.
      * <p>
      * If bootstrap is disabled or already complete, throw IllegalStateException.
-     * If bootstrap is enabled but not yet complete, return null to allow DNS resolution to continue.
+     * If bootstrap is enabled but not yet complete, return an empty {@link LeastLoadedNode}
+     * so that the caller can continue polling while DNS resolution finishes.
      */
     private LeastLoadedNode handleEmptyNodeList() {
         if (bootstrapConfiguration == BootstrapConfiguration.DISABLED || metadataUpdater.isBootstrapped()) {

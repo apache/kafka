@@ -172,7 +172,9 @@ public class AdminMetadataManager {
 
         @Override
         public void bootstrap(List<InetSocketAddress> addresses) {
-            // Called by NetworkClient.ensureBootstrapped() after DNS resolution succeeds
+            // The `now` argument is unused when the incoming cluster is bootstrap-configured
+            // (see AdminMetadataManager#update), so we pass 0 rather than plumbing a clock through
+            // the MetadataUpdater interface for a value that would be ignored.
             AdminMetadataManager.this.update(Cluster.bootstrap(addresses), 0);
         }
 

@@ -249,14 +249,11 @@ public final class ClientUtils {
                     logContext);
             ClientDnsLookup dnsLookup = ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG));
 
-            NetworkClient.BootstrapConfiguration bootstrapConfiguration =
-                (bootstrapServers != null && !bootstrapServers.isEmpty())
-                    ? NetworkClient.BootstrapConfiguration.enabled(
-                        bootstrapServers,
-                        dnsLookup,
-                        config.getLong(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG),
-                        config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG))
-                    : NetworkClient.BootstrapConfiguration.DISABLED;
+            NetworkClient.BootstrapConfiguration bootstrapConfiguration = NetworkClient.BootstrapConfiguration.enabled(
+                bootstrapServers,
+                dnsLookup,
+                config.getLong(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG),
+                config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG));
 
             return new NetworkClient(metadataUpdater,
                     metadata,
