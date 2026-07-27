@@ -150,7 +150,6 @@ public class AdminMetadataTest {
         }
     }
 
-
     @ClusterTest
     public void testDescribeTopicsWithOptionPartitionSizeLimitPerResponse() throws Exception {
         try (Admin admin = clusterInstance.admin()) {
