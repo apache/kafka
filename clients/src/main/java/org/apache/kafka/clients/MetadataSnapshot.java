@@ -227,8 +227,8 @@ public class MetadataSnapshot {
                 .stream()
                 .map(metadata -> MetadataResponse.toPartitionInfo(metadata, nodes))
                 .collect(Collectors.toList());
-        this.clusterInstance = new Cluster(clusterId, nodes.values(), partitionInfos,
-                unauthorizedTopics, invalidTopics, internalTopics, controller, topicIds);
+        this.clusterInstance = new Cluster(clusterId, nodes.values(), partitionInfos, unauthorizedTopics,
+                invalidTopics, internalTopics, controller, topicIds);
     }
 
     static MetadataSnapshot bootstrap(List<InetSocketAddress> addresses) {
