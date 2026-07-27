@@ -350,13 +350,12 @@ $ bin/kafka-share-groups.sh --bootstrap-server localhost:9092 --delete --group m
 Deletion of requested share groups ('my-share-group') was successful.
 ```
 
-## Configuring dead letter queues (DLQ) on share groups ([KIP-1191](https://cwiki.apache.org/confluence/spaces/KAFKA/pages/373885564/KIP-1191+Dead-letter+queues+for+share+groups))
+## Configuring dead-letter queues (DLQ) on share groups
 
-Enable share group dead letter queues (DLQ) on the cluster:
+Share group dead-letter queues are enabled if the `share.version` feature at least 2:
 
 ```bash
-$ bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --feature share.version=2
-share.version was upgraded to 2.
+$ bin/kafka-features.sh --bootstrap-server localhost:9092 describe | grep share.version
 ```
 
 Set DLQ topic on share group:
@@ -387,7 +386,7 @@ $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config "e
 Completed updating default config for brokers in the cluster.
 ```
 
-To enable copying for source record key and value into the DLQ records (default disabled):
+By default, the records written to the DLQ topic just include metadata about the source records such as the topic, partition and offset. You can set the `errors.deadletterqueue.copy.read.enable` configuration for the share group so the source record key and value are copied to the DLQ topic.
 
 ```bash
 $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config "errors.deadletterqueue.copy.record.enable=true" --entity-type groups --entity-name my-share-group
