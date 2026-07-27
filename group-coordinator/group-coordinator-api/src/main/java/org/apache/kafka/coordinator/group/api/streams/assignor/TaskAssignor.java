@@ -21,6 +21,8 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * Server side task assignor used by streams groups.
+ *
+ * <p>Implementations must be thread-safe.
  */
 @InterfaceAudience.Public
 @InterfaceStability.Evolving

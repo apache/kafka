@@ -140,10 +140,8 @@ public class AdminMetadataTest {
 
     @ClusterTest
     public void testListTopicsWithOptionListInternal() throws Exception {
+        clusterInstance.createTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1, (short) 1);
         try (Admin admin = clusterInstance.admin()) {
-            admin.createTopics(List.of(new NewTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1, (short) 1))).all().get();
-            clusterInstance.waitTopicCreation(Topic.GROUP_METADATA_TOPIC_NAME, 1);
-
             Set<String> topicNames = admin.listTopics(new ListTopicsOptions().listInternal(true)).names().get();
             assertTrue(topicNames.contains(Topic.GROUP_METADATA_TOPIC_NAME),
                 "Expected to see internal topic " + Topic.GROUP_METADATA_TOPIC_NAME);
