@@ -20,7 +20,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
@@ -123,24 +123,33 @@ public class RocksDBTimestampedWindowStoreWithHeadersTest {
     }
 
     @Test
-    public void shouldReturnUnknownQueryTypeForWindowRangeQuery() {
+    public void shouldHandleWindowRangeQuery() {
+        // KIP-1356: the withWindowStartRange form of the headers-aware
+        // TimestampedWindowRangeWithHeadersQuery forwards a raw WindowRangeQuery to this native store,
+        // so enable WindowRangeQuery via the inherited RocksDBWindowStore handling (StoreQueryUtils),
+        // returning the raw stored header-format bytes (previously UNKNOWN_QUERY_TYPE); the metered
+        // store does the header-aware deserialization. This matches the adapter build path, and also
+        // fixes the same pre-existing gap for the plain (non-headers) WindowRangeQuery.
+        final Bytes key = new Bytes("test-key".getBytes());
+        final byte[] storedBytes = "headers+timestamp+value".getBytes();
+        final long windowStart = 1_000L;
+        windowStore.put(key, storedBytes, windowStart);
+
         final WindowRangeQuery<Bytes, byte[]> query = WindowRangeQuery.withWindowStartRange(
                 Instant.ofEpochMilli(0),
-                Instant.ofEpochMilli(Long.MAX_VALUE)
+                Instant.ofEpochMilli(RETENTION_PERIOD)
         );
-        final PositionBound positionBound = PositionBound.unbounded();
-        final QueryConfig config = new QueryConfig(false);
+        final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> result =
+                windowStore.query(query, PositionBound.unbounded(), new QueryConfig(false));
 
-        final QueryResult<KeyValueIterator<org.apache.kafka.streams.kstream.Windowed<Bytes>, byte[]>> result =
-                windowStore.query(query, positionBound, config);
-
-        // Verify: Window store with headers currently returns UNKNOWN_QUERY_TYPE
-        assertFalse(result.isSuccess(), "Expected query to fail with unknown query type");
-        assertEquals(
-                FailureReason.UNKNOWN_QUERY_TYPE,
-                result.getFailureReason(),
-                "Expected UNKNOWN_QUERY_TYPE failure reason"
-        );
+        assertTrue(result.isSuccess(), "Expected WindowRangeQuery to succeed");
+        try (KeyValueIterator<Windowed<Bytes>, byte[]> iterator = result.getResult()) {
+            assertTrue(iterator.hasNext(), "Expected the stored entry in the window range result");
+            final KeyValue<Windowed<Bytes>, byte[]> keyValue = iterator.next();
+            assertEquals(key, keyValue.key.key());
+            assertArrayEquals(storedBytes, keyValue.value, "Expected the raw stored bytes to be returned");
+            assertFalse(iterator.hasNext(), "Expected exactly one entry in the window range result");
+        }
         assertNotNull(result.getPosition(), "Expected position to be set");
     }
 
@@ -156,16 +165,19 @@ public class RocksDBTimestampedWindowStoreWithHeadersTest {
 
         final QueryResult<WindowStoreIterator<byte[]>> result = windowStore.query(query, positionBound, config);
 
-        // Verify: Execution info was collected
-        assertFalse(result.getExecutionInfo().isEmpty(), "Expected execution info to be collected");
-        assertTrue(
-                result.getExecutionInfo().get(0).contains("Handled in"),
-                "Expected execution info to contain handling information"
-        );
-        assertTrue(
-                result.getExecutionInfo().get(0).contains(RocksDBTimestampedWindowStoreWithHeaders.class.getName()),
-                "Expected execution info to mention the class name"
-        );
+        // The query succeeds and returns an open store iterator, so close it to avoid a leak.
+        try (WindowStoreIterator<byte[]> iterator = result.getResult()) {
+            // Verify: Execution info was collected
+            assertFalse(result.getExecutionInfo().isEmpty(), "Expected execution info to be collected");
+            assertTrue(
+                    result.getExecutionInfo().get(0).contains("Handled in"),
+                    "Expected execution info to contain handling information"
+            );
+            assertTrue(
+                    result.getExecutionInfo().get(0).contains(RocksDBTimestampedWindowStoreWithHeaders.class.getName()),
+                    "Expected execution info to mention the class name"
+            );
+        }
     }
 
     @Test
@@ -180,7 +192,10 @@ public class RocksDBTimestampedWindowStoreWithHeadersTest {
 
         final QueryResult<WindowStoreIterator<byte[]>> result = windowStore.query(query, positionBound, config);
 
-        // Verify: No execution info was collected
-        assertTrue(result.getExecutionInfo().isEmpty(), "Expected no execution info to be collected");
+        // The query succeeds and returns an open store iterator, so close it to avoid a leak.
+        try (WindowStoreIterator<byte[]> iterator = result.getResult()) {
+            // Verify: No execution info was collected
+            assertTrue(result.getExecutionInfo().isEmpty(), "Expected no execution info to be collected");
+        }
     }
 }
