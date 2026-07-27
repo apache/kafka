@@ -5613,9 +5613,7 @@ org.apache.kafka.common.utils.BytesTest:
 org.apache.kafka.common.utils.MockTimeTest:
 - testAdvanceClock
 - testAutoTickMs
-- testWaitObjectConditionSatisfied
-- testWaitObjectTimeout
-org.apache.kafka.common.utils.SystemTimeTest:
+org.apache.kafka.common.utils.TimeTest:
 - testWaitObjectConditionSatisfied
 - testWaitObjectTimeout
 org.apache.kafka.common.utils.TimerTest:
