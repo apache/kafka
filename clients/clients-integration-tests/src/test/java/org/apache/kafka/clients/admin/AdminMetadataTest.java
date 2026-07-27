@@ -108,7 +108,6 @@ public class AdminMetadataTest {
     public void testDescribeCluster() throws Exception {
         try (Admin admin = clusterInstance.admin()) {
             DescribeClusterResult result = admin.describeCluster();
-            Collection<Node> nodes = result.nodes().get();
             assertEquals(clusterInstance.clusterId(), result.clusterId().get());
 
             // In KRaft, we return a random brokerId as the current controller.
@@ -116,8 +115,11 @@ public class AdminMetadataTest {
             assertTrue(clusterInstance.brokerIds().contains(controller.id()));
 
             Set<String> brokerEndpoints = Set.of(clusterInstance.bootstrapServers().split(","));
-            assertEquals(brokerEndpoints.size(), nodes.size());
-            for (Node node : nodes) {
+            TestUtils.waitForCondition(
+                    () -> admin.describeCluster().nodes().get().size() == brokerEndpoints.size(),
+                    "Timed out waiting for all brokers to be discovered");
+
+            for (Node node : admin.describeCluster().nodes().get()) {
                 String hostStr = node.host() + ":" + node.port();
                 assertTrue(brokerEndpoints.contains(hostStr),
                         "Unknown host:port pair " + hostStr + " in brokerVersionInfos");
