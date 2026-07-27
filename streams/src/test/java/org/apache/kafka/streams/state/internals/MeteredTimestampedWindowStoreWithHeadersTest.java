@@ -651,7 +651,8 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
     private WindowKeyQuery<?, ?> forwardedRawWindowKeyQuery(final Query<?> query) {
         when(innerStoreMock.query(any(), any(PositionBound.class), any(QueryConfig.class)))
             .thenReturn((QueryResult) QueryResult.forResult(windowKeyIterator(List.of())));
-        store.query(query, PositionBound.unbounded(), new QueryConfig(false));
+        // Close the iterator the query opens so num-open-iterators returns to 0.
+        ((ReadOnlyRecordIterator<?, ?>) store.query(query, PositionBound.unbounded(), new QueryConfig(false)).getResult()).close();
         final ArgumentCaptor<WindowKeyQuery> captor = ArgumentCaptor.forClass(WindowKeyQuery.class);
         verify(innerStoreMock).query(captor.capture(), any(PositionBound.class), any(QueryConfig.class));
         return captor.getValue();
@@ -876,7 +877,8 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
     private WindowRangeQuery<?, ?> forwardedRawRangeQuery(final Query<?> query) {
         when(innerStoreMock.query(any(), any(PositionBound.class), any(QueryConfig.class)))
             .thenReturn((QueryResult) QueryResult.forResult(windowRangeIterator(List.of())));
-        store.query(query, PositionBound.unbounded(), new QueryConfig(false));
+        // Close the iterator the query opens so num-open-iterators returns to 0.
+        ((ReadOnlyRecordIterator<?, ?>) store.query(query, PositionBound.unbounded(), new QueryConfig(false)).getResult()).close();
         final ArgumentCaptor<WindowRangeQuery> captor = ArgumentCaptor.forClass(WindowRangeQuery.class);
         verify(innerStoreMock).query(captor.capture(), any(PositionBound.class), any(QueryConfig.class));
         return captor.getValue();

@@ -904,19 +904,20 @@ public class MeteredSessionStoreWithHeadersTest {
             .thenReturn((QueryResult) QueryResult.forResult(
                 new KeyValueIteratorStub<>(Collections.<KeyValue<Windowed<Bytes>, byte[]>>emptyList().iterator())));
 
-        store.query(
-            TimestampedWindowRangeWithHeadersQuery.<String, String>withKey(KEY),
-            PositionBound.unbounded(),
-            new QueryConfig(false));
-
-        // The typed withKey query is translated into a raw byte-level WindowRangeQuery.withKey carrying
-        // the serialized key (and no window-start range), forwarded to the wrapped store.
-        final ArgumentCaptor<WindowRangeQuery> captor = ArgumentCaptor.forClass(WindowRangeQuery.class);
-        verify(innerStore).query(captor.capture(), any(PositionBound.class), any(QueryConfig.class));
-        final WindowRangeQuery<?, ?> rawQuery = captor.getValue();
-        assertEquals(Optional.of(KEY_BYTES), rawQuery.getKey());
-        assertEquals(Optional.empty(), rawQuery.getTimeFrom());
-        assertEquals(Optional.empty(), rawQuery.getTimeTo());
+        // Close the iterator the query opens so num-open-iterators returns to 0.
+        try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = store.query(
+                TimestampedWindowRangeWithHeadersQuery.<String, String>withKey(KEY),
+                PositionBound.unbounded(),
+                new QueryConfig(false)).getResult()) {
+            // The typed withKey query is translated into a raw byte-level WindowRangeQuery.withKey carrying
+            // the serialized key (and no window-start range), forwarded to the wrapped store.
+            final ArgumentCaptor<WindowRangeQuery> captor = ArgumentCaptor.forClass(WindowRangeQuery.class);
+            verify(innerStore).query(captor.capture(), any(PositionBound.class), any(QueryConfig.class));
+            final WindowRangeQuery<?, ?> rawQuery = captor.getValue();
+            assertEquals(Optional.of(KEY_BYTES), rawQuery.getKey());
+            assertEquals(Optional.empty(), rawQuery.getTimeFrom());
+            assertEquals(Optional.empty(), rawQuery.getTimeTo());
+        }
     }
 
     @SuppressWarnings("unchecked")

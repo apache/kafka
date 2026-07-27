@@ -58,7 +58,10 @@ import java.util.Optional;
  *     Session aggregations carry no per-record event-time of their own, so
  *     {@link ReadOnlyRecord#timestamp()} is filled from the session window's (inclusive) end
  *     timestamp. That value is validated non-negative when the window is constructed, so -- unlike
- *     the window-store form above -- this form can never throw while iterating.</li>
+ *     the window-store form above -- this form can never throw while iterating: a session whose
+ *     stored value deserializes to null is still returned, with {@link ReadOnlyRecord#value()}
+ *     {@code null} (the window-store form instead throws for such an entry, as it has no
+ *     event-time to surface).</li>
  * </ul>
  *
  * <p>Submitting the {@code withWindowStartRange} form to a session store, or the {@code withKey} form
