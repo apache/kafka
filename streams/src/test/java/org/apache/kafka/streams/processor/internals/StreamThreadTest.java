@@ -4268,6 +4268,7 @@ public class StreamThreadTest {
             mock(Runnable.class),
             HANDLER,
             null,
+            Long.MAX_VALUE,
             Optional.empty(),
             streamsMetadataState,
             null,
