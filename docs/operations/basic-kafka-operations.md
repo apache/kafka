@@ -356,6 +356,7 @@ Share group dead-letter queues are enabled if the `share.version` feature at lea
 
 ```bash
 $ bin/kafka-features.sh --bootstrap-server localhost:9092 describe | grep share.version
+Feature: share.version                             SupportedMinVersion: 0                SupportedMaxVersion: 2                FinalizedVersionLevel: 2                Epoch: 106
 ```
 
 Set DLQ topic on share group:
