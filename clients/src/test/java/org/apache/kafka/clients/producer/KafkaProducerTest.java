@@ -113,6 +113,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.internal.stubbing.answers.CallsRealMethods;
+import org.opentest4j.AssertionFailedError;
 
 import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
@@ -3416,4 +3417,40 @@ public class KafkaProducerTest {
             CLOSE_COUNT.set(0);
         }
     }
+
+    @Test
+    public void testBatchSizeZero() throws InterruptedException {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        configs.put(ProducerConfig.BATCH_SIZE_CONFIG, "0");
+        configs.put(ProducerConfig.LINGER_MS_CONFIG, "600000");
+
+        var metadata = newMetadata(0, 0, 90000);
+        var time = new MockTime();
+        var metadataUpdate = RequestTestUtils.metadataUpdateWith(1, singletonMap(topic, 1));
+        var mockClient = new MockClient(time, metadata);
+        mockClient.updateMetadata(metadataUpdate);
+        var topicIdPartition = new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition(topic, 0));
+        mockClient.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
+        mockClient.prepareResponse(produceResponse(topicIdPartition, 0L, Errors.NONE, 0, 0));
+        mockClient.prepareResponse(produceResponse(topicIdPartition, 0L, Errors.NONE, 0, 0));
+        try (KafkaProducer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+            new StringSerializer(), metadata, mockClient, null, time)) {
+            ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
+            var future1 = producer.send(record);
+            // The batch isn't full now
+            assertThrows(AssertionFailedError.class,
+                () -> TestUtils.waitForCondition(mockClient::hasInFlightRequests, ""));
+            assertFalse(future1.isDone());
+            // Appending the third record will create a new batch
+            // Only the first two records are sent
+            var future2 = producer.send(new ProducerRecord<>(topic, "value"));
+            var future3 = producer.send(new ProducerRecord<>(topic, "value"));
+            TestUtils.waitForCondition(future1::isDone, "The first record should have been sent");
+            TestUtils.waitForCondition(future2::isDone, "The second record should have been sent");
+            assertThrows(AssertionFailedError.class,
+                () -> TestUtils.waitForCondition(future3::isDone, ""));
+        }
+    }
+
 }
