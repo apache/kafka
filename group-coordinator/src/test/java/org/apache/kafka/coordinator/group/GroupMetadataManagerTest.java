@@ -18792,7 +18792,7 @@ public class GroupMetadataManagerTest {
             new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
         ));
 
-        // The broker registers only a custom assignor (no builtin "sticky"); it is the default.
+        // The broker registers only a custom assignor (no built-in "sticky"); it is the default.
         MockTaskAssignor customAssignor = new MockTaskAssignor("custom");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withStreamsGroupTaskAssignors(List.of(customAssignor))

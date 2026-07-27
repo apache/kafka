@@ -399,7 +399,7 @@ public class GroupCoordinatorConfig {
     public static final String STREAMS_GROUP_ASSIGNORS_DOC = "The server side task assignors for streams groups as a list of either names for built-in assignors or fully qualified class names for custom assignors. " +
         "The first one in the list is considered as the default assignor to be used in the case where the streams group does not specify an assignor. " +
         "Changing the default assignor does not trigger a rebalance for existing groups; the new default takes effect on the next rebalance. " +
-        "The supported builtin assignors are: " + STREAMS_GROUP_BUILTIN_ASSIGNORS.stream().map(TaskAssignor::name).collect(Collectors.joining(", ")) + ".";
+        "The supported built-in assignors are: " + STREAMS_GROUP_BUILTIN_ASSIGNORS.stream().map(TaskAssignor::name).collect(Collectors.joining(", ")) + ".";
     public static final List<String> STREAMS_GROUP_ASSIGNORS_DEFAULT = STREAMS_GROUP_BUILTIN_ASSIGNORS
         .stream()
         .map(TaskAssignor::name)
@@ -926,7 +926,7 @@ public class GroupCoordinatorConfig {
     protected List<TaskAssignor> streamsGroupAssignors(
         AbstractConfig config
     ) {
-        Map<String, TaskAssignor> builtinAssignors = STREAMS_GROUP_BUILTIN_ASSIGNORS
+        Map<String, TaskAssignor> builtInAssignors = STREAMS_GROUP_BUILTIN_ASSIGNORS
             .stream()
             .collect(Collectors.toMap(TaskAssignor::name, Function.identity()));
 
@@ -937,7 +937,7 @@ public class GroupCoordinatorConfig {
             // `configuredAssignor` is either the name of a built-in assignor,
             // or a fully qualified class name of a custom assignor
             for (String configuredAssignor : config.getList(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG)) {
-                TaskAssignor assignor = builtinAssignors.get(configuredAssignor);
+                TaskAssignor assignor = builtInAssignors.get(configuredAssignor);
                 if (assignor == null) {
                     try {
                         assignor = Utils.newInstance(configuredAssignor, TaskAssignor.class);
