@@ -216,7 +216,7 @@ public class SuppressScenarioTest {
     @Test
     public void shouldPropagateHeadersThroughSuppressionInHeadersMode() {
         // Coverage (not discrimination) for headers mode: with dsl.store.format=HEADERS the suppress
-        // buffer serializes each value as a ValueTimestampHeaders blob (V4 changelog format). This
+        // buffer holds each value as a ValueTimestampHeaders blob in memory. This
         // exercises that serialize/deserialize path end to end and confirms headers still propagate
         // through suppression. Note it passes in the default store format too, so on its own it does
         // not prove the headers feature - see TimeOrderedKeyValueBufferTest for the discriminating tests.

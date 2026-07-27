@@ -129,6 +129,49 @@ public class Utils {
     }
 
     /**
+     * Extract the headers-and-timestamp prefix of a serialized ValueTimestampHeaders, i.e. exactly
+     * the part that {@link #rawPlainValue(byte[])} strips off. Splitting a value this way lets the
+     * plain value bytes and their headers/timestamp be stored or transmitted separately and then
+     * recombined with {@link #rawValueTimestampHeaders(byte[], byte[])}.
+     *
+     * Format conversion:
+     * Input:  [headersSize(varint)][headers][timestamp(8)][value]
+     * Output: [headersSize(varint)][headers][timestamp(8)]
+     */
+    public static byte[] rawHeadersTimestampPrefix(final byte[] rawValueTimestampHeaders) {
+        if (rawValueTimestampHeaders == null) {
+            return null;
+        }
+
+        final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
+        final int headersSize = ByteUtils.readVarint(buffer);
+        final int prefixLength = buffer.position() + headersSize + StateSerdes.TIMESTAMP_SIZE;
+
+        final byte[] prefix = new byte[prefixLength];
+        System.arraycopy(rawValueTimestampHeaders, 0, prefix, 0, prefixLength);
+        return prefix;
+    }
+
+    /**
+     * Rebuild a serialized ValueTimestampHeaders from a prefix produced by
+     * {@link #rawHeadersTimestampPrefix(byte[])} and the plain value bytes it was split from.
+     *
+     * Format conversion:
+     * Input:  [headersSize(varint)][headers][timestamp(8)], [value]
+     * Output: [headersSize(varint)][headers][timestamp(8)][value]
+     */
+    public static byte[] rawValueTimestampHeaders(final byte[] rawHeadersTimestampPrefix, final byte[] rawPlainValue) {
+        if (rawPlainValue == null) {
+            return null;
+        }
+
+        final byte[] result = new byte[rawHeadersTimestampPrefix.length + rawPlainValue.length];
+        System.arraycopy(rawHeadersTimestampPrefix, 0, result, 0, rawHeadersTimestampPrefix.length);
+        System.arraycopy(rawPlainValue, 0, result, rawHeadersTimestampPrefix.length, rawPlainValue.length);
+        return result;
+    }
+
+    /**
      * Extract raw timestamped value (timestamp + value) from serialized ValueTimestampHeaders.
      * This strips the headers portion but keeps timestamp and value intact.
      *
