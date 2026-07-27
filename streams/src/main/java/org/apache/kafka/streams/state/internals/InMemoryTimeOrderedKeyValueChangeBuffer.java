@@ -75,15 +75,9 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
     private static final byte[] V_3_CHANGELOG_HEADER_VALUE = {(byte) 3};
     static final RecordHeaders CHANGELOG_HEADERS =
         new RecordHeaders(new Header[] {new RecordHeader("v", V_3_CHANGELOG_HEADER_VALUE)});
-    // When header stores are enabled each buffered value part carries its own headers and timestamp.
-    // Rather than encoding those into the changelog value -- which would introduce a value format
-    // older versions cannot read, breaking offline downgrades -- they travel in the changelog
-    // record's own Kafka headers, leaving the value bytes in the V3 format. This mirrors how the
-    // other header-aware stores log (see ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders),
-    // except that a suppress entry has three value parts rather than one, so it needs one header
-    // per part. Each holds the [headersSize][headers][timestamp] prefix of that part's
-    // ValueTimestampHeaders blob; a part that is null gets no header at all. Older versions ignore
-    // these, and a run without header stores ignores them too and simply uses the plain values.
+    // Each buffered value part's headers/timestamp travel in the changelog record's own Kafka headers -- one per part,
+    // holding that part's [headersSize][headers][timestamp] prefix -- so the value bytes stay V3 and remain restorable
+    // by older versions, which simply ignore these headers.
     static final String PRIOR_VALUE_HEADERS_KEY = "vh.prior";
     static final String OLD_VALUE_HEADERS_KEY = "vh.old";
     static final String NEW_VALUE_HEADERS_KEY = "vh.new";
@@ -313,8 +307,6 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
             null);
     }
 
-    // Strips the headers/timestamp prefix off each value part, yielding a BufferValue whose
-    // serialized form is byte-for-byte the V3 format that every version can restore.
     private static BufferValue plainEncoded(final BufferValue value) {
         return new BufferValue(
             Utils.rawPlainValue(value.priorValue()),

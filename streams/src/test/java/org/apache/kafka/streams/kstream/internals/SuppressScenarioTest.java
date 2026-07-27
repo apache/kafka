@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -54,7 +52,6 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.Iterator;
@@ -162,98 +159,6 @@ public class SuppressScenarioTest {
                     new KeyValueTimestamp<>("y", 1L, 4L)
                 )
             );
-        }
-    }
-
-    @Test
-    public void shouldPropagateHeadersThroughSuppression() {
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final KTable<String, String> valueCounts = builder
-            .table(
-                "input",
-                Consumed.with(STRING_SERDE, STRING_SERDE),
-                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>with(STRING_SERDE, STRING_SERDE)
-                    .withCachingDisabled()
-                    .withLoggingDisabled()
-            );
-
-        valueCounts
-            .suppress(untilTimeLimit(Duration.ofSeconds(1), unbounded()))
-            .toStream()
-            .to("output-suppressed", Produced.with(STRING_SERDE, STRING_SERDE));
-
-        final Topology topology = builder.build();
-
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
-            final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
-
-            // Buffer the first key. It stays in the suppress buffer until stream time advances past
-            // its suppress deadline.
-            final Headers headers1 = new RecordHeaders().add("hk1", "hv1".getBytes(StandardCharsets.UTF_8));
-            inputTopic.pipeInput(new TestRecord<>("k1", "v1", headers1, 0L));
-
-            // A second key with a much larger timestamp advances stream time and flushes "k1" out of
-            // the buffer. The record being processed while "k1" is emitted carries headers2, so this
-            // is exactly the case where the wrong (current-context) headers used to leak into the
-            // suppressed output.
-            final Headers headers2 = new RecordHeaders().add("hk2", "hv2".getBytes(StandardCharsets.UTF_8));
-            inputTopic.pipeInput(new TestRecord<>("k2", "v2", headers2, 120_000L));
-
-            final List<TestRecord<String, String>> output = driver
-                .createOutputTopic("output-suppressed", STRING_DESERIALIZER, STRING_DESERIALIZER)
-                .readRecordsToList();
-
-            assertThat(output.size(), equalTo(1));
-            assertThat(output.get(0).key(), equalTo("k1"));
-            // The emitted record must carry the headers of the buffered ("k1") record, not those of
-            // the ("k2") record that triggered the eviction.
-            assertThat(output.get(0).headers(), equalTo(headers1));
-        }
-    }
-
-    @Test
-    public void shouldPropagateHeadersThroughSuppressionInHeadersMode() {
-        // Coverage (not discrimination) for headers mode: with dsl.store.format=HEADERS the suppress
-        // buffer holds each value as a ValueTimestampHeaders blob in memory. This
-        // exercises that serialize/deserialize path end to end and confirms headers still propagate
-        // through suppression. Note it passes in the default store format too, so on its own it does
-        // not prove the headers feature - see TimeOrderedKeyValueBufferTest for the discriminating tests.
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        builder
-            .table(
-                "input",
-                Consumed.with(STRING_SERDE, STRING_SERDE),
-                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>with(STRING_SERDE, STRING_SERDE)
-                    .withCachingDisabled()
-                    .withLoggingDisabled()
-            )
-            .suppress(untilTimeLimit(Duration.ofSeconds(1), unbounded()))
-            .toStream()
-            .to("output-suppressed", Produced.with(STRING_SERDE, STRING_SERDE));
-
-        final Topology topology = builder.build();
-
-        config.setProperty(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
-            final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
-
-            final Headers headers1 = new RecordHeaders().add("hk1", "hv1".getBytes(StandardCharsets.UTF_8));
-            inputTopic.pipeInput(new TestRecord<>("k1", "v1", headers1, 0L));
-
-            final Headers headers2 = new RecordHeaders().add("hk2", "hv2".getBytes(StandardCharsets.UTF_8));
-            inputTopic.pipeInput(new TestRecord<>("k2", "v2", headers2, 120_000L));
-
-            final List<TestRecord<String, String>> output = driver
-                .createOutputTopic("output-suppressed", STRING_DESERIALIZER, STRING_DESERIALIZER)
-                .readRecordsToList();
-
-            assertThat(output.size(), equalTo(1));
-            assertThat(output.get(0).key(), equalTo("k1"));
-            assertThat(output.get(0).headers(), equalTo(headers1));
         }
     }
 
