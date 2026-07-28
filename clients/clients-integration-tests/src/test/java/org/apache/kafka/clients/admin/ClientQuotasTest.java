@@ -60,6 +60,7 @@ public class ClientQuotasTest {
                 new ClientQuotaAlteration.Op("consumer_byte_rate", value.doubleValue())))
         )).all().get();
     }
+
     private Map<ClientQuotaEntity, Long> getConsumerByteRates(Admin admin) throws Exception {
         return admin.describeClientQuotas(ClientQuotaFilter.contains(List.of()))
             .entities().get()
@@ -70,6 +71,7 @@ public class ClientQuotasTest {
                 entry -> entry.getValue().get("consumer_byte_rate").longValue()
             ));
     }
+    
     @ClusterTest
     public void testClientQuotas(ClusterInstance cluster) throws Exception {
         try (Admin admin = cluster.admin()) {

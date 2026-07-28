@@ -39,7 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class CreateTopicsTest {
 
     @ClusterTest(brokers = 3)
-    public void testCreateClusterAndCreateAndManyTopics(ClusterInstance cluster) throws Exception {
+    public void testCreateManyTopics(ClusterInstance cluster) throws Exception {
         try (Admin admin = cluster.admin()) {
             // Create many topics
             List<NewTopic> newTopics = List.of(

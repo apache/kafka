@@ -71,8 +71,8 @@ public class DeleteTopicTest {
         String testTopic = "test-topic";
         try (Admin admin = cluster.admin()) {
             // Create a test topic
-            List<NewTopic> newTopic = List.of(new NewTopic(testTopic, 1, (short) 3));
-            CreateTopicsResult createTopicResult = admin.createTopics(newTopic);
+            List<NewTopic> newTopics = List.of(new NewTopic(testTopic, 1, (short) 3));
+            CreateTopicsResult createTopicResult = admin.createTopics(newTopics);
             createTopicResult.all().get();
             TestUtils.waitForCondition(
                 () -> admin.listTopics().names().get().contains(testTopic),
