@@ -74,6 +74,30 @@ public class SubscriptionWrapperSerdeTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    public void shouldSerdeV1WithNullPrimaryPartitionTest() {
+        final byte version = SubscriptionWrapper.VERSION_1;
+        final String originalKey = "originalKey";
+        final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde<>(() -> TOPIC, Serdes.String());
+        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
+        final SubscriptionWrapper wrapper = new SubscriptionWrapper<>(
+                hashedValue,
+                SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE,
+                originalKey,
+                version,
+                null);
+        final byte[] serialized = swSerde.serializer().serialize(null, HEADERS, wrapper);
+        final SubscriptionWrapper deserialized = (SubscriptionWrapper) swSerde.deserializer()
+                .deserialize(null, HEADERS, serialized);
+
+        assertEquals(SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE, deserialized.instruction());
+        assertArrayEquals(hashedValue, deserialized.hash());
+        assertEquals(originalKey, deserialized.primaryKey());
+        assertNull(deserialized.primaryPartition());
+        assertEquals(version, deserialized.version());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     public void shouldSerdeV1Test() {
         final byte version = SubscriptionWrapper.VERSION_1;
         final String originalKey = "originalKey";
@@ -245,21 +269,6 @@ public class SubscriptionWrapperSerdeTest {
             originalKey,
             SubscriptionWrapper.VERSION_0,
             primaryPartition));
-    }
-
-    @Test
-    public void shouldThrowExceptionOnNullPrimaryPartitionV1Test() {
-        final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde<>(() -> TOPIC, Serdes.String());
-        final String originalKey = "originalKey";
-        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
-        final Integer primaryPartition = null;
-        final SubscriptionWrapper wrapper = new SubscriptionWrapper<>(
-            hashedValue,
-            SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE,
-            originalKey,
-            SubscriptionWrapper.VERSION_1,
-            primaryPartition);
-        assertThrows(NullPointerException.class, () -> swSerde.serializer().serialize(null, HEADERS, wrapper));
     }
 
     @Test

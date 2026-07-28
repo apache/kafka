@@ -38,6 +38,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
@@ -66,6 +67,38 @@ public class SubscriptionSendProcessorSupplierTest {
     private final String pk = "pk";
     private final String fk1 = "fk1";
     private final String fk2 = "fk2";
+
+    @Test
+    public void shouldUseNullPrimaryPartitionWhenRecordMetadataIsAPunctuationDummy() {
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
+        leftJoinProcessor.init(context);
+        // A punctuator sets a dummy record context: null topic, -1 partition, -1 offset.
+        context.setRecordMetadata(null, -1, -1);
+
+        final LeftValue leftRecordValue = new LeftValue(fk1);
+
+        leftJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, null), 0));
+
+        assertThat(context.forwarded().size(), is(1));
+        assertThat(
+            context.forwarded().get(0).record(),
+            is(new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, null), 0))
+        );
+    }
+
+    @Test
+    public void shouldUseNullPrimaryPartitionWhenRecordMetadataIsAbsent() {
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
+        leftJoinProcessor.init(context);
+        // no setRecorMetadata() call, so recordMetadata() is empty
+
+        final LeftValue leftRecordValue = new LeftValue(fk1);
+
+        leftJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, null), 0));
+
+        assertThat(context.forwarded().size(), is(1));
+        assertThat(context.forwarded().get(0).record().value().primaryPartition(), is(nullValue()));
+    }
 
     // Left join tests
     @Test

@@ -241,9 +241,22 @@ public class SubscriptionSendProcessorSupplier<KLeft, VLeft, KRight>
                 hash(record),
                 deleteKeyNoPropagate,
                 record.key(),
-                context().recordMetadata().get().partition()
+                this.currentPrimaryPartition()
             );
             context().forward(record.withKey(foreignKey).withValue(wrapper));
+        }
+
+        /**
+         * Returns the partition of the record currently being processed or null if there is no source record (for example,
+         * when the downstream forward was triggered by a punctuator, possibly indirectly via a state store cache flush).
+         * <p>
+         * A null primary partition instructs the subscription response sink to fall back to default partitioning.
+         */
+        private Integer currentPrimaryPartition() {
+            return context().recordMetadata()
+                    .map(RecordMetadata::partition)
+                    .filter(p -> p >= 0)
+                    .orElse(null);
         }
 
         private long[] hash(final Record<KLeft, Change<VLeft>> record) {
