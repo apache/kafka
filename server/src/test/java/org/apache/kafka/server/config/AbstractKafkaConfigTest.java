@@ -45,6 +45,7 @@ public class AbstractKafkaConfigTest {
         assertEquals(Collections.emptyMap(), AbstractKafkaConfig.populateSynonyms(Collections.emptyMap()));
     }
 
+    @SuppressWarnings("removal") // this test sets broker.id, which is deprecated (KIP-1232) but still works until 5.0
     @Test
     public void testPopulateSynonymsOnMapWithoutNodeId() {
         Map<String, String> input = new HashMap<>();
@@ -55,6 +56,7 @@ public class AbstractKafkaConfigTest {
         assertEquals(expectedOutput, AbstractKafkaConfig.populateSynonyms(input));
     }
 
+    @SuppressWarnings("removal") // this test sets broker.id, which is deprecated (KIP-1232) but still works until 5.0
     @Test
     public void testPopulateSynonymsOnMapWithoutBrokerId() {
         Map<String, String> input = new HashMap<>();

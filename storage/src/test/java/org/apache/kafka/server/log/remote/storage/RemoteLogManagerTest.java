@@ -377,7 +377,7 @@ public class RemoteLogManagerTest {
         assertFalse(remoteStorageManagerConfig.containsKey("remote.storage.manager.y"));
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "removal"}) // revisit when broker.id is removed from CONFIG_DEF in 5.0 (KIP-1232)
     @Test
     void testRemoteLogMetadataManagerWithEndpointConfig() {
         ArgumentCaptor<Map<String, Object>> capture = ArgumentCaptor.forClass(Map.class);
@@ -388,7 +388,7 @@ public class RemoteLogManagerTest {
         assertEquals(brokerId, capture.getValue().get(ServerConfigs.BROKER_ID_CONFIG));
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "removal"}) // revisit when broker.id is removed from CONFIG_DEF in 5.0 (KIP-1232)
     @Test
     void testRemoteLogMetadataManagerWithEndpointConfigOverridden() throws IOException {
         Properties props = new Properties();

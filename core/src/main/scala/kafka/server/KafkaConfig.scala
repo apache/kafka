@@ -49,7 +49,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
 import scala.jdk.OptionConverters.{RichOption, RichOptional}
 
-object KafkaConfig {
+object KafkaConfig extends Logging {
 
   def main(args: Array[String]): Unit = {
     val combined = new ConfigDef(configDef)
@@ -73,8 +73,15 @@ object KafkaConfig {
   def fromProps(props: Properties): KafkaConfig =
     fromProps(props, true)
 
-  def fromProps(props: Properties, doLog: Boolean): KafkaConfig =
+  def fromProps(props: Properties, doLog: Boolean): KafkaConfig = {
+    // Checked on the raw properties because populateSynonyms copies node.id into broker.id.
+    // Do not add a doLog guard: the broker startup path calls this with doLog = false.
+    if (props.containsKey(ServerConfigs.BROKER_ID_CONFIG)) {
+      warn(s"The '${ServerConfigs.BROKER_ID_CONFIG}' configuration is deprecated and will be removed in " +
+        s"Apache Kafka 5.0. Please use '${KRaftConfigs.NODE_ID_CONFIG}' instead.")
+    }
     new KafkaConfig(props, doLog)
+  }
 
   def fromProps(defaults: Properties, overrides: Properties): KafkaConfig =
     fromProps(defaults, overrides, true)

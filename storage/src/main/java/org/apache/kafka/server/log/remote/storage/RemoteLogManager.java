@@ -399,6 +399,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         });
     }
 
+    @SuppressWarnings("removal") // revisit when broker.id is removed from CONFIG_DEF in 5.0 (KIP-1232)
     private Plugin<RemoteStorageManager> configAndWrapRsmPlugin(RemoteStorageManager rsm) {
         final Map<String, Object> rsmProps = new HashMap<>(rlmConfig.remoteStorageManagerProps());
         rsmProps.put(ServerConfigs.BROKER_ID_CONFIG, brokerId);
@@ -419,6 +420,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         });
     }
 
+    @SuppressWarnings("removal") // revisit when broker.id is removed from CONFIG_DEF in 5.0 (KIP-1232)
     private Plugin<RemoteLogMetadataManager> configAndWrapRlmmPlugin(RemoteLogMetadataManager rlmm) {
         final Map<String, Object> rlmmProps = new HashMap<>();
         endpoint.ifPresent(e -> {
