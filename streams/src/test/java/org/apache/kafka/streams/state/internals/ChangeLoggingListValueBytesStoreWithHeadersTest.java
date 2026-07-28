@@ -21,7 +21,6 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.internals.LogContext;
@@ -36,10 +35,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import static org.apache.kafka.streams.state.internals.ListValueStore.LIST_SERDE;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -53,9 +52,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 public class ChangeLoggingListValueBytesStoreWithHeadersTest {
 
     private static final String TOPIC = "t";
-
-    @SuppressWarnings("unchecked")
-    private static final Serde<List<byte[]>> LIST_SERDE = Serdes.ListSerde(ArrayList.class, Serdes.ByteArray());
 
     private final MockRecordCollector collector = new MockRecordCollector();
     private final InMemoryKeyValueStore inner = new InMemoryKeyValueStore("list");
@@ -155,12 +151,16 @@ public class ChangeLoggingListValueBytesStoreWithHeadersTest {
     }
 
     @Test
-    public void shouldPreserveTheSourceRecordHeadersOnTheChangelogRecord() {
+    public void shouldLogOnlyTheControlHeaderAndNotCopyTheSourceRecordHeaders() {
+        // The changelog record's headers carry the store's own data, nothing from the record context:
+        // this record's user headers are already inside the control blob, as the prefix of the element
+        // just appended. The PLAIN parent logs empty headers for the same reason.
         context.headers().add("user-header", "u".getBytes(StandardCharsets.UTF_8));
 
         store.put(key, headersElement(LeftOrRightValue.makeLeftValue("a"), headers("A", "1")));
 
-        assertEquals("u", new String(loggedHeaders(0).lastHeader("user-header").value(), StandardCharsets.UTF_8));
+        assertNull(loggedHeaders(0).lastHeader("user-header"));
+        assertNotNull(loggedHeaders(0).lastHeader(ListValueStoreUpgradeUtils.LIST_VALUE_HEADERS_HEADER_KEY));
     }
 
     @Test
@@ -201,8 +201,9 @@ public class ChangeLoggingListValueBytesStoreWithHeadersTest {
 
         assertEquals(1, LIST_SERDE.deserializer().deserialize(null, loggedValue(0)).size());
         assertEquals(2, LIST_SERDE.deserializer().deserialize(null, loggedValue(1)).size());
-        // One 0x00 prefix per element, so the control header grows with the list.
-        assertArrayEquals(new byte[]{0}, ListValueStoreUpgradeUtils.elementHeaders(loggedHeaders(0)));
-        assertArrayEquals(new byte[]{0, 0}, ListValueStoreUpgradeUtils.elementHeaders(loggedHeaders(1)));
+        // No element has headers, so no control header is written at all -- these records are exactly
+        // what a PLAIN store would have logged.
+        assertNull(ListValueStoreUpgradeUtils.elementHeaders(loggedHeaders(0)));
+        assertNull(ListValueStoreUpgradeUtils.elementHeaders(loggedHeaders(1)));
     }
 }

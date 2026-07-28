@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
 import org.rocksdb.ColumnFamilyDescriptor;
@@ -45,10 +46,12 @@ import java.util.List;
  * {@link ListValueStoreUpgradeUtils#convertPlainListBlobToHeadersListBlob} and migrates it forward.
  * Otherwise a {@link RocksDBStore.SingleColumnFamilyAccessor} over the headers column family is used.
  * <p>
- * This class intentionally does NOT implement {@code HeadersBytesStore}; see
- * {@link HeadersAwareListValueStore} for why.
+ * Like its siblings it is a {@link HeadersBytesStore}, and additionally a
+ * {@link HeadersAwareListValueStore} so that restore picks the list-aware converter rather than the
+ * generic whole-value one; see {@link HeadersAwareListValueStore}.
  */
-public class RocksDBListValueStoreWithHeaders extends RocksDBStore {
+public class RocksDBListValueStoreWithHeaders extends RocksDBStore
+    implements HeadersBytesStore, HeadersAwareListValueStore {
 
     private static final Logger log = LoggerFactory.getLogger(RocksDBListValueStoreWithHeaders.class);
 

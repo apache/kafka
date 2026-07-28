@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.internals.ChangeLoggingListValueBytesStore;
-import org.apache.kafka.streams.state.internals.ChangeLoggingListValueBytesStoreWithHeaders;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemorySessionStore;
 import org.apache.kafka.streams.state.internals.InMemoryWindowStore;
@@ -32,6 +31,7 @@ import org.apache.kafka.streams.state.internals.MeteredTimestampedWindowStoreWit
 import org.apache.kafka.streams.state.internals.PlainToHeadersStoreAdapter;
 import org.apache.kafka.streams.state.internals.PlainToHeadersWindowStoreAdapter;
 import org.apache.kafka.streams.state.internals.RecordConverter;
+import org.apache.kafka.streams.state.internals.RocksDBListValueStoreWithHeaders;
 import org.apache.kafka.streams.state.internals.SessionToHeadersStoreAdapter;
 import org.apache.kafka.streams.state.internals.TimestampedToHeadersStoreAdapter;
 import org.apache.kafka.streams.state.internals.TimestampedToHeadersWindowStoreAdapter;
@@ -197,11 +197,15 @@ public class StateManagerUtilConverterTest {
     @Test
     @SuppressWarnings("unchecked")
     public void shouldReturnListConverterForHeadersListValueStore() {
-        // Metered -> ChangeLoggingListValueBytesStoreWithHeaders (the HeadersAwareListValueStore marker)
-        final StateStore mockInner = mock(ChangeLoggingListValueBytesStoreWithHeaders.class);
+        // Metered -> ChangeLogging -> RocksDBListValueStoreWithHeaders, which carries the
+        // HeadersAwareListValueStore marker. It is also a HeadersBytesStore, so this pins the branch
+        // order in converterForStore: the list converter must win over the whole-value one.
+        final StateStore mockInner = mock(RocksDBListValueStoreWithHeaders.class);
+        final WrappedStateStore<?, ?, ?> mockChangeLogging = mock(WrappedStateStore.class);
         final WrappedStateStore<?, ?, ?> mockMetered = mock(WrappedStateStore.class);
 
-        doReturn(mockInner).when(mockMetered).wrapped();
+        doReturn(mockInner).when(mockChangeLogging).wrapped();
+        doReturn(mockChangeLogging).when(mockMetered).wrapped();
 
         final RecordConverter converter = StateManagerUtil.converterForStore(mockMetered);
 

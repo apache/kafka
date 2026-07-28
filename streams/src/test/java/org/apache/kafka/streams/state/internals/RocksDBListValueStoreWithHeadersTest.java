@@ -76,8 +76,7 @@ public class RocksDBListValueStoreWithHeadersTest {
             new RocksDBListValueHeadersBytesStoreSupplier(STORE_NAME),
             Serdes.String(),
             new AggregationWithHeadersSerde<>(new LeftOrRightValueSerde<>(Serdes.String(), Serdes.String())),
-            Time.SYSTEM,
-            true)
+            Time.SYSTEM)
             .withCachingDisabled()
             .withLoggingDisabled()
             .build();

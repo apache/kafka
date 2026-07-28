@@ -20,16 +20,14 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
 
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import static org.apache.kafka.streams.state.internals.ListValueStore.LIST_SERDE;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawListValueToHeadersListValue;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToHeadersValue;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToSessionHeadersValue;
@@ -43,9 +41,6 @@ public class RecordConvertersTest {
     private final RecordConverter headersValueConverter = rawValueToHeadersValue();
     private final RecordConverter sessionValueConverter = rawValueToSessionHeadersValue();
     private final RecordConverter listValueConverter = rawListValueToHeadersListValue();
-
-    @SuppressWarnings("unchecked")
-    private static final Serde<List<byte[]>> LIST_SERDE = Serdes.ListSerde(ArrayList.class, Serdes.ByteArray());
 
 
     @Test

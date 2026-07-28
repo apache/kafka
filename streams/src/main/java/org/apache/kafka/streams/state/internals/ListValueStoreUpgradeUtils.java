@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.streams.state.HeadersBytesStore;
@@ -28,6 +27,8 @@ import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+
+import static org.apache.kafka.streams.state.internals.ListValueStore.LIST_SERDE;
 
 /**
  * Helpers for migrating the outer-join {@link ListValueStore} from the pre-headers PLAIN element
@@ -63,18 +64,14 @@ final class ListValueStoreUpgradeUtils {
      * blob is self-delimiting and no element count is needed. An element with no headers contributes
      * a single {@code 0x00} byte.
      * <p>
-     * Deliberately namespaced to avoid colliding with user headers that ride along on the record.
+     * Kept short like the {@code "v"} and {@code "c"} keys Kafka already writes onto changelog records:
+     * this one is paid on every record, and the changelog record carries no user headers to collide with
+     * (see {@code ChangeLoggingListValueBytesStoreWithHeaders#changelogHeaders}).
+     * <p>
      * A record <em>without</em> this header is a legacy PLAIN record: see
      * {@link #joinPlainListBlobWithElementHeaders(byte[], byte[])}.
      */
-    static final String LIST_VALUE_HEADERS_HEADER_KEY = "__kafka_streams_list_value_headers__";
-
-    // The prefix of an element with no headers: headersSize = varint(0), no headers bytes.
-    private static final byte[] EMPTY_HEADERS_PREFIX = {(byte) 0};
-
-    // Must match ListValueStore.LIST_SERDE.
-    @SuppressWarnings("unchecked")
-    private static final Serde<List<byte[]>> LIST_SERDE = Serdes.ListSerde(ArrayList.class, Serdes.ByteArray());
+    static final String LIST_VALUE_HEADERS_HEADER_KEY = "vh";
 
     private ListValueStoreUpgradeUtils() {}
 
@@ -127,16 +124,18 @@ final class ListValueStoreUpgradeUtils {
         final List<byte[]> headersElements = LIST_SERDE.deserializer().deserialize(null, headersListBlob);
         final List<byte[]> plainElements = new ArrayList<>(headersElements.size());
         final ByteArrayOutputStream elementHeaders = new ByteArrayOutputStream();
+        boolean anyHeaders = false;
 
         for (final byte[] element : headersElements) {
             if (element == null) {
-                // ListValueStore never appends null, but ListSerde can hold nulls, so keep the pair
-                // total: a null element round-trips as null and consumes an empty-headers prefix.
-                plainElements.add(null);
-                elementHeaders.write(EMPTY_HEADERS_PREFIX, 0, EMPTY_HEADERS_PREFIX.length);
-                continue;
+                // ListValueStore is the only writer and never appends null: put/putIfAbsent turn a null
+                // value into a whole-list delete, and putAll is unsupported.
+                throw new SerializationException("Unexpected null element in list-value blob of "
+                    + headersElements.size() + " elements");
             }
             final int prefixLength = headersPrefixLength(element);
+            // An empty headers section is exactly the one-byte varint 0, so anything longer carries headers.
+            anyHeaders |= prefixLength > 1;
             elementHeaders.write(element, 0, prefixLength);
             final byte[] plainElement = new byte[element.length - prefixLength];
             System.arraycopy(element, prefixLength, plainElement, 0, plainElement.length);
@@ -145,7 +144,10 @@ final class ListValueStoreUpgradeUtils {
 
         return new SplitListBlob(
             LIST_SERDE.serializer().serialize(null, plainElements),
-            elementHeaders.toByteArray()
+            // All-empty prefixes carry no information: the join side reads an absent blob as "every
+            // element has empty headers", so dropping it makes the changelog record byte-identical to
+            // what a PLAIN store would have logged.
+            anyHeaders ? elementHeaders.toByteArray() : null
         );
     }
 
@@ -176,8 +178,10 @@ final class ListValueStoreUpgradeUtils {
         for (final byte[] plainElement : plainElements) {
             final byte[] prefix = readNextHeadersPrefix(prefixes);
             if (plainElement == null) {
-                headersElements.add(null);
-                continue;
+                // As in splitHeadersListBlob: ListValueStore never appends null, so a null element here
+                // means a corrupt or foreign changelog record.
+                throw new SerializationException("Unexpected null element in list-value changelog record of "
+                    + plainElements.size() + " elements");
             }
             final byte[] headersElement = new byte[prefix.length + plainElement.length];
             System.arraycopy(prefix, 0, headersElement, 0, prefix.length);
@@ -197,9 +201,6 @@ final class ListValueStoreUpgradeUtils {
      *         record has none — i.e. it is a legacy record written before the headers format
      */
     static byte[] elementHeaders(final Headers headers) {
-        if (headers == null) {
-            return null;
-        }
         final Header header = headers.lastHeader(LIST_VALUE_HEADERS_HEADER_KEY);
         return header == null ? null : header.value();
     }

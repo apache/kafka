@@ -16,18 +16,14 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.processor.StateStore;
-
 /**
- * Marker interface for the HEADERS-format outer-join {@link ListValueStore} changelog wrapper.
+ * Marker interface for the bytes store behind the HEADERS-format outer-join {@link ListValueStore}.
  * <p>
- * Used solely by {@code StateManagerUtil.converterForStore} to select the list-aware restore
- * {@link RecordConverters#rawListValueToHeadersListValue() converter}.
- * <p>
- * Note: this is intentionally NOT {@link org.apache.kafka.streams.state.HeadersBytesStore}. That
- * interface would make {@code WrappedStateStore.isHeadersAware} true and wrongly select
- * {@code rawValueToHeadersValue()}, which reconstructs a single {@code [headers][ts][value]} payload
- * and would corrupt the multi-element list blob used here.
+ * Used by {@code StateManagerUtil.converterForStore} to select the list-aware restore
+ * {@link RecordConverters#rawListValueToHeadersListValue() converter}. Such a store is also a
+ * {@link org.apache.kafka.streams.state.HeadersBytesStore}, so this marker has to be checked
+ * <em>first</em>: the generic headers converter reconstructs a single {@code [headers][ts][value]}
+ * payload, which would corrupt a multi-element list blob.
  */
-public interface HeadersAwareListValueStore extends StateStore {
+public interface HeadersAwareListValueStore {
 }

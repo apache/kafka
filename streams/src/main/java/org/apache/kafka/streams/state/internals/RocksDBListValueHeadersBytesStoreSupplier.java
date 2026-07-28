@@ -17,14 +17,19 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.state.HeadersBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 /**
  * Supplies the persistent, dual-column-family {@link RocksDBListValueStoreWithHeaders} used as the
  * bytes store for the outer-join {@link ListValueStore} in HEADERS mode.
+ * <p>
+ * Being a {@link HeadersBytesStoreSupplier} is also what tells {@link ListValueStoreBuilder} to wrap
+ * the store in the headers-aware changelogger.
  */
-public class RocksDBListValueHeadersBytesStoreSupplier implements KeyValueBytesStoreSupplier {
+public class RocksDBListValueHeadersBytesStoreSupplier
+    implements KeyValueBytesStoreSupplier, HeadersBytesStoreSupplier {
 
     private final String name;
 

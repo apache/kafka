@@ -27,7 +27,6 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.state.internals.HeadersAwareListValueStore;
 import org.apache.kafka.streams.state.internals.PlainToHeadersStoreAdapter;
 import org.apache.kafka.streams.state.internals.PlainToHeadersWindowStoreAdapter;
 import org.apache.kafka.streams.state.internals.RecordConverter;
@@ -47,6 +46,7 @@ import static org.apache.kafka.streams.state.internals.RecordConverters.rawValue
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToSessionHeadersValue;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToTimestampedValue;
 import static org.apache.kafka.streams.state.internals.WrappedStateStore.isHeadersAware;
+import static org.apache.kafka.streams.state.internals.WrappedStateStore.isHeadersAwareListValue;
 import static org.apache.kafka.streams.state.internals.WrappedStateStore.isTimestamped;
 import static org.apache.kafka.streams.state.internals.WrappedStateStore.isVersioned;
 
@@ -61,6 +61,12 @@ final class StateManagerUtil {
     private StateManagerUtil() {}
 
     static RecordConverter converterForStore(final StateStore store) {
+        // The outer-join ListValueStore is headers-aware, but one changelog record holds a whole
+        // multi-element list blob rather than a single [headers][ts][value] payload, so it needs its own
+        // converter. It is also a HeadersBytesStore, hence this check has to come first.
+        if (isHeadersAwareListValue(store)) {
+            return rawListValueToHeadersListValue();
+        }
         // First check if the top-level store implements HeadersBytesStore or TimestampedBytesStore
         if (isHeadersAware(store)) {
             if (store instanceof SessionStore) {
@@ -77,12 +83,7 @@ final class StateManagerUtil {
         // This handles persistent stores that use adapters
         StateStore current = store;
         while (current != null) {
-            if (current instanceof HeadersAwareListValueStore) {
-                // The outer-join ListValueStore is headers-aware but is NOT a HeadersBytesStore: its
-                // changelog holds whole multi-element list blobs, not single [headers][ts][value]
-                // payloads, so it needs its own list-aware converter.
-                return rawListValueToHeadersListValue();
-            } else if (current instanceof TimestampedToHeadersStoreAdapter || current instanceof TimestampedToHeadersWindowStoreAdapter) {
+            if (current instanceof TimestampedToHeadersStoreAdapter || current instanceof TimestampedToHeadersWindowStoreAdapter) {
                 // Adapter wraps a timestamped store, so restore in timestamped format
                 return rawValueToTimestampedValue();
             } else if (current instanceof PlainToHeadersStoreAdapter || current instanceof PlainToHeadersWindowStoreAdapter) {

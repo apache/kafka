@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.internals.ByteUtils;
 
 import java.nio.ByteBuffer;
@@ -120,6 +121,14 @@ public final class RecordConverters {
             ListValueStoreUpgradeUtils.elementHeaders(record.headers())
         );
 
+        // Our control header has done its job once the prefixes are back inside the value, so keep it
+        // off the restored record. Copy rather than remove in place: the Headers instance belongs to the
+        // caller, and a converter must not have side effects on its input. Everything else is passed
+        // through, because the restore path reads the position/vector clock back out of these headers
+        // (see ChangelogRecordDeserializationHelper#applyChecksAndUpdatePosition).
+        final Headers headers = new RecordHeaders(record.headers());
+        headers.remove(ListValueStoreUpgradeUtils.LIST_VALUE_HEADERS_HEADER_KEY);
+
         return new ConsumerRecord<>(
             record.topic(),
             record.partition(),
@@ -130,7 +139,7 @@ public final class RecordConverters {
             convertedValue.length,
             record.key(),
             convertedValue,
-            record.headers(),
+            headers,
             record.leaderEpoch()
         );
     };

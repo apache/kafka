@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.state.HeadersBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 
@@ -32,19 +33,14 @@ public class ListValueStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, KeyV
                                  final Serde<K> keySerde,
                                  final Serde<V> valueSerde,
                                  final Time time) {
-        this(storeSupplier, keySerde, valueSerde, time, false);
-    }
-
-    public ListValueStoreBuilder(final KeyValueBytesStoreSupplier storeSupplier,
-                                 final Serde<K> keySerde,
-                                 final Serde<V> valueSerde,
-                                 final Time time,
-                                 final boolean headersFormat) {
         super(storeSupplier.name(), keySerde, valueSerde, time);
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
         Objects.requireNonNull(storeSupplier.metricsScope(), "storeSupplier's metricsScope can't be null");
         this.storeSupplier = storeSupplier;
-        this.headersFormat = headersFormat;
+        // The element format follows the bytes store: a headers-aware supplier means each list element
+        // carries its own headers, which in turn is what the changelogger has to strip out before
+        // logging. Inferring it here keeps the two from ever disagreeing.
+        this.headersFormat = storeSupplier instanceof HeadersBytesStoreSupplier;
     }
 
     @Override

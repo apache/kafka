@@ -40,13 +40,11 @@ import org.apache.kafka.streams.state.KeyValueStore;
  * {@link ListValueStoreUpgradeUtils#LIST_VALUE_HEADERS_HEADER_KEY} rather than unpacked into individual
  * {@code RecordHeader}s.
  * <p>
- * Implements {@link HeadersAwareListValueStore} purely so {@code StateManagerUtil.converterForStore}
- * selects {@link RecordConverters#rawListValueToHeadersListValue()}, which performs the inverse join on
- * restore.
+ * The inverse join on restore is performed by {@link RecordConverters#rawListValueToHeadersListValue()},
+ * which {@code StateManagerUtil.converterForStore} selects off the {@link HeadersAwareListValueStore}
+ * marker on the bytes store below.
  */
-public class ChangeLoggingListValueBytesStoreWithHeaders
-    extends ChangeLoggingListValueBytesStore
-    implements HeadersAwareListValueStore {
+public class ChangeLoggingListValueBytesStoreWithHeaders extends ChangeLoggingListValueBytesStore {
 
     ChangeLoggingListValueBytesStoreWithHeaders(final KeyValueStore<Bytes, byte[]> inner) {
         super(inner);
@@ -67,11 +65,12 @@ public class ChangeLoggingListValueBytesStoreWithHeaders
     }
 
     private Headers changelogHeaders(final byte[] elementHeaders) {
-        // Copy, for two reasons: the live record headers are forwarded downstream, so neither our
-        // control header nor the vector clock that ProcessorContextImpl#logChange appends to whatever
-        // instance we hand it may leak into them.
-        final Headers headers = new RecordHeaders(internalContext.recordContext().headers());
-        headers.remove(ListValueStoreUpgradeUtils.LIST_VALUE_HEADERS_HEADER_KEY);
+        // A fresh instance, never the live record headers: ProcessorContextImpl#logChange appends the
+        // vector clock to whatever it is handed, which would leak into the record forwarded downstream.
+        // Nothing is copied from the record context -- the per-element prefixes in the control blob
+        // already carry this record's own headers -- which also matches the PLAIN parent, and the
+        // value-with-headers stores, which log the headers taken out of the value.
+        final Headers headers = new RecordHeaders();
         if (elementHeaders != null) {
             headers.add(ListValueStoreUpgradeUtils.LIST_VALUE_HEADERS_HEADER_KEY, elementHeaders);
         }

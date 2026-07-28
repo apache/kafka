@@ -42,7 +42,9 @@ public class ListValueStore
     extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, Bytes, byte[]>
     implements KeyValueStore<Bytes, byte[]> {
 
-    private static final Serde<List<byte[]>> LIST_SERDE = Serdes.ListSerde(ArrayList.class, Serdes.ByteArray());
+    // Defines the on-disk blob encoding of a list of values. Package-private because the changelog
+    // split/join in ListValueStoreUpgradeUtils has to read and write the very same encoding.
+    static final Serde<List<byte[]>> LIST_SERDE = Serdes.ListSerde(ArrayList.class, Serdes.ByteArray());
 
     ListValueStore(final KeyValueStore<Bytes, byte[]> bytesStore) {
         super(bytesStore);
