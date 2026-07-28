@@ -69,9 +69,12 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer.CHANGELOG_HEADERS;
 import static org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer.OLD_VALUE_HEADERS_KEY;
+import static org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer.PRIOR_VALUE_HEADERS_KEY;
 import static org.apache.kafka.streams.state.internals.Utils.rawValueTimestampHeaders;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<String, String, Change<String>>> {
@@ -574,6 +577,84 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         assertThat(oldValue.timestamp(), is(10L));     // carried forward from the first record
         assertThat(oldValue.headers(), is(headersA));  // carried forward from the first record
 
+        cleanup(context, buffer);
+    }
+
+    @Test
+    public void shouldNotWritePriorValueHeadersWhenPriorAndOldValueShareAnArray() {
+        // On the first buffering of a key the prior value IS the old value: BufferValue collapses them
+        // onto one array and the V3 serialization writes those bytes only once. The per-part headers
+        // must not undo that saving by writing the same prefix under a second key.
+        final InMemoryTimeOrderedKeyValueChangeBuffer<String, String, Change<String>> buffer =
+            new InMemoryTimeOrderedKeyValueChangeBuffer.Builder<>(STORE_NAME, Serdes.String(), Serdes.String()).build();
+        final MockInternalProcessorContext<?, ?> context = makeContext(true);
+        buffer.init(context, buffer);
+
+        final RecordHeaders headers = new RecordHeaders(new Header[]{new RecordHeader("h", "A".getBytes(UTF_8))});
+        final ProcessorRecordContext recordContext = new ProcessorRecordContext(10L, 0, 0, "topic", headers);
+        context.setRecordContext(recordContext);
+        buffer.put(0L, new Record<>("k", new Change<>("v1", "p"), 10L, headers), recordContext);
+        buffer.commit(Map.of());
+
+        final ProducerRecord<Object, Object> changelogRecord =
+            ((MockRecordCollector) context.recordCollector()).collected().get(0);
+        assertThat(changelogRecord.headers().lastHeader(OLD_VALUE_HEADERS_KEY), is(not(nullValue())));
+        assertThat(changelogRecord.headers().lastHeader(PRIOR_VALUE_HEADERS_KEY), is(nullValue()));
+
+        // The prior value must still come back, recovered from the old part rather than from the
+        // header the writer deliberately left out.
+        final InMemoryTimeOrderedKeyValueChangeBuffer<String, String, Change<String>> restored =
+            new InMemoryTimeOrderedKeyValueChangeBuffer.Builder<>(STORE_NAME, Serdes.String(), Serdes.String()).build();
+        final MockInternalProcessorContext<?, ?> restoreContext = makeContext(true);
+        restored.init(restoreContext, restored);
+        restoreInto(restoreContext, context, STORE_NAME);
+
+        assertThat(restored.priorValueForBuffered("k"),
+            is(Maybe.defined(ValueTimestampHeaders.make("p", RecordQueue.UNKNOWN, new RecordHeaders()))));
+        cleanup(restoreContext, restored);
+        cleanup(context, buffer);
+    }
+
+    @Test
+    public void shouldKeepPriorValueHeadersWhenOnlyThePlainBytesOfPriorAndOldValueMatch() {
+        // The counter-case that makes the dedup above non-trivial: the changelog value dedups on the
+        // PLAIN bytes, so a row can come back from the changelog sharing an array even though its prior
+        // and old parts carried different headers and timestamps. Here the old value is written a second
+        // time with the same value bytes ("p") but picks up the first record's headers by carry-forward,
+        // while the prior value keeps the unknown/empty origin it was first buffered with.
+        final InMemoryTimeOrderedKeyValueChangeBuffer<String, String, Change<String>> buffer =
+            new InMemoryTimeOrderedKeyValueChangeBuffer.Builder<>(STORE_NAME, Serdes.String(), Serdes.String()).build();
+        final MockInternalProcessorContext<?, ?> context = makeContext(true);
+        buffer.init(context, buffer);
+
+        final RecordHeaders headersA = new RecordHeaders(new Header[]{new RecordHeader("h", "A".getBytes(UTF_8))});
+        final RecordHeaders headersB = new RecordHeaders(new Header[]{new RecordHeader("h", "B".getBytes(UTF_8))});
+
+        final ProcessorRecordContext contextA = new ProcessorRecordContext(10L, 0, 0, "topic", headersA);
+        context.setRecordContext(contextA);
+        buffer.put(0L, new Record<>("k", new Change<>("v1", "p"), 10L, headersA), contextA);
+
+        final ProcessorRecordContext contextB = new ProcessorRecordContext(20L, 1, 0, "topic", headersB);
+        context.setRecordContext(contextB);
+        buffer.put(0L, new Record<>("k", new Change<>("v2", "p"), 20L, headersB), contextB);
+
+        buffer.commit(Map.of());
+
+        // The parts differ, so this time the prefix must be written under its own key.
+        final ProducerRecord<Object, Object> changelogRecord =
+            ((MockRecordCollector) context.recordCollector()).collected().get(0);
+        assertThat(changelogRecord.headers().lastHeader(PRIOR_VALUE_HEADERS_KEY), is(not(nullValue())));
+
+        final InMemoryTimeOrderedKeyValueChangeBuffer<String, String, Change<String>> restored =
+            new InMemoryTimeOrderedKeyValueChangeBuffer.Builder<>(STORE_NAME, Serdes.String(), Serdes.String()).build();
+        final MockInternalProcessorContext<?, ?> restoreContext = makeContext(true);
+        restored.init(restoreContext, restored);
+        restoreInto(restoreContext, context, STORE_NAME);
+
+        // Not (p, 10, A) -- that is the OLD part, and taking it here would be the dedup misfiring.
+        assertThat(restored.priorValueForBuffered("k"),
+            is(Maybe.defined(ValueTimestampHeaders.make("p", RecordQueue.UNKNOWN, new RecordHeaders()))));
+        cleanup(restoreContext, restored);
         cleanup(context, buffer);
     }
 

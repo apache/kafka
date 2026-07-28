@@ -319,7 +319,13 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
 
     private static RecordHeaders changelogHeadersWithValuePartHeaders(final BufferValue value) {
         final RecordHeaders headers = new RecordHeaders(new Header[] {new RecordHeader("v", V_3_CHANGELOG_HEADER_VALUE)});
-        addValuePartHeader(headers, PRIOR_VALUE_HEADERS_KEY, value.priorValue());
+        // BufferValue collapses the prior and old values onto one array whenever they are equal -- the
+        // common case, since on the first buffering of a key the prior value IS the old value -- and
+        // serialize() then writes those bytes only once. Skip the duplicate prefix as well; restoring
+        // recovers the prior part from vh.old whenever vh.prior is absent.
+        if (value.priorValue() != value.oldValue()) {
+            addValuePartHeader(headers, PRIOR_VALUE_HEADERS_KEY, value.priorValue());
+        }
         addValuePartHeader(headers, OLD_VALUE_HEADERS_KEY, value.oldValue());
         return headers;
     }
@@ -597,9 +603,19 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
             return value;
         }
         final ProcessorRecordContext context = value.context();
+        final byte[] oldValue = valuePartWithHeaders(value.oldValue(), recordHeaders, OLD_VALUE_HEADERS_KEY, context.timestamp());
+        // A missing vh.prior on a row whose prior and old values share an array means the writer
+        // skipped the duplicate prefix, so the old part IS the prior part. The two conditions have to
+        // be checked together: the changelog value dedups on the PLAIN bytes, so a row can come back
+        // sharing an array even though the parts carried different headers and were written with a
+        // vh.prior of their own. In that case the header wins.
+        final byte[] priorValue = value.priorValue() == value.oldValue()
+            && recordHeaders.lastHeader(PRIOR_VALUE_HEADERS_KEY) == null
+            ? oldValue
+            : valuePartWithHeaders(value.priorValue(), recordHeaders, PRIOR_VALUE_HEADERS_KEY, context.timestamp());
         return new BufferValue(
-            valuePartWithHeaders(value.priorValue(), recordHeaders, PRIOR_VALUE_HEADERS_KEY, context.timestamp()),
-            valuePartWithHeaders(value.oldValue(), recordHeaders, OLD_VALUE_HEADERS_KEY, context.timestamp()),
+            priorValue,
+            oldValue,
             Utils.rawValueTimestampHeaders(value.newValue(), context.timestamp(), context.headers()),
             context
         );
