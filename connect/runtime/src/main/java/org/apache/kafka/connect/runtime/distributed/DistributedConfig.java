@@ -193,7 +193,7 @@ public final class DistributedConfig extends WorkerConfig {
     private static final String INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_DOC = "Whether to automatically create internal topics used by Connect. "
             + "This includes the offset, config, and status topics, as well as connector-specific offset topics "
             + "configured via 'offsets.storage.topic' in the source connector configuration.";
-    public static final Boolean INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_DEFAULT = true;
+    public static final boolean INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_DEFAULT = true;
 
     /**
      * <code>scheduled.rebalance.max.delay.ms</code>
@@ -439,7 +439,7 @@ public final class DistributedConfig extends WorkerConfig {
                     INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_CONFIG,
                     Type.BOOLEAN,
                     INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_DEFAULT,
-                    ConfigDef.Importance.HIGH,
+                    ConfigDef.Importance.MEDIUM,
                     INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_DOC)
             .define(OFFSET_STORAGE_TOPIC_CONFIG,
                     ConfigDef.Type.STRING,
