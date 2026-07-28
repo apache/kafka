@@ -411,6 +411,23 @@ public class KafkaConsumerTest {
         assertMetricsMap(false);
     }
 
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testReturnedMetricsRemainAvailableAfterClose(GroupProtocol groupProtocol) {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
+
+        Map<MetricName, ? extends Metric> beforeClose = consumer.metrics();
+        Set<MetricName> expectedMetricNames = Set.copyOf(beforeClose.keySet());
+        assertFalse(expectedMetricNames.isEmpty());
+
+        consumer.close(CloseOptions.timeout(Duration.ZERO));
+
+        assertEquals(expectedMetricNames, beforeClose.keySet());
+    }
+
     private void assertMetricsMap(boolean metricsShouldBePresent) {
         // Copy the map because we're going to modify it.
         Map<MetricName, ? extends Metric> metrics = new HashMap<>(consumer.metrics());

@@ -63,6 +63,7 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.slf4j.Logger;
 import org.slf4j.event.Level;
 
+import java.lang.ref.WeakReference;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Arrays;
@@ -77,6 +78,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -120,6 +122,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public static final String DEFAULT_REASON = "rebalance enforced by user";
 
     private final Metrics metrics;
+    private final List<WeakReference<ConsumerMetricsView>> metricsViews = new CopyOnWriteArrayList<>();
     private final KafkaConsumerMetrics kafkaConsumerMetrics;
     private Logger log;
     private final String clientId;
@@ -935,7 +938,13 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public Map<MetricName, ? extends Metric> metrics() {
-        return Collections.unmodifiableMap(this.metrics.metrics());
+        if (closed) {
+            return Collections.unmodifiableMap(metrics.metrics());
+        }
+        ConsumerMetricsView metricsView = new ConsumerMetricsView(metrics);
+        metricsViews.removeIf(reference -> reference.get() == null);
+        metricsViews.add(new WeakReference<>(metricsView));
+        return metricsView;
     }
 
     @Override
@@ -1145,6 +1154,11 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private void close(Duration timeout, CloseOptions.GroupMembershipOperation membershipOperation, boolean swallowException) {
         log.trace("Closing the Kafka consumer");
         AtomicReference<Throwable> firstException = new AtomicReference<>();
+        metricsViews.forEach(reference -> {
+            ConsumerMetricsView metricsView = reference.get();
+            if (metricsView != null)
+                metricsView.freeze();
+        });
 
         final Timer closeTimer = createTimerForRequest(timeout);
         clientTelemetryReporter.ifPresent(ClientTelemetryReporter::initiateClose);

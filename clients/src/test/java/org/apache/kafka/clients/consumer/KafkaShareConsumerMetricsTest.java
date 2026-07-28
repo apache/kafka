@@ -208,6 +208,23 @@ public class KafkaShareConsumerMetricsTest {
     }
 
     @Test
+    public void testReturnedMetricsRemainAvailableAfterClose() {
+        Time time = new MockTime(1L);
+        ShareConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        initMetadata(client, Map.of(topic, 1));
+
+        KafkaShareConsumer<String, String> consumer = newShareConsumer(time, client, subscription, metadata);
+        Map<MetricName, ? extends Metric> beforeClose = consumer.metrics();
+        Set<MetricName> expectedMetricNames = Set.copyOf(beforeClose.keySet());
+        assertFalse(expectedMetricNames.isEmpty());
+
+        consumer.close();
+
+        assertEquals(expectedMetricNames, beforeClose.keySet());
+    }
+
+    @Test
     public void testRegisteringCustomMetricsDoesntAffectConsumerMetrics() {
         Time time = new MockTime(1L);
         ShareConsumerMetadata metadata = createMetadata(subscription);

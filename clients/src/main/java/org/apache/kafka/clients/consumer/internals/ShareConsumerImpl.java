@@ -77,6 +77,7 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.slf4j.Logger;
 import org.slf4j.event.Level;
 
+import java.lang.ref.WeakReference;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Arrays;
@@ -91,6 +92,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -200,6 +202,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     private final SubscriptionState subscriptions;
     private final ShareConsumerMetadata metadata;
     private final Metrics metrics;
+    private final List<WeakReference<ConsumerMetricsView>> metricsViews = new CopyOnWriteArrayList<>();
     private final int requestTimeoutMs;
     private final int defaultApiTimeoutMs;
     private volatile boolean closed = false;
@@ -959,7 +962,13 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      */
     @Override
     public Map<MetricName, ? extends Metric> metrics() {
-        return Collections.unmodifiableMap(metrics.metrics());
+        if (closed) {
+            return Collections.unmodifiableMap(metrics.metrics());
+        }
+        ConsumerMetricsView metricsView = new ConsumerMetricsView(metrics);
+        metricsViews.removeIf(reference -> reference.get() == null);
+        metricsViews.add(new WeakReference<>(metricsView));
+        return metricsView;
     }
 
     /**
@@ -1017,6 +1026,11 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     private void close(final Duration timeout, final boolean swallowException) {
         log.trace("Closing the Kafka consumer");
         AtomicReference<Throwable> firstException = new AtomicReference<>();
+        metricsViews.forEach(reference -> {
+            ConsumerMetricsView metricsView = reference.get();
+            if (metricsView != null)
+                metricsView.freeze();
+        });
 
         // We are already closing with a timeout, don't allow wake-ups from here on.
         wakeupTrigger.disableWakeups();
