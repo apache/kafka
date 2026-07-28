@@ -11188,6 +11188,34 @@ public class GroupMetadataManagerTest {
         assertEquals(expectedAssignor, described.get(0).assignorName());
     }
 
+    /**
+     * The default assignor is the first one registered on the broker, which is not necessarily the built-in one.
+     */
+    @Test
+    public void testStreamsGroupDescribeReportsFirstRegisteredAssignorAsDefault() {
+        String groupId = "group-id";
+        String subtopology1 = "subtopology1";
+        StreamsTopology topology = new StreamsTopology(
+            0,
+            Map.of(subtopology1,
+                new StreamsGroupTopologyValue.Subtopology()
+                    .setSubtopologyId(subtopology1)
+                    .setSourceTopics(List.of("foo"))
+            )
+        );
+
+        // "custom" is registered first, so it is the default for groups that do not select an assignor.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("custom"), new MockTaskAssignor("sticky")))
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, 10).withTopology(topology))
+            .build();
+
+        List<StreamsGroupDescribeResponseData.DescribedGroup> described = context.sendStreamsGroupDescribe(List.of(groupId));
+
+        assertEquals(1, described.size());
+        assertEquals("custom", described.get(0).assignorName());
+    }
+
     @Test
     public void testStreamsGroupDescribeWithErrors() {
         String groupId = "groupId";
