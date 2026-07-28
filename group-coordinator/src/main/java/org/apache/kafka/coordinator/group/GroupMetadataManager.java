@@ -4406,7 +4406,10 @@ public class GroupMetadataManager {
             return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), updatedMembersAndTargetAssignment.targetAssignment());
         }
 
-        if (refineOnly) {
+        // The second condition rules out taking the shortcut while an assignment is still pending (deferred by the
+        // assignment interval, or offloaded): the caller only refines a STABLE group, where both epochs are equal, but
+        // if that ever changes, closing the epoch gap here would drop the pending assignor run instead of deferring to it.
+        if (refineOnly && group.assignmentEpoch() >= group.groupEpoch()) {
             // A refinement step only advances the assignment epoch of the unchanged final target so that members
             // re-reconcile toward the next in-memory intermediate assignment. The assignor is not run and the per-member target
             // assignment records are left untouched; only the (small) target-assignment metadata record carrying the epoch is written.

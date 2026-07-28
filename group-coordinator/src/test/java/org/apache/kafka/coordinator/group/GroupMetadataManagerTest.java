@@ -19011,11 +19011,11 @@ public class GroupMetadataManagerTest {
             fooTopicName, computeTopicHash(fooTopicName, metadataImage)
         ));
 
-        // The member is reconciled (STABLE, at the assignment epoch), yet its current assignment differs from the
-        // target: it owns partitions {0,1,2} while the target assigns {0,1,2,3}. With the no-op refiner (which
-        // returns the target as-is), this stands in for "the refiner produced an intermediate assignment the member
-        // has not reconciled to yet", so the refinement predicate fires and a REFINE step is taken. Nothing else
-        // changed (metadata, topology, config all match), so the only reason to bump is the refinement.
+        // maybeRefineAssignment() still returns the target unchanged, so the refinement predicate can only fire when a
+        // member's assigned tasks differ from its target. The setup below forces that: assigned {0,1,2} vs target
+        // {0,1,2,3}, with all epochs equal so the group still reports STABLE. Real reconciliation never leaves those two
+        // out of sync at the same epoch; a real refiner will make this case reachable properly. Metadata, topology and
+        // configs all match, so refinement is the only possible reason to bump the group epoch.
         MockTaskAssignor assignor = new MockTaskAssignor("sticky");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withStreamsGroupTaskAssignors(List.of(assignor))
