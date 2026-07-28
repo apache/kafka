@@ -20,7 +20,7 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.internals.AbstractConfigurableStoreFactory;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.AggregationWithHeaders;
@@ -40,10 +40,16 @@ import org.apache.kafka.streams.state.KeyValueStore;
  *   <li>plain: {@code KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VLeft, VRight>>}</li>
  *   <li>headers-aware: {@code KeyValueStore<TimestampedKeyAndJoinSide<K>, AggregationWithHeaders<LeftOrRightValue<VLeft, VRight>>>}</li>
  * </ul>
- * Both variants are wrapped by the same {@link MeteredKeyValueStore} class — they only differ
- * in the value serde and (erased) generic parameter — so the variant cannot be detected by
- * casting the runtime store. Instead, the variant is read from the {@link StoreFactory}'s
- * configured {@link DslStoreFormat}.
+ * Both variants are wrapped by the same {@link MeteredKeyValueStore} class — they only differ in the
+ * value serde and (erased) generic parameter — so the variant cannot be read off the outermost store.
+ * It is read instead from the innermost bytes store, which carries the
+ * {@link HeadersAwareListValueStore} marker exactly when the elements are in the headers format.
+ * <p>
+ * That is deliberately the <em>same</em> signal {@code OuterStreamJoinStoreFactory} uses to pick the
+ * element serde and {@link ListValueStoreBuilder} uses to pick the changelogger, rather than the
+ * configured {@link DslStoreFormat}: HEADERS only takes effect if the supplier could actually provide a
+ * headers-aware bytes store, so keying off the format would claim headers for an in-memory or
+ * user-supplied store that is in fact holding PLAIN elements.
  */
 public class OuterJoinStoreWrapper<K, VLeft, VRight> {
 
@@ -51,20 +57,15 @@ public class OuterJoinStoreWrapper<K, VLeft, VRight> {
     private KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VLeft, VRight>> plainStore;
     private KeyValueStore<TimestampedKeyAndJoinSide<K>, AggregationWithHeaders<LeftOrRightValue<VLeft, VRight>>> headersStore;
 
+    @SuppressWarnings("unchecked")
     public OuterJoinStoreWrapper(final ProcessorContext<?, ?> context, final StoreFactory storeFactory) {
-        this.isHeadersStore = isHeadersAware(storeFactory);
+        final StateStore store = context.getStateStore(storeFactory.storeName());
+        this.isHeadersStore = WrappedStateStore.isHeadersAwareListValue(store);
         if (isHeadersStore) {
-            headersStore = context.getStateStore(storeFactory.storeName());
+            headersStore = (KeyValueStore<TimestampedKeyAndJoinSide<K>, AggregationWithHeaders<LeftOrRightValue<VLeft, VRight>>>) store;
         } else {
-            plainStore = context.getStateStore(storeFactory.storeName());
+            plainStore = (KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VLeft, VRight>>) store;
         }
-    }
-
-    private static boolean isHeadersAware(final StoreFactory storeFactory) {
-        if (storeFactory instanceof AbstractConfigurableStoreFactory) {
-            return ((AbstractConfigurableStoreFactory) storeFactory).dslStoreFormat() == DslStoreFormat.HEADERS;
-        }
-        return false;
     }
 
     public boolean isHeadersStore() {

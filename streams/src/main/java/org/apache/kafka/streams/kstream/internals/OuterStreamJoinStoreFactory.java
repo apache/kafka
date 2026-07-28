@@ -131,21 +131,24 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
         }
 
         final StoreBuilder<?> builder;
-        if (dslStoreFormat() == DslStoreFormat.HEADERS) {
-            // For a persistent RocksDB store, use the dual-column-family variant so an existing store
-            // that was written by a pre-headers (PLAIN) version can be upgraded in place without
-            // corrupting old data. In-memory and user-supplied stores keep their supplier; their
-            // upgrade is handled on restore by the list-aware RecordConverter.
-            final KeyValueBytesStoreSupplier headersSupplier =
-                supplier instanceof RocksDBKeyValueBytesStoreSupplier
-                    ? new RocksDBListValueHeadersBytesStoreSupplier(name)
-                    : supplier;
+        // HEADERS mode needs a bytes store that can actually hold the headers element format: only the
+        // dual-column-family RocksDB variant can, so that a store already written by a pre-headers
+        // (PLAIN) version is upgraded in place rather than read as corrupt. In-memory and user-supplied
+        // suppliers stay on PLAIN elements, which is what ordinary key-value stores already do in
+        // HEADERS mode: InMemoryDslStoreSuppliers#keyValueStore ignores the format, and
+        // KeyValueStoreMaterializer picks its builder off the supplier rather than off the format.
+        if (dslStoreFormat() == DslStoreFormat.HEADERS && supplier instanceof RocksDBKeyValueBytesStoreSupplier) {
+            // All three decisions follow this one branch: the element serde here, the changelogger via
+            // ListValueStoreBuilder's HeadersBytesStoreSupplier check, and the processor-side value shape
+            // via OuterJoinStoreWrapper's HeadersAwareListValueStore check. They must not disagree --
+            // headers-format elements written through the PLAIN changelogger would put each element's
+            // empty-headers 0x00 prefix on the changelog, where an old PLAIN reader takes it for the
+            // LeftOrRightValue flag and silently turns left values into right ones.
             builder = new ListValueStoreBuilder<>(
-                headersSupplier,
+                new RocksDBListValueHeadersBytesStoreSupplier(name),
                 timestampedKeyAndJoinSideSerde,
                 new AggregationWithHeadersSerde<>(leftOrRightValueSerde),
-                Time.SYSTEM,
-                true
+                Time.SYSTEM
             );
         } else {
             builder = new ListValueStoreBuilder<>(
