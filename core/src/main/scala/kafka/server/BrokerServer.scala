@@ -814,6 +814,7 @@ class BrokerServer(
 
       val rlm = new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.get(0), clusterId, time,
         (tp: TopicPartition) => logManager.getLog(tp),
+        (topicName: String) =>  Optional.of(metadataCache.getTopicId(topicName)).filter(_ != Uuid.ZERO_UUID),
         (tp: TopicPartition, remoteLogStartOffset: java.lang.Long) => {
           logManager.getLog(tp).ifPresent { log =>
             log.updateLogStartOffsetFromRemoteTier(remoteLogStartOffset)

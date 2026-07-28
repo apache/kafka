@@ -102,7 +102,7 @@ import java.nio.file.{Files, Paths}
 import java.util
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicReference}
 import java.util.concurrent.{Callable, CompletableFuture, ConcurrentHashMap, CountDownLatch, Future, TimeUnit}
-import java.util.function.{BiConsumer, Consumer}
+import java.util.function.{BiConsumer, Consumer, Function}
 import java.util.stream.IntStream
 import java.util.{Collections, Optional, OptionalLong, Properties}
 import scala.collection.{Map, Seq, mutable}
@@ -138,6 +138,9 @@ class ReplicaManagerTest {
   private var addPartitionsToTxnManager: AddPartitionsToTxnManager = _
   private var brokerTopicStats: BrokerTopicStats = _
   private val metadataCache: KRaftMetadataCache = mock(classOf[KRaftMetadataCache])
+  private val fetchTopicId: Function[String, Optional[Uuid]] = (topicName: String) => {
+    Optional.ofNullable(metadataCache.getTopicId(topicName)).filter(_ != Uuid.ZERO_UUID)
+  }
   private val quotaExceededThrottleTime = 1000
   private val quotaAvailableThrottleTime = 0
 
@@ -3439,6 +3442,7 @@ class ReplicaManagerTest {
       "clusterId",
       time,
       _ => Optional.of(mockLog),
+      fetchTopicId,
       (TopicPartition, Long) => {},
       brokerTopicStats,
       metrics,
@@ -3539,6 +3543,7 @@ class ReplicaManagerTest {
       "clusterId",
       time,
       _ => Optional.of(dummyLog),
+      fetchTopicId,
       (TopicPartition, Long) => {},
       brokerTopicStats,
       metrics,
@@ -4338,8 +4343,7 @@ class ReplicaManagerTest {
   private def verifyRLMOnLeadershipChange(leaderPartitions: util.Set[Partition], followerPartitions: util.Set[Partition]): Unit = {
     val leaderCapture: ArgumentCaptor[util.Set[TopicPartitionLog]] = ArgumentCaptor.forClass(classOf[util.Set[TopicPartitionLog]])
     val followerCapture: ArgumentCaptor[util.Set[TopicPartitionLog]] = ArgumentCaptor.forClass(classOf[util.Set[TopicPartitionLog]])
-    val topicIdsCapture: ArgumentCaptor[util.Map[String, Uuid]] = ArgumentCaptor.forClass(classOf[util.Map[String, Uuid]])
-    verify(mockRemoteLogManager).onLeadershipChange(leaderCapture.capture(), followerCapture.capture(), topicIdsCapture.capture())
+    verify(mockRemoteLogManager).onLeadershipChange(leaderCapture.capture(), followerCapture.capture())
 
     val actualLeaderPartitions = leaderCapture.getValue
     val actualFollowerPartitions = followerCapture.getValue
@@ -4670,6 +4674,7 @@ class ReplicaManagerTest {
     val localId = 1
     val otherId = localId + 1
     val topicPartition = new TopicPartition("foo", 0)
+    val topicIdPartition = new TopicIdPartition(FOO_UUID, topicPartition)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, enableRemoteStorage = enableRemoteStorage)
 
     try {
@@ -4698,9 +4703,9 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(notReplicaTopicsDelta, notReplicaMetadataImage)
 
       if (enableRemoteStorage) {
-        verify(mockRemoteLogManager, never()).onLeadershipChange(anySet(), anySet(), anyMap())
+        verify(mockRemoteLogManager, never()).onLeadershipChange(anySet(), anySet())
         verify(mockRemoteLogManager, times(1))
-          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(new StopPartition(topicPartition, true, false, false))), any())
+          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(new StopPartition(topicIdPartition, true, false, false))), any())
       }
 
       // Check that the partition was removed
@@ -4718,6 +4723,7 @@ class ReplicaManagerTest {
     val localId = 1
     val otherId = localId + 1
     val topicPartition = new TopicPartition("foo", 0)
+    val topicIdPartition = new TopicIdPartition(FOO_UUID, topicPartition)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, enableRemoteStorage = enableRemoteStorage)
 
     try {
@@ -4746,9 +4752,9 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(removeTopicsDelta, removeMetadataImage)
 
       if (enableRemoteStorage) {
-        verify(mockRemoteLogManager, never()).onLeadershipChange(anySet(), anySet(), anyMap())
+        verify(mockRemoteLogManager, never()).onLeadershipChange(anySet(), anySet())
         verify(mockRemoteLogManager, times(1))
-          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(new StopPartition(topicPartition, true, false, false))), any())
+          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(new StopPartition(topicIdPartition, true, false, false))), any())
       }
 
       // Check that the partition was removed
@@ -4766,6 +4772,7 @@ class ReplicaManagerTest {
     val localId = 1
     val otherId = localId + 1
     val topicPartition = new TopicPartition("foo", 0)
+    val topicIdPartition = new TopicIdPartition(FOO_UUID, topicPartition)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, enableRemoteStorage = enableRemoteStorage)
 
     try {
@@ -4793,9 +4800,9 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(notReplicaTopicsDelta, notReplicaMetadataImage)
 
       if (enableRemoteStorage) {
-        verify(mockRemoteLogManager, never()).onLeadershipChange(anySet(), anySet(), anyMap())
+        verify(mockRemoteLogManager, never()).onLeadershipChange(anySet(), anySet())
         verify(mockRemoteLogManager, times(1))
-          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(new StopPartition(topicPartition, true, false, false))), any())
+          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(new StopPartition(topicIdPartition, true, false, false))), any())
       }
 
       // Check that the partition was removed
@@ -4813,6 +4820,7 @@ class ReplicaManagerTest {
     val localId = 1
     val otherId = localId + 1
     val topicPartition = new TopicPartition("foo", 0)
+    val topicIdPartition = new TopicIdPartition(FOO_UUID, topicPartition)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, enableRemoteStorage = enableRemoteStorage)
 
     try {
@@ -4840,15 +4848,47 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(removeTopicsDelta, removeMetadataImage)
 
       if (enableRemoteStorage) {
-        verify(mockRemoteLogManager, never()).onLeadershipChange(anySet(), anySet(), anyMap())
+        verify(mockRemoteLogManager, never()).onLeadershipChange(anySet(), anySet())
         verify(mockRemoteLogManager, times(1))
-          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(new StopPartition(topicPartition, true, true, false))), any())
+          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(new StopPartition(topicIdPartition, true, true, false))), any())
       }
 
       // Check that the partition was removed
       assertEquals(new HostedPartition.None[Partition], replicaManager.getPartition(topicPartition))
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
       assertEquals(Optional.empty, replicaManager.logManager.getLog(topicPartition))
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
+  def testDeletedTopicUsesPreviousImageTopicId(): Unit = {
+    val localId = 1
+    val topicPartition = new TopicPartition("foo", 0)
+    val topicIdPartition = new TopicIdPartition(FOO_UUID, topicPartition)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, enableRemoteStorage = true)
+
+    try {
+      val leaderTopicsDelta = topicsCreateDelta(localId, isStartIdLeader = true)
+      val leaderMetadataImage = imageFromTopics(leaderTopicsDelta.apply())
+      replicaManager.applyDelta(leaderTopicsDelta, leaderMetadataImage)
+
+      val leaderPartition = getOnlinePartition(replicaManager.getPartition(topicPartition))
+      assertTrue(leaderPartition.isLeader)
+      verifyRLMOnLeadershipChange(Collections.singleton(leaderPartition), Collections.emptySet())
+      reset(mockRemoteLogManager)
+
+      // Metadata cache may already reflect the new image when ReplicaManager applies the delete delta.
+      when(replicaManager.metadataCache.getTopicId(topicPartition.topic())).thenReturn(Uuid.ZERO_UUID)
+
+      val removeTopicsDelta = topicsDeleteDelta(leaderMetadataImage.topics())
+      val removeMetadataImage = imageFromTopics(removeTopicsDelta.apply())
+      replicaManager.applyDelta(removeTopicsDelta, removeMetadataImage)
+
+      verify(mockRemoteLogManager, never()).onLeadershipChange(anySet(), anySet())
+      verify(mockRemoteLogManager, times(1))
+        .stopPartitions(ArgumentMatchers.eq(Collections.singleton(new StopPartition(topicIdPartition, true, true, false))), any())
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }

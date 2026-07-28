@@ -606,7 +606,7 @@ class DynamicConfigChangeUnitTest {
 
     val leaderPartitionsArg: ArgumentCaptor[util.Set[TopicPartitionLog]] = ArgumentCaptor.forClass(classOf[util.Set[TopicPartitionLog]])
     val followerPartitionsArg: ArgumentCaptor[util.Set[TopicPartitionLog]] = ArgumentCaptor.forClass(classOf[util.Set[TopicPartitionLog]])
-    doNothing().when(rlm).onLeadershipChange(leaderPartitionsArg.capture(), followerPartitionsArg.capture(), any())
+    doNothing().when(rlm).onLeadershipChange(leaderPartitionsArg.capture(), followerPartitionsArg.capture())
 
     val isRemoteLogEnabledBeforeUpdate = false
     val configHandler: TopicConfigHandler = new TopicConfigHandler(replicaManager, null, null)
@@ -627,7 +627,7 @@ class DynamicConfigChangeUnitTest {
 
     val log0: UnifiedLog = mock(classOf[UnifiedLog])
     when(log0.remoteLogEnabled()).thenReturn(true)
-    doNothing().when(rlm).onLeadershipChange(any(), any(), any())
+    doNothing().when(rlm).onLeadershipChange(any(), any())
     when(log0.config).thenReturn(new LogConfig(Collections.emptyMap()))
     when(log0.topicPartition).thenReturn(tp0)
     when(partition.isLeader).thenReturn(true)
@@ -635,6 +635,6 @@ class DynamicConfigChangeUnitTest {
     val isRemoteLogEnabledBeforeUpdate = true
     val configHandler: TopicConfigHandler = new TopicConfigHandler(replicaManager, null, null)
     configHandler.maybeUpdateRemoteLogComponents(topic, Seq(log0), isRemoteLogEnabledBeforeUpdate, false)
-    verify(rlm, never()).onLeadershipChange(any(), any(), any())
+    verify(rlm, never()).onLeadershipChange(any(), any())
   }
 }
