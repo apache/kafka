@@ -1211,7 +1211,7 @@ public class ReplicationControlManager {
     }
 
     /**
-     * Validates that a batch of topics will create less than {@value MAX_PARTITIONS_PER_BATCH}. Exceeding this number of topics per batch
+     * Validates that a batch of topics will create at most {@value MAX_PARTITIONS_PER_BATCH}. Exceeding this number of topics per batch
      * has led to out-of-memory exceptions. We use this validation to fail earlier to avoid allocating the memory.
      * Validates an upper bound number of partitions. The actual number may be smaller if some topics are misconfigured.
      *
@@ -1220,7 +1220,7 @@ public class ReplicationControlManager {
      * @throws PolicyViolationException if total number of partitions exceeds {@value MAX_PARTITIONS_PER_BATCH}.
      */
     static void validateTotalNumberOfPartitions(CreateTopicsRequestData request, int defaultNumPartitions) {
-        int totalPartitions = 0;
+        long totalPartitions = 0;
         for (CreatableTopic topic: request.topics()) {
             if (topic.assignments().isEmpty()) {
                 if (topic.numPartitions() == -1) {
@@ -1231,10 +1231,9 @@ public class ReplicationControlManager {
             } else {
                 totalPartitions += topic.assignments().size();
             }
-
-        }
-        if (totalPartitions > MAX_PARTITIONS_PER_BATCH) {
-            throw new PolicyViolationException("Excessively large number of partitions per request.");
+            if (totalPartitions > MAX_PARTITIONS_PER_BATCH) {
+                throw new PolicyViolationException("Excessively large number of partitions per request.");
+            }
         }
     }
 
@@ -2015,6 +2014,10 @@ public class ReplicationControlManager {
                 throw new InvalidReplicaAssignmentException("The manual partition " +
                     "assignment includes broker " + brokerId + ", but no such broker is " +
                     "registered.");
+            }
+            if (!clusterControl.brokerRegistrations().get(brokerId).hasUncordonedDirs()) {
+                throw new InvalidReplicaAssignmentException("The manual partition " +
+                    "assignment includes broker " + brokerId + ", but all its log directories are cordoned.");
             }
             if (brokerId.equals(prevBrokerId)) {
                 throw new InvalidReplicaAssignmentException("The manual partition " +

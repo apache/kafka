@@ -14,8 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.share.fetch;
 
+package org.apache.kafka.server.share.fetch;
 
 import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.common.requests.TransactionResult;

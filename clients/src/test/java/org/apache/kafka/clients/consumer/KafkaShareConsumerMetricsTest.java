@@ -165,6 +165,25 @@ public class KafkaShareConsumerMetricsTest {
         assertEquals((1.0d + 0.0d + 0.5d) / 3, consumer.metrics().get(pollIdleRatio).metricValue());
     }
 
+    @Test
+    public void testPollIdleRatioZero() {
+        ShareConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        initMetadata(client, Map.of(topic, 1));
+
+        KafkaShareConsumer<String, String> consumer = newShareConsumer(time, client, subscription, metadata);
+        // MetricName object to check
+        Metrics metrics = consumer.metricsRegistry();
+        MetricName pollIdleRatio = metrics.metricName("poll-idle-ratio-avg", CONSUMER_SHARE_METRIC_GROUP_PREFIX + "-metrics");
+        // Test default value
+        assertEquals(Double.NaN, consumer.metrics().get(pollIdleRatio).metricValue());
+
+        // Poll starts and ends within the same millisecond, so the metric should be 0.
+        consumer.kafkaShareConsumerMetrics().recordPollStart(time.milliseconds());
+        consumer.kafkaShareConsumerMetrics().recordPollEnd(time.milliseconds());
+        assertEquals(0.0d, consumer.metrics().get(pollIdleRatio).metricValue());
+    }
+
     private static boolean consumerMetricPresent(KafkaShareConsumer<String, String> consumer, String name) {
         MetricName metricName = new MetricName(name, CONSUMER_SHARE_METRIC_GROUP_PREFIX + "-metrics", "", Map.of());
         return consumer.metricsRegistry().metrics().containsKey(metricName);

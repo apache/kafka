@@ -38,6 +38,7 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
@@ -267,15 +268,27 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void shouldDelegateReadOnlyUncommittedToInner() {
-        assertThat(store.readOnly(IsolationLevel.READ_UNCOMMITTED),
-            sameInstance(inner.readOnly(IsolationLevel.READ_UNCOMMITTED)));
+        final KeyValueStore<Bytes, byte[]> innerMock = mock(KeyValueStore.class);
+        final ChangeLoggingKeyValueBytesStore outer = new ChangeLoggingKeyValueBytesStore(innerMock);
+        final ReadOnlyKeyValueStore<Bytes, byte[]> view = mock(ReadOnlyKeyValueStore.class);
+        when(innerMock.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(view);
+
+        assertThat(outer.readOnly(IsolationLevel.READ_UNCOMMITTED), sameInstance(view));
+        verify(innerMock).readOnly(IsolationLevel.READ_UNCOMMITTED);
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void shouldDelegateReadOnlyCommittedToInner() {
-        assertThat(store.readOnly(IsolationLevel.READ_COMMITTED),
-            sameInstance(inner.readOnly(IsolationLevel.READ_COMMITTED)));
+        final KeyValueStore<Bytes, byte[]> innerMock = mock(KeyValueStore.class);
+        final ChangeLoggingKeyValueBytesStore outer = new ChangeLoggingKeyValueBytesStore(innerMock);
+        final ReadOnlyKeyValueStore<Bytes, byte[]> view = mock(ReadOnlyKeyValueStore.class);
+        when(innerMock.readOnly(IsolationLevel.READ_COMMITTED)).thenReturn(view);
+
+        assertThat(outer.readOnly(IsolationLevel.READ_COMMITTED), sameInstance(view));
+        verify(innerMock).readOnly(IsolationLevel.READ_COMMITTED);
     }
 
     private StreamsConfig streamsConfigMock() {

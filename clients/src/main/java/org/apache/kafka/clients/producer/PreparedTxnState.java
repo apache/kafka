@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.clients.producer;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.record.internal.RecordBatch;
 
 /**
  * Class containing the owner fence of a transaction after it has been prepared for a two-phase commit.
  */
+@InterfaceAudience.Public
 public class PreparedTxnState {
     private final long txnOwnerId;
     private final short txnOwnerEpoch;

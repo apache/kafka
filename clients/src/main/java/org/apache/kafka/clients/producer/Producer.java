@@ -25,6 +25,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 
@@ -39,6 +40,7 @@ import java.util.concurrent.Future;
  * @see KafkaProducer
  * @see MockProducer
  */
+@InterfaceAudience.Public
 public interface Producer<K, V> extends Closeable {
 
     /**

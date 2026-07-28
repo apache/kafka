@@ -467,6 +467,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             config,
             streamsMetrics,
             stateDirectory,
+            time,
             threadId,
             logContext);
 
@@ -700,7 +701,8 @@ public class StreamThread extends Thread implements ProcessingThread {
         return Optional.of(rackId);
     }
 
-    private static StreamsRebalanceData initStreamsRebalanceData(final UUID processId,
+    // visible for testing
+    static StreamsRebalanceData initStreamsRebalanceData(final UUID processId,
                                                                  final StreamsConfig config,
                                                                  final Optional<StreamsRebalanceData.HostInfo> endpoint,
                                                                  final Optional<String> rackId,
@@ -826,6 +828,8 @@ public class StreamThread extends Thread implements ProcessingThread {
                         final long maxUncommittedBytesPerThread
                         ) {
         super(threadId);
+        // explicitly non-daemon so the JVM doesn't exit while this thread is still processing
+        setDaemon(false);
         this.stateLock = new Object();
         this.adminClient = adminClient;
         this.streamsMetrics = streamsMetrics;
@@ -1043,7 +1047,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         return true;
     }
 
-    // visible for testing
+    // VisibleForTesting
     void maybeGetClientInstanceIds() {
         // we pass in a timeout of zero into each `clientInstanceId()` call
         // to just trigger the "get instance id" background RPC;
@@ -1111,19 +1115,15 @@ public class StreamThread extends Thread implements ProcessingThread {
         if (assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()) {
             final long now = time.milliseconds();
             final long lastLogged = lastShutdownWarningTimestamp.get();
-            if (now - lastLogged >= 10_000L) {
-                if (lastShutdownWarningTimestamp.compareAndSet(lastLogged, now)) {
-                    log.warn("Detected that shutdown was requested. " +
-                            "All clients in this app will now begin to shutdown");
+
+            if (now - lastLogged >= 10_000L && lastShutdownWarningTimestamp.compareAndSet(lastLogged, now)) {
+                log.warn("Detected that shutdown was requested. " +
+                        "All clients in this app will now begin to shutdown");
+                // The classic protocol propagates the shutdown request via an enforced rebalance,
+                // whereas the Streams protocol (KIP-1071) uses the group heartbeat.
+                if (streamsRebalanceData.isEmpty()) {
+                    mainConsumer.enforceRebalance("Shutdown requested");
                 }
-            }
-            // Under the classic protocol the shutdown request is propagated to the rest of the group
-            // by the assignor during a rebalance, so we need to enforce one. Under the Streams group
-            // protocol (KIP-1071) the request is propagated through the group heartbeat (see
-            // sendShutdownRequest), and enforceRebalance is not supported by the consumer (it would
-            // only log a warning), so we skip it.
-            if (streamsRebalanceData.isEmpty()) {
-                mainConsumer.enforceRebalance("Shutdown requested");
             }
         }
     }

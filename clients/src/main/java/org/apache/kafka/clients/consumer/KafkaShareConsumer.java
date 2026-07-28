@@ -27,6 +27,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
@@ -304,10 +305,10 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1000));
  *
  *         // Get the acquisition lock timeout and prepare to wait half that time before renewing again
- *         int timeToWaitMs = consumer.acquisitionLockTimeoutMs().getOrElse(10000) / 2;
+ *         int timeToWaitMs = consumer.acquisitionLockTimeoutMs().orElse(10000) / 2;
  *
  *         for (ConsumerRecord<String, String> record : records) {
- *             if (processing.put(rec.offset(), rec) == null) {
+ *             if (processing.put(record.offset(), record) == null) {
  *                 // Start the processing on another thread
  *             }
  *
@@ -390,6 +391,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * We have intentionally avoided implementing a particular threading model for processing. Various options for
  * multithreaded processing are possible, of which the most straightforward is to dedicate a thread to each consumer.
  */
+@InterfaceAudience.Public
 public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
 
     private static final ShareConsumerDelegateCreator CREATOR = new ShareConsumerDelegateCreator();

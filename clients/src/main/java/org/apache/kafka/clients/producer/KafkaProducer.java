@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.clients.ApiVersions;
@@ -45,6 +46,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.ApiException;
@@ -78,12 +80,12 @@ import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
-import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch;
 
 import org.slf4j.Logger;
 
@@ -103,7 +105,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
-
 
 /**
  * A Kafka client that publishes records to the Kafka cluster.
@@ -246,6 +247,7 @@ import java.util.stream.Collectors;
  * <code>UnsupportedVersionException</code> when invoking an API that is not available in the running broker version.
  * </p>
  */
+@InterfaceAudience.Public
 public class KafkaProducer<K, V> implements Producer<K, V> {
 
     private final Logger log;
@@ -441,8 +443,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG),
                         config.getLong(ProducerConfig.METADATA_MAX_IDLE_CONFIG),
                         logContext,
-                        clusterResourceListeners,
-                        Time.SYSTEM);
+                        clusterResourceListeners);
                 this.metadata.bootstrap(addresses);
             }
             this.transactionManager = configureTransactionState(config, logContext);
@@ -820,7 +821,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         if (versionOpt.isEmpty()) return 0L;
         sender.wakeup();
         try {
-            metadata.awaitUpdate(versionOpt.getAsInt(), maxBlockTimeMs);
+            metadata.awaitUpdate(versionOpt.getAsInt(), time.timer(maxBlockTimeMs));
         } catch (InterruptedException e) {
             throw new InterruptException(e);
         }
@@ -1290,7 +1291,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             int version = metadata.requestUpdateForTopic(topic);
             sender.wakeup();
             try {
-                metadata.awaitUpdate(version, remainingWaitMs);
+                metadata.awaitUpdate(version, time.timer(remainingWaitMs));
             } catch (TimeoutException ex) {
                 // Rethrow with original maxWaitMs to prevent logging exception with remainingWaitMs
                 final String errorMessage = getErrorMessage(partitionsCount, topic, partition, maxWaitMs);
