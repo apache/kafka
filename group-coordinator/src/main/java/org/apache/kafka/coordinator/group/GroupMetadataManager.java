@@ -758,7 +758,10 @@ public class GroupMetadataManager {
         groupIds.forEach(groupId -> {
             try {
                 StreamsGroup group = streamsGroup(groupId, committedOffset);
-                describedGroups.add(group.asDescribedGroup(committedOffset));
+                describedGroups.add(group.asDescribedGroup(
+                    committedOffset,
+                    streamsGroupAssignor(groupId).name()
+                ));
                 groupIdToStoredDescriptionTopologyEpochs.put(groupId, group.storedDescriptionTopologyEpoch(committedOffset));
             } catch (GroupIdNotFoundException exception) {
                 describedGroups.add(new StreamsGroupDescribeResponseData.DescribedGroup()

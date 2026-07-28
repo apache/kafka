@@ -47,6 +47,7 @@ public class StreamsGroupDescription {
     private final Set<AclOperation> authorizedOperations;
     private final Optional<StreamsGroupTopologyDescription> topologyDescription;
     private final StreamsGroupTopologyDescriptionStatus topologyDescriptionStatus;
+    private final Optional<String> assignorName;
 
     public StreamsGroupDescription(
             final String groupId,
@@ -87,6 +88,36 @@ public class StreamsGroupDescription {
             final Optional<StreamsGroupTopologyDescription> topologyDescription,
             final StreamsGroupTopologyDescriptionStatus topologyDescriptionStatus
     ) {
+        this(
+            groupId,
+            groupEpoch,
+            targetAssignmentEpoch,
+            topologyEpoch,
+            subtopologies,
+            members,
+            groupState,
+            coordinator,
+            authorizedOperations,
+            topologyDescription,
+            topologyDescriptionStatus,
+            Optional.empty()
+        );
+    }
+
+    public StreamsGroupDescription(
+            final String groupId,
+            final int groupEpoch,
+            final int targetAssignmentEpoch,
+            final int topologyEpoch,
+            final Collection<StreamsGroupSubtopologyDescription> subtopologies,
+            final Collection<StreamsGroupMemberDescription> members,
+            final GroupState groupState,
+            final Node coordinator,
+            final Set<AclOperation> authorizedOperations,
+            final Optional<StreamsGroupTopologyDescription> topologyDescription,
+            final StreamsGroupTopologyDescriptionStatus topologyDescriptionStatus,
+            final Optional<String> assignorName
+    ) {
         this.groupId = Objects.requireNonNull(groupId, "groupId must be non-null");
         this.groupEpoch = groupEpoch;
         this.targetAssignmentEpoch = targetAssignmentEpoch;
@@ -98,6 +129,7 @@ public class StreamsGroupDescription {
         this.authorizedOperations = authorizedOperations;
         this.topologyDescription = Objects.requireNonNull(topologyDescription, "topologyDescription must be non-null");
         this.topologyDescriptionStatus = Objects.requireNonNull(topologyDescriptionStatus, "topologyDescriptionStatus must be non-null");
+        this.assignorName = Objects.requireNonNull(assignorName, "assignorName must be non-null");
     }
 
     /**
@@ -179,6 +211,14 @@ public class StreamsGroupDescription {
         return topologyDescriptionStatus;
     }
 
+    /**
+     * The task assignor the coordinator will use for the next assignment computation. May differ from the assignor
+     * that computed the current assignment. Empty if the broker is too old to report it.
+     */
+    public Optional<String> assignorName() {
+        return assignorName;
+    }
+
     @Override
     public boolean equals(final Object o) {
         if (this == o) {
@@ -198,7 +238,8 @@ public class StreamsGroupDescription {
             && Objects.equals(coordinator, that.coordinator)
             && Objects.equals(authorizedOperations, that.authorizedOperations)
             && Objects.equals(topologyDescription, that.topologyDescription)
-            && topologyDescriptionStatus == that.topologyDescriptionStatus;
+            && topologyDescriptionStatus == that.topologyDescriptionStatus
+            && Objects.equals(assignorName, that.assignorName);
     }
 
     @Override
@@ -214,7 +255,8 @@ public class StreamsGroupDescription {
             coordinator,
             authorizedOperations,
             topologyDescription,
-            topologyDescriptionStatus
+            topologyDescriptionStatus,
+            assignorName
         );
     }
 
@@ -232,6 +274,7 @@ public class StreamsGroupDescription {
             ", authorizedOperations=" + authorizedOperations.stream().map(AclOperation::toString).collect(Collectors.joining(",")) +
             ", topologyDescription=" + topologyDescription.map(Object::toString).orElse("") +
             ", topologyDescriptionStatus=" + topologyDescriptionStatus +
+            ", assignorName=" + assignorName.orElse("") +
             ')';
     }
 }

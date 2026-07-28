@@ -169,6 +169,7 @@ import org.apache.kafka.server.share.persister.TopicData;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -11061,6 +11062,7 @@ public class GroupMetadataManagerTest {
                 .setGroupId(streamsGroupIds.get(0))
                 .setGroupState(StreamsGroupState.EMPTY.toString())
                 .setAssignmentEpoch(1)
+                .setAssignorName("mock")
                 .setTopology(expectedTopology),
             new StreamsGroupDescribeResponseData.DescribedGroup()
                 .setGroupEpoch(epoch)
@@ -11074,6 +11076,7 @@ public class GroupMetadataManagerTest {
                 .setTopology(expectedTopology)
                 .setGroupState(StreamsGroupState.NOT_READY.toString())
                 .setAssignmentEpoch(1)
+                .setAssignorName("mock")
         );
         List<StreamsGroupDescribeResponseData.DescribedGroup> actual = context.sendStreamsGroupDescribe(streamsGroupIds);
 
@@ -11142,6 +11145,47 @@ public class GroupMetadataManagerTest {
         );
         assertEquals(List.of(), describedMember2.taskOffsets());
         assertEquals(List.of(), describedMember2.taskEndOffsets());
+    }
+
+    /**
+     * Describe reports the assignor the coordinator resolved for the group, so that an operator can tell which
+     * assignor is actually in effect rather than which one the group config names.
+     */
+    @ParameterizedTest
+    @CsvSource({
+        // selected by the group, expected in the describe response
+        ",           sticky",  // the group does not select one, so the broker default applies
+        "custom,     custom",  // the group selects a registered assignor
+        "not-there,  sticky"   // the group selects an assignor this broker does not have, so it falls back
+    })
+    public void testStreamsGroupDescribeReportsResolvedAssignor(String selectedAssignor, String expectedAssignor) {
+        String groupId = "group-id";
+        String subtopology1 = "subtopology1";
+        StreamsTopology topology = new StreamsTopology(
+            0,
+            Map.of(subtopology1,
+                new StreamsGroupTopologyValue.Subtopology()
+                    .setSubtopologyId(subtopology1)
+                    .setSourceTopics(List.of("foo"))
+            )
+        );
+
+        // The broker registers two assignors; the first ("sticky") is the default.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky"), new MockTaskAssignor("custom")))
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, 10).withTopology(topology))
+            .build();
+
+        if (selectedAssignor != null) {
+            Properties groupConfig = new Properties();
+            groupConfig.setProperty(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, selectedAssignor);
+            context.updateGroupConfig(groupId, groupConfig);
+        }
+
+        List<StreamsGroupDescribeResponseData.DescribedGroup> described = context.sendStreamsGroupDescribe(List.of(groupId));
+
+        assertEquals(1, described.size());
+        assertEquals(expectedAssignor, described.get(0).assignorName());
     }
 
     @Test
@@ -11229,7 +11273,8 @@ public class GroupMetadataManagerTest {
             )
             .setGroupState(StreamsGroup.StreamsGroupState.ASSIGNING.toString())
             .setGroupEpoch(epoch + 2)
-            .setAssignmentEpoch(epoch + 1);
+            .setAssignmentEpoch(epoch + 1)
+            .setAssignorName("mock");
         assertEquals(1, actual.size());
         assertEquals(describedGroup, actual.get(0));
     }
@@ -19830,7 +19875,8 @@ public class GroupMetadataManagerTest {
                     TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)), MemberTaskOffsets.EMPTY)
             ))
             .setGroupState(StreamsGroupState.STABLE.toString())
-            .setGroupEpoch(2);
+            .setGroupEpoch(2)
+            .setAssignorName("sticky");
         assertEquals(1, actualDescribedGroups.size());
         assertEquals(expectedDescribedGroup, actualDescribedGroups.get(0));
     }
