@@ -169,7 +169,6 @@ import org.apache.kafka.server.share.persister.TopicData;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -11147,75 +11146,6 @@ public class GroupMetadataManagerTest {
         assertEquals(List.of(), describedMember2.taskEndOffsets());
     }
 
-    /**
-     * Describe reports the assignor the coordinator resolved for the group, so that an operator can tell which
-     * assignor is actually in effect rather than which one the group config names.
-     */
-    @ParameterizedTest
-    @CsvSource({
-        // selected by the group, expected in the describe response
-        ",           sticky",  // the group does not select one, so the broker default applies
-        "custom,     custom",  // the group selects a registered assignor
-        "not-there,  sticky"   // the group selects an assignor this broker does not have, so it falls back
-    })
-    public void testStreamsGroupDescribeReportsResolvedAssignor(String selectedAssignor, String expectedAssignor) {
-        String groupId = "group-id";
-        String subtopology1 = "subtopology1";
-        StreamsTopology topology = new StreamsTopology(
-            0,
-            Map.of(subtopology1,
-                new StreamsGroupTopologyValue.Subtopology()
-                    .setSubtopologyId(subtopology1)
-                    .setSourceTopics(List.of("foo"))
-            )
-        );
-
-        // The broker registers two assignors; the first ("sticky") is the default.
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky"), new MockTaskAssignor("custom")))
-            .withStreamsGroup(new StreamsGroupBuilder(groupId, 10).withTopology(topology))
-            .build();
-
-        if (selectedAssignor != null) {
-            Properties groupConfig = new Properties();
-            groupConfig.setProperty(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, selectedAssignor);
-            context.updateGroupConfig(groupId, groupConfig);
-        }
-
-        List<StreamsGroupDescribeResponseData.DescribedGroup> described = context.sendStreamsGroupDescribe(List.of(groupId));
-
-        assertEquals(1, described.size());
-        assertEquals(expectedAssignor, described.get(0).assignorName());
-    }
-
-    /**
-     * The default assignor is the first one registered on the broker, which is not necessarily the built-in one.
-     */
-    @Test
-    public void testStreamsGroupDescribeReportsFirstRegisteredAssignorAsDefault() {
-        String groupId = "group-id";
-        String subtopology1 = "subtopology1";
-        StreamsTopology topology = new StreamsTopology(
-            0,
-            Map.of(subtopology1,
-                new StreamsGroupTopologyValue.Subtopology()
-                    .setSubtopologyId(subtopology1)
-                    .setSourceTopics(List.of("foo"))
-            )
-        );
-
-        // "custom" is registered first, so it is the default for groups that do not select an assignor.
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("custom"), new MockTaskAssignor("sticky")))
-            .withStreamsGroup(new StreamsGroupBuilder(groupId, 10).withTopology(topology))
-            .build();
-
-        List<StreamsGroupDescribeResponseData.DescribedGroup> described = context.sendStreamsGroupDescribe(List.of(groupId));
-
-        assertEquals(1, described.size());
-        assertEquals("custom", described.get(0).assignorName());
-    }
-
     @Test
     public void testStreamsGroupDescribeWithErrors() {
         String groupId = "groupId";
@@ -11305,6 +11235,65 @@ public class GroupMetadataManagerTest {
             .setAssignorName("mock");
         assertEquals(1, actual.size());
         assertEquals(describedGroup, actual.get(0));
+    }
+
+    @Test
+    public void testStreamsGroupDescribeReportsAssignorSelectedByGroupConfig() {
+        String groupId = "group-id";
+        String subtopology1 = "subtopology1";
+        StreamsTopology topology = new StreamsTopology(
+            0,
+            Map.of(subtopology1,
+                new StreamsGroupTopologyValue.Subtopology()
+                    .setSubtopologyId(subtopology1)
+                    .setSourceTopics(List.of("foo"))
+            )
+        );
+
+        // The broker registers two assignors; the first ("sticky") is the default.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky"), new MockTaskAssignor("custom")))
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, 10).withTopology(topology))
+            .build();
+
+        Properties groupConfig = new Properties();
+        groupConfig.setProperty(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "custom");
+        context.updateGroupConfig(groupId, groupConfig);
+
+        List<StreamsGroupDescribeResponseData.DescribedGroup> described = context.sendStreamsGroupDescribe(List.of(groupId));
+
+        assertEquals(1, described.size());
+        assertEquals("custom", described.get(0).assignorName());
+    }
+
+    @Test
+    public void testStreamsGroupDescribeReportsDefaultAssignorWhenSelectedOneIsUnavailable() {
+        String groupId = "group-id";
+        String subtopology1 = "subtopology1";
+        StreamsTopology topology = new StreamsTopology(
+            0,
+            Map.of(subtopology1,
+                new StreamsGroupTopologyValue.Subtopology()
+                    .setSubtopologyId(subtopology1)
+                    .setSourceTopics(List.of("foo"))
+            )
+        );
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky"), new MockTaskAssignor("custom")))
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, 10).withTopology(topology))
+            .build();
+
+        // The group selects an assignor that is not registered on this broker.
+        Properties groupConfig = new Properties();
+        groupConfig.setProperty(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "does-not-exist");
+        context.updateGroupConfig(groupId, groupConfig);
+
+        // Describe reports the assignor the coordinator falls back to, and not the unavailable one the group names.
+        List<StreamsGroupDescribeResponseData.DescribedGroup> described = context.sendStreamsGroupDescribe(List.of(groupId));
+
+        assertEquals(1, described.size());
+        assertEquals("sticky", described.get(0).assignorName());
     }
 
     @Test
@@ -18990,6 +18979,64 @@ public class GroupMetadataManagerTest {
         // The coordinator falls back to the default (first) assignor.
         assertFalse(defaultAssignor.lastPassedAssignmentConfigs().isEmpty());
         assertTrue(customAssignor.lastPassedAssignmentConfigs().isEmpty());
+    }
+
+    /**
+     * Describe reports the assignor of the next assignment computation, which is not necessarily the one that
+     * computed the current assignment, because selecting a different assignor does not trigger a rebalance.
+     */
+    @Test
+    public void testStreamsGroupDescribeReportsAssignorOfNextAssignmentComputation() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        MockTaskAssignor defaultAssignor = new MockTaskAssignor("sticky");
+        MockTaskAssignor customAssignor = new MockTaskAssignor("custom");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(defaultAssignor, customAssignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 2)
+                .buildCoordinatorMetadataImage())
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .build();
+        defaultAssignor.prepareGroupAssignment(
+            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
+        customAssignor.prepareGroupAssignment(
+            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
+
+        // The group does not select an assignor, so the default computes the current assignment.
+        context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+        assertFalse(defaultAssignor.lastPassedAssignmentConfigs().isEmpty());
+
+        // The group now selects the other assignor. This does not trigger a rebalance, so the current assignment
+        // is still the one the default assignor computed.
+        Properties groupConfig = new Properties();
+        groupConfig.setProperty(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "custom");
+        context.updateGroupConfig(groupId, groupConfig);
+        assertTrue(customAssignor.lastPassedAssignmentConfigs().isEmpty());
+
+        // Describe already reports the newly selected assignor. Commit the offset first, so that the latest state
+        // is described.
+        context.commit();
+        List<StreamsGroupDescribeResponseData.DescribedGroup> described =
+            context.sendStreamsGroupDescribe(List.of(groupId));
+        assertEquals(1, described.size());
+        assertEquals("custom", described.get(0).assignorName());
     }
 
     @Test
