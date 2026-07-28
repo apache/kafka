@@ -118,7 +118,8 @@ public final class GroupConfig extends AbstractConfig {
     public static final String STREAMS_ASSIGNOR_NAME_CONFIG = "streams.assignor.name";
     public static final String STREAMS_ASSIGNOR_NAME_DOC = "The task assignor to use for this streams group, selected by short name from the assignors registered via the broker configuration " +
         GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG + ". When unset, the group defaults to the first assignor configured in the broker's " +
-        GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG + " setting.";
+        GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG + " setting. " +
+        "Changing the assignor does not trigger a rebalance for the group; the new assignor takes effect on the next rebalance.";
 
     public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG = "errors.deadletterqueue.topic.name";
     public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_DEFAULT = "";
