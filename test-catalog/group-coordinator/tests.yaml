@@ -1339,6 +1339,7 @@ org.apache.kafka.coordinator.group.modern.share.ShareGroupTest:
 - testValidateOffsetDelete
 - testValidateOffsetFetch
 org.apache.kafka.coordinator.group.streams.CurrentAssignmentBuilderTest:
+- testActiveNotGrantedWhileAnotherMemberOnSameProcessHoldsWarmup
 - testAssignmentEpochsShouldBePreservedFromPreviousAssignment
 - testMixedPreservedAndNewAssignmentEpochs
 - testNewlyAssignedTasksGetTargetAssignmentEpoch
@@ -1360,6 +1361,10 @@ org.apache.kafka.coordinator.group.streams.CurrentAssignmentBuilderTest:
 - testUnrevokedTasksToStable
 - testUnrevokedTasksToUnreleasedTasks
 - testUnrevokedTasksToUnrevokedTasks
+- testWarmupNotDroppedWhilePromotionIsBlockedByAnotherRevocation
+- testWarmupPromotedToActiveFromUnreleasedState
+- testWarmupPromotedToActiveWhenActiveIsReleased
+- testWarmupPromotionHoldsWarmupWhileActiveOwnedByAnotherMember
 org.apache.kafka.coordinator.group.streams.MemberTaskOffsetsTest:
 - shouldConvertHeartbeatRequestTaskOffsets
 - shouldRejectDuplicateTaskEntries
