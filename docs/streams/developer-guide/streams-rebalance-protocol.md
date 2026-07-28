@@ -43,6 +43,8 @@ The following features are available in the current release:
 
 * **Custom Task Assignors**: Brokers can be configured with custom task assignors via `group.streams.assignors`, which takes a list of built-in assignor names and fully qualified class names of custom `TaskAssignor` implementations. The first entry is the default assignor. An individual group selects one of the registered assignors by name with the group configuration `streams.assignor.name`; when unset, the group uses the first entry of `group.streams.assignors`. Custom implementations must be thread-safe, since a single instance is shared across all groups on a broker.
 
+* **Warm-Up Tasks**: When a task is moved to a different member, the broker first assigns it as a warm-up task, and promotes it to an active task only once the new owner has caught up with the task's changelog. Warm-up tasks are inserted by the broker during reconciliation, not by the task assignor, so they are available with any assignor, including the built-in sticky assignor. The behavior is controlled by the [`streams.num.warmup.replicas`](/{version}/configuration/group-configs#groupconfigs_streams.num.warmup.replicas) and [`streams.acceptable.recovery.lag`](/{version}/configuration/group-configs#groupconfigs_streams.acceptable.recovery.lag) group configurations.
+
 * **Interactive Query Support**: IQ operations are compatible with the new streams protocol.
 
 * **New Admin RPC**: The StreamsGroupDescribe RPC provides streams-specific metadata separate from consumer group information, with corresponding access via the [`Admin`](/{version}/javadoc/org/apache/kafka/clients/admin/Admin.html) interface.
@@ -61,7 +63,7 @@ The following features are not yet available and should be avoided when using th
 
 * **Topology Updates**: If a topology is changed significantly (e.g., by adding new source topics or changing the number of subtopologies), a new streams group must be created.
 
-* **High Availability Assignor**: The sticky assignor is the only built-in assignor. This implies that "warmup tasks" and rack aware assignment are not supported yet, unless provided by a custom assignor registered via `group.streams.assignors`.
+* **Rack-Aware Assignment**: The sticky assignor is the only built-in assignor, and it does not implement rack-aware assignment. The rack-aware assignment tags are passed to the assignor, so rack-aware assignment is only available if it is implemented by a custom assignor registered via `group.streams.assignors`.
 
 * **Regular Expressions**: Pattern-based topic subscription is not supported.
 
@@ -120,6 +122,10 @@ The following broker configurations control the behavior of streams groups. For 
 * [`group.streams.max.size`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.max.size): The maximum number of streams clients that a single streams group can accommodate.
 * [`group.streams.num.standby.replicas`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.num.standby.replicas): The default number of standby replicas for each task.
 * [`group.streams.max.standby.replicas`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.max.standby.replicas): Maximum for dynamic configurations of the standby replica configuration.
+* [`group.streams.num.warmup.replicas`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.num.warmup.replicas): The default maximum number of warm-up tasks that can be assigned at the same time.
+* [`group.streams.max.warmup.replicas`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.max.warmup.replicas): Maximum for dynamic configurations of the warm-up replica configuration.
+* [`group.streams.acceptable.recovery.lag`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.acceptable.recovery.lag): The default changelog lag at or below which a warm-up task is considered caught up.
+* [`group.streams.rack.aware.assignment.tags`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.rack.aware.assignment.tags): The default client tag keys used to distribute standby replicas, if the assignor supports rack-aware assignment.
 * [`group.streams.initial.rebalance.delay.ms`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.initial.rebalance.delay.ms): The first rebalance of a new (ie, previously empty) group is delayed by this amount to allow more members to join the group.
 * [`group.streams.topology.description.plugin.class`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.topology.description.plugin.class): The fully qualified class name of a `StreamsGroupTopologyDescriptionPlugin` implementation. When not set, the [topology description feature](/{version}/streams/developer-guide/topology-description-plugin/) is disabled.
 * [`group.streams.assignors`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.assignors): The task assignors available to streams groups, as a list of built-in assignor names and fully qualified class names of custom `TaskAssignor` implementations. The first entry is the default assignor for groups that do not select one with `streams.assignor.name`.
@@ -135,6 +141,9 @@ The following group-level configurations are available for streams groups:
 * [`streams.session.timeout.ms`](/{version}/configuration/group-configs#groupconfigs_streams.session.timeout.ms): The timeout to detect client failures when using the streams group protocol.
 * [`streams.heartbeat.interval.ms`](/{version}/configuration/group-configs#groupconfigs_streams.heartbeat.interval.ms): The heartbeat interval given to the members.
 * [`streams.num.standby.replicas`](/{version}/configuration/group-configs#groupconfigs_streams.num.standby.replicas): The number of standby replicas for each task.
+* [`streams.num.warmup.replicas`](/{version}/configuration/group-configs#groupconfigs_streams.num.warmup.replicas): The maximum number of warm-up tasks that can be assigned at the same time.
+* [`streams.acceptable.recovery.lag`](/{version}/configuration/group-configs#groupconfigs_streams.acceptable.recovery.lag): The changelog lag at or below which a warm-up task is considered caught up and can be promoted to an active task.
+* [`streams.rack.aware.assignment.tags`](/{version}/configuration/group-configs#groupconfigs_streams.rack.aware.assignment.tags): The client tag keys used to distribute standby replicas, if the assignor supports rack-aware assignment.
 * [`streams.initial.rebalance.delay.ms`](/{version}/configuration/group-configs#groupconfigs_streams.initial.rebalance.delay.ms): The first rebalance of a group is delayed by this amount to allow more members to join the group.
 * [`streams.assignor.name`](/{version}/configuration/group-configs#groupconfigs_streams.assignor.name): The name of the task assignor to use for this group, which must be one of the assignors registered on the broker via `group.streams.assignors`. When unset, the group uses the first entry of `group.streams.assignors`.
 
@@ -158,11 +167,11 @@ The following client configuration enables the streams rebalance protocol:
 ### Ignored Configurations
 
 The following configurations are ignored when the streams rebalance protocol is enabled:
-* [`acceptable.recovery.lag`](/{version}/configuration/kafka-streams-configs#streamsconfigs_acceptable.recovery.lag)
-* [`max.warmup.replicas`](/{version}/configuration/kafka-streams-configs#streamsconfigs_max.warmup.replicas)
+* [`acceptable.recovery.lag`](/{version}/configuration/kafka-streams-configs#streamsconfigs_acceptable.recovery.lag) (use group-level configuration instead)
+* [`max.warmup.replicas`](/{version}/configuration/kafka-streams-configs#streamsconfigs_max.warmup.replicas) (use the group-level `streams.num.warmup.replicas` instead)
 * [`num.standby.replicas`](/{version}/configuration/kafka-streams-configs#streamsconfigs_num.standby.replicas) (use group-level configuration instead)
-* [`probing.rebalance.interval.ms`](/{version}/configuration/kafka-streams-configs#streamsconfigs_probing.rebalance.interval.ms)
-* [`rack.aware.assignment.tags`](/{version}/configuration/kafka-streams-configs#streamsconfigs_rack.aware.assignment.tags)
+* [`probing.rebalance.interval.ms`](/{version}/configuration/kafka-streams-configs#streamsconfigs_probing.rebalance.interval.ms) (not needed; the broker evaluates warm-up promotion on every heartbeat)
+* [`rack.aware.assignment.tags`](/{version}/configuration/kafka-streams-configs#streamsconfigs_rack.aware.assignment.tags) (use group-level configuration instead)
 * [`rack.aware.assignment.strategy`](/{version}/configuration/kafka-streams-configs#streamsconfigs_rack.aware.assignment.strategy)
 * [`rack.aware.assignment.traffic_cost`](/{version}/configuration/kafka-streams-configs#streamsconfigs_rack.aware.assignment.traffic_cost)
 * [`rack.aware.assignment.non_overlap_cost`](/{version}/configuration/kafka-streams-configs#streamsconfigs_rack.aware.assignment.non_overlap_cost)
