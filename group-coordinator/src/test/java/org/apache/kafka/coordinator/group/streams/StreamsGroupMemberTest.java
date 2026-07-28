@@ -21,7 +21,6 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAss
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentValue.TaskIds;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue.KeyValue;
-import org.apache.kafka.coordinator.group.streams.assignor.TaskId;
 
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -346,14 +345,12 @@ public class StreamsGroupMemberTest {
         );
         MemberTaskOffsets taskOffsets = new MemberTaskOffsets(
             mkMap(
-                mkEntry(new TaskId(SUBTOPOLOGY1, 0), 100L),
-                mkEntry(new TaskId(SUBTOPOLOGY1, 2), 120L),
-                mkEntry(new TaskId(SUBTOPOLOGY2, 1), 200L)
+                mkEntry(SUBTOPOLOGY1, mkMap(mkEntry(0, 100L), mkEntry(2, 120L))),
+                mkEntry(SUBTOPOLOGY2, mkMap(mkEntry(1, 200L)))
             ),
             mkMap(
-                mkEntry(new TaskId(SUBTOPOLOGY1, 0), 150L),
-                mkEntry(new TaskId(SUBTOPOLOGY1, 2), 170L),
-                mkEntry(new TaskId(SUBTOPOLOGY2, 1), 250L)
+                mkEntry(SUBTOPOLOGY1, mkMap(mkEntry(0, 150L), mkEntry(2, 170L))),
+                mkEntry(SUBTOPOLOGY2, mkMap(mkEntry(1, 250L)))
             )
         );
 
@@ -459,16 +456,12 @@ public class StreamsGroupMemberTest {
         // TaskId, i.e. by subtopologyId then partition, for a deterministic response.
         MemberTaskOffsets taskOffsets = new MemberTaskOffsets(
             mkMap(
-                mkEntry(new TaskId(SUBTOPOLOGY2, 1), 200L),
-                mkEntry(new TaskId(SUBTOPOLOGY1, 2), 120L),
-                mkEntry(new TaskId(SUBTOPOLOGY2, 0), 190L),
-                mkEntry(new TaskId(SUBTOPOLOGY1, 0), 100L)
+                mkEntry(SUBTOPOLOGY2, mkMap(mkEntry(1, 200L), mkEntry(0, 190L))),
+                mkEntry(SUBTOPOLOGY1, mkMap(mkEntry(2, 120L), mkEntry(0, 100L)))
             ),
             mkMap(
-                mkEntry(new TaskId(SUBTOPOLOGY2, 0), 290L),
-                mkEntry(new TaskId(SUBTOPOLOGY1, 0), 150L),
-                mkEntry(new TaskId(SUBTOPOLOGY2, 1), 250L),
-                mkEntry(new TaskId(SUBTOPOLOGY1, 2), 170L)
+                mkEntry(SUBTOPOLOGY2, mkMap(mkEntry(0, 290L), mkEntry(1, 250L))),
+                mkEntry(SUBTOPOLOGY1, mkMap(mkEntry(0, 150L), mkEntry(2, 170L)))
             )
         );
 

@@ -212,6 +212,9 @@ public class InternalTopicsIntegrationTest {
 
         // Try to start one worker, with three bad topics
         WorkerHandle worker = connect.addWorker(); // should have failed to start before returning
+        // The worker is expected to fail startup, so shorten the request timeout to avoid
+        // blocking for the default 10 seconds on every health check.
+        connect.requestTimeout(1000);
         assertFalse(connect.isHealthy(worker));
         assertFalse(connect.allWorkersHealthy());
         assertFalse(connect.anyWorkersHealthy());
@@ -222,6 +225,7 @@ public class InternalTopicsIntegrationTest {
 
         // Try to start one worker, with two bad topics remaining
         worker = connect.addWorker(); // should have failed to start before returning
+        connect.requestTimeout(1000);
         assertFalse(connect.isHealthy(worker));
         assertFalse(connect.allWorkersHealthy());
         assertFalse(connect.anyWorkersHealthy());
@@ -232,6 +236,7 @@ public class InternalTopicsIntegrationTest {
 
         // Try to start one worker, with one bad topic remaining
         worker = connect.addWorker(); // should have failed to start before returning
+        connect.requestTimeout(1000);
         assertFalse(connect.isHealthy(worker));
         assertFalse(connect.allWorkersHealthy());
         assertFalse(connect.anyWorkersHealthy());

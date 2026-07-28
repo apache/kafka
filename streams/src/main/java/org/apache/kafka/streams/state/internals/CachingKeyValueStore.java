@@ -438,6 +438,7 @@ public class CachingKeyValueStore
                                                                                               final ReadOnlyKeyValueStore<Bytes, byte[]> underlying) {
         validateStoreOpen();
         final KeyValueIterator<Bytes, byte[]> storeIterator = underlying.prefixScan(prefix, prefixKeySerializer);
+        // headers aren't needed because the prefix already arrives serialized
         final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
         final Bytes to = ByteUtils.increment(from);
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = internalContext.cache().range(cacheName, from, to, false);

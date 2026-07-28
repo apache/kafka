@@ -148,7 +148,6 @@ public class StickyTaskAssignor implements TaskAssignor {
         final int totalCapacity = computeTotalProcessingThreads(clients);
         final Set<TaskId> allTaskIds = applicationState.allTasks().keySet();
         final int taskCount = allTaskIds.size();
-        final int activeTasksPerThread = taskCount / totalCapacity;
         final Set<TaskId> unassigned = new HashSet<>(allTaskIds);
 
         // first try and re-assign existing active tasks to clients that previously had
@@ -156,7 +155,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         for (final TaskId taskId : assignmentState.previousActiveAssignment.keySet()) {
             final ProcessId previousClientForTask = assignmentState.previousActiveAssignment.get(taskId);
             if (allTaskIds.contains(taskId)) {
-                if (mustPreserveActiveTaskAssignment || assignmentState.hasRoomForActiveTask(previousClientForTask, activeTasksPerThread)) {
+                if (mustPreserveActiveTaskAssignment || assignmentState.hasRoomForActiveTask(previousClientForTask, taskCount, totalCapacity)) {
                     assignmentState.finalizeAssignment(taskId, previousClientForTask, AssignedTask.Type.ACTIVE);
                     unassigned.remove(taskId);
                 }
@@ -169,7 +168,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             final TaskId taskId = iterator.next();
             final Set<ProcessId> previousClientsForStandbyTask = assignmentState.previousStandbyAssignment.getOrDefault(taskId, new HashSet<>());
             for (final ProcessId client: previousClientsForStandbyTask) {
-                if (assignmentState.hasRoomForActiveTask(client, activeTasksPerThread)) {
+                if (assignmentState.hasRoomForActiveTask(client, taskCount, totalCapacity)) {
                     assignmentState.finalizeAssignment(taskId, client, AssignedTask.Type.ACTIVE);
                     iterator.remove();
                     break;
@@ -297,14 +296,15 @@ public class StickyTaskAssignor implements TaskAssignor {
             this.newAssignments = optimizedAssignments;
         }
 
-        private boolean hasRoomForActiveTask(final ProcessId processId, final int activeTasksPerThread) {
+        private boolean hasRoomForActiveTask(final ProcessId processId, final int taskCount, final int totalCapacity) {
             final int capacity = clients.get(processId).numProcessingThreads();
             final int newActiveTaskCount = newAssignments.computeIfAbsent(processId, k -> KafkaStreamsAssignment.of(processId, new HashSet<>()))
                 .tasks().values()
                 .stream().filter(assignedTask -> assignedTask.type() == AssignedTask.Type.ACTIVE)
                 .collect(Collectors.toSet())
                 .size();
-            return newActiveTaskCount < capacity * activeTasksPerThread;
+            final int instanceLimit = (taskCount * capacity + totalCapacity - 1) / totalCapacity;
+            return newActiveTaskCount < instanceLimit;
         }
 
         private ProcessId findBestClientForTask(final TaskId taskId, final Set<ProcessId> clientsWithin) {
