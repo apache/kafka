@@ -43,8 +43,6 @@ The following features are available in the current release:
 
 * **Custom Task Assignors**: Brokers can be configured with custom task assignors via `group.streams.assignors`, which takes a list of built-in assignor names and fully qualified class names of custom `TaskAssignor` implementations. The first entry is the default assignor. An individual group selects one of the registered assignors by name with the group configuration `streams.assignor.name`; when unset, the group uses the first entry of `group.streams.assignors`. Custom implementations must be thread-safe, since a single instance is shared across all groups on a broker.
 
-* **Warm-Up Tasks**: When a task is moved to a different member, the broker first assigns it as a warm-up task, and promotes it to an active task only once the new owner has caught up with the task's changelog. Warm-up tasks are inserted by the broker during reconciliation, not by the task assignor, so they are available with any assignor, including the built-in sticky assignor. The behavior is controlled by the [`streams.num.warmup.replicas`](/{version}/configuration/group-configs#groupconfigs_streams.num.warmup.replicas) and [`streams.acceptable.recovery.lag`](/{version}/configuration/group-configs#groupconfigs_streams.acceptable.recovery.lag) group configurations.
-
 * **Interactive Query Support**: IQ operations are compatible with the new streams protocol.
 
 * **New Admin RPC**: The StreamsGroupDescribe RPC provides streams-specific metadata separate from consumer group information, with corresponding access via the [`Admin`](/{version}/javadoc/org/apache/kafka/clients/admin/Admin.html) interface.
@@ -63,7 +61,7 @@ The following features are not yet available and should be avoided when using th
 
 * **Topology Updates**: If a topology is changed significantly (e.g., by adding new source topics or changing the number of subtopologies), a new streams group must be created.
 
-* **Rack-Aware Assignment**: The sticky assignor is the only built-in assignor, and it does not implement rack-aware assignment. The rack-aware assignment tags are passed to the assignor, so rack-aware assignment is only available if it is implemented by a custom assignor registered via `group.streams.assignors`.
+* **Rack-Aware Assignment**: The built-in sticky assignor does not implement rack-aware assignment. The rack-aware assignment tags are passed to the assignor, so rack-aware assignment is only available if a custom assignor registered via `group.streams.assignors` implements it.
 
 * **Regular Expressions**: Pattern-based topic subscription is not supported.
 
