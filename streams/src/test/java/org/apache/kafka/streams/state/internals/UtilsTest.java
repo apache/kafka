@@ -17,7 +17,9 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -229,6 +231,33 @@ public class UtilsTest {
     @Test
     public void shouldReturnNullWhenRebuildingFromNullPlainValue() {
         assertNull(rawValueTimestampHeaders(rawHeadersTimestampPrefix(timestampedValueWithEmptyHeaders(VALUE)), null));
+    }
+
+    @Test
+    public void shouldBuildValueTimestampHeadersFromPlainValueTimestampAndHeaders() {
+        final Headers headers = new RecordHeaders(new Header[]{new RecordHeader("h", "hv".getBytes(StandardCharsets.UTF_8))});
+        final byte[] built = rawValueTimestampHeaders(VALUE, TIMESTAMP, headers);
+
+        // Building must be the exact inverse of the extracting helpers.
+        assertArrayEquals(VALUE, rawPlainValue(built));
+        assertEquals(TIMESTAMP, Utils.timestamp(built));
+        assertEquals(headers, Utils.headers(built));
+    }
+
+    @Test
+    public void shouldBuildValueTimestampHeadersWithEmptyHeadersLikeTheTimestampOnlyOverload() {
+        // Empty and null headers must both encode as headersSize=0, i.e. exactly what the overload
+        // without headers produces -- otherwise the two writers would disagree on the wire format.
+        final byte[] expected = timestampedValueWithEmptyHeaders(VALUE);
+
+        assertArrayEquals(expected, rawValueTimestampHeaders(VALUE, TIMESTAMP));
+        assertArrayEquals(expected, rawValueTimestampHeaders(VALUE, TIMESTAMP, new RecordHeaders()));
+        assertArrayEquals(expected, rawValueTimestampHeaders(VALUE, TIMESTAMP, null));
+    }
+
+    @Test
+    public void shouldReturnNullWhenBuildingFromNullPlainValueWithHeaders() {
+        assertNull(rawValueTimestampHeaders(null, TIMESTAMP, new RecordHeaders()));
     }
 
     private static byte[] timestampedValueWithEmptyHeaders(final byte[] value) {

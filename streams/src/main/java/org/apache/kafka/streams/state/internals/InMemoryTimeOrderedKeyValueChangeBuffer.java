@@ -75,12 +75,13 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
     private static final byte[] V_3_CHANGELOG_HEADER_VALUE = {(byte) 3};
     static final RecordHeaders CHANGELOG_HEADERS =
         new RecordHeaders(new Header[] {new RecordHeader("v", V_3_CHANGELOG_HEADER_VALUE)});
-    // Each buffered value part's headers/timestamp travel in the changelog record's own Kafka headers -- one per part,
-    // holding that part's [headersSize][headers][timestamp] prefix -- so the value bytes stay V3 and remain restorable
-    // by older versions, which simply ignore these headers.
+    // The prior and old value parts' headers/timestamp travel in the changelog record's own Kafka headers -- one per
+    // part, holding that part's [headersSize][headers][timestamp] prefix -- so the value bytes stay V3 and remain
+    // restorable by older versions, which simply ignore these headers. The new value part needs no such header: the
+    // record context encoded in the V3 value already describes it, because put() captures the context of the very
+    // record the new value came from.
     static final String PRIOR_VALUE_HEADERS_KEY = "vh.prior";
     static final String OLD_VALUE_HEADERS_KEY = "vh.old";
-    static final String NEW_VALUE_HEADERS_KEY = "vh.new";
     private static final String METRIC_SCOPE = "in-memory-suppression";
 
     private final Map<Bytes, BufferKey> index = new HashMap<>();
@@ -320,7 +321,6 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
         final RecordHeaders headers = new RecordHeaders(new Header[] {new RecordHeader("v", V_3_CHANGELOG_HEADER_VALUE)});
         addValuePartHeader(headers, PRIOR_VALUE_HEADERS_KEY, value.priorValue());
         addValuePartHeader(headers, OLD_VALUE_HEADERS_KEY, value.oldValue());
-        addValuePartHeader(headers, NEW_VALUE_HEADERS_KEY, value.newValue());
         return headers;
     }
 
@@ -461,9 +461,17 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
                     // deserializing it with the new record's headers would hand the serde the wrong ones.
                     // (ValueTimestampHeadersDeserializer feeds each part's own headers to the inner
                     // value deserializer.)
-                    final ValueTimestampHeaders<V> newPart = deserializeValuePart(bufferValue.newValue());
-                    final ValueTimestampHeaders<V> oldPart = deserializeValuePart(bufferValue.oldValue());
+                    final ValueTimestampHeaders<V> newPart = deserializeValueTimestampHeaders(bufferValue.newValue());
+                    final ValueTimestampHeaders<V> oldPart = deserializeValueTimestampHeaders(bufferValue.oldValue());
                     // A tombstone has no new value to take headers from; fall back to the buffered context.
+                    // That fallback is not a second-best guess: the buffered context and the new value's
+                    // embedded headers always agree. put() hands the very same record.headers() instance to
+                    // both, and ValueTimestampHeadersSerializer snapshots the headers only AFTER running the
+                    // inner value serializer, so even a serde that writes into the headers it is given (a
+                    // Schema Registry serde recording the schema id, say) is reflected in both. Restoring
+                    // preserves the equality, because toInMemoryEncoding rebuilds the new part from that
+                    // same context. Only the old and prior parts can differ from the context, which is why
+                    // they are the ones read from the value here.
                     final Headers newHeaders = newPart == null ? bufferedContext.headers() : newPart.headers();
                     key = keySerde.deserializer().deserialize(changelogTopic, newHeaders, next.getKey().key().get());
                     value = new Change<>(
@@ -541,7 +549,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
                 // The prior value is stored as a ValueTimestampHeaders blob, so we can recover its
                 // timestamp and headers directly (they are unknown/empty when the key was first
                 // buffered, but preserved across restarts via the changelog).
-                return Maybe.defined(deserializeValuePart(serializedValue));
+                return Maybe.defined(deserializeValueTimestampHeaders(serializedValue));
             }
 
             final V deserializedValue = valueSerde.innerSerde().deserializer().deserialize(
@@ -578,20 +586,22 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
 
     // The changelog value format is plain for every version, so a restored buffer value always has
     // plain value parts. When header stores are enabled the in-memory encoding is
-    // ValueTimestampHeaders, so re-attach each part's headers and timestamp from the changelog
-    // record's own Kafka headers. Records written before this feature -- or by a run configured
-    // without header stores -- carry no such headers, in which case the originals are genuinely
-    // unknown and we fall back to empty headers with the record-context timestamp.
+    // ValueTimestampHeaders, so re-attach each part's headers and timestamp. The new value gets them
+    // from the restored record context, which describes exactly that part (see put()); the prior and
+    // old values get them from the changelog record's own Kafka headers. Records written before this
+    // feature -- or by a run configured without header stores -- carry no such Kafka headers, in
+    // which case the prior/old originals are genuinely unknown and we fall back to empty headers with
+    // the record-context timestamp.
     private BufferValue toInMemoryEncoding(final BufferValue value, final Headers recordHeaders) {
         if (!storeHeaders) {
             return value;
         }
-        final long fallbackTimestamp = value.context().timestamp();
+        final ProcessorRecordContext context = value.context();
         return new BufferValue(
-            valuePartWithHeaders(value.priorValue(), recordHeaders, PRIOR_VALUE_HEADERS_KEY, fallbackTimestamp),
-            valuePartWithHeaders(value.oldValue(), recordHeaders, OLD_VALUE_HEADERS_KEY, fallbackTimestamp),
-            valuePartWithHeaders(value.newValue(), recordHeaders, NEW_VALUE_HEADERS_KEY, fallbackTimestamp),
-            value.context()
+            valuePartWithHeaders(value.priorValue(), recordHeaders, PRIOR_VALUE_HEADERS_KEY, context.timestamp()),
+            valuePartWithHeaders(value.oldValue(), recordHeaders, OLD_VALUE_HEADERS_KEY, context.timestamp()),
+            Utils.rawValueTimestampHeaders(value.newValue(), context.timestamp(), context.headers()),
+            context
         );
     }
 
@@ -602,10 +612,10 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
         if (rawPlainValue == null) {
             return null;
         }
-        final Header prefix = recordHeaders.lastHeader(headerKey);
-        return prefix == null
+        final Header headersAndTimestamp = recordHeaders.lastHeader(headerKey);
+        return headersAndTimestamp == null
             ? Utils.rawValueTimestampHeaders(rawPlainValue, fallbackTimestamp)
-            : Utils.rawValueTimestampHeaders(prefix.value(), rawPlainValue);
+            : Utils.rawValueTimestampHeaders(headersAndTimestamp.value(), rawPlainValue);
     }
 
     private ValueTimestampHeadersSerializer<V> valueTimestampHeadersSerializer() {
@@ -637,7 +647,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
 
     // Deserialize a single stored value part into a ValueTimestampHeaders. Only valid when
     // storeHeaders is set (i.e. the part bytes are a ValueTimestampHeaders blob).
-    private ValueTimestampHeaders<V> deserializeValuePart(final byte[] bytes) {
+    private ValueTimestampHeaders<V> deserializeValueTimestampHeaders(final byte[] bytes) {
         return bytes == null ? null : valueTimestampHeadersDeserializer().deserialize(changelogTopic, bytes);
     }
 
@@ -648,7 +658,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
             return null;
         }
         if (storeHeaders) {
-            return ValueTimestampHeaders.getValueOrNull(deserializeValuePart(bytes));
+            return ValueTimestampHeaders.getValueOrNull(deserializeValueTimestampHeaders(bytes));
         }
         return valueSerde.innerSerde().deserializer().deserialize(changelogTopic, fallbackHeaders, bytes);
     }
@@ -676,7 +686,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
         Headers oldHeaders = new RecordHeaders();
         long oldTimestamp = RecordQueue.UNKNOWN;
         if (storeHeaders && buffered != null) {
-            final ValueTimestampHeaders<V> previousNewValue = deserializeValuePart(buffered.newValue());
+            final ValueTimestampHeaders<V> previousNewValue = deserializeValueTimestampHeaders(buffered.newValue());
             if (previousNewValue != null) {
                 oldHeaders = previousNewValue.headers();
                 oldTimestamp = previousNewValue.timestamp();

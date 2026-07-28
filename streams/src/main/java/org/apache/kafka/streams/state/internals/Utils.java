@@ -116,16 +116,35 @@ public class Utils {
      * Output: [headersSize(varint)=0][timestamp(8)][value]
      */
     public static byte[] rawValueTimestampHeaders(final byte[] rawPlainValue, final long timestamp) {
+        return rawValueTimestampHeaders(rawPlainValue, timestamp, null);
+    }
+
+    /**
+     * Build a serialized ValueTimestampHeaders from a plain value, a timestamp and headers.
+     * This is the inverse of {@link #rawPlainValue(byte[])}.
+     *
+     * Format conversion:
+     * Input:  [value], timestamp, headers
+     * Output: [headersSize(varint)][headers][timestamp(8)][value]
+     */
+    public static byte[] rawValueTimestampHeaders(final byte[] rawPlainValue,
+                                                  final long timestamp,
+                                                  final Headers headers) {
         if (rawPlainValue == null) {
             return null;
         }
 
+        final HeadersSerializer.PreSerializedHeaders preSerializedHeaders = HeadersSerializer.prepareSerialization(headers);
         final ByteBuffer buffer = ByteBuffer.allocate(
-            ByteUtils.sizeOfVarint(0) + StateSerdes.TIMESTAMP_SIZE + rawPlainValue.length);
-        ByteUtils.writeVarint(0, buffer); // empty headers
-        buffer.putLong(timestamp);
-        buffer.put(rawPlainValue);
-        return buffer.array();
+            ByteUtils.sizeOfVarint(preSerializedHeaders.requiredBufferSizeForHeaders)
+                + preSerializedHeaders.requiredBufferSizeForHeaders
+                + StateSerdes.TIMESTAMP_SIZE
+                + rawPlainValue.length);
+        ByteUtils.writeVarint(preSerializedHeaders.requiredBufferSizeForHeaders, buffer);
+        return HeadersSerializer.serialize(preSerializedHeaders, buffer)
+            .putLong(timestamp)
+            .put(rawPlainValue)
+            .array();
     }
 
     /**

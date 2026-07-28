@@ -68,7 +68,6 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer.CHANGELOG_HEADERS;
-import static org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer.NEW_VALUE_HEADERS_KEY;
 import static org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer.OLD_VALUE_HEADERS_KEY;
 import static org.apache.kafka.streams.state.internals.Utils.rawValueTimestampHeaders;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -558,16 +557,16 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         assertThat(plainDeserializer.deserialize("topic", bufferValue.newValue()), is("v2"));
         assertThat(plainDeserializer.deserialize("topic", bufferValue.oldValue()), is("v1"));
 
-        // The per-part headers and timestamps ride in the record's Kafka headers instead, one per
-        // value part, and recombine with the plain value bytes into the in-memory encoding.
+        // The new value's headers and timestamp need no Kafka header of their own: the record context
+        // encoded in the V3 value already describes that part, since it is the context of the very
+        // record the new value came from.
+        assertThat(bufferValue.context().headers(), is(headersB));
+        assertThat(bufferValue.context().timestamp(), is(20L));
+
+        // The prior and old parts have no such carrier, so their headers and timestamps ride in the
+        // record's Kafka headers, and recombine with the plain value bytes into the in-memory encoding.
         final ValueTimestampHeadersDeserializer<String> deserializer =
             new ValueTimestampHeadersDeserializer<>(new StringDeserializer());
-
-        final ValueTimestampHeaders<String> newValue = deserializer.deserialize("topic",
-            rawValueTimestampHeaders(changelogRecord.headers().lastHeader(NEW_VALUE_HEADERS_KEY).value(), bufferValue.newValue()));
-        assertThat(newValue.value(), is("v2"));
-        assertThat(newValue.timestamp(), is(20L));
-        assertThat(newValue.headers(), is(headersB));
 
         final ValueTimestampHeaders<String> oldValue = deserializer.deserialize("topic",
             rawValueTimestampHeaders(changelogRecord.headers().lastHeader(OLD_VALUE_HEADERS_KEY).value(), bufferValue.oldValue()));
@@ -713,9 +712,10 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         setup(testName, bufferSupplier);
 
         // The upgrade path, and the mirror of the downgrade test below: a changelog written before
-        // this feature (or by a run without dsl.store.format=HEADERS) carries no per-part headers, so
-        // the originals are genuinely unknown and each part falls back to empty headers with the
-        // record-context timestamp. The values themselves must still restore intact.
+        // this feature (or by a run without dsl.store.format=HEADERS) carries no per-part headers.
+        // The new value still recovers its own headers and timestamp from the encoded record context,
+        // but the prior and old originals are genuinely unknown and fall back to empty headers with
+        // the record-context timestamp. The values themselves must still restore intact.
         final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
         final MockInternalProcessorContext<?, ?> context = makeContext(false);
         buffer.init(context, buffer);

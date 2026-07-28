@@ -165,7 +165,7 @@ public class SuppressHeadersScenarioTest {
         System.out.println();
     }
 
-    // scenarios ------------------------------------------------------------------
+    // ------------------------------------------------------------------ scenarios
 
     @Test
     public void nonWindowedEvictionTriggeredByDifferentKey() {
@@ -319,7 +319,7 @@ public class SuppressHeadersScenarioTest {
         finish();
     }
 
-    // topologies ------------------------------------------------------------------
+    // ------------------------------------------------------------------ topologies
 
     private Topology nonWindowedTopology() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -370,7 +370,7 @@ public class SuppressHeadersScenarioTest {
         return builder.build();
     }
 
-    // serdes ------------------------------------------------------------------
+    // ------------------------------------------------------------------ serdes
 
     /**
      * Serde that only observes: it records every invocation and the {@link Headers} instance it
@@ -428,8 +428,6 @@ public class SuppressHeadersScenarioTest {
         };
     }
 
-
-
     private static byte[] raw(final String s) {
         return s == null ? null : s.getBytes(StandardCharsets.UTF_8);
     }
@@ -438,7 +436,7 @@ public class SuppressHeadersScenarioTest {
         return b == null ? null : new String(b, StandardCharsets.UTF_8);
     }
 
-    // driving and checking ------------------------------------------------------------------
+    // ------------------------------------------------------------------ driving and checking
 
     private void pipe(final TestInputTopic<String, String> topic,
                       final String key,
@@ -544,7 +542,7 @@ public class SuppressHeadersScenarioTest {
         return sb.append(']').toString();
     }
 
-    // small helpers ------------------------------------------------------------------
+    // ------------------------------------------------------------------ small helpers
 
     private static class Event {
         private final String phase;
