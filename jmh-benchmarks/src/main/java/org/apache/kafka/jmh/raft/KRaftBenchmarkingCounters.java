@@ -110,8 +110,10 @@ public class KRaftBenchmarkingCounters {
         RaftClientBenchmarkContext context,
         Optional<ApiKeys> expectedRequest
     ) {
-        this.context = context;
-        this.expectedRequest = expectedRequest;
+        if (this.context == null) {
+            this.context = context;
+            this.expectedRequest = expectedRequest;
+        }
         operations += 1;
     }
 
@@ -122,7 +124,10 @@ public class KRaftBenchmarkingCounters {
     @TearDown(Level.Iteration)
     public void collect() {
         if (context == null || operations == 0) {
-            return;
+            throw new IllegalStateException(
+                "iteration ended with no recorded invocations (operations=" + operations + "); "
+                    + "every @Benchmark method must call recordInvocation() so the work counters "
+                    + "can be attributed to an operation");
         }
         logFlushesTotal = context.getLogFlushesDelta();
         logReadsTotal = context.getLogReadsDelta();

@@ -39,18 +39,15 @@ import java.util.concurrent.TimeUnit;
 /**
  * Benchmarks for the leader-election path.
  */
-@BenchmarkMode(Mode.SingleShotTime)
+@BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
-@Warmup(iterations = RaftClientBenchmarkContext.SINGLE_SHOT_WARMUP_ITERATIONS)
-@Measurement(iterations = RaftClientBenchmarkContext.SINGLE_SHOT_MEASUREMENT_ITERATIONS)
-@Fork(RaftClientBenchmarkContext.SINGLE_SHOT_FORKS)
+@Warmup(iterations = RaftClientBenchmarkContext.AVERAGE_TIME_WARMUP_ITERATIONS)
+@Measurement(iterations = RaftClientBenchmarkContext.AVERAGE_TIME_MEASUREMENT_ITERATIONS)
+@Fork(RaftClientBenchmarkContext.AVERAGE_TIME_FORKS)
 public class ElectionBenchmarks {
 
     /**
-     * Starting state: the local node is Unattached in a {@code voterCount}-node cluster. The
-     * measured election is a one-way transition to the Leader state, so once it completes there is
-     * no Unattached node left to elect. A fresh context is rebuilt before each invocation to
-     * restore the starting state.
+     * Starting state: the local node is Unattached in a {@code voterCount}-node cluster.
      */
     @State(Scope.Thread)
     public static class UnattachedWithMultipleVoters {
@@ -60,18 +57,17 @@ public class ElectionBenchmarks {
         RaftClientBenchmarkContext benchmark;
         RaftClientTestContext context;
 
-        @Setup(Level.Invocation)
+        @Setup(Level.Iteration)
         public void setup() throws IOException {
             benchmark = RaftClientBenchmarkContext.unattachedVoter(
                 voterCount,
                 RaftClientBenchmarkContext.DEFAULT_KRAFT_VERSION,
                 RaftClientBenchmarkContext.DEFAULT_RAFT_PROTOCOL);
             context = benchmark.testContext();
-            benchmark.zeroCountersOnSetup();
         }
     }
 
-    /** The local node wins an election and becomes leader. */
+    /** The local node wins an election and becomes leader, then resigns back to Unattached. */
     @Benchmark
     public void electLeader(
         UnattachedWithMultipleVoters state,
@@ -79,5 +75,6 @@ public class ElectionBenchmarks {
     ) throws Exception {
         state.context.unattachedToLeader();
         counters.recordInvocation(state.benchmark, Optional.empty());
+        state.benchmark.resignToUnattached();
     }
 }

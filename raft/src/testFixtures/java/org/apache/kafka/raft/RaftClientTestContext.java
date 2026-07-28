@@ -1013,7 +1013,7 @@ public final class RaftClientTestContext {
         return inboundRequest(request, raftRequestVersion(request));
     }
 
-    RaftRequest.Inbound inboundRequest(ApiMessage request, short version) {
+    private RaftRequest.Inbound inboundRequest(ApiMessage request, short version) {
         ApiMessage versionedRequest = roundTripApiMessage(request, version);
         return new RaftRequest.Inbound(
             channel.listenerName(),
@@ -1025,7 +1025,7 @@ public final class RaftClientTestContext {
     }
 
     /** Enqueues a pre-built inbound request onto the client and collects its eventual response. */
-    public void deliverRequest(RaftRequest.Inbound inboundRequest) {
+    private void deliverRequest(RaftRequest.Inbound inboundRequest) {
         client.handle(inboundRequest).whenComplete((response, exception) -> {
             if (exception != null) {
                 uncaughtExceptions.add(exception);
@@ -1665,7 +1665,7 @@ public final class RaftClientTestContext {
         );
     }
 
-    public BeginQuorumEpochRequestData beginEpochRequest(int epoch, int leaderId) {
+    BeginQuorumEpochRequestData beginEpochRequest(int epoch, int leaderId) {
         return beginEpochRequest(clusterId, epoch, leaderId);
     }
 

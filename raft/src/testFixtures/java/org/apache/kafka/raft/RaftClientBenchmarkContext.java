@@ -19,6 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.raft.RaftClientTestContext.RaftProtocol;
+import org.apache.kafka.raft.internals.BatchMemoryPool;
 import org.apache.kafka.server.common.KRaftVersion;
 
 import java.io.IOException;
@@ -34,13 +35,7 @@ public final class RaftClientBenchmarkContext {
     // Standardized JMH iteration counts, shared by all raft benchmarks so every benchmark of a
     // given mode is configured identically.
 
-    // SingleShotTime measures a single operation per iteration, so it needs many iterations to
-    // build a stable distribution.
-    public static final int SINGLE_SHOT_WARMUP_ITERATIONS = 50;
-    public static final int SINGLE_SHOT_MEASUREMENT_ITERATIONS = 30;
-    public static final int SINGLE_SHOT_FORKS = 5;
-
-    // AverageTime averages many operations within each timed iteration, so it needs fewer.
+    // AverageTime averages many operations within each timed iteration.
     public static final int AVERAGE_TIME_WARMUP_ITERATIONS = 5;
     public static final int AVERAGE_TIME_MEASUREMENT_ITERATIONS = 10;
     public static final int AVERAGE_TIME_FORKS = 3;
@@ -178,6 +173,7 @@ public final class RaftClientBenchmarkContext {
             .withRaftProtocol(raftProtocol)
             .withPollIntervalMs(0)
             .withUnknownLeader(0)
+            .withMemoryPool(new BatchMemoryPool(5, KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
             .build();
     }
 
@@ -303,6 +299,21 @@ public final class RaftClientBenchmarkContext {
      */
     public int getRpcResponsesSentDelta() {
         return rpcResponsesSent.drainDelta();
+    }
+
+    /**
+     * Resigns the local leader back to the Unattached state.
+     */
+    public void resignToUnattached() throws InterruptedException {
+        if (context.client.quorum().isUnattached()) {
+            throw new IllegalStateException(
+                "resignToUnattached() expects an attached node to resign, but it is already "
+                    + "Unattached; it must be called after an election that made the local node leader");
+        }
+        ReplicaKey candidate = remoteVoters().get(0);
+        deliverAndAwaitResponse(
+            context.inboundRequest(context.voteRequest(context.currentEpoch() + 1, candidate, 0, 0)),
+            Optional.of(ApiKeys.VOTE));
     }
 
 }
