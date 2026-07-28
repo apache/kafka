@@ -61,7 +61,7 @@ The following features are not yet available and should be avoided when using th
 
 * **Topology Updates**: If a topology is changed significantly (e.g., by adding new source topics or changing the number of subtopologies), a new streams group must be created.
 
-* **Rack-Aware Assignment**: The built-in sticky assignor does not implement rack-aware assignment. The rack-aware assignment tags are passed to the assignor, so rack-aware assignment is only available if a custom assignor registered via `group.streams.assignors` implements it.
+* **High Availability Assignor**: The sticky assignor is the only built-in assignor and it does not support rack aware assignment, but a custom assignor registered via `group.streams.assignors` can implement it. "warmup tasks" are created during reconciliation and not by the assignor, and are not supported yet by any assignor.
 
 * **Regular Expressions**: Pattern-based topic subscription is not supported.
 
