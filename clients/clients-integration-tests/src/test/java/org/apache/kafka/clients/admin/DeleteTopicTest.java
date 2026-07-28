@@ -67,7 +67,7 @@ public class DeleteTopicTest {
     private final Map<Integer, List<Integer>> expectedReplicaAssignment = Map.of(0, List.of(0, 1, 2));
 
     @ClusterTest
-    public void testCreateClusterAndCreateListDeleteTopic(ClusterInstance cluster) throws Exception {
+    public void testCreateAndDeleteTopic(ClusterInstance cluster) throws Exception {
         String testTopic = "test-topic";
         try (Admin admin = cluster.admin()) {
             // Create a test topic
