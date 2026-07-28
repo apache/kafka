@@ -662,33 +662,16 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
      *                 result, or a {@code Windowed<Bytes>} for a range result
      */
     private class MeteredWindowStoreWithHeadersReadOnlyRecordIterator<RawKey>
-        implements ReadOnlyRecordIterator<Windowed<K>, V>, MeteredIterator {
+        extends AbstractMeteredReadOnlyRecordIterator<RawKey, Windowed<K>, V> {
 
-        private final KeyValueIterator<RawKey, byte[]> iter;
         private final BiFunction<RawKey, Headers, Windowed<K>> toWindowedKey;
-        private final long startNs;
-        private final long startTimestampMs;
 
         private MeteredWindowStoreWithHeadersReadOnlyRecordIterator(
             final KeyValueIterator<RawKey, byte[]> iter,
             final BiFunction<RawKey, Headers, Windowed<K>> toWindowedKey
         ) {
-            this.iter = iter;
+            super(iter, fetchSensor, iteratorDurationSensor, time, numOpenIterators, openIterators);
             this.toWindowedKey = toWindowedKey;
-            this.startNs = time.nanoseconds();
-            this.startTimestampMs = time.milliseconds();
-            numOpenIterators.increment();
-            openIterators.add(this);
-        }
-
-        @Override
-        public long startTimestamp() {
-            return startTimestampMs;
-        }
-
-        @Override
-        public boolean hasNext() {
-            return iter.hasNext();
         }
 
         @Override
@@ -721,19 +704,6 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
                 headers);
             ((RecordHeaders) record.headers()).setReadOnly();
             return record;
-        }
-
-        @Override
-        public void close() {
-            try {
-                iter.close();
-            } finally {
-                final long duration = time.nanoseconds() - startNs;
-                fetchSensor.record(duration);
-                iteratorDurationSensor.record(duration);
-                numOpenIterators.decrement();
-                openIterators.remove(this);
-            }
         }
     }
 

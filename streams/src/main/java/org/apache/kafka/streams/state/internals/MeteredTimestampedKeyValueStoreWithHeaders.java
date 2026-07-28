@@ -777,7 +777,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
      * {@code next()} throws.
      */
     private class MeteredTimestampedKeyValueStoreWithHeadersReadOnlyRecordIterator
-        extends AbstractMeteredIterator implements ReadOnlyRecordIterator<K, V> {
+        extends AbstractMeteredReadOnlyRecordIterator<Bytes, K, V> {
 
         private final Function<byte[], ValueTimestampHeaders<V>> valueTimestampHeadersDeserializer;
 
@@ -786,13 +786,8 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             final Sensor sensor,
             final Function<byte[], ValueTimestampHeaders<V>> valueTimestampHeadersDeserializer
         ) {
-            super(iter, sensor);
+            super(iter, sensor, iteratorDurationSensor, time, numOpenIterators, openIterators);
             this.valueTimestampHeadersDeserializer = valueTimestampHeadersDeserializer;
-        }
-
-        @Override
-        public boolean hasNext() {
-            return iter.hasNext();
         }
 
         @Override
