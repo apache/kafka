@@ -18,7 +18,6 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.config.ServerConfigs;
@@ -27,23 +26,24 @@ import org.apache.kafka.test.TestUtils;
 import java.util.List;
 import java.util.Map;
 
-public class DynamicBrokerConfigIntegrationTest {
+public class DynamicBrokerConfigTest {
 
     @ClusterTest(
         types = {Type.KRAFT},
         brokers = 1,
-        controllers = 1,
-        serverProperties = {
-            @ClusterConfigProperty(key = ServerConfigs.NUM_IO_THREADS_CONFIG, value = "4")
-        }
+        controllers = 1
     )
     public void testIncreaseNumIoThreads(ClusterInstance cluster) throws Exception {
         try (Admin admin = cluster.admin()) {
             admin.incrementalAlterConfigs(Map.of(
                 new ConfigResource(ConfigResource.Type.BROKER, ""),
-                List.of(new AlterConfigOp(new ConfigEntry(ServerConfigs.NUM_IO_THREADS_CONFIG, "8"), AlterConfigOp.OpType.SET)))
-            ).all().get();
+                List.of(new AlterConfigOp(
+                    new ConfigEntry(ServerConfigs.NUM_IO_THREADS_CONFIG, Integer.toString(ServerConfigs.NUM_IO_THREADS_DEFAULT + 1)),
+                    AlterConfigOp.OpType.SET))
+            )).all().get();
 
+            // KAFKA-16649 introduced this coverage as a safeguard against future deadlocks.
+            // Verify that the broker continues serving requests after resizing the I/O thread pool.
             admin.createTopics(List.of(new NewTopic("test-topic", 1, (short) 1))).all().get();
             TestUtils.waitForCondition(
                 () -> admin.listTopics().names().get().contains("test-topic"),
