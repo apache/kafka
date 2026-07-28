@@ -80,6 +80,32 @@ public record TasksTuple(Map<String, Set<Integer>> activeTasks,
     }
 
     /**
+     * Compares this tuple's task sets to those of a {@link TasksTupleWithEpochs}, ignoring the assignment epochs
+     * carried by the active tasks of {@code other}. Used to decide whether the intermediate assignment produced by
+     * the refiner differs from the assignment a member is currently reconciled to (an active task set is considered
+     * unchanged even if only its epochs would differ).
+     *
+     * @param other Another task tuple with epochs.
+     * @return true if the active, standby and warm-up task sets are equal (active-task epochs are not compared).
+     */
+    public boolean sameTasks(TasksTupleWithEpochs other) {
+        if (!warmupTasks.equals(other.warmupTasks()) || !standbyTasks.equals(other.standbyTasks())) {
+            return false;
+        }
+        Map<String, Map<Integer, Integer>> otherActiveTasks = other.activeTasksWithEpochs();
+        if (activeTasks.size() != otherActiveTasks.size()) {
+            return false;
+        }
+        for (Map.Entry<String, Set<Integer>> entry : activeTasks.entrySet()) {
+            Map<Integer, Integer> otherPartitions = otherActiveTasks.get(entry.getKey());
+            if (otherPartitions == null || !entry.getValue().equals(otherPartitions.keySet())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * Creates a {{@link TasksTuple}} from a
      * {{@link org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue}}.
      *
