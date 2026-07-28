@@ -2915,6 +2915,7 @@ project(':streams') {
 
   systemTestLibs {
     dependsOn testJar
+    dependsOn testFixturesJar
   }
 
   task genStreamsConfigDocs(type: JavaExec) {
