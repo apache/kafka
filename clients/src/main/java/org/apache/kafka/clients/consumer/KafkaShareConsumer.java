@@ -305,10 +305,10 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1000));
  *
  *         // Get the acquisition lock timeout and prepare to wait half that time before renewing again
- *         int timeToWaitMs = consumer.acquisitionLockTimeoutMs().getOrElse(10000) / 2;
+ *         int timeToWaitMs = consumer.acquisitionLockTimeoutMs().orElse(10000) / 2;
  *
  *         for (ConsumerRecord<String, String> record : records) {
- *             if (processing.put(rec.offset(), rec) == null) {
+ *             if (processing.put(record.offset(), record) == null) {
  *                 // Start the processing on another thread
  *             }
  *
