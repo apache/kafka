@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicCollection;
@@ -141,20 +140,11 @@ public class AdminMetadataTest {
 
     @ClusterTest
     public void testListTopicsWithOptionListInternal() throws Exception {
+        clusterInstance.createTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1, (short) 1);
         try (Admin admin = clusterInstance.admin()) {
-            String topic = "test-topic";
-            admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1))).all().get();
-            clusterInstance.waitTopicCreation(topic, 1);
-
-            try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer()) {
-                consumer.subscribe(List.of(topic));
-                consumer.poll(Duration.ofMillis(100));
-            }
-
-            TestUtils.waitForCondition(() -> {
-                Set<String> topicNames = admin.listTopics(new ListTopicsOptions().listInternal(true)).names().get();
-                return topicNames.contains(Topic.GROUP_METADATA_TOPIC_NAME);
-            }, "Expected to see internal topic " + Topic.GROUP_METADATA_TOPIC_NAME);
+            Set<String> topicNames = admin.listTopics(new ListTopicsOptions().listInternal(true)).names().get();
+            assertTrue(topicNames.contains(Topic.GROUP_METADATA_TOPIC_NAME),
+                "Expected to see internal topic " + Topic.GROUP_METADATA_TOPIC_NAME);
         }
     }
 

@@ -304,7 +304,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
      * quota violation, sends out responses before throttling.
      */
     public boolean shouldClientThrottle(short version) {
-        return false;
+        return apiKey.messageType.responseSchemas()[version].get("throttle_time_ms") != null;
     }
 
     public ApiKeys apiKey() {
