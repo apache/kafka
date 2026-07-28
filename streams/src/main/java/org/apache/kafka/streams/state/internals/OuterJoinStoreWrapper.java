@@ -27,6 +27,8 @@ import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
+import java.util.Objects;
+
 /**
  * Wraps the outer-join store used by {@code KStreamKStreamJoin} so the processor only deals
  * with a single value shape: {@code AggregationWithHeaders<LeftOrRightValue<VLeft, VRight>>}.
@@ -53,6 +55,17 @@ import org.apache.kafka.streams.state.KeyValueStore;
  */
 public class OuterJoinStoreWrapper<K, VLeft, VRight> {
 
+    /**
+     * The headers every entry on the plain path is lifted with. Shared rather than allocated per entry:
+     * the flush loop never reads them back (it gates on {@link #isHeadersStore()}), and read-only means
+     * that a future caller which does read them cannot mutate what every other entry sees.
+     */
+    private static final RecordHeaders EMPTY_HEADERS = new RecordHeaders();
+
+    static {
+        EMPTY_HEADERS.setReadOnly();
+    }
+
     private final boolean isHeadersStore;
     private KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VLeft, VRight>> plainStore;
     private KeyValueStore<TimestampedKeyAndJoinSide<K>, AggregationWithHeaders<LeftOrRightValue<VLeft, VRight>>> headersStore;
@@ -72,9 +85,17 @@ public class OuterJoinStoreWrapper<K, VLeft, VRight> {
         return isHeadersStore;
     }
 
+    /**
+     * Appends {@code value} to the list held under {@code key}. Both arguments are required — the
+     * whole-list delete is {@link #deleteList(TimestampedKeyAndJoinSide)}, not a null value.
+     */
     public void put(final TimestampedKeyAndJoinSide<K> key,
                     final LeftOrRightValue<VLeft, VRight> value,
                     final Headers headers) {
+        Objects.requireNonNull(value, "value must not be null; use deleteList to remove the list");
+        // AggregationWithHeaders rejects null headers, but only once the value is non-null, so without
+        // this the mistake would surface as an NPE from inside the value class instead of from here.
+        Objects.requireNonNull(headers, "headers must not be null");
         if (headersStore != null) {
             headersStore.put(key, AggregationWithHeaders.make(value, headers));
         } else {
@@ -82,13 +103,28 @@ public class OuterJoinStoreWrapper<K, VLeft, VRight> {
         }
     }
 
-    public void putIfAbsent(final TimestampedKeyAndJoinSide<K> key,
-                            final LeftOrRightValue<VLeft, VRight> value,
-                            final Headers headers) {
+    /**
+     * Removes every value held under {@code key}. Spelled as a delete rather than a null put because
+     * {@link ListValueStore#put(org.apache.kafka.common.utils.Bytes, byte[])} with a null value drops the
+     * key's whole list, not just one element.
+     */
+    public void deleteList(final TimestampedKeyAndJoinSide<K> key) {
         if (headersStore != null) {
-            headersStore.putIfAbsent(key, AggregationWithHeaders.make(value, headers));
+            headersStore.put(key, null);
         } else {
-            plainStore.putIfAbsent(key, value);
+            plainStore.put(key, null);
+        }
+    }
+
+    /**
+     * Removes every value held under {@code key}, but only if the key has any — a no-op otherwise, so
+     * that no tombstone is written for a key that was never there.
+     */
+    public void deleteListIfPresent(final TimestampedKeyAndJoinSide<K> key) {
+        if (headersStore != null) {
+            headersStore.putIfAbsent(key, null);
+        } else {
+            plainStore.putIfAbsent(key, null);
         }
     }
 
@@ -129,7 +165,7 @@ public class OuterJoinStoreWrapper<K, VLeft, VRight> {
         @Override
         public KeyValue<TimestampedKeyAndJoinSide<K>, AggregationWithHeaders<V>> next() {
             final KeyValue<TimestampedKeyAndJoinSide<K>, V> kv = inner.next();
-            final AggregationWithHeaders<V> lifted = AggregationWithHeaders.make(kv.value, new RecordHeaders());
+            final AggregationWithHeaders<V> lifted = AggregationWithHeaders.make(kv.value, EMPTY_HEADERS);
             return KeyValue.pair(kv.key, lifted);
         }
     }

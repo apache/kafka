@@ -104,7 +104,6 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
         private TimestampedWindowStoreWithHeaders<K, VOther> otherWindowStore;
         private Sensor droppedRecordsSensor;
         private Optional<OuterJoinStoreWrapper<K, VLeft, VRight>> outerJoinStoreWrapper = Optional.empty();
-        private boolean isOuterJoinStoreHeadersAware;
         private InternalProcessorContext<K, VOut> internalProcessorContext;
         private TimeTracker sharedTimeTracker;
 
@@ -121,7 +120,6 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
             if (enableSpuriousResultFix) {
                 outerJoinStoreWrapper = outerJoinWindowStoreFactory
                     .map(s -> new OuterJoinStoreWrapper<>(context, s));
-                isOuterJoinStoreHeadersAware = outerJoinStoreWrapper.map(OuterJoinStoreWrapper::isHeadersStore).orElse(false);
 
                 sharedTimeTracker.setEmitInterval(
                     StreamsConfig.InternalConfig.getLong(
@@ -253,27 +251,29 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
                     }
 
                     final AggregationWithHeaders<LeftOrRightValue<VLeft, VRight>> outerValue = nextKeyValue.value;
-                    forwardNonJoinedOuterRecords(record, timestampedKeyAndJoinSide, outerValue);
+                    forwardNonJoinedOuterRecords(wrapper, record, timestampedKeyAndJoinSide, outerValue);
 
                     if (prevKey != null && !prevKey.equals(timestampedKeyAndJoinSide)) {
                         // blind-delete the previous key from the outer window store now it is emitted;
                         // we do this because this delete would remove the whole list of values of the same key,
                         // and hence if we delete eagerly and then fail, we would miss emitting join results of the later
                         // values in the list.
-                        // we do not use delete() calls since it would incur extra get()
-                        wrapper.put(prevKey, null, null);
+                        // this is a blind write of a whole-list tombstone, not the store's delete(), which
+                        // would incur an extra get() to return the previous value we have no use for
+                        wrapper.deleteList(prevKey);
                     }
                     prevKey = timestampedKeyAndJoinSide;
                 }
 
                 // at the end of the iteration, we need to delete the last key
                 if (prevKey != null) {
-                    wrapper.put(prevKey, null, null);
+                    wrapper.deleteList(prevKey);
                 }
             }
         }
 
-        private void forwardNonJoinedOuterRecords(final Record<K, VThis> record,
+        private void forwardNonJoinedOuterRecords(final OuterJoinStoreWrapper<K, VLeft, VRight> wrapper,
+                                                  final Record<K, VThis> record,
                                                   final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide,
                                                   final AggregationWithHeaders<LeftOrRightValue<VLeft, VRight>> outerValue) {
             final K key = timestampedKeyAndJoinSide.key();
@@ -283,7 +283,9 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
             final VOther otherValue = otherValue(storedValue);
             final VOut nullJoinedValue = joiner.apply(key, thisValue, otherValue);
             Record<K, VOut> forwarded = record.withKey(key).withValue(nullJoinedValue).withTimestamp(timestamp);
-            if (isOuterJoinStoreHeadersAware) {
+            // Only a headers store actually kept the buffered record's headers; on the plain path the
+            // lifted headers are empty and the record keeps whatever it was forwarded with.
+            if (wrapper.isHeadersStore()) {
                 forwarded = forwarded.withHeaders(outerValue.headers());
             }
             context().forward(forwarded);
@@ -307,13 +309,13 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
         private void emitInnerJoin(final Record<K, VThis> thisRecord, final KeyValue<Long, VOther> otherRecord,
                                    final long inputRecordTimestamp) {
             outerJoinStoreWrapper.ifPresent(wrapper -> {
-                // use putIfAbsent to first read and see if there's any values for the key,
-                // if yes delete the key, otherwise do not issue a put;
+                // this first reads to see if there are any values for the key, and only then deletes
+                // them, so that no tombstone is written for a key that was never buffered;
                 // we may delete some values with the same key early but since we are going
                 // range over all values of the same key even after failure, since the other window-store
                 // is only cleaned up by stream time, so this is okay for at-least-once.
                 final TimestampedKeyAndJoinSide<K> otherKey = makeOtherKey(thisRecord.key(), otherRecord.key);
-                wrapper.putIfAbsent(otherKey, null, null);
+                wrapper.deleteListIfPresent(otherKey);
             });
 
             context().forward(

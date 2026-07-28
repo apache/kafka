@@ -19,9 +19,11 @@ package org.apache.kafka.streams.integration;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -52,6 +54,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -65,6 +68,7 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.wa
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilMinRecordsReceived;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Integration test for verifying ListValueStore deserialization behavior after state restoration
@@ -76,6 +80,16 @@ public class OuterJoinListValueStoreRestorationTest {
 
     private static final int NUM_BROKERS = 1;
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+
+    /** Stands in for an absent record header, so a lost header shows up as a diff rather than an NPE. */
+    private static final String NO_HEADER = "<no header>";
+
+    /**
+     * {@code ListValueStoreUpgradeUtils.LIST_VALUE_HEADERS_HEADER_KEY}, repeated as a literal because that
+     * constant is package-private in {@code org.apache.kafka.streams.state.internals}. Only the
+     * headers-format changelogger writes it, which makes it the marker that HEADERS mode really took hold.
+     */
+    private static final String LIST_VALUE_HEADERS_HEADER_KEY = "vh";
 
     private String applicationId;
     private String leftTopic;
@@ -285,10 +299,16 @@ public class OuterJoinListValueStoreRestorationTest {
             waitUntilMinRecordsReceived(getConsumerConfig(), outputTopic, 10, 30000);
 
         // Step 6: Each restored non-joined left record must be emitted with its original header.
+        // A missing header maps to a sentinel rather than null: that is the regression this test guards,
+        // and Collectors.toMap rejects null values, so it would surface as a bare NPE here instead of an
+        // assertEquals diff showing which keys lost their header.
         final Map<String, String> actualHeaders = results.stream()
             .filter(r -> r.value() != null && r.value().endsWith("right=null"))
             .filter(r -> r.key().startsWith("key"))
-            .collect(Collectors.toMap(ConsumerRecord::key, r -> headerValue(r, "h"), (a, b) -> a));
+            .collect(Collectors.toMap(
+                ConsumerRecord::key,
+                r -> Objects.requireNonNullElse(headerValue(r, "h"), NO_HEADER),
+                (a, b) -> a));
 
         assertEquals(expectedHeaders, actualHeaders,
             "Each non-joined left record should retain its original header after wipe + changelog restoration");
@@ -327,6 +347,15 @@ public class OuterJoinListValueStoreRestorationTest {
         produceRecord(rightTopic, "probe", "probe-right", timestamp);
         waitUntilMinKeyValueRecordsReceived(getConsumerConfig(), outputTopic, 1, 30000);
         waitForCompletion(streams, 2, 30000);
+
+        // Step 1b: prove HEADERS mode actually took hold before relying on the downgrade below. Without
+        // this the test is vacuous: if the outer-join store ignored dsl.store.format, step 1 would log
+        // PLAIN elements and step 3 would read them back happily, so every assertion below would pass for
+        // the wrong reason -- including with this whole feature reverted.
+        assertTrue(
+            outerJoinChangelogCarriesElementHeaders(),
+            "No changelog record carried the " + LIST_VALUE_HEADERS_HEADER_KEY + " header, so the store was "
+                + "not the headers-format one and there is nothing for the downgrade below to prove");
 
         // Step 2: wipe the local state, so the only surviving copy is the changelog.
         streams.close(Duration.ofSeconds(30));
@@ -385,6 +414,35 @@ public class OuterJoinListValueStoreRestorationTest {
             timestamp,
             false
         );
+    }
+
+    /**
+     * Whether the outer-join store's changelog carries the per-element headers control header, i.e.
+     * whether the store writing it was the headers-format one.
+     */
+    private boolean outerJoinChangelogCarriesElementHeaders() throws Exception {
+        final Set<String> topics = CLUSTER.getAllTopicsInCluster();
+        // The topology does not name the join store, so it is KSTREAM-OUTERSHARED-<n>-store.
+        final String changelogTopic = topics.stream()
+            .filter(t -> t.contains("OUTERSHARED") && t.endsWith("-store-changelog"))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("no outer-join changelog topic among " + topics));
+
+        final Properties consumerConfig = new Properties();
+        consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "changelog-consumer-" + applicationId);
+        consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+        consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+        consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        // Under exactly-once the changelog writes are transactional, so an uncommitted read could see
+        // records from an aborted transaction -- or miss the committed ones entirely.
+        consumerConfig.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString());
+
+        final List<ConsumerRecord<byte[], byte[]>> changelogRecords =
+            waitUntilMinRecordsReceived(consumerConfig, changelogTopic, 1, 30000);
+
+        return changelogRecords.stream()
+            .anyMatch(r -> r.headers().lastHeader(LIST_VALUE_HEADERS_HEADER_KEY) != null);
     }
 
     private static String headerValue(final ConsumerRecord<?, ?> record, final String key) {
