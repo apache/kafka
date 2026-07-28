@@ -941,8 +941,9 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
 
       val groupConfigResource = new ConfigResource(ConfigResource.Type.GROUP, groupId)
 
-      // The config is unset by default, which means the group uses the broker's default assignor.
-      assertNull(admin.describeConfigs(List(groupConfigResource).asJava).all().get()
+      // The config is unset by default, so it falls back to the broker's default assignor, which is
+      // the name of the first assignor of group.streams.assignors.
+      assertEquals("sticky", admin.describeConfigs(List(groupConfigResource).asJava).all().get()
         .get(groupConfigResource).get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG).value())
 
       // Valid case: the built-in assignor, which is registered by default, is accepted.
@@ -992,7 +993,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
 
       TestUtils.waitUntilTrue(() => {
         val describedConfigs = admin.describeConfigs(List(groupConfigResource).asJava).all().get()
-        describedConfigs.get(groupConfigResource).get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG).value() == null
+        describedConfigs.get(groupConfigResource).get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG).value() == "sticky"
       }, s"${GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG} was not unset within the timeout period.")
     } finally {
       admin.close()
@@ -1048,6 +1049,37 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       )
       assertTrue(executionException.getCause.isInstanceOf[InvalidConfigurationException],
         s"Expected InvalidConfigurationException but got ${executionException.getCause}")
+    } finally {
+      admin.close()
+    }
+  }
+
+  @ClusterTest(
+    serverProperties = Array(
+      // The class name has to be spelled out because annotation values must be compile-time constants.
+      new ClusterConfigProperty(
+        key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG,
+        value = "kafka.server.CustomStreamsTaskAssignor"
+      )
+    )
+  )
+  def testDescribeStreamsAssignorNameGroupConfigFallsBackToAssignorName(): Unit = {
+    val admin = cluster.admin()
+    val groupId = "test-group"
+
+    try {
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
+      )
+
+      val groupConfigResource = new ConfigResource(ConfigResource.Type.GROUP, groupId)
+
+      // The default assignor is registered by class name, but the group config selects assignors by
+      // name, so the fallback is the assignor's name and not the configured class name.
+      assertEquals(CustomStreamsTaskAssignor.NAME, admin.describeConfigs(List(groupConfigResource).asJava).all().get()
+        .get(groupConfigResource).get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG).value())
     } finally {
       admin.close()
     }

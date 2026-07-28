@@ -376,7 +376,7 @@ public final class GroupConfig extends AbstractConfig {
         Map.entry(STREAMS_NUM_WARMUP_REPLICAS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG)),
         Map.entry(STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG)),
         Map.entry(STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_CONFIG)),
-        Map.entry(STREAMS_ASSIGNOR_NAME_CONFIG, Optional.empty()),
+        Map.entry(STREAMS_ASSIGNOR_NAME_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG)),
 
         // DLQ configs
         Map.entry(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, Optional.empty()),

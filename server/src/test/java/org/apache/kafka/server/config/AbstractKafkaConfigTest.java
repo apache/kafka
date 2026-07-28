@@ -18,6 +18,7 @@ package org.apache.kafka.server.config;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.coordinator.group.GroupConfig;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.raft.KRaftConfigs;
 
 import org.junit.jupiter.api.Test;
@@ -33,6 +34,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 
 public class AbstractKafkaConfigTest {
@@ -102,7 +104,8 @@ public class AbstractKafkaConfigTest {
 
             AbstractKafkaConfig kafkaConfig = new AbstractKafkaConfig(configDef, new HashMap<>(brokerProps), Map.of(), false) { };
 
-            return kafkaConfig.extractGroupConfigMap();
+            // The test config is not the streams assignors config, so the coordinator config is never consulted.
+            return kafkaConfig.extractGroupConfigMap(mock(GroupCoordinatorConfig.class));
         }
     }
 }

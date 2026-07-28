@@ -645,16 +645,26 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
      * defaults when building a {@link GroupConfig} for {@code DescribeConfigs}.
      * Internal group configs are excluded unless their broker synonym was explicitly configured.
      *
+     * @param groupCoordinatorConfig The group coordinator config, used to resolve defaults that are
+     *                               not the plain value of the broker synonym.
      * @return a map of group config names to their corresponding broker-level values
      */
-    public Map<String, Object> extractGroupConfigMap() {
+    public Map<String, Object> extractGroupConfigMap(GroupCoordinatorConfig groupCoordinatorConfig) {
         Map<String, Object> defaults = new HashMap<>();
         Map<String, Object> brokerOriginals = originals();
         GroupConfig.configNames().forEach(groupConfigName ->
             GroupConfig.brokerSynonym(groupConfigName).ifPresent(brokerConfigName -> {
                 // Skip internal configs unless they are explicitly configured via the broker synonym.
                 if (!GroupConfig.isInternal(groupConfigName) || brokerOriginals.containsKey(brokerConfigName)) {
-                    defaults.put(groupConfigName, get(brokerConfigName));
+                    if (brokerConfigName.equals(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG)) {
+                        // The broker config lists all registered assignors, while the group config selects a
+                        // single one of them, so the default is the first registered assignor. It is taken from
+                        // the assignor's name rather than from the config, because an entry of the broker config
+                        // may be a class name, which is not a valid value for the group config.
+                        defaults.put(groupConfigName, groupCoordinatorConfig.streamsGroupAssignorNames().get(0));
+                    } else {
+                        defaults.put(groupConfigName, get(brokerConfigName));
+                    }
                 }
             })
         );
