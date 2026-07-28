@@ -54,6 +54,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -451,6 +452,27 @@ public class StreamsResetterTest {
     }
 
     @Test
+    public void shouldMatchExactGroupIdNotSubstring() throws Exception {
+        final String groupId = "my-app";
+        final String existingGroupId = "my-app-v2";
+
+        final Admin adminClient = mock(Admin.class);
+        final DescribeConsumerGroupsResult describeResult = mock(DescribeConsumerGroupsResult.class);
+
+
+        final KafkaFutureImpl<Map<String, ConsumerGroupDescription>> future = new KafkaFutureImpl<>();
+        future.completeExceptionally(new GroupIdNotFoundException("Group " + groupId + " not found."));
+
+        when(describeResult.all()).thenReturn(future);
+        when(adminClient.describeConsumerGroups(Set.of(groupId))).thenReturn(describeResult);
+        assertNotEquals(groupId, existingGroupId);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> streamsResetter.validateApplicationIdExists(groupId, adminClient));
+    }
+
+
+    @Test
     public void shouldSucceedIfApplicationIdExistsAsConsumerGroup() throws Exception {
         final String groupId = "my-app-v1";
 
@@ -467,23 +489,6 @@ public class StreamsResetterTest {
         when(adminClient.describeConsumerGroups(Set.of(groupId))).thenReturn(describeResult);
 
         streamsResetter.validateApplicationIdExists(groupId, adminClient);
-    }
-
-    @Test
-    public void shouldFailIfNoConsumerGroupsExistAtAll() throws Exception {
-        final String groupId = "my-app";
-
-        final Admin adminClient = mock(Admin.class);
-        final DescribeConsumerGroupsResult describeResult = mock(DescribeConsumerGroupsResult.class);
-
-        final KafkaFutureImpl<Map<String, ConsumerGroupDescription>> future = new KafkaFutureImpl<>();
-        future.completeExceptionally(new GroupIdNotFoundException("Group " + groupId + " not found."));
-
-        when(describeResult.all()).thenReturn(future);
-        when(adminClient.describeConsumerGroups(Set.of(groupId))).thenReturn(describeResult);
-
-        assertThrows(IllegalArgumentException.class,
-                () -> streamsResetter.validateApplicationIdExists(groupId, adminClient));
     }
 
     @Test
@@ -521,23 +526,6 @@ public class StreamsResetterTest {
 
         assertTrue(ex.getMessage().contains("my-ap"));
         assertTrue(ex.getMessage().contains("--force"));
-    }
-
-    @Test
-    public void shouldMatchExactGroupIdNotSubstring() throws Exception {
-        final String groupId = "foo";
-
-        final Admin adminClient = mock(Admin.class);
-        final DescribeConsumerGroupsResult describeResult = mock(DescribeConsumerGroupsResult.class);
-
-        final KafkaFutureImpl<Map<String, ConsumerGroupDescription>> future = new KafkaFutureImpl<>();
-        future.completeExceptionally(new GroupIdNotFoundException("Group " + groupId + " not found."));
-
-        when(describeResult.all()).thenReturn(future);
-        when(adminClient.describeConsumerGroups(Set.of(groupId))).thenReturn(describeResult);
-
-        assertThrows(IllegalArgumentException.class,
-                () -> streamsResetter.validateApplicationIdExists(groupId, adminClient));
     }
 
     @Test

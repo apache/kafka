@@ -210,7 +210,6 @@ public class StreamsResetter {
                 throw new RuntimeException(e.getCause());
             }
         }
-        System.out.println("This method is invoked");
 
         if (description == null || GroupState.DEAD.equals(description.groupState())) {
             throw new IllegalArgumentException(
@@ -562,7 +561,7 @@ public class StreamsResetter {
         return validatedTopicPartitionsOffsets;
     }
 
-    private int maybeDeleteInternalTopics(final Admin adminClient, final StreamsResetterOptions options) throws ExecutionException, InterruptedException, TimeoutException {
+    private int maybeDeleteInternalTopics(final Admin adminClient, final StreamsResetterOptions options) {
 
         final List<String> inferredInternalTopics = allTopics.stream()
                 .filter(options::isInferredInternalTopic)
