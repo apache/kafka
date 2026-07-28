@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.jmh.raft;
 
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.raft.RaftClientBenchmarkContext;
 
 import org.openjdk.jmh.annotations.AuxCounters;
@@ -26,8 +25,6 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.infra.BenchmarkParams;
-
-import java.util.Optional;
 
 /**
  * Secondary, machine-independent work counters reported by the raft benchmarks alongside the timing
@@ -64,10 +61,9 @@ public class KRaftBenchmarkingCounters {
     // by captureRunShape().
     private double measurementDataPoints = 1.0;
 
-    // Stashed by recordInvocation() each invocation so the iteration teardown can read the deltas
-    // off the benchmark's mocks and drain any request the scenario expects in-flight.
+    // Stashed by recordInvocation() so the iteration teardown can read the work-counter deltas off
+    // the benchmark's mocks.
     private RaftClientBenchmarkContext context;
-    private Optional<ApiKeys> expectedRequest = Optional.empty();
 
     /**
      * Captures the number of measurement data points — {@code forks x measurement iterations} —
@@ -100,26 +96,23 @@ public class KRaftBenchmarkingCounters {
         quorumStateReadsTotal = 0;
         operations = 0;
         context = null;
-        expectedRequest = Optional.empty();
     }
 
     /**
-     * Counts one completed benchmark operation.
+     * Counts one completed benchmark operation. Every invocation in an iteration shares the same
+     * {@code context}, so it is captured once (on the first invocation after {@link #reset()}) and
+     * only the operation count advances thereafter.
      */
-    public void recordInvocation(
-        RaftClientBenchmarkContext context,
-        Optional<ApiKeys> expectedRequest
-    ) {
+    public void recordInvocation(RaftClientBenchmarkContext context) {
         if (this.context == null) {
             this.context = context;
-            this.expectedRequest = expectedRequest;
         }
         operations += 1;
     }
 
     /**
-     * Runs at iteration end (untimed), before the {@code *PerOp()} aux counters are read,
-     * and reads this iteration's work-counters and drains the requests the scenario expects in-flight.
+     * Runs at iteration end (untimed), before the {@code *PerOp()} aux counters are read. Reads this
+     * iteration's work-counter deltas and asserts the client left no requests unanswered.
      */
     @TearDown(Level.Iteration)
     public void collect() {
@@ -136,7 +129,7 @@ public class KRaftBenchmarkingCounters {
         rpcResponsesSentTotal = context.getRpcResponsesSentDelta();
         quorumStateWritesTotal = context.getQuorumStateWritesDelta();
         quorumStateReadsTotal = context.getQuorumStateReadsDelta();
-        context.drainExpectedRequestsAndAssertEmpty(expectedRequest);
+        context.assertNoOutstandingRequests();
     }
 
     public double logFlushesPerOp() {

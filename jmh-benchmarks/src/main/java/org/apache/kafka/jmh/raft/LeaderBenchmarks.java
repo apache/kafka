@@ -58,7 +58,7 @@ public class LeaderBenchmarks {
          * {@code maxWaitMs = 0}, so the leader replies immediately instead of parking the fetch
          * until new data arrives; this measures the immediate-reply path.
          */
-        NO_WAIT_FETCH_AT_HWM(Optional.empty(), Optional.of(ApiKeys.FETCH)) {
+        NO_WAIT_FETCH_AT_HWM(Optional.of(ApiKeys.FETCH)) {
             @Override
             public ApiMessage build(RaftClientBenchmarkContext benchmark) {
                 RaftClientTestContext context = benchmark.testContext();
@@ -74,7 +74,7 @@ public class LeaderBenchmarks {
         /**
          A FETCH from a follower that is lagging behind the leader's log end offset.
          */
-        FETCH_FROM_LAGGING_FOLLOWER(Optional.empty(), Optional.of(ApiKeys.FETCH)) {
+        FETCH_FROM_LAGGING_FOLLOWER(Optional.of(ApiKeys.FETCH)) {
             @Override
             public ApiMessage build(RaftClientBenchmarkContext benchmark) {
                 RaftClientTestContext context = benchmark.testContext();
@@ -87,24 +87,17 @@ public class LeaderBenchmarks {
             }
         },
 
-        DESCRIBE_QUORUM(Optional.empty(), Optional.of(ApiKeys.DESCRIBE_QUORUM)) {
+        DESCRIBE_QUORUM(Optional.of(ApiKeys.DESCRIBE_QUORUM)) {
             @Override
             public ApiMessage build(RaftClientBenchmarkContext benchmark) {
                 return benchmark.testContext().describeQuorumRequest();
             }
         };
 
-        private final Optional<ApiKeys> expectedRequest;
         private final Optional<ApiKeys> expectedResponse;
 
-        LeaderInboundRpc(Optional<ApiKeys> expectedRequest, Optional<ApiKeys> expectedResponse) {
-            this.expectedRequest = expectedRequest;
+        LeaderInboundRpc(Optional<ApiKeys> expectedResponse) {
             this.expectedResponse = expectedResponse;
-        }
-
-        @Override
-        public Optional<ApiKeys> expectedRequest() {
-            return expectedRequest;
         }
 
         @Override
@@ -156,7 +149,7 @@ public class LeaderBenchmarks {
         KRaftBenchmarkingCounters counters
     ) throws InterruptedException {
         state.benchmark.deliverAndAwaitResponse(state.request, state.rpc.expectedResponse());
-        counters.recordInvocation(state.benchmark, state.rpc.expectedRequest());
+        counters.recordInvocation(state.benchmark);
     }
 
 }

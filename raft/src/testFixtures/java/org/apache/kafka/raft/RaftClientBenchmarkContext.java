@@ -241,12 +241,12 @@ public final class RaftClientBenchmarkContext {
     }
 
     /**
-     * Drains the requests the benchmark expects to be in-flight at the end of the invocation (the
-     * given {@code expectedRequest} API key, if any) and asserts the send queue is then empty. A
-     * non-empty queue means the client sent more requests than the benchmark accounts for.
+     * Asserts the client left no outstanding requests on the send queue at the end of the
+     * invocation. The benchmark is responsible for completing every request it triggers (by
+     * delivering a response), so any leftover request means the client sent more than the benchmark
+     * accounts for.
      */
-    public void drainExpectedRequestsAndAssertEmpty(Optional<ApiKeys> expectedRequest) {
-        expectedRequest.ifPresent(apiKey -> channel.drainSentRequests(Optional.of(apiKey)));
+    public void assertNoOutstandingRequests() {
         if (channel.hasSentRequests()) {
             throw new IllegalStateException(
                 "Unexpected outstanding requests at end of benchmark invocation: "

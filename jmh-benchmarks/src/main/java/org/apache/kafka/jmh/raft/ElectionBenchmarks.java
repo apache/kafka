@@ -33,7 +33,6 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.IOException;
-import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -74,7 +73,7 @@ public class ElectionBenchmarks {
         KRaftBenchmarkingCounters counters
     ) throws Exception {
         state.context.unattachedToLeader();
-        counters.recordInvocation(state.benchmark, Optional.empty());
         state.benchmark.resignToUnattached();
+        counters.recordInvocation(state.benchmark);
     }
 }
