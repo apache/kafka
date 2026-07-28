@@ -30,8 +30,6 @@ import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.BeforeEach;
-
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
@@ -59,11 +57,6 @@ public class AdminMetadataTest {
 
     AdminMetadataTest(ClusterInstance clusterInstance) {
         this.clusterInstance = clusterInstance;
-    }
-
-    @BeforeEach
-    public void setup() throws InterruptedException {
-        clusterInstance.waitForReadyBrokers();
     }
 
     @ClusterTest
@@ -113,6 +106,7 @@ public class AdminMetadataTest {
 
     @ClusterTest
     public void testDescribeCluster() throws Exception {
+        clusterInstance.waitForReadyBrokers();
         try (Admin admin = clusterInstance.admin()) {
             DescribeClusterResult result = admin.describeCluster();
             Collection<Node> nodes = result.nodes().get();
