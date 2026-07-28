@@ -17,7 +17,6 @@
 package org.apache.kafka.jmh.raft;
 
 import org.apache.kafka.raft.RaftClientBenchmarkContext;
-import org.apache.kafka.raft.RaftClientTestContext;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -54,7 +53,6 @@ public class ElectionBenchmarks {
         public int voterCount;
 
         RaftClientBenchmarkContext benchmark;
-        RaftClientTestContext context;
 
         @Setup(Level.Iteration)
         public void setup() throws IOException {
@@ -71,7 +69,7 @@ public class ElectionBenchmarks {
         UnattachedWithMultipleVoters state,
         KRaftBenchmarkingCounters counters
     ) throws Exception {
-        state.context.unattachedToLeader();
+        state.benchmark.testContext().unattachedToLeader();
         state.benchmark.toUnattachedWithHigherEpoch();
         counters.recordInvocation(state.benchmark);
     }
