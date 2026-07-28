@@ -53,7 +53,9 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.MockFaultHandler;
 import org.apache.kafka.test.TestUtils;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -85,6 +87,7 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static org.apache.kafka.image.TopicsImageTest.DELTA1_RECORDS;
 import static org.apache.kafka.image.TopicsImageTest.IMAGE1;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KRaftMigrationDriverTest {
@@ -94,9 +97,16 @@ public class KRaftMigrationDriverTest {
 
     static class MockControllerMetrics extends QuorumControllerMetrics {
         final AtomicBoolean closed = new AtomicBoolean(false);
+        final List<Long> zkWriteSnapshotTimesMs = new ArrayList<>();
 
         MockControllerMetrics() {
             super(Optional.empty(), Time.SYSTEM, false);
+        }
+
+        @Override
+        public void updateZkWriteSnapshotTimeMs(long durationMs) {
+            super.updateZkWriteSnapshotTimeMs(durationMs);
+            zkWriteSnapshotTimesMs.add(durationMs);
         }
 
         @Override
@@ -105,7 +115,7 @@ public class KRaftMigrationDriverTest {
             closed.set(true);
         }
     }
-    MockControllerMetrics metrics = new MockControllerMetrics();
+    MockControllerMetrics metrics;
 
     Time mockTime = new MockTime(1) {
         public long nanoseconds() {
@@ -113,6 +123,16 @@ public class KRaftMigrationDriverTest {
             return System.nanoTime() - NANOSECONDS.convert(990, MILLISECONDS);
         }
     };
+
+    @BeforeEach
+    public void setUp() {
+        metrics = new MockControllerMetrics();
+    }
+
+    @AfterEach
+    public void tearDown() {
+        metrics.close();
+    }
 
     /**
      * Return a {@link org.apache.kafka.metadata.migration.KRaftMigrationDriver.Builder} that uses the mocks
@@ -775,6 +795,49 @@ public class KRaftMigrationDriverTest {
             // Wait for migration
             TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
                 "Waiting for KRaftMigrationDriver to enter DUAL_WRITE state");
+        });
+    }
+
+    @Test
+    public void testZkWriteSnapshotTimeMsIsRecorded() throws Exception {
+        setupTopicDualWrite((driver, migrationClient, topicClient, configClient) -> {
+            MetadataImage image = new MetadataImage(
+                MetadataProvenance.EMPTY,
+                FeaturesImage.EMPTY,
+                ClusterImage.EMPTY,
+                IMAGE1,
+                ConfigurationsImage.EMPTY,
+                ClientQuotasImage.EMPTY,
+                ProducerIdsImage.EMPTY,
+                AclsImage.EMPTY,
+                ScramImage.EMPTY,
+                DelegationTokenImage.EMPTY);
+            MetadataDelta delta = new MetadataDelta(image);
+
+            startAndWaitForRecoveringMigrationStateFromZK(driver);
+            setupDeltaForMigration(delta, true);
+            delta.replay(ZkMigrationState.PRE_MIGRATION.toRecord().message());
+            delta.replay(zkBrokerRecord(0));
+            delta.replay(zkBrokerRecord(1));
+            delta.replay(zkBrokerRecord(2));
+            delta.replay(zkBrokerRecord(3));
+            delta.replay(zkBrokerRecord(4));
+            delta.replay(zkBrokerRecord(5));
+            MetadataProvenance provenance = new MetadataProvenance(100, 1, 1);
+            image = delta.apply(provenance);
+
+            // Publish a delta with this node (3000) as the leader
+            LeaderAndEpoch newLeader = new LeaderAndEpoch(OptionalInt.of(3000), 1);
+            driver.onControllerChange(newLeader);
+            driver.onMetadataUpdate(delta, image, logDeltaManifestBuilder(provenance, newLeader).build());
+
+            // Wait for DUAL_WRITE to ensure ZkWriteSnapshotTimeMs has been recorded.
+            TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
+                "Waiting for KRaftMigrationDriver to enter DUAL_WRITE state");
+
+            assertFalse(metrics.zkWriteSnapshotTimesMs.isEmpty(), "Expected ZkWriteSnapshotTimeMs to be recorded");
+            metrics.zkWriteSnapshotTimesMs.forEach(durationMs ->
+                assertTrue(durationMs >= 0, "Expected non-negative ZkWriteSnapshotTimeMs but got " + durationMs));
         });
     }
 
