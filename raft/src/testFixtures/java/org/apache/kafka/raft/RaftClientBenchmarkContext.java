@@ -217,7 +217,6 @@ public final class RaftClientBenchmarkContext {
         quorumStateReads.drainDelta();
         rpcResponsesSent.drainDelta();
         channel.drainSendQueue();
-        context.drainAllSentResponses();
     }
 
     public int getLogFlushesDelta() {
@@ -302,18 +301,20 @@ public final class RaftClientBenchmarkContext {
     }
 
     /**
-     * Resigns the local leader back to the Unattached state.
+     * Drives the local node to the Unattached state by delivering a vote request one epoch ahead.
+     * A raft node transitions to Unattached whenever it observes an RPC with a higher epoch, so this
+     * is safe and works from any attached role, not just leader.
      */
-    public void resignToUnattached() throws InterruptedException {
+    public void toUnattachedWithHigherEpoch() throws InterruptedException {
         if (context.client.quorum().isUnattached()) {
             throw new IllegalStateException(
-                "resignToUnattached() expects an attached node to resign, but it is already "
-                    + "Unattached; it must be called after an election that made the local node leader");
+                "toUnattachedWithHigherEpoch() expects an attached node, but it is already Unattached");
         }
         ReplicaKey candidate = remoteVoters().get(0);
         deliverAndAwaitResponse(
             context.inboundRequest(context.voteRequest(context.currentEpoch() + 1, candidate, 0, 0)),
-            Optional.of(ApiKeys.VOTE));
+            Optional.of(ApiKeys.VOTE)
+        );
     }
 
 }

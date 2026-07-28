@@ -62,7 +62,6 @@ public class ElectionBenchmarks {
                 voterCount,
                 RaftClientBenchmarkContext.DEFAULT_KRAFT_VERSION,
                 RaftClientBenchmarkContext.DEFAULT_RAFT_PROTOCOL);
-            context = benchmark.testContext();
         }
     }
 
@@ -73,7 +72,7 @@ public class ElectionBenchmarks {
         KRaftBenchmarkingCounters counters
     ) throws Exception {
         state.context.unattachedToLeader();
-        state.benchmark.resignToUnattached();
+        state.benchmark.toUnattachedWithHigherEpoch();
         counters.recordInvocation(state.benchmark);
     }
 }

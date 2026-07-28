@@ -1094,18 +1094,6 @@ public final class RaftClientTestContext {
         return requests;
     }
 
-    /**
-     * Removes and counts all responses the client has sent to inbound requests. Used by the JMH
-     * raft benchmarks to measure {@code rpcResponsesSent} per operation. Unlike the mock work
-     * counters, responses are collected here (not in a mock), so draining the collection both
-     * yields the per-operation delta and bounds its growth across a long benchmark iteration.
-     */
-    int drainAllSentResponses() {
-        int count = sentResponses.size();
-        sentResponses.clear();
-        return count;
-    }
-
     List<RaftResponse.Outbound> drainSentResponses(
         ApiKeys apiKey
     ) {

@@ -120,7 +120,6 @@ public class LeaderBenchmarks {
         public LeaderInboundRpc rpc;
 
         RaftClientBenchmarkContext benchmark;
-        RaftClientTestContext context;
         RaftRequest.Inbound request;
 
         @Setup(Level.Trial)
@@ -130,7 +129,7 @@ public class LeaderBenchmarks {
                 0,
                 RaftClientBenchmarkContext.DEFAULT_KRAFT_VERSION,
                 RaftClientBenchmarkContext.DEFAULT_RAFT_PROTOCOL);
-            context = benchmark.testContext();
+            RaftClientTestContext context = benchmark.testContext();
             context.client.prepareAppend(context.currentEpoch(), List.of("a", "b", "c", "d", "e"));
             context.client.schedulePreparedAppend();
             context.poll();
