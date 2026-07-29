@@ -979,15 +979,20 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     /**
-     * {@code checkInflightPoll()} manages the lifetime of the {@link AsyncPollEvent} processing. If it is
-     * called when no event is currently processing, it will start a new event processing asynchronously. A check
-     * is made during each invocation to see if the <em>inflight</em> event has completed. If it has, it will be
-     * processed accordingly.
+     * {@code checkInflightPoll()} manages the lifecycle of the {@link AsyncPollEvent}. If no event is
+     * currently processing, a new one is started asynchronously. Each invocation checks whether the
+     * <em>inflight</em> event has completed; if so, a new event is submitted in its place so a fetch request
+     * stays in flight. If the completed event left records buffered no new
+     * event is submitted here (it would gate those records behind a fresh validate-positions stage).
+     * Instead the buffered records are returned and the next fetch is pipelined by {@link #poll(Duration)} via
+     * {@link #sendPrefetches(Timer)}.
      */
     private void checkInflightPoll(Timer timer, boolean firstPass) {
-        if (firstPass && inflightPoll != null) {
-            // Handle the case where there's a remaining inflight poll from the *previous* invocation
-            // of AsyncKafkaConsumer.poll().
+        // Clear the current inflight poll if we can, so a new one (and a new fetch) is submitted below.
+        // On the first pass this may clear a leftover from the previous poll(). On later passes it clears
+        // inflights that have completed. A completed poll that filled the buffer is kept, so its records
+        // are returned first (see maybeClearPreviousInflightPoll).
+        if (inflightPoll != null && (firstPass || inflightPoll.isComplete())) {
             maybeClearPreviousInflightPoll();
         }
 

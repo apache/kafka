@@ -54,11 +54,11 @@ public interface ReadOnlyRecord<K, V> {
     /**
      * The headers of the record. Never null.
      *
-     * <p>The returned {@link Headers} is part of a read-only view and must not be mutated by
-     * callers.
+     * <p>The returned {@link Headers} should be treated as read-only. Records served as IQv2 results
+     * from a state store have their headers frozen via {@code RecordHeaders.setReadOnly()}, so adding
+     * or removing a header throws {@link IllegalStateException}. Freezing is not a deep copy, however:
+     * the {@code value()} bytes of an existing header can still be mutated in place, so callers must
+     * not modify them.
      */
-    // TODO (KIP-1356 follow-up): once the IQv2 query types land, records served as IQv2
-    // results from a state store will have their headers frozen via RecordHeaders.setReadOnly(),
-    // so that any attempt to mutate them throws IllegalStateException.
     Headers headers();
 }

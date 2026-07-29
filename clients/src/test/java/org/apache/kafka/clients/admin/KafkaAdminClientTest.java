@@ -24,6 +24,7 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
+import org.apache.kafka.clients.admin.internals.InternalDescribeFeaturesResult;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
@@ -9026,10 +9027,10 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(
                 body -> body instanceof ApiVersionsRequest,
                 prepareApiVersionsResponseForDescribeFeatures(Errors.NONE));
-            final KafkaFuture<FeatureMetadata> future = env.adminClient().describeFeatures(
-                new DescribeFeaturesOptions().timeoutMs(10000)).featureMetadata();
-            final FeatureMetadata metadata = future.get();
-            assertEquals(defaultFeatureMetadata(), metadata);
+            final var result = (InternalDescribeFeaturesResult) env.adminClient().describeFeatures(
+                new DescribeFeaturesOptions().timeoutMs(10000));
+            assertEquals(defaultFeatureMetadata(), result.featureMetadata().get());
+            assertNotNull(result.nodeApiVersions().get().apiVersion(ApiKeys.API_VERSIONS));
         }
     }
 
@@ -9041,9 +9042,9 @@ public class KafkaAdminClientTest {
                 prepareApiVersionsResponseForDescribeFeatures(Errors.INVALID_REQUEST));
             final DescribeFeaturesOptions options = new DescribeFeaturesOptions();
             options.timeoutMs(10000);
-            final KafkaFuture<FeatureMetadata> future = env.adminClient().describeFeatures(options).featureMetadata();
-            final ExecutionException e = assertThrows(ExecutionException.class, future::get);
-            assertEquals(Errors.INVALID_REQUEST.exception().getClass(), e.getCause().getClass());
+            final var result = (InternalDescribeFeaturesResult) env.adminClient().describeFeatures(options);
+            TestUtils.assertFutureThrows(InvalidRequestException.class, result.featureMetadata());
+            TestUtils.assertFutureThrows(InvalidRequestException.class, result.nodeApiVersions());
         }
     }
 
@@ -9068,9 +9069,10 @@ public class KafkaAdminClientTest {
                 body -> body instanceof ApiVersionsRequest,
                 prepareApiVersionsResponseForDescribeFeatures(Errors.NONE),
                 env.cluster().nodeById(1));
-            final KafkaFuture<FeatureMetadata> future = env.adminClient().describeFeatures(
-                new DescribeFeaturesOptions().timeoutMs(1000).nodeId(0)).featureMetadata();
-            assertThrows(ExecutionException.class, future::get);
+            final var result = (InternalDescribeFeaturesResult) env.adminClient().describeFeatures(
+                new DescribeFeaturesOptions().timeoutMs(1000).nodeId(0));
+            TestUtils.assertFutureThrows(TimeoutException.class, result.featureMetadata());
+            TestUtils.assertFutureThrows(TimeoutException.class, result.nodeApiVersions());
         }
     }
 
