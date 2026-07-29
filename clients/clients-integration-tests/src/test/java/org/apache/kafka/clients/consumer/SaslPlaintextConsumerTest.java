@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import kafka.security.JaasTestUtils;
-import kafka.security.minikdc.MiniKdc;
-
 import org.apache.kafka.clients.ClientsTestUtils;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -28,6 +25,8 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.security.JaasTestUtils;
+import org.apache.kafka.security.minikdc.MiniKdc;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
@@ -43,9 +42,6 @@ import java.util.Properties;
 
 import javax.security.auth.login.Configuration;
 
-import static kafka.security.JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME;
-import static kafka.security.JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME_2;
-import static kafka.security.JaasTestUtils.KAFKA_SERVER_PRINCIPAL_UNQUALIFIED_NAME;
 import static org.apache.kafka.clients.ClientsTestUtils.BaseConsumerTestcase.testClusterResourceListener;
 import static org.apache.kafka.clients.ClientsTestUtils.BaseConsumerTestcase.testCoordinatorFailover;
 import static org.apache.kafka.clients.ClientsTestUtils.BaseConsumerTestcase.testSimpleConsumption;
@@ -58,6 +54,9 @@ import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.SAS
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
+import static org.apache.kafka.security.JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME;
+import static org.apache.kafka.security.JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME_2;
+import static org.apache.kafka.security.JaasTestUtils.KAFKA_SERVER_PRINCIPAL_UNQUALIFIED_NAME;
 
 @ClusterTestDefaults(
     types = {Type.KRAFT},

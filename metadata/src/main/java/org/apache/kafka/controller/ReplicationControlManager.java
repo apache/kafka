@@ -2015,6 +2015,10 @@ public class ReplicationControlManager {
                     "assignment includes broker " + brokerId + ", but no such broker is " +
                     "registered.");
             }
+            if (!clusterControl.brokerRegistrations().get(brokerId).hasUncordonedDirs()) {
+                throw new InvalidReplicaAssignmentException("The manual partition " +
+                    "assignment includes broker " + brokerId + ", but all its log directories are cordoned.");
+            }
             if (brokerId.equals(prevBrokerId)) {
                 throw new InvalidReplicaAssignmentException("The manual partition " +
                     "assignment includes the broker " + prevBrokerId + " more than " +

@@ -441,8 +441,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG),
                         config.getLong(ProducerConfig.METADATA_MAX_IDLE_CONFIG),
                         logContext,
-                        clusterResourceListeners,
-                        Time.SYSTEM);
+                        clusterResourceListeners);
                 this.metadata.bootstrap(addresses);
             }
             this.transactionManager = configureTransactionState(config, logContext);
@@ -803,7 +802,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         if (versionOpt.isEmpty()) return 0L;
         sender.wakeup();
         try {
-            metadata.awaitUpdate(versionOpt.getAsInt(), maxBlockTimeMs);
+            metadata.awaitUpdate(versionOpt.getAsInt(), time.timer(maxBlockTimeMs));
         } catch (InterruptedException e) {
             throw new InterruptException(e);
         }
@@ -1274,7 +1273,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             int version = metadata.requestUpdateForTopic(topic);
             sender.wakeup();
             try {
-                metadata.awaitUpdate(version, remainingWaitMs);
+                metadata.awaitUpdate(version, time.timer(remainingWaitMs));
             } catch (TimeoutException ex) {
                 // Rethrow with original maxWaitMs to prevent logging exception with remainingWaitMs
                 final String errorMessage = getErrorMessage(partitionsCount, topic, partition, maxWaitMs);
