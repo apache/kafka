@@ -20,6 +20,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -186,6 +187,13 @@ public final class DistributedConfig extends WorkerConfig {
     public static final String CONNECT_PROTOCOL_CONFIG = "connect.protocol";
     public static final String CONNECT_PROTOCOL_DOC = "Compatibility mode for Kafka Connect Protocol";
     public static final String CONNECT_PROTOCOL_DEFAULT = ConnectProtocolCompatibility.SESSIONED.toString();
+
+
+    public static final String INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_CONFIG = "internal.topics.automatic.creation.enable";
+    private static final String INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_DOC = "Whether to automatically create internal topics used by Connect. "
+            + "This includes the offset, config, and status topics, as well as connector-specific offset topics "
+            + "configured via 'offsets.storage.topic' in the source connector configuration.";
+    public static final boolean INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_DEFAULT = true;
 
     /**
      * <code>scheduled.rebalance.max.delay.ms</code>
@@ -397,6 +405,12 @@ public final class DistributedConfig extends WorkerConfig {
                     atLeast(0L),
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.RETRY_BACKOFF_MAX_MS_DOC)
+            .define(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG,
+                    ConfigDef.Type.LONG,
+                    CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
+                    atLeast(1L),
+                    ConfigDef.Importance.HIGH,
+                    CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC)
             .define(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG,
                     ConfigDef.Type.INT,
                     Math.toIntExact(TimeUnit.SECONDS.toMillis(40)),
@@ -427,6 +441,12 @@ public final class DistributedConfig extends WorkerConfig {
                     WORKER_UNSYNC_BACKOFF_MS_DEFAULT,
                     ConfigDef.Importance.MEDIUM,
                     WORKER_UNSYNC_BACKOFF_MS_DOC)
+            .define(
+                    INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_CONFIG,
+                    Type.BOOLEAN,
+                    INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_DEFAULT,
+                    ConfigDef.Importance.MEDIUM,
+                    INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_DOC)
             .define(OFFSET_STORAGE_TOPIC_CONFIG,
                     ConfigDef.Type.STRING,
                     ConfigDef.Importance.HIGH,
@@ -588,6 +608,11 @@ public final class DistributedConfig extends WorkerConfig {
     @Override
     public boolean connectorOffsetsTopicsPermitted() {
         return true;
+    }
+
+    @Override
+    public boolean internalTopicsCreationEnabled() {
+        return Boolean.TRUE.equals(getBoolean(INTERNAL_TOPICS_AUTOMATIC_CREATION_ENABLE_CONFIG));
     }
 
     @Override
