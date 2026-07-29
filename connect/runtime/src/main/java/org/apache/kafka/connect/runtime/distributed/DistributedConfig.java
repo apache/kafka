@@ -397,6 +397,12 @@ public final class DistributedConfig extends WorkerConfig {
                     atLeast(0L),
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.RETRY_BACKOFF_MAX_MS_DOC)
+            .define(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG,
+                    ConfigDef.Type.LONG,
+                    CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
+                    atLeast(1L),
+                    ConfigDef.Importance.HIGH,
+                    CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC)
             .define(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG,
                     ConfigDef.Type.INT,
                     Math.toIntExact(TimeUnit.SECONDS.toMillis(40)),

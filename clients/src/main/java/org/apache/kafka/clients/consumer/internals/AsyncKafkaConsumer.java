@@ -114,7 +114,6 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.slf4j.Logger;
 import org.slf4j.event.Level;
 
-import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
@@ -500,8 +499,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     interceptorList,
                     Arrays.asList(deserializers.keyDeserializer(), deserializers.valueDeserializer()));
             this.metadata = metadataFactory.build(config, subscriptions, logContext, clusterResourceListeners);
-            final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
-            metadata.bootstrap(addresses);
 
             this.fetchMetricsManager = createFetchMetricsManager(metrics);
             FetchConfig fetchConfig = new FetchConfig(config);
@@ -2209,6 +2206,13 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             release();
             throw new IllegalStateException("This consumer has already been closed.");
         }
+
+        try {
+            metadata.maybeThrowBootstrapFatalException();
+        } catch (RuntimeException e) {
+            release();
+            throw e;
+        }
     }
 
     /**
@@ -2413,7 +2417,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      *
      * Each iteration gives the application thread an opportunity to process background events, which may be
      * necessary to complete the overall processing.
-     *
      * <p/>
      *
      * As an example, take {@link #unsubscribe()}. To start unsubscribing, the application thread enqueues an
