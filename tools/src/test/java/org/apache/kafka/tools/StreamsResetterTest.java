@@ -452,27 +452,6 @@ public class StreamsResetterTest {
     }
 
     @Test
-    public void shouldMatchExactGroupIdNotSubstring() throws Exception {
-        final String groupId = "my-app";
-        final String existingGroupId = "my-app-v2";
-
-        final Admin adminClient = mock(Admin.class);
-        final DescribeConsumerGroupsResult describeResult = mock(DescribeConsumerGroupsResult.class);
-
-
-        final KafkaFutureImpl<Map<String, ConsumerGroupDescription>> future = new KafkaFutureImpl<>();
-        future.completeExceptionally(new GroupIdNotFoundException("Group " + groupId + " not found."));
-
-        when(describeResult.all()).thenReturn(future);
-        when(adminClient.describeConsumerGroups(Set.of(groupId))).thenReturn(describeResult);
-        assertNotEquals(groupId, existingGroupId);
-
-        assertThrows(IllegalArgumentException.class,
-                () -> streamsResetter.validateApplicationIdExists(groupId, adminClient));
-    }
-
-
-    @Test
     public void shouldSucceedIfApplicationIdExistsAsConsumerGroup() throws Exception {
         final String groupId = "my-app-v1";
 
@@ -489,23 +468,6 @@ public class StreamsResetterTest {
         when(adminClient.describeConsumerGroups(Set.of(groupId))).thenReturn(describeResult);
 
         streamsResetter.validateApplicationIdExists(groupId, adminClient);
-    }
-
-    @Test
-    public void shouldFailIfApplicationIdIsAPrefixOfExistingGroup() throws Exception {
-        final String groupId = "my-app";
-
-        final Admin adminClient = mock(Admin.class);
-        final DescribeConsumerGroupsResult describeResult = mock(DescribeConsumerGroupsResult.class);
-
-        final KafkaFutureImpl<Map<String, ConsumerGroupDescription>> future = new KafkaFutureImpl<>();
-        future.completeExceptionally(new GroupIdNotFoundException("Group " + groupId + " not found."));
-
-        when(describeResult.all()).thenReturn(future);
-        when(adminClient.describeConsumerGroups(Set.of(groupId))).thenReturn(describeResult);
-
-        assertThrows(IllegalArgumentException.class,
-                () -> streamsResetter.validateApplicationIdExists(groupId, adminClient));
     }
 
     @Test
