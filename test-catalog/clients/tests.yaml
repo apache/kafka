@@ -1206,6 +1206,7 @@ org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumerTest:
 - testBeginningOffsetsTimeoutException
 - testBeginningOffsetsTimeoutOnEventProcessingTimeout
 - testBeginningOffsetsWithZeroTimeout
+- testBufferedRecordsReturnedWithoutResubmittingPollEvent
 - testClearWakeupTriggerAfterPoll
 - testCloseAwaitPendingAsyncCommitComplete
 - testCloseAwaitPendingAsyncCommitIncomplete
@@ -1247,6 +1248,7 @@ org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumerTest:
 - testGroupRemoteAssignorInClassicProtocol
 - testGroupRemoteAssignorUnusedIfGroupIdUndefined
 - testGroupRemoteAssignorUsedInConsumerProtocol
+- testInflightPollResubmittedAfterCompletionWithEmptyBuffer
 - testInterceptorAutoCommitOnClose
 - testInterceptorCommitAsync
 - testInterceptorCommitSync
@@ -1265,6 +1267,7 @@ org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumerTest:
 - testPauseFlagPreservedForRetainedPartitionAcrossRebalance
 - testPollDoesNotAddNewAsyncPollEventWhenOneIsAlreadyInFlight
 - testPollDoesNotWaitForReconciliationCheckIfNoPendingReconciliation
+- testPollSurfacesInflightPollErrorAndResumes
 - testPollThrowsInterruptExceptionIfInterrupted
 - testPollWaitsForReconciliationCheckComplete
 - testPollWithManualAssignmentDoesNotBusyLoop
@@ -1957,6 +1960,7 @@ org.apache.kafka.clients.consumer.internals.FetchRequestManagerTest:
 - testConsumingViaIncrementalFetchRequests
 - testCorruptMessageError
 - testEmptyControlBatch
+- testEmptyFetchResponseWakesUpBuffer
 - testEpochSetInFetchRequest
 - testFetchAfterPartitionWithFetchedRecordsIsUnassigned
 - testFetchCompletedBeforeHandlerAdded
