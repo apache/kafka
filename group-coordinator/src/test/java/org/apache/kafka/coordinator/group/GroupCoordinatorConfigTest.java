@@ -279,6 +279,16 @@ public class GroupCoordinatorConfigTest {
     }
 
     @Test
+    public void testStreamsGroupAssignorFullClassNames() {
+        // The full class name of the assignors is part of our public api. Hence,
+        // we should ensure that they are not changed by mistake.
+        assertEquals(
+            "org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor",
+            StickyTaskAssignor.class.getName()
+        );
+    }
+
+    @Test
     public void testStreamsGroupAssignors() {
         Map<String, Object> configs = new HashMap<>();
         GroupCoordinatorConfig config;
@@ -356,7 +366,7 @@ public class GroupCoordinatorConfigTest {
     @Test
     public void testStreamsGroupAssignorsBuiltinByClassName() {
         // A built-in configured by its class name is recognised as the built-in, not as a custom assignor
-        // reusing the reserved name. Class names are not public API.
+        // reusing the reserved name. The name it is registered under is the built-in short name.
         Map<String, Object> configs = new HashMap<>();
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, StickyTaskAssignor.class.getName());
         GroupCoordinatorConfig config = createConfig(configs);

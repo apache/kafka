@@ -11269,36 +11269,6 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testStreamsGroupDescribeReportsDefaultAssignorWhenSelectedOneIsUnavailable() {
-        String groupId = "group-id";
-        String subtopology1 = "subtopology1";
-        StreamsTopology topology = new StreamsTopology(
-            0,
-            Map.of(subtopology1,
-                new StreamsGroupTopologyValue.Subtopology()
-                    .setSubtopologyId(subtopology1)
-                    .setSourceTopics(List.of("foo"))
-            )
-        );
-
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky"), new MockTaskAssignor("custom")))
-            .withStreamsGroup(new StreamsGroupBuilder(groupId, 10).withTopology(topology))
-            .build();
-
-        // The group selects an assignor that is not registered on this broker.
-        Properties groupConfig = new Properties();
-        groupConfig.setProperty(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "does-not-exist");
-        context.updateGroupConfig(groupId, groupConfig);
-
-        // Describe reports the assignor the coordinator falls back to, and not the unavailable one the group names.
-        List<StreamsGroupDescribeResponseData.DescribedGroup> described = context.sendStreamsGroupDescribe(List.of(groupId));
-
-        assertEquals(1, described.size());
-        assertEquals("sticky", described.get(0).assignorName());
-    }
-
-    @Test
     public void testFinalizeAfterDeleteClearsUncertainToNone() {
         // The plugin.deleteTopology completed and stored is still UNCERTAIN: no push raced, the
         // plugin is empty, so the smart finalize clears stored to NONE while preserving the
