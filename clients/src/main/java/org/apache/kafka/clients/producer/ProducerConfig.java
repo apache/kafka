@@ -236,6 +236,9 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>retry.backoff.max.ms</code> */
     public static final String RETRY_BACKOFF_MAX_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MAX_MS_CONFIG;
 
+    /** <code>bootstrap.resolve.timeout.ms</code> */
+    public static final String BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG = CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG;
+
     /**
      * <code>enable.metrics.push</code>
      */
@@ -443,6 +446,12 @@ public class ProducerConfig extends AbstractConfig {
                                         atLeast(0L),
                                         Importance.LOW,
                                         CommonClientConfigs.RETRY_BACKOFF_MAX_MS_DOC)
+                                .define(BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG,
+                                        Type.LONG,
+                                        CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
+                                        atLeast(1L),
+                                        Importance.HIGH,
+                                        CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC)
                                 .define(ENABLE_METRICS_PUSH_CONFIG,
                                         Type.BOOLEAN,
                                         true,
@@ -580,10 +589,10 @@ public class ProducerConfig extends AbstractConfig {
                                         Importance.LOW,
                                         CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_DOC)
                                 .define(CONFIG_PROVIDERS_CONFIG,
-                                        ConfigDef.Type.LIST,
+                                        Type.LIST,
                                         List.of(),
                                         ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                                        ConfigDef.Importance.LOW,
+                                        Importance.LOW,
                                         CONFIG_PROVIDERS_DOC);
     }
 

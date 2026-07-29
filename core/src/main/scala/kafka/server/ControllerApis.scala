@@ -24,7 +24,7 @@ import java.util.Map.Entry
 import java.util.concurrent.CompletableFuture
 import java.util.function.Consumer
 import kafka.network.RequestChannel
-import kafka.server.QuotaFactory.QuotaManagers
+import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
 import kafka.server.logger.RuntimeLoggerManager
 import kafka.utils.Logging
 import org.apache.kafka.clients.admin.{AlterConfigOp, EndpointType}
@@ -686,7 +686,7 @@ class ControllerApis(
     request: Request,
     buildResponse: ApiMessage => AbstractResponse
   ): CompletableFuture[Unit] = {
-    val requestBody = request.body(classOf[AbstractRequest])
+    val requestBody = request.body
     val future = raftManager
       .handleRequest(request.context, request.header, requestBody.data, time.milliseconds())
       .toCompletableFuture
