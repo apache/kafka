@@ -227,19 +227,32 @@ public class StreamsGroup implements Group {
 
     /**
      * The intermediate assignment the members are reconciled toward, as derived by the {@link AssignmentRefiner} from
-     * the target assignment. Like {@link #taskOffsets}, this is held in memory only and never persisted; it is derived
-     * again from the persisted assignments after a coordinator failover.
+     * the target assignment, together with the assignment epoch it was derived for. Like {@link #taskOffsets}, this is
+     * held in memory only and never persisted; it is derived again from the persisted assignments after a coordinator
+     * failover.
      * <p>
      * Every refinement step is an assignment epoch of its own, so the intermediate assignment is derived once per
      * epoch, when that epoch is minted, and stays fixed while the members reconcile toward it. It is therefore cached
-     * together with the assignment epoch it was derived for, and a cached value from an earlier epoch is never used.
+     * together with the epoch it belongs to, and a cached value from another epoch is never used.
+     * <p>
+     * Unlike {@link #taskOffsets} it is kept in a timeline container, because it is derived from state that a failed
+     * write rolls back. Rolling back restores an earlier assignment epoch, which the next epoch to be minted then
+     * reuses -- with a target assignment that may differ from the one this was derived from. Left outside the rollback,
+     * the cache would be hit for that epoch and reconcile the members toward an intermediate assignment of an
+     * assignment that no longer exists. The epoch and the assignment share one container so that a rollback can never
+     * restore one without the other.
      */
-    private Map<String, TasksTuple> refinedAssignment = Map.of();
+    private final TimelineObject<RefinedAssignment> refinedAssignment;
 
     /**
-     * The assignment epoch {@link #refinedAssignment} was derived for, or {@code -1} if nothing was derived yet.
+     * An intermediate assignment together with the assignment epoch it was derived for.
+     *
+     * @param assignmentEpoch The assignment epoch, or {@code -1} if nothing was derived yet.
+     * @param assignment      The intermediate assignment keyed by member ID.
      */
-    private int refinedAssignmentEpoch = -1;
+    private record RefinedAssignment(int assignmentEpoch, Map<String, TasksTuple> assignment) {
+        private static final RefinedAssignment NONE = new RefinedAssignment(-1, Map.of());
+    }
 
     /**
      * The Streams topology.
@@ -315,6 +328,7 @@ public class StreamsGroup implements Group {
         this.currentActiveTaskToProcessId = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentStandbyTaskToProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentWarmupTaskToProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.refinedAssignment = new TimelineObject<>(snapshotRegistry, RefinedAssignment.NONE);
         this.topology = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.configuredTopology = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.lastAssignmentConfigs = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -612,7 +626,8 @@ public class StreamsGroup implements Group {
      * @return The intermediate assignment keyed by member ID, or {@code null} if it was not derived for that epoch.
      */
     public Map<String, TasksTuple> refinedAssignment(int assignmentEpoch) {
-        return refinedAssignmentEpoch == assignmentEpoch ? refinedAssignment : null;
+        final RefinedAssignment cached = refinedAssignment.get();
+        return cached.assignmentEpoch() == assignmentEpoch ? cached.assignment() : null;
     }
 
     /**
@@ -630,8 +645,10 @@ public class StreamsGroup implements Group {
      * @param refinedAssignment  The intermediate assignment keyed by member ID.
      */
     public void setRefinedAssignment(int assignmentEpoch, Map<String, TasksTuple> refinedAssignment) {
-        this.refinedAssignmentEpoch = assignmentEpoch;
-        this.refinedAssignment = Map.copyOf(Objects.requireNonNull(refinedAssignment));
+        this.refinedAssignment.set(new RefinedAssignment(
+            assignmentEpoch,
+            Map.copyOf(Objects.requireNonNull(refinedAssignment))
+        ));
     }
 
     /**
@@ -647,16 +664,17 @@ public class StreamsGroup implements Group {
      * @param newMemberId The member ID replacing it.
      */
     public void relabelRefinedAssignment(String oldMemberId, String newMemberId) {
-        final TasksTuple refinedTasks = refinedAssignment.get(oldMemberId);
+        final RefinedAssignment cached = refinedAssignment.get();
+        final TasksTuple refinedTasks = cached.assignment().get(oldMemberId);
         if (refinedTasks == null) {
             // Either nothing was derived for the replaced member, or the cached assignment belongs to another epoch --
             // in which case refinedAssignment(int) does not hand it out anyway.
             return;
         }
-        final Map<String, TasksTuple> relabeled = new HashMap<>(refinedAssignment);
+        final Map<String, TasksTuple> relabeled = new HashMap<>(cached.assignment());
         relabeled.remove(oldMemberId);
         relabeled.put(newMemberId, refinedTasks);
-        this.refinedAssignment = Map.copyOf(relabeled);
+        this.refinedAssignment.set(new RefinedAssignment(cached.assignmentEpoch(), Map.copyOf(relabeled)));
     }
 
     /**
