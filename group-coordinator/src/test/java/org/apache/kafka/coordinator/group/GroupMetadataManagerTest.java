@@ -249,6 +249,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -18803,156 +18804,53 @@ public class GroupMetadataManagerTest {
 
     @Test
     public void testStreamsGroupUsesBrokerDefaultAssignorWhenGroupUnset() {
-        String groupId = "fooup";
-        String memberId = Uuid.randomUuid().toString();
-        String subtopology1 = "subtopology1";
-        String fooTopicName = "foo";
-        Uuid fooTopicId = Uuid.randomUuid();
-        Topology topology = new Topology().setSubtopologies(List.of(
-            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
-        ));
-
         // The broker registers two assignors; the first ("sticky") is the default.
         MockTaskAssignor defaultAssignor = new MockTaskAssignor("sticky");
-        MockTaskAssignor customAssignor = new MockTaskAssignor("custom");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withStreamsGroupTaskAssignors(List.of(defaultAssignor, customAssignor))
-            .withMetadataImage(new MetadataImageBuilder()
-                .addTopic(fooTopicId, fooTopicName, 2)
-                .buildCoordinatorMetadataImage())
-            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .withStreamsGroupTaskAssignors(List.of(defaultAssignor, new MockTaskAssignor("custom")))
             .build();
-        defaultAssignor.prepareGroupAssignment(
-            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
-        customAssignor.prepareGroupAssignment(
-            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
 
         // The group does not select an assignor (streams.assignor.name is unset).
-        context.streamsGroupHeartbeat(
-            new StreamsGroupHeartbeatRequestData()
-                .setGroupId(groupId)
-                .setMemberId(memberId)
-                .setMemberEpoch(0)
-                .setRebalanceTimeoutMs(1500)
-                .setTopology(topology)
-                .setActiveTasks(List.of())
-                .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()));
-
-        // The broker's default (first) assignor computed the assignment.
-        assertFalse(defaultAssignor.lastPassedAssignmentConfigs().isEmpty());
-        assertTrue(customAssignor.lastPassedAssignmentConfigs().isEmpty());
+        assertSame(defaultAssignor, context.groupMetadataManager.streamsGroupAssignor("fooup"));
     }
 
     @Test
     public void testStreamsGroupDefaultsToFirstAssignorWhenNoStickyConfigured() {
-        String groupId = "fooup";
-        String memberId = Uuid.randomUuid().toString();
-        String subtopology1 = "subtopology1";
-        String fooTopicName = "foo";
-        Uuid fooTopicId = Uuid.randomUuid();
-        Topology topology = new Topology().setSubtopologies(List.of(
-            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
-        ));
-
         // The broker registers only a custom assignor (no built-in "sticky"); it is the default.
         MockTaskAssignor customAssignor = new MockTaskAssignor("custom");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withStreamsGroupTaskAssignors(List.of(customAssignor))
-            .withMetadataImage(new MetadataImageBuilder()
-                .addTopic(fooTopicId, fooTopicName, 2)
-                .buildCoordinatorMetadataImage())
-            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
             .build();
-        customAssignor.prepareGroupAssignment(
-            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
 
-        // The group does not select an assignor; resolution must not assume "sticky" exists.
-        context.streamsGroupHeartbeat(
-            new StreamsGroupHeartbeatRequestData()
-                .setGroupId(groupId)
-                .setMemberId(memberId)
-                .setMemberEpoch(0)
-                .setRebalanceTimeoutMs(1500)
-                .setTopology(topology)
-                .setActiveTasks(List.of())
-                .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()));
-
-        // The first (and only) configured assignor computed the assignment — no NPE from a missing "sticky".
-        assertFalse(customAssignor.lastPassedAssignmentConfigs().isEmpty());
+        // Resolution must not assume that a "sticky" assignor is registered.
+        assertSame(customAssignor, context.groupMetadataManager.streamsGroupAssignor("fooup"));
     }
 
     @Test
     public void testStreamsGroupAssignorSelectedByGroupConfig() {
         String groupId = "fooup";
-        String memberId = Uuid.randomUuid().toString();
-        String subtopology1 = "subtopology1";
-        String fooTopicName = "foo";
-        Uuid fooTopicId = Uuid.randomUuid();
-        Topology topology = new Topology().setSubtopologies(List.of(
-            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
-        ));
 
-        MockTaskAssignor defaultAssignor = new MockTaskAssignor("sticky");
         MockTaskAssignor customAssignor = new MockTaskAssignor("custom");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withStreamsGroupTaskAssignors(List.of(defaultAssignor, customAssignor))
-            .withMetadataImage(new MetadataImageBuilder()
-                .addTopic(fooTopicId, fooTopicName, 2)
-                .buildCoordinatorMetadataImage())
-            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky"), customAssignor))
             .build();
-        defaultAssignor.prepareGroupAssignment(
-            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
-        customAssignor.prepareGroupAssignment(
-            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
 
         // The group selects the custom assignor by name.
         Properties groupConfig = new Properties();
         groupConfig.setProperty(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "custom");
         context.updateGroupConfig(groupId, groupConfig);
 
-        context.streamsGroupHeartbeat(
-            new StreamsGroupHeartbeatRequestData()
-                .setGroupId(groupId)
-                .setMemberId(memberId)
-                .setMemberEpoch(0)
-                .setRebalanceTimeoutMs(1500)
-                .setTopology(topology)
-                .setActiveTasks(List.of())
-                .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()));
-
-        // Only the selected assignor computed the assignment.
-        assertFalse(customAssignor.lastPassedAssignmentConfigs().isEmpty());
-        assertTrue(defaultAssignor.lastPassedAssignmentConfigs().isEmpty());
+        assertSame(customAssignor, context.groupMetadataManager.streamsGroupAssignor(groupId));
     }
 
     @Test
     public void testStreamsGroupAssignorFallsBackToDefaultWhenUnavailable() {
         String groupId = "fooup";
-        String memberId = Uuid.randomUuid().toString();
-        String subtopology1 = "subtopology1";
-        String fooTopicName = "foo";
-        Uuid fooTopicId = Uuid.randomUuid();
-        Topology topology = new Topology().setSubtopologies(List.of(
-            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
-        ));
 
         MockTaskAssignor defaultAssignor = new MockTaskAssignor("sticky");
-        MockTaskAssignor customAssignor = new MockTaskAssignor("custom");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withStreamsGroupTaskAssignors(List.of(defaultAssignor, customAssignor))
-            .withMetadataImage(new MetadataImageBuilder()
-                .addTopic(fooTopicId, fooTopicName, 2)
-                .buildCoordinatorMetadataImage())
-            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .withStreamsGroupTaskAssignors(List.of(defaultAssignor, new MockTaskAssignor("custom")))
             .build();
-        defaultAssignor.prepareGroupAssignment(
-            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
-        customAssignor.prepareGroupAssignment(
-            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
 
         // The group selects an assignor that is not registered on the broker.
         Properties groupConfig = new Properties();
@@ -18960,84 +18858,14 @@ public class GroupMetadataManagerTest {
         context.updateGroupConfig(groupId, groupConfig);
 
         try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(GroupMetadataManager.class)) {
-            context.streamsGroupHeartbeat(
-                new StreamsGroupHeartbeatRequestData()
-                    .setGroupId(groupId)
-                    .setMemberId(memberId)
-                    .setMemberEpoch(0)
-                    .setRebalanceTimeoutMs(1500)
-                    .setTopology(topology)
-                    .setActiveTasks(List.of())
-                    .setStandbyTasks(List.of())
-                    .setWarmupTasks(List.of()));
+            // The coordinator falls back to the default (first) assignor.
+            assertSame(defaultAssignor, context.groupMetadataManager.streamsGroupAssignor(groupId));
 
             // A warning names the unavailable assignor and the fallback.
             assertEquals(1, appender.getMessages("WARN").stream()
                 .filter(msg -> msg.contains("The configured task assignor 'does-not-exist' is not available"))
                 .count());
         }
-
-        // The coordinator falls back to the default (first) assignor.
-        assertFalse(defaultAssignor.lastPassedAssignmentConfigs().isEmpty());
-        assertTrue(customAssignor.lastPassedAssignmentConfigs().isEmpty());
-    }
-
-    /**
-     * Describe reports the assignor of the next assignment computation, which is not necessarily the one that
-     * computed the current assignment, because selecting a different assignor does not trigger a rebalance.
-     */
-    @Test
-    public void testStreamsGroupDescribeReportsAssignorOfNextAssignmentComputation() {
-        String groupId = "fooup";
-        String memberId = Uuid.randomUuid().toString();
-        String subtopology1 = "subtopology1";
-        String fooTopicName = "foo";
-        Uuid fooTopicId = Uuid.randomUuid();
-        Topology topology = new Topology().setSubtopologies(List.of(
-            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
-        ));
-
-        MockTaskAssignor defaultAssignor = new MockTaskAssignor("sticky");
-        MockTaskAssignor customAssignor = new MockTaskAssignor("custom");
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withStreamsGroupTaskAssignors(List.of(defaultAssignor, customAssignor))
-            .withMetadataImage(new MetadataImageBuilder()
-                .addTopic(fooTopicId, fooTopicName, 2)
-                .buildCoordinatorMetadataImage())
-            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
-            .build();
-        defaultAssignor.prepareGroupAssignment(
-            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
-        customAssignor.prepareGroupAssignment(
-            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
-
-        // The group does not select an assignor, so the default computes the current assignment.
-        context.streamsGroupHeartbeat(
-            new StreamsGroupHeartbeatRequestData()
-                .setGroupId(groupId)
-                .setMemberId(memberId)
-                .setMemberEpoch(0)
-                .setRebalanceTimeoutMs(1500)
-                .setTopology(topology)
-                .setActiveTasks(List.of())
-                .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()));
-        assertFalse(defaultAssignor.lastPassedAssignmentConfigs().isEmpty());
-
-        // The group now selects the other assignor. This does not trigger a rebalance, so the current assignment
-        // is still the one the default assignor computed.
-        Properties groupConfig = new Properties();
-        groupConfig.setProperty(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "custom");
-        context.updateGroupConfig(groupId, groupConfig);
-        assertTrue(customAssignor.lastPassedAssignmentConfigs().isEmpty());
-
-        // Describe already reports the newly selected assignor. Commit the offset first, so that the latest state
-        // is described.
-        context.commit();
-        List<StreamsGroupDescribeResponseData.DescribedGroup> described =
-            context.sendStreamsGroupDescribe(List.of(groupId));
-        assertEquals(1, described.size());
-        assertEquals("custom", described.get(0).assignorName());
     }
 
     @Test

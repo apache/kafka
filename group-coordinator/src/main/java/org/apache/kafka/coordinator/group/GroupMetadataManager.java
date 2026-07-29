@@ -9821,7 +9821,8 @@ public class GroupMetadataManager {
      * (the first entry of {@code group.streams.assignors}) is used. If the selected assignor is no
      * longer registered on the broker, the coordinator falls back to the default and logs a warning.
      */
-    private TaskAssignor streamsGroupAssignor(String groupId) {
+    // Visible for testing
+    TaskAssignor streamsGroupAssignor(String groupId) {
         Optional<String> configuredName = groupConfigManager.groupConfig(groupId)
             .flatMap(GroupConfig::streamsAssignorName);
         if (configuredName.isPresent()) {
