@@ -68,7 +68,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -455,15 +454,7 @@ public class KafkaShareConsumerTest {
             // accidentally clearing the bootstrap error from the metadata layer.
             assertThrows(BootstrapResolutionException.class, () -> consumer.poll(Duration.ofMillis(100)));
         } finally {
-            // The graceful shutdown path itself triggers network I/O which will re-observe the
-            // permanent bootstrap failure and wrap it in KafkaException. That's expected for this
-            // test — we only care that the API-facing calls surface the bootstrap error, not
-            // that close() also completes cleanly under a broken bootstrap.
-            try {
-                consumer.close(Duration.ZERO);
-            } catch (org.apache.kafka.common.KafkaException expected) {
-                assertInstanceOf(BootstrapResolutionException.class, expected.getCause(), "Expected close to fail due to BootstrapResolutionException, got: " + expected);
-            }
+            consumer.close();
         }
     }
 }
