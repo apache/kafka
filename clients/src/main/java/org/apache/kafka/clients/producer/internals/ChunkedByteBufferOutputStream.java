@@ -97,7 +97,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     public void write(int b) {
         ensureNotDeallocated();
         ensureWritable();
-        ensureChunkCapacity(1);
+        advanceWhileCurrentChunkFull();
         currentChunk.put((byte) b);
     }
 
@@ -106,7 +106,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
         ensureNotDeallocated();
         ensureWritable();
         while (len > 0) {
-            ensureChunkCapacity(1);
+            advanceWhileCurrentChunkFull();
             int toWrite = Math.min(len, currentChunk.remaining());
             currentChunk.put(bytes, off, toWrite);
             off += toWrite;
@@ -119,7 +119,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
         ensureNotDeallocated();
         ensureWritable();
         while (sourceBuffer.hasRemaining()) {
-            ensureChunkCapacity(1);
+            advanceWhileCurrentChunkFull();
             int toWrite = Math.min(sourceBuffer.remaining(), currentChunk.remaining());
             int oldLimit = sourceBuffer.limit();
             sourceBuffer.limit(sourceBuffer.position() + toWrite);
@@ -145,8 +145,11 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
             throw new IllegalStateException("operation not allowed after the stream has been deallocated");
     }
 
-    private void ensureChunkCapacity(int needed) {
-        while (currentChunk.remaining() < needed) {
+    /**
+     * Makes room for the next write by advancing past the chunks that are already full.
+     */
+    private void advanceWhileCurrentChunkFull() {
+        while (!currentChunk.hasRemaining()) {
             advanceToNextChunk();
         }
     }
@@ -322,10 +325,12 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     @Override
     public void ensureRemaining(int remainingBytesRequired) {
         ensureNotDeallocated();
-        // A single call can guarantee at most `chunkSize` of space (the stream advances one chunk
-        // at a time). Callers needing more attach chunks via addBuffers first. write(byte[]) loops
-        // across chunks, so contiguous capacity isn't required.
-        ensureChunkCapacity(Math.min(remainingBytesRequired, chunkSize));
+        // A single write can be split across several chunks, so the required bytes needn't be
+        // contiguous: only the total free space matters. Advancing here would waste the tail of the
+        // current chunk, so writes advance lazily and this only validates. TODO: KAFKA-20579, grow here.
+        if (remainingBytesRequired > remaining())
+            throw new IllegalStateException("required " + remainingBytesRequired
+                + " bytes but only " + remaining() + " remaining across the attached chunks");
     }
 
     /**
