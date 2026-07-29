@@ -36,6 +36,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -853,17 +854,24 @@ public class GroupCoordinatorConfig {
     protected List<ConsumerGroupPartitionAssignor> consumerGroupAssignors(
         AbstractConfig config
     ) {
-        Map<String, ConsumerGroupPartitionAssignor> defaultAssignors = CONSUMER_GROUP_BUILTIN_ASSIGNORS
+        Map<String, ConsumerGroupPartitionAssignor> builtInAssignors = CONSUMER_GROUP_BUILTIN_ASSIGNORS
             .stream()
             .collect(Collectors.toMap(ConsumerGroupPartitionAssignor::name, Function.identity()));
+        // A built-in may be configured either by its name or by its class name, so it is recognised
+        // by class rather than by how it was resolved below.
+        Set<Class<? extends ConsumerGroupPartitionAssignor>> builtInAssignorClasses = CONSUMER_GROUP_BUILTIN_ASSIGNORS
+            .stream()
+            .map(ConsumerGroupPartitionAssignor::getClass)
+            .collect(Collectors.toSet());
 
         List<ConsumerGroupPartitionAssignor> assignors = new ArrayList<>();
+        Set<String> assignorNames = new HashSet<>();
 
         try {
             // `configuredAssignor` is either the name of a built-in assignor,
             // or a fully qualified class name of a custom assignor
             for (String configuredAssignor : config.getList(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG)) {
-                ConsumerGroupPartitionAssignor assignor = defaultAssignors.get(configuredAssignor);
+                ConsumerGroupPartitionAssignor assignor = builtInAssignors.get(configuredAssignor);
                 if (assignor == null) {
                     try {
                         assignor = Utils.newInstance(configuredAssignor, ConsumerGroupPartitionAssignor.class);
@@ -881,6 +889,18 @@ public class GroupCoordinatorConfig {
                 }
 
                 assignors.add(assignor);
+
+                if (!builtInAssignorClasses.contains(assignor.getClass()) && builtInAssignors.containsKey(assignor.name())) {
+                    throw new ConfigException(CONSUMER_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
+                        "Assignor name '" + assignor.name() + "' is reserved by a built-in assignor. " +
+                            "A custom assignor must not reuse the name of a built-in assignor");
+                }
+
+                if (!assignorNames.add(assignor.name())) {
+                    throw new ConfigException(CONSUMER_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
+                        "Assignor name '" + assignor.name() + "' is already registered by another configured assignor. " +
+                            "Assignor names, whether built-in or custom, must be unique");
+                }
 
                 if (assignor instanceof Configurable configurable) {
                     configurable.configure(config.originals());
