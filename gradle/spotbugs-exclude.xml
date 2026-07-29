@@ -564,7 +564,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
          -->
         <Or>
             <Class name="org.apache.kafka.clients.consumer.internals.CompletedFetch"/>
-            <Class name="org.apache.kafka.clients.producer.internals.BufferPool"/>
             <Class name="org.apache.kafka.clients.producer.internals.ProducerBatch"/>
             <Class name="org.apache.kafka.clients.producer.internals.RecordAccumulator"/>
             <Class name="org.apache.kafka.common.security.kerberos.KerberosLogin"/>

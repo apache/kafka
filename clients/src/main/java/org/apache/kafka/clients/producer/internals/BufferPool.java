@@ -59,17 +59,17 @@ public class BufferPool {
     private final long totalMemory;
     private final int poolableSize;
     /** Lock held for any read or write of {@link #free}, {@link #waiters}, {@link #nonPooledAvailableMemory}, or {@link #closed}. */
-    protected final ReentrantLock lock;
+    private final ReentrantLock lock;
     /** Pooled buffers of capacity {@link #poolableSize}, available for reuse. Guarded by {@link #lock}. */
-    protected final Deque<ByteBuffer> free;
+    private final Deque<ByteBuffer> free;
     /** FIFO queue of pending allocation requests; the longest-waiting thread is woken first. Guarded by {@link #lock}. */
-    protected final Deque<Condition> waiters;
+    private final Deque<Condition> waiters;
     /** Total available memory is the sum of nonPooledAvailableMemory and the number of byte buffers in free * poolableSize. Guarded by {@link #lock}. */
-    protected long nonPooledAvailableMemory;
+    private long nonPooledAvailableMemory;
     private final Metrics metrics;
-    protected final Time time;
+    private final Time time;
     private final Sensor waitTime;
-    protected boolean closed;
+    private boolean closed;
     private final AllocationMode allocationMode;
 
     /**
@@ -408,10 +408,10 @@ public class BufferPool {
 
     /**
      * Record that a record send was dropped because the buffer pool was exhausted. Shared by the
-     * full strategy (allocate) and the incremental strategy (ChunkedRecordAccumulator),
+     * full strategy (allocate) and the incremental strategy ({@link ChunkedRecordAccumulator}),
      * so both update the same buffer-exhausted metrics.
      */
-    protected void recordBufferExhausted() {
+    void recordBufferExhausted() {
         this.metrics.sensor("buffer-exhausted-records").record();
     }
 
@@ -419,7 +419,7 @@ public class BufferPool {
      * Wake the longest-waiting thread if any memory (pooled or non-pooled) is available.
      * Must be called with {@link #lock} held. No-op if no waiters or no memory is free.
      */
-    protected void signalNextWaiterIfMemoryAvailable() {
+    private void signalNextWaiterIfMemoryAvailable() {
         if (!(this.nonPooledAvailableMemory == 0 && this.free.isEmpty()) && !this.waiters.isEmpty())
             this.waiters.peekFirst().signal();
     }
@@ -445,7 +445,7 @@ public class BufferPool {
      * waiter. Acquires {@link #lock} internally. Used by callers
      * that reserve memory and then need to roll back the reservation (e.g., upon errors).
      */
-    protected void releaseReservedBytes(long bytes) {
+    private void releaseReservedBytes(long bytes) {
         this.lock.lock();
         try {
             this.nonPooledAvailableMemory += bytes;
@@ -465,7 +465,7 @@ public class BufferPool {
      * Attempt to ensure we have at least the requested number of bytes of memory for allocation by deallocating pooled
      * buffers (if needed). Must be called with {@link #lock} held.
      */
-    protected void freeUp(int size) {
+    private void freeUp(int size) {
         while (!this.free.isEmpty() && this.nonPooledAvailableMemory < size)
             this.nonPooledAvailableMemory += this.free.pollLast().capacity();
     }
