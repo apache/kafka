@@ -125,22 +125,23 @@ public class BufferPoolChunkAllocationTest {
     }
 
     /**
-     * When a multi-chunk request can't be fully satisfied within the deadline, chunks already
-     * acquired during the call must be returned to the pool.
+     * A request that cannot be satisfied immediately and has no time to wait takes nothing: it
+     * blocks on the wait queue before acquiring anything, so the timeout leaves pool memory
+     * untouched (no roll back needed).
      */
     @Test
-    public void testRollbackOnPartialFailure() throws Exception {
+    public void testImmediateTimeoutAcquiresNothing() throws Exception {
         int chunkSize = 64;
         long total = 2 * chunkSize;  // only 2 chunks worth of memory
         BufferPool p = pool(total, chunkSize);
         // Reserve one chunk so the pool has only 1 left.
         ByteBuffer held = p.allocateChunks(chunkSize, 100).get(0);
 
-        // Request 2 chunks with a zero deadline — first chunk fits, second can't, must throw.
+        // Request 2 chunks with a zero deadline. Only 1 chunk's worth is free, so the request goes
+        // to the wait queue and times out on its first wait, before taking anything.
         assertThrows(BufferExhaustedException.class, () -> p.allocateChunks(2 * chunkSize, 0));
 
-        // Available memory must reflect only the chunk we deliberately hold; the request's
-        // first-chunk acquisition was rolled back.
+        // Available memory reflects only the chunk we deliberately hold.
         assertEquals(total - chunkSize, p.availableMemory());
 
         p.deallocate(held);
