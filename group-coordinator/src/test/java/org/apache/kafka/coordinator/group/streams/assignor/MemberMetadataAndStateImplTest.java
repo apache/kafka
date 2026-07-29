@@ -48,25 +48,28 @@ public class MemberMetadataAndStateImplTest {
     @Test
     void testTaskSetsAreDeeplyUnmodifiable() {
         MemberMetadataAndStateImpl member = memberWith(
-            Map.of("subtopology-1", new HashSet<>(Set.of(0, 1))),
-            Map.of()
+            new HashMap<>(Map.of("subtopology-1", new HashSet<>(Set.of(0, 1)))),
+            new HashMap<>()
         );
 
         assertThrows(UnsupportedOperationException.class, () -> member.activeTasks().put("subtopology-2", Set.of(0)));
         assertThrows(UnsupportedOperationException.class, () -> member.activeTasks().get("subtopology-1").add(2));
+        assertThrows(UnsupportedOperationException.class, () -> member.standbyTasks().put("subtopology-2", Set.of(0)));
         assertThrows(UnsupportedOperationException.class, () -> member.standbyTasks().get("subtopology-1").add(2));
+        assertThrows(UnsupportedOperationException.class, () -> member.warmupTasks().put("subtopology-2", Set.of(0)));
         assertThrows(UnsupportedOperationException.class, () -> member.warmupTasks().get("subtopology-1").clear());
     }
 
     @Test
     void testTaskOffsetsAreDeeplyUnmodifiable() {
         MemberMetadataAndStateImpl member = memberWith(
-            Map.of(),
-            Map.of("subtopology-1", new HashMap<>(Map.of(0, 100L)))
+            new HashMap<>(),
+            new HashMap<>(Map.of("subtopology-1", new HashMap<>(Map.of(0, 100L))))
         );
 
         assertThrows(UnsupportedOperationException.class, () -> member.taskOffsets().put("subtopology-2", Map.of()));
         assertThrows(UnsupportedOperationException.class, () -> member.taskOffsets().get("subtopology-1").put(0, 200L));
+        assertThrows(UnsupportedOperationException.class, () -> member.taskEndOffsets().put("subtopology-2", Map.of()));
         assertThrows(UnsupportedOperationException.class, () -> member.taskEndOffsets().get("subtopology-1").put(1, 200L));
     }
 }
