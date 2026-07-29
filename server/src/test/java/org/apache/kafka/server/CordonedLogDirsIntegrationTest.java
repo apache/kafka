@@ -449,13 +449,14 @@ public class CordonedLogDirsIntegrationTest {
             // The broker restarted with the reduced set of log dirs, and no longer reports the removed one
             assertEquals(logDirs, clusterInstance.brokers().get(brokerId).config().logDirs());
             TestUtils.waitForCondition(() ->
-                            !admin.describeLogDirs(List.of(brokerId)).allDescriptions().get().get(brokerId).containsKey(logDirToRemove),
-                    10_000, "Broker " + brokerId + " is still reporting the removed log dir " + logDirToRemove);
+                !admin.describeLogDirs(List.of(brokerId)).allDescriptions().get().get(brokerId).containsKey(logDirToRemove),
+                10_000, "Broker " + brokerId + " is still reporting the removed log dir " + logDirToRemove);
 
             // The broker is still fully functional after losing a log dir
             admin.createTopics(newTopic("topic-after-decommission")).all().get();
-            TestUtils.waitForCondition(() -> admin.listTopics().names().get().size() == 11, 10_000,
-                    "Topic was not created after decommissioning a log dir");
+            TestUtils.waitForCondition(() ->
+                admin.listTopics().names().get().size() == 11,
+                10_000, "Topic was not created after decommissioning a log dir");
         }
     }
 
