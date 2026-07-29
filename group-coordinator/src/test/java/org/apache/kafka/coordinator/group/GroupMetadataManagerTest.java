@@ -18811,7 +18811,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         // The group does not select an assignor (streams.assignor.name is unset).
-        assertSame(defaultAssignor, context.groupMetadataManager.streamsGroupAssignor("fooup"));
+        assertSame(defaultAssignor, context.groupMetadataManager.streamsGroupAssignor("fooup", true));
     }
 
     @Test
@@ -18823,7 +18823,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         // Resolution must not assume that a "sticky" assignor is registered.
-        assertSame(customAssignor, context.groupMetadataManager.streamsGroupAssignor("fooup"));
+        assertSame(customAssignor, context.groupMetadataManager.streamsGroupAssignor("fooup", true));
     }
 
     @Test
@@ -18840,7 +18840,7 @@ public class GroupMetadataManagerTest {
         groupConfig.setProperty(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "custom");
         context.updateGroupConfig(groupId, groupConfig);
 
-        assertSame(customAssignor, context.groupMetadataManager.streamsGroupAssignor(groupId));
+        assertSame(customAssignor, context.groupMetadataManager.streamsGroupAssignor(groupId, true));
     }
 
     @Test
@@ -18859,12 +18859,19 @@ public class GroupMetadataManagerTest {
 
         try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(GroupMetadataManager.class)) {
             // The coordinator falls back to the default (first) assignor.
-            assertSame(defaultAssignor, context.groupMetadataManager.streamsGroupAssignor(groupId));
+            assertSame(defaultAssignor, context.groupMetadataManager.streamsGroupAssignor(groupId, true));
 
             // A warning names the unavailable assignor and the fallback.
             assertEquals(1, appender.getMessages("WARN").stream()
                 .filter(msg -> msg.contains("The configured task assignor 'does-not-exist' is not available"))
                 .count());
+        }
+
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(GroupMetadataManager.class)) {
+            // Read-only paths such as describe resolve the same fallback without warning.
+            assertSame(defaultAssignor, context.groupMetadataManager.streamsGroupAssignor(groupId, false));
+
+            assertEquals(List.of(), appender.getMessages("WARN"));
         }
     }
 
