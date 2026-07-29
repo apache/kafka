@@ -467,6 +467,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // (batch.size >= CHUNK_SIZE). Below that, a batch can't fill even one chunk, so chunking
             // would over-reserve and the producer falls back to the full strategy instead.
             boolean useIncremental = incremental && batchSize >= ChunkedRecordAccumulator.CHUNK_SIZE;
+            if (incremental && !useIncremental) {
+                log.warn("Ignoring {}={} and falling back to {}: {} is {} bytes, below the {} byte chunk size, " +
+                                "so a batch cannot fill a single chunk.",
+                        ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_CONFIG,
+                        ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL,
+                        ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL,
+                        ProducerConfig.BATCH_SIZE_CONFIG, batchSize, ChunkedRecordAccumulator.CHUNK_SIZE);
+            }
             // The chunked path does not support compression yet (TODO: KAFKA-20579)
             if (useIncremental && compression.type() != CompressionType.NONE) {
                 throw new ConfigException("The " + ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL
