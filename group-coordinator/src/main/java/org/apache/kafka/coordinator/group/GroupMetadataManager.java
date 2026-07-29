@@ -4526,7 +4526,7 @@ public class GroupMetadataManager {
             // Warm-up tasks are disabled, so there is nothing to refine and no state to keep for the group.
             return targetAssignment;
         }
-        return AssignmentRefiner.refine(
+        final Map<String, TasksTuple> refinedAssignment = AssignmentRefiner.refine(
             group.members(),
             targetAssignment,
             group.taskOffsets(),
@@ -4534,6 +4534,18 @@ public class GroupMetadataManager {
             numWarmupReplicas,
             streamsGroupAcceptableRecoveryLag(group.groupId())
         );
+        if (!AssignmentRefiner.preservesActiveTaskCount(targetAssignment, refinedAssignment)) {
+            // Reconciling towards an intermediate assignment that lost or duplicated an active task would leave input
+            // partitions unprocessed or processed twice, so fall back to the target assignment. That is the same
+            // assignment the group reconciles towards with warm-up tasks disabled, so no further handling is needed --
+            // beyond that tasks now move without warming up, which the operator should know about.
+            log.error("[GroupId {}] The refined assignment does not hand out as many active tasks as the target " +
+                    "assignment. Reconciling towards the target assignment instead, so tasks that have to move do so " +
+                    "without warming up first. Target assignment: {}, refined assignment: {}.",
+                group.groupId(), targetAssignment, refinedAssignment);
+            return targetAssignment;
+        }
+        return refinedAssignment;
     }
 
     /**

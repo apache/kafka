@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.streams;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Refines the task assignor's target assignment into the <em>intermediate</em> assignment that the reconciler
@@ -77,5 +78,22 @@ public class AssignmentRefiner {
     ) {
         // No warm-up tasks are inserted yet, so the intermediate assignment is the target assignment.
         return targetAssignment;
+    }
+
+    public static boolean preservesActiveTaskCount(
+        Map<String, TasksTuple> targetAssignment,
+        Map<String, TasksTuple> refinedAssignment
+    ) {
+        return countActiveTasks(targetAssignment) == countActiveTasks(refinedAssignment);
+    }
+
+    private static int countActiveTasks(Map<String, TasksTuple> assignment) {
+        int count = 0;
+        for (TasksTuple tasks : assignment.values()) {
+            for (Set<Integer> partitionIds : tasks.activeTasks().values()) {
+                count += partitionIds.size();
+            }
+        }
+        return count;
     }
 }
