@@ -18,7 +18,7 @@
 package kafka.server
 
 import kafka.network.RequestChannel
-import kafka.server.QuotaFactory.QuotaManagers
+import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
 import org.apache.kafka.common.errors.ClusterAuthorizationException
 import org.apache.kafka.common.requests.AbstractResponse
 import org.apache.kafka.common.utils.Time
