@@ -2676,7 +2676,7 @@ public class ShareConsumeRequestManagerTest {
 
         assertNotEquals(startingClusterMetadata, metadata.fetch());
 
-        // We fail the acknowledgements for records which were received from node0 with NOT_LEADER_OR_FOLLOWER exception.
+        // The acknowledgements are sent to the nodes the records were fetched from.
         shareConsumeRequestManager.acknowledgeOnClose(Map.of(tip0, new NodeAcknowledgements(0, acknowledgementsTp0)),
             calculateDeadlineMs(time.timer(100)));
         assertTrue(completedAcknowledgements.isEmpty());
