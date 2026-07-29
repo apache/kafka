@@ -178,12 +178,10 @@ public class CurrentAssignmentBuilder {
                 // owned tasks set in the StreamsGroupHeartbeat API.
 
                 // If the member provides its owned tasks, we verify if it still
-                // owns any of the revoked tasks. If it did not provide it's
+                // owns any of the revoked tasks. If it did not provide its
                 // owned tasks, or we still own some of the revoked tasks, we
                 // cannot progress.
-                if (
-                    ownedTasks.isEmpty() || ownedTasks.get().containsAny(member.tasksPendingRevocation())
-                ) {
+                if (hasNotReleased(member.tasksPendingRevocation())) {
                     return member;
                 }
 
@@ -426,12 +424,20 @@ public class CurrentAssignmentBuilder {
             newActiveAssignedTasks,
             newActiveTasksPendingRevocation,
             newActiveTasksPendingAssignment,
+            // In general, an active task can only be assigned once its previous owner has released it.
+            // In addition, we cannot assign an active task to a _process_ that still holds a corresponding
+            // standby or warm-up task, because a single process must not run the same task twice.
+            // The one exception is an in-place warm-up promotion: if THIS MEMBER holds the task as a warm-up,
+            // we convert it to active in a single step (drop the warm-up, grant the active)
             (subtopologyId, partitionId) ->
+                // still owned as active by its previous owner
                 currentActiveTaskProcessId.apply(subtopologyId, partitionId) != null ||
-                    currentStandbyTaskProcessIds.apply(subtopologyId, partitionId)
-                        .contains(member.processId()) ||
-                    currentWarmupTaskProcessIds.apply(subtopologyId, partitionId)
-                        .contains(member.processId())
+                    // this member's process still holds it as a standby
+                    currentStandbyTaskProcessIds.apply(subtopologyId, partitionId).contains(member.processId()) ||
+                    // this member's process holds it as a warm-up via a *different* member (if this member owns
+                    // the warm-up it is a promotion, which is allowed)
+                    (currentWarmupTaskProcessIds.apply(subtopologyId, partitionId).contains(member.processId())
+                        && !memberAssignedTasks.warmupTasks().getOrDefault(subtopologyId, Set.of()).contains(partitionId))
         );
 
         boolean hasUnreleasedStandbyTasks = computeAssignmentDifference(
@@ -464,13 +470,18 @@ public class CurrentAssignmentBuilder {
                         .contains(member.processId())
         );
 
+        TasksTupleWithEpochs newTasksPendingRevocation = applyWarmupPromotions(
+            memberAssignedTasks,
+            newActiveTasksPendingRevocation,
+            newStandbyTasksPendingRevocation,
+            newWarmupTasksPendingRevocation,
+            newActiveTasksPendingAssignment,
+            newWarmupAssignedTasks // modified in-place by applyWarmupPromotions
+        );
+
         return buildNewMember(
             memberEpoch,
-            new TasksTupleWithEpochs(
-                newActiveTasksPendingRevocation,
-                newStandbyTasksPendingRevocation,
-                newWarmupTasksPendingRevocation
-            ),
+            newTasksPendingRevocation,
             new TasksTupleWithEpochs(
                 newActiveAssignedTasks,
                 newStandbyAssignedTasks,
@@ -485,6 +496,87 @@ public class CurrentAssignmentBuilder {
         );
     }
 
+    /**
+     * Applies warm-up promotions to the freshly computed reconciliation result. A task the member holds as a
+     * warm-up that the target wants it to own as an active task is promoted in place rather than
+     * revoked-then-reassigned, so its recyclable state store survives instead of being closed and restored from
+     * the changelog (cf. KAFKA-9501). Such a warm-up is never routed through the (ack-based) revocation path.
+     *
+     * @return the member's pending revocation after the promoted warm-ups have been removed from it.
+     */
+    private TasksTupleWithEpochs applyWarmupPromotions(TasksTupleWithEpochs memberAssignedTasks,
+                                                       Map<String, Map<Integer, Integer>> newActiveTasksPendingRevocation,
+                                                       Map<String, Set<Integer>> newStandbyTasksPendingRevocation,
+                                                       Map<String, Set<Integer>> newWarmupTasksPendingRevocation,
+                                                       Map<String, Map<Integer, Integer>> newActiveTasksPendingAssignment,
+                                                       Map<String, Set<Integer>> newWarmupAssignedTasks) {
+        // If we promote a warm-up to active, the warm-up does not need an explicit client-side revocation.
+        // Thus, the warm-up can be removed from `newWarmupTasksPendingRevocation` -- we don't expect a client ack back.
+        // We need to remove it regardless of wether the warm-up to active promotion happens now, or is still pending on
+        // the active task revocation.
+        for (Map.Entry<String, Set<Integer>> warmup : memberAssignedTasks.warmupTasks().entrySet()) {
+            String subtopologyId = warmup.getKey();
+            Set<Integer> targetActiveTasks = targetAssignment.activeTasks().getOrDefault(subtopologyId, Set.of());
+            for (Integer partitionId : warmup.getValue()) {
+                if (targetActiveTasks.contains(partitionId)) {
+                    removeFromTaskSet(newWarmupTasksPendingRevocation, subtopologyId, partitionId);
+                }
+            }
+        }
+
+        TasksTupleWithEpochs newTasksPendingRevocation = new TasksTupleWithEpochs(
+            newActiveTasksPendingRevocation,
+            newStandbyTasksPendingRevocation,
+            newWarmupTasksPendingRevocation
+        );
+        boolean hasTasksToBeRevoked = !newTasksPendingRevocation.isEmpty()
+            && hasNotReleased(newTasksPendingRevocation);
+
+        // keep warm-up task and don't revoke if we are not ready for warm-up to active promotion
+        //  - this member still needs to complete its own revocation of other tasks
+        //    (which must complete before any assignment can happen)
+        //  - the active task was not released by its previous owner yet
+        for (Map.Entry<String, Set<Integer>> warmup : memberAssignedTasks.warmupTasks().entrySet()) {
+            String subtopologyId = warmup.getKey();
+            Set<Integer> targetActiveTasks = targetAssignment.activeTasks().getOrDefault(subtopologyId, Set.of());
+            Map<Integer, Integer> grantedActiveTasks = newActiveTasksPendingAssignment.getOrDefault(subtopologyId, Map.of());
+            for (Integer partitionId : warmup.getValue()) {
+                boolean promotedThisStep = !hasTasksToBeRevoked && grantedActiveTasks.containsKey(partitionId);
+                if (targetActiveTasks.contains(partitionId) && !promotedThisStep) {
+                    newWarmupAssignedTasks.computeIfAbsent(subtopologyId, __ -> new HashSet<>()).add(partitionId);
+                }
+            }
+        }
+
+        return newTasksPendingRevocation;
+    }
+
+    /**
+     * Removes a single subtopology/partition from a task set, dropping the subtopology entry entirely if it
+     * becomes empty (so the resulting map matches what the difference helpers would have produced).
+     */
+    private static void removeFromTaskSet(Map<String, Set<Integer>> tasks, String subtopologyId, Integer partitionId) {
+        Set<Integer> partitions = tasks.get(subtopologyId);
+        if (partitions != null && partitions.remove(partitionId) && partitions.isEmpty()) {
+            tasks.remove(subtopologyId);
+        }
+    }
+
+    /**
+     * Checks whether the member has not yet confirmed the release of the given tasks pending revocation.
+     * Revocation is ack-based: it is confirmed only once the member reports its currently owned tasks in a
+     * heartbeat and none of the given tasks appear among them.
+     *
+     * @param tasksPendingRevocation The tasks whose revocation we are waiting for.
+     * @return true if the release of any of those tasks is not yet confirmed.
+     */
+    private boolean hasNotReleased(TasksTupleWithEpochs tasksPendingRevocation) {
+        // Note that {@code ownedTasks} being empty means the member did not report its owned tasks in this
+        // heartbeat -- it is an {@link Optional}, not an empty task set. Without such a report we cannot prove
+        // the tasks were released, so we conservatively treat them as still held.
+        return ownedTasks.isEmpty() || ownedTasks.get().containsAny(tasksPendingRevocation);
+    }
+
     private StreamsGroupMember buildNewMember(final int memberEpoch,
                                               final TasksTupleWithEpochs newTasksPendingRevocation,
                                               final TasksTupleWithEpochs newAssignedTasks,
@@ -492,8 +584,8 @@ public class CurrentAssignmentBuilder {
                                               final boolean hasUnreleasedTasks) {
 
         final boolean hasTasksToBeRevoked =
-            (!newTasksPendingRevocation.isEmpty())
-                && (ownedTasks.isEmpty() || ownedTasks.get().containsAny(newTasksPendingRevocation));
+            !newTasksPendingRevocation.isEmpty()
+                && hasNotReleased(newTasksPendingRevocation);
 
         if (hasTasksToBeRevoked) {
             // If there are tasks to be revoked, the member remains in its current
