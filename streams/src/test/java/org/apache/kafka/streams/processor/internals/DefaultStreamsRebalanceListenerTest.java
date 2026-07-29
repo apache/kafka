@@ -228,7 +228,8 @@ public class DefaultStreamsRebalanceListenerTest {
 
     @Test
     void shouldDropStandbyAndWarmupForTaskThatIsAlsoAssignedAsActive() {
-        createRebalanceListenerWithRebalanceData(rebalanceDataWithSubtopologies("1", "2", "3", "4"));
+        final StreamsRebalanceData streamsRebalanceData = rebalanceDataWithSubtopologies("1", "2", "3", "4");
+        createRebalanceListenerWithRebalanceData(streamsRebalanceData);
 
         final StreamsRebalanceData.Assignment assignment = new StreamsRebalanceData.Assignment(
             Set.of(new StreamsRebalanceData.TaskId("1", 0)),
@@ -253,6 +254,15 @@ public class DefaultStreamsRebalanceListenerTest {
                 new TaskId(3, 0), Set.of(new TopicPartition("source3", 0)),
                 new TaskId(4, 0), Set.of(new TopicPartition("source4", 0)))
         );
+
+        // The next heartbeat reports the reconciled assignment as the owned tasks, and the client runs one task per
+        // task id: 1_0 is reported as active only, and 3_0 as a standby only, since the standby outlives the warm-up.
+        verify(streamsRebalanceData).setReconciledAssignment(new StreamsRebalanceData.Assignment(
+            Set.of(new StreamsRebalanceData.TaskId("1", 0)),
+            Set.of(new StreamsRebalanceData.TaskId("2", 0), new StreamsRebalanceData.TaskId("3", 0)),
+            Set.of(new StreamsRebalanceData.TaskId("4", 0)),
+            true
+        ));
     }
 
     @Test

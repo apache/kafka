@@ -91,10 +91,14 @@ public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener
     @Override
     public void onTasksAssigned(final StreamsRebalanceData.Assignment assignment) {
         final long start = time.milliseconds();
+        final StreamsRebalanceData.Assignment runningAssignment = deduplicateTasks(assignment);
         final Map<TaskId, Set<TopicPartition>> activeTasksWithPartitions =
-            pairWithTopicPartitions(assignment.activeTasks().stream());
+            pairWithTopicPartitions(runningAssignment.activeTasks().stream());
         final Map<TaskId, Set<TopicPartition>> standbyTasksWithPartitions =
-            pairWithTopicPartitions(deduplicateTasks(assignment).stream());
+            pairWithTopicPartitions(Stream.concat(
+                runningAssignment.standbyTasks().stream(),
+                runningAssignment.warmupTasks().stream()
+            ));
 
         log.info("Processing new assignment {} from Streams Rebalance Protocol", assignment);
 
@@ -103,7 +107,7 @@ public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener
             taskManager.handleAssignment(activeTasksWithPartitions, standbyTasksWithPartitions);
             streamThread.setState(StreamThread.State.PARTITIONS_ASSIGNED);
             taskManager.handleRebalanceComplete();
-            streamsRebalanceData.setReconciledAssignment(assignment);
+            streamsRebalanceData.setReconciledAssignment(runningAssignment);
         } finally {
             tasksAssignedSensor.record(time.milliseconds() - start);
         }
@@ -120,7 +124,7 @@ public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener
         }
     }
 
-    private Set<StreamsRebalanceData.TaskId> deduplicateTasks(final StreamsRebalanceData.Assignment assignment) {
+    private StreamsRebalanceData.Assignment deduplicateTasks(final StreamsRebalanceData.Assignment assignment) {
         // The overlaps below are only used to warn about them, so they are kept sorted to give the log a
         // deterministic and readable task order.
         final SortedSet<StreamsRebalanceData.TaskId> standbyAndWarmup = new TreeSet<>(assignment.standbyTasks());
@@ -131,18 +135,29 @@ public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener
                 standbyAndWarmup);
         }
 
-        final Set<StreamsRebalanceData.TaskId> replicas = new HashSet<>(assignment.standbyTasks());
-        replicas.addAll(assignment.warmupTasks());
-
-        final SortedSet<StreamsRebalanceData.TaskId> activeAndReplica = new TreeSet<>(replicas);
+        final SortedSet<StreamsRebalanceData.TaskId> activeAndReplica = new TreeSet<>(assignment.standbyTasks());
+        activeAndReplica.addAll(assignment.warmupTasks());
         activeAndReplica.retainAll(assignment.activeTasks());
         if (!activeAndReplica.isEmpty()) {
             log.warn("Tasks {} were assigned as active tasks and also as standby or warm-up tasks. The standby and " +
                 "warm-up assignment is ignored, and the tasks are run as active tasks.", activeAndReplica);
         }
 
-        replicas.removeAll(assignment.activeTasks());
-        return replicas;
+        // The client runs one task per task id, so it reports one role for it. A task assigned as both standby and
+        // warm-up is reported as a standby: the standby is a permanent part of the assignment, while the warm-up is
+        // only injected on top of it and goes away again.
+        final Set<StreamsRebalanceData.TaskId> standbyTasks = new HashSet<>(assignment.standbyTasks());
+        standbyTasks.removeAll(assignment.activeTasks());
+        final Set<StreamsRebalanceData.TaskId> warmupTasks = new HashSet<>(assignment.warmupTasks());
+        warmupTasks.removeAll(assignment.activeTasks());
+        warmupTasks.removeAll(standbyTasks);
+
+        return new StreamsRebalanceData.Assignment(
+            assignment.activeTasks(),
+            standbyTasks,
+            warmupTasks,
+            assignment.isGroupReady()
+        );
     }
 
     private Map<TaskId, Set<TopicPartition>> pairWithTopicPartitions(final Stream<StreamsRebalanceData.TaskId> taskIdStream) {
