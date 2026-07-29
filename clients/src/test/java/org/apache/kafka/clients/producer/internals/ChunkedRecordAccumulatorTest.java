@@ -635,4 +635,69 @@ public class ChunkedRecordAccumulatorTest {
         assertThrows(IllegalArgumentException.class,
                 () -> new ChunkedProducerBatch(tp1, plainBuilder, time.milliseconds()));
     }
+
+    /**
+     * A batch closed for appends while the extension chunks were acquired off-lock must not be
+     * attached to: the chunks go back to the pool and the record goes to a new batch.
+     */
+    @Test
+    public void testBatchClosedForAppendsDuringAllocationIsNotExtended() throws Exception {
+        final int chunkSize = 256;
+        final AtomicBoolean closeOnce = new AtomicBoolean(true);
+        final AtomicReference<Deque<ProducerBatch>> dqRef = new AtomicReference<>();
+
+        BufferPool pool = new BufferPool(64L * chunkSize, chunkSize, metrics, time, "producer-metrics",
+                BufferPool.AllocationMode.INCREMENTAL) {
+            @Override
+            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
+                List<ByteBuffer> chunks = super.allocateChunks(totalSize, maxTimeToBlockMs);
+                Deque<ProducerBatch> dq = dqRef.get();
+                // Mock a concurrent appender that found the batch full: RecordAccumulator.tryAppend
+                // calls closeForRecordAppends() whenever last.tryAppend returns null.
+                if (dq != null && closeOnce.getAndSet(false)) {
+                    synchronized (dq) {
+                        ProducerBatch last = dq.peekLast();
+                        if (last != null)
+                            last.closeForRecordAppends();
+                    }
+                }
+                return chunks;
+            }
+        };
+        ChunkedRecordAccumulator accum = new ChunkedRecordAccumulator(logContext, 8192, Compression.NONE,
+                /* lingerMs */ 0, /* retryBackoffMs */ 0L, /* retryBackoffMaxMs */ 0L,
+                /* deliveryTimeoutMs */ 3200, metrics, "producer-metrics", time,
+                /* transactionManager */ null, pool);
+        try {
+            // First record opens the batch with a single chunk.
+            accum.append(topic, partition1, 0L, key, new byte[32], Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+            Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+            assertEquals(1, dq.size());
+            dqRef.set(dq);
+
+            long availableBeforeSecond = pool.availableMemory();
+
+            // Second record needs an extension; the batch is closed for appends mid-window.
+            RecordAccumulator.RecordAppendResult result = accum.append(topic, partition1, 0L, key,
+                    new byte[300], Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), cluster);
+
+            assertTrue(result.newBatchCreated, "record must land in a new batch, not the closed one");
+            assertEquals(2, dq.size(), "closed batch + new batch expected");
+            assertNotNull(dq.peekFirst());
+            assertTrue(dq.peekFirst().isFull(), "the original batch must still be closed for appends");
+            assertEquals(1, dq.peekFirst().recordCount, "no record may have been added to the closed batch");
+            assertNotNull(dq.peekLast());
+            assertEquals(1, dq.peekLast().recordCount);
+
+            // The extension chunks acquired for the closed batch must have been refunded, so the only
+            // memory still held beyond the first batch is what the new batch needed.
+            assertTrue(pool.availableMemory() < availableBeforeSecond,
+                    "the new batch should hold pool memory");
+            assertEquals(0, pool.availableMemory() % chunkSize,
+                    "pool accounting must stay chunk-aligned after the refund");
+        } finally {
+            accum.close();
+        }
+    }
 }
