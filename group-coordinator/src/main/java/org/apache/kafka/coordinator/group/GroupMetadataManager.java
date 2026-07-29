@@ -760,7 +760,7 @@ public class GroupMetadataManager {
                 StreamsGroup group = streamsGroup(groupId, committedOffset);
                 describedGroups.add(group.asDescribedGroup(
                     committedOffset,
-                    streamsGroupAssignor(groupId).name()
+                    streamsGroupAssignorName(groupId)
                 ));
                 groupIdToStoredDescriptionTopologyEpochs.put(groupId, group.storedDescriptionTopologyEpoch(committedOffset));
             } catch (GroupIdNotFoundException exception) {
@@ -9834,6 +9834,17 @@ public class GroupMetadataManager {
                 groupId, configuredName.get(), defaultStreamsGroupAssignor.name());
         }
         return defaultStreamsGroupAssignor;
+    }
+
+    /**
+     * The name of the task assignor used by the provided streams group, resolved the same way as
+     * {@link #streamsGroupAssignor(String)} but without logging, for read-only paths such as describe.
+     */
+    private String streamsGroupAssignorName(String groupId) {
+        return groupConfigManager.groupConfig(groupId)
+            .flatMap(GroupConfig::streamsAssignorName)
+            .filter(streamsGroupAssignors::containsKey)
+            .orElseGet(defaultStreamsGroupAssignor::name);
     }
 
     /**
