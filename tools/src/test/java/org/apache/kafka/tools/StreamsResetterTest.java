@@ -490,11 +490,9 @@ public class StreamsResetterTest {
         when(existingResult.all()).thenReturn(existingFuture);
         when(adminClient.describeConsumerGroups(Set.of(existingGroupId))).thenReturn(existingResult);
 
-        // querying "my-app" still fails even though "my-app-v32" is a real, existing group
         assertThrows(IllegalArgumentException.class,
                 () -> streamsResetter.validateApplicationIdExists(groupId, adminClient));
 
-        // querying "my-app-v2" directly succeeds — confirms it's a genuine, resolvable group
         streamsResetter.validateApplicationIdExists(existingGroupId, adminClient);
     }
 
