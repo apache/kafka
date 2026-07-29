@@ -89,8 +89,17 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         AddPartitionsToTxnConfig.CONFIG_DEF
     ));
 
+    private volatile QuotaConfig quotaConfig;
+
     public AbstractKafkaConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
         super(definition, originals, configProviderProps, doLog);
+    }
+
+    public QuotaConfig quotaConfig() {
+        if (quotaConfig == null) {
+            quotaConfig = new QuotaConfig(this);
+        }
+        return quotaConfig;
     }
 
     public List<String> logDirs() {

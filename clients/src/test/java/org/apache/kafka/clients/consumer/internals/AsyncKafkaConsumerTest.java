@@ -44,6 +44,7 @@ import org.apache.kafka.clients.consumer.internals.events.CompletableApplication
 import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
+import org.apache.kafka.clients.consumer.internals.events.CreateFetchRequestsEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsEvent;
@@ -108,6 +109,7 @@ import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -506,6 +508,129 @@ public class AsyncKafkaConsumerTest {
         assertTrue(elapsed < 500, "Wakeup should interrupt promptly, took " + elapsed + "ms");
     }
 
+    /**
+     * When a single {@link AsyncKafkaConsumer#poll(Duration)} call runs multiple internal iterations (because
+     * fetches keep coming back empty), the consumer must keep a fetch request pending on the broker: if the
+     * poll event from one iteration completes without returning any records, the next iteration must submit a
+     * fresh {@link AsyncPollEvent} (which drives a new fetch) rather than idling. This test drives two such
+     * iterations over an empty fetch buffer and verifies a new poll event is submitted on each one. See
+     * KAFKA-20780.
+     */
+    @Test
+    public void testInflightPollResubmittedAfterCompletionWithEmptyBuffer() {
+        FetchBuffer fetchBuffer = mock(FetchBuffer.class);
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
+        consumer = newConsumer(fetchBuffer, mock(ConsumerInterceptors.class),
+            mock(ConsumerRebalanceListenerInvoker.class), subscriptions);
+
+        final TopicPartition tp = new TopicPartition("topic1", 0);
+        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.seek(tp, 0);
+
+        // Capture poll events without completing them here. They are completed later from awaitWakeup() instead.
+        final List<AsyncPollEvent> submittedEvents = new ArrayList<>();
+        doAnswer(invocation -> {
+            submittedEvents.add(invocation.getArgument(0));
+            return null;
+        }).when(applicationEventHandler).add(isA(AsyncPollEvent.class));
+
+        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        // The buffer is empty on every pass (the fetch responses are empty), so a completed poll must be
+        // replaced to keep a fetch pending.
+        doReturn(true).when(fetchBuffer).isEmpty();
+
+        // Model the application thread being woken by an empty fetch response: the inflight poll completes, and
+        // the clock advances so the poll loop runs exactly two passes (150ms per pass, 200ms timeout). The poll
+        // timer is refreshed here because a real FetchBuffer would.
+        doAnswer(invocation -> {
+            submittedEvents.forEach(event -> {
+                if (!event.isComplete()) {
+                    event.markValidatePositionsComplete();
+                    event.completeSuccessfully();
+                }
+            });
+            time.sleep(150);
+            Timer pollTimer = invocation.getArgument(0);
+            pollTimer.update();
+            return null;
+        }).when(fetchBuffer).awaitWakeup(any());
+
+        consumer.poll(Duration.ofMillis(200));
+
+        // A fresh poll event on each of the two passes; the bug submits only one (the second pass is starved).
+        verify(applicationEventHandler, times(2)).add(isA(AsyncPollEvent.class));
+    }
+
+    /**
+     * When the inflight poll (its fetch) completes with an error, {@link AsyncKafkaConsumer#poll(Duration)}
+     * surfaces the error and clears the event, so a subsequent poll submits a fresh event and resumes keeping a
+     * fetch request pending on the broker.
+     */
+    @Test
+    public void testPollSurfacesInflightPollErrorAndResumes() {
+        consumer = newConsumer();
+        final TopicPartition tp = new TopicPartition("topic", 0);
+        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        completeAssignmentChangeEventSuccessfully();
+        consumer.assign(singleton(tp));
+
+        // The inflight poll completes with an error (e.g. a failed fetch); poll() must surface it and clear it.
+        final KafkaException fetchError = new KafkaException("fetch failed");
+        doAnswer(invocation -> {
+            AsyncPollEvent event = invocation.getArgument(0);
+            event.completeExceptionally(fetchError);
+            return null;
+        }).when(applicationEventHandler).add(isA(AsyncPollEvent.class));
+        final KafkaException thrown = assertThrows(KafkaException.class, () -> consumer.poll(Duration.ZERO));
+        assertEquals("fetch failed", thrown.getMessage());
+
+        // The errored event was cleared: the next (successful) poll submits a fresh event rather than re-throwing.
+        completeAsyncPollEventSuccessfully();
+        assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
+        verify(applicationEventHandler, times(2)).add(isA(AsyncPollEvent.class));
+    }
+
+    /**
+     * When an inflight poll completes with records already in the fetch buffer, the next poll must return those
+     * records <em>without</em> submitting a new poll event: a fresh event would re-run the validate-positions
+     * stage and starve the buffered records. Guards the buffer-guarded clear in
+     * {@link AsyncKafkaConsumer#checkInflightPoll(Timer, boolean)} (KAFKA-20780).
+     */
+    @Test
+    public void testBufferedRecordsReturnedWithoutResubmittingPollEvent() {
+        FetchBuffer fetchBuffer = mock(FetchBuffer.class);
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
+        consumer = newConsumer(fetchBuffer, new ConsumerInterceptors<>(Collections.emptyList(), metrics),
+            mock(ConsumerRebalanceListenerInvoker.class), subscriptions);
+        final TopicPartition tp = new TopicPartition("topic1", 0);
+        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.seek(tp, 0);
+
+        // First poll submits a poll event; leave it in flight (incomplete) so it carries over to the next poll().
+        final List<AsyncPollEvent> submittedEvents = new ArrayList<>();
+        doAnswer(invocation -> {
+            submittedEvents.add(invocation.getArgument(0));
+            return null;
+        }).when(applicationEventHandler).add(isA(AsyncPollEvent.class));
+        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        consumer.poll(Duration.ZERO);
+        assertEquals(1, submittedEvents.size());
+
+        // That poll event now completes and its fetch has filled the buffer with records.
+        final List<ConsumerRecord<String, String>> records = asList(
+            new ConsumerRecord<>("topic1", 0, 2, "key", "value"));
+        submittedEvents.get(0).markValidatePositionsComplete();
+        submittedEvents.get(0).completeSuccessfully();
+        doReturn(false).when(fetchBuffer).isEmpty();
+        doReturn(Fetch.forPartition(tp, records, true, new OffsetAndMetadata(3, Optional.of(0), "")))
+            .when(fetchCollector).collectFetch(any(FetchBuffer.class));
+
+        // The next poll returns the buffered records and submits no new poll event (only the original one exists).
+        final ConsumerRecords<String, String> polled = consumer.poll(Duration.ZERO);
+        assertEquals(1, polled.count());
+        verify(applicationEventHandler, times(1)).add(isA(AsyncPollEvent.class));
+    }
+
     @Test
     public void testCommitInRebalanceCallback() {
         consumer = newConsumer();
@@ -560,6 +685,10 @@ public class AsyncKafkaConsumerTest {
         consumer.poll(Duration.ZERO);
 
         assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
+
+        // When poll() returns records, the next fetch is pipelined so a fetch request stays pending on the
+        // broker while the application processes the returned records.
+        verify(applicationEventHandler, atLeastOnce()).add(isA(CreateFetchRequestsEvent.class));
     }
 
     /**
@@ -2499,12 +2628,6 @@ public class AsyncKafkaConsumerTest {
             event.future().complete(committedOffsets);
             return null;
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(FetchCommittedOffsetsEvent.class));
-    }
-
-    private void completeFetchedCommittedOffsetApplicationEventExceptionally(Exception ex) {
-        doThrow(ex)
-            .when(applicationEventHandler)
-            .addAndGet(any(FetchCommittedOffsetsEvent.class));
     }
 
     private void completeUnsubscribeApplicationEventSuccessfully() {
