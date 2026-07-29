@@ -28,6 +28,13 @@ import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
+/**
+ * Tracks the state of a single pending update voter operation.
+ * <p>
+ * An instance is created by {@link UpdateVoterHandler#handleUpdateVoterRequest} once the
+ * API_VERSIONS request has been sent to the voter being updated, and is held by
+ * {@link ChangeVoterHandlerState} until the operation completes, is aborted, or expires.
+ */
 public final class UpdateVoterHandlerState {
     private final ReplicaKey voterKey;
     private final Endpoints voterEndpoints;
@@ -83,7 +90,7 @@ public final class UpdateVoterHandlerState {
         if (this.lastOffset.isPresent()) {
             throw new IllegalStateException(
                 String.format(
-                    "Cannot override last offset to %s for adding voter %s because it is " +
+                    "Cannot override last offset to %s for updating voter %s because it is " +
                     "already set to %s",
                     lastOffset,
                     voterKey,

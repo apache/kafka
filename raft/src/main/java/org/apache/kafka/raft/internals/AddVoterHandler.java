@@ -52,16 +52,29 @@ import java.util.concurrent.CompletionStage;
  * 4. Check that the new voter's id is not part of the existing voter set, otherwise return the
  *    DUPLICATE_VOTER error.
  * 5. Send an API_VERSIONS RPC to the first (default) listener to discover the supported
- *    kraft.version of the new voter.
+ *    kraft.version of the new voter, and record the operation as pending, returning the
+ *    REQUEST_TIMED_OUT error if the request cannot be sent.
+ *
+ * The response is not sent synchronously; the rest of the algorithm runs once the API_VERSIONS
+ * response is handled by {@link #handleApiVersionsResponse}:
+ *
  * 6. Check that the new voter supports the current kraft.version, otherwise return the
  *    INVALID_REQUEST error.
  * 7. Check that the new voter is caught up to the log end offset of the leader, otherwise return
  *    a REQUEST_TIMED_OUT error.
  * 8. Append the updated VotersRecord to the log. The KRaft internal listener will read this
  *    uncommitted record from the log and add the new voter to the set of voters.
- * 9. Wait for the VotersRecord to commit using the majority of the new set of voters. Return a
- *    REQUEST_TIMED_OUT error if it doesn't commit in time.
- * 10. Send the AddVoter successful response to the client.
+ * 9. If the request did not ask to wait for the change to commit ({@code ackWhenCommitted} is
+ *    false), send the AddVoter successful response immediately, without waiting for the record
+ *    to commit.
+ * 10. Otherwise, wait for the VotersRecord to commit using the majority of the new set of
+ *     voters, then send the AddVoter successful response; return a REQUEST_TIMED_OUT error if it
+ *     doesn't commit in time. Either way, the pending operation is only cleared, via
+ *     {@link #highWatermarkUpdated}, once the HWM advances past the offset of the appended
+ *     record, which allows the next voter change operation to proceed.
+ *
+ * A pending operation that doesn't complete before its timeout expires is also aborted with the
+ * REQUEST_TIMED_OUT error, by {@link ChangeVoterHandlerState#maybeExpirePendingOperation}.
  *
  * The algorithm above could be improved as part of KAFKA-17147. Instead of returning an error
  * immediately for 1., 2. and 7., KRaft can wait with a timeout until those invariants are true.
@@ -72,6 +85,15 @@ public final class AddVoterHandler {
     private final Time time;
     private final Logger logger;
 
+    /**
+     * Creates a new handler for add voter requests.
+     *
+     * @param partitionState the KRaft partition state, used to read the currently finalized
+     *        kraft.version and the log's voter set
+     * @param requestSender used to send the API_VERSIONS request to the voter being added
+     * @param time the time implementation, used to create the timer that bounds a pending operation
+     * @param logContext used to create this class's logger
+     */
     public AddVoterHandler(
         KRaftControlRecordStateMachine partitionState,
         RequestSender requestSender,
@@ -84,6 +106,22 @@ public final class AddVoterHandler {
         this.logger = logContext.logger(AddVoterHandler.class);
     }
 
+    /**
+     * Handle an AddVoter request.
+     * <p>
+     * See the class documentation for the full set of steps that this method and
+     * {@link #handleApiVersionsResponse} perform together.
+     *
+     * @param leaderState the leader state
+     * @param voterKey the id and directory id of the voter to add
+     * @param voterEndpoints the endpoints of the voter to add
+     * @param ackWhenCommitted if true, the response is withheld until the voter change commits;
+     *        if false, the response is sent as soon as the change is appended to the log
+     * @param currentTimeMs the current time in milliseconds
+     * @return a future for the AddVoter response; it completes immediately if the request is
+     *         rejected outright, or later, once the API_VERSIONS round trip (and, depending on
+     *         {@code ackWhenCommitted}, the commit) finishes
+     */
     public CompletionStage<AddRaftVoterResponseData> handleAddVoterRequest(
         LeaderState<?> leaderState,
         ReplicaKey voterKey,
@@ -93,8 +131,7 @@ public final class AddVoterHandler {
     ) {
         var changeVoterState = leaderState.changeVoterState();
         // Check if there are any pending voter change requests
-        if (
-            changeVoterState.isOperationPending(
+        if (changeVoterState.isOperationPending(
                 leaderState.leaderAndEpoch(),
                 leaderState.leaderEndpoints(),
                 currentTimeMs
@@ -206,14 +243,24 @@ public final class AddVoterHandler {
     }
 
     /**
-     * Handle the API_VERSIONS response for an add voter operation.
+     * Handle the API_VERSIONS response for a pending add voter operation.
+     * <p>
+     * This may abort the pending operation, completing its future with an error, if the response
+     * doesn't come from the expected voter, if the API_VERSIONS request failed, if the new
+     * voter's supported kraft.version range doesn't cover the cluster's finalized kraft.version,
+     * or if the voter isn't caught up to the leader's log end offset. Otherwise, it appends the
+     * updated VotersRecord to the log and, if {@code ackWhenCommitted} is false, completes the
+     * response immediately.
      *
      * @param leaderState the leader state
      * @param source the node that sent the response
      * @param error the error from the response
      * @param supportedKraftVersions the supported kraft version range from the response
      * @param currentTimeMs the current time in milliseconds
-     * @return true if the add voter operation should continue, false if it was aborted
+     * @return false only when the API_VERSIONS request itself failed, which is the only case
+     *         where the caller (see {@code KafkaRaftClient#handleResponse}) should treat this as
+     *         an unsuccessful response for request-tracking purposes; true otherwise, including
+     *         when this method aborts the pending add voter operation for another reason
      */
     public boolean handleApiVersionsResponse(
         LeaderState<?> leaderState,
@@ -225,7 +272,7 @@ public final class AddVoterHandler {
         var changeVoterState = leaderState.changeVoterState();
         var handlerState = changeVoterState.addVoterHandlerState();
         if (handlerState.isEmpty()) {
-            // There are no pending add operation just ignore the api response
+            // There is no pending add operation; just ignore the API_VERSIONS response
             return true;
         }
 
@@ -254,7 +301,8 @@ public final class AddVoterHandler {
             changeVoterState.resetAddVoterHandlerState(
                 Errors.REQUEST_TIMED_OUT,
                 String.format(
-                    "Aborted add voter operation for since API_VERSIONS returned an error %s",
+                    "Aborted add voter operation for %s since API_VERSIONS returned an error %s",
+                    current.voterKey(),
                     error
                 ),
                 Optional.empty()
@@ -350,6 +398,20 @@ public final class AddVoterHandler {
         return true;
     }
 
+    /**
+     * Called when the high watermark advances to check if a pending add voter operation can be
+     * cleared.
+     * <p>
+     * If the AddVoter request asked to wait for the commit ({@code ackWhenCommitted} is true),
+     * this is also when the response is completed with success. Otherwise, the response was
+     * already sent by {@link #handleApiVersionsResponse} as soon as the VotersRecord was
+     * appended, and this method only clears the pending operation, allowing the next voter
+     * change request to be accepted, once the high watermark advances past the offset of that
+     * record.
+     *
+     * @param leaderState the leader state
+     * @param highWatermark the new high watermark offset
+     */
     public void highWatermarkUpdated(LeaderState<?> leaderState, long highWatermark) {
         var changeVoterState = leaderState.changeVoterState();
 
@@ -358,7 +420,10 @@ public final class AddVoterHandler {
             .ifPresent(current ->
                 current.lastOffset().ifPresent(lastOffset -> {
                     if (highWatermark > lastOffset) {
-                        // VotersRecord with the added voter was committed; complete the RPC
+                        // The VotersRecord with the added voter was committed. If the request
+                        // asked to wait for the commit, this completes the RPC with success;
+                        // otherwise the response was already sent and this just clears the
+                        // pending operation.
                         changeVoterState
                             .resetAddVoterHandlerState(Errors.NONE, null, Optional.empty());
                     }

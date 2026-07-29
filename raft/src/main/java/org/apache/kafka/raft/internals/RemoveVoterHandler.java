@@ -38,18 +38,25 @@ import java.util.concurrent.CompletionStage;
 /**
  * This type implements the protocol for removing a voter from a KRaft partition.
  *
- * The general algorithm for removing voter to the voter set is:
+ * The general algorithm for removing a voter from the voter set is:
  *
  * 1. Check that the leader has fenced the previous leader(s) by checking that the HWM is known,
  *    otherwise return the REQUEST_TIMED_OUT error.
  * 2. Check that the cluster supports kraft.version 1, otherwise return the UNSUPPORTED_VERSION error.
  * 3. Check that there are no uncommitted voter changes, otherwise return the REQUEST_TIMED_OUT error.
- * 4. Append the updated VotersRecord to the log. The KRaft internal listener will read this
+ * 4. Check that the voter being removed is part of the current voter set, otherwise return the
+ *    VOTER_NOT_FOUND error.
+ * 5. Append the updated VotersRecord to the log. The KRaft internal listener will read this
  *    uncommitted record from the log and remove the voter from the set of voters.
- * 5. Wait for the VotersRecord to commit using the majority of the new set of voters. Return a
- *    REQUEST_TIMED_OUT error if it doesn't commit in time.
- * 6. Send the RemoveVoter successful response to the client.
- * 7. Resign the leadership if the leader is not in the new voter set
+ * 6. Wait for the VotersRecord to commit using the majority of the new set of voters, see
+ *    {@link #highWatermarkUpdated}. Return a REQUEST_TIMED_OUT error if it doesn't commit in
+ *    time, see {@link ChangeVoterHandlerState#maybeExpirePendingOperation}.
+ * 7. Send the RemoveVoter successful response to the client.
+ * 8. Resign the leadership if the leader is not in the new voter set.
+ *
+ * Unlike {@link AddVoterHandler} and {@link UpdateVoterHandler}, this operation does not need to
+ * contact the removed voter, so the VotersRecord is appended synchronously within
+ * {@link #handleRemoveVoterRequest} instead of waiting for an API_VERSIONS round trip.
  */
 public final class RemoveVoterHandler {
     private final Optional<ReplicaKey> localReplicaKey;
@@ -58,6 +65,20 @@ public final class RemoveVoterHandler {
     private final long requestTimeoutMs;
     private final Logger logger;
 
+    /**
+     * Creates a new handler for remove voter requests.
+     *
+     * @param nodeId this replica's node id, if it is eligible to be a voter; used together with
+     *        {@code nodeDirectoryId} to detect when the leader itself is being removed, so that
+     *        it can resign
+     * @param nodeDirectoryId this replica's directory id, used together with {@code nodeId} to
+     *        build its {@link ReplicaKey}
+     * @param partitionState the KRaft partition state, used to read the currently finalized
+     *        kraft.version and the log's voter set
+     * @param time the time implementation, used to create the timer that bounds a pending operation
+     * @param requestTimeoutMs the timeout, in milliseconds, for the appended VotersRecord to commit
+     * @param logContext used to create this class's logger
+     */
     public RemoveVoterHandler(
         OptionalInt nodeId,
         Uuid nodeDirectoryId,
@@ -75,6 +96,19 @@ public final class RemoveVoterHandler {
         this.logger = logContext.logger(RemoveVoterHandler.class);
     }
 
+    /**
+     * Handle a RemoveVoter request.
+     * <p>
+     * See the class documentation for the full set of steps that this method and
+     * {@link #highWatermarkUpdated} perform together.
+     *
+     * @param leaderState the leader state
+     * @param voterKey the id and directory id of the voter to remove
+     * @param currentTimeMs the current time in milliseconds
+     * @return a future for the RemoveVoter response; it completes immediately if the request is
+     *         rejected outright, or later, once the appended VotersRecord commits, via
+     *         {@link #highWatermarkUpdated}
+     */
     public CompletionStage<RemoveRaftVoterResponseData> handleRemoveVoterRequest(
         LeaderState<?> leaderState,
         ReplicaKey voterKey,
@@ -138,7 +172,8 @@ public final class RemoveVoterHandler {
             );
         }
 
-        // Remove the voter from the set of voters
+        // Remove the voter from the set of voters, returning VOTER_NOT_FOUND if it isn't a
+        // current voter
         Optional<VoterSet> newVoters = votersEntry.get().value().removeVoter(voterKey);
         if (newVoters.isEmpty()) {
             return CompletableFuture.completedFuture(
@@ -163,6 +198,17 @@ public final class RemoveVoterHandler {
         return state.future();
     }
 
+    /**
+     * Called when the high watermark advances to check if a pending remove voter operation has
+     * committed.
+     * <p>
+     * Once the high watermark advances past the offset of the appended VotersRecord, this
+     * completes the pending RemoveVoter response with success, and resigns the leadership if the
+     * leader itself is no longer part of the committed voter set.
+     *
+     * @param leaderState the leader state
+     * @param highWatermark the new high watermark offset
+     */
     public void highWatermarkUpdated(LeaderState<?> leaderState, long highWatermark) {
         var changeVoterState = leaderState.changeVoterState();
 
@@ -178,7 +224,7 @@ public final class RemoveVoterHandler {
                     ReplicaKey localKey = localReplicaKey.orElseThrow(
                         () -> new IllegalStateException(
                             String.format(
-                                "Leaders mush have an id and directory id %s",
+                                "Leaders must have an id and directory id %s",
                                 localReplicaKey
                             )
                         )

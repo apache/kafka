@@ -24,12 +24,12 @@ import org.apache.kafka.raft.RaftUtil;
 import java.util.Optional;
 
 /**
- * Manages the state of add and remove voter operations.
+ * Manages the state of add, remove, and update voter operations.
  * <p>
- * This class maintains at most one pending voter change operation at a time. Add voter and
- * remove voter operations are mutually exclusive - only one type can be in progress at any
- * given time. When an operation is reset or expires, its associated future is completed with
- * an appropriate error response.
+ * This class maintains at most one pending voter change operation at a time. Add voter, remove
+ * voter, and update voter operations are mutually exclusive - only one type can be in progress
+ * at any given time. When an operation is reset or expires, its associated future is completed
+ * with an appropriate error response.
  * <p>
  * The class also updates the uncommitted voter change metric to reflect whether a voter
  * change operation is currently pending.
@@ -41,6 +41,11 @@ public final class ChangeVoterHandlerState {
 
     private final KafkaRaftMetrics kafkaRaftMetrics;
 
+    /**
+     * Creates a new change-voter handler state tracker.
+     *
+     * @param kafkaRaftMetrics used to report whether a voter change operation is currently pending
+     */
     public ChangeVoterHandlerState(KafkaRaftMetrics kafkaRaftMetrics) {
         this.kafkaRaftMetrics = kafkaRaftMetrics;
     }
@@ -209,11 +214,15 @@ public final class ChangeVoterHandlerState {
     /**
      * Checks for and expires any pending voter change operations that have timed out.
      * <p>
-     * This method evaluates both add voter and remove voter operations. Any operation that
-     * has expired (timeUntilOperationExpiration returns 0) is reset with a REQUEST_TIMED_OUT
-     * error. The method then returns the minimum time remaining until the next operation
-     * expiration.
+     * This method evaluates the add voter, remove voter, and update voter operations. Any
+     * operation that has expired (timeUntilOperationExpiration returns 0) is reset with a
+     * REQUEST_TIMED_OUT error. The method then returns the minimum time remaining until the next
+     * operation expiration.
      *
+     * @param leaderAndEpoch the current leader and epoch information, used to complete the
+     *        future of an expired update voter operation
+     * @param leaderEndpoints the current leader endpoints, used to complete the future of an
+     *        expired update voter operation
      * @param currentTimeMs the current time in milliseconds
      * @return the time in milliseconds until the next operation expires, or Long.MAX_VALUE if
      *         no operations are pending

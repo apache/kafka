@@ -42,21 +42,50 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 /**
- * This type implements the protocol for updating a voter from a KRaft partition.
+ * This type implements the protocol for updating a voter's endpoints and supported kraft.version
+ * in a KRaft partition.
  *
- * 1. Check that the leader has fenced the previous leader(s) by checking that the HWM is known,
+ * Unlike {@link AddVoterHandler} and {@link RemoveVoterHandler}, this operation is not restricted
+ * to clusters that support kraft.version 1: it can also update the leader's in-memory voter
+ * information for clusters still running kraft.version 0.
+ *
+ * Handling the UpdateVoter request ({@link #handleUpdateVoterRequest}) does the following:
+ *
+ * 1. Check that there are no other pending voter change operations (add, remove or update),
  *    otherwise return the REQUEST_TIMED_OUT error.
- * 2. Check that the cluster supports kraft.version 1, otherwise return the UNSUPPORTED_VERSION error.
- * 3. Check that there are no uncommitted voter changes, otherwise return the REQUEST_TIMED_OUT error.
- * 4. Check that the updated voter still supports the currently finalized kraft.version, otherwise
- *    return the INVALID_REQUEST error.
- * 5. Check that the updated voter is still listening on the default listener.
- * 6. Update voter set with new voter configuration.
- *    a. If reconfiguration is supported, append the updated VotersRecord to the log. The KRaft internal listener will read this
- *       uncommitted record from the log and update the voter in the set of voters.
- *    b. If reconfiguration is not supported, update the in-memory information for the voter. This will get
- *       appended to the log when the cluster is upgraded to a kraft version that supports reconfiguration.
- * 7. Send the UpdateVoter successful response to the voter.
+ * 2. Check that the leader has established a HWM, otherwise return the REQUEST_TIMED_OUT error.
+ * 3. Check that the request's supported kraft.version range covers the cluster's currently
+ *    finalized kraft.version, otherwise return the INVALID_REQUEST error.
+ * 4. Check that the updated endpoints include the default listener, otherwise return the
+ *    INVALID_REQUEST error.
+ * 5. Send an API_VERSIONS request to the voter's new default endpoint and record the operation as
+ *    pending, returning the REQUEST_TIMED_OUT error if the request cannot be sent.
+ *
+ * The response is not sent synchronously; the RPC only completes once the API_VERSIONS response is
+ * handled by {@link #handleApiVersionsResponse}:
+ *
+ * 6. Ignore the response if it doesn't come from the voter this operation is waiting on.
+ * 7. Abort with the REQUEST_TIMED_OUT error if the API_VERSIONS request itself failed.
+ * 8. Abort with the INVALID_REQUEST error if the supported kraft.version range in the response
+ *    doesn't match the range from the UpdateVoter request.
+ * 9. Read the current voter set: from the last committed VotersRecord in the log if the cluster
+ *    supports kraft.version 1, or from the leader's in-memory voter set otherwise (this in-memory
+ *    state is used to carry voter updates across a future kraft.version upgrade). Abort with the
+ *    REQUEST_TIMED_OUT error if neither is available yet, e.g. because the kraft.version was just
+ *    upgraded but the corresponding record has not been written to the log.
+ * 10. Update the matching voter's entry with the new endpoints and supported kraft.version, aborting
+ *     with the VOTER_NOT_FOUND error if the voter is no longer part of the set.
+ * 11. Store the updated voter set:
+ *     a. If the cluster supports kraft.version 1, append the updated VotersRecord to the log and
+ *        immediately complete the RPC with success, without waiting for the record to commit. The
+ *        pending operation is only cleared once the HWM advances past the appended record (see
+ *        {@link #highWatermarkUpdated}), which allows the next voter change operation to proceed.
+ *     b. Otherwise, compare-and-set the leader's in-memory voter set, completing the RPC
+ *        immediately with success, or with the REQUEST_TIMED_OUT error if the in-memory state was
+ *        concurrently changed by another operation.
+ *
+ * A pending operation that doesn't complete before its timeout expires is also aborted with the
+ * REQUEST_TIMED_OUT error, by {@link ChangeVoterHandlerState#maybeExpirePendingOperation}.
  */
 public final class UpdateVoterHandler {
     private final KRaftControlRecordStateMachine partitionState;
@@ -64,6 +93,15 @@ public final class UpdateVoterHandler {
     private final Time time;
     private final Logger logger;
 
+    /**
+     * Creates a new handler for update voter requests.
+     *
+     * @param partitionState the KRaft partition state, used to read the currently finalized
+     *        kraft.version and the log's voter set
+     * @param requestSender used to send the API_VERSIONS request to the voter being updated
+     * @param time the time implementation, used to create the timer that bounds a pending operation
+     * @param logContext used to create this class's logger
+     */
     public UpdateVoterHandler(
         KRaftControlRecordStateMachine partitionState,
         RequestSender requestSender,
@@ -76,6 +114,22 @@ public final class UpdateVoterHandler {
         this.logger = logContext.logger(getClass());
     }
 
+    /**
+     * Handle an UpdateVoter request.
+     * <p>
+     * See the class documentation for the full set of steps that this method and
+     * {@link #handleApiVersionsResponse} perform together.
+     *
+     * @param leaderState the leader state
+     * @param requestListenerName the listener the request was received on, used to build the response
+     * @param voterKey the id and directory id of the voter to update
+     * @param voterEndpoints the updated endpoints for the voter
+     * @param supportedKraftVersions the kraft.version range supported by the voter
+     * @param currentTimeMs the current time in milliseconds
+     * @return a future for the UpdateVoter response; it completes immediately if the request is
+     *         rejected outright, or later, once the API_VERSIONS round trip finishes, via
+     *         {@link #handleApiVersionsResponse}
+     */
     public CompletionStage<UpdateRaftVoterResponseData> handleUpdateVoterRequest(
         LeaderState<?> leaderState,
         ListenerName requestListenerName,
@@ -86,8 +140,7 @@ public final class UpdateVoterHandler {
     ) {
         var changeVoterState = leaderState.changeVoterState();
         // Check if there are any pending voter change requests
-        if (
-            changeVoterState.isOperationPending(
+        if (changeVoterState.isOperationPending(
                 leaderState.leaderAndEpoch(),
                 leaderState.leaderEndpoints(),
                 currentTimeMs
@@ -104,8 +157,7 @@ public final class UpdateVoterHandler {
         }
 
         // Check that the leader has established a HWM and committed the current epoch
-        Optional<Long> highWatermark = leaderState.highWatermark().map(LogOffsetMetadata::offset);
-        if (highWatermark.isEmpty()) {
+        if (leaderState.highWatermark().isEmpty()) {
             return CompletableFuture.completedFuture(
                 RaftUtil.updateVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
@@ -189,14 +241,23 @@ public final class UpdateVoterHandler {
     }
 
     /**
-     * Handle the API_VERSIONS response for an update voter operation.
+     * Handle the API_VERSIONS response for a pending update voter operation.
+     * <p>
+     * This may abort the pending operation, completing its future with an error, if the response
+     * doesn't come from the expected voter, if the API_VERSIONS request failed, if the supported
+     * kraft.version range doesn't match the one from the UpdateVoter request, if the current voter
+     * set can't be read yet, or if the voter is no longer part of the voter set. Otherwise, it
+     * stores the updated voter set, see {@link #storeUpdatedVoters}.
      *
      * @param leaderState the leader state
      * @param source the node that sent the response
      * @param error the error from the response
      * @param supportedKraftVersions the supported kraft version range from the response
      * @param currentTimeMs the current time in milliseconds
-     * @return true if the update voter operation should continue, false if it was aborted
+     * @return false only when the API_VERSIONS request itself failed, which is the only case where
+     *         the caller (see {@code KafkaRaftClient#handleResponse}) should treat this as an
+     *         unsuccessful response for request-tracking purposes; true otherwise, including when
+     *         this method aborts the pending update voter operation for another reason
      */
     public boolean handleApiVersionsResponse(
         LeaderState<?> leaderState,
@@ -208,11 +269,11 @@ public final class UpdateVoterHandler {
         var changeVoterState = leaderState.changeVoterState();
         var handlerState = changeVoterState.updateVoterHandlerState();
         if (handlerState.isEmpty()) {
-            // There are no pending add operation just ignore the api response
+            // There is no pending update operation; just ignore the API_VERSIONS response
             return true;
         }
 
-        // Check that the API_VERSIONS response matches the id of the voter getting added
+        // Check that the API_VERSIONS response matches the id of the voter getting updated
         var current = handlerState.get();
         if (!current.expectingApiResponse(source.id())) {
             logger.info(
@@ -245,7 +306,7 @@ public final class UpdateVoterHandler {
                 .equals(supportedKraftVersions.map(this::convertToVersionRange))
         ) {
             // Check that the supported version from the ApiVersions response matches the supported
-            // version from the UpdateVoter requet
+            // version from the UpdateVoter request
             logger.error(
                 "The supported kraft version from UpdateVoters {} doesn't match the supported " +
                 "kraft version from ApiVersions {}",
@@ -265,18 +326,20 @@ public final class UpdateVoterHandler {
         Optional<Long> highWatermark = leaderState.highWatermark().map(LogOffsetMetadata::offset);
         if (highWatermark.isEmpty()) {
             // This cannot happen because the update voter request handler already validated that
-            // the HWMN is known
+            // the HWM is known
             throw new IllegalStateException("Expected the high-watermark to be known");
         }
 
-        // Read the voter set from the log or leader state
+        // Read the voter set from the log if the cluster supports kraft.version 1, otherwise from
+        // the leader's in-memory voter set
         KRaftVersion kraftVersion = partitionState.lastKraftVersion();
         final Optional<KRaftVersionUpgrade.Voters> inMemoryVoters;
         final Optional<VoterSet> voters;
         if (kraftVersion.isReconfigSupported()) {
             inMemoryVoters = Optional.empty();
 
-            // Check that there are no uncommitted VotersRecord
+            // Only use the last voter set entry if it has already committed; an uncommitted
+            // entry is treated as not yet available
             Optional<LogHistory.Entry<VoterSet>> votersEntry = partitionState.lastVoterSetEntry();
             if (votersEntry.isEmpty() || votersEntry.get().offset() >= highWatermark.get()) {
                 voters = Optional.empty();
@@ -288,14 +351,19 @@ public final class UpdateVoterHandler {
             voters = inMemoryVoters.map(KRaftVersionUpgrade.Voters::voters);
         }
         if (voters.isEmpty()) {
-            /* This can happen if the remote voter sends an update voter request after the kraft
-             * version has been upgraded to 1 but before the updated kraft version has been written
-             * to the log.
+            /* This can happen for two reasons:
              *
-             * During this time the kraft version and the voter set have been written to the batch
-             * accumulator and the leader's volatile voter set has been cleared. These updates have
-             * not been written to the log. The KRaft replica's partition state is only updated when
-             * the control record has been written to the log (disk).
+             * 1. The cluster just upgraded to a kraft.version that supports reconfiguration, but
+             *    the updated kraft.version and voter set have only been written to the batch
+             *    accumulator, not yet the log. During this time the leader's volatile voter set
+             *    has already been cleared, but the log doesn't have a committed VotersRecord yet.
+             *    The KRaft replica's partition state is only updated once the control record has
+             *    been written to the log (disk).
+             * 2. The cluster already supports kraft.version 1, but the last VotersRecord in the
+             *    log has not committed yet.
+             *
+             * In both cases the leader doesn't have a definitive voter set to update yet, so ask
+             * the voter to retry.
              */
             logger.info("Unable to read the current voter set with kraft version {}", kraftVersion);
             changeVoterState.resetUpdateVoterHandlerState(
@@ -366,7 +434,7 @@ public final class UpdateVoterHandler {
         var changeVoterState = leaderState.changeVoterState();
 
         if (inMemoryVoters.isEmpty()) {
-            /* Since the partition support reconfig then just write the update voter set directly to the log.
+            /* Since the partition supports reconfig, write the updated voter set directly to the log.
              *
              * Complete the RPC but don't reset the handler state. This allows the follower to send a FETCH
              * request and help to commit the voter set change.
@@ -409,7 +477,7 @@ public final class UpdateVoterHandler {
                     newVoters
                 );
 
-                // Fail the pending future if present
+                // Fail the pending future so the client can retry
                 changeVoterState.resetUpdateVoterHandlerState(
                     Errors.REQUEST_TIMED_OUT,
                     leaderState.leaderAndEpoch(),
@@ -434,8 +502,14 @@ public final class UpdateVoterHandler {
     }
 
     /**
-     * Called when the high watermark is updated to check if any pending update voter operations
-     * can be completed.
+     * Called when the high watermark advances to check if a pending update voter operation can be
+     * cleared.
+     * <p>
+     * When the cluster supports kraft.version 1, {@link #storeUpdatedVoters} completes the
+     * UpdateVoter RPC as soon as the updated VotersRecord is appended to the log, without waiting
+     * for it to commit, but leaves the operation marked as pending so that no other voter change
+     * operation can start. This method clears that pending state, allowing the next voter change
+     * request to be accepted, once the high watermark advances past the offset of that record.
      *
      * @param leaderState the leader state
      * @param highWatermark the new high watermark offset
@@ -448,7 +522,10 @@ public final class UpdateVoterHandler {
             .ifPresent(current -> {
                 current.lastOffset().ifPresent(lastOffset -> {
                     if (highWatermark > lastOffset) {
-                        // VotersRecord with the added voter was committed; complete the RPC
+                        // The VotersRecord with the updated voter was committed; clear the
+                        // pending operation to allow other voter changes. The RPC response was
+                        // already sent when the record was appended, so this does not complete
+                        // the future again.
                         changeVoterState.resetUpdateVoterHandlerState(
                             Errors.NONE,
                             leaderState.leaderAndEpoch(),
