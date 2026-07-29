@@ -1,6 +1,11 @@
 org.apache.kafka.api.EndToEndClusterIdTest:
 - testEndToEndWithClassicProtocol
 - testEndToEndWithConsumerProtocol
+org.apache.kafka.network.ProcessorTest:
+- testParseRequestHeaderForProduceV0ToV2
+- testParseRequestHeaderWithDisabledApiVersion
+- testParseRequestHeaderWithUnsupportedApi
+- testParseRequestHeaderWithUnsupportedApiVersion
 org.apache.kafka.network.RequestConvertToJsonTest:
 - testAllApiVersionsResponseHandled
 - testAllRequestTypesHandled

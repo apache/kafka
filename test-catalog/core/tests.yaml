@@ -948,11 +948,6 @@ kafka.network.DynamicConnectionQuotaTest:
 - testDynamicListenerConnectionQuota
 kafka.network.DynamicNumNetworkThreadsTest:
 - testDynamicNumNetworkThreads
-kafka.network.ProcessorTest:
-- testParseRequestHeaderForProduceV0ToV2
-- testParseRequestHeaderWithDisabledApiVersion
-- testParseRequestHeaderWithUnsupportedApi
-- testParseRequestHeaderWithUnsupportedApiVersion
 kafka.network.RequestConvertToJsonTest:
 - testRequestDesc
 - testRequestDescMetrics
