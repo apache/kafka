@@ -61,7 +61,9 @@ The following features are not yet available and should be avoided when using th
 
 * **Topology Updates**: If a topology is changed significantly (e.g., by adding new source topics or changing the number of subtopologies), a new streams group must be created.
 
-* **High Availability Assignor**: The sticky assignor is the only built-in assignor and it does not support rack aware assignment, but a custom assignor registered via `group.streams.assignors` can implement it. "warmup tasks" are created during reconciliation and not by the assignor, and are not supported yet by any assignor.
+* **High Availability Assignor**: The sticky assignor is the only built-in assignor and it does not support rack aware assignment, but a custom assignor registered via `group.streams.assignors` can implement it.
+
+* **Warmup Tasks**: In contrast to the "classic" rebalance protocol, warmup tasks are not an assignor feature, but the group coordinator would inject warmup tasks into an assignment. The benefit is, that warmup tasks can be used independent of the configured assignor. However, warmup task support is not implemented yet.
 
 * **Regular Expressions**: Pattern-based topic subscription is not supported.
 
