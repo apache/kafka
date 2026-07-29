@@ -1491,6 +1491,13 @@ org.apache.kafka.streams.kstream.internals.SlidingWindowedKStreamImplTest:
 - shouldThrowNullPointerOnMaterializedReduceIfNamedIsNull
 - shouldThrowNullPointerOnMaterializedReduceIfReducerIsNull
 - shouldThrowNullPointerOnReduceIfReducerIsNull
+org.apache.kafka.streams.kstream.internals.SuppressHeadersScenarioTest:
+- nonWindowedEvictionTriggeredByDifferentKey
+- nonWindowedEvictionTriggeredBySameKey
+- nonWindowedTombstoneMustBeForwarded
+- windowedEvictionTriggeredBySameKeyDifferentWindow
+- windowedEvictionTriggeredBySameKeySameWindow
+- windowedFinalResultsTombstoneIsDropped
 org.apache.kafka.streams.kstream.internals.SuppressScenarioTest:
 - shouldImmediatelyEmitEventsWithZeroEmitAfter
 - shouldSupportFinalResultsForSessionWindows
@@ -6938,12 +6945,21 @@ org.apache.kafka.streams.state.internals.TimeOrderedCachingPersistentWindowStore
 org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferTest:
 - shouldAcceptData
 - shouldCommit
+- shouldDeserializeEachValuePartWithItsOwnHeadersWhenHeadersEnabled
+- shouldDeserializeEvictedValueWithBufferedHeadersNotEvictionTriggerHeaders
 - shouldEvictOldestAndUpdateSizeAndCountAndMinTimestamp
 - shouldInit
+- shouldKeepPriorValueHeadersWhenOnlyThePlainBytesOfPriorAndOldValueMatch
 - shouldNotRestoreUnrecognizedVersionRecord
+- shouldNotWritePriorValueHeadersWhenPriorAndOldValueShareAnArray
+- shouldPreservePriorValueTimestampAndHeadersAcrossRestoreWhenHeadersEnabled
+- shouldPreservePriorValueTimestampAndHeadersWhenHeadersEnabled
+- shouldPropagateHeadersThroughEviction
 - shouldRejectNullValues
 - shouldRemoveData
 - shouldRespectEvictionPredicate
+- shouldRestoreChangelogWrittenWithHeadersIntoBufferWithoutHeaders
+- shouldRestoreChangelogWrittenWithoutHeadersIntoBufferWithHeaders
 - shouldRestoreOldUnversionedFormat
 - shouldRestoreV1Format
 - shouldRestoreV2Format
@@ -6951,6 +6967,10 @@ org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferTest:
 - shouldRestoreV3FormatWithV2Header
 - shouldReturnPriorValueForBufferedKey
 - shouldReturnUndefinedOnPriorValueForNotBufferedKey
+- shouldRoundTripDistinctPerValuePartHeadersThroughCommitAndRestore
+- shouldRoundTripHeadersThroughCommitAndRestoreWhenHeadersEnabled
+- shouldSerializeNewValueLastSoItsHeadersWin
+- shouldStorePerValueHeadersInChangelogWhenHeadersEnabled
 - shouldTrackCount
 - shouldTrackMinTimestamp
 - shouldTrackSize
@@ -7165,10 +7185,18 @@ org.apache.kafka.streams.state.internals.TimestampedWindowStoreWithHeadersBuilde
 org.apache.kafka.streams.state.internals.TimestampedWindowStoreWithHeadersSerializerSideEffectTest:
 - shouldPropagateSerializerHeaderSideEffectToChangelog
 org.apache.kafka.streams.state.internals.UtilsTest:
+- shouldBuildValueTimestampHeadersFromPlainValueTimestampAndHeaders
+- shouldBuildValueTimestampHeadersWithEmptyHeadersLikeTheTimestampOnlyOverload
+- shouldExtractHeadersTimestampPrefixWithEmptyHeaders
+- shouldExtractHeadersTimestampPrefixWithHeaders
 - shouldExtractRawPlainValue
 - shouldExtractRawValueWithEmptyHeaders
+- shouldRebuildValueTimestampHeadersFromPrefixAndPlainValue
+- shouldReturnNullForNullRawHeadersTimestampPrefix
 - shouldReturnNullForNullRawPlainValue
 - shouldReturnNullForNullRawTimestampedValue
+- shouldReturnNullWhenBuildingFromNullPlainValueWithHeaders
+- shouldReturnNullWhenRebuildingFromNullPlainValue
 - testEmptyHeadersAndTimestamp
 - testEmptyHeadersAndTimestampWithInvalidHeaderSizes
 - testRawTimestampedValue
