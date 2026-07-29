@@ -182,6 +182,26 @@ public class ChunkedByteBufferOutputStreamTest {
     }
 
     @Test
+    public void testEnsureRemainingDoesNotWasteCurrentChunk() throws Exception {
+        int chunkSize = 8;
+        BufferPool p = pool(64, chunkSize);
+        try (ChunkedByteBufferOutputStream stream = new ChunkedByteBufferOutputStream(chunks(p, chunkSize, 2), chunkSize, p)) {
+            stream.write(new byte[]{1, 2, 3}, 0, 3);
+
+            // Requesting more than the current chunk's free bytes (5) but no more than the total
+            // free bytes across chunks (13) must not skip ahead: the bytes left in the current chunk
+            // stay writable.
+            stream.ensureRemaining(chunkSize + 1);
+            assertEquals(2 * chunkSize - 3, stream.remaining());
+            stream.write(new byte[]{4, 5}, 0, 2);
+            assertEquals(5, stream.position());
+            assertEquals(2 * chunkSize - 5, stream.remaining());
+
+            stream.deallocate();
+        }
+    }
+
+    @Test
     public void testAddBuffersExtendsStream() throws Exception {
         int chunkSize = 8;
         BufferPool p = pool(64, chunkSize);

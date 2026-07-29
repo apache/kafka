@@ -25,6 +25,7 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.Record;
@@ -625,5 +626,13 @@ public class ChunkedRecordAccumulatorTest {
                         + "header double-counting (per-record formula) would inflate this");
 
         accum.close();
+    }
+
+    @Test
+    public void testChunkedBatchRejectsNonChunkedStream() {
+        MemoryRecordsBuilder plainBuilder = MemoryRecords.builder(ByteBuffer.allocate(256),
+                RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE, TimestampType.CREATE_TIME, 0L);
+        assertThrows(IllegalArgumentException.class,
+                () -> new ChunkedProducerBatch(tp1, plainBuilder, time.milliseconds()));
     }
 }
