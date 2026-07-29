@@ -4690,7 +4690,8 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             void handleFailure(Throwable throwable) {
-                completeAllExceptionally(Collections.singletonList(future), throwable);
+                future.completeExceptionally(throwable);
+                nodeApiVersionsFuture.completeExceptionally(throwable);
             }
         };
 
