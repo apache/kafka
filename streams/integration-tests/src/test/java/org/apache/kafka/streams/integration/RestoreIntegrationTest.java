@@ -621,10 +621,11 @@ public class RestoreIntegrationTest {
 
             assertThat(restoreListener.totalNumRestored(), CoreMatchers.equalTo(initialNunRestoredCount));
 
-            // After stopping instance 2 and letting instance 1 take over its tasks, we should have closed the stores on instance 2.
-            // Under the new group protocol, an extra store close can occur during rebalance; account for that here.
-            final int expectedAfterStreams2Close = initialStoreCloseCount + (useNewProtocol ? 3 : 2);
-            assertThat(CloseCountingInMemoryStore.numStoresClosed(), equalTo(expectedAfterStreams2Close));
+            // After stopping instance 2 and letting instance 1 take over its tasks, we should have closed just two stores
+            // total: the active and standby tasks on instance 2. The new protocol used to close one store more, because
+            // the standby that instance 1 already held was closed and re-created instead of being promoted in place;
+            // now that the reconciler changes the role in place, both protocols close the same two stores.
+            assertThat(CloseCountingInMemoryStore.numStoresClosed(), equalTo(initialStoreCloseCount + 2));
         } finally {
             streams1.close(Duration.ofSeconds(60));
         }
