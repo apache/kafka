@@ -204,7 +204,7 @@ public class StreamsGroupCommandTest {
             List.of());
         StreamsGroupDescription exp = new StreamsGroupDescription(
             group, 0, 0, 0, List.of(), List.of(), GroupState.STABLE, new Node(0, "bar", 0), null,
-            Optional.of(topology), StreamsGroupTopologyDescriptionStatus.AVAILABLE);
+            Optional.of(topology), StreamsGroupTopologyDescriptionStatus.AVAILABLE, Optional.empty());
 
         Admin admin = mock(KafkaAdminClient.class);
         DescribeStreamsGroupsResult result = mock(DescribeStreamsGroupsResult.class);
@@ -236,7 +236,7 @@ public class StreamsGroupCommandTest {
         String group = "foo-group";
         StreamsGroupDescription exp = new StreamsGroupDescription(
             group, 0, 0, 0, List.of(), List.of(), GroupState.STABLE, new Node(0, "bar", 0), null,
-            Optional.empty(), StreamsGroupTopologyDescriptionStatus.NOT_STORED);
+            Optional.empty(), StreamsGroupTopologyDescriptionStatus.NOT_STORED, Optional.empty());
 
         Admin admin = mock(KafkaAdminClient.class);
         DescribeStreamsGroupsResult result = mock(DescribeStreamsGroupsResult.class);

@@ -49,6 +49,10 @@ public class StreamsGroupDescription {
     private final StreamsGroupTopologyDescriptionStatus topologyDescriptionStatus;
     private final Optional<String> assignorName;
 
+    /**
+     * @deprecated Since 4.4. Use {@link #StreamsGroupDescription(String, int, int, int, Collection, Collection, GroupState, Node, Set, Optional, StreamsGroupTopologyDescriptionStatus, Optional)} instead.
+     */
+    @Deprecated(since = "4.4")
     public StreamsGroupDescription(
             final String groupId,
             final int groupEpoch,
@@ -71,35 +75,7 @@ public class StreamsGroupDescription {
             coordinator,
             authorizedOperations,
             Optional.empty(),
-            StreamsGroupTopologyDescriptionStatus.NOT_REQUESTED
-        );
-    }
-
-    public StreamsGroupDescription(
-            final String groupId,
-            final int groupEpoch,
-            final int targetAssignmentEpoch,
-            final int topologyEpoch,
-            final Collection<StreamsGroupSubtopologyDescription> subtopologies,
-            final Collection<StreamsGroupMemberDescription> members,
-            final GroupState groupState,
-            final Node coordinator,
-            final Set<AclOperation> authorizedOperations,
-            final Optional<StreamsGroupTopologyDescription> topologyDescription,
-            final StreamsGroupTopologyDescriptionStatus topologyDescriptionStatus
-    ) {
-        this(
-            groupId,
-            groupEpoch,
-            targetAssignmentEpoch,
-            topologyEpoch,
-            subtopologies,
-            members,
-            groupState,
-            coordinator,
-            authorizedOperations,
-            topologyDescription,
-            topologyDescriptionStatus,
+            StreamsGroupTopologyDescriptionStatus.NOT_REQUESTED,
             Optional.empty()
         );
     }
