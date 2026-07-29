@@ -985,6 +985,7 @@ org.apache.kafka.clients.consumer.KafkaShareConsumerMetricsTest:
 - testUnregisteringCustomMetricsWithSameNameDoesntAffectConsumerMetrics
 - testUnregisteringNonexistingMetricsDoesntCauseError
 org.apache.kafka.clients.consumer.KafkaShareConsumerTest:
+- testShareConsumerBootstrapResolutionExceptionPropagatedToPoll
 - testVerifyFetchAndCloseImplicit
 - testVerifyFetchAndCommitSyncImplicit
 - testVerifyHeartbeats
