@@ -16,16 +16,13 @@
  */
 package org.apache.kafka.tiered.storage.integration;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.tiered.storage.TieredStorageTestAction;
 import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
-import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
 import java.util.HashMap;
@@ -44,6 +41,7 @@ public final class DisableRemoteLogOnTopicTest {
     private static final int BROKER_COUNT = 3;
     private static final int NUM_REMOTE_LOG_METADATA_PARTITIONS = 5;
 
+    @SuppressWarnings("unused")
     private static List<ClusterConfig> clusterConfig() {
         return List.of(ClusterConfig.defaultBuilder()
                 .setTypes(Set.of(Type.KRAFT))
@@ -143,17 +141,6 @@ public final class DisableRemoteLogOnTopicTest {
                 // verify the local log is still consumable
                 .consume(topicA, p0, 3L, 1, 0);
 
-        Map<String, Object> extraConsumerProps = Map.of(
-                ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT)
-        );
-        try (TieredStorageTestContext context = new TieredStorageTestContext(clusterInstance, extraConsumerProps)) {
-            try {
-                for (TieredStorageTestAction action : builder.complete()) {
-                    action.execute(context);
-                }
-            } finally {
-                context.printReport(System.out);
-            }
-        }
+        builder.build().execute(clusterInstance, groupProtocol);
     }
 }

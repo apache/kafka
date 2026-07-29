@@ -19,10 +19,10 @@ package kafka.api
 
 import java.time.Duration
 import java.nio.charset.StandardCharsets
+import java.util
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 import kafka.integration.KafkaServerTestHarness
-import kafka.security.JaasTestUtils
 import kafka.server.KafkaConfig
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{Admin, NewPartitions}
@@ -35,6 +35,7 @@ import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.security.JaasTestUtils
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
@@ -265,12 +266,11 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
     try {
       // create topic
-      val topicProps = new Properties()
-      if (timestampType == TimestampType.LOG_APPEND_TIME)
-        topicProps.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
-      else
-        topicProps.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "CreateTime")
-      TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2, topicConfig = topicProps)
+      val topicConfigs = util.Map.of(
+        TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG,
+        if (timestampType == TimestampType.LOG_APPEND_TIME) "LogAppendTime" else "CreateTime"
+      )
+      TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2, topicConfig = topicConfigs)
 
       val recordAndFutures = for (i <- 1 to numRecords) yield {
         val record = new ProducerRecord(topic, partition, baseTimestamp + i, s"key$i".getBytes(StandardCharsets.UTF_8),
@@ -448,7 +448,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     val e = assertThrows(classOf[ExecutionException], () => producer.send(new ProducerRecord(topic, partition1, null, "value".getBytes(StandardCharsets.UTF_8))).get())
     assertEquals(classOf[TimeoutException], e.getCause.getClass)
 
-    admin.createPartitions(java.util.Map.of(topic, NewPartitions.increaseTo(2))).all().get()
+    admin.createPartitions(util.Map.of(topic, NewPartitions.increaseTo(2))).all().get()
 
     // read metadata from a broker and verify the new topic partitions exist
     TestUtils.waitForPartitionMetadata(brokers, topic, 0)

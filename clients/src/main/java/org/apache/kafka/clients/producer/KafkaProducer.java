@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.clients.ApiVersions;
@@ -43,11 +44,13 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
@@ -76,16 +79,15 @@ import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
-import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch;
 
 import org.slf4j.Logger;
 
-import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
@@ -93,12 +95,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-
+import java.util.stream.Collectors;
 
 /**
  * A Kafka client that publishes records to the Kafka cluster.
@@ -241,6 +245,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * <code>UnsupportedVersionException</code> when invoking an API that is not available in the running broker version.
  * </p>
  */
+@InterfaceAudience.Public
 public class KafkaProducer<K, V> implements Producer<K, V> {
 
     private final Logger log;
@@ -427,6 +432,16 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             int deliveryTimeoutMs = configureDeliveryTimeout(config, log);
 
             this.apiVersions = apiVersions;
+            if (metadata != null) {
+                this.metadata = metadata;
+            } else {
+                this.metadata = new ProducerMetadata(retryBackoffMs,
+                        retryBackoffMaxMs,
+                        config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG),
+                        config.getLong(ProducerConfig.METADATA_MAX_IDLE_CONFIG),
+                        logContext,
+                        clusterResourceListeners);
+            }
             this.transactionManager = configureTransactionState(config, logContext);
             // There is no need to do work required for adaptive partitioning, if we use a custom partitioner.
             boolean enableAdaptivePartitioning = partitionerPlugin.get() == null &&
@@ -454,19 +469,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     transactionManager,
                     new BufferPool(this.totalMemorySize, batchSize, metrics, time, PRODUCER_METRIC_GROUP_NAME));
 
-            List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
-            if (metadata != null) {
-                this.metadata = metadata;
-            } else {
-                this.metadata = new ProducerMetadata(retryBackoffMs,
-                        retryBackoffMaxMs,
-                        config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG),
-                        config.getLong(ProducerConfig.METADATA_MAX_IDLE_CONFIG),
-                        logContext,
-                        clusterResourceListeners,
-                        Time.SYSTEM);
-                this.metadata.bootstrap(addresses);
-            }
             this.errors = this.metrics.sensor("errors");
             this.sender = newSender(logContext, kafkaClient, this.metadata);
             String ioThreadName = NETWORK_THREAD_PREFIX + " | " + clientId;
@@ -530,6 +532,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         ProducerMetrics metricsRegistry = new ProducerMetrics(this.metrics);
         Sensor throttleTimeSensor = Sender.throttleTimeSensor(metricsRegistry.senderMetrics);
         KafkaClient client = kafkaClient != null ? kafkaClient : ClientUtils.createNetworkClient(producerConfig,
+                producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG),
                 this.metrics,
                 "producer",
                 logContext,
@@ -622,6 +625,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 transactionTimeoutMs,
                 retryBackoffMs,
                 apiVersions,
+                metadata,
                 enable2PC
             );
 
@@ -740,7 +744,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * Note, that the consumer should have {@code enable.auto.commit=false} and should
      * also not commit offsets manually (via {@link KafkaConsumer#commitSync(Map) sync} or
      * {@link KafkaConsumer#commitAsync(Map, OffsetCommitCallback) async} commits).
-     * This method will raise {@link TimeoutException} if the producer cannot send offsets before expiration of {@code max.block.ms}.
+     * This method will raise {@link TimeoutException} if the producer cannot resolve the metadata for the topics in
+     * {@code offsets} and send the offsets before expiration of {@code max.block.ms}.
      * Additionally, it will raise {@link InterruptException} if interrupted.
      *
      * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started.
@@ -761,8 +766,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *         to the partition leader. See the exception for more details
      * @throws KafkaException if the producer has encountered a previous fatal or abortable error, or for any
      *         other unexpected error
-     * @throws TimeoutException if the time taken for sending the offsets has surpassed <code>max.block.ms</code>.
+     * @throws TimeoutException if the combined time taken for resolving topic metadata and sending the offsets
+     *         has surpassed <code>max.block.ms</code>.
      * @throws InterruptException if the thread is interrupted while blocked
+     * @throws BootstrapResolutionException if DNS resolution of the bootstrap servers fails within {@code bootstrap.resolve.timeout.ms}
      */
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                          ConsumerGroupMetadata groupMetadata) throws ProducerFencedException {
@@ -773,11 +780,40 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
         if (!offsets.isEmpty()) {
             long start = time.nanoseconds();
+            var topics = offsets.keySet().stream().map(TopicPartition::topic).collect(Collectors.toSet());
+            var waitMs = awaitTopicMetadata(topics);
+            var remainingMs = Math.max(0L, maxBlockTimeMs - waitMs);
             TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, groupMetadata);
             sender.wakeup();
-            result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS, SEND_OFFSETS_TIMEOUT_MSG);
+            result.await(remainingMs, TimeUnit.MILLISECONDS, SEND_OFFSETS_TIMEOUT_MSG);
             producerMetrics.recordSendOffsets(time.nanoseconds() - start);
         }
+    }
+
+    /**
+     * Request a partial metadata refresh for the given topics and await the next
+     * metadata update on a best-effort basis (up to {@code max.block.ms}). Returns
+     * the elapsed wait time so the caller can subtract it from its own
+     * {@code max.block.ms} budget.
+     */
+    private long awaitTopicMetadata(Set<String> topics) {
+        long startNanos = time.nanoseconds();
+        OptionalInt versionOpt = metadata.add(topics, time.milliseconds());
+        if (versionOpt.isEmpty()) {
+            // Even when no metadata refresh is needed for these topics, a permanent bootstrap
+            // failure must still be surfaced so every API call sees the error.
+            metadata.maybeThrowBootstrapFatalException();
+            return 0L;
+        }
+        sender.wakeup();
+        try {
+            metadata.awaitUpdate(versionOpt.getAsInt(), time.timer(maxBlockTimeMs));
+        } catch (InterruptedException e) {
+            throw new InterruptException(e);
+        }
+        long elapsedNanos = time.nanoseconds() - startNanos;
+        producerMetrics.recordMetadataWait(elapsedNanos);
+        return TimeUnit.NANOSECONDS.toMillis(elapsedNanos);
     }
 
     /**
@@ -1055,6 +1091,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *                                when send is invoked after producer has been closed.
      * @throws InterruptException     If the thread is interrupted while blocked
      * @throws SerializationException If the key or value are not valid objects given the configured serializers
+     * @throws BootstrapResolutionException if DNS resolution of the bootstrap servers fails within {@code bootstrap.resolve.timeout.ms}
      * @throws KafkaException         If a Kafka related error occurs that does not belong to the public API exceptions.
      * @see #partitionsFor(String)
      */
@@ -1242,7 +1279,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             int version = metadata.requestUpdateForTopic(topic);
             sender.wakeup();
             try {
-                metadata.awaitUpdate(version, remainingWaitMs);
+                metadata.awaitUpdate(version, time.timer(remainingWaitMs));
             } catch (TimeoutException ex) {
                 // Rethrow with original maxWaitMs to prevent logging exception with remainingWaitMs
                 final String errorMessage = getErrorMessage(partitionsCount, topic, partition, maxWaitMs);
@@ -1363,6 +1400,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws AuthorizationException  if not authorized to the specified topic. See the exception for more details
      * @throws InterruptException      if the thread is interrupted while blocked
      * @throws TimeoutException        if the topic cannot be found in metadata within {@code max.block.ms}
+     * @throws BootstrapResolutionException if DNS resolution of the bootstrap servers fails within {@code bootstrap.resolve.timeout.ms}
      * @throws KafkaException          for all Kafka-related exceptions, including the case where this method is called after producer close
      */
     @Override

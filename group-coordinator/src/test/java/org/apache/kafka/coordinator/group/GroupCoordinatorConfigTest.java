@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Configurable;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.record.internal.CompressionType;
@@ -27,6 +26,8 @@ import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
+import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
+import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.SimpleAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
@@ -38,10 +39,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
+import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class GroupCoordinatorConfigTest {
@@ -57,6 +61,24 @@ public class GroupCoordinatorConfigTest {
         @Override
         public String name() {
             return "CustomAssignor";
+        }
+
+        @Override
+        public GroupAssignment assign(
+            GroupSpec groupSpec,
+            SubscribedTopicDescriber subscribedTopicDescriber
+        ) throws PartitionAssignorException {
+            return null;
+        }
+    }
+
+    public static class NoDefaultConstructorAssignor implements ConsumerGroupPartitionAssignor, ShareGroupPartitionAssignor {
+        public NoDefaultConstructorAssignor(String unused) {
+        }
+
+        @Override
+        public String name() {
+            return "NoDefaultConstructorAssignor";
         }
 
         @Override
@@ -104,15 +126,7 @@ public class GroupCoordinatorConfigTest {
         assertInstanceOf(CustomAssignor.class, assignors.get(0));
         assertNotNull(((CustomAssignor) assignors.get(0)).configs);
 
-        // Test with classes.
-        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(RangeAssignor.class, CustomAssignor.class));
-        config = createConfig(configs);
-        assignors = config.consumerGroupAssignors();
-        assertEquals(2, assignors.size());
-        assertInstanceOf(RangeAssignor.class, assignors.get(0));
-        assertInstanceOf(CustomAssignor.class, assignors.get(1));
-
-        // Test combination of short name and class.
+        // Test combination of short name and class name as a comma-separated string.
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, "uniform, " + CustomAssignor.class.getName());
         config = createConfig(configs);
         assignors = config.consumerGroupAssignors();
@@ -120,7 +134,7 @@ public class GroupCoordinatorConfigTest {
         assertInstanceOf(UniformAssignor.class, assignors.get(0));
         assertInstanceOf(CustomAssignor.class, assignors.get(1));
 
-        // Test combination of short name and class.
+        // Test combination of short name and class name as a list of strings.
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of("uniform", CustomAssignor.class.getName()));
         config = createConfig(configs);
         assignors = config.consumerGroupAssignors();
@@ -169,6 +183,24 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNORS_CONFIG, "simple, " + CustomAssignor.class.getName());
         assertEquals("group.share.assignors must contain exactly one assignor, but found 2",
             assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+
+        // Test unknown class.
+        configs.put(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNORS_CONFIG, "foo");
+        assertEquals("Invalid value foo for configuration group.share.assignors: Class cannot be found",
+            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+
+        // Test class that is not an assignor.
+        configs.put(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNORS_CONFIG, Object.class.getName());
+        assertEquals("Invalid value java.lang.Object for configuration group.share.assignors: " +
+                "Class is not an instance of org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor",
+            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+
+        // Test class that cannot be instantiated.
+        configs.put(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNORS_CONFIG, NoDefaultConstructorAssignor.class.getName());
+        assertEquals("Invalid value " + NoDefaultConstructorAssignor.class.getName() +
+                " for configuration group.share.assignors: Could not find a public no-argument constructor for " +
+                NoDefaultConstructorAssignor.class.getName(),
+            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
     }
 
     @Test
@@ -180,7 +212,7 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, 555);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, 200);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SIZE_CONFIG, 55);
-        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(RangeAssignor.class));
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(RangeAssignor.class.getName()));
         configs.put(GroupCoordinatorConfig.OFFSETS_TOPIC_SEGMENT_BYTES_CONFIG, 2222);
         configs.put(GroupCoordinatorConfig.OFFSET_METADATA_MAX_SIZE_CONFIG, 3333);
         configs.put(GroupCoordinatorConfig.GROUP_MAX_SIZE_CONFIG, 60);
@@ -310,19 +342,22 @@ public class GroupCoordinatorConfigTest {
                 assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
 
         configs.clear();
-        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(Object.class));
-        assertEquals("class java.lang.Object is not an instance of org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor",
-                assertThrows(KafkaException.class, () -> createConfig(configs)).getMessage());
-
-        configs.clear();
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, Object.class.getName());
-        assertEquals("java.lang.Object is not an instance of org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor",
-            assertThrows(KafkaException.class, () -> createConfig(configs)).getMessage());
+        assertEquals("Invalid value java.lang.Object for configuration group.consumer.assignors: " +
+                "Class is not an instance of org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor",
+            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
 
         configs.clear();
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, "foo");
-        assertEquals("Class foo cannot be found",
-            assertThrows(KafkaException.class, () -> createConfig(configs)).getMessage());
+        assertEquals("Invalid value foo for configuration group.consumer.assignors: Class cannot be found",
+            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, NoDefaultConstructorAssignor.class.getName());
+        assertEquals("Invalid value " + NoDefaultConstructorAssignor.class.getName() +
+                " for configuration group.consumer.assignors: Could not find a public no-argument constructor for " +
+                NoDefaultConstructorAssignor.class.getName(),
+            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
 
         configs.clear();
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, "foobar");
@@ -598,6 +633,44 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG, -1);
         assertEquals("Invalid value -1 for configuration group.streams.max.warmup.replicas: Value must be at least 0",
             assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+
+
+        // group.streams.rack.aware.assignment.tags
+
+        // default is empty list
+        configs.clear();
+        GroupCoordinatorConfig defaultTagsConfig = createConfig(configs);
+        assertEquals(List.of(), defaultTagsConfig.streamsGroupRackAwareAssignmentTags());
+
+        // can parse a non-empty value
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,cluster");
+        GroupCoordinatorConfig nonEmptyTagsConfig = createConfig(configs);
+        assertEquals(List.of("zone", "cluster"), nonEmptyTagsConfig.streamsGroupRackAwareAssignmentTags());
+
+        // surrounding whitespace is trimmed: " zone , cluster " parses and returns two clean tags
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, " zone , cluster ");
+        GroupCoordinatorConfig whitespaceTagsConfig = createConfig(configs);
+        assertEquals(List.of("zone", "cluster"), whitespaceTagsConfig.streamsGroupRackAwareAssignmentTags());
+
+        // rejects empty entries in the list
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone, ");
+        assertEquals("Configuration 'group.streams.rack.aware.assignment.tags' values must not be empty.",
+            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+
+        // duplicate tag keys make the broker refuse to start
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,zone");
+        assertEquals("group.streams.rack.aware.assignment.tags must not contain duplicate tag keys.",
+            assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+
+        // duplicate tag keys are detected regardless of surrounding whitespace
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, " zone , zone ");
+        assertEquals("group.streams.rack.aware.assignment.tags must not contain duplicate tag keys.",
+            assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
     }
 
     @Test
@@ -678,7 +751,7 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, 5);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 5);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SIZE_CONFIG, Integer.MAX_VALUE);
-        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(RangeAssignor.class));
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(RangeAssignor.class.getName()));
         configs.put(GroupCoordinatorConfig.OFFSETS_TOPIC_SEGMENT_BYTES_CONFIG, 1000);
         configs.put(GroupCoordinatorConfig.OFFSET_METADATA_MAX_SIZE_CONFIG, offsetMetadataMaxSize);
         configs.put(GroupCoordinatorConfig.GROUP_MAX_SIZE_CONFIG, Integer.MAX_VALUE);
@@ -819,6 +892,90 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG, "my-dlq-");
         GroupCoordinatorConfig config = createConfig(configs);
         assertEquals("my-dlq-", config.errorsDLQTopicNamePrefix());
+    }
+
+    @Test
+    public void testStreamsGroupTopologyDescriptionPluginDefaultIsNull() {
+        GroupCoordinatorConfig config = createConfig(new HashMap<>());
+        assertNull(config.streamsGroupTopologyDescriptionPlugin(Map.of()));
+    }
+
+    @Test
+    public void testStreamsGroupTopologyDescriptionPluginLoadedAndConfigured() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
+            TestTopologyDescriptionPlugin.class.getName());
+        GroupCoordinatorConfig config = createConfig(configs);
+
+        StreamsGroupTopologyDescriptionPlugin plugin =
+            config.streamsGroupTopologyDescriptionPlugin(Map.of());
+        assertInstanceOf(TestTopologyDescriptionPlugin.class, plugin);
+        assertNotNull(((TestTopologyDescriptionPlugin) plugin).configs);
+    }
+
+    @Test
+    public void testStreamsGroupTopologyDescriptionPluginAcceptsClassObject() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
+            TestTopologyDescriptionPlugin.class);
+        GroupCoordinatorConfig config = createConfig(configs);
+
+        assertInstanceOf(TestTopologyDescriptionPlugin.class,
+            config.streamsGroupTopologyDescriptionPlugin(Map.of()));
+    }
+
+    @Test
+    public void testStreamsGroupTopologyDescriptionPluginReceivesAdditionalConfigs() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
+            TestTopologyDescriptionPlugin.class);
+        GroupCoordinatorConfig config = createConfig(configs);
+
+        try (TestTopologyDescriptionPlugin plugin = (TestTopologyDescriptionPlugin)
+            config.streamsGroupTopologyDescriptionPlugin(Map.of("injected.handle", "value"))) {
+            assertEquals("value", plugin.configs.get("injected.handle"));
+        }
+    }
+
+    @Test
+    public void testStreamsGroupTopologyDescriptionPluginReturnsFreshInstancePerCall() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
+            TestTopologyDescriptionPlugin.class);
+        GroupCoordinatorConfig config = createConfig(configs);
+
+        StreamsGroupTopologyDescriptionPlugin first =
+            config.streamsGroupTopologyDescriptionPlugin(Map.of());
+        StreamsGroupTopologyDescriptionPlugin second =
+            config.streamsGroupTopologyDescriptionPlugin(Map.of());
+        assertNotSame(first, second);
+    }
+
+    public static class TestTopologyDescriptionPlugin implements StreamsGroupTopologyDescriptionPlugin {
+        public Map<String, ?> configs;
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            this.configs = configs;
+        }
+
+        @Override
+        public CompletableFuture<Void> setTopology(String groupId, int topologyEpoch, StreamsGroupTopologyDescription description) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        @Override
+        public CompletableFuture<Void> deleteTopology(String groupId) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        @Override
+        public java.util.concurrent.CompletableFuture<StreamsGroupTopologyDescription> getTopology(String groupId, int topologyEpoch) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        @Override
+        public void close() { }
     }
 
     public static GroupCoordinatorConfig createConfig(Map<String, Object> configs) {

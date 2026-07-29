@@ -118,6 +118,12 @@ public class FormatterTest {
         }
     }
 
+    private static File clusterMetadataDir(String directory) {
+        return new File(directory, String.format("%s-%d",
+            CLUSTER_METADATA_TOPIC_PARTITION.topic(),
+            CLUSTER_METADATA_TOPIC_PARTITION.partition()));
+    }
+
     static class FormatterContext {
         final Formatter formatter;
         final ByteArrayOutputStream stream;
@@ -155,15 +161,25 @@ public class FormatterTest {
     }
 
     @Test
+    public void testWritesBootstrapSnapshotOnlyToMetadataDirectory() throws Exception {
+        try (TestEnv testEnv = new TestEnv(3)) {
+            testEnv.newFormatter().formatter.run();
+            assertTrue(clusterMetadataDir(testEnv.directory(0)).exists());
+            assertFalse(clusterMetadataDir(testEnv.directory(1)).exists());
+            assertFalse(clusterMetadataDir(testEnv.directory(2)).exists());
+
+            BootstrapMetadata bootstrapMetadata = BootstrapTestUtils.readBootstrapMetadata(testEnv.directory(0));
+            assertEquals(MetadataVersion.latestProduction(), bootstrapMetadata.metadataVersion());
+        }
+    }
+
+    @Test
     public void testSkipsBootstrapSnapshotWhenDisabled() throws Exception {
         try (TestEnv testEnv = new TestEnv(1)) {
             FormatterContext context = testEnv.newFormatter();
             context.formatter.setWriteBootstrapSnapshot(false);
             context.formatter.run();
-            File clusterMetadataDir = new File(testEnv.directory(0), String.format("%s-%d",
-                CLUSTER_METADATA_TOPIC_PARTITION.topic(),
-                CLUSTER_METADATA_TOPIC_PARTITION.partition()));
-            assertFalse(clusterMetadataDir.exists());
+            assertFalse(clusterMetadataDir(testEnv.directory(0)).exists());
         }
     }
 

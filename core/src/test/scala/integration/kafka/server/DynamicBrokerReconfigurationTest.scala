@@ -29,8 +29,7 @@ import java.util.concurrent._
 import javax.management.ObjectName
 import com.yammer.metrics.core.MetricName
 import kafka.api.SaslSetup
-import kafka.network.{DataPlaneAcceptor, Processor, RequestChannel}
-import kafka.security.JaasTestUtils
+import kafka.network.{DataPlaneAcceptor, RequestChannel}
 import kafka.utils._
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -54,8 +53,9 @@ import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
-import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.network.{Processor, SocketServerConfigs}
 import org.apache.kafka.raft.MetadataLogConfig
+import org.apache.kafka.security.JaasTestUtils
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.metrics.{KafkaYammerMetrics, MetricConfigs}
 import org.apache.kafka.server.ReplicaState
@@ -568,9 +568,8 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testConsecutiveConfigChange(groupProtocol: String): Unit = {
     val topic2 = "testtopic2"
-    val topicProps = new Properties
-    topicProps.put(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
-    TestUtils.createTopicWithAdmin(adminClients.head, topic2, servers, controllerServers, numPartitions = 1, replicationFactor = numServers, topicConfig = topicProps)
+    val topicConfigs = util.Map.of(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
+    TestUtils.createTopicWithAdmin(adminClients.head, topic2, servers, controllerServers, numPartitions = 1, replicationFactor = numServers, topicConfig = topicConfigs)
 
     def getLogOrThrow(tp: TopicPartition): UnifiedLog = {
       var (logOpt, found) = TestUtils.computeUntilTrue {
@@ -885,7 +884,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
   private def isProcessorMetric(metricName: MetricName): Boolean = {
     val mbeanName = metricName.getMBeanName
-    mbeanName.contains(s"${Processor.NetworkProcessorMetricTag}=") || mbeanName.contains(s"${RequestChannel.ProcessorMetricTag}=")
+    mbeanName.contains(s"${Processor.NETWORK_PROCESSOR_METRIC_TAG}=") || mbeanName.contains(s"${RequestChannel.ProcessorMetricTag}=")
   }
 
   private def clearLeftOverProcessorMetrics(): Unit = {
@@ -900,13 +899,13 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     val numProcessors = servers.head.config.numNetworkThreads * 2 // 2 listeners
 
     val kafkaMetrics = servers.head.metrics.metrics().keySet.asScala
-      .filter(_.tags.containsKey(Processor.NetworkProcessorMetricTag))
-      .groupBy(_.tags.get(Processor.ListenerMetricTag))
+      .filter(_.tags.containsKey(Processor.NETWORK_PROCESSOR_METRIC_TAG))
+      .groupBy(_.tags.get(Processor.LISTENER_METRIC_TAG))
 
     assertEquals(2, kafkaMetrics.size) // 2 listeners
     // 2 threads per listener
-    assertEquals(2, kafkaMetrics("INTERNAL").groupBy(_.tags().get(Processor.NetworkProcessorMetricTag)).size)
-    assertEquals(2, kafkaMetrics("EXTERNAL").groupBy(_.tags().get(Processor.NetworkProcessorMetricTag)).size)
+    assertEquals(2, kafkaMetrics("INTERNAL").groupBy(_.tags().get(Processor.NETWORK_PROCESSOR_METRIC_TAG)).size)
+    assertEquals(2, kafkaMetrics("EXTERNAL").groupBy(_.tags().get(Processor.NETWORK_PROCESSOR_METRIC_TAG)).size)
 
     KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
       .filter(isProcessorMetric)
@@ -1255,7 +1254,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
   private def alterConfigsOnServer(server: KafkaBroker, props: Properties): Unit = {
     val configEntries = props.asScala.map { case (k, v) => new AlterConfigOp(new ConfigEntry(k, v), OpType.SET) }.toList.asJava
-    val alterConfigs = new java.util.HashMap[ConfigResource, java.util.Collection[AlterConfigOp]]()
+    val alterConfigs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
     alterConfigs.put(new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString), configEntries)
     adminClients.head.incrementalAlterConfigs(alterConfigs)
     props.asScala.foreach { case (k, v) => waitForConfigOnServer(server, k, v) }
@@ -1276,11 +1275,11 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
                                 perBrokerConfig: Boolean): AlterConfigsResult = {
     val configEntries = props.asScala.map { case (k, v) => new AlterConfigOp(new ConfigEntry(k, v), OpType.SET) }.toList.asJava
     val configs = if (perBrokerConfig) {
-      val alterConfigs = new java.util.HashMap[ConfigResource, java.util.Collection[AlterConfigOp]]()
+      val alterConfigs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
       servers.foreach(server => alterConfigs.put(new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString), configEntries))
       alterConfigs
     } else {
-      val alterConfigs = new java.util.HashMap[ConfigResource, java.util.Collection[AlterConfigOp]]()
+      val alterConfigs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
       alterConfigs.put(new ConfigResource(ConfigResource.Type.BROKER, ""), configEntries)
       alterConfigs
     }

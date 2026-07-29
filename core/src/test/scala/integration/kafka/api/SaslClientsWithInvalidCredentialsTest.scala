@@ -12,8 +12,6 @@
   */
 package kafka.api
 
-import kafka.security.JaasTestUtils
-
 import java.time.Duration
 import java.util.Properties
 import java.util.concurrent.{ExecutionException, TimeUnit}
@@ -30,6 +28,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.storage.Formatter
+import org.apache.kafka.security.JaasTestUtils
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{MethodSource, ValueSource}
 

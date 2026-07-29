@@ -53,6 +53,7 @@ public class ReplicaManagerPartitionMetadataProvider implements PartitionMetadat
 
     @Override
     public long offsetForEarliestTimestamp(TopicIdPartition topicIdPartition, int leaderEpoch) {
+        // Isolation level is only required when reading from the latest offset hence use Option.empty() for now.
         Optional<FileRecords.TimestampAndOffset> timestampAndOffset = replicaManager.fetchOffsetForTimestamp(
             topicIdPartition.topicPartition(), ListOffsetsRequest.EARLIEST_TIMESTAMP, scala.Option.empty(),
             Optional.of(leaderEpoch), true).timestampAndOffsetOpt();
@@ -64,6 +65,7 @@ public class ReplicaManagerPartitionMetadataProvider implements PartitionMetadat
 
     @Override
     public long offsetForLatestTimestamp(TopicIdPartition topicIdPartition, int leaderEpoch) {
+        // Isolation level is set to READ_UNCOMMITTED, matching with that used in share fetch requests.
         Optional<FileRecords.TimestampAndOffset> timestampAndOffset = replicaManager.fetchOffsetForTimestamp(
             topicIdPartition.topicPartition(), ListOffsetsRequest.LATEST_TIMESTAMP, new Some<>(IsolationLevel.READ_UNCOMMITTED),
             Optional.of(leaderEpoch), true).timestampAndOffsetOpt();
@@ -85,20 +87,20 @@ public class ReplicaManagerPartitionMetadataProvider implements PartitionMetadat
     }
 
     @Override
-    public Optional<LogOffsetMetadata> endOffsetMetadata(TopicIdPartition topicIdPartition, FetchIsolation isolation) {
-        Partition partition = leaderPartition(topicIdPartition);
+    public LogOffsetMetadata endOffsetMetadata(TopicIdPartition topicIdPartition, FetchIsolation isolation) {
+        Partition partition = partition(topicIdPartition);
         LogOffsetSnapshot offsetSnapshot = partition.fetchOffsetSnapshot(Optional.empty(), true);
         if (isolation == FetchIsolation.LOG_END)
-            return Optional.of(offsetSnapshot.logEndOffset());
+            return offsetSnapshot.logEndOffset();
         else if (isolation == FetchIsolation.HIGH_WATERMARK)
-            return Optional.of(offsetSnapshot.highWatermark());
+            return offsetSnapshot.highWatermark();
         else
-            return Optional.of(offsetSnapshot.lastStableOffset());
+            return offsetSnapshot.lastStableOffset();
     }
 
     @Override
     public int leaderEpoch(TopicIdPartition topicIdPartition) {
-        return leaderPartition(topicIdPartition).getLeaderEpoch();
+        return partition(topicIdPartition).getLeaderEpoch();
     }
 
     @Override
@@ -111,7 +113,7 @@ public class ReplicaManagerPartitionMetadataProvider implements PartitionMetadat
         replicaManager.removeListener(topicIdPartition.topicPartition(), listener);
     }
 
-    private Partition leaderPartition(TopicIdPartition topicIdPartition) {
+    private Partition partition(TopicIdPartition topicIdPartition) {
         Partition partition = replicaManager.getPartitionOrException(topicIdPartition.topicPartition());
         if (!partition.isLeader()) {
             log.debug("The broker is not the leader for topic partition: {}", topicIdPartition.topicPartition());

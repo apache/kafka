@@ -17,7 +17,6 @@
 package kafka.utils
 
 import com.yammer.metrics.core.Meter
-import kafka.security.JaasTestUtils
 import kafka.server._
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -45,6 +44,7 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.{ConfigRepository, LeaderAndIsr, MockConfigRepository}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
+import org.apache.kafka.security.JaasTestUtils
 import org.apache.kafka.server.authorizer.{Authorizer => JAuthorizer}
 import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -317,14 +317,11 @@ object TestUtils extends Logging {
     numPartitions: Int = 1,
     replicationFactor: Int = 1,
     replicaAssignment: collection.Map[Int, Seq[Int]] = Map.empty,
-    topicConfig: Properties = new Properties,
+    topicConfig: util.Map[String, String] = util.Map.of(),
   ): Uuid = {
-    val configsMap = new util.HashMap[String, String]()
-    topicConfig.forEach((k, v) => configsMap.put(k.toString, v.toString))
-
     val result = if (replicaAssignment.isEmpty) {
       admin.createTopics(util.List.of(new NewTopic(
-        topic, numPartitions, replicationFactor.toShort).configs(configsMap)))
+        topic, numPartitions, replicationFactor.toShort).configs(topicConfig)))
     } else {
       val assignment = new util.HashMap[Integer, util.List[Integer]]()
       replicaAssignment.foreachEntry { case (k, v) =>
@@ -333,7 +330,7 @@ object TestUtils extends Logging {
         assignment.put(k.asInstanceOf[Integer], replicas)
       }
       admin.createTopics(util.List.of(new NewTopic(
-        topic, assignment).configs(configsMap)))
+        topic, assignment).configs(topicConfig)))
     }
 
     result.topicId(topic).get()
@@ -347,7 +344,7 @@ object TestUtils extends Logging {
     numPartitions: Int = 1,
     replicationFactor: Int = 1,
     replicaAssignment: collection.Map[Int, Seq[Int]] = Map.empty,
-    topicConfig: Properties = new Properties,
+    topicConfig: util.Map[String, String] = util.Map.of(),
   ): scala.collection.immutable.Map[Int, Int] = {
     val effectiveNumPartitions = if (replicaAssignment.isEmpty) {
       numPartitions
@@ -1117,10 +1114,6 @@ object TestUtils extends Logging {
         "aborted".getBytes(StandardCharsets.UTF_8)
     }
     new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, key, value, util.Set.of(header))
-  }
-
-  def producerRecordWithExpectedTransactionStatus(topic: String, partition: Integer, key: String, value: String, willBeCommitted: Boolean): ProducerRecord[Array[Byte], Array[Byte]] = {
-    producerRecordWithExpectedTransactionStatus(topic, partition, asBytes(key), asBytes(value), willBeCommitted)
   }
 
   // Collect the current positions for all partition in the consumers current assignment.

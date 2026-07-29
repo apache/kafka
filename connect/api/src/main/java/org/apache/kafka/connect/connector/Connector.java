@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.connector;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
@@ -43,6 +44,7 @@ import java.util.Map;
  * Tasks.
  * </p>
  */
+@InterfaceAudience.Public
 public abstract class Connector implements ConnectPlugin {
 
     protected ConnectorContext context;

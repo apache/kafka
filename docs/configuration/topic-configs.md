@@ -1,6 +1,6 @@
 ---
 title: Topic Configs
-description: Topic Configs
+description: Kafka topic configuration reference.
 weight: 2
 tags: ['kafka', 'docs']
 aliases: 
