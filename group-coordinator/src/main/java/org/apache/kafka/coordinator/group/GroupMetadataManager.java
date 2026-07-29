@@ -3560,26 +3560,6 @@ public class GroupMetadataManager {
         return !currentPreferredAssignor.equals(newPreferredAssignor);
     }
 
-    /**
-     * Get the assignor with the provided name.
-     *
-     * <p>Members persist their preferred assignor by name, so the name may no longer be registered
-     * on the broker. In that case the coordinator falls back to the default assignor and logs a
-     * warning, rather than failing the group's rebalances.
-     */
-    private ConsumerGroupPartitionAssignor consumerGroupAssignor(String groupId, Optional<String> assignorName) {
-        if (assignorName.isPresent()) {
-            ConsumerGroupPartitionAssignor assignor = consumerGroupAssignors.get(assignorName.get());
-            if (assignor != null) {
-                return assignor;
-            }
-            log.warn("[GroupId {}] The preferred server assignor '{}' is not available; " +
-                    "falling back to the default assignor '{}'.",
-                groupId, assignorName.get(), defaultConsumerGroupAssignor.name());
-        }
-        return defaultConsumerGroupAssignor;
-    }
-
     private static boolean isNotEmpty(String value) {
         return value != null && !value.isEmpty();
     }
@@ -4219,10 +4199,10 @@ public class GroupMetadataManager {
             return UpdateTargetAssignmentResult.fromLastTargetAssignment(group, updatedMember);
         }
 
-        ConsumerGroupPartitionAssignor preferredServerAssignor = consumerGroupAssignor(
-            group.groupId(),
-            group.computePreferredServerAssignor(member, updatedMember)
-        );
+        String preferredServerAssignor = group.computePreferredServerAssignor(
+            member,
+            updatedMember
+        ).orElse(defaultConsumerGroupAssignor.name());
         try {
             UpdatedMembersAndTargetAssignmentView<ConsumerGroupMember, Assignment> updatedMembersAndTargetAssignment =
                 new UpdatedMembersAndTargetAssignmentView<>(
@@ -4234,7 +4214,7 @@ public class GroupMetadataManager {
             updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), updatedMember);
 
             TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder assignmentResultBuilder =
-                new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(group.groupId(), groupEpoch, preferredServerAssignor)
+                new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(group.groupId(), groupEpoch, consumerGroupAssignors.get(preferredServerAssignor))
                     .withTime(time)
                     .withMembers(updatedMembersAndTargetAssignment.members())
                     .withSubscriptionType(subscriptionType)
@@ -4250,10 +4230,10 @@ public class GroupMetadataManager {
 
             if (log.isDebugEnabled()) {
                 log.debug("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms: {}.",
-                    group.groupId(), groupEpoch, preferredServerAssignor.name(), assignorTimeMs, assignmentResult.targetAssignment());
+                    group.groupId(), groupEpoch, preferredServerAssignor, assignorTimeMs, assignmentResult.targetAssignment());
             } else {
                 log.info("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms.",
-                    group.groupId(), groupEpoch, preferredServerAssignor.name(), assignorTimeMs);
+                    group.groupId(), groupEpoch, preferredServerAssignor, assignorTimeMs);
             }
 
             records.addAll(assignmentResult.records());
