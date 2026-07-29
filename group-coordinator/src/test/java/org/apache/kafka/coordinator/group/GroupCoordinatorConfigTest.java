@@ -355,7 +355,8 @@ public class GroupCoordinatorConfigTest {
 
     @Test
     public void testStreamsGroupAssignorsBuiltinByClassName() {
-        // A built-in may also be configured by its class name.
+        // A built-in configured by its class name is recognised as the built-in, not as a custom assignor
+        // reusing the reserved name. Class names are not public API.
         Map<String, Object> configs = new HashMap<>();
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, StickyTaskAssignor.class.getName());
         GroupCoordinatorConfig config = createConfig(configs);
