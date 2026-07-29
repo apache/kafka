@@ -133,8 +133,16 @@ public final class LocalTieredStorage implements RemoteStorageManager {
 
     /**
      * The ID of the broker which owns this instance of {@link LocalTieredStorage}.
+     *
+     * @deprecated Use {@link #NODE_ID} instead. This key is no longer passed to plugins from Kafka 5.0 (KIP-1232).
      */
+    @Deprecated(since = "4.4", forRemoval = true)
     public static final String BROKER_ID = "broker.id";
+
+    /**
+     * The ID of the node which owns this instance of {@link LocalTieredStorage}.
+     */
+    public static final String NODE_ID = "node.id";
 
     private static final String ROOT_STORAGE_DIR_NAME = "kafka-tiered-storage";
 
@@ -233,14 +241,14 @@ public final class LocalTieredStorage implements RemoteStorageManager {
         final String shouldDeleteOnClose = (String) configs.get(DELETE_ON_CLOSE_CONFIG);
         final String transfererClass = (String) configs.get(TRANSFERER_CLASS_CONFIG);
         final String isDeleteEnabled = (String) configs.get(ENABLE_DELETE_API_CONFIG);
-        final Integer brokerIdInt = (Integer) configs.get(BROKER_ID);
+        final Integer nodeIdInt = (Integer) configs.get(NODE_ID);
 
-        if (brokerIdInt == null) {
+        if (nodeIdInt == null) {
             throw new InvalidConfigurationException(
-                    "Broker ID is required to configure the LocalTieredStorage manager.");
+                    "Node ID is required to configure the LocalTieredStorage manager.");
         }
 
-        brokerId = brokerIdInt;
+        brokerId = nodeIdInt;
         logger = new LogContext(format("[LocalTieredStorage Id=%d] ", brokerId)).logger(this.getClass());
 
         if (shouldDeleteOnClose != null) {

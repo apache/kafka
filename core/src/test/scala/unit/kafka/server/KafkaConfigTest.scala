@@ -45,6 +45,8 @@ import org.apache.logging.log4j.Level
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.function.Executable
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 import scala.util.Using
@@ -1660,7 +1662,8 @@ class KafkaConfigTest {
     props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "1")
     props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
-    assertEquals("You must set `node.id` to the same value as `broker.id`.",
+    assertEquals("`node.id` and `broker.id` must be set to the same value. " +
+      "`broker.id` is deprecated, please use `node.id` instead.",
       assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props)).getMessage())
   }
 
@@ -1709,8 +1712,10 @@ class KafkaConfigTest {
     assertEquals("3", originals.get(KRaftConfigs.NODE_ID_CONFIG))
   }
 
-  @Test
-  def testBrokerIdDeprecationWarning(): Unit = {
+  // The warning must fire regardless of doLog, since the broker startup path passes doLog = false.
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testBrokerIdDeprecationWarning(doLog: Boolean): Unit = {
     val deprecationWarning = "The 'broker.id' configuration is deprecated and will be removed in " +
       "Apache Kafka 5.0. Please use 'node.id' instead."
 
@@ -1724,17 +1729,17 @@ class KafkaConfigTest {
       // Only node.id set: no warning.
       val props = new Properties()
       props.putAll(kraftProps())
-      KafkaConfig.fromProps(props)
+      KafkaConfig.fromProps(props, doLog)
       assertEquals(0, warningCount)
 
       // Both broker.id and node.id set to the same value: deprecation warning.
       props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "3")
-      KafkaConfig.fromProps(props)
+      KafkaConfig.fromProps(props, doLog)
       assertEquals(1, warningCount)
 
       // Only broker.id set: deprecation warning.
       props.remove(KRaftConfigs.NODE_ID_CONFIG)
-      KafkaConfig.fromProps(props)
+      KafkaConfig.fromProps(props, doLog)
       assertEquals(2, warningCount)
     }
   }

@@ -437,7 +437,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
 
   private def validateValues(): Unit = {
     if (nodeId != brokerId) {
-      throw new ConfigException(s"You must set `${KRaftConfigs.NODE_ID_CONFIG}` to the same value as `${ServerConfigs.BROKER_ID_CONFIG}`.")
+      throw new ConfigException(s"`${KRaftConfigs.NODE_ID_CONFIG}` and `${ServerConfigs.BROKER_ID_CONFIG}` must be set to the same value. " +
+        s"`${ServerConfigs.BROKER_ID_CONFIG}` is deprecated, please use `${KRaftConfigs.NODE_ID_CONFIG}` instead.")
     }
     require(logRollTimeMillis >= 1, "log.roll.ms must be greater than or equal to 1")
     require(logRollTimeJitterMillis >= 0, "log.roll.jitter.ms must be greater than or equal to 0")
