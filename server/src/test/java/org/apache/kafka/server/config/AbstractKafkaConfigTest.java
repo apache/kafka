@@ -16,9 +16,14 @@
  */
 package org.apache.kafka.server.config;
 
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+import org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TopologyDescriber;
 import org.apache.kafka.raft.KRaftConfigs;
 
 import org.junit.jupiter.api.Test;
@@ -88,6 +93,47 @@ public class AbstractKafkaConfigTest {
 
         assertTrue(config.containsKey(TEST_INTERNAL_GROUP_CONFIG));
         assertEquals("default-value", config.get(TEST_INTERNAL_GROUP_CONFIG));
+    }
+
+    @Test
+    public void testExtractGroupConfigMapReturnsStreamsAssignorShortName() {
+        try (MockedStatic<GroupConfig> mocked = mockStatic(GroupConfig.class, Mockito.CALLS_REAL_METHODS)) {
+            mocked.when(GroupConfig::configNames).thenReturn(Set.of(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG));
+
+            AbstractKafkaConfig kafkaConfig = new AbstractKafkaConfig(new ConfigDef(), Map.of(), Map.of(), false) { };
+
+            // The group config holds a single assignor name, so the default is the first entry of the
+            // broker's list rather than the whole list.
+            assertEquals("sticky",
+                kafkaConfig.extractGroupConfigMap(streamsAssignors("sticky," + CustomTaskAssignor.class.getName()))
+                    .get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG));
+
+            // A custom assignor is configured by class name, but a group selects it by name(), so the
+            // default must be the name and not the class name.
+            assertEquals("CustomTaskAssignor",
+                kafkaConfig.extractGroupConfigMap(streamsAssignors(CustomTaskAssignor.class.getName() + ",sticky"))
+                    .get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG));
+        }
+    }
+
+    private static GroupCoordinatorConfig streamsAssignors(String assignors) {
+        return new GroupCoordinatorConfig(new AbstractConfig(
+            GroupCoordinatorConfig.CONFIG_DEF,
+            Map.of(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, assignors),
+            false
+        ));
+    }
+
+    public static class CustomTaskAssignor implements TaskAssignor {
+        @Override
+        public String name() {
+            return "CustomTaskAssignor";
+        }
+
+        @Override
+        public GroupAssignment assign(GroupSpec groupSpec, TopologyDescriber topologyDescriber) {
+            return null;
+        }
     }
 
     private static Map<String, Object> extractGroupConfigMap(Map<String, Object> brokerProps, boolean isInternal) {

@@ -946,23 +946,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       assertEquals("sticky", admin.describeConfigs(List(groupConfigResource).asJava).all().get()
         .get(groupConfigResource).get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG).value())
 
-      // Valid case: the built-in assignor, which is registered by default, is accepted.
-      val validAlterOp = new AlterConfigOp(
-        new ConfigEntry(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "sticky"),
-        AlterConfigOp.OpType.SET
-      )
-      admin.incrementalAlterConfigs(
-        Map(groupConfigResource -> List(validAlterOp).asJavaCollection).asJava
-      ).all().get()
-
-      // Verify the config was persisted. Group config propagation is asynchronous, so wait for it.
-      TestUtils.waitUntilTrue(() => {
-        val describedConfigs = admin.describeConfigs(List(groupConfigResource).asJava).all().get()
-        val assignorName = describedConfigs.get(groupConfigResource).get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG)
-        assignorName != null && assignorName.value() == "sticky"
-      }, s"${GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG} was not updated to the expected value within the timeout period.")
-
-      // Invalid case: a name that is not registered on the broker is rejected with INVALID_CONFIG.
+      // A name that is not registered on the broker is rejected with INVALID_CONFIG.
       val invalidAlterOp = new AlterConfigOp(
         new ConfigEntry(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "does-not-exist"),
         AlterConfigOp.OpType.SET
@@ -976,25 +960,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         s"Expected InvalidConfigurationException but got ${executionException.getCause}")
       assertTrue(executionException.getCause.getMessage.contains("'does-not-exist' is not a registered task assignor"),
         s"Unexpected error message: ${executionException.getCause.getMessage}")
-
-      // The invalid alter is rejected at validation time, so the previously persisted valid value is unchanged.
-      val describedConfigsAfter = admin.describeConfigs(List(groupConfigResource).asJava).all().get()
-      assertEquals("sticky",
-        describedConfigsAfter.get(groupConfigResource).get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG).value())
-
-      // Deleting the config returns the group to the broker's default assignor.
-      val deleteAlterOp = new AlterConfigOp(
-        new ConfigEntry(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, ""),
-        AlterConfigOp.OpType.DELETE
-      )
-      admin.incrementalAlterConfigs(
-        Map(groupConfigResource -> List(deleteAlterOp).asJavaCollection).asJava
-      ).all().get()
-
-      TestUtils.waitUntilTrue(() => {
-        val describedConfigs = admin.describeConfigs(List(groupConfigResource).asJava).all().get()
-        describedConfigs.get(groupConfigResource).get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG).value() == "sticky"
-      }, s"${GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG} was not unset within the timeout period.")
     } finally {
       admin.close()
     }
@@ -1022,7 +987,13 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
 
       val groupConfigResource = new ConfigResource(ConfigResource.Type.GROUP, groupId)
 
-      // A custom assignor registered on the broker is selected by the name it reports.
+      // The config is unset, so it falls back to the broker's default assignor, which is the first
+      // entry of group.streams.assignors.
+      assertEquals("sticky", admin.describeConfigs(List(groupConfigResource).asJava).all().get()
+        .get(groupConfigResource).get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG).value())
+
+      // A custom assignor registered on the broker is selected by the name it reports, moving the group
+      // off the default. Group config propagation is asynchronous, so wait for it.
       val validAlterOp = new AlterConfigOp(
         new ConfigEntry(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, CustomStreamsTaskAssignor.NAME),
         AlterConfigOp.OpType.SET
@@ -1049,6 +1020,24 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       )
       assertTrue(executionException.getCause.isInstanceOf[InvalidConfigurationException],
         s"Expected InvalidConfigurationException but got ${executionException.getCause}")
+
+      // The alter is rejected at validation time, so the group keeps the assignor it had selected.
+      assertEquals(CustomStreamsTaskAssignor.NAME, admin.describeConfigs(List(groupConfigResource).asJava).all().get()
+        .get(groupConfigResource).get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG).value())
+
+      // Deleting the config returns the group to the broker's default assignor.
+      val deleteAlterOp = new AlterConfigOp(
+        new ConfigEntry(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, ""),
+        AlterConfigOp.OpType.DELETE
+      )
+      admin.incrementalAlterConfigs(
+        Map(groupConfigResource -> List(deleteAlterOp).asJavaCollection).asJava
+      ).all().get()
+
+      TestUtils.waitUntilTrue(() => {
+        val describedConfigs = admin.describeConfigs(List(groupConfigResource).asJava).all().get()
+        describedConfigs.get(groupConfigResource).get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG).value() == "sticky"
+      }, s"${GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG} was not unset within the timeout period.")
     } finally {
       admin.close()
     }

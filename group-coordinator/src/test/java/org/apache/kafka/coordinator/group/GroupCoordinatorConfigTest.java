@@ -279,81 +279,6 @@ public class GroupCoordinatorConfigTest {
     }
 
     @Test
-    public void testStreamsGroupAssignorsWithDuplicateNamesFails() {
-        // Two custom assignors resolving to the same name must fail startup.
-        Map<String, Object> configs = new HashMap<>();
-        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG,
-            List.of(CustomTaskAssignor.class.getName(), DuplicateNameTaskAssignor.class.getName()));
-        assertEquals("Invalid value " + DuplicateNameTaskAssignor.class.getName() +
-                " for configuration group.streams.assignors: Assignor name 'CustomTaskAssignor' is already " +
-                "registered by another configured assignor. Assignor names, whether built-in or custom, must be unique",
-            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
-
-        // Configuring the same built-in twice, once by name and once by class name, must fail startup.
-        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG,
-            List.of("sticky", StickyTaskAssignor.class.getName()));
-        assertEquals("Invalid value " + StickyTaskAssignor.class.getName() +
-                " for configuration group.streams.assignors: Assignor name 'sticky' is already " +
-                "registered by another configured assignor. Assignor names, whether built-in or custom, must be unique",
-            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
-    }
-
-    @Test
-    public void testStreamsGroupAssignorsWithReservedBuiltinNameFails() {
-        // A custom assignor must not take the name of a built-in, whether or not the built-in is
-        // itself configured: a group selecting that name would otherwise silently get the custom one.
-        Map<String, Object> configs = new HashMap<>();
-        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, StickyNamedTaskAssignor.class.getName());
-        assertEquals("Invalid value " + StickyNamedTaskAssignor.class.getName() +
-                " for configuration group.streams.assignors: Assignor name 'sticky' is reserved by a " +
-                "built-in assignor. A custom assignor must not reuse the name of a built-in assignor",
-            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
-
-        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG,
-            List.of("sticky", StickyNamedTaskAssignor.class.getName()));
-        assertEquals("Invalid value " + StickyNamedTaskAssignor.class.getName() +
-                " for configuration group.streams.assignors: Assignor name 'sticky' is reserved by a " +
-                "built-in assignor. A custom assignor must not reuse the name of a built-in assignor",
-            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
-    }
-
-    @Test
-    public void testStreamsGroupAssignorsBuiltinByClassName() {
-        // A built-in may also be configured by its class name.
-        Map<String, Object> configs = new HashMap<>();
-        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, StickyTaskAssignor.class.getName());
-        GroupCoordinatorConfig config = createConfig(configs);
-        List<TaskAssignor> assignors = config.streamsGroupAssignors();
-        assertEquals(1, assignors.size());
-        assertInstanceOf(StickyTaskAssignor.class, assignors.get(0));
-        assertEquals(List.of("sticky"), config.streamsGroupAssignorNames());
-    }
-
-    @Test
-    public void testStreamsGroupAssignorsWithInvalidClassFails() {
-        Map<String, Object> configs = new HashMap<>();
-
-        // An entry that is neither a built-in short name nor a loadable class name must fail startup.
-        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, "org.apache.kafka.NonExistentAssignor");
-        assertEquals("Invalid value org.apache.kafka.NonExistentAssignor for configuration " +
-                "group.streams.assignors: Class cannot be found",
-            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
-
-        // Test class that is not an assignor.
-        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, Object.class.getName());
-        assertEquals("Invalid value java.lang.Object for configuration group.streams.assignors: " +
-                "Class is not an instance of org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor",
-            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
-
-        // Test class that cannot be instantiated.
-        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, NoDefaultConstructorTaskAssignor.class.getName());
-        assertEquals("Invalid value " + NoDefaultConstructorTaskAssignor.class.getName() +
-                " for configuration group.streams.assignors: Could not find a public no-argument constructor for " +
-                NoDefaultConstructorTaskAssignor.class.getName(),
-            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
-    }
-
-    @Test
     public void testStreamsGroupAssignors() {
         Map<String, Object> configs = new HashMap<>();
         GroupCoordinatorConfig config;
@@ -394,6 +319,74 @@ public class GroupCoordinatorConfigTest {
         assertEquals(2, assignors.size());
         assertInstanceOf(StickyTaskAssignor.class, assignors.get(0));
         assertInstanceOf(CustomTaskAssignor.class, assignors.get(1));
+    }
+
+    @Test
+    public void testStreamsGroupAssignorsWithDuplicateNamesFails() {
+        // Two custom assignors resolving to the same name must fail startup.
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG,
+            List.of(CustomTaskAssignor.class.getName(), DuplicateNameTaskAssignor.class.getName()));
+        assertEquals("Invalid value " + DuplicateNameTaskAssignor.class.getName() +
+                " for configuration group.streams.assignors: Assignor name 'CustomTaskAssignor' is already " +
+                "registered by another configured assignor. Assignor names, whether built-in or custom, must be unique",
+            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+
+        // Configuring the same built-in twice, once by name and once by class name, must fail startup.
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG,
+            List.of("sticky", StickyTaskAssignor.class.getName()));
+        assertEquals("Invalid value " + StickyTaskAssignor.class.getName() +
+                " for configuration group.streams.assignors: Assignor name 'sticky' is already " +
+                "registered by another configured assignor. Assignor names, whether built-in or custom, must be unique",
+            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+    }
+
+    @Test
+    public void testStreamsGroupAssignorsWithReservedBuiltinNameFails() {
+        // A custom assignor must not take the name of a built-in, whether or not the built-in is
+        // itself configured: a group selecting that name would otherwise silently get the custom one.
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, StickyNamedTaskAssignor.class.getName());
+        assertEquals("Invalid value " + StickyNamedTaskAssignor.class.getName() +
+                " for configuration group.streams.assignors: Assignor name 'sticky' is reserved by a " +
+                "built-in assignor. A custom assignor must not reuse the name of a built-in assignor",
+            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+    }
+
+    @Test
+    public void testStreamsGroupAssignorsBuiltinByClassName() {
+        // A built-in may also be configured by its class name.
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, StickyTaskAssignor.class.getName());
+        GroupCoordinatorConfig config = createConfig(configs);
+        List<TaskAssignor> assignors = config.streamsGroupAssignors();
+        assertEquals(1, assignors.size());
+        assertInstanceOf(StickyTaskAssignor.class, assignors.get(0));
+        assertEquals(List.of("sticky"), config.streamsGroupAssignorNames());
+    }
+
+    @Test
+    public void testStreamsGroupAssignorsWithInvalidClassFails() {
+        Map<String, Object> configs = new HashMap<>();
+
+        // An entry that is neither a built-in short name nor a loadable class name must fail startup.
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, "org.apache.kafka.NonExistentAssignor");
+        assertEquals("Invalid value org.apache.kafka.NonExistentAssignor for configuration " +
+                "group.streams.assignors: Class cannot be found",
+            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+
+        // Test class that is not an assignor.
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, Object.class.getName());
+        assertEquals("Invalid value java.lang.Object for configuration group.streams.assignors: " +
+                "Class is not an instance of org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor",
+            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+
+        // Test class that cannot be instantiated.
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, NoDefaultConstructorTaskAssignor.class.getName());
+        assertEquals("Invalid value " + NoDefaultConstructorTaskAssignor.class.getName() +
+                " for configuration group.streams.assignors: Could not find a public no-argument constructor for " +
+                NoDefaultConstructorTaskAssignor.class.getName(),
+            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
     }
 
     @Test
