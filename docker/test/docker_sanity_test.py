@@ -244,4 +244,4 @@ def run_tests(image, mode, fixtures_dir):
                 description='This demonstrates the report output.'
                 )
     result = runner.run(combined_suite)
-    return result.failure_count
+    return (result.failure_count, result.error_count)
