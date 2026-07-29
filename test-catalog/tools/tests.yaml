@@ -155,6 +155,15 @@ org.apache.kafka.tools.ConfigCommandTest:
 - testNoSpecifiedEntityOptionWithDescribeBrokersInBootstrapServerIsAllowed
 - testOptionEntityTypeNames
 - testParseConfigsToBeAddedForAddConfigFile
+org.apache.kafka.tools.ConnectInternalTopicsTest:
+- testCreateInternalTopicsWithDefaultValues
+- testCreateMissingTopics
+- testEmptyTopicNamesInWorkerConfig
+- testNoTopicNamesInWorkerConfig
+- testNoWorkerConfig
+- testTopicConfigOverrides
+- testWorkerConfigBlank
+- testWorkerConfigFileDoesNotExist
 org.apache.kafka.tools.ConnectPluginPathTest:
 - testListEmptyPluginPathArg
 - testListEmptyPluginPathElementArg
