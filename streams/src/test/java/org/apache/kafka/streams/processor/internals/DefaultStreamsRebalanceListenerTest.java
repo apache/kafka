@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.RebalanceListenerMetrics;
@@ -32,6 +33,7 @@ import org.mockito.InOrder;
 import org.mockito.MockedStatic;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -40,6 +42,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
@@ -54,6 +57,9 @@ import static org.mockito.Mockito.when;
 
 public class DefaultStreamsRebalanceListenerTest {
     private static final String THREAD_ID = "test-thread-id";
+    private static final String MERGED_WARNING = "merged into a single task";
+    private static final String IGNORED_WARNING = "is ignored";
+
     private final TaskManager taskManager = mock(TaskManager.class);
     private final StreamThread streamThread = mock(StreamThread.class);
     private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
@@ -87,6 +93,25 @@ public class DefaultStreamsRebalanceListenerTest {
                 THREAD_ID
             );
         }
+    }
+
+    private StreamsRebalanceData rebalanceDataWithSubtopologies(final String... subtopologyIds) {
+        final StreamsRebalanceData streamsRebalanceData = mock(StreamsRebalanceData.class);
+        final Map<String, StreamsRebalanceData.Subtopology> subtopologies = new HashMap<>();
+        for (final String subtopologyId : subtopologyIds) {
+            subtopologies.put(subtopologyId, new StreamsRebalanceData.Subtopology(
+                Set.of("source" + subtopologyId), Set.of(), Map.of(), Map.of(), Set.of()));
+        }
+        when(streamsRebalanceData.subtopologies()).thenReturn(subtopologies);
+        return streamsRebalanceData;
+    }
+
+    private String warningContaining(final LogCaptureAppender appender, final String fragment) {
+        return appender.getMessages("WARN").stream()
+            .filter(message -> message.contains(fragment))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError(
+                "No WARN containing \"" + fragment + "\". Messages: " + appender.getMessages("WARN")));
     }
 
     @ParameterizedTest
@@ -180,7 +205,12 @@ public class DefaultStreamsRebalanceListenerTest {
             false
         );
 
-        assertDoesNotThrow(() -> defaultStreamsRebalanceListener.onTasksAssigned(assignment));
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(DefaultStreamsRebalanceListener.class)) {
+            assertDoesNotThrow(() -> defaultStreamsRebalanceListener.onTasksAssigned(assignment));
+
+            assertTrue(appender.getMessages("WARN").isEmpty(),
+                "No warning should be logged for an assignment without overlapping roles: " + appender.getMessages("WARN"));
+        }
 
         final InOrder inOrder = inOrder(taskManager, streamThread, streamsRebalanceData);
         inOrder.verify(streamThread).setStreamsGroupReady(false);
@@ -194,6 +224,35 @@ public class DefaultStreamsRebalanceListenerTest {
         inOrder.verify(streamThread).setState(StreamThread.State.PARTITIONS_ASSIGNED);
         inOrder.verify(taskManager).handleRebalanceComplete();
         inOrder.verify(streamsRebalanceData).setReconciledAssignment(assignment);
+    }
+
+    @Test
+    void shouldDropStandbyAndWarmupForTaskThatIsAlsoAssignedAsActive() {
+        createRebalanceListenerWithRebalanceData(rebalanceDataWithSubtopologies("1", "2", "3", "4"));
+
+        final StreamsRebalanceData.Assignment assignment = new StreamsRebalanceData.Assignment(
+            Set.of(new StreamsRebalanceData.TaskId("1", 0)),
+            Set.of(new StreamsRebalanceData.TaskId("1", 0), new StreamsRebalanceData.TaskId("2", 0), new StreamsRebalanceData.TaskId("3", 0)),
+            Set.of(new StreamsRebalanceData.TaskId("1", 0), new StreamsRebalanceData.TaskId("3", 0), new StreamsRebalanceData.TaskId("4", 0)),
+            true
+        );
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(DefaultStreamsRebalanceListener.class)) {
+            assertDoesNotThrow(() -> defaultStreamsRebalanceListener.onTasksAssigned(assignment));
+
+            final String mergedWarning = warningContaining(appender, MERGED_WARNING);
+            assertTrue(mergedWarning.contains("[1_0, 3_0]"), "Only the merged task should be named: " + mergedWarning);
+            final String ignoredWarning = warningContaining(appender, IGNORED_WARNING);
+            assertTrue(ignoredWarning.contains("[1_0]"), "Only the ignored task should be named: " + ignoredWarning);
+        }
+
+        verify(taskManager).handleAssignment(
+            Map.of(new TaskId(1, 0), Set.of(new TopicPartition("source1", 0))),
+            Map.of(
+                new TaskId(2, 0), Set.of(new TopicPartition("source2", 0)),
+                new TaskId(3, 0), Set.of(new TopicPartition("source3", 0)),
+                new TaskId(4, 0), Set.of(new TopicPartition("source4", 0)))
+        );
     }
 
     @Test

@@ -28,8 +28,11 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.slf4j.Logger;
 
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -91,7 +94,7 @@ public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener
         final Map<TaskId, Set<TopicPartition>> activeTasksWithPartitions =
             pairWithTopicPartitions(assignment.activeTasks().stream());
         final Map<TaskId, Set<TopicPartition>> standbyTasksWithPartitions =
-            pairWithTopicPartitions(Stream.concat(assignment.standbyTasks().stream(), assignment.warmupTasks().stream()));
+            pairWithTopicPartitions(deduplicateTasks(assignment).stream());
 
         log.info("Processing new assignment {} from Streams Rebalance Protocol", assignment);
 
@@ -115,6 +118,31 @@ public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener
         } finally {
             tasksLostSensor.record(time.milliseconds() - start);
         }
+    }
+
+    private Set<StreamsRebalanceData.TaskId> deduplicateTasks(final StreamsRebalanceData.Assignment assignment) {
+        // The overlaps below are only used to warn about them, so they are kept sorted to give the log a
+        // deterministic and readable task order.
+        final SortedSet<StreamsRebalanceData.TaskId> standbyAndWarmup = new TreeSet<>(assignment.standbyTasks());
+        standbyAndWarmup.retainAll(assignment.warmupTasks());
+        if (!standbyAndWarmup.isEmpty()) {
+            log.warn("Tasks {} were assigned as standby tasks and as warm-up tasks. A standby task and a warm-up " +
+                "task are the same thing on the client, so the two assignments are merged into a single task each.",
+                standbyAndWarmup);
+        }
+
+        final Set<StreamsRebalanceData.TaskId> replicas = new HashSet<>(assignment.standbyTasks());
+        replicas.addAll(assignment.warmupTasks());
+
+        final SortedSet<StreamsRebalanceData.TaskId> activeAndReplica = new TreeSet<>(replicas);
+        activeAndReplica.retainAll(assignment.activeTasks());
+        if (!activeAndReplica.isEmpty()) {
+            log.warn("Tasks {} were assigned as active tasks and also as standby or warm-up tasks. The standby and " +
+                "warm-up assignment is ignored, and the tasks are run as active tasks.", activeAndReplica);
+        }
+
+        replicas.removeAll(assignment.activeTasks());
+        return replicas;
     }
 
     private Map<TaskId, Set<TopicPartition>> pairWithTopicPartitions(final Stream<StreamsRebalanceData.TaskId> taskIdStream) {
