@@ -665,15 +665,15 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
             GroupConfig.brokerSynonym(groupConfigName).ifPresent(brokerConfigName -> {
                 // Skip internal configs unless they are explicitly configured via the broker synonym.
                 if (!GroupConfig.isInternal(groupConfigName) || brokerOriginals.containsKey(brokerConfigName)) {
-                    if (brokerConfigName.equals(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG)) {
-                        // The group config holds a single assignor name, whereas the broker config is a list
-                        // that may also use class names, so the default is the name of the first registered assignor.
-                        defaults.put(groupConfigName, groupCoordinatorConfig.streamsGroupAssignorNames().get(0));
-                    } else {
-                        defaults.put(groupConfigName, get(brokerConfigName));
-                    }
+                    defaults.put(groupConfigName, get(brokerConfigName));
                 }
             })
+        );
+        // The group config holds a single assignor name, whereas the broker config is a list that may also
+        // use class names, so the default is the name of the first registered assignor.
+        defaults.computeIfPresent(
+            GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG,
+            (groupConfigName, brokerValue) -> groupCoordinatorConfig.streamsGroupAssignorNames().get(0)
         );
         return defaults;
     }

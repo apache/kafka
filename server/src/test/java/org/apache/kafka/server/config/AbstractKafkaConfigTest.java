@@ -100,7 +100,9 @@ public class AbstractKafkaConfigTest {
         try (MockedStatic<GroupConfig> mocked = mockStatic(GroupConfig.class, Mockito.CALLS_REAL_METHODS)) {
             mocked.when(GroupConfig::configNames).thenReturn(Set.of(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG));
 
-            AbstractKafkaConfig kafkaConfig = new AbstractKafkaConfig(new ConfigDef(), Map.of(), Map.of(), false) { };
+            // The broker synonym of the group config is read from the broker config, so it must be defined.
+            AbstractKafkaConfig kafkaConfig =
+                new AbstractKafkaConfig(GroupCoordinatorConfig.CONFIG_DEF, Map.of(), Map.of(), false) { };
 
             // The group config holds a single assignor name, so the default is the first entry of the
             // broker's list rather than the whole list.

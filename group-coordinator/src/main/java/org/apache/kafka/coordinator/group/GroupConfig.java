@@ -628,6 +628,16 @@ public final class GroupConfig extends AbstractConfig {
             groupCoordinatorConfig.streamsGroupMaxWarmupReplicas()
         );
 
+        // The selected streams assignor must be one of the assignors registered on the broker.
+        if (parsed.containsKey(STREAMS_ASSIGNOR_NAME_CONFIG)) {
+            String assignorName = (String) parsed.get(STREAMS_ASSIGNOR_NAME_CONFIG);
+            List<String> registeredAssignors = groupCoordinatorConfig.streamsGroupAssignorNames();
+            if (!registeredAssignors.contains(assignorName)) {
+                throw new InvalidConfigurationException(STREAMS_ASSIGNOR_NAME_CONFIG + " '" + assignorName +
+                    "' is not a registered task assignor. Registered assignors are: " + registeredAssignors + ".");
+            }
+        }
+
         // Cross-field validations: session timeout must be greater than heartbeat interval.
         validateSessionExceedsHeartbeat(
             parsed,
@@ -650,16 +660,6 @@ public final class GroupConfig extends AbstractConfig {
             STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.streamsGroupHeartbeatIntervalMs()
         );
-
-        // The selected streams assignor must be one of the assignors registered on the broker.
-        if (parsed.containsKey(STREAMS_ASSIGNOR_NAME_CONFIG)) {
-            String assignorName = (String) parsed.get(STREAMS_ASSIGNOR_NAME_CONFIG);
-            List<String> registeredAssignors = groupCoordinatorConfig.streamsGroupAssignorNames();
-            if (!registeredAssignors.contains(assignorName)) {
-                throw new InvalidConfigurationException(STREAMS_ASSIGNOR_NAME_CONFIG + " '" + assignorName +
-                    "' is not a registered task assignor. Registered assignors are: " + registeredAssignors + ".");
-            }
-        }
 
         // DLQ validation (KIP-1191)
         // DLQ topic name must not start with "__" (reserved for internal topics)
