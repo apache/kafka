@@ -137,6 +137,101 @@ public class StreamsGroupTest {
     }
 
     @Test
+    public void testCacheAndRetrieveRefinedAssignment() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+
+        assertNull(streamsGroup.refinedAssignment(0));
+
+        Map<String, TasksTuple> refinedAssignment = Map.of(
+            "member-id", new TasksTuple(Map.of("sub-1", Set.of(0)), Map.of(), Map.of())
+        );
+        streamsGroup.setRefinedAssignment(5, refinedAssignment);
+
+        assertEquals(refinedAssignment, streamsGroup.refinedAssignment(5));
+        // An intermediate assignment derived for one assignment epoch must not be used for another one: a new epoch is
+        // a new refinement step.
+        assertNull(streamsGroup.refinedAssignment(4));
+        assertNull(streamsGroup.refinedAssignment(6));
+    }
+
+    @Test
+    public void testCachedRefinedAssignmentDoesNotTrackTheCallersMap() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+
+        TasksTuple memberTasks = new TasksTuple(Map.of("sub-1", Set.of(0)), Map.of(), Map.of());
+        Map<String, TasksTuple> derived = new HashMap<>();
+        derived.put("member-id", memberTasks);
+
+        streamsGroup.setRefinedAssignment(5, derived);
+
+        // The intermediate assignment of an epoch is fixed once derived. A refiner that returns the target assignment
+        // as-is hands over a view of it, which changes as records are replayed, so the cache must copy rather than alias.
+        derived.put("late-member-id", new TasksTuple(Map.of("sub-1", Set.of(1)), Map.of(), Map.of()));
+        derived.remove("member-id");
+
+        assertEquals(Map.of("member-id", memberTasks), streamsGroup.refinedAssignment(5));
+    }
+
+    @Test
+    public void testRelabelRefinedAssignment() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+
+        TasksTuple oldMemberTasks = new TasksTuple(Map.of("sub-1", Set.of(0)), Map.of(), Map.of());
+        TasksTuple otherMemberTasks = new TasksTuple(Map.of("sub-1", Set.of(1)), Map.of(), Map.of());
+        streamsGroup.setRefinedAssignment(5, Map.of(
+            "old-member-id", oldMemberTasks,
+            "other-member-id", otherMemberTasks
+        ));
+
+        streamsGroup.relabelRefinedAssignment("old-member-id", "new-member-id");
+
+        // The replaced member's slice moves to its new ID and every other member's slice is left exactly as derived:
+        // the epoch's decisions must not change while the group reconciles towards it.
+        assertEquals(
+            Map.of("new-member-id", oldMemberTasks, "other-member-id", otherMemberTasks),
+            streamsGroup.refinedAssignment(5)
+        );
+        // Re-keying does not make the entry apply to a different epoch.
+        assertNull(streamsGroup.refinedAssignment(6));
+    }
+
+    @Test
+    public void testRelabelRefinedAssignmentOfUnknownMemberIsANoOp() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+
+        Map<String, TasksTuple> refinedAssignment = Map.of(
+            "member-id", new TasksTuple(Map.of("sub-1", Set.of(0)), Map.of(), Map.of())
+        );
+        streamsGroup.setRefinedAssignment(5, refinedAssignment);
+
+        // Nothing was derived for that member, so there is nothing to re-key -- and in particular the cached
+        // assignment of the epoch must not be disturbed.
+        streamsGroup.relabelRefinedAssignment("not-in-the-cache", "new-member-id");
+
+        assertEquals(refinedAssignment, streamsGroup.refinedAssignment(5));
+    }
+
+    @Test
+    public void testRefinedAssignmentCacheHoldsOnlyTheLatestEpoch() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+
+        Map<String, TasksTuple> refinedAssignmentOfEpoch5 = Map.of(
+            "member-id", new TasksTuple(Map.of("sub-1", Set.of(0)), Map.of(), Map.of())
+        );
+        Map<String, TasksTuple> refinedAssignmentOfEpoch6 = Map.of(
+            "member-id", new TasksTuple(Map.of("sub-1", Set.of(0, 1)), Map.of(), Map.of())
+        );
+
+        streamsGroup.setRefinedAssignment(5, refinedAssignmentOfEpoch5);
+        streamsGroup.setRefinedAssignment(6, refinedAssignmentOfEpoch6);
+
+        // The cache is a single slot, so deriving for a new epoch evicts the previous one rather than accumulating an
+        // entry per epoch. Only the epoch the members are currently reconciling towards is ever asked for.
+        assertEquals(refinedAssignmentOfEpoch6, streamsGroup.refinedAssignment(6));
+        assertNull(streamsGroup.refinedAssignment(5));
+    }
+
+    @Test
     public void testRemoveMemberClearsTaskOffsets() {
         StreamsGroup streamsGroup = createStreamsGroup("foo");
         streamsGroup.updateMember(new StreamsGroupMember.Builder("member-id").build());
