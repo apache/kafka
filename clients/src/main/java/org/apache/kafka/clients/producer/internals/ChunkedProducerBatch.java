@@ -37,6 +37,10 @@ public class ChunkedProducerBatch extends ProducerBatch {
 
     public ChunkedProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs) {
         super(tp, recordsBuilder, createdMs);
+        if (!(recordsBuilder.bufferStream() instanceof ChunkedByteBufferOutputStream))
+            throw new IllegalArgumentException("recordsBuilder must be an instance of "
+                    + ChunkedByteBufferOutputStream.class.getSimpleName() + ", but found "
+                    + recordsBuilder.bufferStream().getClass().getName());
     }
 
     /**
@@ -58,13 +62,13 @@ public class ChunkedProducerBatch extends ProducerBatch {
     }
 
     /**
-     * Appends the record after checking there's chunk capacity for it.
-     * At this point it's expected that the allocated chunks have
-     * capacity for the record because the accumulator never routes an
-     * append here without ensuring chunk capacity first: the first-record path pre-sizes the
-     * stream for the record and the mid-batch path attaches extension chunks before retrying.
+     * Appends the record, first checking that the stream has the capacity to hold it. This batch
+     * never acquires memory itself: the capacity is arranged before the append, by the accumulator
+     * attaching chunks (see {@link #extensionBytesNeeded} and {@link #addBuffers}).
      *
-     * @throws IllegalStateException if the attached chunks lack capacity for the record
+     * @return the record's future, or null if the batch is at its batch-size limit
+     * @throws IllegalStateException if the batch could still take the record but the stream lacks
+     *         the capacity to hold it
      */
     @Override
     public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, Callback callback, long now) {
