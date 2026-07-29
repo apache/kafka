@@ -207,16 +207,16 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
 
                     if (extensionChunks != null) {
                         ProducerBatch last = dq.peekLast();
-                        // The off-lock allocateChunks window allows the open batch we checked to be
-                        // drained and replaced — possibly by a split batch (a plain
-                        // ProducerBatch), which can't take extension chunks. Only attach to a
-                        // writable chunked batch; otherwise refund the chunks and re-evaluate.
-                        if (last instanceof ChunkedProducerBatch && last.isWritable()) {
-                            // Attach the chunks we sized off-lock without re-checking whether a
-                            // concurrent appender already grew the batch enough. Optimizes for the
-                            // uncontended case; under concurrency two appenders can each attach their
-                            // own gap (temporary over-allocation, one could have been enough for both).
-                            // The unused chunks returns to the pool when the batch closes for appends.
+                        // The batch may have changed while allocateChunks was off-lock: drained and
+                        // replaced, closed for appends, filled to its limit, or already grown by a
+                        // concurrent appender. The instanceof excludes a replacement that cannot take
+                        // chunks at all (a split batch is a plain ProducerBatch), and a positive
+                        // extensionBytesNeeded means the batch still needs chunks for this record, so
+                        // together they attach only when doing so is both safe and useful: attaching
+                        // to a batch closed for appends would throw, and to one that no longer needs
+                        // them would merely hold chunks it cannot use.
+                        if (last instanceof ChunkedProducerBatch
+                                && ((ChunkedProducerBatch) last).extensionBytesNeeded(timestamp, key, value, headers) > 0) {
                             ((ChunkedProducerBatch) last).addBuffers(extensionChunks);
                             extensionChunks = null;
                             RecordAppendResult retryResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
@@ -228,7 +228,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                             // right: needsBufferExtension with a fresh gap, or needsNewBatch
                             continue;
                         }
-                        // The open batch is gone, closed, or non-chunked (e.g., a split batch). Return chunks to pool.
+                        // The batch no longer needs these chunks, or cannot take them. Return them to the pool.
                         deallocateExtensionChunks(extensionChunks);
                         extensionChunks = null;
                         continue;
@@ -283,7 +283,8 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     topic, partition);
             synchronized (dq) {
                 ProducerBatch last = dq.peekLast();
-                if (last != null && last.isWritable()) {
+                // No need to check whether it is still open: closeForRecordAppends is idempotent.
+                if (last != null) {
                     last.closeForRecordAppends();
                 }
             }

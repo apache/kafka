@@ -567,10 +567,6 @@ public class ProducerBatch {
         return recordsBuilder.initialCapacity();
     }
 
-    public boolean isWritable() {
-        return !recordsBuilder.isClosed();
-    }
-
     public byte magic() {
         return recordsBuilder.magic();
     }
