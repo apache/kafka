@@ -132,14 +132,6 @@ public final class LocalTieredStorage implements RemoteStorageManager {
     public static final String ENABLE_DELETE_API_CONFIG = "delete.enable";
 
     /**
-     * The ID of the broker which owns this instance of {@link LocalTieredStorage}.
-     *
-     * @deprecated Use {@link #NODE_ID} instead. This key is no longer passed to plugins from Kafka 5.0 (KIP-1232).
-     */
-    @Deprecated(since = "4.4", forRemoval = true)
-    public static final String BROKER_ID = "broker.id";
-
-    /**
      * The ID of the node which owns this instance of {@link LocalTieredStorage}.
      */
     public static final String NODE_ID = "node.id";
