@@ -54,7 +54,6 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -468,6 +467,35 @@ public class StreamsResetterTest {
         when(adminClient.describeConsumerGroups(Set.of(groupId))).thenReturn(describeResult);
 
         streamsResetter.validateApplicationIdExists(groupId, adminClient);
+    }
+
+    @Test
+    public void shouldMatchExactGroupIdNotSubstring() throws Exception {
+        final String groupId = "my-app";
+        final String existingGroupId = "my-app-v2";
+
+        final Admin adminClient = mock(Admin.class);
+
+        final DescribeConsumerGroupsResult notFoundResult = mock(DescribeConsumerGroupsResult.class);
+        final KafkaFutureImpl<Map<String, ConsumerGroupDescription>> notFoundFuture = new KafkaFutureImpl<>();
+        notFoundFuture.completeExceptionally(new GroupIdNotFoundException("Group " + groupId + " not found."));
+        when(notFoundResult.all()).thenReturn(notFoundFuture);
+        when(adminClient.describeConsumerGroups(Set.of(groupId))).thenReturn(notFoundResult);
+
+        final DescribeConsumerGroupsResult existingResult = mock(DescribeConsumerGroupsResult.class);
+        final ConsumerGroupDescription existingDescription = mock(ConsumerGroupDescription.class);
+        when(existingDescription.groupState()).thenReturn(GroupState.STABLE);
+        final KafkaFutureImpl<Map<String, ConsumerGroupDescription>> existingFuture = new KafkaFutureImpl<>();
+        existingFuture.complete(Map.of(existingGroupId, existingDescription));
+        when(existingResult.all()).thenReturn(existingFuture);
+        when(adminClient.describeConsumerGroups(Set.of(existingGroupId))).thenReturn(existingResult);
+
+        // querying "my-app" still fails even though "my-app-v32" is a real, existing group
+        assertThrows(IllegalArgumentException.class,
+                () -> streamsResetter.validateApplicationIdExists(groupId, adminClient));
+
+        // querying "my-app-v2" directly succeeds — confirms it's a genuine, resolvable group
+        streamsResetter.validateApplicationIdExists(existingGroupId, adminClient);
     }
 
     @Test
