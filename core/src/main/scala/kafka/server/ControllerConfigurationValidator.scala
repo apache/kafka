@@ -135,7 +135,7 @@ class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends Configu
       case GROUP =>
         validateGroupName(resource.name())
         val filteredConfigs = filterAndValidateNullConfigs(newConfigs, "group")
-        GroupConfig.validate(filteredConfigs, kafkaConfig.groupCoordinatorConfig, kafkaConfig.shareGroupConfig)
+        GroupConfig.validate(oldConfigs, filteredConfigs, kafkaConfig.groupCoordinatorConfig, kafkaConfig.shareGroupConfig)
       case _ => throwExceptionForUnknownResourceType(resource)
     }
   }

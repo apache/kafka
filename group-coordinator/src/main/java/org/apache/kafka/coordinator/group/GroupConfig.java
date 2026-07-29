@@ -481,11 +481,13 @@ public final class GroupConfig extends AbstractConfig {
      * Check that the given properties contain only valid group config names and that
      * all values can be parsed and are valid.
      *
+     * @param oldGroupConfig         The group config overrides currently stored for the group.
      * @param newGroupConfig         The new unparsed group config overrides.
      * @param groupCoordinatorConfig The group coordinator config.
      * @param shareGroupConfig       The share group config.
      */
     public static void validate(
+        Map<String, String> oldGroupConfig,
         Map<String, String> newGroupConfig,
         GroupCoordinatorConfig groupCoordinatorConfig,
         ShareGroupConfig shareGroupConfig
@@ -498,6 +500,7 @@ public final class GroupConfig extends AbstractConfig {
         parsed.keySet().retainAll(newGroupConfig.keySet());
         validateValues(
             parsed,
+            oldGroupConfig,
             groupCoordinatorConfig,
             shareGroupConfig
         );
@@ -527,11 +530,13 @@ public final class GroupConfig extends AbstractConfig {
      * Only configs explicitly present in the parsed map are validated.
      *
      * @param parsed                 The parsed group config overrides.
+     * @param oldGroupConfig         The group config overrides currently stored for the group.
      * @param groupCoordinatorConfig The group coordinator config.
      * @param shareGroupConfig       The share group config.
      */
     private static void validateValues(
         Map<String, Object> parsed,
+        Map<String, String> oldGroupConfig,
         GroupCoordinatorConfig groupCoordinatorConfig,
         ShareGroupConfig shareGroupConfig
     ) {
@@ -628,13 +633,17 @@ public final class GroupConfig extends AbstractConfig {
             groupCoordinatorConfig.streamsGroupMaxWarmupReplicas()
         );
 
-        // The selected streams assignor must be one of the assignors registered on the broker.
+        // A newly selected streams assignor must be one of the assignors registered on the broker. An
+        // already stored name is not re-checked: the coordinator falls back to the default assignor when it
+        // is no longer registered, so it must not block updates to the other configs of the same group.
         if (parsed.containsKey(STREAMS_ASSIGNOR_NAME_CONFIG)) {
             String assignorName = (String) parsed.get(STREAMS_ASSIGNOR_NAME_CONFIG);
-            List<String> registeredAssignors = groupCoordinatorConfig.streamsGroupAssignorNames();
-            if (!registeredAssignors.contains(assignorName)) {
-                throw new InvalidConfigurationException(STREAMS_ASSIGNOR_NAME_CONFIG + " '" + assignorName +
-                    "' is not a registered task assignor. Registered assignors are: " + registeredAssignors + ".");
+            if (!assignorName.equals(oldGroupConfig.get(STREAMS_ASSIGNOR_NAME_CONFIG))) {
+                List<String> registeredAssignors = groupCoordinatorConfig.streamsGroupAssignorNames();
+                if (!registeredAssignors.contains(assignorName)) {
+                    throw new InvalidConfigurationException(STREAMS_ASSIGNOR_NAME_CONFIG + " '" + assignorName +
+                        "' is not a registered task assignor. Registered assignors are: " + registeredAssignors + ".");
+                }
             }
         }
 
