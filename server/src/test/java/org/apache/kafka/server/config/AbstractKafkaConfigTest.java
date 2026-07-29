@@ -96,7 +96,7 @@ public class AbstractKafkaConfigTest {
     }
 
     @Test
-    public void testExtractGroupConfigMapReturnsStreamsAssignorShortName() {
+    public void testExtractGroupConfigMapReturnsStreamsAssignor() {
         try (MockedStatic<GroupConfig> mocked = mockStatic(GroupConfig.class, Mockito.CALLS_REAL_METHODS)) {
             mocked.when(GroupConfig::configNames).thenReturn(Set.of(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG));
 
@@ -107,18 +107,18 @@ public class AbstractKafkaConfigTest {
             // The group config holds a single assignor name, so the default is the first entry of the
             // broker's list rather than the whole list.
             assertEquals("sticky",
-                kafkaConfig.extractGroupConfigMap(streamsAssignors("sticky," + CustomTaskAssignor.class.getName()))
+                kafkaConfig.extractGroupConfigMap(groupCoordinatorConfigWithStreamsAssignors("sticky," + CustomTaskAssignor.class.getName()))
                     .get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG));
 
             // A custom assignor is configured by class name, but a group selects it by name(), so the
             // default must be the name and not the class name.
             assertEquals("CustomTaskAssignor",
-                kafkaConfig.extractGroupConfigMap(streamsAssignors(CustomTaskAssignor.class.getName() + ",sticky"))
+                kafkaConfig.extractGroupConfigMap(groupCoordinatorConfigWithStreamsAssignors(CustomTaskAssignor.class.getName() + ",sticky"))
                     .get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG));
         }
     }
 
-    private static GroupCoordinatorConfig streamsAssignors(String assignors) {
+    private static GroupCoordinatorConfig groupCoordinatorConfigWithStreamsAssignors(String assignors) {
         return new GroupCoordinatorConfig(new AbstractConfig(
             GroupCoordinatorConfig.CONFIG_DEF,
             Map.of(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG, assignors),

@@ -52,7 +52,7 @@ public class StreamsGroupDescription {
     /**
      * @deprecated Since 4.4. Use {@link #StreamsGroupDescription(String, int, int, int, Collection, Collection, GroupState, Node, Set, Optional, StreamsGroupTopologyDescriptionStatus, Optional)} instead.
      */
-    @Deprecated(since = "4.4")
+    @Deprecated(since = "4.4", forRemoval = true)
     public StreamsGroupDescription(
             final String groupId,
             final int groupEpoch,
