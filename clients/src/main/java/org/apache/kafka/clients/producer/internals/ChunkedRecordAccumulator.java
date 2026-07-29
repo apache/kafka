@@ -75,6 +75,10 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                                     BufferPool bufferPool) {
         super(logContext, batchSize, compression, lingerMs, retryBackoffMs, retryBackoffMaxMs,
                 deliveryTimeoutMs, partitionerConfig, metrics, metricGrpName, time, transactionManager, bufferPool);
+        if (bufferPool.allocationMode() != BufferPool.AllocationMode.INCREMENTAL)
+            throw new IllegalArgumentException("bufferPool must serve "
+                    + BufferPool.AllocationMode.INCREMENTAL + " allocation, but serves "
+                    + bufferPool.allocationMode());
         // TODO: drop this once the incremental strategy supports compressed data (with the
         //   mid-record growth fallback for compressor overshoot).
         if (compression.type() != CompressionType.NONE)
@@ -183,7 +187,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     } finally {
                         // Update the remaining time to block.
                         nowMs = time.milliseconds();
-                        remainingTimeToBlock = Math.max(0L, remainingTimeToBlock - (nowMs - allocationStartMs));
+                        remainingTimeToBlock = Math.max(0L, remainingTimeToBlock - Math.max(0L, nowMs - allocationStartMs));
                     }
                     newBatch = new NewBatchBuffer(
                             new ChunkedByteBufferOutputStream(initialChunks, chunkedFree.poolableSize(), chunkedFree),

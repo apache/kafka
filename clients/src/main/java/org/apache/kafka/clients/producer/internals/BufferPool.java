@@ -555,6 +555,14 @@ public class BufferPool {
         return this.totalMemory;
     }
 
+    /**
+     * Which allocation method this pool serves, so callers that only use one of them can validate
+     * the pool they were given up front.
+     */
+    AllocationMode allocationMode() {
+        return this.allocationMode;
+    }
+
     // package-private method used only for testing
     Deque<Condition> waiters() {
         return this.waiters;

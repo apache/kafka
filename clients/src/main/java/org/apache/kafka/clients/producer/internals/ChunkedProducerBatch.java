@@ -50,6 +50,8 @@ public class ChunkedProducerBatch extends ProducerBatch {
      * is pre-sized for the first record). Positive when the record is within the batch-size limit
      * but the attached chunks lack capacity — the accumulator then allocates exactly the missing
      * bytes (rounded up to whole chunks) and attaches them via {@link #addBuffers} before retrying.
+     * <p>
+     * TODO (KAFKA-20859): improve by reusing size calculation.
      */
     int extensionBytesNeeded(long timestamp, byte[] key, byte[] value, Header[] headers) {
         if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers))
@@ -62,20 +64,26 @@ public class ChunkedProducerBatch extends ProducerBatch {
     }
 
     /**
-     * Appends the record, first checking that the stream has the capacity to hold it. This batch
-     * never acquires memory itself: the capacity is arranged before the append, by the accumulator
-     * attaching chunks (see {@link #extensionBytesNeeded} and {@link #addBuffers}).
+     * Appends the record. This batch never acquires memory itself: the capacity is arranged before
+     * the append, by the accumulator attaching chunks (see {@link #extensionBytesNeeded} and
+     * {@link #addBuffers}).
+     * <p>
+     * The capacity is verified here only for the batch's first record, which is the one append no
+     * caller checks: {@code RecordAccumulator.appendNewBatch} creates the batch and appends straight
+     * into it, relying on the stream having been pre-sized. Every later append arrives through
+     * {@code ChunkedRecordAccumulator.tryAppend}, which evaluates {@link #extensionBytesNeeded}
+     * itself and attaches chunks before retrying, so repeating the check for those would size the
+     * record a second time on every append for no added safety.
      *
      * @return the record's future, or null if the batch is at its batch-size limit
-     * @throws IllegalStateException if the batch could still take the record but the stream lacks
-     *         the capacity to hold it
+     * @throws IllegalStateException if the stream was not pre-sized to hold the batch's first record
      */
     @Override
     public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, Callback callback, long now) {
-        if (extensionBytesNeeded(timestamp, key, value, headers) != 0)
+        if (recordCount == 0 && extensionBytesNeeded(timestamp, key, value, headers) != 0)
             throw new IllegalStateException(
                     "Unexpected append to a chunked batch whose chunks lack capacity for the record; " +
-                            "the accumulator should have attached extension chunks first");
+                            "the stream should have been pre-sized for the batch's first record");
         return super.tryAppend(timestamp, key, value, headers, callback, now);
     }
 
