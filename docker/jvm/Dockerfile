@@ -31,7 +31,7 @@ COPY *kafka.tgz kafka.tgz
 RUN set -eux ; \
     apk update ; \
     apk upgrade ; \
-    apk add --no-cache bash; \
+    apk add --no-cache bash procps-ng; \
     mkdir opt/kafka; \
     if [ -n "$kafka_url" ]; then \
         apk add --no-cache wget gcompat gpg gpg-agent procps; \
