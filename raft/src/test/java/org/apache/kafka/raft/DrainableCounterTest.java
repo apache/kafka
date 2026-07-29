@@ -18,7 +18,7 @@ package org.apache.kafka.raft;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -27,7 +27,7 @@ public final class DrainableCounterTest {
 
     @Test
     public void testDrainDeltaReturnsIncreaseSinceLastDrain() {
-        AtomicInteger source = new AtomicInteger();
+        AtomicLong source = new AtomicLong();
         DrainableCounter counter = new DrainableCounter(source::get);
 
         source.addAndGet(3);
@@ -39,7 +39,7 @@ public final class DrainableCounterTest {
 
     @Test
     public void testDrainDeltaIsZeroWhenSourceUnchanged() {
-        AtomicInteger source = new AtomicInteger(7);
+        AtomicLong source = new AtomicLong(7);
         DrainableCounter counter = new DrainableCounter(source::get);
 
         assertEquals(0, counter.drainDelta());
@@ -48,7 +48,7 @@ public final class DrainableCounterTest {
 
     @Test
     public void testDrainDeltaAdvancesTheBaseline() {
-        AtomicInteger source = new AtomicInteger();
+        AtomicLong source = new AtomicLong();
         DrainableCounter counter = new DrainableCounter(source::get);
 
         source.addAndGet(6);
@@ -60,7 +60,7 @@ public final class DrainableCounterTest {
 
     @Test
     public void testBaselineIsSnapshottedAtConstruction() {
-        AtomicInteger source = new AtomicInteger(9);
+        AtomicLong source = new AtomicLong(9);
         DrainableCounter counter = new DrainableCounter(source::get);
 
         // The constructor snapshots the current value, so the first drain only reflects increases
@@ -73,7 +73,7 @@ public final class DrainableCounterTest {
 
     @Test
     public void testIgnoredDrainDeltaExcludesPriorIncreasesFromTheNextDrain() {
-        AtomicInteger source = new AtomicInteger();
+        AtomicLong source = new AtomicLong();
         DrainableCounter counter = new DrainableCounter(source::get);
 
         source.addAndGet(3);
@@ -91,7 +91,7 @@ public final class DrainableCounterTest {
 
     @Test
     public void testDrainDeltaThrowsWhenSourceDecreases() {
-        AtomicInteger source = new AtomicInteger(10);
+        AtomicLong source = new AtomicLong(10);
         DrainableCounter counter = new DrainableCounter(source::get);
 
         source.set(4);

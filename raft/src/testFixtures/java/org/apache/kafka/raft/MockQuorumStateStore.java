@@ -27,8 +27,8 @@ public class MockQuorumStateStore implements QuorumStateStore {
     private Optional<QuorumStateData> current = Optional.empty();
 
     // Cumulative counts of quorum-state-file writes and reads, used by the JMH raft benchmarks.
-    private int writeCount = 0;
-    private int readCount = 0;
+    private long writeCount = 0;
+    private long readCount = 0;
 
     @Override
     public Optional<ElectionState> readElectionState() {
@@ -36,7 +36,7 @@ public class MockQuorumStateStore implements QuorumStateStore {
         return current.map(ElectionState::fromQuorumStateData);
     }
 
-    public int readCount() {
+    public long readCount() {
         return readCount;
     }
 
@@ -48,7 +48,7 @@ public class MockQuorumStateStore implements QuorumStateStore {
         writeCount++;
     }
 
-    public int writeCount() {
+    public long writeCount() {
         return writeCount;
     }
 

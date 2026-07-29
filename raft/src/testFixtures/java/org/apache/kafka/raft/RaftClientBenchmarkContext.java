@@ -67,7 +67,7 @@ public final class RaftClientBenchmarkContext {
     // of appending to RaftClientTestContext.sentResponses, so the collection stays bounded when
     // per-invocation draining is deferred to an iteration teardown.
     private final DrainableCounter rpcResponsesSent;
-    private int rpcResponsesSentTotal;
+    private long rpcResponsesSentTotal;
     private RaftResponse.Outbound lastResponse;
     private Throwable lastResponseException;
 
@@ -219,15 +219,15 @@ public final class RaftClientBenchmarkContext {
         channel.drainSendQueue();
     }
 
-    public int getLogFlushesDelta() {
+    public long getLogFlushesDelta() {
         return logFlushes.drainDelta();
     }
 
-    public int getLogReadsDelta() {
+    public long getLogReadsDelta() {
         return logReads.drainDelta();
     }
 
-    public int getLogTruncationsDelta() {
+    public long getLogTruncationsDelta() {
         return logTruncations.drainDelta();
     }
 
@@ -235,7 +235,7 @@ public final class RaftClientBenchmarkContext {
      * Total number of requests (all API keys) the client has sent since the last drain. Uses the
      * channel's cumulative counter, so it is unaffected by a test driver draining the send queue.
      */
-    public int getRpcRequestsSentDelta() {
+    public long getRpcRequestsSentDelta() {
         return rpcRequestsSent.drainDelta();
     }
 
@@ -253,11 +253,11 @@ public final class RaftClientBenchmarkContext {
         }
     }
 
-    public int getQuorumStateWritesDelta() {
+    public long getQuorumStateWritesDelta() {
         return quorumStateWrites.drainDelta();
     }
 
-    public int getQuorumStateReadsDelta() {
+    public long getQuorumStateReadsDelta() {
         return quorumStateReads.drainDelta();
     }
 
@@ -269,7 +269,7 @@ public final class RaftClientBenchmarkContext {
         RaftRequest.Inbound inbound,
         Optional<ApiKeys> expectedResponse
     ) throws InterruptedException {
-        int before = rpcResponsesSentTotal;
+        long before = rpcResponsesSentTotal;
         context.client.handle(inbound).whenComplete((response, exception) -> {
             if (exception != null) {
                 lastResponseException = exception;
@@ -296,7 +296,7 @@ public final class RaftClientBenchmarkContext {
      * Number of responses the client has produced via {@link #deliverAndAwaitResponse} since the
      * last drain.
      */
-    public int getRpcResponsesSentDelta() {
+    public long getRpcResponsesSentDelta() {
         return rpcResponsesSent.drainDelta();
     }
 

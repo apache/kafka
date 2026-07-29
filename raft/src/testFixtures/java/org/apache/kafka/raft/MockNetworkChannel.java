@@ -35,7 +35,7 @@ public class MockNetworkChannel implements NetworkChannel {
     private final List<RequestEntry> sendQueue = new ArrayList<>();
     private final Map<Integer, CompletableFuture<RaftResponse.Inbound>> awaitingResponse = new HashMap<>();
 
-    private int requestsSent = 0;
+    private long requestsSent = 0;
 
     public MockNetworkChannel(AtomicInteger correlationIdCounter) {
         this.correlationIdCounter = correlationIdCounter;
@@ -61,7 +61,7 @@ public class MockNetworkChannel implements NetworkChannel {
     /**
      * Cumulative number of outbound requests the client has sent since this channel was created.
      */
-    public int requestsSent() {
+    public long requestsSent() {
         return requestsSent;
     }
 

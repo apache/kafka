@@ -71,9 +71,9 @@ public class MockLog implements RaftLog {
 
     // Cumulative work counters used by the JMH raft benchmarks. They grow for the lifetime of the
     // log; benchmarks read them as drainable deltas (see RaftClientBenchmarkContext).
-    private int flushCount = 0;
-    private int readCount = 0;
-    private int truncationCount = 0;
+    private long flushCount = 0;
+    private long readCount = 0;
+    private long truncationCount = 0;
 
     public MockLog(
         TopicPartition topicPartition,
@@ -397,15 +397,15 @@ public class MockLog implements RaftLog {
      * Cumulative number of {@link #flush(boolean)} calls since this log was created. Used as a
      * proxy for disk I/Os by the JMH raft benchmarks.
      */
-    public int flushCount() {
+    public long flushCount() {
         return flushCount;
     }
 
-    public int readCount() {
+    public long readCount() {
         return readCount;
     }
 
-    public int truncationCount() {
+    public long truncationCount() {
         return truncationCount;
     }
 

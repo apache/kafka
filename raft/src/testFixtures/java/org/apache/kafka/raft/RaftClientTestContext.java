@@ -578,14 +578,14 @@ public final class RaftClientTestContext {
     /**
      * Cumulative number of quorum-state-file writes. Used by the JMH raft benchmarks.
      */
-    int quorumStateWriteCount() {
+    long quorumStateWriteCount() {
         return quorumStateStore.writeCount();
     }
 
     /**
      * Cumulative number of quorum-state-file reads. Used by the JMH raft benchmarks.
      */
-    int quorumStateReadCount() {
+    long quorumStateReadCount() {
         return quorumStateStore.readCount();
     }
 

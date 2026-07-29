@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.raft;
 
-import java.util.function.IntSupplier;
+import java.util.function.LongSupplier;
 
 /**
  * Tracks a cumulative, monotonically increasing counter (e.g. the work counters on the raft
@@ -26,22 +26,22 @@ import java.util.function.IntSupplier;
  * counter, e.g. to exclude setup work from the next measurement.
  */
 final class DrainableCounter {
-    private final IntSupplier source;
-    private int baseline;
+    private final LongSupplier source;
+    private long baseline;
 
-    DrainableCounter(IntSupplier source) {
+    DrainableCounter(LongSupplier source) {
         this.source = source;
-        this.baseline = source.getAsInt();
+        this.baseline = source.getAsLong();
     }
 
-    int drainDelta() {
-        int current = source.getAsInt();
+    long drainDelta() {
+        long current = source.getAsLong();
         if (current < baseline) {
             throw new IllegalStateException(
                 "Counter source is not monotonically increasing: read " + current
                     + " after " + baseline);
         }
-        int delta = current - baseline;
+        long delta = current - baseline;
         baseline = current;
         return delta;
     }
