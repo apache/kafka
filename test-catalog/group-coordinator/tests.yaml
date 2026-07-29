@@ -780,6 +780,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testStreamsGroupHeartbeatOnConsumerGroup
 - testStreamsGroupHeartbeatOnShareGroup
 - testStreamsGroupHeartbeatPartialResponseWhenNothingChanges
+- testStreamsGroupHeartbeatRefinementStepBumpsEpochWithoutRunningAssignor
 - testStreamsGroupHeartbeatRejectsDuplicateTaskOffsets
 - testStreamsGroupHeartbeatResponseVersion0
 - testStreamsGroupHeartbeatResponseVersion1
@@ -1537,6 +1538,7 @@ org.apache.kafka.coordinator.group.streams.TasksTupleTest:
 - testFromTargetAssignmentRecord
 - testIsEmpty
 - testReturnUnmodifiableTaskAssignments
+- testSameTasks
 - testTasksCannotBeNull
 org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochsTest:
 - testFromCurrentAssignmentRecord

@@ -116,6 +116,9 @@ org.apache.kafka.clients.NetworkClientTest:
 - testDisconnectDuringUserMetadataRequest
 - testDisconnectWithMultipleInFlights
 - testDnsLookupFailure
+- testEnsureBootstrappedPollTimeoutReturnsWithoutError
+- testEnsureBootstrappedRetryUntilSuccess
+- testEnsureBootstrappedSuccess
 - testFailedConnectionToFirstAddress
 - testFailedConnectionToFirstAddressAfterReconnect
 - testHasNodeAvailableOrConnectionReady
@@ -184,6 +187,7 @@ org.apache.kafka.clients.admin.KafkaAdminClientTest:
 - testAbortTransaction
 - testAbortTransactionFindLeaderAfterDisconnect
 - testAddRaftVoterRequest
+- testAdminBootstrapResolutionExceptionPropagated
 - testAdminClientApisAuthenticationFailure
 - testAdminClientFailureWhenClosed
 - testAlterClientQuotas
@@ -544,10 +548,6 @@ org.apache.kafka.clients.admin.internals.AdminApiDriverTest:
 - testRetryLookupAndDisableBatchAfterNoBatchedFindCoordinatorsException
 - testRetryLookupIsNoOpForFixedBrokerStrategy
 - testStaticMapping
-org.apache.kafka.clients.admin.internals.AdminBootstrapAddressesTest:
-- testFromConfig
-- testNoBootstrapSet
-- testTwoBootstrapsSet
 org.apache.kafka.clients.admin.internals.AdminFetchMetricsManagerTest:
 - testMultiNodeLatency
 - testSingleNodeLatency
@@ -869,6 +869,7 @@ org.apache.kafka.clients.consumer.KafkaConsumerTest:
 - testConstructorClose
 - testConstructorFailsOnNetworkClientConstructorFailure
 - testConstructorInvalidMetricReporters
+- testConsumerBootstrapResolutionExceptionPropagatedToPoll
 - testConsumerJmxPrefix
 - testConsumerProtocolDoesNotLogRecommendation
 - testCurrentLag
@@ -2163,6 +2164,7 @@ org.apache.kafka.clients.consumer.internals.KafkaConsumerMetricsTest:
 - shouldRecordCommittedTime
 - shouldRemoveMetricsOnClose
 org.apache.kafka.clients.consumer.internals.NetworkClientDelegateTest:
+- testBootstrapResolutionExceptionPropagatedViaErrorEventOnce
 - testCheckDisconnectsWithOnClose
 - testEnsureCorrectCompletionTimeOnComplete
 - testEnsureCorrectCompletionTimeOnFailure
@@ -3041,7 +3043,9 @@ org.apache.kafka.clients.producer.KafkaProducerTest:
 - testPartitionsForWithNullTopic
 - testPrepareTransactionFailsWhen2PCDisabled
 - testPrepareTransactionSuccess
+- testProducerBootstrapResolutionExceptionPropagated
 - testProducerJmxPrefix
+- testProducerSendOffsetsToTransactionBootstrapResolutionExceptionPropagated
 - testRetriesAndIdempotenceForIdempotentProducers
 - testSendNotAllowedInPreparedTransactionState
 - testSendOffsetsNotAllowedInPreparedTransactionState
