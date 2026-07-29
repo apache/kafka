@@ -38,6 +38,7 @@ import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.TimestampedWindowKeyWithHeadersQuery;
+import org.apache.kafka.streams.query.TimestampedWindowRangeWithHeadersQuery;
 import org.apache.kafka.streams.query.WindowKeyQuery;
 import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
@@ -53,6 +54,7 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.time.Instant;
 import java.util.Objects;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
@@ -143,26 +145,34 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
         final PositionBound positionBound,
         final QueryConfig config
     ) {
-        final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
+        final long start = time.nanoseconds();
         final QueryResult<R> result;
+        // Queries this store handles itself go through its serdes; anything delegated to the wrapped
+        // store does not, so the two cases report execution info differently.
+        final boolean handledLocally;
 
         if (query instanceof WindowKeyQuery) {
             result = runWindowKeyQuery((WindowKeyQuery<K, ValueTimestampHeaders<V>>) query, positionBound, config);
+            handledLocally = true;
         } else if (query instanceof TimestampedWindowKeyWithHeadersQuery) {
             result = runTimestampedWindowKeyWithHeadersQuery((TimestampedWindowKeyWithHeadersQuery<K, V>) query, positionBound, config);
+            handledLocally = true;
         } else if (query instanceof WindowRangeQuery) {
             result = runWindowRangeQuery((WindowRangeQuery<K, ValueTimestampHeaders<V>>) query, positionBound, config);
+            handledLocally = true;
+        } else if (query instanceof TimestampedWindowRangeWithHeadersQuery) {
+            result = runTimestampedWindowRangeWithHeadersQuery((TimestampedWindowRangeWithHeadersQuery<K, V>) query, positionBound, config);
+            handledLocally = true;
         } else {
             result = wrapped().query(query, positionBound, config);
+            handledLocally = false;
         }
 
         if (config.isCollectExecutionInfo()) {
-            final String conversionType = isUnderlyingStoreTimestamped()
-                ? "with conversion to ValueAndTimestamp"
-                : "with extraction of plain values";
             result.addExecutionInfo(
-                "Handled in " + getClass() + " " + conversionType + " in "
-                    + (time.nanoseconds() - start) + "ns");
+                "Handled in " + getClass()
+                    + (handledLocally ? " with serdes " + serdes : "")
+                    + " in " + (time.nanoseconds() - start) + "ns");
         }
         return result;
     }
@@ -250,8 +260,12 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
                 );
             final QueryResult<WindowStoreIterator<byte[]>> rawResult = wrapped().query(rawKeyQuery, positionBound, config);
             if (rawResult.isSuccess()) {
+                final K key = query.key();
                 final ReadOnlyRecordIterator<Windowed<K>, V> resultIterator =
-                    new MeteredWindowStoreWithHeadersReadOnlyRecordIterator(rawResult.getResult(), query.key());
+                    new MeteredWindowStoreWithHeadersReadOnlyRecordIterator<Long>(
+                        rawResult.getResult(),
+                        (windowStart, headers) ->
+                            new Windowed<>(key, new TimeWindow(windowStart, windowStart + windowSizeMs)));
                 queryResult = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, resultIterator);
             } else {
                 queryResult = (QueryResult<R>) rawResult;
@@ -340,6 +354,48 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
             );
         }
         return result;
+    }
+
+    /**
+     * Handles the {@code withWindowStartRange} form of {@link TimestampedWindowRangeWithHeadersQuery}
+     * by forwarding a raw byte-level {@link WindowRangeQuery#withWindowStartRange(java.time.Instant,
+     * java.time.Instant)} to the wrapped store and surfacing each entry as a {@link ReadOnlyRecord}
+     * (via {@link Record}) whose key is a {@link Windowed} of the deserialized key and the entry's
+     * window, carrying the stored value, event-time timestamp, and headers. The {@code withKey} form
+     * is rejected: it is handled by session stores, not window stores.
+     */
+    @SuppressWarnings("unchecked")
+    private <R> QueryResult<R> runTimestampedWindowRangeWithHeadersQuery(
+        final TimestampedWindowRangeWithHeadersQuery<K, V> query,
+        final PositionBound positionBound,
+        final QueryConfig config
+    ) {
+        final QueryResult<R> queryResult;
+
+        if (query.timeFrom().isPresent() && query.timeTo().isPresent()) {
+            final WindowRangeQuery<Bytes, byte[]> rawRangeQuery =
+                WindowRangeQuery.withWindowStartRange(query.timeFrom().get(), query.timeTo().get());
+            final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult = wrapped().query(rawRangeQuery, positionBound, config);
+            if (rawResult.isSuccess()) {
+                final ReadOnlyRecordIterator<Windowed<K>, V> resultIterator =
+                    new MeteredWindowStoreWithHeadersReadOnlyRecordIterator<Windowed<Bytes>>(
+                        rawResult.getResult(),
+                        (windowedBytes, headers) ->
+                            new Windowed<>(deserializeKey(windowedBytes.key().get(), headers), windowedBytes.window()));
+                queryResult = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, resultIterator);
+            } else {
+                queryResult = (QueryResult<R>) rawResult;
+            }
+        } else {
+            queryResult = QueryResult.forFailure(
+                FailureReason.UNKNOWN_QUERY_TYPE,
+                "This store (" + getClass() + ") doesn't know how to"
+                    + " execute the given query (" + query + ") because"
+                    + " WindowStores only supports TimestampedWindowRangeWithHeadersQuery.withWindowStartRange."
+                    + " Contact the store maintainer if you need support for a new query type."
+            );
+        }
+        return queryResult;
     }
 
     @Override
@@ -572,38 +628,53 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
     }
 
     /**
-     * Iterator backing {@link TimestampedWindowKeyWithHeadersQuery}: yields each entry as a
+     * Iterator backing both headers-aware window query types: the single-key
+     * {@link TimestampedWindowKeyWithHeadersQuery} and the {@code withWindowStartRange} form of
+     * {@link TimestampedWindowRangeWithHeadersQuery}. Each entry is surfaced as a
      * {@link ReadOnlyRecord} (implemented by {@link Record}) whose key is a {@link Windowed} of the
-     * queried key and the entry's window, carrying the value, stored event-time timestamp, and the
-     * stored headers, with the headers frozen so a caller cannot mutate the read-only result.
+     * entry's key and window, carrying the value, stored event-time timestamp, and the stored
+     * headers, with the headers frozen so a caller cannot mutate the read-only result.
+     *
+     * <p>The two query types differ only in how the {@link Windowed} key is derived from a raw
+     * entry, which the caller supplies as {@code toWindowedKey}: a single-key result yields the
+     * window-start timestamp ({@code RawKey} = {@link Long}) and reuses the queried key,
+     * reconstructing the window from {@code windowSizeMs}; a range result already carries the full
+     * {@code Windowed<Bytes>} ({@code RawKey} = {@code Windowed<Bytes>}), from which the key is
+     * deserialized and the window used directly.
      *
      * <p>A {@link ReadOnlyRecord} timestamp is contractually non-negative, so an entry with a
      * negative stored timestamp cannot be represented -- for example a {@code WithHeaders} store
      * built over a plain, non-timestamped window supplier surfaces entries with
-     * {@code NO_TIMESTAMP} (-1). This mirrors the rule the point/range headers queries apply. But
-     * because a lazily-evaluated iterator has already returned a successful {@link QueryResult}
-     * before any entry is read, such an entry cannot be surfaced as a query-level failure; it is
-     * instead reported by throwing a {@link StreamsException} while advancing the iterator.
+     * {@code NO_TIMESTAMP} (-1). This mirrors the rule the point/range headers queries apply. A
+     * value that deserializes to null has no event-time either and is reported the same way (though,
+     * unlike {@code NO_TIMESTAMP}, that is a fail-fast safety net -- a native store cannot hold a
+     * null value). But because a lazily-evaluated iterator has already returned a successful
+     * {@link QueryResult} before any entry is read, such an entry cannot be surfaced as a query-level
+     * failure; it is instead reported by throwing a {@link StreamsException} while advancing the
+     * iterator.
      *
      * <p>Because {@link #next()} can throw mid-iteration, the caller must always close this iterator
      * (via try-with-resources or a {@code finally} block) even when iteration throws: a caller that
      * catches the exception and abandons the iterator without closing it leaks the underlying store
      * iterator and leaves the {@code num-open-iterators} metric permanently incremented.
+     *
+     * @param <RawKey> the raw iterator's key type: a {@link Long} window-start for a single-key
+     *                 result, or a {@code Windowed<Bytes>} for a range result
      */
-    private class MeteredWindowStoreWithHeadersReadOnlyRecordIterator
+    private class MeteredWindowStoreWithHeadersReadOnlyRecordIterator<RawKey>
         implements ReadOnlyRecordIterator<Windowed<K>, V>, MeteredIterator {
 
-        private final WindowStoreIterator<byte[]> iter;
-        private final K key;
+        private final KeyValueIterator<RawKey, byte[]> iter;
+        private final BiFunction<RawKey, Headers, Windowed<K>> toWindowedKey;
         private final long startNs;
         private final long startTimestampMs;
 
         private MeteredWindowStoreWithHeadersReadOnlyRecordIterator(
-            final WindowStoreIterator<byte[]> iter,
-            final K key
+            final KeyValueIterator<RawKey, byte[]> iter,
+            final BiFunction<RawKey, Headers, Windowed<K>> toWindowedKey
         ) {
             this.iter = iter;
-            this.key = key;
+            this.toWindowedKey = toWindowedKey;
             this.startNs = time.nanoseconds();
             this.startTimestampMs = time.milliseconds();
             numOpenIterators.increment();
@@ -622,18 +693,27 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
 
         @Override
         public ReadOnlyRecord<Windowed<K>, V> next() {
-            final KeyValue<Long, byte[]> next = iter.next();
-            final long windowStart = next.key;
+            final KeyValue<RawKey, byte[]> next = iter.next();
             final ValueTimestampHeaders<V> valueTimestampHeaders = deserializeValue(next.value);
-            final Headers headers = valueTimestampHeaders.headers();
+            // A ReadOnlyRecord carries the stored event-time, so an entry that has none cannot be
+            // represented. A value that deserializes to null has no event-time, so it is reported the
+            // same way as a negative/absent timestamp (below). The headers deref is guarded so we can
+            // build the error message rather than NPE. This is a fail-fast safety net: a null value is
+            // unreachable for a native store (a null value cannot be stored).
+            final Headers headers = valueTimestampHeaders != null ? valueTimestampHeaders.headers() : new RecordHeaders();
+            final Windowed<K> windowedKey = toWindowedKey.apply(next.key, headers);
+            if (valueTimestampHeaders == null) {
+                throw new StreamsException(
+                    "Cannot represent the stored record for key [" + windowedKey.key()
+                        + "] and window [" + windowedKey.window() + "] as a ReadOnlyRecord:"
+                        + " its value is null.");
+            }
             if (valueTimestampHeaders.timestamp() < 0) {
                 throw new StreamsException(
-                    "Cannot represent the stored record for key [" + key + "] and window start ["
-                        + windowStart + "] as a ReadOnlyRecord: its timestamp ("
-                        + valueTimestampHeaders.timestamp() + ") is negative.");
+                    "Cannot represent the stored record for key [" + windowedKey.key()
+                        + "] and window [" + windowedKey.window() + "] as a ReadOnlyRecord:"
+                        + " its timestamp (" + valueTimestampHeaders.timestamp() + ") is negative.");
             }
-            final Windowed<K> windowedKey =
-                new Windowed<>(key, new TimeWindow(windowStart, windowStart + windowSizeMs));
             final Record<Windowed<K>, V> record = new Record<>(
                 windowedKey,
                 valueTimestampHeaders.value(),

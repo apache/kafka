@@ -364,6 +364,61 @@ public class RequestResponseTest {
         }
     }
 
+    @Test
+    public void testClientThrottlesResponsesWithThrottleTime() {
+        Map<ApiKeys, Short> postKip219Version = Map.ofEntries(
+            Map.entry(ApiKeys.PRODUCE, (short) 6),
+            Map.entry(ApiKeys.FETCH, (short) 8),
+            Map.entry(ApiKeys.LIST_OFFSETS, (short) 3),
+            Map.entry(ApiKeys.METADATA, (short) 6),
+            Map.entry(ApiKeys.OFFSET_COMMIT, (short) 4),
+            Map.entry(ApiKeys.OFFSET_FETCH, (short) 4),
+            Map.entry(ApiKeys.FIND_COORDINATOR, (short) 2),
+            Map.entry(ApiKeys.JOIN_GROUP, (short) 3),
+            Map.entry(ApiKeys.HEARTBEAT, (short) 2),
+            Map.entry(ApiKeys.LEAVE_GROUP, (short) 2),
+            Map.entry(ApiKeys.SYNC_GROUP, (short) 2),
+            Map.entry(ApiKeys.DESCRIBE_GROUPS, (short) 2),
+            Map.entry(ApiKeys.LIST_GROUPS, (short) 2),
+            Map.entry(ApiKeys.API_VERSIONS, (short) 2),
+            Map.entry(ApiKeys.CREATE_TOPICS, (short) 3),
+            Map.entry(ApiKeys.DELETE_TOPICS, (short) 2),
+            Map.entry(ApiKeys.DELETE_RECORDS, (short) 1),
+            Map.entry(ApiKeys.INIT_PRODUCER_ID, (short) 1),
+            Map.entry(ApiKeys.ADD_PARTITIONS_TO_TXN, (short) 1),
+            Map.entry(ApiKeys.ADD_OFFSETS_TO_TXN, (short) 1),
+            Map.entry(ApiKeys.END_TXN, (short) 1),
+            Map.entry(ApiKeys.TXN_OFFSET_COMMIT, (short) 1),
+            Map.entry(ApiKeys.DESCRIBE_ACLS, (short) 1),
+            Map.entry(ApiKeys.CREATE_ACLS, (short) 1),
+            Map.entry(ApiKeys.DELETE_ACLS, (short) 1),
+            Map.entry(ApiKeys.DESCRIBE_CONFIGS, (short) 2),
+            Map.entry(ApiKeys.ALTER_CONFIGS, (short) 1),
+            Map.entry(ApiKeys.ALTER_REPLICA_LOG_DIRS, (short) 1),
+            Map.entry(ApiKeys.DESCRIBE_LOG_DIRS, (short) 1),
+            Map.entry(ApiKeys.CREATE_PARTITIONS, (short) 1),
+            Map.entry(ApiKeys.CREATE_DELEGATION_TOKEN, (short) 1),
+            Map.entry(ApiKeys.RENEW_DELEGATION_TOKEN, (short) 1),
+            Map.entry(ApiKeys.EXPIRE_DELEGATION_TOKEN, (short) 1),
+            Map.entry(ApiKeys.DESCRIBE_DELEGATION_TOKEN, (short) 1),
+            Map.entry(ApiKeys.DELETE_GROUPS, (short) 1)
+        );
+
+        for (ApiKeys apiKey : ApiKeys.values()) {
+            for (short version : apiKey.allVersions()) {
+                boolean responseHasThrottleTime =
+                    apiKey.messageType.responseSchemas()[version].get("throttle_time_ms") != null;
+                short firstPostKip219Version = postKip219Version.getOrDefault(apiKey, apiKey.oldestVersion());
+                boolean shouldClientThrottle = responseHasThrottleTime &&
+                    version >= firstPostKip219Version;
+                assertEquals(shouldClientThrottle, getResponse(apiKey, version).shouldClientThrottle(version),
+                    "Unexpected shouldClientThrottle result for " + apiKey + " version " + version +
+                        ": responseHasThrottleTime=" + responseHasThrottleTime +
+                        ", firstPostKip219Version=" + firstPostKip219Version);
+            }
+        }
+    }
+
     // This test validates special cases that are not checked in testSerialization
     @Test
     public void testSerializationSpecialCases() {

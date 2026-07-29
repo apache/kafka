@@ -123,6 +123,7 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMe
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue.Endpoint;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.Assignment;
@@ -18992,6 +18993,82 @@ public class GroupMetadataManagerTest {
 
         StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
         assertEquals(MemberTaskOffsets.EMPTY, group.taskOffsets(memberId));
+    }
+
+    @Test
+    public void testStreamsGroupHeartbeatRefinementStepBumpsEpochWithoutRunningAssignor() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 4)
+            .buildCoordinatorMetadataImage();
+        long groupMetadataHash = computeGroupHash(Map.of(
+            fooTopicName, computeTopicHash(fooTopicName, metadataImage)
+        ));
+
+        // maybeRefineAssignment() still returns the target unchanged, so the refinement predicate can only fire when a
+        // member's assigned tasks differ from its target. The setup below forces that: assigned {0,1,2} vs target
+        // {0,1,2,3}, with all epochs equal so the group still reports STABLE. Real reconciliation never leaves those two
+        // out of sync at the same epoch; a real refiner will make this case reachable properly. Metadata, topology and
+        // configs all match, so refinement is the only possible reason to bump the group epoch.
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, 10)
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(10)
+                    .setAssignedTasks(mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 10,
+                        TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2)))
+                    .build())
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topology))
+                .withTargetAssignment(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+                    TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3)))
+                .withTargetAssignmentEpoch(10)
+                .withTargetAssignmentTimestamp(12345L)
+                .withMetadataHash(groupMetadataHash)
+                .withValidatedTopologyEpoch(0)
+                .withLastAssignmentConfigs(Map.of("num.standby.replicas", "0"))
+            )
+            .build();
+
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(10)
+                .setProcessId("process-id")
+                .setRebalanceTimeoutMs(1500)
+                .setActiveTasks(List.of(new StreamsGroupHeartbeatRequestData.TaskIds()
+                    .setSubtopologyId(subtopology1)
+                    .setPartitions(List.of(0, 1, 2))))
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        // The refinement step bumped the group/assignment epoch to 11; the member reconciles toward it.
+        assertEquals(11, result.response().data().memberEpoch());
+        assertTrue(result.records().stream()
+            .filter(r -> r.key() instanceof StreamsGroupMetadataKey)
+            .map(r -> (StreamsGroupMetadataValue) r.value().message())
+            .anyMatch(v -> v.epoch() == 11));
+
+        // A refinement step only advances the assignment epoch of the unchanged final target. The target-assignment
+        // metadata record carries the bumped epoch and PRESERVES the assignment timestamp (12345L) rather than
+        // resetting it to the current time, so the assignment interval is not restarted.
+        assertTrue(result.records().contains(
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 11, 12345L)));
+
+        // The assignor was not run: the final target is unchanged, so no per-member target-assignment record is written.
+        assertTrue(result.records().stream()
+            .noneMatch(r -> r.key() instanceof StreamsGroupTargetAssignmentMemberKey));
     }
 
     @Test
