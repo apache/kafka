@@ -17,7 +17,6 @@
 package kafka.utils
 
 import com.yammer.metrics.core.Meter
-import kafka.security.JaasTestUtils
 import kafka.server._
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -45,6 +44,7 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.{ConfigRepository, LeaderAndIsr, MockConfigRepository}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
+import org.apache.kafka.security.JaasTestUtils
 import org.apache.kafka.server.authorizer.{Authorizer => JAuthorizer}
 import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics

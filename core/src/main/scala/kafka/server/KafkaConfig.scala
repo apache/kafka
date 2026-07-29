@@ -159,9 +159,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   private val _shareCoordinatorConfig = new ShareCoordinatorConfig(this)
   def shareCoordinatorConfig: ShareCoordinatorConfig = _shareCoordinatorConfig
 
-  private val _quotaConfig = new QuotaConfig(this)
-  def quotaConfig: QuotaConfig = _quotaConfig
-
   /** ********* General Configuration ***********/
   val brokerSessionTimeoutMs: Int = getInt(KRaftConfigs.BROKER_SESSION_TIMEOUT_MS_CONFIG)
   val controllerPerformanceSamplePeriodMs: Long = getLong(KRaftConfigs.CONTROLLER_PERFORMANCE_SAMPLE_PERIOD_MS)

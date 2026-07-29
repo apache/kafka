@@ -63,7 +63,6 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.slf4j.Logger;
 import org.slf4j.event.Level;
 
-import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
@@ -190,8 +189,6 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     interceptorList,
                     Arrays.asList(this.deserializers.keyDeserializer(), this.deserializers.valueDeserializer()));
             this.metadata = new ConsumerMetadata(config, subscriptions, logContext, clusterResourceListeners);
-            List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
-            this.metadata.bootstrap(addresses);
 
             this.fetchMetricsManager = createFetchMetricsManager(metrics);
             FetchConfig fetchConfig = new FetchConfig(config);
@@ -1238,6 +1235,12 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         if (this.closed) {
             release();
             throw new IllegalStateException("This consumer has already been closed.");
+        }
+        try {
+            metadata.maybeThrowBootstrapFatalException();
+        } catch (RuntimeException e) {
+            release();
+            throw e;
         }
     }
 

@@ -23,11 +23,12 @@ import org.apache.kafka.common.message.{StreamsGroupHeartbeatRequestData, Stream
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterFeature, ClusterTest, ClusterTestDefaults, Type}
-import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
-import org.apache.kafka.common.errors.UnsupportedVersionException
+import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
+import org.apache.kafka.common.errors.{InvalidConfigurationException, UnsupportedVersionException}
 import org.apache.kafka.server.common.Feature
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertNull, assertThrows, assertTrue}
 
+import java.util.concurrent.ExecutionException
 import scala.jdk.CollectionConverters._
 
 object StreamsGroupHeartbeatRequestTest {
@@ -868,6 +869,58 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       assertEquals(5_000, streamsGroupHeartbeatResponse1.acceptableRecoveryLag(), "Member 1 should pickup acceptable.recovery.lag change")
       assertEquals(5_000, streamsGroupHeartbeatResponse2.acceptableRecoveryLag(), "Member 2 should pickup acceptable.recovery.lag change")
 
+    } finally {
+      admin.close()
+    }
+  }
+
+  @ClusterTest
+  def testAlterRackAwareAssignmentTagsGroupConfig(): Unit = {
+    val admin = cluster.admin()
+    val groupId = "test-group"
+
+    try {
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
+      )
+
+      val groupConfigResource = new ConfigResource(ConfigResource.Type.GROUP, groupId)
+
+      // Valid case: a list of distinct client tag keys is accepted.
+      val validAlterOp = new AlterConfigOp(
+        new ConfigEntry(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,cluster"),
+        AlterConfigOp.OpType.SET
+      )
+      admin.incrementalAlterConfigs(
+        Map(groupConfigResource -> List(validAlterOp).asJavaCollection).asJava
+      ).all().get()
+
+      // Verify the config was persisted. Group config propagation is asynchronous, so wait for it.
+      TestUtils.waitUntilTrue(() => {
+        val describedConfigs = admin.describeConfigs(List(groupConfigResource).asJava).all().get()
+        val rackAwareTags = describedConfigs.get(groupConfigResource).get(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG)
+        rackAwareTags != null && rackAwareTags.value() == "zone,cluster"
+      }, s"${GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG} was not updated to the expected value within the timeout period.")
+
+      // Invalid case: an empty tag key (here an empty element between commas) is rejected with INVALID_CONFIG.
+      val invalidAlterOp = new AlterConfigOp(
+        new ConfigEntry(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,,cluster"),
+        AlterConfigOp.OpType.SET
+      )
+      val executionException = assertThrows(classOf[ExecutionException], () =>
+        admin.incrementalAlterConfigs(
+          Map(groupConfigResource -> List(invalidAlterOp).asJavaCollection).asJava
+        ).all().get()
+      )
+      assertTrue(executionException.getCause.isInstanceOf[InvalidConfigurationException],
+        s"Expected InvalidConfigurationException but got ${executionException.getCause}")
+
+      // The invalid alter is rejected at validation time, so the previously persisted valid value is unchanged.
+      val describedConfigsAfter = admin.describeConfigs(List(groupConfigResource).asJava).all().get()
+      assertEquals("zone,cluster",
+        describedConfigsAfter.get(groupConfigResource).get(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG).value())
     } finally {
       admin.close()
     }

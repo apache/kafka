@@ -1074,6 +1074,7 @@ public class ProcessorTopologyTest {
         assertEquals(headers, record.headers());
     }
 
+    @SuppressWarnings({"deprecation", "removal"})
     private StreamPartitioner<String, String> constantPartitioner(final Integer partition) {
         return (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(partition));
     }
@@ -1103,8 +1104,14 @@ public class ProcessorTopologyTest {
     }
 
     static class DroppingPartitioner implements StreamPartitioner<String, String> {
+        @SuppressWarnings("removal")
         @Override
         public Optional<Set<Integer>> partitions(final String topic, final String key, final String value, final int numPartitions) {
+            throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
+        }
+
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final String value, final Headers headers, final int numPartitions) {
             final Set<Integer> partitions = new HashSet<>();
             for (int i = 1; i < numPartitions; i += 2) {
                 partitions.add(i);

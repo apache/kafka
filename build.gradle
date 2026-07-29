@@ -30,17 +30,17 @@ buildscript {
 }
 
 plugins {
-  id 'com.github.ben-manes.versions' version '0.54.0'
+  id 'io.github.ben-manes.versions' version '0.56.0'
   id 'idea'
   id 'jacoco'
   id 'java-library'
-  id 'org.owasp.dependencycheck' version '12.2.1'
+  id 'org.owasp.dependencycheck' version '12.2.2'
   id 'org.nosphere.apache.rat' version "0.8.1"
   id "io.swagger.core.v3.swagger-gradle-plugin" version "${swaggerVersion}"
 
-  id "com.github.spotbugs" version '6.5.1' apply false
-  id 'org.scoverage' version '8.1' apply false
-  id 'com.gradleup.shadow' version '9.4.1' apply false
+  id "com.github.spotbugs" version '6.5.9' apply false
+  id 'org.scoverage' version '9.1' apply false
+  id 'com.gradleup.shadow' version '9.6.1' apply false
   id 'com.diffplug.spotless' version "8.4.0"
 
   // Pre-register the KIP-1265 checker so `apply plugin:` resolves it inside subprojects { }.
@@ -1038,6 +1038,15 @@ project(':server') {
   }
 
   apply plugin: 'java-test-fixtures'
+  configurations {
+    // To prevent a UniqueResourceException due the same resource existing in both
+    // org.apache.directory.api/api-all and org.apache.directory.api/api-ldap-schema-data
+    testImplementation.exclude module: 'api-ldap-schema-data'
+    testFixturesImplementation.exclude module: 'api-ldap-schema-data'
+    testFixturesImplementation.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
+    testCompileClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
+    testRuntimeClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
+  }
 
   dependencies {
     implementation libs.commonsValidator
@@ -1058,7 +1067,6 @@ project(':server') {
     implementation log4j2Libs
 
     testImplementation testFixtures(project(':clients'))
-
     testImplementation libs.mockitoCore
     testImplementation libs.junitJupiter
     testImplementation testLog4j2Libs
@@ -1074,6 +1082,20 @@ project(':server') {
     testFixturesImplementation project(':server-common')
     testFixturesImplementation testFixtures(project(':server-common'))
     testFixturesImplementation libs.junitJupiter
+    testFixturesImplementation(libs.apacheda) {
+      exclude group: 'xml-apis', module: 'xml-apis'
+      // `mina-core` is a transitive dependency for `apacheds` and `apacheda`.
+      // It is safer to use from `apacheds` since that is the implementation.
+      exclude module: 'mina-core'
+    }
+    testFixturesImplementation libs.apachedsCoreApi
+    testFixturesImplementation libs.apachedsInterceptorKerberos
+    testFixturesImplementation libs.apachedsProtocolShared
+    testFixturesImplementation libs.apachedsProtocolKerberos
+    testFixturesImplementation libs.apachedsProtocolLdap
+    testFixturesImplementation libs.apachedsLdifPartition
+    testFixturesImplementation libs.apachedsMavibotPartition
+    testFixturesImplementation libs.apachedsJdbmPartition
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -1142,9 +1164,6 @@ project(':core') {
     implementation.exclude module: 'jmxri'
     implementation.exclude module: 'jmxtools'
     implementation.exclude module: 'mail'
-    // To prevent a UniqueResourceException due the same resource existing in both
-    // org.apache.directory.api/api-all and org.apache.directory.api/api-ldap-schema-data
-    testImplementation.exclude module: 'api-ldap-schema-data'
     releaseOnly
   }
 
@@ -1200,6 +1219,7 @@ project(':core') {
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-util')
+    testImplementation libs.apachedsCoreApi
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
     testImplementation(libs.apacheda) {
@@ -1220,6 +1240,22 @@ project(':core') {
     testImplementation testLog4j2Libs
     testImplementation libs.mockOAuth2Server
 
+    configurations {
+      // To prevent a UniqueResourceException due the same resource existing in both
+      // org.apache.directory.api/api-all and org.apache.directory.api/api-ldap-schema-data
+      testRuntimeOnly.exclude module: 'api-ldap-schema-data'
+    }
+
+    testRuntimeOnly(libs.apacheda) {
+      exclude group: 'xml-apis', module: 'xml-apis'
+      // `mina-core` is a transitive dependency for `apacheds` and `apacheda`.
+      // It is safer to use from `apacheds` since that is the implementation.
+      exclude module: 'mina-core'
+    }
+    testRuntimeOnly libs.apachedsInterceptorKerberos
+    testRuntimeOnly libs.apachedsProtocolKerberos
+    testRuntimeOnly libs.apachedsProtocolLdap
+    testRuntimeOnly libs.apachedsLdifPartition
     testRuntimeOnly runtimeTestLibs
   }
 
@@ -2473,6 +2509,7 @@ project(':storage') {
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':test-common:test-common-util')
     testImplementation project(':server')
+    testImplementation testFixtures(project(':server'))
     testImplementation project(':server-common')
     testImplementation testFixtures(project(':server-common'))
     testImplementation testFixtures(project(':metadata'))
@@ -2664,7 +2701,6 @@ project(':tools') {
     testImplementation project(':connect:api')
     testImplementation project(':connect:runtime')
     testImplementation testFixtures(project(':connect:runtime'))
-    testImplementation project(':storage:storage-api').sourceSets.main.output
     testImplementation testFixtures(project(':storage'))
     testImplementation project(':streams')
     testImplementation project(':streams').sourceSets.test.output
@@ -4134,6 +4170,7 @@ gradle.projectsEvaluated {
     'metadata': ':metadata',
     'raft': ':raft',
     'connect/runtime': ':connect:runtime',
+    'core': ':core',
   ]
   allprojects { proj ->
     proj.configurations.all { config ->

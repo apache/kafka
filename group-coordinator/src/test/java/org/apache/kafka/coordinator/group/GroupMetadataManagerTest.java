@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.FencedMemberEpochException;
@@ -122,6 +123,7 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMe
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue.Endpoint;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.Assignment;
@@ -1181,7 +1183,7 @@ public class GroupMetadataManagerTest {
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(groupId, topology));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 100, computeGroupHash(Map.of(
             fooTopicName, fooTopicHash
-        )), 1, new TreeMap<>(Map.of("num.standby.replicas", "0")), -1, -1));
+        )), 1, getDefaultAssignmentConfigs(), -1, -1));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId,
             TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                 TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2)
@@ -18994,6 +18996,82 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testStreamsGroupHeartbeatRefinementStepBumpsEpochWithoutRunningAssignor() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 4)
+            .buildCoordinatorMetadataImage();
+        long groupMetadataHash = computeGroupHash(Map.of(
+            fooTopicName, computeTopicHash(fooTopicName, metadataImage)
+        ));
+
+        // maybeRefineAssignment() still returns the target unchanged, so the refinement predicate can only fire when a
+        // member's assigned tasks differ from its target. The setup below forces that: assigned {0,1,2} vs target
+        // {0,1,2,3}, with all epochs equal so the group still reports STABLE. Real reconciliation never leaves those two
+        // out of sync at the same epoch; a real refiner will make this case reachable properly. Metadata, topology and
+        // configs all match, so refinement is the only possible reason to bump the group epoch.
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, 10)
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(10)
+                    .setAssignedTasks(mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 10,
+                        TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2)))
+                    .build())
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topology))
+                .withTargetAssignment(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+                    TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3)))
+                .withTargetAssignmentEpoch(10)
+                .withTargetAssignmentTimestamp(12345L)
+                .withMetadataHash(groupMetadataHash)
+                .withValidatedTopologyEpoch(0)
+                .withLastAssignmentConfigs(Map.of("num.standby.replicas", "0"))
+            )
+            .build();
+
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(10)
+                .setProcessId("process-id")
+                .setRebalanceTimeoutMs(1500)
+                .setActiveTasks(List.of(new StreamsGroupHeartbeatRequestData.TaskIds()
+                    .setSubtopologyId(subtopology1)
+                    .setPartitions(List.of(0, 1, 2))))
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        // The refinement step bumped the group/assignment epoch to 11; the member reconciles toward it.
+        assertEquals(11, result.response().data().memberEpoch());
+        assertTrue(result.records().stream()
+            .filter(r -> r.key() instanceof StreamsGroupMetadataKey)
+            .map(r -> (StreamsGroupMetadataValue) r.value().message())
+            .anyMatch(v -> v.epoch() == 11));
+
+        // A refinement step only advances the assignment epoch of the unchanged final target. The target-assignment
+        // metadata record carries the bumped epoch and PRESERVES the assignment timestamp (12345L) rather than
+        // resetting it to the current time, so the assignment interval is not restarted.
+        assertTrue(result.records().contains(
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 11, 12345L)));
+
+        // The assignor was not run: the final target is unchanged, so no per-member target-assignment record is written.
+        assertTrue(result.records().stream()
+            .noneMatch(r -> r.key() instanceof StreamsGroupTargetAssignmentMemberKey));
+    }
+
+    @Test
     public void testStreamsGroupHeartbeatStoresTaskOffsetsWithoutPersisting() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
@@ -19241,9 +19319,7 @@ public class GroupMetadataManagerTest {
                 2,
                 groupMetadataHash,
                 0,
-                new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
-                )),
+                getDefaultAssignmentConfigs(),
                 -1,
                 -1
             ),
@@ -19257,6 +19333,305 @@ public class GroupMetadataManagerTest {
         );
 
         assertRecordsEquals(expectedRecords, result.records());
+    }
+
+    @Test
+    public void testMissingClientTagsStatusWhenRackAwareTagsConfigured() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .buildCoordinatorMetadataImage();
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,cluster")
+            .build();
+
+        assignor.prepareGroupAssignment(Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+            TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)
+        )));
+
+        // Member joins without any client tags — should get MISSING_CLIENT_TAGS status
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setProcessId("process-id")
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        assertTrue(result.response().data().status().stream()
+            .anyMatch(s -> s.statusCode() == Status.MISSING_CLIENT_TAGS.code()
+                && s.statusDetail().contains("zone")
+                && s.statusDetail().contains("cluster")));
+    }
+
+    @Test
+    public void testMissingClientTagsStatusNotReturnedToVersion0Clients() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .buildCoordinatorMetadataImage();
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,cluster")
+            .build();
+
+        assignor.prepareGroupAssignment(Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+            TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)
+        )));
+
+        // Member joins without any client tags using version 0 of the RPC. Version 0 clients throw on
+        // the unknown MISSING_CLIENT_TAGS status code, so the broker must not return it to them.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setProcessId("process-id")
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()),
+            (short) 0);
+
+        assertTrue(result.response().data().status().stream()
+            .noneMatch(s -> s.statusCode() == Status.MISSING_CLIENT_TAGS.code()));
+    }
+
+    @Test
+    public void testMissingClientTagsStatusReportsOnlyMissingTags() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .buildCoordinatorMetadataImage();
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,cluster")
+            .build();
+
+        assignor.prepareGroupAssignment(Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+            TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)
+        )));
+
+        // Member joins with only the "cluster" tag — only the missing "zone" tag should be reported.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setProcessId("process-id")
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setClientTags(List.of(
+                    new StreamsGroupHeartbeatRequestData.KeyValue().setKey("cluster").setValue("c1")))
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        StreamsGroupHeartbeatResponseData.Status status = result.response().data().status().stream()
+            .filter(s -> s.statusCode() == Status.MISSING_CLIENT_TAGS.code())
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("Expected a MISSING_CLIENT_TAGS status"));
+        assertTrue(status.statusDetail().contains("[zone]"));
+        assertFalse(status.statusDetail().contains("cluster"));
+    }
+
+    @Test
+    public void testNoMissingClientTagsStatusWhenAllTagsPresent() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .buildCoordinatorMetadataImage();
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone")
+            .build();
+
+        assignor.prepareGroupAssignment(Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+            TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)
+        )));
+
+        // Member joins with the required client tag — should NOT get MISSING_CLIENT_TAGS status
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setProcessId("process-id")
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setClientTags(List.of(
+                    new StreamsGroupHeartbeatRequestData.KeyValue().setKey("zone").setValue("us-east-1a")))
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        assertTrue(result.response().data().status().stream()
+            .noneMatch(s -> s.statusCode() == Status.MISSING_CLIENT_TAGS.code()));
+    }
+
+    @Test
+    public void testRackAwareAssignmentTagsRejectsEmptyTags() {
+        assertThrows(ConfigException.class, () -> new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,,cluster")
+            .build());
+    }
+
+    @Test
+    public void testNoMissingClientTagsStatusWhenRackAwareTagsNotConfigured() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .buildCoordinatorMetadataImage();
+        // No rack-aware assignment tags configured (broker default is empty).
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .build();
+
+        assignor.prepareGroupAssignment(Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+            TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)
+        )));
+
+        // Member joins without any client tags. Since the feature is not configured, no MISSING_CLIENT_TAGS
+        // status should be returned.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setProcessId("process-id")
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        assertTrue(result.response().data().status().stream()
+            .noneMatch(s -> s.statusCode() == Status.MISSING_CLIENT_TAGS.code()));
+    }
+
+    @Test
+    public void testGroupConfigOverridesBrokerRackAwareAssignmentTags() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .buildCoordinatorMetadataImage();
+        // Broker default requires only the "zone" tag.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone")
+            .build();
+
+        // The per-group override requires "rack" instead, taking precedence over the broker default.
+        Properties newConfig = new Properties();
+        newConfig.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "rack");
+        context.groupConfigManager.updateGroupConfig(groupId, newConfig);
+
+        assignor.prepareGroupAssignment(Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+            TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)
+        )));
+
+        // Member reports the broker-default tag "zone" but not the group-override tag "rack". Because the
+        // group override takes precedence, "rack" must be reported as missing (and "zone" must not be).
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setProcessId("process-id")
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setClientTags(List.of(
+                    new StreamsGroupHeartbeatRequestData.KeyValue().setKey("zone").setValue("us-east-1a")))
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        StreamsGroupHeartbeatResponseData.Status status = result.response().data().status().stream()
+            .filter(s -> s.statusCode() == Status.MISSING_CLIENT_TAGS.code())
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("Expected a MISSING_CLIENT_TAGS status"));
+        assertTrue(status.statusDetail().contains("[rack]"),
+            "The group-level override tag 'rack' should be reported as missing");
+        assertFalse(status.statusDetail().contains("zone"),
+            "The broker-default tag 'zone' should not be used once the group override is set");
     }
 
     @Test
@@ -19430,9 +19805,7 @@ public class GroupMetadataManagerTest {
                 2,
                 computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))),
                 -1,
-                new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
-                )),
+                getDefaultAssignmentConfigs(),
                 -1,
                 -1
             ),
@@ -19526,9 +19899,7 @@ public class GroupMetadataManagerTest {
                 2,
                 computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))),
                 -1,
-                new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
-                )),
+                getDefaultAssignmentConfigs(),
                 -1,
                 -1
             ),
@@ -19622,9 +19993,7 @@ public class GroupMetadataManagerTest {
                     barTopicName, computeTopicHash(barTopicName, metadataImage)
                 )),
                 -1,
-                new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
-                )),
+                getDefaultAssignmentConfigs(),
                 -1,
                 -1
             ),
@@ -19731,9 +20100,7 @@ public class GroupMetadataManagerTest {
                     barTopicName, computeTopicHash(barTopicName, metadataImage)
                 )),
                 1,
-                new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
-                )),
+                getDefaultAssignmentConfigs(),
                 -1,
                 -1
             ),
@@ -20048,9 +20415,7 @@ public class GroupMetadataManagerTest {
                 11,
                 groupMetadataHash,
                 0,
-                new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
-                )),
+                getDefaultAssignmentConfigs(),
                 -1,
                 -1
             ),
@@ -20183,9 +20548,7 @@ public class GroupMetadataManagerTest {
                     barTopicName, computeTopicHash(barTopicName, newMetadataImage)
                 )),
                 0,
-                new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
-                )),
+                getDefaultAssignmentConfigs(),
                 -1,
                 -1
             ),
@@ -21485,9 +21848,7 @@ public class GroupMetadataManagerTest {
                 11,
                 computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))),
                 0,
-                new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
-                )),
+                getDefaultAssignmentConfigs(),
                 -1,
                 -1
             ),
@@ -21617,9 +21978,7 @@ public class GroupMetadataManagerTest {
                 11,
                 computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))),
                 0,
-                new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
-                )),
+                getDefaultAssignmentConfigs(),
                 -1,
                 -1
             ),
@@ -21778,9 +22137,7 @@ public class GroupMetadataManagerTest {
                             3,
                             groupMetadataHash,
                             0,
-                            new TreeMap<>(Map.of(
-                                "num.standby.replicas", "0"
-                            )),
+                            getDefaultAssignmentConfigs(),
                             -1,
                             -1
                         ),
@@ -22113,9 +22470,7 @@ public class GroupMetadataManagerTest {
                             4,
                             groupMetadataHash,
                             0,
-                            new TreeMap<>(Map.of(
-                                "num.standby.replicas", "0"
-                            )),
+                            getDefaultAssignmentConfigs(),
                             -1,
                             -1
                         )
@@ -22693,9 +23048,7 @@ public class GroupMetadataManagerTest {
                     2,
                     0,
                     -1,
-                    new TreeMap<>(Map.of(
-                        "num.standby.replicas", "0"
-                    )),
+                    getDefaultAssignmentConfigs(),
                     -1,
                     -1
                 ),
@@ -23131,9 +23484,7 @@ public class GroupMetadataManagerTest {
                     .setWarmupTasks(List.of()));
         assertEquals(2, result.response().data().memberEpoch());
         assertEquals(
-            Map.of(
-                "num.standby.replicas", "0"
-            ),
+            getDefaultAssignmentConfigs(),
             assignor.lastPassedAssignmentConfigs()
         );
 
@@ -23172,9 +23523,7 @@ public class GroupMetadataManagerTest {
 
         // Verify that the new number of standby replicas is used
         assertEquals(
-            Map.of(
-                "num.standby.replicas", "2"
-            ),
+            Map.of("num.standby.replicas", "2"),
             assignor.lastPassedAssignmentConfigs()
         );
 
@@ -23522,9 +23871,7 @@ public class GroupMetadataManagerTest {
         context.assertSessionTimeout(groupId, memberId,
             GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_DEFAULT);
         assertEquals(
-            Map.of(
-                "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT)
-            ),
+            getDefaultAssignmentConfigs(),
             assignor.lastPassedAssignmentConfigs());
         assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT,
             result.response().data().taskOffsetIntervalMs());
@@ -23564,9 +23911,7 @@ public class GroupMetadataManagerTest {
         // Verify that the number of standby replicas is evaluated to max,
         // and task offset interval is evaluated to min
         assertEquals(
-            Map.of(
-                "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT)
-            ),
+            Map.of("num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT)),
             assignor.lastPassedAssignmentConfigs());
         assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT,
             result.response().data().taskOffsetIntervalMs());
@@ -23863,7 +24208,7 @@ public class GroupMetadataManagerTest {
 
         // The group still exists but the member is already gone. Replaying the
         // StreamsGroupMemberMetadata tombstone should be a no-op.
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord("foo", 10, 0, 0, Map.of("num.standby.replicas", "0"), -1, -1));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord("foo", 10, 0, 0, getDefaultAssignmentConfigs(), -1, -1));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord("foo", "m1"));
         assertThrows(UnknownMemberIdException.class, () -> context.groupMetadataManager.streamsGroup("foo").getMemberOrThrow("m1"));
 
@@ -23919,7 +24264,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         // The group is created if it does not exist.
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord("foo", 10, 0, 0, Map.of("num.standby.replicas", "0"), -1, -1));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord("foo", 10, 0, 0, getDefaultAssignmentConfigs(), -1, -1));
         assertEquals(10, context.groupMetadataManager.streamsGroup("foo").groupEpoch());
     }
 
@@ -24116,7 +24461,7 @@ public class GroupMetadataManagerTest {
 
         // The group still exists, but the member is already gone. Replaying the
         // StreamsGroupCurrentMemberAssignment tombstone should be a no-op.
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord("foo", 10, 0, 0, Map.of("num.standby.replicas", "0"), -1, -1));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord("foo", 10, 0, 0, getDefaultAssignmentConfigs(), -1, -1));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord("foo", "m1"));
         assertThrows(UnknownMemberIdException.class, () -> context.groupMetadataManager.streamsGroup("foo").getMemberOrThrow("m1"));
 
@@ -24192,7 +24537,7 @@ public class GroupMetadataManagerTest {
 
         // The group still exists, but the member is already gone. Replaying the
         // StreamsGroupTopology tombstone should be a no-op.
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord("foo", 10, 0, 0, Map.of("num.standby.replicas", "0"), -1, -1));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord("foo", 10, 0, 0, getDefaultAssignmentConfigs(), -1, -1));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecordTombstone("foo"));
         assertTrue(context.groupMetadataManager.streamsGroup("foo").topology().isEmpty());
 
@@ -29594,9 +29939,7 @@ public class GroupMetadataManagerTest {
                 StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(groupId, topology),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 2, computeGroupHash(Map.of(
                     fooTopicName, computeTopicHash(fooTopicName, metadataImage)
-                )), 0, new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
-                )), -1, -1),
+                )), 0, getDefaultAssignmentConfigs(), -1, -1),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId1,
                     TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                         TaskAssignmentTestUtil.mkTasks(subtopology, 0, 1, 2, 3, 4, 5)
@@ -29659,9 +30002,7 @@ public class GroupMetadataManagerTest {
                 StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, expectedMember2),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 3, computeGroupHash(Map.of(
                     fooTopicName, computeTopicHash(fooTopicName, metadataImage)
-                )), 0, new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
-                )), -1, -1),
+                )), 0, getDefaultAssignmentConfigs(), -1, -1),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedMember2)
             ),
             result2.records()

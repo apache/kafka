@@ -72,7 +72,7 @@ public class ProducerMetadataAddBenchmark {
         }
 
         metadata = new ProducerMetadata(100L, 1000L, TimeUnit.MINUTES.toMillis(5), METADATA_IDLE_MS,
-            new LogContext(), new ClusterResourceListeners(), Time.SYSTEM);
+            new LogContext(), new ClusterResourceListeners());
 
         long nowMs = Time.SYSTEM.milliseconds();
         for (String topic : topics) {
