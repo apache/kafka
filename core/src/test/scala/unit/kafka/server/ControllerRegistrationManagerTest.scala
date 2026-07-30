@@ -126,11 +126,11 @@ class ControllerRegistrationManagerTest {
       }
     }
     if (metadataVersion.isControllerUnregistrationSupported) {
-     for (i <- Seq(1, 2, 3)) {
-       unregisterModifier(RecordTestUtils.createTestControllerUnregistration(i)).foreach {
-         unregistration => delta.replay(unregistration)
-       }
-     }
+      for (i <- Seq(1, 2, 3)) {
+        unregisterModifier(RecordTestUtils.createTestControllerUnregistration(i)).foreach {
+          unregistration => delta.replay(unregistration)
+        }
+      }
     }
     val provenance = new MetadataProvenance(100, 200, 300, true)
     val newImage = delta.apply(provenance)

@@ -40,6 +40,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Reconfigurable;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.ConfigResource;
@@ -681,11 +682,22 @@ public class KRaftClusterTest {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testUnregisterController(boolean usingBootstrapControllers) throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(3)
-                .setNumControllerNodes(3)
-                .build()).build()) {
+        final var nodes = new TestKitNodes.Builder().
+            setNumBrokerNodes(3).
+            setNumControllerNodes(3).
+            build();
+        final Map<Integer, Uuid> initialVoters = new HashMap<>();
+        for (final var controllerNode : nodes.controllerNodes().values()) {
+            initialVoters.put(
+                controllerNode.id(),
+                controllerNode.metadataDirectoryId()
+            );
+        }
+
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).
+            setInitialVoterSet(initialVoters).
+            build()
+        ) {
             cluster.format();
             cluster.startup();
             int controllerIdToUnregister = cluster.controllers().keySet().iterator().next();
@@ -695,6 +707,9 @@ public class KRaftClusterTest {
             try (Admin admin = createAdminClient(cluster, usingBootstrapControllers)) {
                 assertDoesNotThrow(() -> admin.unregisterController(controllerIdToUnregister).all().get());
             }
+
+            TestUtils.waitForCondition(() -> !clusterImage(cluster, 1).controllers().containsKey(controllerIdToUnregister),
+                    "Timed out waiting for controller to be unregistered.");
         }
     }
 
@@ -708,9 +723,17 @@ public class KRaftClusterTest {
                 .build()).build()) {
             cluster.format();
             cluster.startup();
-            int leaderId = cluster.controllers().keySet().iterator().next();
             int unknownId = 9999;
             cluster.waitForActiveController();
+            int activeId = cluster.controllers().entrySet().stream()
+                    .filter(e -> e.getValue().controller().isActive())
+                    .map(Map.Entry::getKey)
+                    .findFirst()
+                    .orElseThrow();
+            int inactiveId = cluster.controllers().keySet().stream()
+                    .filter(id -> id != activeId)
+                    .findFirst()
+                    .orElseThrow();
 
             try (Admin admin = createAdminClient(cluster, usingBootstrapControllers)) {
                 assertFutureThrows(
@@ -720,8 +743,13 @@ public class KRaftClusterTest {
                 );
                 assertFutureThrows(
                     InvalidRequestException.class,
-                    admin.unregisterController(leaderId).all(),
+                    admin.unregisterController(activeId).all(),
                     "Controller cannot unregister itself while it is active."
+                );
+                assertFutureThrows(
+                        InvalidRequestException.class,
+                        admin.unregisterController(inactiveId).all(),
+                        "Cannot unregister a controller who is defined in controller.quorum.voters."
                 );
             }
         }
