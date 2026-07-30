@@ -98,6 +98,7 @@ import org.apache.kafka.coordinator.common.runtime.MockCoordinatorExecutor;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer.ExpiredTimeout;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer.ScheduledTimeout;
+import org.apache.kafka.coordinator.group.StreamsGroupTestUtil.StreamsTopicFixture;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
@@ -144,6 +145,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroupBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.coordinator.group.streams.MemberTaskOffsets;
+import org.apache.kafka.coordinator.group.streams.MockAssignmentRefiner;
 import org.apache.kafka.coordinator.group.streams.MockTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
@@ -232,6 +234,7 @@ import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext
 import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext.DEFAULT_CLIENT_ID;
 import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext.DEFAULT_PROCESS_ID;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.getDefaultAssignmentConfigs;
+import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.streamsTopicFixture;
 import static org.apache.kafka.coordinator.group.Utils.computeGroupHash;
 import static org.apache.kafka.coordinator.group.Utils.computeTopicHash;
 import static org.apache.kafka.coordinator.group.Utils.toAssignmentWithEpochs;
@@ -245,6 +248,7 @@ import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.STABL
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CONSUMER_GROUP_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.SHARE_GROUP_REBALANCES_SENSOR_NAME;
+import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksTuple;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksTupleWithCommonEpoch;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksTupleWithEpochs;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksWithEpochs;
@@ -19243,6 +19247,233 @@ public class GroupMetadataManagerTest {
         // anyway, so nothing is frozen for the group -- the group keeps no per-epoch state it would never read.
         StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
         assertNull(group.refinedAssignment(group.assignmentEpoch()));
+    }
+
+    @Test
+    public void testStreamsGroupRefinerIsPassedTheGroupContextAndTheGroupsConfigs() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        StreamsTopicFixture topic = streamsTopicFixture("subtopology1", "foo", 3);
+        TasksTuple targetAssignment = topic.targetAssignment(0, 1, 2);
+
+        MockAssignmentRefiner refiner = new MockAssignmentRefiner();
+        GroupMetadataManagerTestContext context = streamsGroupContextForRefinement(
+            groupId, refiner, topic, Map.of(memberId, List.of(0, 1, 2)), Map.of(memberId, DEFAULT_PROCESS_ID));
+
+        Properties groupConfig = new Properties();
+        groupConfig.setProperty(GroupConfig.STREAMS_NUM_WARMUP_REPLICAS_CONFIG, "3");
+        groupConfig.setProperty(GroupConfig.STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG, "17");
+        context.updateGroupConfig(groupId, groupConfig);
+
+        context.streamsGroupHeartbeat(
+            streamsGroupRefinementHeartbeat(groupId, memberId, DEFAULT_PROCESS_ID, topic, List.of(0, 1, 2))
+                .setTaskOffsets(List.of(new StreamsGroupHeartbeatRequestData.TaskOffset()
+                    .setSubtopologyId("subtopology1")
+                    .setPartition(0)
+                    .setOffset(42L))));
+
+        // The refiner derives the intermediate assignment for the whole group, so it is handed the group's members and
+        // their target assignments rather than a single member's slice, plus the reported offsets it derives lag from.
+        assertEquals(1, refiner.numRefinements());
+        assertEquals(Set.of(memberId), refiner.lastPassedMembers().keySet());
+        assertEquals(Map.of(memberId, targetAssignment), refiner.lastPassedTargetAssignment());
+        assertEquals(
+            Map.of("subtopology1", Map.of(0, 42L)),
+            refiner.lastPassedTaskOffsets().get(memberId).taskOffsets());
+        assertEquals(Set.of("subtopology1"), refiner.lastPassedSubtopologies().keySet());
+        // Both configurations are overridable per group, so the group's values have to arrive, not the broker defaults.
+        assertEquals(3, refiner.lastPassedNumWarmupReplicas());
+        assertEquals(17L, refiner.lastPassedAcceptableRecoveryLag());
+    }
+
+    @Test
+    public void testStreamsGroupReconcilesTowardsTheRefinedAssignment() {
+        String groupId = "fooup";
+        String memberA = Uuid.randomUuid().toString();
+        String memberB = Uuid.randomUuid().toString();
+        StreamsTopicFixture topic = streamsTopicFixture("subtopology1", "foo", 3);
+
+        MockAssignmentRefiner refiner = new MockAssignmentRefiner();
+        GroupMetadataManagerTestContext context = streamsGroupContextForRefinement(
+            groupId,
+            refiner,
+            topic,
+            Map.of(memberA, List.of(0, 1, 2), memberB, List.of()),
+            Map.of(memberA, DEFAULT_PROCESS_ID, memberB, "process-b")
+        );
+
+        // What a refinement step does to stage a migration: memberA keeps 0_2 active while memberB warms it up.
+        refiner.prepareRefinedAssignment(Map.of(
+            memberA, topic.targetAssignment(0, 1, 2),
+            memberB, mkTasksTuple(TaskRole.WARMUP, topic.tasks(2))
+        ));
+
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            streamsGroupRefinementHeartbeat(groupId, memberB, "process-b", topic, List.of()));
+
+        // The refined assignment differs from what memberB holds, so this is a refinement step of its own: the epoch is
+        // bumped for it and memberB is reconciled towards the warm-up task, which no target assignment ever held.
+        StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+        assertEquals(11, group.groupEpoch());
+        assertEquals(topic.responseTasks(2), result.response().data().warmupTasks());
+        assertEquals(List.of(), result.response().data().activeTasks());
+        assertEquals(
+            mkTasksTuple(TaskRole.WARMUP, topic.tasks(2)),
+            group.refinedAssignment(group.assignmentEpoch()).get(memberB)
+        );
+    }
+
+    @Test
+    public void testStreamsGroupDoesNotRefineWhenWarmupsAreDisabled() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        StreamsTopicFixture topic = streamsTopicFixture("subtopology1", "foo", 3);
+
+        MockAssignmentRefiner refiner = new MockAssignmentRefiner();
+        GroupMetadataManagerTestContext context = streamsGroupContextForRefinement(
+            groupId, refiner, topic, Map.of(memberId, List.of(0, 1, 2)),
+            Map.of(memberId, DEFAULT_PROCESS_ID));
+
+        Properties groupConfig = new Properties();
+        groupConfig.setProperty(GroupConfig.STREAMS_NUM_WARMUP_REPLICAS_CONFIG, "0");
+        context.updateGroupConfig(groupId, groupConfig);
+
+        context.streamsGroupHeartbeat(
+            streamsGroupRefinementHeartbeat(groupId, memberId, DEFAULT_PROCESS_ID, topic, List.of(0, 1, 2)));
+
+        // A group with no warm-up budget reconciles towards the target assignment directly, so there is nothing to
+        // refine and the refiner is not consulted at all.
+        assertEquals(0, refiner.numRefinements());
+    }
+
+    @Test
+    public void testStreamsGroupDoesNotRefineWhileTheTopologyIsNotReady() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        // A source topic that does not exist in the metadata image leaves the topology unconfigurable, so we cannot
+        // tell which subtopologies are stateful yet.
+        StreamsTopicFixture topic = streamsTopicFixture("subtopology1", "foo", 3);
+        StreamsGroupHeartbeatRequestData.Topology unresolvableTopology = new StreamsGroupHeartbeatRequestData.Topology()
+            .setSubtopologies(List.of(new StreamsGroupHeartbeatRequestData.Subtopology()
+                .setSubtopologyId("subtopology1")
+                .setSourceTopics(List.of("does-not-exist"))));
+
+        MockAssignmentRefiner refiner = new MockAssignmentRefiner();
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
+            .withAssignmentRefiner(refiner)
+            .withMetadataImage(topic.metadataImage())
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, 10)
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(10)
+                    .build())
+                .withTopology(StreamsTopology.fromHeartbeatRequest(unresolvableTopology))
+                .withTargetAssignment(memberId, TasksTuple.EMPTY)
+                .withTargetAssignmentEpoch(10)
+                .withMetadataHash(topic.metadataHash())
+                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+            .build();
+
+        context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(10)
+                .setProcessId(DEFAULT_PROCESS_ID)
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(unresolvableTopology)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        // Every refiner has to read the subtopologies to tell a stateful task from a stateless one, so it must not be
+        // called before they are known.
+        assertEquals(0, refiner.numRefinements());
+    }
+
+    @Test
+    public void testStreamsGroupFallsBackToTargetAssignmentWhenRefinementLosesAnActiveTask() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        StreamsTopicFixture topic = streamsTopicFixture("subtopology1", "foo", 3);
+        TasksTuple targetAssignment = topic.targetAssignment(0, 1, 2);
+
+        MockAssignmentRefiner refiner = new MockAssignmentRefiner();
+        GroupMetadataManagerTestContext context = streamsGroupContextForRefinement(
+            groupId, refiner, topic, Map.of(memberId, List.of(0, 1, 2)), Map.of(memberId, DEFAULT_PROCESS_ID));
+
+        refiner.prepareRefinedAssignment(Map.of(memberId, topic.targetAssignment(0, 1)));
+
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            streamsGroupRefinementHeartbeat(groupId, memberId, DEFAULT_PROCESS_ID, topic, List.of(0, 1, 2)));
+
+        // Reconciling towards an intermediate assignment that dropped an active task would leave input partitions
+        // unprocessed, so the target assignment is used instead: the member keeps all three tasks, which leaves nothing
+        // to reconcile and hence no epoch to bump and no assignment to return.
+        StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+        assertEquals(10, group.groupEpoch());
+        assertNull(result.response().data().activeTasks());
+        assertEquals(
+            mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 10, topic.tasks(0, 1, 2)),
+            group.getMemberOrThrow(memberId).assignedTasks()
+        );
+        assertEquals(Map.of(memberId, targetAssignment), group.refinedAssignment(group.assignmentEpoch()));
+    }
+
+    /**
+     * A streams group that is settled at epoch 10 -- every member reconciled to its target assignment -- which is the
+     * state a refinement step is derived from.
+     */
+    private GroupMetadataManagerTestContext streamsGroupContextForRefinement(
+        String groupId,
+        MockAssignmentRefiner refiner,
+        StreamsTopicFixture topic,
+        Map<String, List<Integer>> activeTasksByMemberId,
+        Map<String, String> processIdByMemberId
+    ) {
+        StreamsGroupBuilder groupBuilder = new StreamsGroupBuilder(groupId, 10)
+            .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
+            .withTargetAssignmentEpoch(10)
+            .withMetadataHash(topic.metadataHash())
+            .withValidatedTopologyEpoch(0)
+            .withLastAssignmentConfigs(getDefaultAssignmentConfigs());
+        activeTasksByMemberId.forEach((memberId, partitions) -> {
+            Integer[] activeTasks = partitions.toArray(Integer[]::new);
+            groupBuilder
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(10)
+                    .setProcessId(processIdByMemberId.get(memberId))
+                    .setAssignedTasks(topic.assignedTasks(10, activeTasks))
+                    .build())
+                .withTargetAssignment(memberId, topic.targetAssignment(activeTasks));
+        });
+
+        return new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
+            .withAssignmentRefiner(refiner)
+            .withMetadataImage(topic.metadataImage())
+            .withStreamsGroup(groupBuilder)
+            .build();
+    }
+
+    private StreamsGroupHeartbeatRequestData streamsGroupRefinementHeartbeat(
+        String groupId,
+        String memberId,
+        String processId,
+        StreamsTopicFixture topic,
+        List<Integer> ownedActiveTasks
+    ) {
+        return new StreamsGroupHeartbeatRequestData()
+            .setGroupId(groupId)
+            .setMemberId(memberId)
+            .setMemberEpoch(10)
+            .setProcessId(processId)
+            .setRebalanceTimeoutMs(1500)
+            .setActiveTasks(ownedActiveTasks.isEmpty() ? List.of() : topic.requestTasks(ownedActiveTasks))
+            .setStandbyTasks(List.of())
+            .setWarmupTasks(List.of());
     }
 
     @Test

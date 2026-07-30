@@ -155,6 +155,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroup.ShareGroupStat
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupAssignmentBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.coordinator.group.streams.AssignmentRefiner;
+import org.apache.kafka.coordinator.group.streams.NoOpAssignmentRefiner;
 import org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
@@ -329,6 +330,7 @@ public class GroupMetadataManager {
         private GroupCoordinatorMetricsShard metrics;
         private Optional<Plugin<Authorizer>> authorizerPlugin = null;
         private List<TaskAssignor> streamsGroupAssignors = null;
+        private AssignmentRefiner assignmentRefiner = null;
 
         Builder withLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -367,6 +369,11 @@ public class GroupMetadataManager {
 
         Builder withStreamsGroupAssignors(List<TaskAssignor> streamsGroupAssignors) {
             this.streamsGroupAssignors = streamsGroupAssignors;
+            return this;
+        }
+
+        Builder withAssignmentRefiner(AssignmentRefiner assignmentRefiner) {
+            this.assignmentRefiner = assignmentRefiner;
             return this;
         }
 
@@ -411,6 +418,8 @@ public class GroupMetadataManager {
                 throw new IllegalArgumentException("GroupConfigManager must be set.");
             if (streamsGroupAssignors == null)
                 streamsGroupAssignors = List.of(new StickyTaskAssignor());
+            if (assignmentRefiner == null)
+                assignmentRefiner = new NoOpAssignmentRefiner();
 
             return new GroupMetadataManager(
                 snapshotRegistry,
@@ -424,7 +433,8 @@ public class GroupMetadataManager {
                 groupConfigManager,
                 shareGroupAssignor,
                 authorizerPlugin,
-                streamsGroupAssignors
+                streamsGroupAssignors,
+                assignmentRefiner
             );
         }
     }
@@ -518,6 +528,11 @@ public class GroupMetadataManager {
     private final TaskAssignor defaultStreamsGroupAssignor;
 
     /**
+     * Derives the intermediate assignment that the members of a streams group are reconciled towards.
+     */
+    private final AssignmentRefiner assignmentRefiner;
+
+    /**
      * The metadata image.
      */
     private CoordinatorMetadataImage metadataImage;
@@ -566,7 +581,8 @@ public class GroupMetadataManager {
         GroupConfigManager groupConfigManager,
         ShareGroupPartitionAssignor shareGroupAssignor,
         Optional<Plugin<Authorizer>> authorizerPlugin,
-        List<TaskAssignor> streamsGroupAssignors
+        List<TaskAssignor> streamsGroupAssignors,
+        AssignmentRefiner assignmentRefiner
     ) {
         this.logContext = logContext;
         this.log = logContext.logger(GroupMetadataManager.class);
@@ -589,6 +605,7 @@ public class GroupMetadataManager {
         this.shareGroupAssignor = shareGroupAssignor;
         this.defaultStreamsGroupAssignor = streamsGroupAssignors.get(0);
         this.streamsGroupAssignors = streamsGroupAssignors.stream().collect(Collectors.toMap(TaskAssignor::name, Function.identity()));
+        this.assignmentRefiner = assignmentRefiner;
         this.topicRegexResolver = new TopicRegexResolver(() -> authorizerPlugin, this.time);
         this.topicHashCache = new HashMap<>();
     }
@@ -4537,11 +4554,21 @@ public class GroupMetadataManager {
             // Warm-up tasks are disabled, so there is nothing to refine and no state to keep for the group.
             return targetAssignment;
         }
-        final Map<String, TasksTuple> refinedAssignment = AssignmentRefiner.refine(
+        if (!configuredTopology.isReady()) {
+            // A refiner is handed the resolved subtopologies, never an unresolved topology, so it does not have to
+            // reason about readiness; the topology must be ready to allow the refiner to identify stateless vs
+            // stateful tasks.
+            // If the topology is not ready, the assignor computes an empty assignment, which we can just fall back to.
+            // Even if the assignor fall-back would be a non-empty assignment, it's still reasonable to not refine and
+            // just apply the target assignment directly. It's a robust fall back, ensuring that we converge to the new
+            // target assignment, trading off availability.
+            return targetAssignment;
+        }
+        final Map<String, TasksTuple> refinedAssignment = assignmentRefiner.refine(
             group.members(),
             targetAssignment,
             group.taskOffsets(),
-            configuredTopology,
+            Collections.unmodifiableSortedMap(configuredTopology.subtopologies().get()),
             numWarmupReplicas,
             streamsGroupAcceptableRecoveryLag(group.groupId())
         );

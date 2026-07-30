@@ -109,7 +109,9 @@ import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupBuilder;
+import org.apache.kafka.coordinator.group.streams.AssignmentRefiner;
 import org.apache.kafka.coordinator.group.streams.MockTaskAssignor;
+import org.apache.kafka.coordinator.group.streams.NoOpAssignmentRefiner;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupBuilder;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
@@ -475,6 +477,7 @@ public class GroupMetadataManagerTestContext {
         private final Map<String, Object> config = new HashMap<>();
         private Optional<Plugin<Authorizer>> authorizerPlugin = Optional.empty();
         private List<TaskAssignor> streamsGroupAssignors = Collections.singletonList(new MockTaskAssignor("mock"));
+        private AssignmentRefiner assignmentRefiner = new NoOpAssignmentRefiner();
 
         public Builder withConfig(String key, Object value) {
             config.put(key, value);
@@ -516,6 +519,11 @@ public class GroupMetadataManagerTestContext {
             return this;
         }
 
+        public Builder withAssignmentRefiner(AssignmentRefiner assignmentRefiner) {
+            this.assignmentRefiner = assignmentRefiner;
+            return this;
+        }
+
         public Builder withTime(MockTime time) {
             this.time = time;
             return this;
@@ -552,6 +560,7 @@ public class GroupMetadataManagerTestContext {
                     .withGroupConfigManager(groupConfigManager)
                     .withAuthorizerPlugin(authorizerPlugin)
                     .withStreamsGroupAssignors(streamsGroupAssignors)
+                    .withAssignmentRefiner(assignmentRefiner)
                     .build(),
                 groupConfigManager
             );

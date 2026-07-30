@@ -31,6 +31,8 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.SimpleAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
+import org.apache.kafka.coordinator.group.streams.AssignmentRefiner;
+import org.apache.kafka.coordinator.group.streams.NoOpAssignmentRefiner;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 
 import org.slf4j.Logger;
@@ -433,6 +435,10 @@ public class GroupCoordinatorConfig {
     public static final Class<?> STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_DEFAULT = null;
     public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_DOC = "The fully qualified class name of a StreamsGroupTopologyDescriptionPlugin implementation. When not set, the feature is disabled.";
 
+    public static final String STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_CONFIG = "group.streams.assignment.refiner.class";
+    public static final Class<?> STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_DEFAULT = null;
+    public static final String STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_DOC = "The fully qualified class name of an AssignmentRefiner implementation, which derives the intermediate assignment (with warm-up tasks) that the members of a streams group are reconciled towards. When not set, no warm-up tasks are handed out and a task that has to move does so right away. This should be used for testing only.";
+
     public static final String STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_CONFIG = "group.streams.acceptable.recovery.lag";
     public static final long STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DEFAULT = 10000L;
     public static final String STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DOC = "The maximum acceptable lag (number of offsets to catch up) for a client to be considered caught-up enough to receive an active task assignment.";
@@ -535,7 +541,8 @@ public class GroupCoordinatorConfig {
         .define(STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG, INT, STREAMS_GROUP_MAX_WARMUP_REPLICAS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_MAX_WARMUP_REPLICAS_DOC)
         .define(STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, LIST, STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT, ConfigDef.ValidList.anyNonDuplicateValues(true, false), LOW, STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DOC)
         .define(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG, CLASS, STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_DEFAULT, MEDIUM, STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_DOC)
-        .define(STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_CONFIG, LONG, STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DEFAULT, atLeast(0L), MEDIUM, STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DOC);
+        .define(STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_CONFIG, LONG, STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DEFAULT, atLeast(0L), MEDIUM, STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DOC)
+        .defineInternal(STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_CONFIG, CLASS, STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_DEFAULT, null, LOW, STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_DOC);
 
 
     /**
@@ -1063,6 +1070,21 @@ public class GroupCoordinatorConfig {
      */
     public boolean isStreamsGroupTopologyDescriptionPluginConfigured() {
         return config.getClass(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG) != null;
+    }
+
+    /**
+     * The assignment refiner to derive the intermediate assignment of a streams group with, or {@code null} if none is
+     * configured, in which case the caller falls back to {@link NoOpAssignmentRefiner}.
+     * <p>
+     * Instantiated on demand rather than held in a field, because a {@code GroupCoordinatorConfig} is constructed
+     * whenever any dynamic broker config changes ({@code DynamicBrokerConfig.processReconfiguration} builds a whole
+     * {@code KafkaConfig}), and we do not want to construct a refiner for each of those. A shard asks for one when it
+     * is loaded, so every shard gets its own instance.
+     */
+    public AssignmentRefiner streamsGroupAssignmentRefiner() {
+        return config.getConfiguredInstance(
+            STREAMS_GROUP_ASSIGNMENT_REFINER_CLASS_CONFIG,
+            AssignmentRefiner.class);
     }
 
     /**
