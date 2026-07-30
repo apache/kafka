@@ -226,6 +226,35 @@ public class StreamsGroup implements Group {
     private final Map<String, MemberTaskOffsets> taskOffsets = new HashMap<>();
 
     /**
+     * The intermediate assignment the members are reconciled toward, as derived by the {@link AssignmentRefiner} from
+     * the target assignment, together with the assignment epoch it was derived for. Like {@link #taskOffsets}, this is
+     * held in memory only and never persisted; it is derived again from the persisted assignments after a coordinator
+     * failover.
+     * <p>
+     * Every refinement step is an assignment epoch of its own, so the intermediate assignment is derived once per
+     * epoch, when that epoch is minted, and stays fixed while the members reconcile toward it. It is therefore cached
+     * together with the epoch it belongs to, and a cached value from another epoch is never used.
+     * <p>
+     * Unlike {@link #taskOffsets} it is kept in a timeline container, because it is derived from state that a failed
+     * write rolls back. Rolling back restores an earlier assignment epoch, which the next epoch to be minted then
+     * reuses -- with a target assignment that may differ from the one this was derived from. Left outside the rollback,
+     * the cache would be hit for that epoch and reconcile the members toward an intermediate assignment of an
+     * assignment that no longer exists. The epoch and the assignment share one container so that a rollback can never
+     * restore one without the other.
+     */
+    private final TimelineObject<RefinedAssignment> refinedAssignment;
+
+    /**
+     * An intermediate assignment together with the assignment epoch it was derived for.
+     *
+     * @param assignmentEpoch The assignment epoch, or {@code -1} if nothing was derived yet.
+     * @param assignment      The intermediate assignment keyed by member ID.
+     */
+    private record RefinedAssignment(int assignmentEpoch, Map<String, TasksTuple> assignment) {
+        private static final RefinedAssignment NONE = new RefinedAssignment(-1, Map.of());
+    }
+
+    /**
      * The Streams topology.
      */
     private final TimelineObject<Optional<StreamsTopology>> topology;
@@ -299,6 +328,7 @@ public class StreamsGroup implements Group {
         this.currentActiveTaskToProcessId = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentStandbyTaskToProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentWarmupTaskToProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.refinedAssignment = new TimelineObject<>(snapshotRegistry, RefinedAssignment.NONE);
         this.topology = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.configuredTopology = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.lastAssignmentConfigs = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -584,6 +614,67 @@ public class StreamsGroup implements Group {
      */
     public Map<String, MemberTaskOffsets> taskOffsets() {
         return Collections.unmodifiableMap(taskOffsets);
+    }
+
+    /**
+     * Returns the intermediate assignment that was derived for the given assignment epoch, if any. A value derived for
+     * an earlier epoch is not returned: the intermediate assignment of an epoch is fixed, but a new epoch means a new
+     * refinement step, which has to be derived anew.
+     *
+     * @param assignmentEpoch The assignment epoch to return the intermediate assignment for.
+     *
+     * @return The intermediate assignment keyed by member ID, or {@code null} if it was not derived for that epoch.
+     */
+    public Map<String, TasksTuple> refinedAssignment(int assignmentEpoch) {
+        final RefinedAssignment cached = refinedAssignment.get();
+        return cached.assignmentEpoch() == assignmentEpoch ? cached.assignment() : null;
+    }
+
+    /**
+     * Caches the intermediate assignment derived for the given assignment epoch. This is transient state; it must be
+     * set from the heartbeat path only, never while replaying records.
+     * <p>
+     * The given map is copied, so that the cached assignment is genuinely fixed for its epoch rather than tracking
+     * whatever the caller hands over: a refiner that returns the target assignment as-is would otherwise leave the
+     * cache holding a view of {@link #targetAssignment()}, which changes as records are replayed. Only the map itself
+     * is copied -- a {@link TasksTuple} already owns its task sets, so there is nothing else that could change
+     * underneath. The copy is free once the refiner returns a map it built itself, because {@link Map#copyOf} hands
+     * back an already-immutable map unchanged.
+     *
+     * @param assignmentEpoch    The assignment epoch the intermediate assignment was derived for.
+     * @param refinedAssignment  The intermediate assignment keyed by member ID.
+     */
+    public void setRefinedAssignment(int assignmentEpoch, Map<String, TasksTuple> refinedAssignment) {
+        this.refinedAssignment.set(new RefinedAssignment(
+            assignmentEpoch,
+            Map.copyOf(Objects.requireNonNull(refinedAssignment))
+        ));
+    }
+
+    /**
+     * Re-keys the cached intermediate assignment from an old to a new member ID.
+     * <p>
+     * Replacing a static member relabels its target assignment the same way, without advancing the assignment epoch.
+     * The cached intermediate assignment is therefore still the one the other members are reconciling towards; only its
+     * key for the replaced member went stale. Re-keying it keeps the decisions of the epoch fixed, whereas dropping it
+     * would derive a new one mid-epoch, which could revise the slice of a member that already reconciled and is
+     * therefore not reconciled again within this epoch.
+     *
+     * @param oldMemberId The member ID the intermediate assignment was derived for.
+     * @param newMemberId The member ID replacing it.
+     */
+    public void relabelRefinedAssignment(String oldMemberId, String newMemberId) {
+        final RefinedAssignment cached = refinedAssignment.get();
+        final TasksTuple refinedTasks = cached.assignment().get(oldMemberId);
+        if (refinedTasks == null) {
+            // Either nothing was derived for the replaced member, or the cached assignment belongs to another epoch --
+            // in which case refinedAssignment(int) does not hand it out anyway.
+            return;
+        }
+        final Map<String, TasksTuple> relabeled = new HashMap<>(cached.assignment());
+        relabeled.remove(oldMemberId);
+        relabeled.put(newMemberId, refinedTasks);
+        this.refinedAssignment.set(new RefinedAssignment(cached.assignmentEpoch(), Map.copyOf(relabeled)));
     }
 
     /**
