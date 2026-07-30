@@ -1312,14 +1312,21 @@ public class StreamsGroup implements Group {
         });
     }
 
+    /**
+     * @param committedOffset The last committed offset of this shard.
+     * @param assignorName    The name of the assignor that the coordinator will use for the next assignment
+     *                        computation, already resolved against the assignors registered on this broker.
+     */
     public StreamsGroupDescribeResponseData.DescribedGroup asDescribedGroup(
-        long committedOffset
+        long committedOffset,
+        String assignorName
     ) {
         StreamsGroupDescribeResponseData.DescribedGroup describedGroup = new StreamsGroupDescribeResponseData.DescribedGroup()
             .setGroupId(groupId)
             .setGroupEpoch(groupEpoch.get(committedOffset))
             .setGroupState(state.get(committedOffset).toString())
             .setAssignmentEpoch(targetAssignmentMetadata.get(committedOffset).assignmentEpoch())
+            .setAssignorName(assignorName)
             .setTopology(
                 configuredTopology.get(committedOffset)
                     .filter(ConfiguredTopology::isReady)

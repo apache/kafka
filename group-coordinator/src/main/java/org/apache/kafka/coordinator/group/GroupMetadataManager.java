@@ -511,6 +511,11 @@ public class GroupMetadataManager {
     private final Map<String, TaskAssignor> streamsGroupAssignors;
 
     /**
+     * The default streams group task assignor used.
+     */
+    private final TaskAssignor defaultStreamsGroupAssignor;
+
+    /**
      * The metadata image.
      */
     private CoordinatorMetadataImage metadataImage;
@@ -580,6 +585,7 @@ public class GroupMetadataManager {
         this.shareGroupStatePartitionMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
         this.groupConfigManager = groupConfigManager;
         this.shareGroupAssignor = shareGroupAssignor;
+        this.defaultStreamsGroupAssignor = streamsGroupAssignors.get(0);
         this.streamsGroupAssignors = streamsGroupAssignors.stream().collect(Collectors.toMap(TaskAssignor::name, Function.identity()));
         this.topicRegexResolver = new TopicRegexResolver(() -> authorizerPlugin, this.time);
         this.topicHashCache = new HashMap<>();
@@ -752,7 +758,10 @@ public class GroupMetadataManager {
         groupIds.forEach(groupId -> {
             try {
                 StreamsGroup group = streamsGroup(groupId, committedOffset);
-                describedGroups.add(group.asDescribedGroup(committedOffset));
+                describedGroups.add(group.asDescribedGroup(
+                    committedOffset,
+                    streamsGroupAssignor(groupId, false).name()
+                ));
                 groupIdToStoredDescriptionTopologyEpochs.put(groupId, group.storedDescriptionTopologyEpoch(committedOffset));
             } catch (GroupIdNotFoundException exception) {
                 describedGroups.add(new StreamsGroupDescribeResponseData.DescribedGroup()
@@ -4456,7 +4465,7 @@ public class GroupMetadataManager {
             return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), updatedMembersAndTargetAssignment.targetAssignment());
         }
 
-        TaskAssignor assignor = streamsGroupAssignor(group.groupId());
+        TaskAssignor assignor = streamsGroupAssignor(group.groupId(), true);
         try {
             org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder assignmentResultBuilder =
                 new org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder(
@@ -9806,9 +9815,31 @@ public class GroupMetadataManager {
 
     /**
      * Get the assignor of the provided streams group.
+     *
+     * <p>The assignor is selected by the group-level {@link GroupConfig#STREAMS_ASSIGNOR_NAME_CONFIG}
+     * configuration. When the group does not select an assignor, the broker's default assignor
+     * (the first entry of {@code group.streams.assignors}) is used. If the selected assignor is no
+     * longer registered on the broker, the coordinator falls back to the default.
+     *
+     * @param maybeLogWarning Whether to warn about the fallback. Set to false on read-only paths such as
+     *                        describe, which would otherwise log on every request.
      */
-    private TaskAssignor streamsGroupAssignor(String groupId) {
-        return streamsGroupAssignors.get("sticky");
+    // Visible for testing
+    TaskAssignor streamsGroupAssignor(String groupId, boolean maybeLogWarning) {
+        Optional<String> configuredName = groupConfigManager.groupConfig(groupId)
+            .flatMap(GroupConfig::streamsAssignorName);
+        if (configuredName.isPresent()) {
+            TaskAssignor assignor = streamsGroupAssignors.get(configuredName.get());
+            if (assignor != null) {
+                return assignor;
+            }
+            if (maybeLogWarning) {
+                log.warn("[GroupId {}] The configured task assignor '{}' is not available; " +
+                        "falling back to the default assignor '{}'.",
+                    groupId, configuredName.get(), defaultStreamsGroupAssignor.name());
+            }
+        }
+        return defaultStreamsGroupAssignor;
     }
 
     /**

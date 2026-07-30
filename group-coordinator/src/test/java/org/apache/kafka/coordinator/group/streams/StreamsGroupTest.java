@@ -1029,6 +1029,7 @@ public class StreamsGroupTest {
             .setGroupEpoch(1)
             .setTopology(new StreamsGroupDescribeResponseData.Topology().setEpoch(1).setSubtopologies(List.of()))
             .setAssignmentEpoch(1)
+            .setAssignorName("sticky")
             .setMembers(Arrays.asList(
                 new StreamsGroupDescribeResponseData.Member()
                     .setMemberId("member1")
@@ -1057,7 +1058,7 @@ public class StreamsGroupTest {
                     .setAssignment(new StreamsGroupDescribeResponseData.Assignment())
                     .setTargetAssignment(new StreamsGroupDescribeResponseData.Assignment())
             ));
-        StreamsGroupDescribeResponseData.DescribedGroup actual = group.asDescribedGroup(1);
+        StreamsGroupDescribeResponseData.DescribedGroup actual = group.asDescribedGroup(1, "sticky");
 
         assertEquals(expected, actual);
     }
@@ -1237,12 +1238,13 @@ public class StreamsGroupTest {
         ));
         snapshotRegistry.idempotentCreateSnapshot(1);
 
-        StreamsGroupDescribeResponseData.DescribedGroup describedGroup = group.asDescribedGroup(1);
+        StreamsGroupDescribeResponseData.DescribedGroup describedGroup = group.asDescribedGroup(1, "sticky");
 
         assertEquals("group-id-with-topology", describedGroup.groupId());
         assertEquals(StreamsGroup.StreamsGroupState.NOT_READY.toString(), describedGroup.groupState());
         assertEquals(2, describedGroup.groupEpoch());
         assertEquals(2, describedGroup.assignmentEpoch());
+        assertEquals("sticky", describedGroup.assignorName());
 
         // Verify topology is correctly described
         assertNotNull(describedGroup.topology());
@@ -1288,7 +1290,7 @@ public class StreamsGroupTest {
         group.setTargetAssignmentMetadata(3, 12345L);
         snapshotRegistry.idempotentCreateSnapshot(1);
 
-        StreamsGroupDescribeResponseData.DescribedGroup describedGroup = group.asDescribedGroup(1);
+        StreamsGroupDescribeResponseData.DescribedGroup describedGroup = group.asDescribedGroup(1, "sticky");
 
         // Should prefer ConfiguredTopology over StreamsTopology
         assertNotNull(describedGroup.topology());
@@ -1315,7 +1317,7 @@ public class StreamsGroupTest {
         group.setTargetAssignmentMetadata(4, 12345L);
         snapshotRegistry.idempotentCreateSnapshot(1);
 
-        StreamsGroupDescribeResponseData.DescribedGroup describedGroup = group.asDescribedGroup(1);
+        StreamsGroupDescribeResponseData.DescribedGroup describedGroup = group.asDescribedGroup(1, "sticky");
 
         // Should use StreamsTopology when ConfiguredTopology is not available
         assertNotNull(describedGroup.topology());
