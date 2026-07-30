@@ -124,11 +124,13 @@ class ControllerRegistrationManagerTest {
           registration => delta.replay(registration)
         }
       }
-      for (i <- Seq(1, 2, 3)) {
-        unregisterModifier(RecordTestUtils.createTestControllerUnregistration(i)).foreach {
-          unregistration => delta.replay(unregistration)
-        }
-      }
+    }
+    if (metadataVersion.isControllerUnregistrationSupported) {
+     for (i <- Seq(1, 2, 3)) {
+       unregisterModifier(RecordTestUtils.createTestControllerUnregistration(i)).foreach {
+         unregistration => delta.replay(unregistration)
+       }
+     }
     }
     val provenance = new MetadataProvenance(100, 200, 300, true)
     val newImage = delta.apply(provenance)
@@ -352,7 +354,7 @@ class ControllerRegistrationManagerTest {
       // initial state with controller registered in log
       val image = doMetadataUpdate(MetadataImage.EMPTY,
         manager,
-        MetadataVersion.IBP_3_7_IV0,
+        MetadataVersion.IBP_4_4_IV2,
         r => Some(r),
         _ => None
       )
@@ -361,7 +363,7 @@ class ControllerRegistrationManagerTest {
       // Now unregister the controller via an UnregisterControllerRecord.
       doMetadataUpdate(image,
         manager,
-        MetadataVersion.IBP_3_7_IV0,
+        MetadataVersion.IBP_4_4_IV2,
         _ => None,
         r => if (r.controllerId() == 1) Some(r) else None
       )

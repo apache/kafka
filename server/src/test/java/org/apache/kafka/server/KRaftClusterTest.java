@@ -690,6 +690,7 @@ public class KRaftClusterTest {
             cluster.startup();
             int controllerIdToUnregister = cluster.controllers().keySet().iterator().next();
             cluster.controllers().get(controllerIdToUnregister).shutdown();
+            cluster.waitForActiveController();
 
             try (Admin admin = createAdminClient(cluster, usingBootstrapControllers)) {
                 assertDoesNotThrow(() -> admin.unregisterController(controllerIdToUnregister).all().get());
@@ -709,6 +710,7 @@ public class KRaftClusterTest {
             cluster.startup();
             int leaderId = cluster.controllers().keySet().iterator().next();
             int unknownId = 9999;
+            cluster.waitForActiveController();
 
             try (Admin admin = createAdminClient(cluster, usingBootstrapControllers)) {
                 assertFutureThrows(

@@ -60,9 +60,4 @@ public class UnregisterControllerResponse extends AbstractResponse {
     public static UnregisterControllerResponse parse(Readable readable, short version) {
         return new UnregisterControllerResponse(new UnregisterControllerResponseData(readable, version));
     }
-
-    @Override
-    public boolean shouldClientThrottle(short version) {
-        return true;
-    }
 }

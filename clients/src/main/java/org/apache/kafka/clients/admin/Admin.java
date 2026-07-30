@@ -1705,13 +1705,13 @@ public interface Admin extends AutoCloseable {
      *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
      *   If the request timed out before the unregister operation could finish.</li>
      *   <li>{@link org.apache.kafka.common.errors.UnsupportedVersionException}
-     *   If the software is too old to support the unregistration API.
+     *   If the software is too old to support the unregistration API.</li>
      *   <li>{@link org.apache.kafka.common.errors.ControllerIdNotRegisteredException}
-     *   If the requested controller id is not currently registered.
+     *   If the requested controller id is not currently registered.</li>
      *   <li>{@link org.apache.kafka.common.errors.NotControllerException}
-     *   If the request does not arrive at the active controller.
+     *   If the request does not arrive at the active controller.</li>
      *   <li>{@link org.apache.kafka.common.errors.InvalidRequestException}
-     *   If the request tries to unregister the current active controller id.
+     *   If the request tries to unregister the current active controller id.</li>
      *
      * </ul>
      * <p>
