@@ -11,7 +11,7 @@
 
 [**Apache Kafka**](https://kafka.apache.org) is an open-source distributed event streaming platform used by thousands of companies for high-performance data pipelines, streaming analytics, data integration, and mission-critical applications.
 
-You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
+You need to have [Java](https://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
 We build and test Apache Kafka with Java versions 17 and 25. The `release` parameter in javac is set to `11` for the clients 
 and streams modules, and `17` for the rest, ensuring compatibility with their respective
@@ -206,9 +206,9 @@ mvn deploy
 
 Please note for this to work you should create/update user maven settings (typically, `${USER_HOME}/.m2/settings.xml`) to assign the following variables
 
-    <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
-       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-       xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+    <settings xmlns="https://maven.apache.org/SETTINGS/1.0.0"
+       xmlns:xsi="https://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="https://maven.apache.org/SETTINGS/1.0.0
                            https://maven.apache.org/xsd/settings-1.0.0.xsd">
     ...                           
     <servers>
@@ -356,7 +356,7 @@ See [examples/README.md](examples/README.md).
 
 ### Contribution
 
-Apache Kafka is interested in building the community; we would welcome any thoughts or [patches](https://issues.apache.org/jira/browse/KAFKA). You can reach us [on the Apache mailing lists](http://kafka.apache.org/contact.html).
+Apache Kafka is interested in building the community; we would welcome any thoughts or [patches](https://issues.apache.org/jira/browse/KAFKA). You can reach us [on the Apache mailing lists](https://kafka.apache.org/contact.html).
 
 To contribute follow the instructions here:
  * https://kafka.apache.org/contributing.html
