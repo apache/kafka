@@ -1095,7 +1095,6 @@ public class SharePartition {
 
         CompletableFuture<Void> future = new CompletableFuture<>();
         Throwable throwable = null;
-        List<InFlightState> stagedThisCall = new ArrayList<>();
         List<PersisterBatch> persisterBatches = new ArrayList<>();
         lock.writeLock().lock();
         try {
@@ -1133,16 +1132,13 @@ public class SharePartition {
                     batch,
                     ackTypeMap,
                     subMap,
-                    stagedThisCall,
                     persisterBatches
                 );
                 if (throwable != null) break;
             }
 
             if (throwable != null) {
-                for (InFlightState s : stagedThisCall) {
-                    s.revertStagedTxnAcknowledge(txnOwnerId, txnOwnerEpoch);
-                }
+                revertStagedAndRearm(persisterBatches, txnOwnerId, txnOwnerEpoch);
             }
         } finally {
             lock.writeLock().unlock();
@@ -1155,8 +1151,7 @@ public class SharePartition {
                 if (exception != null) {
                     lock.writeLock().lock();
                     try {
-                        persisterBatches.forEach(persisterBatch ->
-                            persisterBatch.updatedState().revertStagedTxnAcknowledge(txnOwnerId, txnOwnerEpoch));
+                        revertStagedAndRearm(persisterBatches, txnOwnerId, txnOwnerEpoch);
                     } finally {
                         lock.writeLock().unlock();
                     }
@@ -1168,6 +1163,20 @@ public class SharePartition {
         return future;
     }
 
+    // Revert records staged into a transaction back to ACQUIRED and restore the acquisition-lock
+    // timeout that staging cancelled. Without this, a failed stage leaves records ACQUIRED with no
+    // timer, holding them until the session ends instead of releasing them for redelivery.
+    private void revertStagedAndRearm(List<PersisterBatch> persisterBatches, long txnOwnerId, short txnOwnerEpoch) {
+        for (PersisterBatch persisterBatch : persisterBatches) {
+            InFlightState state = persisterBatch.updatedState();
+            if (state.revertStagedTxnAcknowledge(txnOwnerId, txnOwnerEpoch)) {
+                PersisterStateBatch batch = persisterBatch.stateBatch();
+                state.updateAcquisitionLockTimeoutTask(
+                    scheduleAcquisitionLockTimeout(state.memberId(), batch.firstOffset(), batch.lastOffset()));
+            }
+        }
+    }
+
     private Throwable stageBatchTxnRecords(
         String memberId,
         long txnOwnerId,
@@ -1175,7 +1184,6 @@ public class SharePartition {
         ShareAcknowledgementBatch batch,
         Map<Long, Byte> ackTypeMap,
         NavigableMap<Long, InFlightBatch> subMap,
-        List<InFlightState> stagedThisCall,
         List<PersisterBatch> persisterBatches
     ) {
         for (Map.Entry<Long, InFlightBatch> entry : subMap.entrySet()) {
@@ -1208,7 +1216,6 @@ public class SharePartition {
                 if (staged == null) {
                     return new InvalidRecordStateException("Cannot stage txn ack: batch not in ACQUIRED state");
                 }
-                stagedThisCall.add(staged);
                 persisterBatches.add(new PersisterBatch(
                     staged,
                     persisterStateBatch(inFlightBatch.firstOffset(), inFlightBatch.lastOffset(), staged),
@@ -1235,7 +1242,6 @@ public class SharePartition {
                     if (staged == null) {
                         return new InvalidRecordStateException("Cannot stage txn ack: offset " + os.getKey() + " not ACQUIRED");
                     }
-                    stagedThisCall.add(staged);
                     persisterBatches.add(new PersisterBatch(
                         staged,
                         persisterStateBatch(os.getKey(), os.getKey(), staged),

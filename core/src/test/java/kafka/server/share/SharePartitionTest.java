@@ -13980,6 +13980,43 @@ public class SharePartitionTest {
     }
 
     @Test
+    public void testStageTxnAcknowledgeReArmsAcquisitionLockOnRevert() throws InterruptedException {
+        // Staging cancels the acquisition-lock timer (the transaction governs the hold). When a
+        // stage fails and the records revert to ACQUIRED, the timer must be re-armed, otherwise the
+        // records are held with no timer until the session ends instead of being released for
+        // redelivery (KIP-1289 hold-governance invariant). The first persister write (staging)
+        // fails; the later timeout-release write succeeds.
+        Persister persister = Mockito.mock(Persister.class);
+        Mockito.when(persister.writeState(Mockito.any()))
+            .thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult(Errors.GROUP_ID_NOT_FOUND)))
+            .thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult(Errors.NONE)));
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withSharePartitionMetrics(sharePartitionMetrics)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+        fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
+        assertNotNull(sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask());
+
+        CompletableFuture<Void> stage = sharePartition.stageTxnAcknowledge(MEMBER_ID, 100L, (short) 1,
+            List.of(new ShareAcknowledgementBatch(10, 14, List.of(AcknowledgeType.ACCEPT.id))));
+
+        assertFutureThrows(GroupIdNotFoundException.class, stage);
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(10L).batchState());
+        // The acquisition-lock timer cancelled by staging is re-armed on revert.
+        assertNotNull(sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask());
+
+        // On expiry the re-armed timer releases the records for redelivery.
+        mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
+        TestUtils.waitForCondition(
+            () -> sharePartition.cachedState().get(10L).batchState() == RecordState.AVAILABLE &&
+                  sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask() == null,
+            DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
+            () -> "Reverted records were not released by the re-armed acquisition-lock timer");
+    }
+
+    @Test
     public void testApplyTxnMarkerPersistsFinalState() {
         Persister persister = Mockito.mock(Persister.class);
         Mockito.when(persister.writeState(Mockito.any()))
