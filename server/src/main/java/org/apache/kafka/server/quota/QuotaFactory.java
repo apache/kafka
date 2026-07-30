@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.server;
+package org.apache.kafka.server.quota;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.Plugin;
@@ -22,16 +22,10 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.publisher.QuotaConfigChangeListener;
+import org.apache.kafka.server.config.AbstractKafkaConfig;
 import org.apache.kafka.server.config.ClientQuotaManagerConfig;
 import org.apache.kafka.server.config.QuotaConfig;
 import org.apache.kafka.server.config.ReplicationQuotaManagerConfig;
-import org.apache.kafka.server.quota.ClientQuotaCallback;
-import org.apache.kafka.server.quota.ClientQuotaManager;
-import org.apache.kafka.server.quota.ClientRequestQuotaManager;
-import org.apache.kafka.server.quota.ControllerMutationQuotaManager;
-import org.apache.kafka.server.quota.QuotaType;
-import org.apache.kafka.server.quota.ReplicaQuota;
-import org.apache.kafka.server.quota.ReplicationQuotaManager;
 
 import java.util.Optional;
 
@@ -83,7 +77,7 @@ public class QuotaFactory {
     }
 
     public static QuotaManagers instantiate(
-        KafkaConfig cfg,
+        AbstractKafkaConfig cfg,
         Metrics metrics,
         Time time,
         String threadNamePrefix,
@@ -104,8 +98,8 @@ public class QuotaFactory {
     }
 
     private static Optional<Plugin<ClientQuotaCallback>> createClientQuotaCallback(
-        KafkaConfig cfg, 
-        Metrics metrics, 
+        AbstractKafkaConfig cfg,
+        Metrics metrics,
         String role
     ) {
         ClientQuotaCallback clientQuotaCallback = cfg.getConfiguredInstance(
@@ -118,28 +112,28 @@ public class QuotaFactory {
         ));
     }
 
-    private static ClientQuotaManagerConfig clientConfig(KafkaConfig cfg) {
+    private static ClientQuotaManagerConfig clientConfig(AbstractKafkaConfig cfg) {
         return new ClientQuotaManagerConfig(
             cfg.quotaConfig().numQuotaSamples(),
             cfg.quotaConfig().quotaWindowSizeSeconds()
         );
     }
 
-    private static ClientQuotaManagerConfig clientControllerMutationConfig(KafkaConfig cfg) {
+    private static ClientQuotaManagerConfig clientControllerMutationConfig(AbstractKafkaConfig cfg) {
         return new ClientQuotaManagerConfig(
             cfg.quotaConfig().numControllerQuotaSamples(),
             cfg.quotaConfig().controllerQuotaWindowSizeSeconds()
         );
     }
 
-    private static ReplicationQuotaManagerConfig replicationConfig(KafkaConfig cfg) {
+    private static ReplicationQuotaManagerConfig replicationConfig(AbstractKafkaConfig cfg) {
         return new ReplicationQuotaManagerConfig(
             cfg.quotaConfig().numReplicationQuotaSamples(),
             cfg.quotaConfig().replicationQuotaWindowSizeSeconds()
         );
     }
 
-    private static ReplicationQuotaManagerConfig alterLogDirsReplicationConfig(KafkaConfig cfg) {
+    private static ReplicationQuotaManagerConfig alterLogDirsReplicationConfig(AbstractKafkaConfig cfg) {
         return new ReplicationQuotaManagerConfig(
             cfg.quotaConfig().numAlterLogDirsReplicationQuotaSamples(),
             cfg.quotaConfig().alterLogDirsReplicationQuotaWindowSizeSeconds()

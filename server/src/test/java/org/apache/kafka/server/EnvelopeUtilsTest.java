@@ -86,7 +86,7 @@ public class EnvelopeUtilsTest {
         assertTrue(forwardedRequest.isForwarded());
         assertSame(envelope, forwardedRequest.envelope().orElseThrow());
         assertEquals(envelope.requestDequeueTimeNanos(), forwardedRequest.requestDequeueTimeNanos());
-        assertInstanceOf(CreateTopicsRequest.class, forwardedRequest.body(AbstractRequest.class));
+        assertInstanceOf(CreateTopicsRequest.class, forwardedRequest.body());
     }
 
     @Test

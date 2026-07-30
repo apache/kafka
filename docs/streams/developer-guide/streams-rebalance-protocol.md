@@ -39,7 +39,9 @@ The following features are available in the current release:
 
 * **Core Streams Group Rebalance Protocol**: The `group.protocol=streams` configuration enables the dedicated streams rebalance protocol. This separates streams groups from consumer groups and provides a streams-specific group membership lifecycle and metadata management on the broker.
 
-* **Sticky Task Assignor**: A basic task assignment strategy that minimizes task movement during rebalances is included.
+* **Sticky Task Assignor**: A basic task assignment strategy that minimizes task movement during rebalances is included. It is registered under the name `sticky` and is the default assignor.
+
+* **Custom Task Assignors**: Brokers can be configured with custom task assignors via `group.streams.assignors`, which takes a list of built-in assignor names and fully qualified class names of custom `TaskAssignor` implementations. The first entry is the default assignor. An individual group selects one of the registered assignors by name with the group configuration `streams.assignor.name`; when unset, the group uses the first entry of `group.streams.assignors`. Custom implementations must be thread-safe, since a single instance is shared across all groups on a broker.
 
 * **Interactive Query Support**: IQ operations are compatible with the new streams protocol.
 
@@ -59,7 +61,9 @@ The following features are not yet available and should be avoided when using th
 
 * **Topology Updates**: If a topology is changed significantly (e.g., by adding new source topics or changing the number of subtopologies), a new streams group must be created.
 
-* **High Availability Assignor**: Only the sticky assignor is supported. This implies that "warmup tasks" and rack aware assignment are not supported yet.
+* **High Availability Assignor**: The sticky assignor is the only built-in assignor and it does not support rack aware assignment, but a custom assignor registered via `group.streams.assignors` can implement it.
+
+* **Warmup Tasks**: In contrast to the "classic" rebalance protocol, warmup tasks are not an assignor feature, but the group coordinator would inject warmup tasks into an assignment. The benefit is, that warmup tasks can be used independent of the configured assignor. However, warmup task support is not implemented yet.
 
 * **Regular Expressions**: Pattern-based topic subscription is not supported.
 
@@ -120,6 +124,7 @@ The following broker configurations control the behavior of streams groups. For 
 * [`group.streams.max.standby.replicas`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.max.standby.replicas): Maximum for dynamic configurations of the standby replica configuration.
 * [`group.streams.initial.rebalance.delay.ms`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.initial.rebalance.delay.ms): The first rebalance of a new (ie, previously empty) group is delayed by this amount to allow more members to join the group.
 * [`group.streams.topology.description.plugin.class`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.topology.description.plugin.class): The fully qualified class name of a `StreamsGroupTopologyDescriptionPlugin` implementation. When not set, the [topology description feature](/{version}/streams/developer-guide/topology-description-plugin/) is disabled.
+* [`group.streams.assignors`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.assignors): The task assignors available to streams groups, as a list of built-in assignor names and fully qualified class names of custom `TaskAssignor` implementations. The first entry is the default assignor for groups that do not select one with `streams.assignor.name`.
 
 ## Group Configuration
 
@@ -133,6 +138,7 @@ The following group-level configurations are available for streams groups:
 * [`streams.heartbeat.interval.ms`](/{version}/configuration/group-configs#groupconfigs_streams.heartbeat.interval.ms): The heartbeat interval given to the members.
 * [`streams.num.standby.replicas`](/{version}/configuration/group-configs#groupconfigs_streams.num.standby.replicas): The number of standby replicas for each task.
 * [`streams.initial.rebalance.delay.ms`](/{version}/configuration/group-configs#groupconfigs_streams.initial.rebalance.delay.ms): The first rebalance of a group is delayed by this amount to allow more members to join the group.
+* [`streams.assignor.name`](/{version}/configuration/group-configs#groupconfigs_streams.assignor.name): The name of the task assignor to use for this group, which must be one of the assignors registered on the broker via `group.streams.assignors`. When unset, the group uses the first entry of `group.streams.assignors`.
 
 ### Example: Setting Group-Level Configuration
 ```
@@ -162,7 +168,7 @@ The following configurations are ignored when the streams rebalance protocol is 
 * [`rack.aware.assignment.strategy`](/{version}/configuration/kafka-streams-configs#streamsconfigs_rack.aware.assignment.strategy)
 * [`rack.aware.assignment.traffic_cost`](/{version}/configuration/kafka-streams-configs#streamsconfigs_rack.aware.assignment.traffic_cost)
 * [`rack.aware.assignment.non_overlap_cost`](/{version}/configuration/kafka-streams-configs#streamsconfigs_rack.aware.assignment.non_overlap_cost)
-* [`task.assignor.class`](/{version}/configuration/kafka-streams-configs#streamsconfigs_task.assignor.class)
+* [`task.assignor.class`](/{version}/configuration/kafka-streams-configs#streamsconfigs_task.assignor.class) (assignment happens on the broker; use `group.streams.assignors` and `streams.assignor.name` instead)
 * [`session.timeout.ms`](/{version}/configuration/kafka-streams-configs#streamsconfigs_session.timeout.ms) (use group-level configuration instead)
 * [`heartbeat.interval.ms`](/{version}/configuration/kafka-streams-configs#streamsconfigs_heartbeat.interval.ms) (use group-level configuration instead)
 

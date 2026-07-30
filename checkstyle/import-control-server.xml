@@ -122,7 +122,7 @@
   <subpackage name="network">
     <allow pkg="com.fasterxml.jackson" />
     <allow pkg="org.apache.kafka.network.metrics" />
-    <allow class="org.apache.kafka.server.EnvelopeUtils" />
+    <allow pkg="org.apache.kafka.server" />
   </subpackage>
 
 </import-control>
