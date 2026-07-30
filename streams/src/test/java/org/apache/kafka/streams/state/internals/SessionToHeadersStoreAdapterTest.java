@@ -155,6 +155,14 @@ public class SessionToHeadersStoreAdapterTest {
     }
 
     @Test
+    public void shouldWrapFindSessionsWithEndTimeRangeIterator() {
+        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = innerIteratorWithRawValue();
+        when(innerStore.findSessions(10L, 20L)).thenReturn(innerIter);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> result = adapter.findSessions(10L, 20L);
+        assertAddsEmptyHeaders(result);
+    }
+
+    @Test
     public void shouldWrapFetchIterator() {
         final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = innerIteratorWithRawValue();
         when(innerStore.fetch(KEY)).thenReturn(innerIter);

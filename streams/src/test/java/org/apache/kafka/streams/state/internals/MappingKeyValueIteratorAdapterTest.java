@@ -35,7 +35,6 @@ import static org.apache.kafka.streams.state.HeadersBytesStore.convertToHeaderFo
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
@@ -110,7 +109,6 @@ public class MappingKeyValueIteratorAdapterTest {
         final WindowStoreIterator<byte[]> adapter =
             MappingKeyValueIteratorAdapter.plainToHeadersWindow(windowInner);
 
-        assertInstanceOf(WindowStoreIterator.class, adapter);
         assertTrue(adapter.hasNext());
         final KeyValue<Long, byte[]> result = adapter.next();
         assertEquals(TIMESTAMP, result.key);
@@ -125,7 +123,6 @@ public class MappingKeyValueIteratorAdapterTest {
         final WindowStoreIterator<byte[]> adapter =
             MappingKeyValueIteratorAdapter.timestampedToHeadersWindow(windowInner);
 
-        assertInstanceOf(WindowStoreIterator.class, adapter);
         assertTrue(adapter.hasNext());
         final KeyValue<Long, byte[]> result = adapter.next();
         assertEquals(TIMESTAMP, result.key);

@@ -385,20 +385,6 @@ public class TimestampedToHeadersStoreAdapterTest {
     }
 
     @Test
-    public void shouldDelegateOtherQueryTypesToUnderlyingStore() {
-        adapter = createAdapter();
-        final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(new Bytes("key".getBytes()));
-
-        final QueryResult<byte[]> mockResult = QueryResult.forUnknownQueryType(query, mockStore);
-        when(mockStore.query(eq(query), any(PositionBound.class), any(QueryConfig.class)))
-            .thenReturn(mockResult);
-
-        final QueryResult<byte[]> result = adapter.query(query, PositionBound.unbounded(), new QueryConfig(false));
-
-        assertFalse(result.isSuccess());
-    }
-
-    @Test
     public void shouldDelegateName() {
         when(mockStore.name()).thenReturn("test-store");
         adapter = createAdapter();

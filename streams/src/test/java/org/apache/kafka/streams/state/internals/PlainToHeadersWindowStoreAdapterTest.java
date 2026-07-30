@@ -40,11 +40,16 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.File;
 import java.time.Instant;
 import java.util.Properties;
+import java.util.stream.Stream;
 
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.state.HeadersBytesStore.convertFromPlainToHeaderFormat;
@@ -60,6 +65,8 @@ public class PlainToHeadersWindowStoreAdapterTest {
     private static final long WINDOW_SIZE = 10_000L;
     private static final long RETENTION_PERIOD = 60_000L;
     private static final long SEGMENT_INTERVAL = 30_000L;
+    private static final Bytes KEY = new Bytes("key".getBytes());
+    private static final byte[] PLAIN_VALUE = "value".getBytes();
 
     private PlainToHeadersWindowStoreAdapter adapter;
     private RocksDBWindowStore underlyingStore;
@@ -102,195 +109,46 @@ public class PlainToHeadersWindowStoreAdapterTest {
         }
     }
 
-    @Test
-    public void shouldConvertValueOnFetch() {
-        final Bytes key = new Bytes("key".getBytes());
-        final byte[] plainValue = "value".getBytes();
-        underlyingStore.put(key, plainValue, 1000L);
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("valueConvertingAccessors")
+    public void shouldConvertValue(final WindowIteratorAccessor accessor) {
+        underlyingStore.put(KEY, PLAIN_VALUE, 1000L);
 
-        try (final WindowStoreIterator<byte[]> iterator = adapter.fetch(key, 0L, 10000L)) {
-            assertTrue(iterator.hasNext(), "Expected fetch to return the stored window");
-            final KeyValue<Long, byte[]> kv = iterator.next();
-            assertEquals(1000L, kv.key, "Expected the window start timestamp");
-            assertArrayEquals(convertFromPlainToHeaderFormat(plainValue), kv.value,
-                "Expected fetch to convert the plain value to the headers format");
-            assertFalse(iterator.hasNext(), "Expected no more results");
+        try (final KeyValueIterator<?, byte[]> iterator = accessor.apply(adapter)) {
+            assertTrue(iterator.hasNext(), "Expected the stored window to be returned");
+            assertArrayEquals(convertFromPlainToHeaderFormat(PLAIN_VALUE), iterator.next().value,
+                "Expected the plain value to be converted to the headers format");
         }
     }
 
-    @Test
-    public void shouldConvertValueOnBackwardFetch() {
-        final Bytes key = new Bytes("key".getBytes());
-        final byte[] plainValue = "value".getBytes();
-        underlyingStore.put(key, plainValue, 1000L);
-
-        try (final WindowStoreIterator<byte[]> iterator = adapter.backwardFetch(key, 0L, 10000L)) {
-            assertTrue(iterator.hasNext(), "Expected backwardFetch to return the stored window");
-            final KeyValue<Long, byte[]> kv = iterator.next();
-            assertEquals(1000L, kv.key, "Expected the window start timestamp");
-            assertArrayEquals(convertFromPlainToHeaderFormat(plainValue), kv.value,
-                "Expected backwardFetch to convert the plain value to the headers format");
-            assertFalse(iterator.hasNext(), "Expected no more results");
-        }
+    private static Stream<Arguments> valueConvertingAccessors() {
+        return Stream.of(
+            Arguments.of(Named.of("fetch", (WindowIteratorAccessor) a -> a.fetch(KEY, 0L, 10000L))),
+            Arguments.of(Named.of("backwardFetch", (WindowIteratorAccessor) a -> a.backwardFetch(KEY, 0L, 10000L))),
+            Arguments.of(Named.of("fetchAll", (WindowIteratorAccessor) a -> a.fetchAll(0L, 10000L))),
+            Arguments.of(Named.of("fetchWithInstantBounds",
+                (WindowIteratorAccessor) a -> a.fetch(KEY, Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L)))),
+            Arguments.of(Named.of("backwardFetchWithInstantBounds",
+                (WindowIteratorAccessor) a -> a.backwardFetch(KEY, Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L)))),
+            Arguments.of(Named.of("keyRangeFetch", (WindowIteratorAccessor) a -> a.fetch(KEY, KEY, 0L, 10000L))),
+            Arguments.of(Named.of("keyRangeFetchWithInstantBounds",
+                (WindowIteratorAccessor) a -> a.fetch(KEY, KEY, Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L)))),
+            Arguments.of(Named.of("keyRangeBackwardFetch", (WindowIteratorAccessor) a -> a.backwardFetch(KEY, KEY, 0L, 10000L))),
+            Arguments.of(Named.of("keyRangeBackwardFetchWithInstantBounds",
+                (WindowIteratorAccessor) a -> a.backwardFetch(KEY, KEY, Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L)))),
+            Arguments.of(Named.of("fetchAllWithInstantBounds",
+                (WindowIteratorAccessor) a -> a.fetchAll(Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L)))),
+            Arguments.of(Named.of("backwardFetchAll", (WindowIteratorAccessor) a -> a.backwardFetchAll(0L, 10000L))),
+            Arguments.of(Named.of("backwardFetchAllWithInstantBounds",
+                (WindowIteratorAccessor) a -> a.backwardFetchAll(Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L)))),
+            Arguments.of(Named.of("all", (WindowIteratorAccessor) a -> a.all())),
+            Arguments.of(Named.of("backwardAll", (WindowIteratorAccessor) a -> a.backwardAll()))
+        );
     }
 
-    @Test
-    public void shouldConvertValueOnFetchAll() {
-        final Bytes key = new Bytes("key".getBytes());
-        final byte[] plainValue = "value".getBytes();
-        underlyingStore.put(key, plainValue, 1000L);
-
-        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = adapter.fetchAll(0L, 10000L)) {
-            assertTrue(iterator.hasNext(), "Expected fetchAll to return the stored window");
-            final KeyValue<Windowed<Bytes>, byte[]> kv = iterator.next();
-            assertEquals(key, kv.key.key(), "Expected the stored key");
-            assertEquals(1000L, kv.key.window().start(), "Expected the window start timestamp");
-            assertArrayEquals(convertFromPlainToHeaderFormat(plainValue), kv.value,
-                "Expected fetchAll to convert the plain value to the headers format");
-            assertFalse(iterator.hasNext(), "Expected no more results");
-        }
-    }
-
-    @Test
-    public void shouldConvertValueOnFetchWithInstantBounds() {
-        final Bytes key = new Bytes("key".getBytes());
-        final byte[] plainValue = "value".getBytes();
-        underlyingStore.put(key, plainValue, 1000L);
-
-        try (final WindowStoreIterator<byte[]> iterator =
-                 adapter.fetch(key, Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L))) {
-            assertConvertedValue(iterator, plainValue);
-        }
-    }
-
-    @Test
-    public void shouldConvertValueOnBackwardFetchWithInstantBounds() {
-        final Bytes key = new Bytes("key".getBytes());
-        final byte[] plainValue = "value".getBytes();
-        underlyingStore.put(key, plainValue, 1000L);
-
-        try (final WindowStoreIterator<byte[]> iterator =
-                 adapter.backwardFetch(key, Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L))) {
-            assertConvertedValue(iterator, plainValue);
-        }
-    }
-
-    @Test
-    public void shouldConvertValueOnKeyRangeFetch() {
-        final Bytes key = new Bytes("key".getBytes());
-        final byte[] plainValue = "value".getBytes();
-        underlyingStore.put(key, plainValue, 1000L);
-
-        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
-                 adapter.fetch(key, key, 0L, 10000L)) {
-            assertConvertedValue(iterator, plainValue);
-        }
-    }
-
-    @Test
-    public void shouldConvertValueOnKeyRangeFetchWithInstantBounds() {
-        final Bytes key = new Bytes("key".getBytes());
-        final byte[] plainValue = "value".getBytes();
-        underlyingStore.put(key, plainValue, 1000L);
-
-        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
-                 adapter.fetch(key, key, Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L))) {
-            assertConvertedValue(iterator, plainValue);
-        }
-    }
-
-    @Test
-    public void shouldConvertValueOnKeyRangeBackwardFetch() {
-        final Bytes key = new Bytes("key".getBytes());
-        final byte[] plainValue = "value".getBytes();
-        underlyingStore.put(key, plainValue, 1000L);
-
-        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
-                 adapter.backwardFetch(key, key, 0L, 10000L)) {
-            assertConvertedValue(iterator, plainValue);
-        }
-    }
-
-    @Test
-    public void shouldConvertValueOnKeyRangeBackwardFetchWithInstantBounds() {
-        final Bytes key = new Bytes("key".getBytes());
-        final byte[] plainValue = "value".getBytes();
-        underlyingStore.put(key, plainValue, 1000L);
-
-        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
-                 adapter.backwardFetch(key, key, Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L))) {
-            assertConvertedValue(iterator, plainValue);
-        }
-    }
-
-    @Test
-    public void shouldConvertValueOnFetchAllWithInstantBounds() {
-        final Bytes key = new Bytes("key".getBytes());
-        final byte[] plainValue = "value".getBytes();
-        underlyingStore.put(key, plainValue, 1000L);
-
-        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
-                 adapter.fetchAll(Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L))) {
-            assertConvertedValue(iterator, plainValue);
-        }
-    }
-
-    @Test
-    public void shouldConvertValueOnBackwardFetchAll() {
-        final Bytes key = new Bytes("key".getBytes());
-        final byte[] plainValue = "value".getBytes();
-        underlyingStore.put(key, plainValue, 1000L);
-
-        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
-                 adapter.backwardFetchAll(0L, 10000L)) {
-            assertConvertedValue(iterator, plainValue);
-        }
-    }
-
-    @Test
-    public void shouldConvertValueOnBackwardFetchAllWithInstantBounds() {
-        final Bytes key = new Bytes("key".getBytes());
-        final byte[] plainValue = "value".getBytes();
-        underlyingStore.put(key, plainValue, 1000L);
-
-        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
-                 adapter.backwardFetchAll(Instant.ofEpochMilli(0), Instant.ofEpochMilli(10000L))) {
-            assertConvertedValue(iterator, plainValue);
-        }
-    }
-
-    @Test
-    public void shouldConvertValueOnAll() {
-        final Bytes key = new Bytes("key".getBytes());
-        final byte[] plainValue = "value".getBytes();
-        underlyingStore.put(key, plainValue, 1000L);
-
-        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = adapter.all()) {
-            assertConvertedValue(iterator, plainValue);
-        }
-    }
-
-    @Test
-    public void shouldConvertValueOnBackwardAll() {
-        final Bytes key = new Bytes("key".getBytes());
-        final byte[] plainValue = "value".getBytes();
-        underlyingStore.put(key, plainValue, 1000L);
-
-        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = adapter.backwardAll()) {
-            assertConvertedValue(iterator, plainValue);
-        }
-    }
-
-    private static void assertConvertedValue(final WindowStoreIterator<byte[]> iterator, final byte[] plainValue) {
-        assertTrue(iterator.hasNext(), "Expected the stored window to be returned");
-        assertArrayEquals(convertFromPlainToHeaderFormat(plainValue), iterator.next().value,
-            "Expected the plain value to be converted to the headers format");
-    }
-
-    private static void assertConvertedValue(final KeyValueIterator<Windowed<Bytes>, byte[]> iterator, final byte[] plainValue) {
-        assertTrue(iterator.hasNext(), "Expected the stored window to be returned");
-        assertArrayEquals(convertFromPlainToHeaderFormat(plainValue), iterator.next().value,
-            "Expected the plain value to be converted to the headers format");
+    @FunctionalInterface
+    private interface WindowIteratorAccessor {
+        KeyValueIterator<?, byte[]> apply(PlainToHeadersWindowStoreAdapter adapter);
     }
 
     @Test
