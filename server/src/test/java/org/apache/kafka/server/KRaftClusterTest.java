@@ -719,7 +719,7 @@ public class KRaftClusterTest {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
             new TestKitNodes.Builder()
                 .setNumBrokerNodes(3)
-                .setNumControllerNodes(1)
+                .setNumControllerNodes(3)
                 .build()).build()) {
             cluster.format();
             cluster.startup();
