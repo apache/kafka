@@ -730,10 +730,6 @@ public class KRaftClusterTest {
                     .map(Map.Entry::getKey)
                     .findFirst()
                     .orElseThrow();
-            int inactiveId = cluster.controllers().keySet().stream()
-                    .filter(id -> id != activeId)
-                    .findFirst()
-                    .orElseThrow();
 
             try (Admin admin = createAdminClient(cluster, usingBootstrapControllers)) {
                 assertFutureThrows(
