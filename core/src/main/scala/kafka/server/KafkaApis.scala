@@ -3830,7 +3830,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       request.context,
       READ,
       TOPIC,
-      acknowledgeBatchesMap.keys.asJava,
+      acknowledgeBatchesMap.keySet.asJava,
       (tip: TopicIdPartition) => tip.topicPartition.topic
     )
 
