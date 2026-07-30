@@ -18,6 +18,7 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -32,6 +33,7 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -57,6 +59,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -77,6 +80,34 @@ public class OptimizedKTableIntegrationTest {
     private static int port = 0;
     private static final String INPUT_TOPIC_NAME = "input-topic";
     private static final String TABLE_NAME = "source-table";
+
+    private static final StreamPartitioner<Integer, Object> PARTITION_ZERO_PARTITIONER =
+        new StreamPartitioner<>() {
+            @SuppressWarnings("removal")
+            @Override
+            public Optional<Set<Integer>> partitions(
+                final String topic,
+                final Integer key,
+                final Object value,
+                final int numPartitions
+            ) {
+                throw new AssertionError(
+                    "Deprecated 4-argument partitions method was called instead of "
+                        + "5-argument method containing headers."
+                );
+            }
+
+            @Override
+            public Optional<Set<Integer>> partitions(
+                final String topic,
+                final Integer key,
+                final Object value,
+                final Headers headers,
+                final int numPartitions
+            ) {
+                return Optional.of(Collections.singleton(0));
+            }
+        };
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
@@ -139,7 +170,7 @@ public class OptimizedKTableIntegrationTest {
                 final ReadOnlyKeyValueStore<Integer, Integer> store2 = IntegrationTestUtils.getStore(TABLE_NAME, kafkaStreams2, QueryableStoreTypes.keyValueStore());
 
                 final KeyQueryMetadata keyQueryMetadata = kafkaStreams1
-                        .queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> Optional.of(Collections.singleton(0)));
+                        .queryMetadataForKey(TABLE_NAME, key, PARTITION_ZERO_PARTITIONER);
 
                 try {
                     // Assert that the current value in store reflects all messages being processed
