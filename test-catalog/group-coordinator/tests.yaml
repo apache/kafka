@@ -41,6 +41,9 @@ org.apache.kafka.coordinator.group.GroupCoordinatorConfigTest:
 - testConfigs
 - testConsumerGroupAssignorFullClassNames
 - testConsumerGroupAssignors
+- testConsumerGroupAssignorsBuiltinByClassName
+- testConsumerGroupAssignorsWithDuplicateNamesFails
+- testConsumerGroupAssignorsWithReservedBuiltinNameFails
 - testDLQAutoCreateTopicsEnableCustomValue
 - testDLQAutoCreateTopicsEnableDefaultValue
 - testDLQTopicNamePrefixCustomValue
