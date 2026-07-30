@@ -823,22 +823,18 @@ public class MemoryRecordsBuilder implements AutoCloseable {
      * @return The estimated number of bytes written
      */
     private int estimatedBytesWritten() {
-        return estimatedBytesWritten(magic, compression.type(), estimatedCompressionRatio, uncompressedRecordsSizeInBytes);
+        return estimatedBytesWritten(uncompressedRecordsSizeInBytes);
     }
 
     /**
-     * Returns the projected number of bytes the builder would write for
-     * {@code uncompressedRecordsSizeInBytes} of records under the given magic, compression type,
-     * and ratio: exact for uncompressed, a ratio-aware estimate for compressed.
+     * Returns the projected number of bytes the builder would write for the given uncompressed
+     * record bytes: exact for uncompressed, a ratio-aware estimate for compressed.
      */
-    private static int estimatedBytesWritten(byte magic, CompressionType compressionType,
-                                             float compressionRatio,
-                                             int uncompressedRecordsSizeInBytes) {
-        int batchHeaderSizeInBytes = AbstractRecords.recordBatchHeaderSizeInBytes(magic, compressionType);
-        if (compressionType == CompressionType.NONE) {
-            return batchHeaderSizeInBytes + uncompressedRecordsSizeInBytes;
+    private int estimatedBytesWritten(int uncompressedSize) {
+        if (compression.type() == CompressionType.NONE) {
+            return batchHeaderSizeInBytes + uncompressedSize;
         } else {
-            return batchHeaderSizeInBytes + (int) (uncompressedRecordsSizeInBytes * compressionRatio * COMPRESSION_RATE_ESTIMATION_FACTOR);
+            return batchHeaderSizeInBytes + (int) (uncompressedSize * estimatedCompressionRatio * COMPRESSION_RATE_ESTIMATION_FACTOR);
         }
     }
 
@@ -856,8 +852,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         } else {
             recordSize = DefaultRecord.recordSizeUpperBound(keyBuffer, valueBuffer, headers);
         }
-        return estimatedBytesWritten(magic, compression.type(), estimatedCompressionRatio,
-                uncompressedRecordsSizeInBytes + recordSize);
+        return estimatedBytesWritten(uncompressedRecordsSizeInBytes + recordSize);
     }
 
     /**
