@@ -746,11 +746,6 @@ public class KRaftClusterTest {
                     admin.unregisterController(activeId).all(),
                     "Controller cannot unregister itself while it is active."
                 );
-                assertFutureThrows(
-                        InvalidRequestException.class,
-                        admin.unregisterController(inactiveId).all(),
-                        "Cannot unregister a controller who is defined in controller.quorum.voters."
-                );
             }
         }
     }

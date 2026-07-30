@@ -2166,8 +2166,6 @@ public final class QuorumController implements Controller {
             () -> {
                 if (nodeId == controllerId) {
                     throw new InvalidRequestException("Controller cannot unregister itself while it is active.");
-                } else if (featureControl.isControllerId(controllerId)) {
-                    throw new InvalidRequestException("Cannot unregister a controller who is defined in controller.quorum.voters.");
                 }
                 return clusterControl.unregisterController(controllerId);
             },
