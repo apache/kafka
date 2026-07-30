@@ -756,6 +756,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     @Override
     public ReadOnlyKeyValueStore<Bytes, byte[]> readOnly(final IsolationLevel isolationLevel) {
+        validateStoreOpen();
         return new ReadOnlyView(dbAccessor.readOnly(isolationLevel));
     }
 

@@ -78,7 +78,7 @@ public class TimestampedToHeadersWindowStoreAdapterTest {
                 new StreamsConfig(props)
         );
 
-        final SegmentedBytesStore segmentedBytesStore = new RocksDBSegmentedBytesStore(
+        final RocksDBSegmentedBytesStore segmentedBytesStore = new RocksDBSegmentedBytesStore(
                 "iqv2-test-store",
                 "test-metrics-scope",
                 RETENTION_PERIOD,

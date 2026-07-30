@@ -39,7 +39,7 @@
     <suppress checks="NPathComplexity" files="(ClusterTestExtensions|KafkaApisBuilder|SharePartition|SharePartitionManager).java"/>
     <suppress checks="NPathComplexity" files="TestKitNodes.java"/>
     <suppress checks="JavaNCSS"
-              files="(SharePartitionManagerTest|SharePartitionTest|ShareConsumerTest).java"/>
+              files="(SharePartitionManagerTest|SharePartitionTest|ShareConsumerTest|DelayedShareFetchTest).java"/>
     <suppress checks="ClassDataAbstractionCoupling|ClassFanOutComplexity" files="SharePartitionManagerTest"/>
     <suppress checks="CyclomaticComplexity" files="SharePartition.java"/>
 
@@ -89,7 +89,7 @@
               files="(Sender|Fetcher|FetchRequestManager|OffsetFetcher|KafkaConsumer|Metrics|RequestResponse|TransactionManager|KafkaAdminClient|Message|KafkaProducer)Test.java"/>
 
     <suppress checks="ClassFanOutComplexity"
-              files="(ConsumerCoordinator|KafkaConsumer|RequestResponse|Fetcher|FetchRequestManager|KafkaAdminClient|Message|KafkaProducer|NetworkClient)Test.java"/>
+              files="(ConsumerCoordinator|KafkaConsumer|RequestResponse|Fetcher|FetchRequestManager|KafkaAdminClient|Message|KafkaProducer|NetworkClient|StreamsGroupHeartbeatRequestManager)Test.java"/>
 
     <suppress checks="ClassFanOutComplexity"
               files="MockAdminClient.java"/>
@@ -137,7 +137,7 @@
 
     <!-- connect tests-->
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(DistributedHerder|KafkaBasedLog|WorkerSourceTask)Test.java"/>
+              files="(AbstractHerder|DistributedHerder|KafkaBasedLog|WorkerSourceTask)Test.java"/>
 
     <suppress checks="ClassFanOutComplexity"
               files="(WorkerSink|WorkerSource|ErrorHandling)TaskTest.java"/>
@@ -244,6 +244,8 @@
               files="(ProduceBenchSpec|ConsumeBenchSpec|SustainedConnectionSpec).java"/>
     <suppress id="dontUseSystemExit"
               files="(VerifiableConsumer|VerifiableProducer|VerifiableShareConsumer).java"/>
+    <suppress checks="MethodLength"
+              files="ProducerPerformance\.java"/>
 
     <!-- Shell -->
     <suppress checks="CyclomaticComplexity"
@@ -277,7 +279,7 @@
     <suppress checks="ParameterNumber"
               files="(ConsumerGroupMember|GroupMetadataManager).java"/>
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(RecordHelpersTest|GroupCoordinatorRecordHelpers|GroupMetadataManager|GroupCoordinatorService|GroupMetadataManagerTest|OffsetMetadataManagerTest|GroupCoordinatorServiceTest|GroupCoordinatorShardTest|GroupCoordinatorRecordSerde|StreamsGroupTest).java"/>
+              files="(RecordHelpersTest|GroupCoordinatorRecordHelpers|GroupMetadataManager|GroupCoordinatorService|GroupMetadataManagerTest|OffsetMetadataManagerTest|GroupCoordinatorServiceTest|GroupCoordinatorServiceTopologyDescriptionTest|GroupCoordinatorShardTest|GroupCoordinatorRecordSerde|StreamsGroupTest).java"/>
     <suppress checks="JavaNCSS"
               files="(GroupMetadataManager|GroupMetadataManagerTest).java"/>
 

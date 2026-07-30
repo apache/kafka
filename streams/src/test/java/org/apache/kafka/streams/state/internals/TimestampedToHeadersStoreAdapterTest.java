@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.RangeQuery;
@@ -43,6 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -316,6 +318,25 @@ public class TimestampedToHeadersStoreAdapterTest {
         assertTrue(result.isSuccess());
         assertNotNull(result.getResult());
         assertConvertsTimestampedToHeaders(result.getResult());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldDelegateOtherQueryTypesToStore() {
+        adapter = createAdapter();
+        // Any query that is neither KeyQuery nor RangeQuery falls through to the
+        // else branch and is passed straight to the underlying store, unchanged.
+        final Query<String> query = mock(Query.class);
+        final QueryResult<String> mockResult = QueryResult.forResult("delegated");
+        when(mockStore.query(eq(query), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn(mockResult);
+
+        final QueryResult<String> result =
+            adapter.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertSame(mockResult, result);
+        assertTrue(result.isSuccess());
+        assertEquals("delegated", result.getResult());
     }
 
     @Test

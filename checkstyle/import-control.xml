@@ -308,6 +308,7 @@
     <allow pkg="org.apache.kafka.test" />
     <allow pkg="org.apache.kafka.connect.runtime" />
     <allow pkg="org.apache.kafka.connect.runtime.isolation" />
+    <allow pkg="org.apache.kafka.connect.util" />
     <allow pkg="com.fasterxml.jackson" />
     <allow pkg="org.jose4j" />
     <allow pkg="net.sourceforge.argparse4j" />
@@ -422,6 +423,7 @@
       <allow class="org.apache.kafka.coordinator.transaction.TransactionLogConfig" />
       <allow pkg="org.apache.kafka.coordinator.group" />
       <allow pkg="org.apache.kafka.network" />
+      <allow pkg="org.apache.kafka.server.streams" />
     </subpackage>
 
     <subpackage name="test">
