@@ -2319,11 +2319,13 @@ org.apache.kafka.clients.consumer.internals.ShareCompletedFetchTest:
 - testCrcFailureWithUnalignedAcquiredRecords
 - testGapsForControlRecordsInAcquiredRange
 - testGapsWithControlRecordsAtBeginningAndEnd
+- testHasPendingAcknowledgements
 - testMixedRecordsAndGaps
 - testMultipleConsecutiveCrcFailures
 - testNegativeFetchCount
 - testNoRecordsInFetch
 - testOverlappingAcquiredRecordsLogsErrorAndRetainsFirstOccurrence
+- testPendingRenewAcknowledgementsWithException
 - testRecordDeserializationException
 - testSimple
 - testSoftMaxPollRecordLimit
@@ -2340,13 +2342,17 @@ org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManagerTest:
 - testCallbackHandlerConfig
 - testCloseFutureCompletedWhenMemberIdIsNull
 - testCloseInternalClosesShareFetchMetricsManager
+- testCloseSessionWhenNoSharePartitions
 - testCloseShouldBeIdempotent
 - testCloseWithSubscriptionChange
 - testCommitAsync
 - testCommitAsyncWithSubscriptionChange
 - testCommitSync
 - testCommitSyncWithSubscriptionChange
+- testCommitWithRenewAcknowledgements
 - testCorruptMessageError
+- testDoesNotCloseSessionWhileAcknowledgementsPending
+- testDoesNotCloseSessionWhileRecordsBuffered
 - testFatalErrorsAcknowledgementResponse
 - testFetchDisconnected
 - testFetchError
@@ -2392,12 +2398,13 @@ org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManagerTest:
 - testShareFetchWithSubscriptionChangeMultipleNodes
 - testShareFetchWithSubscriptionChangeMultipleNodesEmptyAcknowledgements
 - testStaleLeaderEpochDoesNotDowngradeShareSessionLeader
+- testStaleMetadataLeadershipChangeDoesNotFailAcknowledgements
 - testUnauthorizedTopic
 - testUnknownTopicIdError
-- testWhenFetchResponseReturnsWithALeadershipChangeErrorAndNewLeaderInformation
 - testWhenLeadershipChangeBetweenShareFetchRequests
 - testWhenLeadershipChangedAfterDisconnected
 - testWhenShareFetchResponseReturnsALeadershipChangeErrorButNoNewLeaderInformation
+- testWhenShareFetchResponseReturnsWithALeadershipChangeErrorAndNewLeaderInformation
 org.apache.kafka.clients.consumer.internals.ShareConsumerImplTest:
 - testAcknowledgementCommitCallbackRegistrationEvent
 - testAcknowledgementCommitCallbackRegistrationEvent_Null
@@ -2440,8 +2447,12 @@ org.apache.kafka.clients.consumer.internals.ShareConsumerImplTest:
 - testWakeupBeforeCallingPoll
 org.apache.kafka.clients.consumer.internals.ShareFetchBufferTest:
 - testBasicPeekAndPoll
+- testBufferedIncludesConsumedFetchWithPendingAcknowledgements
 - testBufferedPartitions
 - testCloseClearsData
+- testCloseClearsPendingAcknowledgementFetches
+- testRetainsEvictedFetchWithPendingAcknowledgements
+- testRetainsEvictedFetchWithPendingRenewAcknowledgements
 - testWakeup
 org.apache.kafka.clients.consumer.internals.ShareFetchCollectorTest:
 - testErrorInInitialize
@@ -2543,6 +2554,7 @@ org.apache.kafka.clients.consumer.internals.ShareSessionHandlerTest:
 - testAcknowledgeOnlyPartitionNotInSessionIsForgotten
 - testAddNewIdAfterTopicRemovedFromSession
 - testCanSkipIfRequestEmpty
+- testCloseEmptySessionBuildsFinalEpochShareFetch
 - testForgottenPartitions
 - testNextAcknowledgementsClearedOnInvalidRequest
 - testPartitionForgottenOnAcknowledgeOnly
