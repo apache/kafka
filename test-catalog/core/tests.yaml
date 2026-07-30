@@ -2322,13 +2322,6 @@ kafka.server.epoch.OffsetsForLeaderEpochTest:
 kafka.server.handlers.DescribeTopicPartitionsRequestHandlerTest:
 - testDescribeTopicPartitionsRequest
 - testDescribeTopicPartitionsRequestWithEdgeCases
-kafka.server.logger.RuntimeLoggerManagerTest:
-- testOperationNotAllowed
-- testValidateBogusLogLevelNameNotAllowed
-- testValidateDeleteLogLevelConfig
-- testValidateRemoveRootLogLevelConfigNotAllowed
-- testValidateSetLogLevelConfig
-- testValidateSetRootLogLevelConfig
 kafka.server.metadata.BrokerMetadataPublisherTest:
 - testExceptionInUpdateCoordinator
 - testGetTopicDelta

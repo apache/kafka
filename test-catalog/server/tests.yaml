@@ -418,6 +418,15 @@ org.apache.kafka.server.config.MinInSyncReplicasConfigTest:
 - testDefaultKafkaConfig
 org.apache.kafka.server.logger.LoggingControllerTest:
 - testLoggerLevelIsResolved
+org.apache.kafka.server.logger.RuntimeLoggerManagerTest:
+- testAlterUnknownOperationNotAllowed
+- testOperationNotAllowed
+- testUnknownOperationNotAllowed
+- testValidateBogusLogLevelNameNotAllowed
+- testValidateDeleteLogLevelConfig
+- testValidateRemoveRootLogLevelConfigNotAllowed
+- testValidateSetLogLevelConfig
+- testValidateSetRootLogLevelConfig
 org.apache.kafka.server.metrics.BrokerServerMetricsTest:
 - testIgnoredStaticVoters
 - testLastAppliedRecordOffset
