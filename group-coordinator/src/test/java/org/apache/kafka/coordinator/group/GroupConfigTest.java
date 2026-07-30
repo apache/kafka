@@ -137,7 +137,10 @@ public class GroupConfigTest {
                 // This is a free-form list of tag keys, so values like "not_a_number" are valid. Only an
                 // empty tag key (an empty element between commas) is rejected.
                 assertPropertyInvalid(name, "tag1,,tag2");
-            } else if (!GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG.equals(name)) {
+            } else if (!GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG.equals(name)
+                    && !GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG.equals(name)) {
+                // Free-form string configs (no ConfigDef validator) accept any value at construction
+                // time; their values are validated separately in GroupConfig.validate.
                 assertPropertyInvalid(name, "not_a_number", "-0.1");
             }
         });
@@ -377,6 +380,55 @@ public class GroupConfigTest {
         doTestValidProps(whitespaceProps);
         assertEquals(Optional.of(List.of("zone", "cluster")),
             new GroupConfig(whitespaceProps).streamsRackAwareAssignmentTags());
+    }
+
+    @Test
+    public void testStreamsAssignorNameValidation() {
+        // A registered assignor name is accepted.
+        Map<String, String> props = createValidGroupConfig();
+        props.put(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "sticky");
+        doTestValidProps(props);
+
+        // An unknown assignor name is rejected with INVALID_CONFIG.
+        props = createValidGroupConfig();
+        props.put(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "does-not-exist");
+        doTestInvalidProps(props, InvalidConfigurationException.class);
+    }
+
+    @Test
+    public void testStreamsAssignorNameSelectsCustomAssignor() {
+        // A custom assignor registered on the broker can be selected by its name.
+        GroupCoordinatorConfig groupCoordinatorConfig = createGroupCoordinatorConfig(Map.of(
+            GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG,
+            "sticky," + GroupCoordinatorConfigTest.CustomTaskAssignor.class.getName()
+        ));
+
+        Map<String, String> props = createValidGroupConfig();
+        props.put(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "CustomTaskAssignor");
+        assertDoesNotThrow(() -> GroupConfig.validate(props, groupCoordinatorConfig, createShareGroupConfig()));
+
+        // The built-in assignor is still selectable alongside it.
+        props.put(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "sticky");
+        assertDoesNotThrow(() -> GroupConfig.validate(props, groupCoordinatorConfig, createShareGroupConfig()));
+
+        // The custom assignor's class name is not a valid selector; only its name() is.
+        props.put(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, GroupCoordinatorConfigTest.CustomTaskAssignor.class.getName());
+        assertThrows(InvalidConfigurationException.class,
+            () -> GroupConfig.validate(props, groupCoordinatorConfig, createShareGroupConfig()));
+    }
+
+    @Test
+    public void testStreamsAssignorNameEvaluateIsLenient() {
+        // The Admin path (validate) rejects an unknown assignor name...
+        Map<String, String> props = createValidGroupConfig();
+        props.put(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "does-not-exist");
+        doTestInvalidProps(props, InvalidConfigurationException.class);
+
+        // ...but the metadata-replay path (evaluate) accepts it, so a value that was valid when set
+        // survives a broker restart even if the assignor was later removed from the broker config.
+        Properties replayed = new Properties();
+        replayed.setProperty(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "does-not-exist");
+        assertDoesNotThrow(() -> GroupConfig.evaluate(replayed, "group", createGroupCoordinatorConfig(), createShareGroupConfig()));
     }
 
     private void doTestInvalidProps(Map<String, String> props, Class<? extends Exception> exceptionClassName) {
@@ -894,15 +946,21 @@ public class GroupConfigTest {
     }
 
     private GroupCoordinatorConfig createGroupCoordinatorConfig() {
+        return createGroupCoordinatorConfig(Map.of());
+    }
+
+    private GroupCoordinatorConfig createGroupCoordinatorConfig(Map<String, Object> overrides) {
+        Map<String, Object> configs = new HashMap<>(Map.of(
+            GroupCoordinatorConfig.CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 1000,
+            GroupCoordinatorConfig.SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 1000,
+            GroupCoordinatorConfig.STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 1000
+        ));
+        configs.putAll(overrides);
         return GroupCoordinatorConfigTest.createGroupCoordinatorConfig(
             OFFSET_METADATA_MAX_SIZE,
             OFFSETS_RETENTION_CHECK_INTERVAL_MS,
             OFFSETS_RETENTION_MINUTES,
-            Map.of(
-                GroupCoordinatorConfig.CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 1000,
-                GroupCoordinatorConfig.SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 1000,
-                GroupCoordinatorConfig.STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, 1000
-            )
+            configs
         );
     }
 
