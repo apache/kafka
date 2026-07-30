@@ -69,8 +69,9 @@ import java.util.stream.Stream;
  * Two modes:
  * <ul>
  * <li>{@code steadyStateAppend} — all records to one partition. Dominated by per-append work, but
- *     not purely per-append: batches still fill and get replaced, so about 1 append in 145 creates a
- *     batch at {@code valueSize=100}, and 1 in 15 at {@code valueSize=1024}.</li>
+ *     not purely per-append: batches still fill and get replaced. At the default 16KB batch size that
+ *     is about 1 append in 145 creating a batch at {@code valueSize=100} and 1 in 15 at
+ *     {@code valueSize=1024}; at 256KB it is roughly 16x rarer.</li>
  * <li>{@code newBatchAppend} — one record per partition, so every append also creates a batch.
  *     Maximizes per-batch work, but read its <em>allocation</em> numbers with care: the per-partition
  *     deque map is a {@link org.apache.kafka.common.utils.internals.CopyOnWriteMap}, which copies the
@@ -117,10 +118,11 @@ public class ProducerAppendPathBenchmark {
     private static final int POOL_WARM_BUFFERS = 800;
 
     /**
-     * The producer default. 262144 was dropped once compression was added, to keep the run time
-     * flat: it is not a default, and the question here is specifically about the default path.
+     * 16384 is the producer default. 262144 is included to check that a regression on the default
+     * path does not depend on batch size — a larger batch means more records per batch, so it shifts
+     * the ratio of per-append to per-batch work.
      */
-    @Param({"16384"})
+    @Param({"16384", "262144"})
     private int batchSize;
 
     /**
