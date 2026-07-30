@@ -1369,6 +1369,10 @@ org.apache.kafka.coordinator.group.streams.AssignmentRefinerTest:
 - shouldPreserveActiveTaskCountWhenStandbysAreDeferred
 - shouldPreserveActiveTaskCountWhenTheTargetAssignmentItselfDuplicatesATask
 org.apache.kafka.coordinator.group.streams.CurrentAssignmentBuilderTest:
+- testActiveDemotedToStandbyInPlace
+- testActiveDemotionCompletesWhenRevocationIsAcknowledged
+- testActiveNotDemotedInPlaceWhileAnotherMemberOnSameProcessHoldsStandby
+- testActiveNotGrantedWhileAnotherMemberOnSameProcessHoldsStandby
 - testActiveNotGrantedWhileAnotherMemberOnSameProcessHoldsWarmup
 - testAssignmentEpochsShouldBePreservedFromPreviousAssignment
 - testMixedPreservedAndNewAssignmentEpochs
@@ -1381,6 +1385,10 @@ org.apache.kafka.coordinator.group.streams.CurrentAssignmentBuilderTest:
 - testStableToUnreleasedTasksWithOwnedTasksNotHavingRevokedTasks
 - testStableToUnrevokedTasks
 - testStableToUnrevokedWithEmptyAssignment
+- testStandbyConvertedToWarmupInPlace
+- testStandbyPromotedToActiveWhenActiveIsReleased
+- testStandbyPromotionHoldsStandbyWhileActiveOwnedByAnotherMember
+- testStandbyRevokedNormallyWhenConversionIsBlockedByAnotherMemberOnSameProcess
 - testUnknownState
 - testUnreleasedTasksToStable
 - testUnreleasedTasksToStableWithNewTasks
@@ -1391,6 +1399,7 @@ org.apache.kafka.coordinator.group.streams.CurrentAssignmentBuilderTest:
 - testUnrevokedTasksToStable
 - testUnrevokedTasksToUnreleasedTasks
 - testUnrevokedTasksToUnrevokedTasks
+- testWarmupConvertedToStandbyInPlace
 - testWarmupNotDroppedWhilePromotionIsBlockedByAnotherRevocation
 - testWarmupPromotedToActiveFromUnreleasedState
 - testWarmupPromotedToActiveWhenActiveIsReleased
