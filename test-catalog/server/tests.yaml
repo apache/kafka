@@ -400,6 +400,7 @@ org.apache.kafka.server.config.AbstractKafkaConfigTest:
 - testExtractGroupConfigMapExcludesInternalConfigWithUnconfiguredBrokerSynonym
 - testExtractGroupConfigMapIncludesInternalConfigWithConfiguredBrokerSynonym
 - testExtractGroupConfigMapIncludesNonInternalConfig
+- testExtractGroupConfigMapReturnsStreamsAssignor
 - testPopulateSynonymsOnEmptyMap
 - testPopulateSynonymsOnMapWithoutBrokerId
 - testPopulateSynonymsOnMapWithoutNodeId

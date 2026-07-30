@@ -2208,6 +2208,9 @@ kafka.server.StreamsGroupDescribeRequestTest:
 - testStreamsGroupDescribeWhenFeatureFlagNotEnabled
 kafka.server.StreamsGroupHeartbeatRequestTest:
 - testAlterRackAwareAssignmentTagsGroupConfig
+- testAlterStreamsAssignorNameGroupConfig
+- testAlterStreamsAssignorNameGroupConfigWithCustomAssignor
+- testDescribeStreamsAssignorNameGroupConfigFallsBackToAssignorName
 - testDynamicGroupConfig
 - testEmptyStreamsGroupId
 - testFencedMemberCanRejoinWithEpochZero
@@ -2224,6 +2227,9 @@ kafka.server.StreamsGroupHeartbeatRequestTest:
 - testStreamsGroupHeartbeatWithInvalidAPIVersion
 kafka.server.StreamsGroupHeartbeatRequestTest$WithAssignmentBatchingDisabledTest:
 - testAlterRackAwareAssignmentTagsGroupConfig
+- testAlterStreamsAssignorNameGroupConfig
+- testAlterStreamsAssignorNameGroupConfigWithCustomAssignor
+- testDescribeStreamsAssignorNameGroupConfigFallsBackToAssignorName
 - testDynamicGroupConfig
 - testEmptyStreamsGroupId
 - testFencedMemberCanRejoinWithEpochZero

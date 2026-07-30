@@ -4909,6 +4909,7 @@ org.apache.kafka.common.security.authenticator.SaslAuthenticatorTest:
 - testMissingUsernameSaslPlain
 - testMultipleServerMechanisms
 - testPacketSizeTooBig
+- testPrincipalBuiltOncePerAuthentication
 - testReauthenticateWithLargeReauthValue
 - testRepeatedValidSaslPlainOverSsl
 - testSaslAuthenticationMaxReceiveSize
