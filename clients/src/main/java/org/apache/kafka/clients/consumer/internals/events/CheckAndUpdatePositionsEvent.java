@@ -18,8 +18,8 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.internals.OffsetsRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerSubscriptionState;
+import org.apache.kafka.clients.consumer.internals.OffsetsRequestManager;
 import org.apache.kafka.common.TopicPartition;
 
 import java.time.Duration;
