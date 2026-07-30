@@ -1531,6 +1531,15 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
         public long remainingMs(final long currentTimeMs) {
             this.timer.update(currentTimeMs);
+            // KAFKA-20253: If the auto-commit interval has elapsed but a previous auto-commit is still
+            // in-flight (for example it cannot complete because the coordinator is unavailable after a
+            // failed re-authentication), a new auto-commit cannot be started yet. Returning 0 here would
+            // busy-spin the application thread, since this value feeds AsyncKafkaConsumer.pollForFetches()
+            // via maximumTimeToWait(). Wait for the interval instead; the network thread still wakes on the
+            // in-flight commit's response, which resets this timer.
+            if (this.timer.isExpired() && this.hasInflightCommit) {
+                return autoCommitInterval;
+            }
             return this.timer.remainingMs();
         }
 
