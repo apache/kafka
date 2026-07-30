@@ -654,9 +654,11 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
      * defaults when building a {@link GroupConfig} for {@code DescribeConfigs}.
      * Internal group configs are excluded unless their broker synonym was explicitly configured.
      *
+     * @param groupCoordinatorConfig The group coordinator config, used to resolve defaults that are
+     *                               not the plain value of the broker synonym.
      * @return a map of group config names to their corresponding broker-level values
      */
-    public Map<String, Object> extractGroupConfigMap() {
+    public Map<String, Object> extractGroupConfigMap(GroupCoordinatorConfig groupCoordinatorConfig) {
         Map<String, Object> defaults = new HashMap<>();
         Map<String, Object> brokerOriginals = originals();
         GroupConfig.configNames().forEach(groupConfigName ->
@@ -666,6 +668,12 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
                     defaults.put(groupConfigName, get(brokerConfigName));
                 }
             })
+        );
+        // The group config holds a single assignor name, whereas the broker config is a list that may also
+        // use class names, so the default is the name of the first registered assignor.
+        defaults.computeIfPresent(
+            GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG,
+            (groupConfigName, brokerValue) -> groupCoordinatorConfig.streamsGroupAssignorNames().get(0)
         );
         return defaults;
     }

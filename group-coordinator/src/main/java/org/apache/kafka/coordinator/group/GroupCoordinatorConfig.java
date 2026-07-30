@@ -27,15 +27,18 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.SimpleAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
+import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -387,6 +390,21 @@ public class GroupCoordinatorConfig {
     public static final String STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DOC = "The maximum interval between assignment updates for a streams group.";
     public static final int STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT = 15000;
 
+    // The first entry is the default assignor for groups that do not select one. New built-in
+    // assignors must be appended so that the default does not change for existing groups.
+    private static final List<TaskAssignor> STREAMS_GROUP_BUILTIN_ASSIGNORS = List.of(
+        new StickyTaskAssignor()
+    );
+    public static final String STREAMS_GROUP_ASSIGNORS_CONFIG = "group.streams.assignors";
+    public static final String STREAMS_GROUP_ASSIGNORS_DOC = "The server side task assignors for streams groups as a list of either names for built-in assignors or fully qualified class names for custom assignors. " +
+        "The first one in the list is considered as the default assignor to be used in the case where the streams group does not specify an assignor. " +
+        "Changing the default assignor does not trigger a rebalance for existing groups; the new default takes effect on the next rebalance. " +
+        "The supported built-in assignors are: " + STREAMS_GROUP_BUILTIN_ASSIGNORS.stream().map(TaskAssignor::name).collect(Collectors.joining(", ")) + ".";
+    public static final List<String> STREAMS_GROUP_ASSIGNORS_DEFAULT = STREAMS_GROUP_BUILTIN_ASSIGNORS
+        .stream()
+        .map(TaskAssignor::name)
+        .toList();
+
     public static final String STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG = "group.streams.rack.aware.assignment.tags";
     public static final String STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT = "";
     public static final String STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DOC = "List of client tag keys used to distribute standby replicas across Kafka Streams instances. When configured, and the used broker-side assignor supports it, it will make a best-effort to distribute standby tasks over each client tag dimension.";
@@ -509,6 +527,7 @@ public class GroupCoordinatorConfig {
         .define(STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_DOC)
         .define(STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_DOC)
         .define(STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DOC)
+        .define(STREAMS_GROUP_ASSIGNORS_CONFIG, LIST, STREAMS_GROUP_ASSIGNORS_DEFAULT, ConfigDef.ValidList.anyNonDuplicateValues(false, false), MEDIUM, STREAMS_GROUP_ASSIGNORS_DOC)
         .define(STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, BOOLEAN, STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT, MEDIUM, STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DOC)
         .define(STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DOC)
         .define(STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DOC)
@@ -583,6 +602,8 @@ public class GroupCoordinatorConfig {
     private final int streamsGroupMaxWarmupReplicas;
     private final List<String> streamsGroupRackAwareAssignmentTags;
     private final long streamsGroupAcceptableRecoveryLag;
+    private final List<TaskAssignor> streamsGroupAssignors;
+    private final List<String> streamsGroupAssignorNames;
 
     private final AbstractConfig config;
 
@@ -651,6 +672,8 @@ public class GroupCoordinatorConfig {
         this.streamsGroupNumWarmupReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG);
         this.streamsGroupMaxWarmupReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG);
         this.streamsGroupAcceptableRecoveryLag = config.getLong(GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_CONFIG);
+        this.streamsGroupAssignors = streamsGroupAssignors(config);
+        this.streamsGroupAssignorNames = this.streamsGroupAssignors.stream().map(TaskAssignor::name).toList();
         this.config = config;
 
         checkConstraints();
@@ -853,17 +876,24 @@ public class GroupCoordinatorConfig {
     protected List<ConsumerGroupPartitionAssignor> consumerGroupAssignors(
         AbstractConfig config
     ) {
-        Map<String, ConsumerGroupPartitionAssignor> defaultAssignors = CONSUMER_GROUP_BUILTIN_ASSIGNORS
+        Map<String, ConsumerGroupPartitionAssignor> builtInAssignors = CONSUMER_GROUP_BUILTIN_ASSIGNORS
             .stream()
             .collect(Collectors.toMap(ConsumerGroupPartitionAssignor::name, Function.identity()));
+        // A built-in may be configured either by its name or by its class name, so it is recognised
+        // by class rather than by how it was resolved below.
+        Set<Class<? extends ConsumerGroupPartitionAssignor>> builtInAssignorClasses = CONSUMER_GROUP_BUILTIN_ASSIGNORS
+            .stream()
+            .map(ConsumerGroupPartitionAssignor::getClass)
+            .collect(Collectors.toSet());
 
         List<ConsumerGroupPartitionAssignor> assignors = new ArrayList<>();
+        Set<String> assignorNames = new HashSet<>();
 
         try {
             // `configuredAssignor` is either the name of a built-in assignor,
             // or a fully qualified class name of a custom assignor
             for (String configuredAssignor : config.getList(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG)) {
-                ConsumerGroupPartitionAssignor assignor = defaultAssignors.get(configuredAssignor);
+                ConsumerGroupPartitionAssignor assignor = builtInAssignors.get(configuredAssignor);
                 if (assignor == null) {
                     try {
                         assignor = Utils.newInstance(configuredAssignor, ConsumerGroupPartitionAssignor.class);
@@ -882,6 +912,18 @@ public class GroupCoordinatorConfig {
 
                 assignors.add(assignor);
 
+                if (!builtInAssignorClasses.contains(assignor.getClass()) && builtInAssignors.containsKey(assignor.name())) {
+                    throw new ConfigException(CONSUMER_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
+                        "Assignor name '" + assignor.name() + "' is reserved by a built-in assignor. " +
+                            "A custom assignor must not reuse the name of a built-in assignor");
+                }
+
+                if (!assignorNames.add(assignor.name())) {
+                    throw new ConfigException(CONSUMER_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
+                        "Assignor name '" + assignor.name() + "' is already registered by another configured assignor. " +
+                            "Assignor names, whether built-in or custom, must be unique");
+                }
+
                 if (assignor instanceof Configurable configurable) {
                     configurable.configure(config.originals());
                 }
@@ -889,6 +931,71 @@ public class GroupCoordinatorConfig {
         } catch (Exception e) {
             for (ConsumerGroupPartitionAssignor assignor : assignors) {
                 maybeCloseQuietly(assignor, "AutoCloseable object constructed and configured during failed call to consumerGroupAssignors");
+            }
+            throw e;
+        }
+
+        return assignors;
+    }
+
+    protected List<TaskAssignor> streamsGroupAssignors(
+        AbstractConfig config
+    ) {
+        Map<String, TaskAssignor> builtInAssignors = STREAMS_GROUP_BUILTIN_ASSIGNORS
+            .stream()
+            .collect(Collectors.toMap(TaskAssignor::name, Function.identity()));
+        // A built-in may be configured either by its name or by its class name, so it is recognised
+        // by class rather than by how it was resolved below.
+        Set<Class<? extends TaskAssignor>> builtInAssignorClasses = STREAMS_GROUP_BUILTIN_ASSIGNORS
+            .stream()
+            .map(TaskAssignor::getClass)
+            .collect(Collectors.toSet());
+
+        List<TaskAssignor> assignors = new ArrayList<>();
+        Set<String> assignorNames = new HashSet<>();
+
+        try {
+            // `configuredAssignor` is either the name of a built-in assignor,
+            // or a fully qualified class name of a custom assignor
+            for (String configuredAssignor : config.getList(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG)) {
+                TaskAssignor assignor = builtInAssignors.get(configuredAssignor);
+                if (assignor == null) {
+                    try {
+                        assignor = Utils.newInstance(configuredAssignor, TaskAssignor.class);
+                    } catch (ClassNotFoundException e) {
+                        throw new ConfigException(STREAMS_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
+                            "Class cannot be found");
+                    } catch (ClassCastException e) {
+                        throw new ConfigException(STREAMS_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
+                            "Class is not an instance of " + TaskAssignor.class.getName());
+                    } catch (KafkaException e) {
+                        // Utils#newInstance reports instantiation failures, for example a missing
+                        // public no-argument constructor, without naming the config that caused them.
+                        throw new ConfigException(STREAMS_GROUP_ASSIGNORS_CONFIG, configuredAssignor, e.getMessage());
+                    }
+                }
+
+                assignors.add(assignor);
+
+                if (!builtInAssignorClasses.contains(assignor.getClass()) && builtInAssignors.containsKey(assignor.name())) {
+                    throw new ConfigException(STREAMS_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
+                        "Assignor name '" + assignor.name() + "' is reserved by a built-in assignor. " +
+                            "A custom assignor must not reuse the name of a built-in assignor");
+                }
+
+                if (!assignorNames.add(assignor.name())) {
+                    throw new ConfigException(STREAMS_GROUP_ASSIGNORS_CONFIG, configuredAssignor,
+                        "Assignor name '" + assignor.name() + "' is already registered by another configured assignor. " +
+                            "Assignor names, whether built-in or custom, must be unique");
+                }
+
+                if (assignor instanceof Configurable configurable) {
+                    configurable.configure(config.originals());
+                }
+            }
+        } catch (Exception e) {
+            for (TaskAssignor assignor : assignors) {
+                maybeCloseQuietly(assignor, "AutoCloseable object constructed and configured during failed call to streamsGroupAssignors");
             }
             throw e;
         }
@@ -1447,5 +1554,19 @@ public class GroupCoordinatorConfig {
      */
     public long streamsGroupAcceptableRecoveryLag() {
         return streamsGroupAcceptableRecoveryLag;
+    }
+
+    /**
+     * The streams group task assignors.
+     */
+    public List<TaskAssignor> streamsGroupAssignors() {
+        return streamsGroupAssignors;
+    }
+
+    /**
+     * The names of the registered streams group task assignors, in configured order.
+     */
+    public List<String> streamsGroupAssignorNames() {
+        return streamsGroupAssignorNames;
     }
 }
