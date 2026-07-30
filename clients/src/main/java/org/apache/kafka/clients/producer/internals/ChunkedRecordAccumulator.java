@@ -209,12 +209,11 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                         ProducerBatch last = dq.peekLast();
                         // The batch may have changed while allocateChunks was off-lock: drained and
                         // replaced, closed for appends, filled to its limit, or already grown by a
-                        // concurrent appender. The instanceof excludes a replacement that cannot take
-                        // chunks at all (a split batch is a plain ProducerBatch), and a positive
-                        // extensionBytesNeeded means the batch still needs chunks for this record, so
-                        // together they attach only when doing so is both safe and useful: attaching
-                        // to a batch closed for appends would throw, and to one that no longer needs
-                        // them would merely hold chunks it cannot use.
+                        // concurrent appender. extensionBytesNeeded is 0 whenever attaching would be
+                        // wrong, so it serves as both tests at once: the batch still needs chunks for
+                        // this record, and it is still open (attaching to a stream closed for appends
+                        // would throw). The instanceof covers the one case it cannot: a replacement
+                        // that is a plain ProducerBatch (a split batch), which takes no chunks at all.
                         if (last instanceof ChunkedProducerBatch
                                 && ((ChunkedProducerBatch) last).extensionBytesNeeded(timestamp, key, value, headers) > 0) {
                             ((ChunkedProducerBatch) last).addBuffers(extensionChunks);

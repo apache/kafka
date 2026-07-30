@@ -41,9 +41,11 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -51,6 +53,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -645,12 +648,19 @@ public class ChunkedRecordAccumulatorTest {
         final int chunkSize = 256;
         final AtomicBoolean closeOnce = new AtomicBoolean(true);
         final AtomicReference<Deque<ProducerBatch>> dqRef = new AtomicReference<>();
+        // Chunks handed to the extension path, and every chunk handed back to the pool. Tracked by
+        // identity so the assertions can name the exact buffers rather than infer from a total.
+        final List<ByteBuffer> extensionChunks = new ArrayList<>();
+        final Set<ByteBuffer> returnedToPool = Collections.newSetFromMap(new IdentityHashMap<>());
 
         BufferPool pool = new BufferPool(64L * chunkSize, chunkSize, metrics, time, "producer-metrics",
                 BufferPool.AllocationMode.INCREMENTAL) {
             @Override
             public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
                 List<ByteBuffer> chunks = super.allocateChunks(totalSize, maxTimeToBlockMs);
+                // The extension acquire is the only non-blocking one (see allocateExtensionChunks).
+                if (maxTimeToBlockMs == 0L)
+                    extensionChunks.addAll(chunks);
                 Deque<ProducerBatch> dq = dqRef.get();
                 // Mock a concurrent appender that found the batch full: RecordAccumulator.tryAppend
                 // calls closeForRecordAppends() whenever last.tryAppend returns null.
@@ -662,6 +672,12 @@ public class ChunkedRecordAccumulatorTest {
                     }
                 }
                 return chunks;
+            }
+
+            @Override
+            public void deallocate(ByteBuffer buffer, int size) {
+                returnedToPool.add(buffer);
+                super.deallocate(buffer, size);
             }
         };
         ChunkedRecordAccumulator accum = new ChunkedRecordAccumulator(logContext, 8192, Compression.NONE,
@@ -676,8 +692,6 @@ public class ChunkedRecordAccumulatorTest {
             assertEquals(1, dq.size());
             dqRef.set(dq);
 
-            long availableBeforeSecond = pool.availableMemory();
-
             // Second record needs an extension; the batch is closed for appends mid-window.
             RecordAccumulator.RecordAppendResult result = accum.append(topic, partition1, 0L, key,
                     new byte[300], Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), cluster);
@@ -690,12 +704,11 @@ public class ChunkedRecordAccumulatorTest {
             assertNotNull(dq.peekLast());
             assertEquals(1, dq.peekLast().recordCount);
 
-            // The extension chunks acquired for the closed batch must have been refunded, so the only
-            // memory still held beyond the first batch is what the new batch needed.
-            assertTrue(pool.availableMemory() < availableBeforeSecond,
-                    "the new batch should hold pool memory");
-            assertEquals(0, pool.availableMemory() % chunkSize,
-                    "pool accounting must stay chunk-aligned after the refund");
+            // Every chunk the extension path acquired for the now-closed batch must have gone back to
+            // the pool, rather than being attached to it or dropped.
+            assertFalse(extensionChunks.isEmpty(), "the extension path should have acquired chunks");
+            assertTrue(returnedToPool.containsAll(extensionChunks),
+                    "every chunk acquired to extend the closed batch must be returned to the pool");
         } finally {
             accum.close();
         }
