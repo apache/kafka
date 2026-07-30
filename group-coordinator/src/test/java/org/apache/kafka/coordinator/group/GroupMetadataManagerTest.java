@@ -144,6 +144,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
+import org.apache.kafka.coordinator.group.streams.LagDrivenAssignmentRefiner;
 import org.apache.kafka.coordinator.group.streams.MemberTaskOffsets;
 import org.apache.kafka.coordinator.group.streams.MockAssignmentRefiner;
 import org.apache.kafka.coordinator.group.streams.MockTaskAssignor;
@@ -234,6 +235,7 @@ import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext
 import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext.DEFAULT_CLIENT_ID;
 import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext.DEFAULT_PROCESS_ID;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.getDefaultAssignmentConfigs;
+import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.mkResponseTasks;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.streamsTopicFixture;
 import static org.apache.kafka.coordinator.group.Utils.computeGroupHash;
 import static org.apache.kafka.coordinator.group.Utils.computeTopicHash;
@@ -19419,6 +19421,155 @@ public class GroupMetadataManagerTest {
             group.getMemberOrThrow(memberId).assignedTasks()
         );
         assertEquals(Map.of(memberId, targetAssignment), group.refinedAssignment(group.assignmentEpoch()));
+    }
+
+    @Test
+    public void testStreamsGroupWarmsUpAStatefulTaskBeforeHandingItOver() {
+        String groupId = "fooup";
+        String memberA = Uuid.randomUuid().toString();
+        String memberB = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Uuid changelogTopicId = Uuid.randomUuid();
+
+        // A stateful subtopology: its tasks have state to restore, so they are the ones that get warmed up.
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology()
+                .setSubtopologyId(subtopology1)
+                .setSourceTopics(List.of("foo"))
+                .setStateChangelogTopics(List.of(
+                    new StreamsGroupHeartbeatRequestData.TopicInfo().setName("changelog")))
+        ));
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, "foo", 2)
+            .addTopic(changelogTopicId, "changelog", 2)
+            .buildCoordinatorMetadataImage();
+        long groupMetadataHash = computeGroupHash(Map.of(
+            "foo", computeTopicHash("foo", metadataImage),
+            "changelog", computeTopicHash("changelog", metadataImage)
+        ));
+
+        // The assignor decides 0_1 belongs on memberB, which holds no state for it.
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        assignor.prepareGroupAssignment(Map.of(
+            memberA, mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0)),
+            memberB, mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 1))
+        ));
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withStreamsGroupAssignmentRefiner(new LagDrivenAssignmentRefiner())
+            .withMetadataImage(metadataImage)
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, 10)
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberA)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(10)
+                    .setProcessId("processA")
+                    .setAssignedTasks(mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 10,
+                        TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1)))
+                    .build())
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberB)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(10)
+                    .setProcessId("processB")
+                    .build())
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topology))
+                .withTargetAssignment(memberA, mkTasksTuple(TaskRole.ACTIVE,
+                    TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1)))
+                .withTargetAssignment(memberB, TasksTuple.EMPTY)
+                .withTargetAssignmentEpoch(10)
+                .withMetadataHash(groupMetadataHash)
+                .withValidatedTopologyEpoch(0)
+                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+            .build();
+
+        // Changing an assignment configuration is the cheapest way to make the coordinator run the assignor, which
+        // hands back the target assignment prepared above.
+        Properties groupConfig = new Properties();
+        groupConfig.setProperty(GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, "1");
+        context.updateGroupConfig(groupId, groupConfig);
+
+        // Step 1: memberB is told to warm 0_1 up rather than to run it. memberA keeps running it in the meantime.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> plant =
+            context.streamsGroupHeartbeat(streamsGroupWarmupHeartbeat(groupId, memberB, "processB", 10, List.of(), null));
+        assertEquals(mkResponseTasks(subtopology1, 1), plant.response().data().warmupTasks());
+        assertEquals(List.of(), plant.response().data().activeTasks());
+
+        StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+        assertEquals(11, group.groupEpoch());
+        assertEquals(
+            mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1)),
+            group.refinedAssignment(group.assignmentEpoch()).get(memberA)
+        );
+
+        // Step 2: memberA reconciles to the new epoch, keeping both tasks, which settles the group.
+        context.streamsGroupHeartbeat(
+            streamsGroupWarmupHeartbeat(groupId, memberA, "processA", 10, List.of(0, 1), null));
+        assertEquals(StreamsGroupState.STABLE, group.state());
+
+        // Step 3: memberB reports that its warm-up has caught up, so the next refinement step stops withholding 0_1 and
+        // memberA is asked to revoke it. memberB cannot have it yet.
+        context.streamsGroupHeartbeat(
+            streamsGroupWarmupHeartbeat(groupId, memberB, "processB", 11, List.of(), 0L));
+        assertEquals(12, group.groupEpoch());
+        // memberB still cannot run the task: memberA has to release it first. It keeps the warm-up in the meantime
+        // rather than giving it up while it waits, so the restored state is still there to recycle when the active task
+        // is granted.
+        assertEquals(Map.of(), group.getMemberOrThrow(memberB).assignedTasks().activeTasksWithEpochs());
+        assertEquals(
+            Map.of(subtopology1, Set.of(1)),
+            group.getMemberOrThrow(memberB).assignedTasks().warmupTasks()
+        );
+
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> revoke = context.streamsGroupHeartbeat(
+            streamsGroupWarmupHeartbeat(groupId, memberA, "processA", 11, List.of(0, 1), null));
+        assertEquals(mkResponseTasks(subtopology1, 0), revoke.response().data().activeTasks());
+
+        // memberA acknowledges the revocation by reporting that it now only owns 0_0.
+        context.streamsGroupHeartbeat(
+            streamsGroupWarmupHeartbeat(groupId, memberA, "processA", 11, List.of(0), null));
+
+        // Step 4: with 0_1 released, memberB takes it over as an active task and its warm-up is promoted in place --
+        // the warm-up is gone from the assignment rather than revoked and restored a second time.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> promote = context.streamsGroupHeartbeat(
+            streamsGroupWarmupHeartbeat(groupId, memberB, "processB", 12, List.of(), 0L));
+        assertEquals(mkResponseTasks(subtopology1, 1), promote.response().data().activeTasks());
+        assertEquals(
+            Set.of(1),
+            group.getMemberOrThrow(memberB).assignedTasks().activeTasksWithEpochs().get(subtopology1).keySet()
+        );
+        assertEquals(Map.of(), group.getMemberOrThrow(memberB).assignedTasks().warmupTasks());
+    }
+
+    private StreamsGroupHeartbeatRequestData streamsGroupWarmupHeartbeat(
+        String groupId,
+        String memberId,
+        String processId,
+        int memberEpoch,
+        List<Integer> ownedActiveTasks,
+        Long warmupTaskLag
+    ) {
+        StreamsGroupHeartbeatRequestData request = new StreamsGroupHeartbeatRequestData()
+            .setGroupId(groupId)
+            .setMemberId(memberId)
+            .setMemberEpoch(memberEpoch)
+            .setProcessId(processId)
+            .setRebalanceTimeoutMs(1500)
+            .setActiveTasks(ownedActiveTasks.isEmpty()
+                ? List.of()
+                : List.of(new StreamsGroupHeartbeatRequestData.TaskIds()
+                    .setSubtopologyId("subtopology1")
+                    .setPartitions(ownedActiveTasks)))
+            .setStandbyTasks(List.of())
+            .setWarmupTasks(List.of());
+        if (warmupTaskLag != null) {
+            request
+                .setTaskOffsets(List.of(new StreamsGroupHeartbeatRequestData.TaskOffset()
+                    .setSubtopologyId("subtopology1").setPartition(1).setOffset(1000L)))
+                .setTaskEndOffsets(List.of(new StreamsGroupHeartbeatRequestData.TaskOffset()
+                    .setSubtopologyId("subtopology1").setPartition(1).setOffset(1000L + warmupTaskLag)));
+        }
+        return request;
     }
 
     /**
