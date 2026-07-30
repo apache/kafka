@@ -19,7 +19,7 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
-import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.clients.consumer.internals.ConsumerSubscriptionState;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -62,7 +62,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_
 public class MockConsumer<K, V> implements Consumer<K, V> {
 
     private final Map<String, List<PartitionInfo>> partitions;
-    private final SubscriptionState subscriptions;
+    private final ConsumerSubscriptionState subscriptions;
     private final Map<TopicPartition, Long> beginningOffsets;
     private final Map<TopicPartition, Long> endOffsets;
     private final Map<TopicPartition, Long> durationResetOffsets;
@@ -103,7 +103,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     private MockConsumer(AutoOffsetResetStrategy offsetResetStrategy) {
-        this.subscriptions = new SubscriptionState(new LogContext(), offsetResetStrategy);
+        this.subscriptions = new ConsumerSubscriptionState(new LogContext(), offsetResetStrategy);
         this.partitions = new HashMap<>();
         this.records = new HashMap<>();
         this.paused = new HashSet<>();
@@ -331,7 +331,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
                     if (rec.offset() >= position) {
                         results.computeIfAbsent(entry.getKey(), partition -> new ArrayList<>()).add(rec);
                         Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(Optional.empty(), rec.leaderEpoch());
-                        SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
+                        ConsumerSubscriptionState.FetchPosition newPosition = new ConsumerSubscriptionState.FetchPosition(
                                 rec.offset() + 1, rec.leaderEpoch(), leaderAndEpoch);
                         subscriptions.position(entry.getKey(), newPosition);
                         nextOffsetAndMetadata.put(entry.getKey(), new OffsetAndMetadata(rec.offset() + 1, rec.leaderEpoch(), ""));
@@ -467,7 +467,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         ensureNotClosed();
         if (!this.subscriptions.isAssigned(partition))
             throw new IllegalArgumentException("You can only check the position for partitions assigned to this consumer.");
-        SubscriptionState.FetchPosition position = this.subscriptions.position(partition);
+        ConsumerSubscriptionState.FetchPosition position = this.subscriptions.position(partition);
         if (position == null) {
             updateFetchPosition(partition);
             position = this.subscriptions.position(partition);

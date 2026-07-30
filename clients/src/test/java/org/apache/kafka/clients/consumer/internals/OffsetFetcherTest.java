@@ -118,7 +118,7 @@ public class OffsetFetcherTest {
 
     private final long retryBackoffMs = 100;
     private MockTime time = new MockTime(1);
-    private SubscriptionState subscriptions;
+    private ConsumerSubscriptionState subscriptions;
     private ConsumerMetadata metadata;
     private MockClient client;
     private Metrics metrics;
@@ -1184,7 +1184,7 @@ public class OffsetFetcherTest {
             Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(
                 metadata.currentLeader(tp).leader, Optional.of(4));
             subscriptions.seekUnvalidated(tp,
-                new SubscriptionState.FetchPosition(0, Optional.of(4), leaderAndEpoch));
+                new ConsumerSubscriptionState.FetchPosition(0, Optional.of(4), leaderAndEpoch));
         }
 
         Set<TopicPartition> allRequestedPartitions = new HashSet<>();
@@ -1250,7 +1250,7 @@ public class OffsetFetcherTest {
         // Seek with a position and leader+epoch
         Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(
                 metadata.currentLeader(tp0).leader, Optional.of(epochOne));
-        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(20L, Optional.of(epochOne), leaderAndEpoch));
+        subscriptions.seekUnvalidated(tp0, new ConsumerSubscriptionState.FetchPosition(20L, Optional.of(epochOne), leaderAndEpoch));
         assertFalse(client.isConnected(node.idString()));
         assertTrue(subscriptions.awaitingValidation(tp0));
 
@@ -1287,7 +1287,7 @@ public class OffsetFetcherTest {
 
         MetricConfig metricConfig = new MetricConfig();
         LogContext logContext = new LogContext();
-        SubscriptionState subscriptionState = new SubscriptionState(logContext, offsetResetStrategy);
+        ConsumerSubscriptionState subscriptionState = new ConsumerSubscriptionState(logContext, offsetResetStrategy);
 
         buildFetcher(metricConfig, isolationLevel, metadataExpireMs, subscriptionState, logContext);
 
@@ -1333,7 +1333,7 @@ public class OffsetFetcherTest {
             // Seek with a position and leader+epoch
             Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(
                     metadata.currentLeader(tp0).leader, Optional.of(epochOne));
-            subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(0, Optional.of(epochOne), leaderAndEpoch));
+            subscriptions.seekUnvalidated(tp0, new ConsumerSubscriptionState.FetchPosition(0, Optional.of(epochOne), leaderAndEpoch));
 
             // Update metadata to epoch=2, enter validation
             metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds("dummy", 1,
@@ -1348,7 +1348,7 @@ public class OffsetFetcherTest {
             // Seek with a position and leader+epoch
             Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(
                     metadata.currentLeader(tp0).leader, Optional.of(epochOne));
-            subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(0, Optional.of(epochOne), leaderAndEpoch));
+            subscriptions.seekUnvalidated(tp0, new ConsumerSubscriptionState.FetchPosition(0, Optional.of(epochOne), leaderAndEpoch));
 
             // Update metadata to epoch=2, enter validation
             metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds("dummy", 1,
@@ -1382,7 +1382,7 @@ public class OffsetFetcherTest {
         // Seek with a position and leader+epoch
         Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(
             metadata.currentLeader(tp0).leader, Optional.of(epochOne));
-        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(20L, Optional.of(epochOne), leaderAndEpoch));
+        subscriptions.seekUnvalidated(tp0, new ConsumerSubscriptionState.FetchPosition(20L, Optional.of(epochOne), leaderAndEpoch));
         assertFalse(client.isConnected(node.idString()));
         assertTrue(subscriptions.awaitingValidation(tp0));
 
@@ -1445,7 +1445,7 @@ public class OffsetFetcherTest {
         apiVersions.update(node.idString(), NodeApiVersions.create());
 
         Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(metadata.currentLeader(tp0).leader, Optional.of(epochOne));
-        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(initialOffset, Optional.of(epochOne), leaderAndEpoch));
+        subscriptions.seekUnvalidated(tp0, new ConsumerSubscriptionState.FetchPosition(initialOffset, Optional.of(epochOne), leaderAndEpoch));
 
         offsetFetcher.validatePositionsIfNeeded();
 
@@ -1496,7 +1496,7 @@ public class OffsetFetcherTest {
         apiVersions.update(node.idString(), NodeApiVersions.create());
 
         Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(metadata.currentLeader(tp0).leader, epochOneOpt);
-        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(0, epochOneOpt, leaderAndEpoch));
+        subscriptions.seekUnvalidated(tp0, new ConsumerSubscriptionState.FetchPosition(0, epochOneOpt, leaderAndEpoch));
 
         offsetFetcher.validatePositionsIfNeeded();
         consumerClient.poll(time.timer(Duration.ZERO));
@@ -1504,7 +1504,7 @@ public class OffsetFetcherTest {
         assertTrue(client.hasInFlightRequests());
 
         // While the OffsetForLeaderEpoch request is in-flight, we seek to a different offset.
-        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(5, epochOneOpt, leaderAndEpoch));
+        subscriptions.seekUnvalidated(tp0, new ConsumerSubscriptionState.FetchPosition(5, epochOneOpt, leaderAndEpoch));
         assertTrue(subscriptions.awaitingValidation(tp0));
 
         client.respond(
@@ -1538,7 +1538,7 @@ public class OffsetFetcherTest {
 
         // Seek with a position and leader+epoch
         Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(metadata.currentLeader(tp0).leader, Optional.of(epochOne));
-        subscriptions.seekValidated(tp0, new SubscriptionState.FetchPosition(0, Optional.of(epochOne), leaderAndEpoch));
+        subscriptions.seekValidated(tp0, new ConsumerSubscriptionState.FetchPosition(0, Optional.of(epochOne), leaderAndEpoch));
 
         // Update metadata to epoch=2, enter validation
         metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds("dummy", 1,
@@ -1548,7 +1548,7 @@ public class OffsetFetcherTest {
 
         // Update the position to epoch=3, as we would from a fetch
         subscriptions.completeValidation(tp0);
-        SubscriptionState.FetchPosition nextPosition = new SubscriptionState.FetchPosition(
+        ConsumerSubscriptionState.FetchPosition nextPosition = new ConsumerSubscriptionState.FetchPosition(
                 10,
                 Optional.of(epochTwo),
                 new Metadata.LeaderAndEpoch(leaderAndEpoch.leader, Optional.of(epochTwo)));
@@ -1746,7 +1746,7 @@ public class OffsetFetcherTest {
                               IsolationLevel isolationLevel) {
         long metadataExpireMs = Long.MAX_VALUE;
         LogContext logContext = new LogContext();
-        SubscriptionState subscriptionState = new SubscriptionState(logContext, offsetResetStrategy);
+        ConsumerSubscriptionState subscriptionState = new ConsumerSubscriptionState(logContext, offsetResetStrategy);
         buildFetcher(metricConfig, isolationLevel, metadataExpireMs,
                 subscriptionState, logContext);
     }
@@ -1754,7 +1754,7 @@ public class OffsetFetcherTest {
     private void buildFetcher(MetricConfig metricConfig,
                               IsolationLevel isolationLevel,
                               long metadataExpireMs,
-                              SubscriptionState subscriptionState,
+                              ConsumerSubscriptionState subscriptionState,
                               LogContext logContext) {
         buildDependencies(metricConfig, metadataExpireMs, subscriptionState, logContext);
         offsetFetcher = new OffsetFetcher(logContext,
@@ -1770,7 +1770,7 @@ public class OffsetFetcherTest {
 
     private void buildDependencies(MetricConfig metricConfig,
                                    long metadataExpireMs,
-                                   SubscriptionState subscriptionState,
+                                   ConsumerSubscriptionState subscriptionState,
                                    LogContext logContext) {
         time = new MockTime(1);
         subscriptions = subscriptionState;

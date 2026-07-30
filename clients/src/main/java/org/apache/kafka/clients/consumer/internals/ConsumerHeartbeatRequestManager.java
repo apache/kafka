@@ -64,7 +64,7 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
             final Time time,
             final ConsumerConfig config,
             final CoordinatorRequestManager coordinatorRequestManager,
-            final SubscriptionState subscriptions,
+            final ConsumerSubscriptionState subscriptions,
             final ConsumerMembershipManager membershipManager,
             final BackgroundEventHandler backgroundEventHandler,
             final Metrics metrics) {
@@ -231,13 +231,13 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
      * is important to ensure that reconciliation completes successfully.
      */
     static class HeartbeatState {
-        private final SubscriptionState subscriptions;
+        private final ConsumerSubscriptionState subscriptions;
         private final ConsumerMembershipManager membershipManager;
         private final int rebalanceTimeoutMs;
         private final SentFields sentFields;
 
         public HeartbeatState(
-                final SubscriptionState subscriptions,
+                final ConsumerSubscriptionState subscriptions,
                 final ConsumerMembershipManager membershipManager,
                 final int rebalanceTimeoutMs) {
             this.subscriptions = subscriptions;

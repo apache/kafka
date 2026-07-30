@@ -71,14 +71,14 @@ import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UND
  * <p>
  * Thread Safety: this class is thread-safe.
  */
-public class SubscriptionState {
+public class ConsumerSubscriptionState implements AbstractSubscriptionState {
     private static final String SUBSCRIPTION_EXCEPTION_MESSAGE =
             "Subscription to topics, partitions and pattern are mutually exclusive";
 
     private final Logger log;
 
     private enum SubscriptionType {
-        NONE, AUTO_TOPICS, AUTO_PATTERN, AUTO_PATTERN_RE2J, USER_ASSIGNED, AUTO_TOPICS_SHARE
+        NONE, AUTO_TOPICS, AUTO_PATTERN, AUTO_PATTERN_RE2J, USER_ASSIGNED
     }
 
     /* the type of subscription */
@@ -118,7 +118,7 @@ public class SubscriptionState {
 
     @Override
     public synchronized String toString() {
-        return "SubscriptionState{" +
+        return "ConsumerSubscriptionState{" +
             "type=" + subscriptionType +
             ", subscribedPattern=" + subscribedPatternInUse() +
             ", subscription=" + String.join(",", subscription) +
@@ -147,14 +147,12 @@ public class SubscriptionState {
                 return "Subscribe(" + subscribedRe2JPattern + ")";
             case USER_ASSIGNED:
                 return "Assign(" + assignedPartitions() + " , id=" + assignmentId + ")";
-            case AUTO_TOPICS_SHARE:
-                return "Subscribe to Share Group(" + String.join(",", subscription) + ")";
             default:
                 throw new IllegalStateException("Unrecognized subscription type: " + subscriptionType);
         }
     }
 
-    public SubscriptionState(LogContext logContext, AutoOffsetResetStrategy defaultResetStrategy) {
+    public ConsumerSubscriptionState(LogContext logContext, AutoOffsetResetStrategy defaultResetStrategy) {
         this.log = logContext.logger(this.getClass());
         this.defaultResetStrategy = defaultResetStrategy;
         this.subscription = new TreeSet<>(); // use a sorted set for better logging
@@ -212,12 +210,6 @@ public class SubscriptionState {
             throw new IllegalArgumentException("Attempt to subscribe from pattern while subscription type set to " +
                     subscriptionType);
 
-        return changeSubscription(topics);
-    }
-
-    public synchronized boolean subscribeToShareGroup(Set<String> topics) {
-        registerRebalanceListener(Optional.empty());
-        setSubscriptionType(SubscriptionType.AUTO_TOPICS_SHARE);
         return changeSubscription(topics);
     }
 
@@ -312,6 +304,7 @@ public class SubscriptionState {
      * Change the assignment to the specified partitions returned from the coordinator, note this is
      * different from {@link #assignFromUser(Set)} which directly set the assignment from user inputs.
      */
+    @Override
     public synchronized void assignFromSubscribed(Collection<TopicPartition> assignments) {
         if (!this.hasAutoAssignedPartitions())
             throw new IllegalArgumentException("Attempt to dynamically assign partitions while manual assignment in use");
@@ -344,6 +337,7 @@ public class SubscriptionState {
         return this.subscriptionType == SubscriptionType.NONE;
     }
 
+    @Override
     public synchronized void unsubscribe() {
         this.subscription = Collections.emptySet();
         this.groupSubscription = Collections.emptySet();
@@ -463,6 +457,7 @@ public class SubscriptionState {
     /**
      * @return a modifiable copy of the currently assigned partitions
      */
+    @Override
     public synchronized Set<TopicPartition> assignedPartitions() {
         return new HashSet<>(this.assignment.partitionSet());
     }
@@ -488,8 +483,7 @@ public class SubscriptionState {
         List<TopicPartition> result = new ArrayList<>();
         assignment.forEach((topicPartition, topicPartitionState) -> {
             // Cheap check is first to avoid evaluating the predicate if possible
-            if ((subscriptionType.equals(SubscriptionType.AUTO_TOPICS_SHARE) || isFetchableAndSubscribed(topicPartition, topicPartitionState))
-                    && isAvailable.test(topicPartition)) {
+            if (isFetchableAndSubscribed(topicPartition, topicPartitionState) && isAvailable.test(topicPartition)) {
                 result.add(topicPartition);
             }
         });
@@ -509,9 +503,10 @@ public class SubscriptionState {
         return topicPartitionState.isFetchable();
     }
 
+    @Override
     public synchronized boolean hasAutoAssignedPartitions() {
         return this.subscriptionType == SubscriptionType.AUTO_TOPICS || this.subscriptionType == SubscriptionType.AUTO_PATTERN
-                || this.subscriptionType == SubscriptionType.AUTO_TOPICS_SHARE || this.subscriptionType == SubscriptionType.AUTO_PATTERN_RE2J;
+                || this.subscriptionType == SubscriptionType.AUTO_PATTERN_RE2J;
     }
 
     /**
@@ -574,7 +569,7 @@ public class SubscriptionState {
         } else if (!state.awaitingValidation()) {
             log.debug("Skipping completed validation for partition {} which is no longer expecting validation.", tp);
         } else {
-            SubscriptionState.FetchPosition currentPosition = state.position;
+            ConsumerSubscriptionState.FetchPosition currentPosition = state.position;
             if (!currentPosition.equals(requestPosition)) {
                 log.debug("Skipping completed validation for partition {} since the current position {} " +
                           "no longer matches the position {} when the request was sent",
@@ -592,7 +587,7 @@ public class SubscriptionState {
                 }
             } else if (epochEndOffset.endOffset() < currentPosition.offset) {
                 if (hasDefaultOffsetResetPolicy()) {
-                    SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
+                    ConsumerSubscriptionState.FetchPosition newPosition = new ConsumerSubscriptionState.FetchPosition(
                             epochEndOffset.endOffset(), Optional.of(epochEndOffset.leaderEpoch()),
                             currentPosition.currentLeader);
                     log.info("Truncation detected for partition {} at offset {}, resetting offset to " +
@@ -902,16 +897,6 @@ public class SubscriptionState {
         return result;
     }
 
-    public synchronized boolean hasPartitionsNeedingValidation(long nowMs) {
-        for (TopicPartitionState tps  : assignment.partitionStateValues()) {
-            if (tps.awaitingValidation() && !tps.awaitingRetryBackoff(nowMs) && tps.position != null) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     public synchronized boolean isAssigned(TopicPartition tp) {
         return assignment.contains(tp);
     }
@@ -935,6 +920,7 @@ public class SubscriptionState {
         assignedState(tp).pause();
     }
 
+    @Override
     public synchronized void markPendingRevocation(Set<TopicPartition> tps) {
         tps.forEach(tp -> assignedState(tp).markPendingRevocation());
     }
@@ -973,7 +959,8 @@ public class SubscriptionState {
      * Set the set of topic IDs that have been assigned to the consumer by the coordinator.
      * This is used for topic IDs received in an assignment when using the new consumer rebalance protocol (KIP-848).
      */
-    public synchronized  void setAssignedTopicIds(Set<Uuid> assignedTopicIds) {
+    @Override
+    public synchronized void setAssignedTopicIds(Set<Uuid> assignedTopicIds) {
         this.assignedTopicIds = assignedTopicIds;
     }
 
@@ -982,6 +969,7 @@ public class SubscriptionState {
      * consumer, but waiting for the onPartitionsAssigned callback to complete. This is
      * expected to be used by the async consumer.
      */
+    @Override
     public synchronized void enablePartitionsAwaitingCallback(Collection<TopicPartition> partitions) {
         markPendingOnAssignedCallback(partitions, false);
     }
@@ -1271,7 +1259,7 @@ public class SubscriptionState {
     }
 
     /**
-     * The fetch state of a partition. This class is used to determine valid state transitions and expose the some of
+     * The fetch state of a partition. This class is used to determine valid state transitions and expose some of
      * the behavior of the current fetch state. Actual state variables are stored in the {@link TopicPartitionState}.
      */
     interface FetchState {

@@ -258,7 +258,7 @@ public class AsyncKafkaConsumerTest {
         FetchBuffer fetchBuffer,
         ConsumerInterceptors<String, String> interceptors,
         ConsumerRebalanceListenerInvoker rebalanceListenerInvoker,
-        SubscriptionState subscriptions) {
+        ConsumerSubscriptionState subscriptions) {
         long retryBackoffMs = 100L;
         int requestTimeoutMs = 30000;
         int defaultApiTimeoutMs = 1000;
@@ -485,7 +485,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testWakeupWhileWaitingOnReconciliationCheck() {
         FetchBuffer fetchBuffer = mock(FetchBuffer.class);
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ConsumerSubscriptionState subscriptions = new ConsumerSubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(fetchBuffer, mock(ConsumerInterceptors.class),
             mock(ConsumerRebalanceListenerInvoker.class), subscriptions);
 
@@ -519,7 +519,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testInflightPollResubmittedAfterCompletionWithEmptyBuffer() {
         FetchBuffer fetchBuffer = mock(FetchBuffer.class);
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
+        ConsumerSubscriptionState subscriptions = new ConsumerSubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
         consumer = newConsumer(fetchBuffer, mock(ConsumerInterceptors.class),
             mock(ConsumerRebalanceListenerInvoker.class), subscriptions);
 
@@ -599,7 +599,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testBufferedRecordsReturnedWithoutResubmittingPollEvent() {
         FetchBuffer fetchBuffer = mock(FetchBuffer.class);
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
+        ConsumerSubscriptionState subscriptions = new ConsumerSubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
         consumer = newConsumer(fetchBuffer, new ConsumerInterceptors<>(Collections.emptyList(), metrics),
             mock(ConsumerRebalanceListenerInvoker.class), subscriptions);
         final TopicPartition tp = new TopicPartition("topic1", 0);
@@ -706,7 +706,7 @@ public class AsyncKafkaConsumerTest {
             new ConsumerRecord<>(topicName, partition, 3, "key2", "value2")
         );
 
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ConsumerSubscriptionState subscriptions = new ConsumerSubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(
             mock(FetchBuffer.class),
             new ConsumerInterceptors<>(Collections.emptyList(), metrics),
@@ -764,7 +764,7 @@ public class AsyncKafkaConsumerTest {
                 new ConsumerRecord<>(topicName, partition, 3, "key2", "value2")
         );
 
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ConsumerSubscriptionState subscriptions = new ConsumerSubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(
                 mock(FetchBuffer.class),
                 new ConsumerInterceptors<>(Collections.emptyList(), metrics),
@@ -974,7 +974,7 @@ public class AsyncKafkaConsumerTest {
     @ParameterizedTest
     @ValueSource(longs = {0, ConsumerUtils.DEFAULT_CLOSE_TIMEOUT_MS})
     public void testCloseLeavesGroup(long timeoutMs) {
-        SubscriptionState subscriptions = mock(SubscriptionState.class);
+        ConsumerSubscriptionState subscriptions = mock(ConsumerSubscriptionState.class);
         consumer = spy(newConsumer(
             mock(FetchBuffer.class),
             mock(ConsumerInterceptors.class),
@@ -990,7 +990,7 @@ public class AsyncKafkaConsumerTest {
         // and proceed with closing the consumer.
         Throwable rootError = new KafkaException("Intentional error");
         Set<TopicPartition> partitions = singleton(new TopicPartition("topic1", 0));
-        SubscriptionState subscriptions = mock(SubscriptionState.class);
+        ConsumerSubscriptionState subscriptions = mock(ConsumerSubscriptionState.class);
         when(subscriptions.assignedPartitions()).thenReturn(partitions);
         ConsumerRebalanceListenerInvoker invoker = mock(ConsumerRebalanceListenerInvoker.class);
         doAnswer(invocation -> rootError).when(invoker).invokePartitionsLost(any(SortedSet.class));
@@ -1013,7 +1013,7 @@ public class AsyncKafkaConsumerTest {
     @ValueSource(longs = {0, ConsumerUtils.DEFAULT_CLOSE_TIMEOUT_MS})
     public void testCloseLeavesGroupDespiteInterrupt(long timeoutMs) {
         Set<TopicPartition> partitions = singleton(new TopicPartition("topic1", 0));
-        SubscriptionState subscriptions = mock(SubscriptionState.class);
+        ConsumerSubscriptionState subscriptions = mock(ConsumerSubscriptionState.class);
         when(subscriptions.assignedPartitions()).thenReturn(partitions);
         when(applicationEventHandler.addAndGet(any(CompletableApplicationEvent.class))).thenThrow(InterruptException.class);
         consumer = spy(newConsumer(
@@ -1096,7 +1096,7 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testCommitSyncAllConsumed() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ConsumerSubscriptionState subscriptions = new ConsumerSubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(
             mock(FetchBuffer.class),
             mock(ConsumerInterceptors.class),
@@ -1124,7 +1124,7 @@ public class AsyncKafkaConsumerTest {
      */
     @Test
     public void testPauseFlagPreservedForRetainedPartitionAcrossRebalance() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ConsumerSubscriptionState subscriptions = new ConsumerSubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(
             mock(FetchBuffer.class),
             mock(ConsumerInterceptors.class),
@@ -1159,7 +1159,7 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testAutoCommitSyncDisabled() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ConsumerSubscriptionState subscriptions = new ConsumerSubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(
             mock(FetchBuffer.class),
             mock(ConsumerInterceptors.class),
@@ -1998,7 +1998,7 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testEnsurePollEventSentOnConsumerPoll() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ConsumerSubscriptionState subscriptions = new ConsumerSubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(
                 mock(FetchBuffer.class),
                 new ConsumerInterceptors<>(Collections.emptyList(), metrics),
@@ -2076,7 +2076,7 @@ public class AsyncKafkaConsumerTest {
         FetchBuffer fetchBuffer = mock(FetchBuffer.class);
         ConsumerInterceptors<String, String> interceptors = mock(ConsumerInterceptors.class);
         ConsumerRebalanceListenerInvoker rebalanceListenerInvoker = mock(ConsumerRebalanceListenerInvoker.class);
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ConsumerSubscriptionState subscriptions = new ConsumerSubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(fetchBuffer, interceptors, rebalanceListenerInvoker, subscriptions);
 
         final String topicName = "topic1";
@@ -2124,7 +2124,7 @@ public class AsyncKafkaConsumerTest {
         FetchBuffer fetchBuffer = mock(FetchBuffer.class);
         ConsumerInterceptors<String, String> interceptors = mock(ConsumerInterceptors.class);
         ConsumerRebalanceListenerInvoker rebalanceListenerInvoker = mock(ConsumerRebalanceListenerInvoker.class);
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        ConsumerSubscriptionState subscriptions = new ConsumerSubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(fetchBuffer, interceptors, rebalanceListenerInvoker, subscriptions);
 
         final TopicPartition tp = new TopicPartition("topic1", 0);
@@ -2458,7 +2458,7 @@ public class AsyncKafkaConsumerTest {
         final ConsumerConfig config = new ConsumerConfig(props);
 
         ConsumerMetadata metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false, false,
-            mock(SubscriptionState.class), new LogContext(), new ClusterResourceListeners());
+            mock(ConsumerSubscriptionState.class), new LogContext(), new ClusterResourceListeners());
         MockClient client = new MockClient(time, metadata);
         MetadataResponse initialMetadata = RequestTestUtils.metadataUpdateWithIds(1, Map.of("topic1", 2),
             Map.of("topic1", Uuid.randomUuid()));
@@ -2478,7 +2478,7 @@ public class AsyncKafkaConsumerTest {
         Node coordinator = new GroupCoordinatorNode(node.id(), node.host(), node.port());
         client.prepareResponseFrom(result, coordinator);
 
-        SubscriptionState subscriptionState = mock(SubscriptionState.class);
+        ConsumerSubscriptionState subscriptionState = mock(ConsumerSubscriptionState.class);
 
         consumer = new AsyncKafkaConsumer<>(
             new LogContext(),
@@ -2513,7 +2513,7 @@ public class AsyncKafkaConsumerTest {
                 mock(FetchBuffer.class),
                 mock(ConsumerInterceptors.class),
                 mock(ConsumerRebalanceListenerInvoker.class),
-                mock(SubscriptionState.class));
+                mock(ConsumerSubscriptionState.class));
         Metrics metrics = consumer.metricsRegistry();
         AsyncConsumerMetrics asyncConsumerMetrics = consumer.asyncConsumerMetrics();
 
@@ -2688,7 +2688,7 @@ public class AsyncKafkaConsumerTest {
     private void completeSeekUnvalidatedEventSuccessfully() {
         doAnswer(invocation -> {
             SeekUnvalidatedEvent event = invocation.getArgument(0);
-            SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
+            ConsumerSubscriptionState.FetchPosition newPosition = new ConsumerSubscriptionState.FetchPosition(
                     event.offset(),
                     event.offsetEpoch(),
                     metadata.currentLeader(event.partition())

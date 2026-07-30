@@ -83,7 +83,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     private final IsolationLevel isolationLevel;
     private final Logger log;
     private final OffsetFetcherUtils offsetFetcherUtils;
-    private final SubscriptionState subscriptionState;
+    private final ConsumerSubscriptionState subscriptionState;
 
     private final Set<ListOffsetsRequestState> requestsToRetry;
     private final List<NetworkClientDelegate.UnsentRequest> requestsToSend;
@@ -109,7 +109,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
      */
     private PendingFetchCommittedRequest pendingOffsetFetchEvent;
 
-    public OffsetsRequestManager(final SubscriptionState subscriptionState,
+    public OffsetsRequestManager(final ConsumerSubscriptionState subscriptionState,
                                  final ConsumerMetadata metadata,
                                  final IsolationLevel isolationLevel,
                                  final Time time,
@@ -229,7 +229,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
      *                   this will be saved, and used to complete the result exceptionally on the next call to this
      *                   function.
      * @return Future that will complete with a boolean indicating if all assigned partitions have positions (based
-     * on {@link SubscriptionState#hasAllFetchPositions()}). It will complete immediately, with true, if all positions
+     * on {@link ConsumerSubscriptionState#hasAllFetchPositions()}). It will complete immediately, with true, if all positions
      * are already available. If some positions are missing, the future will complete once the offsets are retrieved and positions are updated.
      */
     public CompletableFuture<Void> updateFetchPositions(long deadlineMs) {
@@ -503,7 +503,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
      * next call to this function.
      */
     void validatePositionsIfNeeded() {
-        Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate = offsetFetcherUtils.refreshAndGetPartitionsToValidate();
+        Map<TopicPartition, ConsumerSubscriptionState.FetchPosition> partitionsToValidate = offsetFetcherUtils.refreshAndGetPartitionsToValidate();
         if (partitionsToValidate.isEmpty()) {
             return;
         }
@@ -721,9 +721,9 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
 
      */
     private void sendOffsetsForLeaderEpochRequestsAndValidatePositions(
-            Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate) {
+            Map<TopicPartition, ConsumerSubscriptionState.FetchPosition> partitionsToValidate) {
 
-        final Map<Node, Map<TopicPartition, SubscriptionState.FetchPosition>> regrouped =
+        final Map<Node, Map<TopicPartition, ConsumerSubscriptionState.FetchPosition>> regrouped =
                 regroupFetchPositionsByLeader(partitionsToValidate);
 
         long nextResetTimeMs = time.milliseconds() + requestTimeoutMs;
@@ -782,7 +782,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
      */
     private CompletableFuture<OffsetsForLeaderEpochUtils.OffsetForEpochResult> buildOffsetsForLeaderEpochRequestToNode(
             final Node node,
-            final Map<TopicPartition, SubscriptionState.FetchPosition> fetchPositions,
+            final Map<TopicPartition, ConsumerSubscriptionState.FetchPosition> fetchPositions,
             List<NetworkClientDelegate.UnsentRequest> unsentRequests) {
         AbstractRequest.Builder<OffsetsForLeaderEpochRequest> builder =
                 OffsetsForLeaderEpochUtils.prepareRequest(fetchPositions);

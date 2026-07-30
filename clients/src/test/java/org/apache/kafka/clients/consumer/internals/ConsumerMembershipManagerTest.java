@@ -108,7 +108,7 @@ public class ConsumerMembershipManagerTest {
     private static final int MEMBER_EPOCH = 1;
     private static final LogContext LOG_CONTEXT = new LogContext();
 
-    private SubscriptionState subscriptionState;
+    private ConsumerSubscriptionState subscriptionState;
     private ConsumerMetadata metadata;
     private CommitRequestManager commitRequestManager;
     private BlockingQueue<BackgroundEvent> backgroundEventQueue;
@@ -120,7 +120,7 @@ public class ConsumerMembershipManagerTest {
     @BeforeEach
     public void setup() {
         metadata = mock(ConsumerMetadata.class);
-        subscriptionState = mock(SubscriptionState.class);
+        subscriptionState = mock(ConsumerSubscriptionState.class);
         commitRequestManager = mock(CommitRequestManager.class);
         backgroundEventQueue = new LinkedBlockingQueue<>();
         time = new MockTime(0);

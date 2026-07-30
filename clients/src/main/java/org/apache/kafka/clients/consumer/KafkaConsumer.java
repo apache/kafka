@@ -20,7 +20,7 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerDelegate;
 import org.apache.kafka.clients.consumer.internals.ConsumerDelegateCreator;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
-import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.clients.consumer.internals.ConsumerSubscriptionState;
 import org.apache.kafka.clients.consumer.internals.metrics.KafkaConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -623,7 +623,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                   Deserializer<K> keyDeserializer,
                   Deserializer<V> valueDeserializer,
                   KafkaClient client,
-                  SubscriptionState subscriptions,
+                  ConsumerSubscriptionState subscriptions,
                   ConsumerMetadata metadata,
                   List<ConsumerPartitionAssignor> assignors) {
         delegate = CREATOR.create(

@@ -85,8 +85,8 @@ public class ShareMembershipManagerTest {
     private static final int MEMBER_EPOCH = 1;
 
     private final LogContext logContext = new LogContext();
-    private SubscriptionState subscriptionState;
-    private ConsumerMetadata metadata;
+    private ShareSubscriptionState subscriptionState;
+    private ShareConsumerMetadata metadata;
 
     private Time time;
     private ShareRebalanceMetricsManager rebalanceMetricsManager;
@@ -94,8 +94,8 @@ public class ShareMembershipManagerTest {
 
     @BeforeEach
     public void setup() {
-        metadata = mock(ConsumerMetadata.class);
-        subscriptionState = mock(SubscriptionState.class);
+        metadata = mock(ShareConsumerMetadata.class);
+        subscriptionState = mock(ShareSubscriptionState.class);
         time = new MockTime(0);
         metrics = new Metrics(time);
         rebalanceMetricsManager = new ShareRebalanceMetricsManager(metrics);
@@ -823,7 +823,7 @@ public class ShareMembershipManagerTest {
 
         Set<TopicPartition> expectedAssignment = Set.of(new TopicPartition(topicName, 0));
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
-        verify(subscriptionState).assignFromSubscribedAwaitingCallback(expectedAssignment, expectedAssignment);
+        verify(subscriptionState).assignFromSubscribed(expectedAssignment);
 
         // When ack for the reconciled assignment is sent, member should go back to STABLE
         // because the first assignment that was not resolved should have been discarded
@@ -916,7 +916,7 @@ public class ShareMembershipManagerTest {
 
         // Assignment should have been reconciled.
         Set<TopicPartition> expectedAssignment = Set.of(new TopicPartition(topicName, 1));
-        verify(subscriptionState).assignFromSubscribedAwaitingCallback(expectedAssignment, expectedAssignment);
+        verify(subscriptionState).assignFromSubscribed(expectedAssignment);
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         assertTrue(membershipManager.topicsAwaitingReconciliation().isEmpty());
     }
@@ -1061,7 +1061,7 @@ public class ShareMembershipManagerTest {
         assertEquals(topicIdPartitionsMap(topicId, 1, 2), membershipManager.currentAssignment().partitions);
         assertFalse(membershipManager.reconciliationInProgress());
 
-        verify(subscriptionState).assignFromSubscribedAwaitingCallback(expectedSet, expectedSet);
+        verify(subscriptionState).assignFromSubscribed(expectedSet);
     }
 
     @Test
@@ -1288,7 +1288,6 @@ public class ShareMembershipManagerTest {
 
     private void testFenceIsNoOp(ShareMembershipManager membershipManager) {
         assertNotEquals(0, membershipManager.memberEpoch());
-        verify(subscriptionState, never()).rebalanceListener();
     }
 
     private void assertStaleMemberLeavesGroupAndClearsAssignment(ShareMembershipManager membershipManager) {
@@ -1411,7 +1410,7 @@ public class ShareMembershipManagerTest {
 
         // Assignment applied
         List<TopicPartition> expectedTopicPartitions = buildTopicPartitions(expectedAssignment);
-        verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(new HashSet<>(expectedTopicPartitions)), any());
+        verify(subscriptionState).assignFromSubscribed(eq(new HashSet<>(expectedTopicPartitions)));
         Map<Uuid, SortedSet<Integer>> assignmentByTopicId = assignmentByTopicId(expectedAssignment);
         assertEquals(assignmentByTopicId, membershipManager.currentAssignment().partitions);
     }
@@ -1455,7 +1454,7 @@ public class ShareMembershipManagerTest {
         List<TopicPartition> expectedTopicPartitionAssignment =
                 buildTopicPartitions(expectedCurrentAssignment);
         HashSet<TopicPartition> expectedSet = new HashSet<>(expectedTopicPartitionAssignment);
-        verify(subscriptionState).assignFromSubscribedAwaitingCallback(expectedSet, Set.of());
+        verify(subscriptionState).assignFromSubscribed(expectedSet);
     }
 
     private Map<Uuid, SortedSet<Integer>> assignmentByTopicId(List<TopicIdPartition> topicIdPartitions) {
@@ -1507,7 +1506,7 @@ public class ShareMembershipManagerTest {
 
         if (triggerReconciliation) {
             membershipManager.poll(time.milliseconds());
-            verify(subscriptionState).assignFromSubscribedAwaitingCallback(anyCollection(), anyCollection());
+            verify(subscriptionState).assignFromSubscribed(anyCollection());
         } else {
             verify(subscriptionState, never()).assignFromSubscribed(anyCollection());
         }
@@ -1520,7 +1519,6 @@ public class ShareMembershipManagerTest {
         ShareMembershipManager membershipManager = createMembershipManagerJoiningGroup();
         ShareGroupHeartbeatResponse heartbeatResponse = createShareGroupHeartbeatResponse(new Assignment(), membershipManager.memberId());
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty());
         membershipManager.onHeartbeatSuccess(heartbeatResponse);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         membershipManager.poll(time.milliseconds());

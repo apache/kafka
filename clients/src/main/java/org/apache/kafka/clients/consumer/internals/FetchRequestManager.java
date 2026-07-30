@@ -38,7 +38,7 @@ import java.util.stream.Collectors;
 
 /**
  * {@code FetchRequestManager} is responsible for generating {@link FetchRequest} that represent the
- * {@link SubscriptionState#fetchablePartitions(Predicate)} based on the user's topic subscription/partition
+ * {@link ConsumerSubscriptionState#fetchablePartitions(Predicate)} based on the user's topic subscription/partition
  * assignment.
  */
 public class FetchRequestManager extends AbstractFetch implements RequestManager {
@@ -49,7 +49,7 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
     FetchRequestManager(final LogContext logContext,
                         final Time time,
                         final ConsumerMetadata metadata,
-                        final SubscriptionState subscriptions,
+                        final ConsumerSubscriptionState subscriptions,
                         final FetchConfig fetchConfig,
                         final FetchBuffer fetchBuffer,
                         final FetchMetricsManager metricsManager,

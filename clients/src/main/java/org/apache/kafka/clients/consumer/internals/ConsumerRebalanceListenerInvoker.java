@@ -39,12 +39,12 @@ import java.util.SortedSet;
 public class ConsumerRebalanceListenerInvoker {
 
     private final Logger log;
-    private final SubscriptionState subscriptions;
+    private final ConsumerSubscriptionState subscriptions;
     private final Time time;
     private final RebalanceCallbackMetricsManager metricsManager;
 
     ConsumerRebalanceListenerInvoker(LogContext logContext,
-                                     SubscriptionState subscriptions,
+                                     ConsumerSubscriptionState subscriptions,
                                      Time time,
                                      RebalanceCallbackMetricsManager metricsManager) {
         this.log = logContext.logger(getClass());

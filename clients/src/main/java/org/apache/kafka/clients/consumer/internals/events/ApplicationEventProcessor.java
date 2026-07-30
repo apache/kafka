@@ -24,13 +24,14 @@ import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMembershipManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
+import org.apache.kafka.clients.consumer.internals.ConsumerSubscriptionState;
 import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManager;
 import org.apache.kafka.clients.consumer.internals.ShareMembershipManager;
+import org.apache.kafka.clients.consumer.internals.ShareSubscriptionState;
 import org.apache.kafka.clients.consumer.internals.StreamsMembershipManager;
-import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
@@ -64,18 +65,32 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
     private final Logger log;
     private final Metadata metadata;
-    private final SubscriptionState subscriptions;
+    private final ConsumerSubscriptionState subscriptions;
+    private final ShareSubscriptionState shareSubscriptions;
     private final RequestManagers requestManagers;
     private int metadataVersionSnapshot;
 
     public ApplicationEventProcessor(final LogContext logContext,
                                      final RequestManagers requestManagers,
                                      final Metadata metadata,
-                                     final SubscriptionState subscriptions) {
+                                     final ConsumerSubscriptionState subscriptions) {
         this.log = logContext.logger(ApplicationEventProcessor.class);
         this.requestManagers = requestManagers;
         this.metadata = metadata;
         this.subscriptions = subscriptions;
+        this.shareSubscriptions = null;
+        this.metadataVersionSnapshot = metadata.updateVersion();
+    }
+
+    public ApplicationEventProcessor(final LogContext logContext,
+                                     final RequestManagers requestManagers,
+                                     final Metadata metadata,
+                                     final ShareSubscriptionState shareSubscriptions) {
+        this.log = logContext.logger(ApplicationEventProcessor.class);
+        this.requestManagers = requestManagers;
+        this.metadata = metadata;
+        this.subscriptions = null;
+        this.shareSubscriptions = shareSubscriptions;
         this.metadataVersionSnapshot = metadata.updateVersion();
     }
 
@@ -556,7 +571,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             return;
         }
 
-        if (subscriptions.subscribeToShareGroup(event.topics()))
+        if (shareSubscriptions.subscribeToShareGroup(event.topics()))
             metadata.requestUpdateForNewTopics();
 
         requestManagers.shareHeartbeatRequestManager.get().membershipManager().onSubscriptionUpdated();
@@ -579,7 +594,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             return;
         }
 
-        subscriptions.unsubscribe();
+        shareSubscriptions.unsubscribe();
 
         CompletableFuture<Void> future = requestManagers.shareHeartbeatRequestManager.get().membershipManager().leaveGroup();
         // The future will be completed on heartbeat sent
@@ -622,7 +637,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     private void process(final SeekUnvalidatedEvent event) {
         try {
             event.offsetEpoch().ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(event.partition(), epoch));
-            SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
+            ConsumerSubscriptionState.FetchPosition newPosition = new ConsumerSubscriptionState.FetchPosition(
                 event.offset(),
                 event.offsetEpoch(),
                 metadata.currentLeader(event.partition())
@@ -832,11 +847,11 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
     /**
      * Creates a {@link Supplier} for deferred creation during invocation by
-     * {@link ConsumerNetworkThread}.
+     * {@link ConsumerNetworkThread}, for the regular consumer.
      */
     public static Supplier<ApplicationEventProcessor> supplier(final LogContext logContext,
                                                                final Metadata metadata,
-                                                               final SubscriptionState subscriptions,
+                                                               final ConsumerSubscriptionState subscriptions,
                                                                final Supplier<RequestManagers> requestManagersSupplier) {
         return new CachedSupplier<>() {
             @Override
@@ -847,6 +862,28 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                         requestManagers,
                         metadata,
                         subscriptions
+                );
+            }
+        };
+    }
+
+    /**
+     * Creates a {@link Supplier} for deferred creation during invocation by
+     * {@link ConsumerNetworkThread}, for the share consumer.
+     */
+    public static Supplier<ApplicationEventProcessor> supplier(final LogContext logContext,
+                                                               final Metadata metadata,
+                                                               final ShareSubscriptionState shareSubscriptions,
+                                                               final Supplier<RequestManagers> requestManagersSupplier) {
+        return new CachedSupplier<>() {
+            @Override
+            protected ApplicationEventProcessor create() {
+                RequestManagers requestManagers = requestManagersSupplier.get();
+                return new ApplicationEventProcessor(
+                    logContext,
+                    requestManagers,
+                    metadata,
+                    shareSubscriptions
                 );
             }
         };
