@@ -931,7 +931,6 @@ This config only changes the state store format. It does not define how DSL oper
 
   * aggregations, KTable-KTable joins, materialized `KTable.mapValues`, `KStream.toTable()`, and `StreamsBuilder.table()` write empty headers to their materialized stores
   * KStream-KStream join window stores keep source-record headers, but join result records do not get computed or merged headers; they may carry the headers from the record that triggered the result
-  * `suppress()` uses a headers-aware buffer store: each buffered value is stored together with the headers of the record it came from, and the record emitted when a buffered row is evicted carries the headers of the value being emitted
   * left/outer [KStream-KStream joins](#kstream-kstream-join) use a non-headers-aware buffer store for not-yet-matched records, so records passing through that buffer lose their headers
 
 A follow-up KIP will define how DSL result headers are computed.
