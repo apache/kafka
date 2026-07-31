@@ -75,9 +75,9 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.isA;
-import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
@@ -488,12 +488,26 @@ public class StandbyTaskTest {
         task.recordRestoration(time, 25L, 30L, false);
 
         assertThat(totalMetric.metricValue(), equalTo(25.0));
-        assertThat(rateMetric.metricValue(), not(0.0));
+        // the rate measures updated records per second, not update batches per second; with no time
+        // elapsed the rate window is (metrics.num.samples - 1) * metrics.sample.window.ms == 30s
+        assertTrue(
+            // regression test for KAFKA-20877: previously we did incorrectly count batches which would result in 0.03333
+            // using 0.5 as good intermediate to the expected value of 0.83333
+            // -> avoid equalTo(...) on floating point numbers
+            0.5d < ((Number) rateMetric.metricValue()).doubleValue(),
+            "Expected a value larger 0.5 [precisely 0.83333...], but got " + rateMetric.metricValue()
+        );
 
         task.recordRestoration(time, 50L, 55L, false);
 
         assertThat(totalMetric.metricValue(), equalTo(75.0));
-        assertThat(rateMetric.metricValue(), not(0.0));
+        assertTrue(
+            // regression test for KAFKA-20877: previously we did incorrectly count batches which would result in 0.06666
+            // using 2.0 as good intermediate to the expected value of 2.5
+            // -> avoid equalTo(...) on floating point numbers
+            2.0d < ((Number) rateMetric.metricValue()).doubleValue(),
+            "Expected a value larger 2.0 [precisely 2.5], but got " + rateMetric.metricValue()
+        );
     }
 
     private KafkaMetric getMetric(final String operation,
