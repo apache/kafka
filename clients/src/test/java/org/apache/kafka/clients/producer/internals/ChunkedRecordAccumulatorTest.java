@@ -48,6 +48,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -87,6 +88,10 @@ public class ChunkedRecordAccumulatorTest {
 
     private ChunkedRecordAccumulator newAccumulator(int batchSize, int chunkSize, long totalMemory, Compression compression) {
         BufferPool pool = new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL);
+        return newAccumulator(batchSize, compression, pool);
+    }
+
+    private ChunkedRecordAccumulator newAccumulator(int batchSize, Compression compression, BufferPool pool) {
         return new ChunkedRecordAccumulator(logContext, batchSize, compression,
                 /* lingerMs */ 0, /* retryBackoffMs */ 0L, /* retryBackoffMaxMs */ 0L,
                 /* deliveryTimeoutMs */ 3200, metrics, "producer-metrics", time,
@@ -557,6 +562,176 @@ public class ChunkedRecordAccumulatorTest {
             assertFalse(replacement.isFull(), "the replacement batch must stay open for appends");
             assertEquals(2, replacement.recordCount,
                     "the retried record must land in the replacement batch, extending it");
+        } finally {
+            accum.close();
+        }
+    }
+
+    /**
+     * Simulates the concurrent activity that can move the deque while an extension acquire runs off
+     * the deque lock: the sender drains the open batch, returning its chunks to the pool, and another
+     * appender claims that memory for a fresh batch in its place.
+     */
+    private void simulateConcurrentDrainAndReplace(ChunkedRecordAccumulator accum) throws InterruptedException {
+        Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+        ProducerBatch drained;
+        synchronized (dq) {
+            drained = dq.pollFirst();
+        }
+        assertNotNull(drained, "there must be an open batch to drain");
+        accum.deallocate(drained);
+        accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
+                maxBlockTimeMs, time.milliseconds(), cluster);
+    }
+
+    /**
+     * Pool that fails the first extension acquire (non-blocking), after the batch it was attempting
+     * to extend gets replaced, and max.block.ms has run out.
+     * The failed extension finds a batch it never sized against, so it closes nothing, and the append
+     * retries with no budget left. Only that first acquire is intercepted; later ones delegate to the
+     * real pool and succeed, so a missing deadline check surfaces as a failed assertion, not as a hang.
+     * <p>
+     * The replacement batch is pre-sized for its own single record, so {@code chunkSize} decides whether
+     * it has room to spare for the retried one.
+     */
+    private BufferPool poolFailingFirstExtensionAfterBatchReplaced(int chunkSize,
+                                                                  AtomicReference<ChunkedRecordAccumulator> accumRef,
+                                                                  AtomicBoolean injected) {
+        return new BufferPool(16L * chunkSize, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
+            @Override
+            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
+                // The extension is the only acquire that does not block.
+                boolean isExtensionPath = maxTimeToBlockMs == 0L;
+                if (isExtensionPath && injected.compareAndSet(false, true)) {
+                    simulateConcurrentDrainAndReplace(accumRef.get());
+                    // Leave the append with no budget left, so the deadline lands on its retry. Stands in
+                    // for time spent earlier in the append (a prior blocking acquire, or the metadata wait).
+                    time.sleep(maxBlockTimeMs + 1);
+                    throw new BufferExhaustedException("injected: pool exhausted");
+                }
+                return super.allocateChunks(totalSize, maxTimeToBlockMs);
+            }
+        };
+    }
+
+    /**
+     * The extension acquire fails with the batch it was sized against already replaced, so nothing is
+     * closed, the budget is spent, and the replacement needs memory too. The append must give up
+     * rather than come back to the same non-blocking acquire indefinitely.
+     */
+    @Test
+    public void testExtensionRetryStopsOnceMaxBlockTimeIsUsedUp() throws Exception {
+        AtomicBoolean injected = new AtomicBoolean();
+        AtomicReference<ChunkedRecordAccumulator> accumRef = new AtomicReference<>();
+        // A chunk barely bigger than a record, so the replacement batch cannot take the retried one
+        // either and the append has to give up rather than recover.
+        BufferPool pool = poolFailingFirstExtensionAfterBatchReplaced(256, accumRef, injected);
+        ChunkedRecordAccumulator accum = newAccumulator(8192, Compression.NONE, pool);
+        accumRef.set(accum);
+        try {
+            KafkaMetric exhausted = metrics.metric(metrics.metricName("buffer-exhausted-total", "producer-metrics"));
+
+            accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+
+            // Needs an extension, which fails with the budget already spent.
+            BufferExhaustedException e = assertThrows(BufferExhaustedException.class,
+                    () -> accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
+                            maxBlockTimeMs, time.milliseconds(), cluster));
+            // Must come from the extension path's deadline check, not from the blocking new-batch
+            // acquire — BufferPool's own exhaustion message says nothing about extending a batch.
+            assertTrue(e.getMessage().contains("Failed to extend the open batch"), e.getMessage());
+            assertEquals(1.0, (double) exhausted.metricValue(),
+                    "giving up on the extension path must count the dropped record exactly once");
+
+            // Giving up must leave the batch it declined to close untouched.
+            Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+            assertEquals(1, dq.size(), "only the replacement batch is expected");
+            ProducerBatch replacement = dq.peekLast();
+            // Far below its writeLimit, so isFull() can only be true via a closed append stream.
+            assertFalse(replacement.isFull(), "the replacement batch must stay open for appends");
+            assertEquals(1, replacement.recordCount, "the dropped record must not have landed anywhere");
+        } finally {
+            accum.close();
+        }
+    }
+
+    /**
+     * A failed extension acquire burns part of {@code max.block.ms} before closing the batch and
+     * falling through to the blocking new-batch acquire. That acquire must get only what is left of
+     * the budget, not the whole of it again.
+     */
+    @Test
+    public void testBlockingAcquireGetsOnlyWhatIsLeftOfMaxBlockTimeAfterFailedExtension() throws Exception {
+        int chunkSize = 256;
+        long spentInExtensionMs = 600;
+        AtomicBoolean injected = new AtomicBoolean();
+        AtomicLong blockingAcquireTimeout = new AtomicLong(-1);
+
+        BufferPool pool = new BufferPool(16L * chunkSize, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
+            @Override
+            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
+                // The extension is the only acquire that does not block.
+                boolean isExtensionPath = maxTimeToBlockMs == 0L;
+                if (isExtensionPath && injected.compareAndSet(false, true)) {
+                    // The open batch is left in place, so this failure closes it and the retry falls
+                    // through to the blocking new-batch acquire below.
+                    time.sleep(spentInExtensionMs);
+                    throw new BufferExhaustedException("injected: pool exhausted");
+                }
+                // The first blocking acquire after that failure is the new-batch one under test.
+                if (injected.get() && !isExtensionPath)
+                    blockingAcquireTimeout.compareAndSet(-1, maxTimeToBlockMs);
+                return super.allocateChunks(totalSize, maxTimeToBlockMs);
+            }
+        };
+        ChunkedRecordAccumulator accum = newAccumulator(8192, Compression.NONE, pool);
+        try {
+            accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+
+            // Needs an extension; the failed acquire burns part of the budget before the batch is
+            // closed and the record retries on the blocking path.
+            accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+
+            assertEquals(maxBlockTimeMs - spentInExtensionMs, blockingAcquireTimeout.get(),
+                    "the blocking acquire must only get the remaining max.block.ms");
+        } finally {
+            accum.close();
+        }
+    }
+
+    /**
+     * Same as the give-up case above, except the replacement batch has room to spare, so the retried
+     * record needs no memory at all. The append must land it there even with the budget spent, rather
+     * than fail on a deadline that only bounds waiting for memory.
+     */
+    @Test
+    public void testExtensionRetryStillAppendsToRoomierBatchAfterMaxBlockTimeIsUsedUp() throws Exception {
+        AtomicBoolean injected = new AtomicBoolean();
+        AtomicReference<ChunkedRecordAccumulator> accumRef = new AtomicReference<>();
+        // A chunk many times a record's size, so the replacement batch has room to spare and the
+        // retried record needs no memory at all.
+        BufferPool pool = poolFailingFirstExtensionAfterBatchReplaced(1024, accumRef, injected);
+        ChunkedRecordAccumulator accum = newAccumulator(8192, Compression.NONE, pool);
+        accumRef.set(accum);
+        try {
+            KafkaMetric exhausted = metrics.metric(metrics.metricName("buffer-exhausted-total", "producer-metrics"));
+
+            // Fill the open batch's chunk until a record needs an extension, which fires the injection.
+            // That last append is the one under test: it must recover on the replacement batch.
+            for (int i = 0; i < 50 && !injected.get(); i++)
+                accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
+                        maxBlockTimeMs, time.milliseconds(), cluster);
+            assertTrue(injected.get(), "the extension acquire was never reached");
+
+            Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+            assertEquals(1, dq.size(), "only the replacement batch is expected");
+            assertEquals(2, dq.peekLast().recordCount,
+                    "the retried record must land in the replacement batch without any allocation");
+            assertEquals(0.0, (double) exhausted.metricValue(),
+                    "an append that recovered must not be counted as a dropped record");
         } finally {
             accum.close();
         }
