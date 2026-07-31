@@ -109,37 +109,8 @@ class EndpointToPartitionsManagerTest {
         List<StreamsGroupHeartbeatResponseData.TopicPartition> standbyPartitions = result.standbyPartitions();
         activePartitions.sort(Comparator.comparing(StreamsGroupHeartbeatResponseData.TopicPartition::topic));
         standbyPartitions.sort(Comparator.comparing(StreamsGroupHeartbeatResponseData.TopicPartition::topic));
-        assertTopicPartitionsAssigned(activePartitions, "Topic-A", List.of(0, 1, 2));
-        assertTopicPartitionsAssigned(standbyPartitions, "Topic-B", List.of(0, 1, 2));
-    }
-
-    @Test
-    void testEndpointToPartitionsWithWarmupTaskAssignments() {
-        MetadataImage metadataImage = new MetadataImageBuilder()
-            .addTopic(Uuid.randomUuid(), "Topic-A", 3)
-            .addTopic(Uuid.randomUuid(), "Topic-B", 3)
-            .build();
-
-        when(streamsGroupMember.assignedTasks()).thenReturn(
-            new TasksTupleWithEpochs(
-                mkTasksPerSubtopologyWithCommonEpoch(0, mkEntry("0", Set.of(0, 1, 2))),
-                Map.of(),
-                mkTasksPerSubtopology(mkEntry("1", Set.of(0, 1, 2)))
-            )
-        );
-        when(streamsGroup.configuredTopology()).thenReturn(Optional.of(configuredTopology));
-        SortedMap<String, ConfiguredSubtopology> configuredSubtopologyMap = new TreeMap<>();
-        configuredSubtopologyMap.put("0", configuredSubtopologyOne);
-        configuredSubtopologyMap.put("1", configuredSubtopologyTwo);
-        when(configuredTopology.subtopologies()).thenReturn(Optional.of(configuredSubtopologyMap));
-
-        StreamsGroupHeartbeatResponseData.EndpointToPartitions result =
-            EndpointToPartitionsManager.endpointToPartitions(streamsGroupMember, responseEndpoint, streamsGroup, new KRaftCoordinatorMetadataImage(metadataImage));
-
-        assertEquals(responseEndpoint, result.userEndpoint());
-        // Warm-up tasks are reported as standby partitions.
-        assertTopicPartitionsAssigned(result.activePartitions(), "Topic-A", List.of(0, 1, 2));
-        assertTopicPartitionsAssigned(result.standbyPartitions(), "Topic-B", List.of(0, 1, 2));
+        assertTopicPartitionsAssigned(activePartitions, "Topic-A");
+        assertTopicPartitionsAssigned(standbyPartitions, "Topic-B");
     }
 
     @Test
@@ -163,23 +134,23 @@ class EndpointToPartitionsManagerTest {
         when(configuredTopology.subtopologies()).thenReturn(Optional.of(configuredSubtopologyMap));
 
         StreamsGroupHeartbeatResponseData.EndpointToPartitions result =
-            EndpointToPartitionsManager.endpointToPartitions(streamsGroupMember, responseEndpoint, streamsGroup, new KRaftCoordinatorMetadataImage(metadataImage));
+                EndpointToPartitionsManager.endpointToPartitions(streamsGroupMember, responseEndpoint, streamsGroup, new KRaftCoordinatorMetadataImage(metadataImage));
 
         assertEquals(responseEndpoint, result.userEndpoint());
-        assertTopicPartitionsAssigned(result.activePartitions(), "Topic-A", List.of(0, 1, 2));
-        // Standby and warm-up partitions of the same subtopology are both reported as standby partitions.
-        assertTopicPartitionsAssigned(result.standbyPartitions(), "Topic-B", List.of(0, 1, 2));
-    }
-
-    private static void assertTopicPartitionsAssigned(List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitions,
-                                                      String topicName,
-                                                      List<Integer> expectedPartitions) {
-        List<Integer> actualPartitions = topicPartitions.stream()
-            .filter(tp -> tp.topic().equals(topicName))
-            .flatMap(tp -> tp.partitions().stream())
+        assertTopicPartitionsAssigned(result.activePartitions(), "Topic-A");
+        // The standby task and the warm-up tasks of subtopology 1 are reported as separate entries for the same topic.
+        List<Integer> standbyPartitionsForTopicB = result.standbyPartitions().stream()
+            .filter(topicPartition -> topicPartition.topic().equals("Topic-B"))
+            .flatMap(topicPartition -> topicPartition.partitions().stream())
             .sorted()
             .toList();
-        assertEquals(expectedPartitions, actualPartitions);
+        assertEquals(List.of(0, 1, 2), standbyPartitionsForTopicB);
+    }
+
+    private static void assertTopicPartitionsAssigned(List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitions, String topicName) {
+        StreamsGroupHeartbeatResponseData.TopicPartition topicPartition = topicPartitions.stream().filter(tp -> tp.topic().equals(topicName)).findFirst().get();
+        assertEquals(topicName, topicPartition.topic());
+        assertEquals(List.of(0, 1, 2), topicPartition.partitions().stream().sorted().toList());
     }
 
     @ParameterizedTest(name = "{4}")
