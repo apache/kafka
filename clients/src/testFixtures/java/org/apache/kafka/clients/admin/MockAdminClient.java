@@ -1510,7 +1510,8 @@ public class MockAdminClient extends AdminClient {
             description.coordinator(),
             description.authorizedOperations(),
             Optional.empty(),
-            StreamsGroupTopologyDescriptionStatus.NOT_REQUESTED
+            StreamsGroupTopologyDescriptionStatus.NOT_REQUESTED,
+            description.assignorName()
         );
     }
 

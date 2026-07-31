@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.server.logger;
+package org.apache.kafka.server.logger;
 
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.common.config.LogLevelConfig;
@@ -25,7 +25,6 @@ import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterConfigsResource;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfig;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.server.logger.LoggingController;
 
 import org.slf4j.Logger;
 
@@ -49,7 +48,7 @@ public class RuntimeLoggerManager {
     private final int nodeId;
     private final Logger log;
 
-    public RuntimeLoggerManager(int nodeId,  Logger log) {
+    public RuntimeLoggerManager(int nodeId, Logger log) {
         this.nodeId = nodeId;
         this.log = log;
     }
@@ -73,7 +72,12 @@ public class RuntimeLoggerManager {
         ops.forEach(op -> {
             String loggerName = op.name();
             String logLevel = op.value();
-            switch (OpType.forId(op.configOperation())) {
+            OpType opType = OpType.forId(op.configOperation());
+            if (opType == null) {
+                throw new IllegalArgumentException(
+                    "Invalid log4j configOperation: " + op.configOperation());
+            }
+            switch (opType) {
                 case SET:
                     if (LoggingController.logLevel(loggerName, logLevel)) {
                         log.warn("Updated the log level of {} to {}", loggerName, logLevel);
@@ -118,7 +122,13 @@ public class RuntimeLoggerManager {
     void validateLogLevelConfigs(Collection<AlterableConfig> ops) {
         ops.forEach(op -> {
             String loggerName = op.name();
-            switch (OpType.forId(op.configOperation())) {
+            OpType opType = OpType.forId(op.configOperation());
+            if (opType == null) {
+                throw new InvalidRequestException("Unknown operation type " +
+                    (int) op.configOperation() + " is not allowed for the " +
+                    BROKER_LOGGER + " resource");
+            }
+            switch (opType) {
                 case SET:
                     validateLoggerNameExists(loggerName);
                     String logLevel = op.value();

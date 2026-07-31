@@ -47,7 +47,6 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -115,10 +114,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * INV-1 is therefore unsatisfiable in plain format for these scenarios, no matter how
  * {@code suppress()} is implemented.
  *
- * <p>{@link #nonWindowedEvictionTriggeredBySameKey()} and
- * {@link #windowedEvictionTriggeredBySameKeySameWindow()} consequently set
+ * <p>{@link #nonWindowedEvictionTriggeredBySameKey()},
+ * {@link #windowedEvictionTriggeredBySameKeySameWindow()},
+ * {@link #nonWindowedTombstoneMustBeForwarded()} and
+ * {@link #windowedFinalResultsTombstoneIsDropped()} consequently set
  * {@code dsl.store.format=headers}, where each value part carries its own headers. Running them in
- * plain format would assert something impossible and read as a permanent bug.
+ * plain format would assert something impossible and read as a permanent bug. The two tombstone
+ * scenarios belong in that group as well: a delete overwrites the row it lands on, so the row still
+ * holds an {@code old} value from the earlier record alongside the {@code new} null.
  *
  * <p>Scenarios where the evicted row is <em>not</em> the one being updated have only one origin per
  * row, so they are satisfiable in plain format and deliberately stay there.
@@ -164,7 +167,6 @@ public class SuppressHeadersScenarioTest {
 
     // ------------------------------------------------------------------ scenarios
 
-    @Disabled("Enabled by the fix for KAFKA-20413; see class javadoc")
     @Test
     public void nonWindowedEvictionTriggeredByDifferentKey() {
         scenario = "non-windowed / eviction triggered by a DIFFERENT key";
@@ -187,7 +189,6 @@ public class SuppressHeadersScenarioTest {
      * The row holds {@code new=v2 / old=v1}, each from a different input record, which plain values
      * cannot represent.
      */
-    @Disabled("Enabled by the fix for KAFKA-20413; see class javadoc")
     @Test
     public void nonWindowedEvictionTriggeredBySameKey() {
         scenario = "non-windowed / SAME key, row updated then evicted (headers format)";
@@ -218,10 +219,13 @@ public class SuppressHeadersScenarioTest {
      * emitted; with a tombstone only the <em>old</em> value is serialized, which makes the leak
      * visible on the emitted record.
      */
-    @Disabled("Enabled by the fix for KAFKA-20413; see class javadoc")
     @Test
     public void nonWindowedTombstoneMustBeForwarded() {
-        scenario = "non-windowed / buffered row is DELETED, tombstone must be forwarded";
+        scenario = "non-windowed / buffered row is DELETED, tombstone must be forwarded (headers format)";
+        // Same-row overwrite: the delete lands on the row it deletes, so the row still holds an old
+        // value from the earlier record. INV-1 therefore needs two origins recoverable from one row;
+        // see the class javadoc on why that requires the HEADERS format.
+        config.setProperty(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
         try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(nonWindowedTopology()).withConfig(config).build()) {
             final TestInputTopic<String, String> input =
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
@@ -242,7 +246,6 @@ public class SuppressHeadersScenarioTest {
      * it records: a <em>same</em> input key still produces a <em>different</em> suppress row once
      * windowed, so the evicted row is not the one the arriving record updated.
      */
-    @Disabled("Enabled by the fix for KAFKA-20413; see class javadoc")
     @Test
     public void windowedEvictionTriggeredBySameKeyDifferentWindow() {
         scenario = "windowed (untilWindowCloses) / SAME key but a DIFFERENT window";
@@ -265,7 +268,6 @@ public class SuppressHeadersScenarioTest {
      * under {@code untilTimeLimit}. It cannot happen under {@code untilWindowCloses}, where being
      * inside a window excludes being past its close.
      */
-    @Disabled("Enabled by the fix for KAFKA-20413; see class javadoc")
     @Test
     public void windowedEvictionTriggeredBySameKeySameWindow() {
         scenario = "windowed (untilTimeLimit) / SAME key and SAME window (headers format)";
@@ -296,10 +298,12 @@ public class SuppressHeadersScenarioTest {
      * <p>A null value cannot be piped into an aggregation, so the tombstone is staged by having the
      * reducer return {@code null} for the sentinel value {@code DELETE}.
      */
-    @Disabled("Enabled by the fix for KAFKA-20413; see class javadoc")
     @Test
     public void windowedFinalResultsTombstoneIsDropped() {
-        scenario = "windowed (untilWindowCloses) / tombstone is dropped by design";
+        scenario = "windowed (untilWindowCloses) / tombstone is dropped by design (headers format)";
+        // Same-row overwrite as above (kA's aggregate is updated to null), so this too needs the
+        // HEADERS format for INV-1 to be satisfiable at all.
+        config.setProperty(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
         try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(windowedTopology(false)).withConfig(config).build()) {
             final TestInputTopic<String, String> input =
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
