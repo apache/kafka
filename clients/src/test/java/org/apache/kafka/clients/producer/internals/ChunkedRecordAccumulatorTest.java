@@ -481,6 +481,88 @@ public class ChunkedRecordAccumulatorTest {
     }
 
     /**
+     * The extension acquire runs off the deque lock, so the open batch can be replaced while it is in
+     * flight: the sender drains the batch the gap was sized against and a concurrent appender creates a
+     * new one with the memory that drain just freed. On exhaustion the append must then leave that new
+     * batch open.
+     */
+    @Test
+    public void testExhaustedExtensionLeavesAReplacementBatchOpen() throws Exception {
+        int chunkSize = 256;
+        AtomicBoolean injected = new AtomicBoolean();
+        AtomicInteger closeForAppendsCalls = new AtomicInteger();
+        AtomicReference<ChunkedRecordAccumulator> accumRef = new AtomicReference<>();
+        AtomicReference<ProducerBatch> drainedRef = new AtomicReference<>();
+
+        BufferPool pool = new BufferPool(16L * chunkSize, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
+            @Override
+            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
+                // Only the first non-blocking (extension) acquire is intercepted; the deque lock is not
+                // held here, which is exactly what lets the open batch change under the appender.
+                if (maxTimeToBlockMs == 0L && injected.compareAndSet(false, true)) {
+                    ChunkedRecordAccumulator accum = accumRef.get();
+                    Deque<ProducerBatch> dq = accum.getDeque(tp1);
+                    ProducerBatch drained;
+                    synchronized (dq) {
+                        drained = dq.pollFirst();
+                    }
+                    // Simulate the sender draining the sized batch, returning its chunks to the pool...
+                    drainedRef.set(drained);
+                    accum.deallocate(drained);
+                    // Simulate a concurrent appender claiming that memory for a new batch on the same
+                    // partition. This replaces the batch, so from here on dq.peekLast() is
+                    // no longer the batch the gap was sized against.
+                    accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
+                            maxBlockTimeMs, time.milliseconds(), cluster);
+                    throw new BufferExhaustedException("injected: pool exhausted");
+                }
+                return super.allocateChunks(totalSize, maxTimeToBlockMs);
+            }
+        };
+        ChunkedRecordAccumulator accum = new ChunkedRecordAccumulator(logContext, 8192, Compression.NONE,
+                /* lingerMs */ 0, /* retryBackoffMs */ 0L, /* retryBackoffMaxMs */ 0L,
+                /* deliveryTimeoutMs */ 3200, metrics, "producer-metrics", time,
+                /* transactionManager */ null, pool) {
+            @Override
+            protected ProducerBatch createProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long nowMs) {
+                return new ChunkedProducerBatch(tp, recordsBuilder, nowMs) {
+                    @Override
+                    public void closeForRecordAppends() {
+                        closeForAppendsCalls.incrementAndGet();
+                        super.closeForRecordAppends();
+                    }
+                };
+            }
+        };
+        accumRef.set(accum);
+        try {
+            // First record establishes the open batch the extension gap will be sized against.
+            accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+
+            // Second record overflows that batch's chunk, so it needs an extension. The injected
+            // exhaustion fires after the batch has been replaced by the nested append's batch.
+            accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+
+            assertTrue(injected.get(), "the extension acquire must have been intercepted");
+            assertNotNull(drainedRef.get(), "the sized batch must have been drained by the injection");
+            assertEquals(0, closeForAppendsCalls.get(),
+                    "the failed extension must not close a batch it did not size the gap against");
+
+            Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+            assertEquals(1, dq.size(), "only the replacement batch is expected");
+            ProducerBatch replacement = dq.peekLast();
+            // Far below its writeLimit, so isFull() can only be true via a closed append stream.
+            assertFalse(replacement.isFull(), "the replacement batch must stay open for appends");
+            assertEquals(2, replacement.recordCount,
+                    "the retried record must land in the replacement batch, extending it");
+        } finally {
+            accum.close();
+        }
+    }
+
+    /**
      * A single dropped record is counted exactly once even when it first fails the extension attempt
      * (recovered) and then fails the new-batch acquire.
      * Uses a real (non-overridden) pool so the actual allocateChunks path runs on both acquires.
