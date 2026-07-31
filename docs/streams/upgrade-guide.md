@@ -131,13 +131,16 @@ Today, DSL result headers behave as follows:
 
 * Aggregations (`count`, `reduce`, `aggregate`, including their windowed and session-windowed variants), KTable-KTable joins (inner / left / outer), materialized `KTable.mapValues`, `KStream.toTable()`, and `StreamsBuilder.table()` write empty headers to their materialized stores.
 * KStream-KStream join window stores keep source-record headers, but join result records do not get computed or merged headers. They may carry the headers from the record that triggered the result.
-* `suppress()` and left/outer stream-stream joins use non-headers-aware buffer stores. Records that pass through those buffers lose their headers.
+* `suppress()` uses a headers-aware buffer store under `dsl.store.format=HEADERS`. Each buffered value is stored together with the headers of the record it came from, and the record emitted when a buffered row is evicted carries the headers of the value being emitted. Under `DEFAULT`, the buffer stores plain values plus a single record context per buffered row, so a row updated by a later record before eviction preserves only the headers of that later record.
+* Left/outer stream-stream joins use a non-headers-aware buffer store for not-yet-matched records. Records that pass through that buffer lose their headers.
 
 A follow-up KIP will give users explicit control over how DSL result headers are computed. See [Stateful transformations](/{version}/streams/developer-guide/dsl-api.html#stateful-transformations) for more details.
 
 #### Changelog, migration, and performance
 
 KIP-1285 does not change the changelog wire format, the migration procedure, or the per-store overhead — those are properties of the underlying KIP-1271 stores. See the [KIP-1271 section](#kip-1271-headers-aware-stores) above for the full description of changelog compatibility, the lazy per-key RocksDB migration on `DEFAULT`→`HEADERS`, the restore behavior, and the per-record size impact. The DSL config `dsl.store.format` only controls which operators participate; once an operator is using a headers-aware store, the store runtime behavior is identical to the Processor API case.
+
+The `suppress()` buffer is the one exception worth noting: under `dsl.store.format=HEADERS` its changelog records keep the existing V3 value format and carry the headers of the buffered old and prior values in additional Kafka record headers (`vh.old`, `vh.prior`). Older versions ignore those headers and restore the values without them, so the changelog stays readable across a downgrade.
 
 
 ### Deprecation of streams-scala module (KIP-1244)

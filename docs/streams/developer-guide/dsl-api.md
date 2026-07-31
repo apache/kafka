@@ -931,7 +931,8 @@ This config only changes the state store format. It does not define how DSL oper
 
   * aggregations, KTable-KTable joins, materialized `KTable.mapValues`, `KStream.toTable()`, and `StreamsBuilder.table()` write empty headers to their materialized stores
   * KStream-KStream join window stores keep source-record headers, but join result records do not get computed or merged headers; they may carry the headers from the record that triggered the result
-  * `suppress()` and left/outer [KStream-KStream joins](#kstream-kstream-join) use non-headers-aware buffer stores, so records passing through those buffers lose their headers
+  * `suppress()` uses a headers-aware buffer store: each buffered value is stored together with the headers of the record it came from, and the record emitted when a buffered row is evicted carries the headers of the value being emitted
+  * left/outer [KStream-KStream joins](#kstream-kstream-join) use a non-headers-aware buffer store for not-yet-matched records, so records passing through that buffer lose their headers
 
 A follow-up KIP will define how DSL result headers are computed.
 
@@ -4673,7 +4674,7 @@ The key parts of this program are:
 
 One thing to note is that suppression is just like any other Kafka Streams operator, so you can build a topology with two branches emerging from the `count`, one suppressed, and one not, or even multiple differently configured suppressions. This allows you to apply suppressions where they are needed and otherwise rely on the default continuous update behavior. 
 
-**Note on headers-aware state stores:** `suppress()` uses an in-memory buffer that is not headers-aware. Record headers attached to upstream records are not preserved across the suppression boundary, even when [`dsl.store.format=HEADERS`](../config-streams#dsl-store-format) is set globally per [KIP-1285](https://cwiki.apache.org/confluence/x/4ow8G).
+**Note on headers-aware state stores:** With [`dsl.store.format=HEADERS`](../config-streams#dsl-store-format) set per [KIP-1285](https://cwiki.apache.org/confluence/x/4ow8G), the in-memory buffer used by `suppress()` is headers-aware: each buffered value is stored together with the headers of the record it came from, so record headers are preserved across the suppression boundary, and the record emitted when a buffered row is evicted carries the headers of the value being emitted. With the default `dsl.store.format=DEFAULT`, the buffer stores plain values plus a single record context per buffered row, so a row that is updated by a later record before it is evicted preserves only the headers of that later record.
 
 For more detailed information, see the JavaDoc on the `Suppressed` config object and [KIP-328](https://cwiki.apache.org/confluence/x/sQU0BQ "KIP-328"). 
 
