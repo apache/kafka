@@ -37,7 +37,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -54,7 +53,6 @@ import static org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksTuple;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -177,42 +175,6 @@ public class TargetAssignmentBuilderTest {
         );
 
         assertEquals(Map.of(fooSubtopologyId, Set.of(1, 2, 3)), memberMetadata.warmupTasks());
-    }
-
-    @Test
-    public void testCreateMemberMetadataAndStateReturnsUnmodifiableCollections() {
-        String fooSubtopologyId = Uuid.randomUuid().toString();
-
-        // The member's tasks and reported offsets are only unmodifiable at the outer level, so build them from
-        // mutable collections here: a custom assignor must not be able to reach through and mutate them.
-        StreamsGroupMember member = new StreamsGroupMember.Builder("member-id")
-            .setRackId("rackId")
-            .setInstanceId("instanceId")
-            .setProcessId("processId")
-            .setClientTags(new HashMap<>(Map.of("tag1", "value1")))
-            .setAssignedTasks(new TasksTupleWithEpochs(
-                new HashMap<>(Map.of(fooSubtopologyId, new HashMap<>(Map.of(0, 0)))),
-                new HashMap<>(Map.of(fooSubtopologyId, new HashSet<>(Set.of(1)))),
-                new HashMap<>(Map.of(fooSubtopologyId, new HashSet<>(Set.of(2))))))
-            .build();
-
-        MemberMetadataAndStateImpl memberMetadata = createMemberMetadataAndState(
-            member,
-            new MemberTaskOffsets(
-                new HashMap<>(Map.of(fooSubtopologyId, new HashMap<>(Map.of(0, 10L)))),
-                new HashMap<>(Map.of(fooSubtopologyId, new HashMap<>(Map.of(0, 20L))))
-            )
-        );
-
-        assertThrows(UnsupportedOperationException.class, () -> memberMetadata.clientTags().put("tag2", "value2"));
-        assertThrows(UnsupportedOperationException.class, () -> memberMetadata.activeTasks().get(fooSubtopologyId).add(3));
-        assertThrows(UnsupportedOperationException.class, () -> memberMetadata.standbyTasks().get(fooSubtopologyId).add(3));
-        assertThrows(UnsupportedOperationException.class, () -> memberMetadata.warmupTasks().get(fooSubtopologyId).add(3));
-        assertThrows(UnsupportedOperationException.class, () -> memberMetadata.taskOffsets().get(fooSubtopologyId).put(1, 11L));
-        assertThrows(UnsupportedOperationException.class, () -> memberMetadata.taskEndOffsets().get(fooSubtopologyId).put(1, 21L));
-
-        assertEquals(Map.of(fooSubtopologyId, Set.of(1)), member.assignedTasks().standbyTasks());
-        assertEquals(Map.of(fooSubtopologyId, Set.of(2)), member.assignedTasks().warmupTasks());
     }
 
     @Test

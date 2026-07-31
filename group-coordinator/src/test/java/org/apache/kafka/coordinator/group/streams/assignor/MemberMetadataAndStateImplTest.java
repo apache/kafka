@@ -36,7 +36,7 @@ public class MemberMetadataAndStateImplTest {
             Optional.of("test-instance"),
             Optional.of("test-rack"),
             "test-process",
-            Map.of(),
+            new HashMap<>(Map.of("tag1", "value1")),
             tasks,
             tasks,
             tasks,
@@ -46,12 +46,13 @@ public class MemberMetadataAndStateImplTest {
     }
 
     @Test
-    void testTaskSetsAreDeeplyUnmodifiable() {
+    void testCollectionsAreDeeplyUnmodifiable() {
         MemberMetadataAndStateImpl member = memberWith(
             new HashMap<>(Map.of("subtopology-1", new HashSet<>(Set.of(0, 1)))),
             new HashMap<>()
         );
 
+        assertThrows(UnsupportedOperationException.class, () -> member.clientTags().put("tag2", "value2"));
         assertThrows(UnsupportedOperationException.class, () -> member.activeTasks().put("subtopology-2", Set.of(0)));
         assertThrows(UnsupportedOperationException.class, () -> member.activeTasks().get("subtopology-1").add(2));
         assertThrows(UnsupportedOperationException.class, () -> member.standbyTasks().put("subtopology-2", Set.of(0)));
