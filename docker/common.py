@@ -15,6 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from pathlib import Path
 import subprocess
 import tempfile
 import os
@@ -38,14 +39,20 @@ def build_docker_image_runner(command, image_type, kafka_archive=None):
     shutil.copytree(f"{current_dir}/{image_type}", f"{temp_dir_path}/{image_type}", dirs_exist_ok=True)
     shutil.copytree(f"{current_dir}/resources", f"{temp_dir_path}/{image_type}/resources", dirs_exist_ok=True)
     shutil.copy(f"{current_dir}/server.properties", f"{temp_dir_path}/{image_type}")
+
+    kafka_archive_path = Path(temp_dir_path) / image_type / "kafka.tgz"
     if kafka_archive:
-        shutil.copy(kafka_archive, f"{temp_dir_path}/{image_type}/kafka.tgz")
+        shutil.copy(kafka_archive, kafka_archive_path)
+    else:
+        # Podman requires the COPY source to exist before kafka_url is
+        # downloaded by the Dockerfile.
+        kafka_archive_path.touch()
     command = command.replace("$DOCKER_FILE", f"{temp_dir_path}/{image_type}/Dockerfile")
     command = command.replace("$DOCKER_DIR", f"{temp_dir_path}/{image_type}")
     try:
         execute(command.split())
-    except:
-        raise SystemError(f"{container_runtime.capitalize()} image build failed")
+    except Exception as e:
+        raise SystemError("Container image build failed") from e
     finally:
         shutil.rmtree(temp_dir_path)
 
