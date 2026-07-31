@@ -750,17 +750,26 @@ class BrokerServer(
       .build()
   }
 
+  /**
+   * Since share group Persister implementations are only factory pluggable,
+   * there is no need to actually load the classes before instantiation.
+   *
+   * This method initializes the appropriate Persister implementation
+   * based on the class name specified in the config.
+   * @return Valid Persister implementation.
+   * @throws IllegalArgumentException if the configured class name is unsupported.
+   */
   private def createShareStatePersister(): Persister = {
-    if (config.shareGroupConfig.shareGroupPersisterClassName.nonEmpty) {
-      val klass = Utils.loadClass(config.shareGroupConfig.shareGroupPersisterClassName, classOf[Object]).asInstanceOf[Class[Persister]]
-      if (klass.getName.equals(classOf[DefaultStatePersister].getName)) {
+    val className = config.shareGroupConfig.shareGroupPersisterClassName
+    if (className.nonEmpty) {
+      if (className.equals(classOf[DefaultStatePersister].getName)) {
         DefaultStatePersister.instance(
           NetworkUtils.buildNetworkClient("Persister", config, metrics, Time.SYSTEM, new LogContext(s"[Persister broker=${config.brokerId}]")),
           new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager, () => config.messageMaxBytes),
           Time.SYSTEM,
           shareGroupTimer
         )
-      } else if (klass.getName.equals(classOf[NoOpStatePersister].getName)) {
+      } else if (className.equals(classOf[NoOpStatePersister].getName)) {
         info("Using no-op persister")
         new NoOpStatePersister()
       } else {
