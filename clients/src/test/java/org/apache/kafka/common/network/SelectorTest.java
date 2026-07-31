@@ -454,6 +454,7 @@ public class SelectorTest {
     public void testCloseOldestConnection() throws Exception {
         String id = "0";
         selector.connect(id, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.waitForChannelConnected(selector, id);
         NetworkTestUtils.waitForChannelReady(selector, id);
         time.sleep(CONNECTION_MAX_IDLE_MS + 1_000);
         selector.poll(0);
