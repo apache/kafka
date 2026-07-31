@@ -24,6 +24,8 @@ import org.apache.kafka.common.protocol.Readable;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.SortedSet;
+import java.util.TreeSet;
 
 /**
  * Possible error codes.
@@ -118,6 +120,14 @@ public class StreamsGroupHeartbeatResponse extends AbstractResponse {
                 throw new IllegalArgumentException("Unknown code " + code);
             }
             return status;
+        }
+
+        public static boolean isKnownCode(byte code) {
+            return CODE_TO_STATUS.containsKey(code);
+        }
+
+        public static SortedSet<Byte> knownCodes() {
+            return Collections.unmodifiableSortedSet(new TreeSet<>(CODE_TO_STATUS.keySet()));
         }
     }
 }
