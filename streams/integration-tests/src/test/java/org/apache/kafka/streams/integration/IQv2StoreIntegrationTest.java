@@ -853,7 +853,6 @@ public class IQv2StoreIntegrationTest {
         }
     }
 
-
     private <T> void shouldHandleRangeQueries() {
         shouldHandleRangeQuery(
             Optional.of(0),
