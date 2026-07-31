@@ -235,7 +235,6 @@ object TestUtils extends Logging {
     props.put(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true")
     props.setProperty(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG, TimeUnit.MINUTES.toMillis(10).toString)
     props.put(KRaftConfigs.NODE_ID_CONFIG, nodeId.toString)
-    props.put(ServerConfigs.BROKER_ID_CONFIG, nodeId.toString)
     props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, listeners)
     props.put(SocketServerConfigs.LISTENERS_CONFIG, listeners)
     props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
