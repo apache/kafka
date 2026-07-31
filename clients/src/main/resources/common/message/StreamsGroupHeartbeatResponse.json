@@ -83,7 +83,7 @@
         { "name": "ActivePartitions", "type": "[]TopicPartition", "versions": "0+",
           "about": "All topic partitions materialized by active tasks on the node" },
         { "name": "StandbyPartitions", "type": "[]TopicPartition", "versions": "0+",
-          "about": "All topic partitions materialized by standby tasks on the node" }
+          "about": "All topic partitions materialized by standby and warm-up tasks on the node" }
       ]
     }
   ],
