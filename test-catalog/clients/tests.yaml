@@ -3153,12 +3153,15 @@ org.apache.kafka.clients.producer.ProducerConfigTest:
 - testAppendSerializerToConfig
 - testAppendSerializerToConfigWithException
 - testCaseInsensitiveSecurityProtocol
+- testDefaultBufferMemoryAllocationStrategy
 - testDefaultMetadataRecoveryStrategy
+- testInvalidBufferMemoryAllocationStrategy
 - testInvalidCompressionType
 - testInvalidMetadataRecoveryStrategy
 - testInvalidSecurityProtocol
 - testTwoPhaseCommitIncompatibleWithTransactionTimeout
 - testUpperboundCheckOfEnableIdempotence
+- testValidBufferMemoryAllocationStrategy
 - testValidateConfigPropertiesFile
 org.apache.kafka.clients.producer.ProducerRecordTest:
 - testEqualsAndHashCode
@@ -3173,6 +3176,20 @@ org.apache.kafka.clients.producer.RecordSendTest:
 org.apache.kafka.clients.producer.RoundRobinPartitionerTest:
 - testRoundRobinWithKeyBytes
 - testRoundRobinWithUnavailablePartitions
+org.apache.kafka.clients.producer.internals.BufferPoolChunkAllocationTest:
+- testAllocateMultipleChunks
+- testAllocateOneChunk
+- testAllocateRoundsUpToChunkBoundary
+- testAvailableMemoryAfterAllocation
+- testCloseDuringAtomicWait
+- testDeallocationRestoresMemory
+- testFifoFairnessAcrossMultiChunkAndSingleChunkRequests
+- testImmediateTimeoutAcquiresNothing
+- testNoPartialHoldsDuringWait
+- testRejectsNonPositiveRequest
+- testRejectsRequestExceedingTotalMemory
+- testWaitingRequestDoesNotCorruptAccountingOnSuccess
+- testWaitingRequestDoesNotDoubleRefundChunksOnTimeout
 org.apache.kafka.clients.producer.internals.BufferPoolTest:
 - outOfMemoryOnAllocation
 - testBlockTimeout
@@ -3194,6 +3211,34 @@ org.apache.kafka.clients.producer.internals.BuiltInPartitionerTest:
 - testStickyPartitioning
 - testStickyPartitioningWithRackAwareness
 - unavailablePartitionsTest
+org.apache.kafka.clients.producer.internals.ChunkedByteBufferOutputStreamTest:
+- testAddBuffersExtendsStream
+- testAddBuffersRejectsWrongSizeChunks
+- testConstructorRejectsInvalidChunks
+- testDeallocateReturnsAllChunks
+- testEnsureRemainingDoesNotWasteCurrentChunk
+- testOperationsRejectedAfterDeallocate
+- testPositionWalksAcrossChunks
+- testRemainingSumsFreeBytesAcrossChunks
+- testSingleChunkWriteRoundtrip
+- testUnusedChunksReleasedOnCloseNotOnBuffer
+- testWriteAcrossMultipleChunks
+- testWritesDisallowedAfterClose
+org.apache.kafka.clients.producer.internals.ChunkedRecordAccumulatorTest:
+- testBatchCloseDoesNotDeallocateChunksPrematurely
+- testBatchClosedForAppendsDuringAllocationIsNotExtended
+- testBufferExhaustedNotDoubleCountedAcrossExtensionAndNewBatch
+- testChunkedBatchRejectsNonChunkedStream
+- testConcurrentExtensionRaceLoserExtendsAgain
+- testConcurrentExtensionRaceLoserStartsNewBatch
+- testCumulativeAccountsForBatchHeaderOnce
+- testExhaustedExtensionFallsBackToBlockingNewBatchPath
+- testExtensionTracksCumulativeBatchSize
+- testFirstRecordCreatesChunkedBatch
+- testInflightExpirationReturnsAllChunksToPool
+- testMidBatchExtensionGrowsExistingBatch
+- testPartitionSwitchRefundsHeldExtensionChunks
+- testSmallFollowupRecordFitsWithoutExtension
 org.apache.kafka.clients.producer.internals.FutureRecordMetadataTest:
 - testFutureGetWithMilliSeconds
 - testFutureGetWithSeconds
