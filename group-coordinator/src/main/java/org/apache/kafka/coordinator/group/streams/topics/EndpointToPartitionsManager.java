@@ -74,10 +74,14 @@ public class EndpointToPartitionsManager {
                 entry -> entry.getValue().keySet()
             ));
         Map<String, Set<Integer>> standbyTasks = streamsGroupMember.assignedTasks().standbyTasks();
+        Map<String, Set<Integer>> warmupTasks = streamsGroupMember.assignedTasks().warmupTasks();
         endpointToPartitions.setUserEndpoint(responseEndpoint);
         Map<String, ConfiguredSubtopology> configuredSubtopologies = streamsGroup.configuredTopology().flatMap(ConfiguredTopology::subtopologies).get();
         List<StreamsGroupHeartbeatResponseData.TopicPartition> activeTopicPartitions = topicPartitions(activeTasks, configuredSubtopologies, metadataImage);
         List<StreamsGroupHeartbeatResponseData.TopicPartition> standbyTopicPartitions = topicPartitions(standbyTasks, configuredSubtopologies, metadataImage);
+        List<StreamsGroupHeartbeatResponseData.TopicPartition> warmupTopicPartitions = topicPartitions(warmupTasks, configuredSubtopologies, metadataImage);
+        // Warm-up tasks are executed as standby tasks on the client, so they are reported as standby partitions, as in the classic protocol.
+        standbyTopicPartitions.addAll(warmupTopicPartitions);
         endpointToPartitions.setActivePartitions(activeTopicPartitions);
         endpointToPartitions.setStandbyPartitions(standbyTopicPartitions);
         return endpointToPartitions;
