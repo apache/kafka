@@ -17,7 +17,8 @@
   "apiKey": 89,
   "type": "response",
   "name": "StreamsGroupDescribeResponse",
-  // Version 1 adds TopologyDescription and TopologyDescriptionStatus (KIP-1331).
+  // Version 1 adds TopologyDescription and TopologyDescriptionStatus (KIP-1331),
+  // and AssignorName (KIP-1357).
   "validVersions": "0-1",
   "flexibleVersions": "0+",
   // Supported errors:
@@ -112,7 +113,9 @@
           "nullableVersions": "1+", "default": "null",
           "about": "The full topology description for this group. Non-null if and only if TopologyDescriptionStatus is AVAILABLE (3); null otherwise." },
         { "name": "TopologyDescriptionStatus", "type": "int8", "versions": "1+", "default": "0",
-          "about": "The status of the topology description for this group, paired with TopologyDescription: 0=NOT_REQUESTED (client did not set IncludeTopologyDescription; TopologyDescription is null); 1=NOT_STORED (no description recorded for this group; TopologyDescription is null); 2=ERROR (broker failed to fetch the description, see broker logs; TopologyDescription is null); 3=AVAILABLE (TopologyDescription is non-null and carries the description)." }
+          "about": "The status of the topology description for this group, paired with TopologyDescription: 0=NOT_REQUESTED (client did not set IncludeTopologyDescription; TopologyDescription is null); 1=NOT_STORED (no description recorded for this group; TopologyDescription is null); 2=ERROR (broker failed to fetch the description, see broker logs; TopologyDescription is null); 3=AVAILABLE (TopologyDescription is non-null and carries the description)." },
+        { "name": "AssignorName", "type": "string", "versions": "1+", "nullableVersions": "1+", "default": "null", "ignorable": true,
+          "about": "The task assignor that the group coordinator will use for the next assignment computation. This may differ from the assignor that computed the current assignment, because changing the assignor configuration does not trigger a rebalance. Null in case of a describe error." }
       ]
     }
   ],

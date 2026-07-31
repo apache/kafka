@@ -298,7 +298,7 @@ These take the same arguments as the built-in variants.
 
 ### Determining if any dependencies could be updated
 ```bash
-./gradlew dependencyUpdates --no-parallel
+./gradlew dependencyUpdates
 ```
 
 ### Common build options ###

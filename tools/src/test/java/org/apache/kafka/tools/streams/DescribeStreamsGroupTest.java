@@ -148,8 +148,8 @@ public class DescribeStreamsGroupTest {
     }
 
     private static void assertDescribeStreamsGroupWithStateOption(String clusterBootstrapServers) throws Exception {
-        final List<String> expectedHeader = List.of("GROUP", "COORDINATOR", "(ID)", "STATE", "#MEMBERS");
-        final Set<List<String>> expectedRows = Set.of(List.of(APP_ID, "", "", "Stable", "2"));
+        final List<String> expectedHeader = List.of("GROUP", "COORDINATOR", "(ID)", "ASSIGNOR", "STATE", "#MEMBERS");
+        final Set<List<String>> expectedRows = Set.of(List.of(APP_ID, "", "", "sticky", "Stable", "2"));
         // The coordinator is not deterministic, so we don't care about it.
         final List<Integer> dontCares = List.of(1, 2);
 
@@ -158,11 +158,11 @@ public class DescribeStreamsGroupTest {
     }
 
     private static void assertDescribeStreamsGroupWithStateAndVerboseOptions(String clusterBootstrapServers) throws Exception {
-        final List<String> expectedHeader = List.of("GROUP", "COORDINATOR", "(ID)", "STATE", "GROUP-EPOCH", "TARGET-ASSIGNMENT-EPOCH", "#MEMBERS");
-        final Set<List<String>> expectedRows = Set.of(List.of(APP_ID, "", "", "Stable", "", "", "2"));
+        final List<String> expectedHeader = List.of("GROUP", "COORDINATOR", "(ID)", "ASSIGNOR", "STATE", "GROUP-EPOCH", "TARGET-ASSIGNMENT-EPOCH", "#MEMBERS");
+        final Set<List<String>> expectedRows = Set.of(List.of(APP_ID, "", "", "sticky", "Stable", "", "", "2"));
         // The coordinator is not deterministic, so we don't care about it.
         // The GROUP-EPOCH and TARGET-ASSIGNMENT-EPOCH can vary due to rebalance timing, so we don't care about them either.
-        final List<Integer> dontCares = List.of(1, 2, 4, 5);
+        final List<Integer> dontCares = List.of(1, 2, 5, 6);
 
         validateDescribeOutput(
             List.of("--bootstrap-server", clusterBootstrapServers, "--describe", "--state", "--verbose", "--group", APP_ID), expectedHeader, expectedRows, dontCares);

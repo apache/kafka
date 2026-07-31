@@ -19,7 +19,6 @@ package org.apache.kafka.coordinator.group.streams;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
-import org.apache.kafka.coordinator.group.streams.assignor.TaskId;
 
 import org.slf4j.Logger;
 
@@ -417,14 +416,16 @@ public record StreamsGroupMember(String memberId,
             );
     }
 
-    private static List<StreamsGroupDescribeResponseData.TaskOffset> taskOffsetsFromMap(Map<TaskId, Long> offsets) {
-        return offsets.entrySet().stream()
-            .sorted(Map.Entry.comparingByKey())
-            .map(entry -> new StreamsGroupDescribeResponseData.TaskOffset()
-                .setSubtopologyId(entry.getKey().subtopologyId())
-                .setPartition(entry.getKey().partition())
-                .setOffset(entry.getValue()))
-            .toList();
+    private static List<StreamsGroupDescribeResponseData.TaskOffset> taskOffsetsFromMap(Map<String, Map<Integer, Long>> offsets) {
+        List<StreamsGroupDescribeResponseData.TaskOffset> taskOffsets = new ArrayList<>();
+        offsets.keySet().stream().sorted().forEach(subtopologyId ->
+            offsets.get(subtopologyId).entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(entry -> taskOffsets.add(new StreamsGroupDescribeResponseData.TaskOffset()
+                    .setSubtopologyId(subtopologyId)
+                    .setPartition(entry.getKey())
+                    .setOffset(entry.getValue()))));
+        return taskOffsets;
     }
 
     private static List<StreamsGroupDescribeResponseData.TaskIds> taskIdsFromMap(Map<String, Set<Integer>> tasks) {

@@ -88,7 +88,7 @@ public class EndToEndLatencyTest {
                     .toArray(String[]::new);
         }
 
-        public ArgsBuilder withNegative(String param) {
+        public ArgsBuilder withMinusOne(String param) {
             return with(param, "-1");
         }
         
@@ -124,35 +124,37 @@ public class EndToEndLatencyTest {
     private void testInvalidNumRecords() {
         String expectedMsg = "Value for --num-records must be a positive integer.";
         assertInitializeInvalidOptionsExitCodeAndMsg(
-            ArgsBuilder.defaults().withNegative("--num-records").build(), expectedMsg);
+            ArgsBuilder.defaults().withZero("--num-records").build(), expectedMsg);
+        assertInitializeInvalidOptionsExitCodeAndMsg(
+            ArgsBuilder.defaults().withMinusOne("--num-records").build(), expectedMsg);
     }
 
     private void testInvalidRecordSize() {
         String expectedMsg = "Value for --record-size must be a non-negative integer.";
         assertInitializeInvalidOptionsExitCodeAndMsg(
-            ArgsBuilder.defaults().withNegative("--record-size").build(), expectedMsg);
+            ArgsBuilder.defaults().withMinusOne("--record-size").build(), expectedMsg);
     }
 
     private void testInvalidRecordKey() {
         String expectedMsg = "Value for --record-key-size must be a non-negative integer.";
         assertInitializeInvalidOptionsExitCodeAndMsg(
-            ArgsBuilder.defaults().withNegative("--record-key-size").build(), expectedMsg);
+            ArgsBuilder.defaults().withMinusOne("--record-key-size").build(), expectedMsg);
     }
 
     private void testInvalidNumHeaders() {
         String expectedMsg = "Value for --num-headers must be a non-negative integer.";
         assertInitializeInvalidOptionsExitCodeAndMsg(
-                ArgsBuilder.defaults().withNegative("--num-headers").build(), expectedMsg);
+                ArgsBuilder.defaults().withMinusOne("--num-headers").build(), expectedMsg);
     }
 
     private void testInvalidRecordHeaderKey() {
         String expectedMsg = "Value for --record-header-key-size must be a non-negative integer.";
         assertInitializeInvalidOptionsExitCodeAndMsg(
-            ArgsBuilder.defaults().withNegative("--record-header-key-size").build(), expectedMsg);
+            ArgsBuilder.defaults().withMinusOne("--record-header-key-size").build(), expectedMsg);
     }
 
     private void testInvalidRecordHeaderValue() {
-        String expectedMsg = "Value for --record-header-size must be a non-negative integer";
+        String expectedMsg = "Value for --record-header-size must be a non-negative integer or -1 for null header value.";
         assertInitializeInvalidOptionsExitCodeAndMsg(
             ArgsBuilder.defaults().with("--record-header-size", "-2").build(), expectedMsg);
     }
@@ -310,6 +312,11 @@ public class EndToEndLatencyTest {
     @Test
     public void shouldPassWithNamedArgs() {
         assertDoesNotThrow(() -> new EndToEndLatency.EndToEndLatencyCommandOptions(ArgsBuilder.defaults().build()));
+    }
+
+    @Test
+    public void shouldAcceptMinusOneForRecordHeaderValueSize() {
+        assertDoesNotThrow(() -> new EndToEndLatency.EndToEndLatencyCommandOptions(ArgsBuilder.defaults().withMinusOne("--record-header-size").build()));
     }
 
 }

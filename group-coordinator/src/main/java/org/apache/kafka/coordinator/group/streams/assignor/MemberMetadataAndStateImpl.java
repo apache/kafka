@@ -1,0 +1,66 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.coordinator.group.streams.assignor;
+
+import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignmentMetadata;
+import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignmentState;
+
+import java.util.Collections;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+
+/**
+ * Implementation of both the {@link MemberAssignmentMetadata} and the {@link MemberAssignmentState}
+ * interfaces for a streams group member.
+ *
+ * @param instanceId    The instance ID if provided.
+ * @param rackId        The rack ID if provided.
+ * @param processId     The process ID.
+ * @param clientTags    The client tags for a rack-aware assignment.
+ * @param activeTasks   Current active tasks.
+ * @param standbyTasks  Current standby tasks.
+ * @param warmupTasks   Current warm-up tasks.
+ * @param taskOffsets   The last received cumulative task offsets of assigned tasks or dormant tasks.
+ * @param taskEndOffsets The last received cumulative task end offsets of assigned tasks or dormant tasks.
+ */
+public record MemberMetadataAndStateImpl(
+    Optional<String> instanceId,
+    Optional<String> rackId,
+    String processId,
+    Map<String, String> clientTags,
+    Map<String, Set<Integer>> activeTasks,
+    Map<String, Set<Integer>> standbyTasks,
+    Map<String, Set<Integer>> warmupTasks,
+    Map<String, Map<Integer, Long>> taskOffsets,
+    Map<String, Map<Integer, Long>> taskEndOffsets
+) implements MemberAssignmentMetadata, MemberAssignmentState {
+
+    public MemberMetadataAndStateImpl {
+        Objects.requireNonNull(instanceId);
+        Objects.requireNonNull(rackId);
+        Objects.requireNonNull(processId);
+        clientTags = Collections.unmodifiableMap(Objects.requireNonNull(clientTags));
+        activeTasks = Collections.unmodifiableMap(Objects.requireNonNull(activeTasks));
+        standbyTasks = Collections.unmodifiableMap(Objects.requireNonNull(standbyTasks));
+        warmupTasks = Collections.unmodifiableMap(Objects.requireNonNull(warmupTasks));
+        taskOffsets = Collections.unmodifiableMap(Objects.requireNonNull(taskOffsets));
+        taskEndOffsets = Collections.unmodifiableMap(Objects.requireNonNull(taskEndOffsets));
+    }
+
+}
