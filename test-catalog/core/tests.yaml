@@ -1784,6 +1784,7 @@ kafka.server.KafkaConfigTest:
 - testAdvertiseDefaults
 - testAdvertisedListenersAllowedForKRaftControllerOnlyRole
 - testBadListenerProtocol
+- testBrokerIdDeprecationWarning
 - testBrokerIdIsInferredByNodeIdWithKraft
 - testCaseInsensitiveListenerProtocol
 - testConsumerGroupHeartbeatIntervalValidation
