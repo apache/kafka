@@ -813,6 +813,73 @@ public class KafkaStreamsTest {
     }
 
     @Test
+    @Timeout(30)
+    public void removeStreamThreadShouldReleaseLockBeforeWaitingForShutdown() throws Exception {
+        // `removeStreamThread` used to call `waitOnThreadState(DEAD)` while holding
+        // `changeThreadCount`. If the target thread happened to be the same
+        // StreamThread that concurrently entered the REPLACE_THREAD uncaught-exception
+        // handler, that thread's `replaceStreamThread -> addStreamThread` path would
+        // block on the same lock — so it never reached `setState(DEAD)` and the waiter waited
+        // forever. Verify the lock is released before we wait.
+        prepareStreams();
+        final AtomicReference<StreamThread.State> state1 = prepareStreamThread(streamThreadOne, 1);
+        final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
+        prepareThreadState(streamThreadOne, state1);
+        prepareThreadState(streamThreadTwo, state2);
+        when(streamThreadOne.groupInstanceID()).thenReturn(Optional.empty());
+        when(streamThreadOne.isThreadAlive()).thenReturn(true);
+
+        final CountDownLatch waitEntered = new CountDownLatch(1);
+        final CountDownLatch releaseWait = new CountDownLatch(1);
+        when(streamThreadOne.waitOnThreadState(isA(StreamThread.State.class), anyLong())).thenAnswer(inv -> {
+            waitEntered.countDown();
+            releaseWait.await();
+            return true;
+        });
+
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.start();
+            waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L,
+                "Kafka Streams client did not reach state RUNNING");
+
+            final java.util.concurrent.ExecutorService removeExec = Executors.newSingleThreadExecutor();
+            try {
+                final java.util.concurrent.Callable<Optional<String>> removeTask = streams::removeStreamThread;
+                final java.util.concurrent.Future<Optional<String>> removeFuture = removeExec.submit(removeTask);
+                assertTrue(waitEntered.await(10, TimeUnit.SECONDS),
+                    "removeStreamThread never reached waitOnThreadState");
+
+                // Attempt to acquire `changeThreadCount` from a different thread.
+                // Before the fix, the removal path holds it across the wait, so this
+                // probe would block indefinitely. After the fix, it acquires
+                // immediately.
+                final java.lang.reflect.Field field = KafkaStreams.class.getDeclaredField("changeThreadCount");
+                field.setAccessible(true);
+                final Object changeThreadCount = field.get(streams);
+
+                final AtomicBoolean acquired = new AtomicBoolean(false);
+                final Thread probe = new Thread(() -> {
+                    synchronized (changeThreadCount) {
+                        acquired.set(true);
+                    }
+                }, "changeThreadCount-probe");
+                probe.start();
+                probe.join(TimeUnit.SECONDS.toMillis(5));
+                assertTrue(acquired.get(),
+                    "changeThreadCount is still held while removeStreamThread waits on state — pattern A deadlock");
+
+                releaseWait.countDown();
+                assertEquals(Optional.of("processId-StreamThread-1"),
+                    removeFuture.get(10, TimeUnit.SECONDS));
+            } finally {
+                releaseWait.countDown();
+                removeExec.shutdownNow();
+            }
+        }
+    }
+
+    @Test
     public void shouldNotRemoveThreadWhenNotRunning() {
         prepareStreams();
         prepareStreamThread(streamThreadOne, 1);
