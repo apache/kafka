@@ -641,6 +641,13 @@
   "name":"java.rmi.server.UID"
 },
 {
+  "name":"java.security.AccessControlContext"
+},
+{
+  "name":"java.security.AccessController",
+  "methods":[{"name":"doPrivileged","parameterTypes":["java.security.PrivilegedAction"] }, {"name":"getContext","parameterTypes":[] }]
+},
+{
   "name":"java.security.AlgorithmParametersSpi"
 },
 {
@@ -794,6 +801,10 @@
 {
   "name":"javax.management.remote.rmi.RMIServerImpl_Stub",
   "methods":[{"name":"<init>","parameterTypes":["java.rmi.server.RemoteRef"] }]
+},
+{
+  "name":"javax.security.auth.Subject",
+  "methods":[{"name":"callAs","parameterTypes":["javax.security.auth.Subject","java.util.concurrent.Callable"] }, {"name":"current","parameterTypes":[] }, {"name":"doAs","parameterTypes":["javax.security.auth.Subject","java.security.PrivilegedExceptionAction"] }, {"name":"getSubject","parameterTypes":["java.security.AccessControlContext"] }]
 },
 {
   "name":"javax.security.auth.x500.X500Principal",

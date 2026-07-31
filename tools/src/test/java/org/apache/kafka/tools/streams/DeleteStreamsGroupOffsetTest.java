@@ -16,24 +16,23 @@
  */
 package org.apache.kafka.tools.streams;
 
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.GroupListing;
-import org.apache.kafka.clients.admin.ListGroupsOptions;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
-import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -41,12 +40,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -56,56 +50,44 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.common.GroupState.EMPTY;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG;
+import static org.apache.kafka.coordinator.transaction.TransactionLogConfig.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG;
+import static org.apache.kafka.coordinator.transaction.TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG;
+import static org.apache.kafka.coordinator.transaction.TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Timeout(600)
-@Tag("integration")
+@ClusterTestDefaults(
+    types = {Type.CO_KRAFT},
+    brokers = 2,
+    serverProperties = {
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = TRANSACTIONS_TOPIC_MIN_ISR_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "0"),
+        @ClusterConfigProperty(key = STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, value = "100"),
+        @ClusterConfigProperty(key = STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, value = "100"),
+    }
+)
 public class DeleteStreamsGroupOffsetTest {
     private static final String TOPIC_PREFIX = "foo-";
     private static final String APP_ID_PREFIX = "streams-group-command-test";
 
     private static final int RECORD_TOTAL = 5;
-    public static EmbeddedKafkaCluster cluster;
-    private static String bootstrapServers;
     private static final String OUTPUT_TOPIC_PREFIX = "output-topic-";
 
-    @BeforeAll
-    public static void startCluster() {
-        final Properties props = new Properties();
-        cluster = new EmbeddedKafkaCluster(2, props);
-        cluster.start();
-
-        bootstrapServers = cluster.bootstrapServers();
-    }
-
-    @AfterEach
-    public void deleteTopicsAndGroups() {
-        try (final Admin adminClient = cluster.createAdminClient()) {
-            // delete all topics
-            final Set<String> topics = adminClient.listTopics().names().get();
-            adminClient.deleteTopics(topics).all().get();
-            // delete all groups
-            List<String> groupIds =
-                adminClient.listGroups(ListGroupsOptions.forStreamsGroups().timeoutMs(1000)).all().get()
-                    .stream().map(GroupListing::groupId).toList();
-            adminClient.deleteStreamsGroups(groupIds).all().get();
-        } catch (final UnknownTopicOrPartitionException ignored) {
-        } catch (final ExecutionException | InterruptedException e) {
-            if (!(e.getCause() instanceof UnknownTopicOrPartitionException)) {
-                throw new RuntimeException(e);
-            }
-        }
-    }
-
-    private Properties createStreamsConfig(String bootstrapServers, String appId) {
+    private static Properties createStreamsConfig(String bootstrapServers, String appId) {
         final Properties configs = new Properties();
         configs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         configs.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
@@ -113,20 +95,19 @@ public class DeleteStreamsGroupOffsetTest {
         configs.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         configs.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
         configs.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        // Use a unique state directory per instance. TestUtils.randomString uses a fixed seed, so app ids are
+        // identical across parallel test JVMs. Without this, concurrent forks would share the default
+        // ${java.io.tmpdir}/kafka-streams/<application.id> directory and fail to acquire the state lock.
+        configs.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         configs.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         return configs;
     }
 
-    @AfterAll
-    public static void closeCluster() {
-        cluster.stop();
-    }
-
-    @Test
-    public void testDeleteOffsetsNonExistingGroup() {
+    @ClusterTest
+    public void testDeleteOffsetsNonExistingGroup(ClusterInstance cluster) {
         String group = "not-existing";
         String topic = "foo:1";
-        String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--input-topic", topic};
+        String[] args = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete-offsets", "--group", group, "--input-topic", topic};
         try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args)) {
             Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets();
             assertEquals(Errors.GROUP_ID_NOT_FOUND, res.getKey());
@@ -140,20 +121,20 @@ public class DeleteStreamsGroupOffsetTest {
         final String topic1 = generateRandomTopic();
         final String topic2 = generateRandomTopic();
 
-        String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group1, "--group", group2, "--input-topic", topic1, "--input-topic", topic2};
+        String[] args = new String[]{"--bootstrap-server", "localhost:9092", "--delete-offsets", "--group", group1, "--group", group2, "--input-topic", topic1, "--input-topic", topic2};
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> getStreamsGroupService(args));
         assertTrue(e.getMessage().contains("Option [delete-offsets] supports only one [group] at a time, but found:") &&
             e.getMessage().contains(group1) && e.getMessage().contains(group2));
     }
 
-    @Test
-    public void testDeleteOffsetsOfStableStreamsGroupWithTopicPartition() {
+    @ClusterTest
+    public void testDeleteOffsetsOfStableStreamsGroupWithTopicPartition(ClusterInstance cluster) {
         final String group = generateRandomAppId();
         final String topic = generateRandomTopic();
         String topicPartition = topic + ":0";
         String[] args;
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--input-topic", topicPartition};
-        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args); KafkaStreams streams = startKSApp(group, topic, service)) {
+        args = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete-offsets", "--group", group, "--input-topic", topicPartition};
+        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args); KafkaStreams streams = startKSApp(cluster, group, topic, service)) {
             Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets();
             assertError(res, topic, 0, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC);
         } catch (Exception e) {
@@ -161,13 +142,13 @@ public class DeleteStreamsGroupOffsetTest {
         }
     }
 
-    @Test
-    public void testDeleteOffsetsOfStableStreamsGroupWithTopicOnly() {
+    @ClusterTest
+    public void testDeleteOffsetsOfStableStreamsGroupWithTopicOnly(ClusterInstance cluster) {
         final String group = generateRandomAppId();
         final String topic = generateRandomTopic();
         String[] args;
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--input-topic", topic};
-        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args); KafkaStreams streams = startKSApp(group, topic, service)) {
+        args = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete-offsets", "--group", group, "--input-topic", topic};
+        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args); KafkaStreams streams = startKSApp(cluster, group, topic, service)) {
             Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets();
             assertError(res, topic, -1, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC);
         } catch (Exception e) {
@@ -175,15 +156,15 @@ public class DeleteStreamsGroupOffsetTest {
         }
     }
 
-    @Test
-    public void testDeleteOffsetsOfStableStreamsGroupWithUnknownTopicPartition() {
+    @ClusterTest
+    public void testDeleteOffsetsOfStableStreamsGroupWithUnknownTopicPartition(ClusterInstance cluster) {
         final String group = generateRandomAppId();
         final String topic = generateRandomTopic();
         final String unknownTopic = "unknown-topic";
         final String unknownTopicPartition = unknownTopic + ":0";
         String[] args;
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--input-topic", unknownTopicPartition};
-        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args); KafkaStreams streams = startKSApp(group, topic, service)) {
+        args = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete-offsets", "--group", group, "--input-topic", unknownTopicPartition};
+        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args); KafkaStreams streams = startKSApp(cluster, group, topic, service)) {
             Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets();
             assertError(res, unknownTopic, 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION);
         } catch (Exception e) {
@@ -191,14 +172,15 @@ public class DeleteStreamsGroupOffsetTest {
         }
     }
 
-    @Test
-    public void testDeleteOffsetsOfStableStreamsGroupWithUnknownTopicOnly() {
+    @ClusterTest
+    public void testDeleteOffsetsOfStableStreamsGroupWithUnknownTopicOnly(ClusterInstance cluster) {
         final String group = generateRandomAppId();
         final String topic = generateRandomTopic();
         final String unknownTopic = "unknown-topic";
         String[] args;
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--input-topic", unknownTopic};
-        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args); KafkaStreams streams = startKSApp(group, topic, service)) {
+        args = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete-offsets", "--group", group, "--input-topic", unknownTopic};
+        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args);
+             KafkaStreams streams = startKSApp(cluster, group, topic, service)) {
             Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets();
             assertError(res, unknownTopic, -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION);
         } catch (Exception e) {
@@ -206,14 +188,15 @@ public class DeleteStreamsGroupOffsetTest {
         }
     }
 
-    @Test
-    public void testDeleteOffsetsOfEmptyStreamsGroupWithTopicPartition() {
+    @ClusterTest
+    public void testDeleteOffsetsOfEmptyStreamsGroupWithTopicPartition(ClusterInstance cluster) {
         final String group = generateRandomAppId();
         final String topic = generateRandomTopic();
         final String topicPartition = topic + ":0";
         String[] args;
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--input-topic", topicPartition};
-        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args); KafkaStreams streams = startKSApp(group, topic, service)) {
+        args = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete-offsets", "--group", group, "--input-topic", topicPartition};
+        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args);
+             KafkaStreams streams = startKSApp(cluster, group, topic, service)) {
             stopKSApp(group, topic, streams, service);
             Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets();
             assertError(res, topic, 0, 0, Errors.NONE);
@@ -222,13 +205,14 @@ public class DeleteStreamsGroupOffsetTest {
         }
     }
 
-    @Test
-    public void testDeleteOffsetsOfEmptyStreamsGroupWithTopicOnly() {
+    @ClusterTest
+    public void testDeleteOffsetsOfEmptyStreamsGroupWithTopicOnly(ClusterInstance cluster) {
         final String group = generateRandomAppId();
         final String topic = generateRandomTopic();
         String[] args;
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--input-topic", topic};
-        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args); KafkaStreams streams = startKSApp(group, topic, service)) {
+        args = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete-offsets", "--group", group, "--input-topic", topic};
+        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args);
+             KafkaStreams streams = startKSApp(cluster, group, topic, service)) {
             stopKSApp(group, topic, streams, service);
             Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets();
             assertError(res, topic, -1, 0, Errors.NONE);
@@ -237,15 +221,16 @@ public class DeleteStreamsGroupOffsetTest {
         }
     }
 
-    @Test
-    public void testDeleteOffsetsOfEmptyStreamsGroupWithMultipleTopics() {
+    @ClusterTest
+    public void testDeleteOffsetsOfEmptyStreamsGroupWithMultipleTopics(ClusterInstance cluster) {
         final String group = generateRandomAppId();
         final String topic1 = generateRandomTopic();
         final String unknownTopic = "unknown-topic";
 
         String[] args;
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--input-topic", topic1, "--input-topic", unknownTopic};
-        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args); KafkaStreams streams = startKSApp(group, topic1, service)) {
+        args = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete-offsets", "--group", group, "--input-topic", topic1, "--input-topic", unknownTopic};
+        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args);
+             KafkaStreams streams = startKSApp(cluster, group, topic1, service)) {
             stopKSApp(group, topic1, streams, service);
             Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets();
             assertError(res, topic1, -1, 0, Errors.NONE);
@@ -255,15 +240,16 @@ public class DeleteStreamsGroupOffsetTest {
         }
     }
 
-    @Test
-    public void testDeleteOffsetsOfEmptyStreamsGroupWithUnknownTopicPartition() {
+    @ClusterTest
+    public void testDeleteOffsetsOfEmptyStreamsGroupWithUnknownTopicPartition(ClusterInstance cluster) {
         final String group = generateRandomAppId();
         final String topic = generateRandomTopic();
         final String unknownTopic = "unknown-topic";
         final String unknownTopicPartition = unknownTopic + ":0";
         String[] args;
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--input-topic", unknownTopicPartition};
-        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args); KafkaStreams streams = startKSApp(group, topic, service)) {
+        args = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete-offsets", "--group", group, "--input-topic", unknownTopicPartition};
+        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args);
+             KafkaStreams streams = startKSApp(cluster, group, topic, service)) {
             stopKSApp(group, topic, streams, service);
             Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets();
             assertError(res, unknownTopic, 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION);
@@ -272,14 +258,15 @@ public class DeleteStreamsGroupOffsetTest {
         }
     }
 
-    @Test
-    public void testDeleteOffsetsOfEmptyStreamsGroupWithUnknownTopicOnly() {
+    @ClusterTest
+    public void testDeleteOffsetsOfEmptyStreamsGroupWithUnknownTopicOnly(ClusterInstance cluster) {
         final String group = generateRandomAppId();
         final String topic = generateRandomTopic();
         final String unknownTopic = "unknown-topic";
         String[] args;
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--input-topic", unknownTopic};
-        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args); KafkaStreams streams = startKSApp(group, topic, service)) {
+        args = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete-offsets", "--group", group, "--input-topic", unknownTopic};
+        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args);
+             KafkaStreams streams = startKSApp(cluster, group, topic, service)) {
             stopKSApp(group, topic, streams, service);
             Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets();
             assertError(res, unknownTopic, -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION);
@@ -288,13 +275,14 @@ public class DeleteStreamsGroupOffsetTest {
         }
     }
 
-    @Test
-    public void testDeleteOffsetsOfEmptyStreamsGroupWithAllTopics() {
+    @ClusterTest
+    public void testDeleteOffsetsOfEmptyStreamsGroupWithAllTopics(ClusterInstance cluster) {
         final String group = generateRandomAppId();
         final String topic = generateRandomTopic();
         String[] args;
-        args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group, "--all-input-topics", topic};
-        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args); KafkaStreams streams = startKSApp(group, topic, service)) {
+        args = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete-offsets", "--group", group, "--all-input-topics", topic};
+        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args);
+             KafkaStreams streams = startKSApp(cluster, group, topic, service)) {
             stopKSApp(group, topic, streams, service);
             Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets();
             assertError(res, topic, -1, 0, Errors.NONE);
@@ -347,10 +335,11 @@ public class DeleteStreamsGroupOffsetTest {
         }
     }
 
-    private KafkaStreams startKSApp(String appId, String inputTopic, StreamsGroupCommand.StreamsGroupService service) throws Exception {
+    private KafkaStreams startKSApp(ClusterInstance cluster, String appId, String inputTopic, StreamsGroupCommand.StreamsGroupService service) throws Exception {
         String outputTopic = generateRandomTopicId(OUTPUT_TOPIC_PREFIX);
+        cluster.createTopic(inputTopic, 1, (short) 1);
         StreamsBuilder builder = builder(inputTopic, outputTopic);
-        produceMessages(inputTopic);
+        produceMessages(cluster, inputTopic);
 
         final KStream<String, String> inputStream = builder.stream(inputTopic);
 
@@ -368,7 +357,7 @@ public class DeleteStreamsGroupOffsetTest {
             }
         });
 
-        KafkaStreams streams = IntegrationTestUtils.getStartedStreams(createStreamsConfig(bootstrapServers, appId), builder, true);
+        KafkaStreams streams = StreamsGroupCommandTestUtils.getStartedStreams(createStreamsConfig(cluster.bootstrapServers(), appId), builder, true);
 
         TestUtils.waitForCondition(
             () -> !service.collectGroupMembers(appId).isEmpty(),
@@ -386,10 +375,6 @@ public class DeleteStreamsGroupOffsetTest {
         return prefix + TestUtils.randomString(10);
     }
 
-    private String generateGroupAppId() {
-        return APP_ID_PREFIX + TestUtils.randomString(10);
-    }
-
     private boolean checkGroupState(StreamsGroupCommand.StreamsGroupService service, String groupId, GroupState state) throws Exception {
         return Objects.equals(service.collectGroupState(groupId), state);
     }
@@ -404,25 +389,20 @@ public class DeleteStreamsGroupOffsetTest {
         return builder;
     }
 
-    private static void produceMessages(final String topic) {
+    private static void produceMessages(final ClusterInstance cluster, final String topic) {
         List<KeyValueTimestamp<String, String>> data = new ArrayList<>(RECORD_TOTAL);
         for (long v = 0; v < RECORD_TOTAL; ++v) {
-            data.add(new KeyValueTimestamp<>(v + "0" + topic, v + "0", cluster.time.milliseconds()));
+            data.add(new KeyValueTimestamp<>(v + "0" + topic, v + "0", System.currentTimeMillis()));
         }
 
-        IntegrationTestUtils.produceSynchronously(
-            TestUtils.producerConfig(bootstrapServers, StringSerializer.class, StringSerializer.class),
-            false,
-            topic,
-            Optional.empty(),
-            data
-        );
+        StreamsGroupCommandTestUtils.produce(cluster, topic, Optional.empty(), data);
     }
 
     private StreamsGroupCommand.StreamsGroupService getStreamsGroupService(String[] args) {
         StreamsGroupCommandOptions opts = StreamsGroupCommandOptions.fromArgs(args);
         return new StreamsGroupCommand.StreamsGroupService(
-            opts, cluster.createAdminClient());
-
+            opts,
+            Map.of(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE))
+        );
     }
 }
