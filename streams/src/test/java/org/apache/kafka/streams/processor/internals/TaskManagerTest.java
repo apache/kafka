@@ -3538,10 +3538,13 @@ public class TaskManagerTest {
 
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, false);
 
-        when(stateUpdater.tasks()).thenReturn(singleton(task00));
+        // the state updater only exposes read-only tasks, which cannot be closed
+        when(stateUpdater.tasks()).thenReturn(singleton(new ReadOnlyTask(task00)));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = mock(CompletableFuture.class);
         when(stateUpdater.remove(eq(taskId00), eq(SuspendReason.MIGRATED))).thenReturn(future);
         when(future.get(anyLong(), any())).thenThrow(new java.util.concurrent.TimeoutException());
+        // the removal timed out, so the task is still owned by the state updater
+        when(stateUpdater.drainQueuedTasks()).thenReturn(singleton(task00));
 
         taskManager.shutdown(true);
 

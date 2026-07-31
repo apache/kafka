@@ -187,6 +187,17 @@ public interface StateUpdater {
     boolean hasExceptionsAndFailedTasks();
 
     /**
+     * Drains the tasks that wait in the queues of the state updater, i.e., tasks that were not picked up from the input
+     * queue yet, restored tasks that were not handed over yet, and failed tasks. Tasks that the state updater is
+     * updating or has paused are not returned.
+     *
+     * The returned tasks are removed from the state updater.
+     *
+     * @return the tasks that wait in the queues of the state updater
+     */
+    Set<Task> drainQueuedTasks();
+
+    /**
      * Gets all tasks that are managed by the state updater.
      *
      * The state updater manages all tasks that were added with the {@link StateUpdater#add(Task)} and that have

@@ -1673,6 +1673,34 @@ class DefaultStateUpdaterTest {
     }
 
     @Test
+    public void shouldDrainQueuedTasks() throws Exception {
+        final StreamTask restoredTask = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask failedTask = statefulTask(TASK_1_0, Set.of(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
+        final StreamTask taskInInputQueue = statefulTask(TASK_1_1, Set.of(TOPIC_PARTITION_C_0)).inState(State.RESTORING).build();
+        final StreamsException streamsException = new StreamsException("Something happened", failedTask.id());
+        when(changelogReader.completedChangelogs()).thenReturn(Set.of(TOPIC_PARTITION_A_0));
+        doThrow(streamsException).when(changelogReader).restore(mkMap(mkEntry(TASK_1_0, failedTask)));
+        stateUpdater.start();
+        stateUpdater.add(restoredTask);
+        verifyRestoredActiveTasks(restoredTask);
+        stateUpdater.add(failedTask);
+        verifyExceptionsAndFailedTasks(new ExceptionAndTask(streamsException, failedTask));
+        // a state updater that was shut down does not pick up tasks from its input queue anymore
+        stateUpdater.shutdown(Duration.ofMinutes(1));
+        stateUpdater.add(taskInInputQueue);
+        assertEquals(
+            Set.of(restoredTask.id(), failedTask.id(), taskInInputQueue.id()),
+            stateUpdater.tasks().stream().map(Task::id).collect(Collectors.toSet())
+        );
+
+        final Set<Task> drainedTasks = stateUpdater.drainQueuedTasks();
+
+        // in contrast to tasks(), the tasks themselves are returned, so that the caller can close them
+        assertEquals(Set.of(restoredTask, failedTask, taskInInputQueue), drainedTasks);
+        assertTrue(stateUpdater.tasks().isEmpty());
+    }
+
+    @Test
     public void shouldGetTasksFromPausedTasks() throws Exception {
         final StreamTask activeTask = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StandbyTask standbyTask = standbyTask(TASK_0_1, Set.of(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();

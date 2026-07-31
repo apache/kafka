@@ -1513,13 +1513,8 @@ public class TaskManager {
             closeTaskDirty(task, false);
         }
         // Handling all failures that occurred during the remove process
-        for (final StateUpdater.ExceptionAndTask exceptionAndTask : stateUpdater.drainExceptionsAndFailedTasks()) {
-            final Task failedTask = exceptionAndTask.task();
-            closeTaskDirty(failedTask, false);
-        }
-
-        // If there is anything left unhandled due to timeouts, handling now
-        for (final Task task : stateUpdater.tasks()) {
+        // And if there is anything left unhandled due to timeouts, handling now too
+        for (final Task task : stateUpdater.drainQueuedTasks()) {
             closeTaskDirty(task, false);
         }
     }

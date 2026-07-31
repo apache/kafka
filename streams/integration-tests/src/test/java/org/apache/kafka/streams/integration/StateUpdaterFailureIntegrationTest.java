@@ -16,7 +16,11 @@
  */
 package org.apache.kafka.streams.integration;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KafkaStreams;
@@ -26,25 +30,26 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.AbstractStoreBuilder;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.TestUtils;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 
-import java.io.IOException;
 import java.time.Duration;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StateUpdaterFailureIntegrationTest {
@@ -60,9 +65,8 @@ public class StateUpdaterFailureIntegrationTest {
     private KafkaStreams streams;
 
     @BeforeEach
-    public void before(final TestInfo testInfo) throws InterruptedException, IOException {
+    public void before(final TestInfo testInfo) {
         cluster.start();
-        cluster.createTopic(INPUT_TOPIC_NAME, NUM_PARTITIONS, 1);
         streamsConfiguration = new Properties();
         final String safeTestName = safeUniqueTestName(testInfo);
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
@@ -73,8 +77,6 @@ public class StateUpdaterFailureIntegrationTest {
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
-        streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
-
     }
 
     @AfterEach
@@ -97,6 +99,9 @@ public class StateUpdaterFailureIntegrationTest {
      */
     @Test
     public void correctlyHandleFlushErrorsDuringRebalance() throws Exception {
+        cluster.createTopic(INPUT_TOPIC_NAME, NUM_PARTITIONS, 1);
+        streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
+
         final AtomicInteger numberOfStoreInits = new AtomicInteger();
         final CountDownLatch pendingShutdownLatch = new CountDownLatch(1);
 
@@ -150,5 +155,85 @@ public class StateUpdaterFailureIntegrationTest {
         TestUtils.waitForCondition(() -> numberOfStoreInits.get() == 9, "Streams never reinitialized the store enough times");
 
         assertTrue(streams.close(Duration.ofSeconds(60)));
+    }
+
+    @Test
+    public void shouldCloseTasksThatAreLeftInTheStateUpdaterOnShutdown() throws Exception {
+        final String inputTopic = "input-topic-with-two-partitions";
+        cluster.createTopic(inputTopic, 2, 1);
+        streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
+
+        final CountDownLatch stateUpdaterThreadStoppedLatch = new CountDownLatch(1);
+        // count how many state stores are opened and closed, so that the test can verify that every task that the
+        // stream thread initialized is closed during the shutdown
+        final AtomicInteger numberOfStoreInits = new AtomicInteger();
+        final AtomicInteger numberOfStoreCloses = new AtomicInteger();
+
+        final StoreBuilder<KeyValueStore<Object, Object>> storeBuilder =
+            new AbstractStoreBuilder<>("testStateStore", Serdes.Integer(), Serdes.ByteArray(), new MockTime()) {
+
+                @Override
+                public KeyValueStore<Object, Object> build() {
+                    return new MockKeyValueStore(name, false) {
+
+                        @Override
+                        public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+                            super.init(stateStoreContext, root);
+                            if (numberOfStoreInits.getAndIncrement() == 1) {
+                                // The stream thread hands a task over to the state updater right after it initialized
+                                // the task. Waiting here until the state updater thread stopped completely -- it clears
+                                // its input queue while it stops -- therefore leaves this task in the input queue of the
+                                // state updater, which nobody picks it up from anymore.
+                                try {
+                                    stateUpdaterThreadStoppedLatch.await();
+                                } catch (final InterruptedException e) {
+                                    throw new RuntimeException(e);
+                                }
+                            }
+                        }
+
+                        @Override
+                        public void close() {
+                            numberOfStoreCloses.incrementAndGet();
+                            super.close();
+                        }
+                    };
+                }
+            };
+
+        final TopologyWrapper topology = new TopologyWrapper();
+        topology.addSource("ingest", inputTopic);
+        topology.addProcessor("my-processor", new MockApiProcessorSupplier<>(), "ingest");
+        topology.addStateStore(storeBuilder, "my-processor");
+
+        streams = new KafkaStreams(topology, streamsConfiguration, new DefaultKafkaClientSupplier() {
+
+            @Override
+            public Consumer<byte[], byte[]> getRestoreConsumer(final Map<String, Object> config) {
+                return new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
+
+                    @Override
+                    public ConsumerRecords<byte[], byte[]> poll(final Duration timeout) {
+                        // the state updater thread only handles Kafka exceptions, so a runtime exception kills it and
+                        // the task it was restoring is reported as failed
+                        throw new RuntimeException("Polling the restore consumer failed");
+                    }
+
+                    @Override
+                    public void unsubscribe() {
+                        // the state updater thread unsubscribes the restore consumer as the last step of stopping,
+                        // after it cleared its input queue
+                        stateUpdaterThreadStoppedLatch.countDown();
+                        super.unsubscribe();
+                    }
+                };
+            }
+        });
+        streams.start();
+
+        TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.ERROR, Duration.ofMinutes(8).toMillis(),
+            "Streams client did not shut down with an error");
+
+        assertEquals(numberOfStoreInits.get(), numberOfStoreCloses.get());
     }
 }
