@@ -392,7 +392,6 @@ kafka.api.PlaintextAdminIntegrationTest:
 - testShareGroups
 - testValidIncrementalAlterConfigs
 kafka.api.PlaintextConsumerAssignorsTest:
-- executionError
 - testMultiConsumerDefaultAssignor
 - testMultiConsumerDefaultAssignorAndVerifyAssignment
 - testMultiConsumerRoundRobinAssignor
@@ -402,7 +401,6 @@ kafka.api.PlaintextConsumerAssignorsTest:
 - testRemoteAssignorRange
 - testRoundRobinAssignment
 kafka.api.PlaintextEndToEndAuthorizationTest:
-- initializationError
 - testListenerName
 - testNoConsumeWithDescribeAclViaAssign
 - testNoConsumeWithDescribeAclViaSubscribe
@@ -462,7 +460,6 @@ kafka.api.SaslGssapiSslEndToEndAuthorizationTest:
 - testProduceConsumeWithWildcardAcls
 - testTwoConsumersWithDifferentSaslCredentials
 kafka.api.SaslMultiMechanismConsumerTest:
-- initializationError
 - testClusterResourceListener
 - testCoordinatorFailover
 - testMultipleBrokerMechanisms
@@ -496,7 +493,6 @@ kafka.api.SaslPlainSslEndToEndAuthorizationTest:
 - testProduceConsumeWithWildcardAcls
 - testTwoConsumersWithDifferentSaslCredentials
 kafka.api.SaslPlaintextConsumerTest:
-- initializationError
 - testClusterResourceListener
 - testCoordinatorFailover
 - testSimpleConsumption
@@ -535,7 +531,6 @@ kafka.api.SaslSslAdminIntegrationTest:
 - testExpiredTimeStampLargerThanMaxLifeStamp
 - testLegacyAclOpsNeverAffectOrReturnPrefixed
 kafka.api.SaslSslConsumerTest:
-- initializationError
 - testClusterResourceListener
 - testCoordinatorFailover
 - testSimpleConsumption

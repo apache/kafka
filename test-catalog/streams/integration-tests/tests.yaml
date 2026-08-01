@@ -524,6 +524,7 @@ org.apache.kafka.streams.integration.TopologyDescriptionPluginIntegrationTest:
 - shouldPushTopologyDescriptionToPluginAfterJoin
 - shouldStopSolicitingPushAfterPermanentPluginFailure
 org.apache.kafka.streams.integration.TransactionalPositionRestartIntegrationTest:
+- initializationError
 - verifyStore
 org.apache.kafka.streams.integration.VersionedKeyValueStoreIntegrationTest:
 - shouldAllowCustomIQv2ForCustomStoreImplementations
