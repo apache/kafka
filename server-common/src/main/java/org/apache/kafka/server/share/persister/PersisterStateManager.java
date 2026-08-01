@@ -181,25 +181,57 @@ public class PersisterStateManager {
         return nodeRPCMap;
     }
 
+    // test visibility
+    Collection<RequestAndCompletionHandler> generateRequests() {
+        return sender.generateRequests();
+    }
+
     public void setGenerateCallback(Runnable generateCallback) {
         this.generateCallback = generateCallback;
     }
 
-    // Groups a combined response's results into topicId -> partition -> result for O(1) per-partition lookup.
-    private static <T, P> Map<Uuid, Map<Integer, P>> indexByTopicPartition(
-        List<T> results,
-        Function<T, Uuid> topicId,
-        Function<T, List<P>> partitions,
-        ToIntFunction<P> partition
-    ) {
-        Map<Uuid, Map<Integer, P>> index = new HashMap<>();
-        for (T result : results) {
-            Map<Integer, P> byPartition = index.computeIfAbsent(topicId.apply(result), t -> new HashMap<>());
-            for (P p : partitions.apply(result)) {
-                byPartition.put(partition.applyAsInt(p), p);
-            }
+    /**
+     * Demultiplexes a combined RPC response into topicId -> partition -> per-partition result, so that
+     * each handler of a coalesced request finds its own slice in O(1) rather than rescanning the whole
+     * response (which costs O(N) per handler, hence O(N^2) per batch).
+     *
+     * @param <P> per-partition result type of the RPC, e.g. {@link WriteShareGroupStateResponseData.PartitionResult}
+     */
+    static final class PartitionResultIndex<P> {
+        private final Map<Uuid, Map<Integer, P>> index;
+
+        private PartitionResultIndex(Map<Uuid, Map<Integer, P>> index) {
+            this.index = index;
         }
-        return index;
+
+        /**
+         * @param results    per-topic results of the combined response
+         * @param topicId    extracts the topic id from a per-topic result
+         * @param partitions extracts the per-partition results of a per-topic result
+         * @param partition  extracts the partition number from a per-partition result
+         * @param <T>        per-topic result type of the RPC, e.g. {@link WriteShareGroupStateResponseData.WriteStateResult}
+         * @param <P>        per-partition result type of the RPC
+         */
+        static <T, P> PartitionResultIndex<P> build(
+            List<T> results,
+            Function<T, Uuid> topicId,
+            Function<T, List<P>> partitions,
+            ToIntFunction<P> partition
+        ) {
+            Map<Uuid, Map<Integer, P>> index = new HashMap<>();
+            for (T result : results) {
+                Map<Integer, P> byPartition = index.computeIfAbsent(topicId.apply(result), t -> new HashMap<>());
+                for (P p : partitions.apply(result)) {
+                    byPartition.put(partition.applyAsInt(p), p);
+                }
+            }
+            return new PartitionResultIndex<>(index);
+        }
+
+        P get(SharePartitionKey key) {
+            Map<Integer, P> byPartition = index.get(key.topicId());
+            return byPartition == null ? null : byPartition.get(key.partition());
+        }
     }
 
     /**
@@ -215,8 +247,9 @@ public class PersisterStateManager {
         private final ExponentialBackoffManager findCoordBackoff;
         private Consumer<ClientResponse> onCompleteCallback;
         protected final SharePartitionKey partitionKey;
-        // Combined-response index shared across handlers; set before onComplete, read-and-cleared in lookupPartitionResult (KAFKA-20803).
-        protected Object sharedResultIndex;
+        // Index of the combined response, shared across the handlers of one coalesced request; assigned
+        // before onComplete and read-and-cleared by lookupPartitionResult (KAFKA-20803).
+        private PartitionResultIndex<?> sharedResultIndex;
 
         public PersisterStateManagerHandler(
             String groupId,
@@ -259,22 +292,33 @@ public class PersisterStateManager {
          */
         protected abstract void handleRequestResponse(ClientResponse response);
 
-        // Overridden per RPC to index the combined response as topicId -> partition -> result; null when no usable body.
-        protected Object buildResultIndex(ClientResponse response) {
+        /**
+         * Indexes a combined response so every handler of the batch can look up its own slice. Overridden
+         * per RPC type; the base implementation leaves the O(1) path disabled. Implementations must tolerate
+         * a null or bodyless response and return null for it.
+         *
+         * @param response - Client response, possibly null
+         * @return index of the combined response, or null when there is no usable body
+         */
+        protected PartitionResultIndex<?> buildResultIndex(ClientResponse response) {
             return null;
         }
 
+        /**
+         * Returns this handler's per-partition result from the combined response in O(1), preferring the
+         * index built once for the whole batch and otherwise indexing the response on its own.
+         *
+         * @param response - Client response
+         * @return the per-partition result, or null when the response carries none for this partition
+         */
         @SuppressWarnings("unchecked")
         protected final <R> R lookupPartitionResult(ClientResponse response) {
-            Object index = sharedResultIndex;
+            PartitionResultIndex<?> index = sharedResultIndex;
             sharedResultIndex = null;
-            Map<Uuid, Map<Integer, R>> resultIndex =
-                (Map<Uuid, Map<Integer, R>>) (index != null ? index : buildResultIndex(response));
-            if (resultIndex == null) {
-                return null;
+            if (index == null) {
+                index = buildResultIndex(response);
             }
-            Map<Integer, R> byPartition = resultIndex.get(partitionKey().topicId());
-            return byPartition == null ? null : byPartition.get(partitionKey().partition());
+            return index == null ? null : ((PartitionResultIndex<R>) index).get(partitionKey());
         }
 
         /**
@@ -815,11 +859,11 @@ public class PersisterStateManager {
         }
 
         @Override
-        protected Object buildResultIndex(ClientResponse response) {
-            if (!response.hasResponse()) {
+        protected PartitionResultIndex<WriteShareGroupStateResponseData.PartitionResult> buildResultIndex(ClientResponse response) {
+            if (response == null || !response.hasResponse()) {
                 return null;
             }
-            return indexByTopicPartition(
+            return PartitionResultIndex.build(
                 ((WriteShareGroupStateResponse) response.responseBody()).data().results(),
                 WriteShareGroupStateResponseData.WriteStateResult::topicId,
                 WriteShareGroupStateResponseData.WriteStateResult::partitions,
@@ -1593,14 +1637,15 @@ public class PersisterStateManager {
                                             oldVal.remove(coordNode);
                                             return oldVal;
                                         });
-                                        // Demux the combined response once and share it across handlers (KAFKA-20803).
-                                        Object sharedResultIndex = handlersPerGroup.isEmpty()
-                                            ? null
-                                            : handlersPerGroup.get(0).buildResultIndex(response);
-                                        handlersPerGroup.forEach(handler1 -> {
-                                            handler1.sharedResultIndex = sharedResultIndex;
-                                            handler1.onComplete(response);
-                                        });
+                                        // Demux the combined response once and share it across the handlers
+                                        // which composed the combined request (KAFKA-20803).
+                                        if (!handlersPerGroup.isEmpty()) {
+                                            PartitionResultIndex<?> sharedResultIndex = handlersPerGroup.get(0).buildResultIndex(response);
+                                            handlersPerGroup.forEach(handler1 -> {
+                                                handler1.sharedResultIndex = sharedResultIndex;
+                                                handler1.onComplete(response);
+                                            });
+                                        }
                                         wakeup();
                                     }));
                                 sending.computeIfAbsent(rpcType, key -> new HashSet<>()).add(coordNode);
@@ -1649,7 +1694,10 @@ public class PersisterStateManager {
      * batching requests.
      */
     private static class RequestCoalescerHelper {
+        private static final Logger LOG = LoggerFactory.getLogger(RequestCoalescerHelper.class);
+
         public static AbstractRequest.Builder<? extends AbstractRequest> coalesceRequests(String groupId, RPCType rpcType, List<? extends PersisterStateManagerHandler> handlers) {
+            LOG.trace("Received coalesce request for {} handlers of RPC type {}", handlers.size(), rpcType);
             return switch (rpcType) {
                 case WRITE -> coalesceWrites(groupId, handlers);
                 case READ -> coalesceReads(groupId, handlers);
