@@ -69,7 +69,7 @@ public class TopicMetadataFetcherTest {
         RequestTestUtils.metadataUpdateWithIds(1, singletonMap(topicName, 4), topicIds);
 
     private MockTime time = new MockTime(1);
-    private SubscriptionState subscriptions;
+    private ConsumerSubscriptionState subscriptions;
     private ConsumerMetadata metadata;
     private MockClient client;
     private Metrics metrics;
@@ -239,14 +239,14 @@ public class TopicMetadataFetcherTest {
         long retryBackoffMs = 100;
         long retryBackoffMaxMs = 1000;
         LogContext logContext = new LogContext();
-        SubscriptionState subscriptionState = new SubscriptionState(logContext, AutoOffsetResetStrategy.EARLIEST);
+        ConsumerSubscriptionState subscriptionState = new ConsumerSubscriptionState(logContext, AutoOffsetResetStrategy.EARLIEST);
         buildDependencies(metricConfig, metadataExpireMs, subscriptionState, logContext);
         topicMetadataFetcher = new TopicMetadataFetcher(logContext, consumerClient, retryBackoffMs, retryBackoffMaxMs);
     }
 
     private void buildDependencies(MetricConfig metricConfig,
                                    long metadataExpireMs,
-                                   SubscriptionState subscriptionState,
+                                   ConsumerSubscriptionState subscriptionState,
                                    LogContext logContext) {
         time = new MockTime(1);
         subscriptions = subscriptionState;

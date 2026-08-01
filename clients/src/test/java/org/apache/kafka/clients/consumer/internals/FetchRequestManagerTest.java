@@ -188,7 +188,7 @@ public class FetchRequestManagerTest {
     private final int requestTimeoutMs = 30000;
     private final ApiVersions apiVersions = new ApiVersions();
     private MockTime time = new MockTime(1);
-    private SubscriptionState subscriptions;
+    private ConsumerSubscriptionState subscriptions;
     private ConsumerMetadata metadata;
     private BackgroundEventHandler backgroundEventHandler;
     private FetchMetricsRegistry metricsRegistry;
@@ -1045,7 +1045,7 @@ public class FetchRequestManagerTest {
 
         buffer.flip();
 
-        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(0, Optional.empty(), metadata.currentLeader(tp0)));
+        subscriptions.seekUnvalidated(tp0, new ConsumerSubscriptionState.FetchPosition(0, Optional.empty(), metadata.currentLeader(tp0)));
 
         // normal fetch
         assertEquals(1, sendFetches());
@@ -1079,7 +1079,7 @@ public class FetchRequestManagerTest {
 
     private void seekAndConsumeRecord(ByteBuffer responseBuffer, long toOffset) {
         // Seek to skip the bad record and fetch again.
-        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(toOffset, Optional.empty(), metadata.currentLeader(tp0)));
+        subscriptions.seekUnvalidated(tp0, new ConsumerSubscriptionState.FetchPosition(toOffset, Optional.empty(), metadata.currentLeader(tp0)));
         // Should not throw exception after the seek.
         collectFetch();
         assertEquals(1, sendFetches());
@@ -1480,13 +1480,13 @@ public class FetchRequestManagerTest {
         // seek to tp0 and tp1 in two polls to generate 2 complete requests and responses
 
         // #1 seek, request, poll, response
-        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp0)));
+        subscriptions.seekUnvalidated(tp0, new ConsumerSubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp0)));
         assertEquals(1, sendFetches());
         client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
         networkClientDelegate.poll(time.timer(0));
 
         // #2 seek, request, poll, response
-        subscriptions.seekUnvalidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
+        subscriptions.seekUnvalidated(tp1, new ConsumerSubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
         assertEquals(1, sendFetches());
         client.prepareResponse(fullFetchResponse(tidp1, nextRecords, Errors.NONE, 100L, 0));
 
@@ -1512,13 +1512,13 @@ public class FetchRequestManagerTest {
         // seek to tp0 and tp1 in two polls to generate 2 complete requests and responses
 
         // #1 seek, request, poll, response
-        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp0)));
+        subscriptions.seekUnvalidated(tp0, new ConsumerSubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp0)));
         assertEquals(1, sendFetches());
         client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
         networkClientDelegate.poll(time.timer(0));
 
         // #2 seek, request, poll, response
-        subscriptions.seekUnvalidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
+        subscriptions.seekUnvalidated(tp1, new ConsumerSubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
         assertEquals(1, sendFetches());
         client.prepareResponse(fullFetchResponse(tidp1, nextRecords, Errors.NONE, 100L, 0));
 
@@ -1951,7 +1951,7 @@ public class FetchRequestManagerTest {
         assertEquals(2, fetchRecords().get(tp0).size());
 
         subscriptions.assignFromUser(Set.of(tp0, tp1));
-        subscriptions.seekUnvalidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
+        subscriptions.seekUnvalidated(tp1, new ConsumerSubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
 
         assertEquals(1, sendFetches());
         partitions = new HashMap<>();
@@ -2836,8 +2836,8 @@ public class FetchRequestManagerTest {
         buildFetcher(2);
 
         assignFromUser(Set.of(tp0, tp1));
-        subscriptions.seekValidated(tp0, new SubscriptionState.FetchPosition(0, Optional.empty(), metadata.currentLeader(tp0)));
-        subscriptions.seekValidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
+        subscriptions.seekValidated(tp0, new ConsumerSubscriptionState.FetchPosition(0, Optional.empty(), metadata.currentLeader(tp0)));
+        subscriptions.seekValidated(tp1, new ConsumerSubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeader(tp1)));
 
         // Fetch some records and establish an incremental fetch session.
         LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> partitions1 = new LinkedHashMap<>();
@@ -3762,7 +3762,7 @@ public class FetchRequestManagerTest {
 
         // Overwrite tp1's position with an empty leader, but verify that it is still buffered. Having a leaderless,
         // buffered partition is key to triggering the test case.
-        subscriptions.position(tp1, new SubscriptionState.FetchPosition(
+        subscriptions.position(tp1, new ConsumerSubscriptionState.FetchPosition(
             0,
             Optional.empty(),
             Metadata.LeaderAndEpoch.noLeaderOrEpoch()
@@ -3833,7 +3833,7 @@ public class FetchRequestManagerTest {
 
         // Confirm that calling SubscriptionState.position() succeeds for a leaderless partition. While it shouldn't
         // throw an exception, it should return a null position.
-        SubscriptionState.FetchPosition position = assertDoesNotThrow(() -> subscriptions.position(node0Partition2));
+        ConsumerSubscriptionState.FetchPosition position = assertDoesNotThrow(() -> subscriptions.position(node0Partition2));
         assertNull(position);
 
         // sendFetches() call #2 will now fail to send any requests as we have an invalid position in the assignment.
@@ -4139,7 +4139,7 @@ public class FetchRequestManagerTest {
                                      IsolationLevel isolationLevel,
                                      long metadataExpireMs) {
         LogContext logContext = new LogContext();
-        SubscriptionState subscriptionState = new SubscriptionState(logContext, offsetResetStrategy);
+        ConsumerSubscriptionState subscriptionState = new ConsumerSubscriptionState(logContext, offsetResetStrategy);
         buildFetcher(metricConfig, keyDeserializer, valueDeserializer, maxPollRecords, isolationLevel, metadataExpireMs,
                 subscriptionState, logContext);
     }
@@ -4150,7 +4150,7 @@ public class FetchRequestManagerTest {
                                      int maxPollRecords,
                                      IsolationLevel isolationLevel,
                                      long metadataExpireMs,
-                                     SubscriptionState subscriptionState,
+                                     ConsumerSubscriptionState subscriptionState,
                                      LogContext logContext) {
         buildDependencies(metricConfig, metadataExpireMs, subscriptionState, logContext);
         Deserializers<K, V> deserializers = new Deserializers<>(keyDeserializer, valueDeserializer, metrics);
@@ -4202,7 +4202,7 @@ public class FetchRequestManagerTest {
 
     private void buildDependencies(MetricConfig metricConfig,
                                    long metadataExpireMs,
-                                   SubscriptionState subscriptionState,
+                                   ConsumerSubscriptionState subscriptionState,
                                    LogContext logContext) {
         time = new MockTime(1, 0, 0);
         subscriptions = subscriptionState;
@@ -4236,7 +4236,7 @@ public class FetchRequestManagerTest {
         public TestableFetchRequestManager(LogContext logContext,
                                            Time time,
                                            ConsumerMetadata metadata,
-                                           SubscriptionState subscriptions,
+                                           ConsumerSubscriptionState subscriptions,
                                            FetchConfig fetchConfig,
                                            FetchBuffer fetchBuffer,
                                            FetchMetricsManager metricsManager,

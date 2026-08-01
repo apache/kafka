@@ -97,6 +97,7 @@ public class ConsumerHeartbeatRequestManagerTest
     // methods (groupInstanceId, rackId, serverAssignor). The subclass setUp() assigns the same
     // mock to super.membershipManager so inherited tests see the same instance.
     private ConsumerMembershipManager membershipManager;
+    private ConsumerSubscriptionState subscriptions;
     private ConsumerHeartbeatRequestManager heartbeatRequestManager;
     private Metadata metadata;
     private HeartbeatState heartbeatState;
@@ -114,7 +115,8 @@ public class ConsumerHeartbeatRequestManagerTest
         this.coordinatorRequestManager = mock(CoordinatorRequestManager.class);
         this.heartbeatState = mock(HeartbeatState.class);
         this.backgroundEventHandler = mock(BackgroundEventHandler.class);
-        this.subscriptions = mock(SubscriptionState.class);
+        this.subscriptions = mock(ConsumerSubscriptionState.class);
+        super.subscriptions = subscriptions;
         this.membershipManager = mock(ConsumerMembershipManager.class);
         super.membershipManager = this.membershipManager;
         Metrics metrics = new Metrics(time);

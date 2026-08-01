@@ -62,7 +62,7 @@ public class CompletedFetch {
     final FetchResponseData.PartitionData partitionData;
 
     private final Logger log;
-    private final SubscriptionState subscriptions;
+    private final ConsumerSubscriptionState subscriptions;
     private final BufferSupplier decompressionBufferSupplier;
     private final Iterator<? extends RecordBatch> batches;
     private final Set<Long> abortedProducerIds;
@@ -83,7 +83,7 @@ public class CompletedFetch {
     private boolean initialized = false;
 
     CompletedFetch(Logger log,
-                   SubscriptionState subscriptions,
+                   ConsumerSubscriptionState subscriptions,
                    BufferSupplier decompressionBufferSupplier,
                    TopicPartition partition,
                    FetchResponseData.PartitionData partitionData,

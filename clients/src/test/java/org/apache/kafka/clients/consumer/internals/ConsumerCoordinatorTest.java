@@ -168,7 +168,7 @@ public abstract class ConsumerCoordinatorTest {
         }
     });
     private final Node node = metadataResponse.brokers().iterator().next();
-    private SubscriptionState subscriptions;
+    private ConsumerSubscriptionState subscriptions;
     private ConsumerMetadata metadata;
     private Metrics metrics;
     private ConsumerNetworkClient consumerClient;
@@ -195,7 +195,7 @@ public abstract class ConsumerCoordinatorTest {
     @BeforeEach
     public void setup() {
         LogContext logContext = new LogContext();
-        this.subscriptions = new SubscriptionState(logContext, AutoOffsetResetStrategy.EARLIEST);
+        this.subscriptions = new ConsumerSubscriptionState(logContext, AutoOffsetResetStrategy.EARLIEST);
         this.metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false,
                 false, subscriptions, logContext, new ClusterResourceListeners());
         this.client = new MockClient(time, metadata);
@@ -282,7 +282,7 @@ public abstract class ConsumerCoordinatorTest {
     @SuppressWarnings("unchecked")
     @Test
     public void testPerformAssignmentShouldUpdateGroupSubscriptionAfterAssignmentIfNeeded() {
-        SubscriptionState mockSubscriptionState = Mockito.mock(SubscriptionState.class);
+        ConsumerSubscriptionState mockSubscriptionState = Mockito.mock(ConsumerSubscriptionState.class);
 
         // the consumer only subscribed to "topic1"
         Map<String, List<String>> memberSubscriptions = singletonMap(consumerId, singletonList(topic1));
@@ -382,7 +382,7 @@ public abstract class ConsumerCoordinatorTest {
 
     @Test
     public void testPerformAssignmentShouldValidateCooperativeAssignment() {
-        SubscriptionState mockSubscriptionState = Mockito.mock(SubscriptionState.class);
+        ConsumerSubscriptionState mockSubscriptionState = Mockito.mock(ConsumerSubscriptionState.class);
         List<JoinGroupResponseData.JoinGroupResponseMember> metadata = validateCooperativeAssignmentTestSetup();
 
         // simulate the custom cooperative assignor didn't revoke the partition first before assign to other consumer
@@ -406,7 +406,7 @@ public abstract class ConsumerCoordinatorTest {
 
     @Test
     public void testOnLeaderElectedShouldSkipAssignment() {
-        SubscriptionState mockSubscriptionState = Mockito.mock(SubscriptionState.class);
+        ConsumerSubscriptionState mockSubscriptionState = Mockito.mock(ConsumerSubscriptionState.class);
         ConsumerPartitionAssignor assignor = Mockito.mock(ConsumerPartitionAssignor.class);
         String assignorName = "mock-assignor";
         Mockito.when(assignor.name()).thenReturn(assignorName);
@@ -433,7 +433,7 @@ public abstract class ConsumerCoordinatorTest {
 
     @Test
     public void testPerformAssignmentShouldSkipValidateCooperativeAssignmentForBuiltInCooperativeStickyAssignor() {
-        SubscriptionState mockSubscriptionState = Mockito.mock(SubscriptionState.class);
+        ConsumerSubscriptionState mockSubscriptionState = Mockito.mock(ConsumerSubscriptionState.class);
         List<JoinGroupResponseData.JoinGroupResponseMember> metadata = validateCooperativeAssignmentTestSetup();
 
         List<ConsumerPartitionAssignor> assignorsWithCooperativeStickyAssignor = new ArrayList<>(assignors);
@@ -540,7 +540,7 @@ public abstract class ConsumerCoordinatorTest {
 
             // elapse auto commit interval and set committable position
             time.sleep(autoCommitIntervalMs);
-            subscriptions.seekUnvalidated(t1p, new SubscriptionState.FetchPosition(100L));
+            subscriptions.seekUnvalidated(t1p, new ConsumerSubscriptionState.FetchPosition(100L));
 
             // should try to find coordinator since we are auto committing
             coordinator.poll(time.timer(0));
@@ -3963,7 +3963,7 @@ public abstract class ConsumerCoordinatorTest {
                                                  final Metrics metrics,
                                                  final List<ConsumerPartitionAssignor> assignors,
                                                  final boolean autoCommitEnabled,
-                                                 final SubscriptionState subscriptionState) {
+                                                 final ConsumerSubscriptionState subscriptionState) {
         return new ConsumerCoordinator(
                 rebalanceConfig,
                 new LogContext(),

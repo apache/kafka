@@ -105,7 +105,7 @@ public class StreamsMembershipManagerTest {
     private StreamsMembershipManager membershipManager;
 
     @Mock
-    private SubscriptionState subscriptionState;
+    private ConsumerSubscriptionState subscriptionState;
 
     @Mock
     private BackgroundEventHandler backgroundEventHandler;

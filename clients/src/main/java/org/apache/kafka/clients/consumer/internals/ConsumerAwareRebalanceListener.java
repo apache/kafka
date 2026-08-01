@@ -29,7 +29,7 @@ import java.util.Collection;
  *
  * <p>This class implements {@link ConsumerRebalanceListener} so that it can be stored and
  * returned in place of the user's listener without changing the type of
- * {@link SubscriptionState#rebalanceListener()}. The 1-arg methods create a
+ * {@link ConsumerSubscriptionState#rebalanceListener()}. The 1-arg methods create a
  * {@link DelegatingRebalanceConsumer} view and delegate to the user listener's 2-arg methods.
  *
  * <p>This class exists so that the {@link Consumer} reference does not need to be passed through

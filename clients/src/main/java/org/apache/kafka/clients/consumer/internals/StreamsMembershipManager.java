@@ -175,7 +175,7 @@ public class StreamsMembershipManager implements RequestManager {
      * Subscription state object holding the current assignment the member has for the topology
      * of the Streams application.
      */
-    private final SubscriptionState subscriptionState;
+    private final ConsumerSubscriptionState subscriptionState;
 
     /**
      * Current state of this member as part of the consumer group, as defined in {@link MemberState}.
@@ -304,7 +304,7 @@ public class StreamsMembershipManager implements RequestManager {
     public StreamsMembershipManager(final String groupId,
                                     final Optional<String> groupInstanceId,
                                     final StreamsRebalanceData streamsRebalanceData,
-                                    final SubscriptionState subscriptionState,
+                                    final ConsumerSubscriptionState subscriptionState,
                                     final BackgroundEventHandler backgroundEventHandler,
                                     final LogContext logContext,
                                     final Time time,

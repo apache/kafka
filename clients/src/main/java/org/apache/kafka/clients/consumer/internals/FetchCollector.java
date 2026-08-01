@@ -52,7 +52,7 @@ public class FetchCollector<K, V> {
 
     private final Logger log;
     private final ConsumerMetadata metadata;
-    private final SubscriptionState subscriptions;
+    private final ConsumerSubscriptionState subscriptions;
     private final FetchConfig fetchConfig;
     private final Deserializers<K, V> deserializers;
     private final FetchMetricsManager metricsManager;
@@ -60,7 +60,7 @@ public class FetchCollector<K, V> {
 
     public FetchCollector(final LogContext logContext,
                           final ConsumerMetadata metadata,
-                          final SubscriptionState subscriptions,
+                          final ConsumerSubscriptionState subscriptions,
                           final FetchConfig fetchConfig,
                           final Deserializers<K, V> deserializers,
                           final FetchMetricsManager metricsManager,
@@ -160,7 +160,7 @@ public class FetchCollector<K, V> {
             // that are not in the subscription anymore, so we make them not fetchable.
             log.debug("Not returning fetched records for assigned partition {} since it is no longer fetchable", tp);
         } else {
-            SubscriptionState.FetchPosition position = subscriptions.position(tp);
+            ConsumerSubscriptionState.FetchPosition position = subscriptions.position(tp);
 
             if (position == null)
                 throw new IllegalStateException("Missing position for fetchable partition " + tp);
@@ -176,7 +176,7 @@ public class FetchCollector<K, V> {
                 boolean positionAdvanced = false;
 
                 if (nextInLineFetch.nextFetchOffset() > position.offset) {
-                    SubscriptionState.FetchPosition nextPosition = new SubscriptionState.FetchPosition(
+                    ConsumerSubscriptionState.FetchPosition nextPosition = new ConsumerSubscriptionState.FetchPosition(
                             nextInLineFetch.nextFetchOffset(),
                             nextInLineFetch.lastEpoch(),
                             position.currentLeader);
@@ -255,7 +255,7 @@ public class FetchCollector<K, V> {
 
         // we are interested in this fetch only if the beginning offset matches the
         // current consumed position
-        SubscriptionState.FetchPosition position = subscriptions.positionOrNull(tp);
+        ConsumerSubscriptionState.FetchPosition position = subscriptions.positionOrNull(tp);
         if (position == null || position.offset != fetchOffset) {
             log.debug("Discarding stale fetch response for partition {} since its offset {} does not match " +
                 "the expected offset {} or the partition has been unassigned", tp, fetchOffset, position);
@@ -343,7 +343,7 @@ public class FetchCollector<K, V> {
 
             if (clearedReplicaId.isEmpty()) {
                 // If there's no preferred replica to clear, we're fetching from the leader so handle this error normally
-                SubscriptionState.FetchPosition position = subscriptions.positionOrNull(tp);
+                ConsumerSubscriptionState.FetchPosition position = subscriptions.positionOrNull(tp);
 
                 if (position == null || fetchOffset != position.offset) {
                     log.debug("Discarding stale fetch response for partition {} since the fetched offset {} " +

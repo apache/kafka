@@ -17,7 +17,7 @@
 package org.apache.kafka.clients.consumer.internals.metrics;
 
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
-import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.clients.consumer.internals.ConsumerSubscriptionState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -43,7 +43,7 @@ class ConsumerRebalanceMetricsManagerTest extends AbstractConsumerMetricsManager
 
     private Time time;
     private Metrics metrics;
-    private SubscriptionState subscriptionState;
+    private ConsumerSubscriptionState subscriptionState;
     private ConsumerRebalanceMetricsManager metricsManager;
     private MetricConfig metricConfig;
     private long windowSizeMs;
@@ -59,7 +59,7 @@ class ConsumerRebalanceMetricsManagerTest extends AbstractConsumerMetricsManager
                 .samples(numSamples)
                 .timeWindow(windowSizeMs, java.util.concurrent.TimeUnit.MILLISECONDS);
         metrics = new Metrics(metricConfig, time);
-        subscriptionState = new SubscriptionState(mock(LogContext.class), AutoOffsetResetStrategy.EARLIEST);
+        subscriptionState = new ConsumerSubscriptionState(mock(LogContext.class), AutoOffsetResetStrategy.EARLIEST);
         metricsManager = new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
     }
 
@@ -70,7 +70,7 @@ class ConsumerRebalanceMetricsManagerTest extends AbstractConsumerMetricsManager
 
     @Override
     protected AbstractConsumerMetricsManager metricsManager(Metrics metrics, String groupDescription) {
-        SubscriptionState subscriptionState = new SubscriptionState(mock(LogContext.class), AutoOffsetResetStrategy.EARLIEST);
+        ConsumerSubscriptionState subscriptionState = new ConsumerSubscriptionState(mock(LogContext.class), AutoOffsetResetStrategy.EARLIEST);
         return new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
     }
 

@@ -70,7 +70,7 @@ public abstract class AbstractFetch implements Closeable {
     private final IdempotentCloser idempotentCloser = new IdempotentCloser();
     protected final LogContext logContext;
     protected final ConsumerMetadata metadata;
-    protected final SubscriptionState subscriptions;
+    protected final ConsumerSubscriptionState subscriptions;
     protected final FetchConfig fetchConfig;
     protected final Time time;
     protected final FetchMetricsManager metricsManager;
@@ -84,7 +84,7 @@ public abstract class AbstractFetch implements Closeable {
 
     public AbstractFetch(final LogContext logContext,
                          final ConsumerMetadata metadata,
-                         final SubscriptionState subscriptions,
+                         final ConsumerSubscriptionState subscriptions,
                          final FetchConfig fetchConfig,
                          final FetchBuffer fetchBuffer,
                          final FetchMetricsManager metricsManager,
@@ -368,8 +368,8 @@ public abstract class AbstractFetch implements Closeable {
      * @param leaderReplica {@link Node} for the leader of the given partition
      * @param currentTimeMs Current time in milliseconds; used to determine if we're within the optional lease window
      * @return Replica {@link Node node} from which to request the data
-     * @see SubscriptionState#preferredReadReplica
-     * @see SubscriptionState#updatePreferredReadReplica
+     * @see ConsumerSubscriptionState#preferredReadReplica
+     * @see ConsumerSubscriptionState#updatePreferredReadReplica
      */
     Node selectReadReplica(final TopicPartition partition, final Node leaderReplica, final long currentTimeMs) {
         Optional<Integer> nodeId = subscriptions.preferredReadReplica(partition, currentTimeMs);
@@ -441,7 +441,7 @@ public abstract class AbstractFetch implements Closeable {
         Set<Integer> bufferedNodes = bufferedNodes(buffered, currentTimeMs);
 
         for (TopicPartition partition : unbuffered) {
-            SubscriptionState.FetchPosition position = positionForPartition(partition);
+            ConsumerSubscriptionState.FetchPosition position = positionForPartition(partition);
             Optional<Node> nodeOpt = maybeNodeForPosition(partition, position, currentTimeMs);
 
             if (nodeOpt.isEmpty())
@@ -502,11 +502,11 @@ public abstract class AbstractFetch implements Closeable {
     }
 
     /**
-     * Simple utility method that returns a {@link SubscriptionState.FetchPosition position} for the partition. If
+     * Simple utility method that returns a {@link ConsumerSubscriptionState.FetchPosition position} for the partition. If
      * no position exists, an {@link IllegalStateException} is thrown.
      */
-    private SubscriptionState.FetchPosition positionForPartition(TopicPartition partition) {
-        SubscriptionState.FetchPosition position = subscriptions.position(partition);
+    private ConsumerSubscriptionState.FetchPosition positionForPartition(TopicPartition partition) {
+        ConsumerSubscriptionState.FetchPosition position = subscriptions.position(partition);
 
         if (position == null)
             throw new IllegalStateException("Missing position for fetchable partition " + partition);
@@ -516,7 +516,7 @@ public abstract class AbstractFetch implements Closeable {
 
     /**
      * Retrieves the node from which to fetch the partition data. If the given
-     * {@link SubscriptionState.FetchPosition position} does not have a current
+     * {@link ConsumerSubscriptionState.FetchPosition position} does not have a current
      * {@link Metadata.LeaderAndEpoch#leader leader} defined the method will return {@link Optional#empty()}.
      *
      * @return Three options: 1) {@link Optional#empty()} if the position's leader is empty, 2) the
@@ -524,7 +524,7 @@ public abstract class AbstractFetch implements Closeable {
      * {@link Metadata.LeaderAndEpoch#leader leader}
      */
     private Optional<Node> maybeNodeForPosition(TopicPartition partition,
-                                                SubscriptionState.FetchPosition position,
+                                                ConsumerSubscriptionState.FetchPosition position,
                                                 long currentTimeMs) {
         Optional<Node> leaderOpt = position.currentLeader.leader;
 
@@ -558,8 +558,8 @@ public abstract class AbstractFetch implements Closeable {
      * <ul>
      *     <li>
      *         The partition is no longer assigned to the client. This also includes when the partition assignment
-     *         is either {@link SubscriptionState#markPendingRevocation(Set) pending revocation} or
-     *         {@link SubscriptionState#markPendingOnAssignedCallback(Collection, boolean) pending assignment}.
+     *         is either {@link ConsumerSubscriptionState#markPendingRevocation(Set) pending revocation} or
+     *         {@link ConsumerSubscriptionState#markPendingOnAssignedCallback(Collection, boolean) pending assignment}.
      *     </li>
      *     <li>
      *         The client {@link Consumer#pause(Collection) paused} the partition. A paused partition remains in
@@ -600,7 +600,7 @@ public abstract class AbstractFetch implements Closeable {
             if (!subscriptions.isFetchable(partition))
                 continue;
 
-            SubscriptionState.FetchPosition position = positionForPartition(partition);
+            ConsumerSubscriptionState.FetchPosition position = positionForPartition(partition);
             Optional<Node> nodeOpt = maybeNodeForPosition(partition, position, currentTimeMs);
             nodeOpt.ifPresent(node -> ids.add(node.id()));
         }

@@ -29,8 +29,6 @@ import org.slf4j.Logger;
 
 import java.util.Set;
 
-import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMetadataUpdate;
-
 /**
  * {@code ShareFetchCollector} operates at the {@link RecordBatch} level, as that is what is stored in the
  * {@link ShareFetchBuffer}. Each {@link org.apache.kafka.common.record.internal.Record} in the {@link RecordBatch} is converted
@@ -43,18 +41,15 @@ public class ShareFetchCollector<K, V> {
 
     private final Logger log;
     private final ShareConsumerMetadata metadata;
-    private final SubscriptionState subscriptions;
     private final ShareFetchConfig shareFetchConfig;
     private final Deserializers<K, V> deserializers;
 
     public ShareFetchCollector(final LogContext logContext,
                                final ShareConsumerMetadata metadata,
-                               final SubscriptionState subscriptions,
                                final ShareFetchConfig shareFetchConfig,
                                final Deserializers<K, V> deserializers) {
         this.log = logContext.logger(ShareFetchCollector.class);
         this.metadata = metadata;
-        this.subscriptions = subscriptions;
         this.shareFetchConfig = shareFetchConfig;
         this.deserializers = deserializers;
     }
@@ -159,16 +154,16 @@ public class ShareFetchCollector<K, V> {
                 error == Errors.FENCED_LEADER_EPOCH ||
                 error == Errors.OFFSET_NOT_AVAILABLE) {
             log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
-            requestMetadataUpdate(metadata, subscriptions, tp.topicPartition());
+            metadata.requestUpdate(false);
         } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
             log.warn("Received unknown topic or partition error in fetch for partition {}.", tp);
-            requestMetadataUpdate(metadata, subscriptions, tp.topicPartition());
+            metadata.requestUpdate(false);
         } else if (error == Errors.UNKNOWN_TOPIC_ID) {
             log.warn("Received unknown topic ID error in fetch for partition {}.", tp);
-            requestMetadataUpdate(metadata, subscriptions, tp.topicPartition());
+            metadata.requestUpdate(false);
         } else if (error == Errors.INCONSISTENT_TOPIC_ID) {
             log.warn("Received inconsistent topic ID error in fetch for partition {}.", tp);
-            requestMetadataUpdate(metadata, subscriptions, tp.topicPartition());
+            metadata.requestUpdate(false);
         } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
             // Log the actual partition and not just the topic to help with ACL propagation issues in large clusters
             log.warn("Not authorized to read from partition {}.", tp.topicPartition());

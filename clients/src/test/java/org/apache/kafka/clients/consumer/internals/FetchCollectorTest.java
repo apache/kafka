@@ -95,7 +95,7 @@ public class FetchCollectorTest {
     private final Set<TopicPartition> allPartitions = partitions(topicAPartition0, topicAPartition1, topicAPartition2);
     private final LogContext logContext = new LogContext();
 
-    private SubscriptionState subscriptions;
+    private ConsumerSubscriptionState subscriptions;
     private FetchConfig fetchConfig;
     private FetchMetricsManager metricsManager;
     private ConsumerMetadata metadata;
@@ -146,7 +146,7 @@ public class FetchCollectorTest {
 
         // Validate that the next fetch position has been updated to point to the record after our last fetched
         // record.
-        SubscriptionState.FetchPosition position = subscriptions.position(topicAPartition0);
+        ConsumerSubscriptionState.FetchPosition position = subscriptions.position(topicAPartition0);
         assertEquals(recordCount, position.offset);
 
         // Now attempt to collect more records from the fetch buffer.
@@ -472,7 +472,7 @@ public class FetchCollectorTest {
     @Test
     public void testCollectFetchInitializationWithNullPosition() {
         final TopicPartition topicPartition0 = new TopicPartition("topic", 0);
-        final SubscriptionState subscriptions = mock(SubscriptionState.class);
+        final ConsumerSubscriptionState subscriptions = mock(ConsumerSubscriptionState.class);
         when(subscriptions.hasValidPosition(topicPartition0)).thenReturn(true);
         when(subscriptions.positionOrNull(topicPartition0)).thenReturn(null);
         final FetchCollector<String, String> fetchCollector = createFetchCollector(subscriptions);
@@ -500,9 +500,9 @@ public class FetchCollectorTest {
         final TopicPartition topicPartition0 = new TopicPartition("topic", 0);
         final long fetchOffset = 42;
         final long highWatermark = 1000;
-        final SubscriptionState subscriptions = mock(SubscriptionState.class);
+        final ConsumerSubscriptionState subscriptions = mock(ConsumerSubscriptionState.class);
         when(subscriptions.hasValidPosition(topicPartition0)).thenReturn(true);
-        when(subscriptions.positionOrNull(topicPartition0)).thenReturn(new SubscriptionState.FetchPosition(fetchOffset));
+        when(subscriptions.positionOrNull(topicPartition0)).thenReturn(new ConsumerSubscriptionState.FetchPosition(fetchOffset));
         when(subscriptions.tryUpdatingHighWatermark(topicPartition0, highWatermark)).thenReturn(false);
         final FetchCollector<String, String> fetchCollector = createFetchCollector(subscriptions);
         final Records records = createRecords();
@@ -531,9 +531,9 @@ public class FetchCollectorTest {
         final long fetchOffset = 42;
         final long highWatermark = 1000;
         final long logStartOffset = 10;
-        final SubscriptionState subscriptions = mock(SubscriptionState.class);
+        final ConsumerSubscriptionState subscriptions = mock(ConsumerSubscriptionState.class);
         when(subscriptions.hasValidPosition(topicPartition0)).thenReturn(true);
-        when(subscriptions.positionOrNull(topicPartition0)).thenReturn(new SubscriptionState.FetchPosition(fetchOffset));
+        when(subscriptions.positionOrNull(topicPartition0)).thenReturn(new ConsumerSubscriptionState.FetchPosition(fetchOffset));
         when(subscriptions.tryUpdatingHighWatermark(topicPartition0, highWatermark)).thenReturn(true);
         when(subscriptions.tryUpdatingLogStartOffset(topicPartition0, logStartOffset)).thenReturn(false);
         final FetchCollector<String, String> fetchCollector = createFetchCollector(subscriptions);
@@ -565,9 +565,9 @@ public class FetchCollectorTest {
         final long highWatermark = 1000;
         final long logStartOffset = 10;
         final long lastStableOffset = 900;
-        final SubscriptionState subscriptions = mock(SubscriptionState.class);
+        final ConsumerSubscriptionState subscriptions = mock(ConsumerSubscriptionState.class);
         when(subscriptions.hasValidPosition(topicPartition0)).thenReturn(true);
-        when(subscriptions.positionOrNull(topicPartition0)).thenReturn(new SubscriptionState.FetchPosition(fetchOffset));
+        when(subscriptions.positionOrNull(topicPartition0)).thenReturn(new ConsumerSubscriptionState.FetchPosition(fetchOffset));
         when(subscriptions.tryUpdatingHighWatermark(topicPartition0, highWatermark)).thenReturn(true);
         when(subscriptions.tryUpdatingLogStartOffset(topicPartition0, logStartOffset)).thenReturn(true);
         when(subscriptions.tryUpdatingLastStableOffset(topicPartition0, lastStableOffset)).thenReturn(false);
@@ -602,9 +602,9 @@ public class FetchCollectorTest {
         final long logStartOffset = 10;
         final long lastStableOffset = 900;
         final int preferredReadReplicaId = 21;
-        final SubscriptionState subscriptions = mock(SubscriptionState.class);
+        final ConsumerSubscriptionState subscriptions = mock(ConsumerSubscriptionState.class);
         when(subscriptions.hasValidPosition(topicPartition0)).thenReturn(true);
-        when(subscriptions.positionOrNull(topicPartition0)).thenReturn(new SubscriptionState.FetchPosition(fetchOffset));
+        when(subscriptions.positionOrNull(topicPartition0)).thenReturn(new ConsumerSubscriptionState.FetchPosition(fetchOffset));
         when(subscriptions.tryUpdatingHighWatermark(topicPartition0, highWatermark)).thenReturn(true);
         when(subscriptions.tryUpdatingLogStartOffset(topicPartition0, logStartOffset)).thenReturn(true);
         when(subscriptions.tryUpdatingLastStableOffset(topicPartition0, lastStableOffset)).thenReturn(true);
@@ -636,7 +636,7 @@ public class FetchCollectorTest {
     @Test
     public void testCollectFetchInitializationOffsetOutOfRangeErrorWithNullPosition() {
         final TopicPartition topicPartition0 = new TopicPartition("topic", 0);
-        final SubscriptionState subscriptions = mock(SubscriptionState.class);
+        final ConsumerSubscriptionState subscriptions = mock(ConsumerSubscriptionState.class);
         when(subscriptions.hasValidPosition(topicPartition0)).thenReturn(true);
         when(subscriptions.positionOrNull(topicPartition0)).thenReturn(null);
         final FetchCollector<String, String> fetchCollector = createFetchCollector(subscriptions);
@@ -661,9 +661,9 @@ public class FetchCollectorTest {
     public void testCollectFetchInitializationOffsetOutOfRangeErrorWithOffsetReset() {
         final TopicPartition topicPartition0 = new TopicPartition("topic", 0);
         final long fetchOffset = 42;
-        final SubscriptionState subscriptions = mock(SubscriptionState.class);
+        final ConsumerSubscriptionState subscriptions = mock(ConsumerSubscriptionState.class);
         when(subscriptions.hasValidPosition(topicPartition0)).thenReturn(true);
-        when(subscriptions.positionOrNull(topicPartition0)).thenReturn(new SubscriptionState.FetchPosition(fetchOffset));
+        when(subscriptions.positionOrNull(topicPartition0)).thenReturn(new ConsumerSubscriptionState.FetchPosition(fetchOffset));
         when(subscriptions.hasDefaultOffsetResetPolicy()).thenReturn(true);
         final FetchCollector<String, String> fetchCollector = createFetchCollector(subscriptions);
         FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
@@ -735,7 +735,7 @@ public class FetchCollectorTest {
         return Collections.singletonList(abortedTransaction);
     }
 
-    private FetchCollector<String, String> createFetchCollector(final SubscriptionState subscriptions) {
+    private FetchCollector<String, String> createFetchCollector(final ConsumerSubscriptionState subscriptions) {
         final Properties consumerProps = consumerProps();
         return new FetchCollector<>(
             logContext,
