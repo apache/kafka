@@ -3010,7 +3010,6 @@ project(':streams:streams-scala') {
     api project(':streams')
 
     api libs.scalaLibrary
-    testImplementation testFixtures(project(':streams'))
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':streams:test-utils')
 
