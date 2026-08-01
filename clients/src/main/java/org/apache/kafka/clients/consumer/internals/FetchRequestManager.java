@@ -146,9 +146,12 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
             Map<Node, FetchSessionHandler.FetchRequestData> fetchRequests = fetchRequestPreparer.prepare();
 
             if (fetchRequests.isEmpty()) {
-                // If there's nothing to fetch, wake up the FetchBuffer so it doesn't needlessly wait for a wakeup
-                // that won't come until the data in the fetch buffer is consumed.
-                fetchBuffer.wakeup();
+                if (emptyResultShouldWakeBuffer()) {
+                    // If there's nothing to fetch because every fetchable partition already has buffered data,
+                    // wake up the FetchBuffer so it doesn't needlessly wait for a wakeup that won't come until
+                    // the data in the fetch buffer is consumed.
+                    fetchBuffer.wakeup();
+                }
                 pendingFetchRequestFuture.complete(null);
                 return PollResult.EMPTY;
             }

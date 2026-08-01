@@ -78,6 +78,12 @@ public abstract class AbstractFetch implements Closeable {
     protected final BufferSupplier decompressionBufferSupplier;
     protected final Set<Integer> nodesWithPendingFetchRequests;
 
+    // Whether the most recent empty result from prepareFetchRequests()/prepareCloseFetchSessionRequests()
+    // is a safe point to wake up the FetchBuffer immediately, rather than a state that can only change
+    // in response to an external event (for example, a metadata update, reconnect backoff expiration,
+    // or an in-flight response arriving).
+    private boolean emptyResultShouldWakeBuffer;
+
     private final Map<Integer, FetchSessionHandler> sessionHandlers;
 
     private final ApiVersions apiVersions;
@@ -392,6 +398,10 @@ public abstract class AbstractFetch implements Closeable {
     }
 
     protected Map<Node, FetchSessionHandler.FetchRequestData> prepareCloseFetchSessionRequests() {
+        // Closing is a one-shot operation, not part of the steady-state polling loop, so always waking the
+        // buffer here is safe even if this ends up empty.
+        emptyResultShouldWakeBuffer = true;
+
         final Cluster cluster = metadata.fetch();
         Map<Node, FetchSessionHandler.Builder> fetchable = new HashMap<>();
 
@@ -433,8 +443,13 @@ public abstract class AbstractFetch implements Closeable {
         List<TopicPartition> unbuffered = fetchablePartitions(buffered);
 
         if (unbuffered.isEmpty()) {
-            // If there are no partitions that don't already have data locally buffered, there's no need to issue
-            // any fetch requests at the present time.
+            // If every currently fetchable partition already has buffered data, there is no need to issue
+            // additional fetch requests. This is a safe point to wake the buffer immediately because progress
+            // can be made by consuming the buffered data. If no partitions are fetchable at all (for example,
+            // no assignment yet, invalid positions, paused, or pending revocation/callback), the state will
+            // not change until some external event occurs, so an immediate wakeup would only busy-loop the
+            // caller rather than allowing the normal backoff to apply.
+            emptyResultShouldWakeBuffer = !subscriptions.fetchablePartitions(tp -> true).isEmpty();
             return Collections.emptyMap();
         }
 
@@ -484,7 +499,22 @@ public abstract class AbstractFetch implements Closeable {
             }
         }
 
+        // If every fetchable-but-unbuffered partition was skipped (for example, due to reconnect backoff,
+        // an in-flight request, or its node already hosting buffered partitions), the state will only
+        // change over time. An immediate wakeup would therefore just busy-loop the caller instead of
+        // respecting its normal backoff. This case is only relevant when fetchable partitions exist but
+        // the resulting request map is empty; otherwise the caller ignores this flag.
+        emptyResultShouldWakeBuffer = false;
         return convert(fetchable);
+    }
+
+    /**
+     * Whether the most recent empty result from {@link #prepareFetchRequests()} or
+     * {@link #prepareCloseFetchSessionRequests()} represents a safe point to wake up the {@link FetchBuffer}
+     * immediately, as opposed to a state that will only change once some other event happens.
+     */
+    protected boolean emptyResultShouldWakeBuffer() {
+        return emptyResultShouldWakeBuffer;
     }
 
     /**

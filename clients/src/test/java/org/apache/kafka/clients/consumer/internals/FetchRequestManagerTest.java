@@ -322,6 +322,29 @@ public class FetchRequestManagerTest {
     }
 
     @Test
+    public void testNoFetchablePartitionsDoesNotWakeUpBuffer() throws InterruptedException {
+        buildFetcher();
+
+        // A consumer thread blocked waiting for data on the empty buffer.
+        Thread blockedOnBuffer = new Thread(() -> fetcher.fetchBuffer.awaitWakeup(time.timer(3_600_000L)));
+        blockedOnBuffer.setDaemon(true);
+        blockedOnBuffer.start();
+
+        // Simulate a network thread cycle that finds nothing to fetch.
+        assertEquals(0, sendFetches());
+
+        // The thread must still be blocked: an eager wakeup here would busy-loop the caller.
+        blockedOnBuffer.join(500);
+        assertTrue(blockedOnBuffer.isAlive(),
+                "Empty fetch result with no fetchable partitions must not wake the thread blocked on the fetch buffer");
+
+        // Clean up: explicitly wake so the daemon thread can exit instead of leaking as a live thread.
+        fetcher.fetchBuffer.wakeup();
+        blockedOnBuffer.join(2_000);
+        assertFalse(blockedOnBuffer.isAlive());
+    }
+
+    @Test
     public void testInflightFetchOnPendingPartitions() {
         buildFetcher();
 
