@@ -81,6 +81,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -1647,6 +1648,61 @@ class PersisterStateManagerTest {
         assertWriteStateResult(topic1Partition1, topicId1, 1, Errors.INVALID_REQUEST);
         assertWriteStateResult(topic2Partition0, topicId2, 0, Errors.FENCED_STATE_EPOCH);
         assertWriteStateResult(topic2Partition1, topicId2, 1, Errors.NONE);
+    }
+
+    @Test
+    public void testWriteStateCombinedResponseIndexedOncePerBatch() {
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(new MockClient(MOCK_TIME))
+            .withTimer(mockTimer)
+            .withCacheHelper(getCoordinatorCacheHelper(coordinatorNode))
+            .build();
+
+        List<PersisterStateManager.WriteStateHandler> handlers = new ArrayList<>();
+        for (int partition = 0; partition < 4; partition++) {
+            PersisterStateManager.WriteStateHandler handler = spy(stateManager.new WriteStateHandler(
+                groupId,
+                topicId,
+                partition,
+                0,
+                0,
+                0,
+                0,
+                List.of(),
+                new CompletableFuture<>(),
+                REQUEST_BACKOFF_MS,
+                REQUEST_BACKOFF_MAX_MS,
+                MAX_RPC_RETRY_ATTEMPTS
+            ));
+            handler.addRequestToNodeMap(coordinatorNode, handler);
+            handlers.add(handler);
+        }
+
+        Collection<RequestAndCompletionHandler> requests = stateManager.generateRequests();
+        assertEquals(1, requests.size());
+
+        requests.iterator().next().handler.onComplete(writeStateClientResponse(
+            new WriteShareGroupStateResponseData().setResults(List.of(
+                writeStateResult(topicId,
+                    writePartitionResult(0, Errors.NONE),
+                    writePartitionResult(1, Errors.NONE),
+                    writePartitionResult(2, Errors.NONE),
+                    writePartitionResult(3, Errors.NONE))))));
+
+        // the combined response is indexed once for the whole batch, and every other handler reuses
+        // that index rather than rescanning the response
+        verify(handlers.get(0), times(1)).buildResultIndex(any());
+        for (int i = 1; i < handlers.size(); i++) {
+            verify(handlers.get(i), never()).buildResultIndex(any());
+        }
+
+        for (int partition = 0; partition < handlers.size(); partition++) {
+            assertWriteStateResult(handlers.get(partition), topicId, partition, Errors.NONE);
+        }
     }
 
     @Test
