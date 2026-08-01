@@ -109,6 +109,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
@@ -637,6 +638,48 @@ public class StreamThreadTest {
         thread.maybeCommit();
 
         verify(taskManager, times(2)).maybePurgeCommittedRecords();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"true, true", "true, false", "false, true", "false, false"})
+    public void shouldPublishTaskOffsetSumSnapshotOnEveryIteration(final boolean processingThreadsEnabled,
+                                                                   final boolean streamsGroupReady) {
+        // The group coordinator places tasks based on the offsets reported to it, so they have to be published on every
+        // iteration, including the ones that return early because the group is not ready -- which is exactly when a
+        // task may still be restoring.
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
+        final TaskManager taskManager = mock(TaskManager.class);
+        when(mainConsumer.poll(Mockito.any())).thenReturn(ConsumerRecords.empty());
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of, Map::of);
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        thread = new StreamThread(
+            mockTime, config, null,
+            mainConsumer, consumer,
+            changelogReader, null, taskManager, null,
+            new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime),
+            topologyMetadata,
+            PROCESS_ID, CLIENT_ID, new LogContext(""),
+            new AtomicInteger(), new AtomicLong(Long.MAX_VALUE), new LinkedList<>(),
+            null, HANDLER, null,
+            Optional.of(streamsRebalanceData), mock(StreamsMetadataState.class), null, -1L
+        ).updateThreadMetadata(adminClientId(CLIENT_ID));
+        thread.setState(State.STARTING);
+        thread.setState(State.PARTITIONS_ASSIGNED);
+
+        thread.setStreamsGroupReady(streamsGroupReady);
+        if (processingThreadsEnabled) {
+            thread.runOnceWithProcessingThreads();
+        } else {
+            thread.runOnceWithoutProcessingThreads();
+        }
+
+        verify(taskManager).maybeUpdateTaskOffsetSumSnapshot();
     }
 
     @Test
@@ -3448,7 +3491,9 @@ public class StreamThreadTest {
         final InOrder inOrder = Mockito.inOrder(mainConsumer, thread.taskManager());
         inOrder.verify(mainConsumer).poll(Mockito.any());
         inOrder.verify(thread.taskManager()).updateLags();
-        inOrder.verify(thread.taskManager()).maybeUpdateTaskOffsetSumSnapshot();
+        // The offset-sum snapshot is only read by the streams-protocol heartbeat thread, so under the classic protocol
+        // it is not published at all.
+        verify(thread.taskManager(), never()).maybeUpdateTaskOffsetSumSnapshot();
     }
 
 
