@@ -90,7 +90,7 @@ public class PlaintextConsumerCallbackTest {
     private void testRebalanceListenerAssignmentOnPartitionsAssigned(GroupProtocol groupProtocol) throws InterruptedException {
         try (var consumer = createConsumer(groupProtocol)) {
             triggerOnPartitionsAssigned(tp, consumer,
-                    (executeConsumer, partitions) -> assertTrue(executeConsumer.assignment().contains(tp))
+                (executeConsumer, partitions) -> assertTrue(executeConsumer.assignment().contains(tp))
             );
         }
     }
@@ -135,14 +135,14 @@ public class PlaintextConsumerCallbackTest {
     @ClusterTest
     public void testClassicConsumerRebalanceListenerAssignmentOnPartitionsRevoked() throws InterruptedException {
         triggerOnPartitionsRevoked(tp, CLASSIC,
-                (consumer, partitions) -> assertTrue(consumer.assignment().contains(tp))
+            (consumer, partitions) -> assertTrue(consumer.assignment().contains(tp))
         );
     }
 
     @ClusterTest
     public void testAsyncConsumerRebalanceListenerAssignmentOnPartitionsRevoked() throws InterruptedException {
         triggerOnPartitionsRevoked(tp, CONSUMER,
-                (consumer, partitions) -> assertTrue(consumer.assignment().contains(tp))
+            (consumer, partitions) -> assertTrue(consumer.assignment().contains(tp))
         );
     }
 

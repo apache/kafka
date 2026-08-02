@@ -1052,6 +1052,11 @@ public class SubscriptionState {
         return listenerContext.get().rebalanceListener != null;
     }
 
+    public synchronized Optional<String> listenerName() {
+        return Optional.ofNullable(listenerContext.get().rebalanceListener)
+                .map(listener -> listener.getClass().getName());
+    }
+
     private synchronized ListenerContext listenerContext() {
         return listenerContext.get();
     }

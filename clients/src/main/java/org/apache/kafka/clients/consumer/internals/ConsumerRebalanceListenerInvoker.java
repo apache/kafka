@@ -63,7 +63,8 @@ public class ConsumerRebalanceListenerInvoker {
                 throw e;
             } catch (Exception e) {
                 log.error(
-                    "User provided listener failed on invocation of onPartitionsAssigned for partitions {}",
+                    "User provided listener {} failed on invocation of onPartitionsAssigned for partitions {}",
+                    subscriptions.listenerName(),
                     assignedPartitions,
                     e
                 );
@@ -90,7 +91,8 @@ public class ConsumerRebalanceListenerInvoker {
                 throw e;
             } catch (Exception e) {
                 log.error(
-                    "User provided listener failed on invocation of onPartitionsRevoked for partitions {}",
+                    "User provided listener {} failed on invocation of onPartitionsRevoked for partitions {}",
+                    subscriptions.listenerName(),
                     revokedPartitions,
                     e
                 );
@@ -117,7 +119,8 @@ public class ConsumerRebalanceListenerInvoker {
                 throw e;
             } catch (Exception e) {
                 log.error(
-                    "User provided listener failed on invocation of onPartitionsLost for partitions {}",
+                    "User provided listener {} failed on invocation of onPartitionsLost for partitions {}",
+                    subscriptions.listenerName(),
                     lostPartitions,
                     e
                 );
