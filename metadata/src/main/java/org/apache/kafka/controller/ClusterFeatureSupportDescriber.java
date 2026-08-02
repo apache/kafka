@@ -22,9 +22,23 @@ import org.apache.kafka.metadata.VersionRange;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
 
 public interface ClusterFeatureSupportDescriber {
     Iterator<Entry<Integer, Map<String, VersionRange>>> brokerSupported();
     Iterator<Entry<Integer, Map<String, VersionRange>>> controllerSupported();
+
+    /**
+     * The IDs of the controllers which are currently members of the quorum.
+     *
+     * <p>This is separate from {@link #controllerSupported()} because a controller
+     * registration can outlive the controller's membership in a dynamic quorum.
+     *
+     * @return the current quorum controller IDs, or an empty set when the caller
+     *         should use its static quorum configuration
+     */
+    default Set<Integer> controllerIds() {
+        return Set.of();
+    }
 }

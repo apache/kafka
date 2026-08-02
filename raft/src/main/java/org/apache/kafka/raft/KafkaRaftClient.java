@@ -3900,6 +3900,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         return partitionState.lastVoterSet().voterNode(id, listenerName);
     }
 
+    @Override
+    public Set<Integer> voterIds() {
+        return partitionState.lastVoterSet().voterIds();
+    }
+
     // Visible only for test
     QuorumState quorum() {
         // It's okay to return null since this method is only called by tests

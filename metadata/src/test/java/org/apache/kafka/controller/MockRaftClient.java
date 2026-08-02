@@ -61,6 +61,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -763,6 +764,11 @@ public final class MockRaftClient implements RaftClient<ApiMessageAndVersion>, A
     @Override
     public Optional<Node> voterNode(int id, ListenerName listenerName) {
         return Optional.empty();
+    }
+
+    @Override
+    public Set<Integer> voterIds() {
+        return Set.copyOf(shared.raftClients.keySet());
     }
 
     public List<RaftClient.Listener<ApiMessageAndVersion>> listeners() {
