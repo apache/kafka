@@ -26,6 +26,8 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.CloseOptions;
+import org.apache.kafka.streams.CloseOptions.GroupMembershipOperation;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -67,6 +69,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -99,6 +102,9 @@ import static org.hamcrest.Matchers.is;
 
 @Tag("integration")
 @Timeout(600)
+// PER_CLASS lets the parameter source `data()` be a non-static, overridable method so subclasses
+// (e.g. the transactional variant) can supply a different matrix while reusing all the machinery below.
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class PositionRestartIntegrationTest {
     private static final Logger LOG = LoggerFactory.getLogger(PositionRestartIntegrationTest.class);
     private static final long SEED = new Random().nextLong();
@@ -250,19 +256,22 @@ public class PositionRestartIntegrationTest {
         }
     }
 
-    public static Stream<Arguments> data() {
+    /** Whether the store-under-test is configured transactional (KIP-892). Overridden by the transactional variant. */
+    protected boolean transactional() {
+        return false;
+    }
+
+    protected Stream<Arguments> data() {
         LOG.info("Generating test cases according to random seed: {}", SEED);
         final List<Arguments> values = new ArrayList<>();
         for (final boolean cacheEnabled : Arrays.asList(true, false)) {
             for (final boolean logEnabled : Arrays.asList(true, false)) {
-                for (final boolean transactional : Arrays.asList(true, false)) {
-                    for (final StoresToTest toTest : StoresToTest.values()) {
-                        // We don't need to test if non-persistent stores without logging
-                        // survive restarts, since those are by definition not durable.
-                        if (logEnabled || toTest.supplier().get().persistent()) {
-                            for (final String kind : Arrays.asList("DSL", "PAPI")) {
-                                values.add(Arguments.of(cacheEnabled, logEnabled, transactional, toTest, kind));
-                            }
+                for (final StoresToTest toTest : StoresToTest.values()) {
+                    // We don't need to test if non-persistent stores without logging
+                    // survive restarts, since those are by definition not durable.
+                    if (logEnabled || toTest.supplier().get().persistent()) {
+                        for (final String kind : Arrays.asList("DSL", "PAPI")) {
+                            values.add(Arguments.of(cacheEnabled, logEnabled, toTest, kind));
                         }
                     }
                 }
@@ -363,8 +372,8 @@ public class PositionRestartIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void verifyStore(final boolean cache, final boolean log, final boolean transactional, final StoresToTest storeToTest, final String kind) {
-        final Properties streamsConfig = streamsConfiguration(cache, log, transactional, storeToTest.name(), kind);
+    public void verifyStore(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind) {
+        final Properties streamsConfig = streamsConfiguration(cache, log, storeToTest.name(), kind);
         final StreamsBuilder streamsBuilder = getStreamBuilder(cache, log, storeToTest, kind);
         kafkaStreams = IntegrationTestUtils.getStartedStreams(streamsConfig, streamsBuilder, true);
 
@@ -385,7 +394,7 @@ public class PositionRestartIntegrationTest {
         shouldReachExpectedPosition(query);
 
         // reboot
-        kafkaStreams.close();
+        kafkaStreams.close(CloseOptions.groupMembershipOperation(GroupMembershipOperation.LEAVE_GROUP));
         kafkaStreams = IntegrationTestUtils.getStartedStreams(streamsConfig, streamsBuilder, false);
 
         shouldReachExpectedPosition(query);
@@ -648,14 +657,13 @@ public class PositionRestartIntegrationTest {
             .process(processorSupplier, sessionStoreStoreBuilder.name());
     }
 
-    private static Properties streamsConfiguration(final boolean cache,
-                                                   final boolean log,
-                                                   final boolean transactional,
-                                                   final String supplier,
-                                                   final String kind) {
+    protected Properties streamsConfiguration(final boolean cache,
+                                              final boolean log,
+                                              final String supplier,
+                                              final String kind) {
         final String safeTestName =
-            PositionRestartIntegrationTest.class.getName() + "-" + cache + "-" + log + "-" + transactional + "-"
-                + supplier + "-" + kind;
+            getClass().getName() + "-" + cache + "-" + log + "-"
+                + supplier + "-" + kind + "-" + transactional();
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
@@ -666,12 +674,14 @@ public class PositionRestartIntegrationTest {
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         config.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 100);
-        config.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 200);
-        config.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         config.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         config.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
-        config.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, transactional);
+        if (transactional()) {
+            // Transactional state stores (KIP-892) are only meaningful under exactly-once.
+            config.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
+            config.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        }
         return config;
     }
 }

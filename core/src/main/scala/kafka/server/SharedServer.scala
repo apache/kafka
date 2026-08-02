@@ -41,7 +41,7 @@ import org.apache.kafka.server.config.DefaultSupportedConfigChecker
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.{FaultHandler, LoggingFaultHandler, ProcessTerminatingFaultHandler}
 import org.apache.kafka.server.metrics.{BrokerServerMetrics, KafkaYammerMetrics, NodeMetrics}
-import org.apache.kafka.server.quota.ClientQuotaCallback
+import org.apache.kafka.server.quota.{ClientQuotaCallback, QuotaFactory}
 
 import java.net.InetSocketAddress
 import java.util.Arrays

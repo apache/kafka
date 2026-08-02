@@ -28,6 +28,7 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.LeastLoadedNode;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.NetworkClient;
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.StaleMetadataException;
 import org.apache.kafka.clients.admin.CreateTopicsResult.TopicMetadataAndConfig;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResult;
@@ -40,7 +41,6 @@ import org.apache.kafka.clients.admin.internals.AdminApiDriver;
 import org.apache.kafka.clients.admin.internals.AdminApiFuture;
 import org.apache.kafka.clients.admin.internals.AdminApiFuture.SimpleAdminApiFuture;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler;
-import org.apache.kafka.clients.admin.internals.AdminBootstrapAddresses;
 import org.apache.kafka.clients.admin.internals.AdminFetchMetricsManager;
 import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
 import org.apache.kafka.clients.admin.internals.AllBrokersStrategy;
@@ -59,6 +59,7 @@ import org.apache.kafka.clients.admin.internals.DescribeShareGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeStreamsGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeTransactionsHandler;
 import org.apache.kafka.clients.admin.internals.FenceProducersHandler;
+import org.apache.kafka.clients.admin.internals.InternalDescribeFeaturesResult;
 import org.apache.kafka.clients.admin.internals.ListConsumerGroupOffsetsHandler;
 import org.apache.kafka.clients.admin.internals.ListOffsetsHandler;
 import org.apache.kafka.clients.admin.internals.ListShareGroupOffsetsHandler;
@@ -93,6 +94,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTopicException;
@@ -258,13 +260,13 @@ import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
-import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.common.utils.internals.ExponentialBackoff;
 import org.apache.kafka.common.utils.internals.KafkaThread;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch;
 
 import org.slf4j.Logger;
 
@@ -516,6 +518,43 @@ public class KafkaAdminClient extends AdminClient {
         return throwable.getClass().getSimpleName();
     }
 
+    /**
+     * Determines which bootstrap configuration to use based on the provided config.
+     * Validates that exactly one of bootstrap.servers or bootstrap.controllers is configured.
+     *
+     * @param config The admin client configuration
+     * @return true if using bootstrap.controllers, false if using bootstrap.servers
+     * @throws ConfigException if both or neither bootstrap configurations are set
+     */
+    static boolean determineBootstrapType(AdminClientConfig config) {
+        List<String> bootstrapServers = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
+        if (bootstrapServers == null) {
+            bootstrapServers = Collections.emptyList();
+        }
+        List<String> controllerServers = config.getList(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG);
+        if (controllerServers == null) {
+            controllerServers = Collections.emptyList();
+        }
+
+        if (bootstrapServers.isEmpty()) {
+            if (controllerServers.isEmpty()) {
+                throw new ConfigException("You must set either " +
+                    CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + " or " +
+                    AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG);
+            } else {
+                return true; // Using bootstrap.controllers
+            }
+        } else {
+            if (controllerServers.isEmpty()) {
+                return false; // Using bootstrap.servers
+            } else {
+                throw new ConfigException("You cannot set both " +
+                    CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + " and " +
+                    AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG);
+            }
+        }
+    }
+
     static KafkaAdminClient createInternal(AdminClientConfig config, TimeoutProcessorFactory timeoutProcessorFactory) {
         return createInternal(config, timeoutProcessorFactory, null);
     }
@@ -536,12 +575,19 @@ public class KafkaAdminClient extends AdminClient {
         try {
             // Since we only request node information, it's safe to pass true for allowAutoTopicCreation (and it
             // simplifies communication with older brokers)
-            AdminBootstrapAddresses adminAddresses = AdminBootstrapAddresses.fromConfig(config);
+            boolean usingBootstrapControllers = determineBootstrapType(config);
             AdminMetadataManager metadataManager = new AdminMetadataManager(logContext,
                 config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
                 config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG),
-                adminAddresses.usingBootstrapControllers());
-            metadataManager.update(Cluster.bootstrap(adminAddresses.addresses()), time.milliseconds());
+                usingBootstrapControllers);
+
+            // Get the appropriate bootstrap configuration
+            List<String> bootstrapAddressesToUse = usingBootstrapControllers
+                ? config.getList(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG)
+                : config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
+
+            // Don't create bootstrap cluster here - let NetworkClient.ensureBootstrapped() handle it
+            // during the first poll after DNS resolution succeeds
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
             clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
             clientTelemetryReporter.ifPresent(reporters::add);
@@ -553,7 +599,9 @@ public class KafkaAdminClient extends AdminClient {
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                 config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
             metrics = new Metrics(metricConfig, reporters, time, metricsContext);
+
             networkClient = ClientUtils.createNetworkClient(config,
+                bootstrapAddressesToUse,
                 clientId,
                 metrics,
                 "admin-client",
@@ -729,6 +777,7 @@ public class KafkaAdminClient extends AdminClient {
             long now = time.milliseconds();
             LeastLoadedNode leastLoadedNode = client.leastLoadedNode(now);
             if (metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP
+                && metadataManager.isBootstrapped()
                 && !leastLoadedNode.hasNodeAvailableOrConnectionReady()) {
                 metadataManager.rebootstrap(now);
             }
@@ -1126,6 +1175,12 @@ public class KafkaAdminClient extends AdminClient {
          * Pending calls. Protected by the object monitor.
          */
         private final List<Call> newCalls = new LinkedList<>();
+
+        /**
+         * True once a permanent bootstrap failure has been observed and {@link #failAllPendingCalls}
+         * was invoked for it. Used to make sure we only fail in-flight calls once.
+         */
+        private boolean bootstrapFailureHandled = false;
 
         /**
          * Maps node ID strings to their readiness deadlines.  A node will appear in this
@@ -1546,7 +1601,17 @@ public class KafkaAdminClient extends AdminClient {
 
                 // Wait for network responses.
                 log.trace("Entering KafkaClient#poll(timeout={})", pollTimeout);
-                List<ClientResponse> responses = client.poll(Math.max(0L, pollTimeout), now);
+                List<ClientResponse> responses;
+                responses = client.poll(Math.max(0L, pollTimeout), now);
+
+                // If bootstrap permanently failed during the poll above, fail any calls that were
+                // in flight at that moment. Calls submitted afterwards are handled by enqueue().
+                BootstrapResolutionException bootstrapEx = metadataManager.bootstrapFatalException();
+                if (bootstrapEx != null && !bootstrapFailureHandled) {
+                    bootstrapFailureHandled = true;
+                    failAllPendingCalls(bootstrapEx, now);
+                    break;
+                }
                 log.trace("KafkaClient#poll retrieved {} response(s)", responses.size());
 
                 // unassign calls to disconnected nodes
@@ -1556,6 +1621,24 @@ public class KafkaAdminClient extends AdminClient {
                 now = time.milliseconds();
                 handleResponses(now, responses);
             }
+        }
+
+        private void failAllPendingCalls(Throwable cause, long now) {
+            synchronized (this) {
+                for (Call call : newCalls)
+                    call.fail(now, cause);
+                newCalls.clear();
+            }
+            for (Call call : pendingCalls)
+                call.fail(now, cause);
+            pendingCalls.clear();
+            for (List<Call> callList : callsToSend.values())
+                for (Call call : callList)
+                    call.fail(now, cause);
+            callsToSend.clear();
+            for (Call call : correlationIdToCalls.values())
+                call.fail(now, cause);
+            correlationIdToCalls.clear();
         }
 
         /**
@@ -1580,14 +1663,17 @@ public class KafkaAdminClient extends AdminClient {
                     Math.min(requestTimeoutMs, call.deadlineMs - now));
             }
             boolean accepted = false;
+            BootstrapResolutionException bootstrapEx = metadataManager.bootstrapFatalException();
             synchronized (this) {
-                if (!closing) {
+                if (bootstrapEx == null && !closing) {
                     newCalls.add(call);
                     accepted = true;
                 }
             }
             if (accepted) {
                 client.wakeup(); // wake the thread if it is in poll()
+            } else if (bootstrapEx != null) {
+                call.fail(time.milliseconds(), bootstrapEx);
             } else {
                 log.debug("The AdminClient thread has exited. Timing out {}.", call);
                 call.handleTimeoutFailure(time.milliseconds(),
@@ -4548,11 +4634,20 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public DescribeFeaturesResult describeFeatures(final DescribeFeaturesOptions options) {
         final KafkaFutureImpl<FeatureMetadata> future = new KafkaFutureImpl<>();
+        final KafkaFutureImpl<NodeApiVersions> nodeApiVersionsFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         final NodeProvider nodeProvider = options.nodeId().isPresent() ?
             new ConstantNodeIdProvider(options.nodeId().getAsInt(), true) : new LeastLoadedBrokerOrActiveKController();
         final Call call = new Call(
             "describeFeatures", calcDeadlineMs(now, options.timeoutMs()), nodeProvider) {
+
+            private NodeApiVersions createNodeApiVersion(final ApiVersionsResponse response) {
+                return new NodeApiVersions(
+                    response.data().apiKeys(),
+                    response.data().supportedFeatures(),
+                    response.data().finalizedFeatures(),
+                    response.data().finalizedFeaturesEpoch());
+            }
 
             private FeatureMetadata createFeatureMetadata(final ApiVersionsResponse response) {
                 final Map<String, FinalizedVersionRange> finalizedFeatures = new HashMap<>();
@@ -4585,19 +4680,23 @@ public class KafkaAdminClient extends AdminClient {
                 final ApiVersionsResponse apiVersionsResponse = (ApiVersionsResponse) response;
                 if (apiVersionsResponse.data().errorCode() == Errors.NONE.code()) {
                     future.complete(createFeatureMetadata(apiVersionsResponse));
+                    nodeApiVersionsFuture.complete(createNodeApiVersion(apiVersionsResponse));
                 } else {
-                    future.completeExceptionally(Errors.forCode(apiVersionsResponse.data().errorCode()).exception());
+                    Exception exception = Errors.forCode(apiVersionsResponse.data().errorCode()).exception();
+                    future.completeExceptionally(exception);
+                    nodeApiVersionsFuture.completeExceptionally(exception);
                 }
             }
 
             @Override
             void handleFailure(Throwable throwable) {
-                completeAllExceptionally(Collections.singletonList(future), throwable);
+                future.completeExceptionally(throwable);
+                nodeApiVersionsFuture.completeExceptionally(throwable);
             }
         };
 
         runnable.call(call, now);
-        return new DescribeFeaturesResult(future);
+        return new InternalDescribeFeaturesResult(future, nodeApiVersionsFuture);
     }
 
     @Override
@@ -5168,6 +5267,15 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             boolean handleNodeUnavailable(long currentTimeMs) {
+                // Don't intervene while the client is shutting down. Re-running the lookup enqueues
+                // new calls via runnable.call(), which are rejected during close ("Cannot accept new
+                // calls when AdminClient is closing"). Leaving the call in pendingCalls preserves the
+                // normal close(timeout) handling, so it can still be retried (or assigned, should the
+                // broker reappear) within the shutdown grace period instead of failing immediately.
+                if (hardShutdownTimeMs.get() != INVALID_SHUTDOWN_TIME) {
+                    return false;
+                }
+
                 OptionalInt brokerId = spec.scope.destinationBrokerId();
                 // The fulfillment target broker is no longer present in the cluster metadata. This
                 // happens when a stale entry in the partition leader cache points at a broker that

@@ -130,6 +130,41 @@ public class ProducerConfigTest {
     }
 
     @Test
+    public void testDefaultBufferMemoryAllocationStrategy() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
+        configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        final ProducerConfig producerConfig = new ProducerConfig(configs);
+        assertEquals(ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL,
+                producerConfig.getString(ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_CONFIG));
+    }
+
+    @Test
+    public void testValidBufferMemoryAllocationStrategy() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
+        configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        configs.put(ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_CONFIG,
+                ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL);
+        final ProducerConfig producerConfig = new ProducerConfig(configs);
+        assertEquals(ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL,
+                producerConfig.getString(ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_CONFIG));
+    }
+
+    @Test
+    public void testInvalidBufferMemoryAllocationStrategy() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
+        configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
+        configs.put(ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_CONFIG, "abc");
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        ConfigException ce = assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
+        assertTrue(ce.getMessage().contains(ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_CONFIG));
+    }
+
+    @Test
     public void testCaseInsensitiveSecurityProtocol() {
         final String saslSslLowerCase = SecurityProtocol.SASL_SSL.name.toLowerCase(Locale.ROOT);
         final Map<String, Object> configs = new HashMap<>();

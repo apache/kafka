@@ -20,12 +20,14 @@ import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.api.ReadOnlyRecord;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -41,10 +43,12 @@ import org.apache.kafka.streams.query.ResultOrder;
 import org.apache.kafka.streams.query.TimestampedKeyQuery;
 import org.apache.kafka.streams.query.TimestampedKeyWithHeadersQuery;
 import org.apache.kafka.streams.query.TimestampedRangeQuery;
+import org.apache.kafka.streams.query.TimestampedRangeWithHeadersQuery;
 import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyRecordIterator;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
@@ -54,6 +58,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Function;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -74,6 +79,8 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
     extends MeteredKeyValueStore<K, ValueTimestampHeaders<V>>
     implements TimestampedKeyValueStoreWithHeaders<K, V> {
+
+    private static final Serializer<byte[]> BYTE_ARRAY_SERIALIZER = new ByteArraySerializer();
 
     MeteredTimestampedKeyValueStoreWithHeaders(
         final KeyValueStore<Bytes, byte[]> inner,
@@ -106,6 +113,10 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             mkEntry(
                 TimestampedRangeQuery.class,
                 (query, positionBound, config, store) -> runTimestampedRangeQuery(query, positionBound, config)
+            ),
+            mkEntry(
+                TimestampedRangeWithHeadersQuery.class,
+                (query, positionBound, config, store) -> runTimestampedRangeWithHeadersQuery(query, positionBound, config)
             )
         );
 
@@ -451,6 +462,22 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         return result;
     }
 
+    private RangeQuery<Bytes, byte[]> rawRangeQuery(final Optional<K> lowerBound,
+                                                    final Optional<K> upperBound,
+                                                    final ResultOrder order) {
+        RangeQuery<Bytes, byte[]> rawRangeQuery = RangeQuery.withRange(
+            serializeKey(lowerBound.orElse(null), internalContext.headers()),
+            serializeKey(upperBound.orElse(null), internalContext.headers())
+        );
+        if (order.equals(ResultOrder.DESCENDING)) {
+            rawRangeQuery = rawRangeQuery.withDescendingKeys();
+        }
+        if (order.equals(ResultOrder.ASCENDING)) {
+            rawRangeQuery = rawRangeQuery.withAscendingKeys();
+        }
+        return rawRangeQuery;
+    }
+
     @SuppressWarnings("unchecked")
     private <R> QueryResult<R> runRangeQuery(
         final Query<R> query,
@@ -460,18 +487,8 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         final QueryResult<R> result;
         final RangeQuery<K, V> typedQuery = (RangeQuery<K, V>) query;
 
-        RangeQuery<Bytes, byte[]> rawRangeQuery;
-        final ResultOrder order = typedQuery.resultOrder();
-        rawRangeQuery = RangeQuery.withRange(
-            serializeKey(typedQuery.getLowerBound().orElse(null), internalContext.headers()),
-            serializeKey(typedQuery.getUpperBound().orElse(null), internalContext.headers())
-        );
-        if (order.equals(ResultOrder.DESCENDING)) {
-            rawRangeQuery = rawRangeQuery.withDescendingKeys();
-        }
-        if (order.equals(ResultOrder.ASCENDING)) {
-            rawRangeQuery = rawRangeQuery.withAscendingKeys();
-        }
+        final RangeQuery<Bytes, byte[]> rawRangeQuery =
+            rawRangeQuery(typedQuery.getLowerBound(), typedQuery.getUpperBound(), typedQuery.resultOrder());
 
         final QueryResult<KeyValueIterator<Bytes, byte[]>> rawResult = wrapped().query(rawRangeQuery, positionBound, config);
         if (rawResult.isSuccess()) {
@@ -505,18 +522,8 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         final QueryResult<R> result;
         final TimestampedRangeQuery<K, V> typedQuery = (TimestampedRangeQuery<K, V>) query;
 
-        RangeQuery<Bytes, byte[]> rawRangeQuery;
-        final ResultOrder order = typedQuery.resultOrder();
-        rawRangeQuery = RangeQuery.withRange(
-            serializeKey(typedQuery.lowerBound().orElse(null), internalContext.headers()),
-            serializeKey(typedQuery.upperBound().orElse(null), internalContext.headers())
-        );
-        if (order.equals(ResultOrder.DESCENDING)) {
-            rawRangeQuery = rawRangeQuery.withDescendingKeys();
-        }
-        if (order.equals(ResultOrder.ASCENDING)) {
-            rawRangeQuery = rawRangeQuery.withAscendingKeys();
-        }
+        final RangeQuery<Bytes, byte[]> rawRangeQuery =
+            rawRangeQuery(typedQuery.lowerBound(), typedQuery.upperBound(), typedQuery.resultOrder());
 
         final QueryResult<KeyValueIterator<Bytes, byte[]>> rawResult = wrapped().query(rawRangeQuery, positionBound, config);
         if (rawResult.isSuccess()) {
@@ -542,6 +549,40 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         return result;
     }
 
+    @SuppressWarnings("unchecked")
+    private <R> QueryResult<R> runTimestampedRangeWithHeadersQuery(
+        final Query<R> query,
+        final PositionBound positionBound,
+        final QueryConfig config
+    ) {
+        final QueryResult<R> result;
+        final TimestampedRangeWithHeadersQuery<K, V> typedQuery = (TimestampedRangeWithHeadersQuery<K, V>) query;
+
+        final RangeQuery<Bytes, byte[]> rawRangeQuery =
+            rawRangeQuery(typedQuery.lowerBound(), typedQuery.upperBound(), typedQuery.resultOrder());
+
+        final QueryResult<KeyValueIterator<Bytes, byte[]>> rawResult = wrapped().query(rawRangeQuery, positionBound, config);
+        if (rawResult.isSuccess()) {
+            final KeyValueIterator<Bytes, byte[]> iterator = rawResult.getResult();
+            final ReadOnlyRecordIterator<K, V> resultIterator =
+                new MeteredTimestampedKeyValueStoreWithHeadersReadOnlyRecordIterator(
+                    iterator,
+                    getSensor,
+                    StoreQueryUtils.deserializeValue(serdes, wrapped())
+                );
+            final QueryResult<ReadOnlyRecordIterator<K, V>> typedQueryResult =
+                InternalQueryResultUtil.copyAndSubstituteDeserializedResult(
+                    rawResult,
+                    resultIterator
+                );
+            result = (QueryResult<R>) typedQueryResult;
+        } else {
+            // the generic type doesn't matter, since failed queries have no result set.
+            result = (QueryResult<R>) rawResult;
+        }
+        return result;
+    }
+
     @Override
     public <PS extends Serializer<P>, P> KeyValueIterator<K, ValueTimestampHeaders<V>> prefixScan(
         final P prefix, final PS prefixKeySerializer
@@ -554,8 +595,9 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
     private <PS extends Serializer<P>, P> KeyValueIterator<K, ValueTimestampHeaders<V>> prefixScanInternal(
         final ReadOnlyKeyValueStore<Bytes, byte[]> store, final P prefix, final PS prefixKeySerializer
     ) {
+        final byte[] keyBytes = prefixKeySerializer.serialize(null, internalContext.headers(), prefix);
         return new MeteredTimestampedKeyValueStoreWithHeadersIterator(
-            store.prefixScan(prefix, prefixKeySerializer), prefixScanSensor
+            store.prefixScan(keyBytes, BYTE_ARRAY_SERIALIZER), prefixScanSensor
         );
     }
 
@@ -615,13 +657,49 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         return new MeteredTimestampedKeyValueStoreWithHeadersIterator(store.reverseAll(), allSensor);
     }
 
-    @SuppressWarnings("unchecked")
-    private class MeteredTimestampedKeyValueStoreWithHeadersQueryIterator implements KeyValueIterator<K, V>, MeteredIterator {
+    /**
+     * Shared scaffolding for the metered iterators below: tracks {@code num-open-iterators},
+     * {@code oldest-iterator-open-since-ms}, and per-operation iterator duration, and delegates
+     * closing the wrapped raw iterator. Subclasses only need to implement the deserializing
+     * {@code next()}/{@code hasNext()} (and, where applicable, {@code peekNextKey()}).
+     */
+    private abstract class AbstractMeteredIterator implements MeteredIterator {
 
-        private final KeyValueIterator<Bytes, byte[]> iter;
+        final KeyValueIterator<Bytes, byte[]> iter;
         private final Sensor sensor;
         private final long startNs;
         private final long startTimestampMs;
+
+        AbstractMeteredIterator(final KeyValueIterator<Bytes, byte[]> iter, final Sensor sensor) {
+            this.iter = iter;
+            this.sensor = sensor;
+            this.startNs = time.nanoseconds();
+            this.startTimestampMs = time.milliseconds();
+            numOpenIterators.increment();
+            openIterators.add(this);
+        }
+
+        @Override
+        public long startTimestamp() {
+            return startTimestampMs;
+        }
+
+        public void close() {
+            try {
+                iter.close();
+            } finally {
+                final long duration = time.nanoseconds() - startNs;
+                sensor.record(duration);
+                iteratorDurationSensor.record(duration);
+                numOpenIterators.decrement();
+                openIterators.remove(this);
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private class MeteredTimestampedKeyValueStoreWithHeadersQueryIterator extends AbstractMeteredIterator implements KeyValueIterator<K, V> {
+
         private final Function<byte[], ValueTimestampHeaders<V>> valueTimestampHeadersDeserializer;
 
         private final boolean returnPlainValue;
@@ -633,18 +711,9 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             final Function<byte[], ValueTimestampHeaders<V>> valueTimestampHeadersDeserializer,
             final boolean returnPlainValue
         ) {
-            this.iter = iter;
-            this.sensor = sensor;
+            super(iter, sensor);
             this.valueTimestampHeadersDeserializer = valueTimestampHeadersDeserializer;
-            this.startNs = time.nanoseconds();
-            this.startTimestampMs = time.milliseconds();
             this.returnPlainValue = returnPlainValue;
-            openIterators.add(this);
-        }
-
-        @Override
-        public long startTimestamp() {
-            return startTimestampMs;
         }
 
         @Override
@@ -676,18 +745,6 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         }
 
         @Override
-        public void close() {
-            try {
-                iter.close();
-            } finally {
-                final long duration = time.nanoseconds() - startNs;
-                sensor.record(duration);
-                iteratorDurationSensor.record(duration);
-                openIterators.remove(this);
-            }
-        }
-
-        @Override
         public K peekNextKey() {
             if (cachedNext == null) {
                 cachedNext = next();
@@ -696,28 +753,79 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         }
     }
 
-    private class MeteredTimestampedKeyValueStoreWithHeadersIterator implements KeyValueIterator<K, ValueTimestampHeaders<V>>, MeteredIterator {
-        private final KeyValueIterator<Bytes, byte[]> iter;
-        private final Sensor sensor;
-        private final long startNs;
-        private final long startTimestampMs;
+    /**
+     * Iterator backing {@link TimestampedRangeWithHeadersQuery}: yields each entry as a
+     * {@link ReadOnlyRecord} (implemented by {@link Record}) carrying key, value, timestamp, and the
+     * stored headers, with the headers frozen so a caller cannot mutate the read-only result.
+     *
+     * <p>A {@link ReadOnlyRecord} timestamp is contractually non-negative, so an entry with a negative
+     * stored timestamp cannot be represented. The dominant, deterministic cause is a store that does
+     * not persist timestamps: a {@code WithHeaders} store built over a plain {@link KeyValueStore}
+     * supplier surfaces every entry with {@code NO_TIMESTAMP} (-1). A genuine negative write is
+     * otherwise blocked (the source {@code RecordQueue} drops negative-timestamp records at ingestion),
+     * though {@link ValueAndTimestamp#make}/{@link ValueTimestampHeaders#make} do not themselves reject
+     * one written directly.
+     *
+     * <p>This mirrors the rule the point query {@link TimestampedKeyWithHeadersQuery} applies. But
+     * because a lazily-evaluated range has already returned a successful {@link QueryResult} before any
+     * entry is read, such an entry cannot be surfaced as a query-level failure; it is instead reported
+     * by throwing a {@link StreamsException} while advancing the iterator.
+     *
+     * <p>That throw does not close the iterator: a caller that catches it and abandons the iterator
+     * leaks the underlying raw iterator and permanently inflates {@code num-open-iterators}. Callers
+     * must close this iterator in a {@code finally} block or a try-with-resources statement, even when
+     * {@code next()} throws.
+     */
+    private class MeteredTimestampedKeyValueStoreWithHeadersReadOnlyRecordIterator
+        extends AbstractMeteredIterator implements ReadOnlyRecordIterator<K, V> {
+
+        private final Function<byte[], ValueTimestampHeaders<V>> valueTimestampHeadersDeserializer;
+
+        private MeteredTimestampedKeyValueStoreWithHeadersReadOnlyRecordIterator(
+            final KeyValueIterator<Bytes, byte[]> iter,
+            final Sensor sensor,
+            final Function<byte[], ValueTimestampHeaders<V>> valueTimestampHeadersDeserializer
+        ) {
+            super(iter, sensor);
+            this.valueTimestampHeadersDeserializer = valueTimestampHeadersDeserializer;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return iter.hasNext();
+        }
+
+        @Override
+        public ReadOnlyRecord<K, V> next() {
+            final KeyValue<Bytes, byte[]> keyValue = iter.next();
+            final ValueTimestampHeaders<V> valueTimestampHeaders = valueTimestampHeadersDeserializer.apply(keyValue.value);
+            final Headers headers = valueTimestampHeaders.headers();
+            final K key = deserializeKey(keyValue.key.get(), headers);
+            if (valueTimestampHeaders.timestamp() < 0) {
+                throw new StreamsException(
+                    "Cannot represent the stored record for key [" + key + "] as a ReadOnlyRecord: its "
+                        + "timestamp (" + valueTimestampHeaders.timestamp() + ") is negative.");
+            }
+            final Record<K, V> record = new Record<>(
+                key,
+                valueTimestampHeaders.value(),
+                valueTimestampHeaders.timestamp(),
+                headers);
+            ((RecordHeaders) record.headers()).setReadOnly();
+            return record;
+        }
+    }
+
+    private class MeteredTimestampedKeyValueStoreWithHeadersIterator
+        extends AbstractMeteredIterator implements KeyValueIterator<K, ValueTimestampHeaders<V>> {
+
         private KeyValue<K, ValueTimestampHeaders<V>> cachedNext;
 
         private MeteredTimestampedKeyValueStoreWithHeadersIterator(
             final KeyValueIterator<Bytes, byte[]> iter,
             final Sensor sensor
         ) {
-            this.iter = iter;
-            this.sensor = sensor;
-            this.startNs = time.nanoseconds();
-            this.startTimestampMs = time.milliseconds();
-            numOpenIterators.increment();
-            openIterators.add(this);
-        }
-
-        @Override
-        public long startTimestamp() {
-            return startTimestampMs;
+            super(iter, sensor);
         }
 
         @Override
@@ -737,19 +845,6 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             final ValueTimestampHeaders<V> valueTimestampHeaders = deserializeValue(keyValue.value);
             final K key = deserializeKey(keyValue.key.get(), valueTimestampHeaders.headers());
             return KeyValue.pair(key, valueTimestampHeaders);
-        }
-
-        @Override
-        public void close() {
-            try {
-                iter.close();
-            } finally {
-                final long duration = time.nanoseconds() - startNs;
-                sensor.record(duration);
-                iteratorDurationSensor.record(duration);
-                numOpenIterators.decrement();
-                openIterators.remove(this);
-            }
         }
 
         @Override

@@ -180,7 +180,10 @@ public class StreamsGroupCommandTest {
             List.of(),
             GroupState.STABLE,
             new Node(0, "bar", 0),
-            null);
+            null,
+            Optional.empty(),
+            StreamsGroupTopologyDescriptionStatus.NOT_REQUESTED,
+            Optional.empty());
         resultMap.put(firstGroup, exp);
         when(result.all()).thenReturn(KafkaFuture.completedFuture(resultMap));
         when(ADMIN_CLIENT.describeStreamsGroups(anyCollection(),  any(DescribeStreamsGroupsOptions.class))).thenReturn(result);
@@ -204,7 +207,7 @@ public class StreamsGroupCommandTest {
             List.of());
         StreamsGroupDescription exp = new StreamsGroupDescription(
             group, 0, 0, 0, List.of(), List.of(), GroupState.STABLE, new Node(0, "bar", 0), null,
-            Optional.of(topology), StreamsGroupTopologyDescriptionStatus.AVAILABLE);
+            Optional.of(topology), StreamsGroupTopologyDescriptionStatus.AVAILABLE, Optional.empty());
 
         Admin admin = mock(KafkaAdminClient.class);
         DescribeStreamsGroupsResult result = mock(DescribeStreamsGroupsResult.class);
@@ -236,7 +239,7 @@ public class StreamsGroupCommandTest {
         String group = "foo-group";
         StreamsGroupDescription exp = new StreamsGroupDescription(
             group, 0, 0, 0, List.of(), List.of(), GroupState.STABLE, new Node(0, "bar", 0), null,
-            Optional.empty(), StreamsGroupTopologyDescriptionStatus.NOT_STORED);
+            Optional.empty(), StreamsGroupTopologyDescriptionStatus.NOT_STORED, Optional.empty());
 
         Admin admin = mock(KafkaAdminClient.class);
         DescribeStreamsGroupsResult result = mock(DescribeStreamsGroupsResult.class);
@@ -298,7 +301,10 @@ public class StreamsGroupCommandTest {
             List.of(description),
             GroupState.STABLE,
             new Node(0, "host", 0),
-            null);
+            null,
+            Optional.empty(),
+            StreamsGroupTopologyDescriptionStatus.NOT_REQUESTED,
+            Optional.empty());
         StreamsGroupCommandOptions streamsGroupCommandOptions = new StreamsGroupCommandOptions(
             new String[]{"--bootstrap-server", BOOTSTRAP_SERVERS, "--group", groupId, "--describe"});
 
@@ -428,7 +434,10 @@ public class StreamsGroupCommandTest {
             List.of(),
             GroupState.DEAD,
             new Node(0, "localhost", 9092),
-            null));
+            null,
+            Optional.empty(),
+            StreamsGroupTopologyDescriptionStatus.NOT_REQUESTED,
+            Optional.empty()));
         DescribeStreamsGroupsResult result = mock(DescribeStreamsGroupsResult.class);
         when(result.all()).thenReturn(KafkaFuture.completedFuture(resultMap));
         when(ADMIN_CLIENT.describeStreamsGroups(anyCollection(), any(DescribeStreamsGroupsOptions.class))).thenReturn(result);
@@ -602,7 +611,10 @@ public class StreamsGroupCommandTest {
             List.of(),
             GroupState.STABLE,
             new Node(0, "localhost", 9092),
-            null
+            null,
+            Optional.empty(),
+            StreamsGroupTopologyDescriptionStatus.NOT_REQUESTED,
+            Optional.empty()
         );
         when(describeResult.all()).thenReturn(KafkaFuture.completedFuture(Map.of(groupId, groupDescription)));
         when(ADMIN_CLIENT.describeStreamsGroups(eq(List.of(groupId)), any(DescribeStreamsGroupsOptions.class)))
@@ -673,7 +685,10 @@ public class StreamsGroupCommandTest {
             List.of(),
             GroupState.STABLE,
             new Node(0, "localhost", 9092),
-            null
+            null,
+            Optional.empty(),
+            StreamsGroupTopologyDescriptionStatus.NOT_REQUESTED,
+            Optional.empty()
         );
         when(describeResult.all()).thenReturn(KafkaFuture.completedFuture(Map.of(groupId, groupDescription)));
         when(ADMIN_CLIENT.describeStreamsGroups(eq(List.of(groupId)), any(DescribeStreamsGroupsOptions.class)))
@@ -753,7 +768,10 @@ public class StreamsGroupCommandTest {
             List.of(memberDescription),
             groupState,
             new Node(1, "localhost", 9092),
-            Set.of());
+            Set.of(),
+            Optional.empty(),
+            StreamsGroupTopologyDescriptionStatus.NOT_REQUESTED,
+            Optional.empty());
         KafkaFutureImpl<StreamsGroupDescription> future = new KafkaFutureImpl<>();
         future.complete(description);
         return new DescribeStreamsGroupsResult(Map.of(groupId, future));

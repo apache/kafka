@@ -76,6 +76,25 @@ public class StreamsGroup implements Group {
      */
     private static final String PROTOCOL_TYPE = "streams";
 
+    /** Stored topology epoch meaning the plugin definitely holds no topology for this group. */
+    public static final int STORED_TOPOLOGY_EPOCH_NONE = -1;
+    /**
+     * Stored topology epoch meaning the plugin may or may not hold a topology: written durably
+     * before any plugin-disturbing operation. Treated like {@link #STORED_TOPOLOGY_EPOCH_NONE}
+     * for the "solicit a push" decision and like a real (>= 0) epoch for "delete-eligible".
+     */
+    public static final int STORED_TOPOLOGY_EPOCH_UNCERTAIN = -2;
+
+    /**
+     * @return true when {@code storedEpoch} is a real, reliably-stored topology epoch — i.e. the
+     *         plugin definitely holds exactly that topology. Real epochs are non-negative; every
+     *         sentinel ({@link #STORED_TOPOLOGY_EPOCH_NONE}, {@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN},
+     *         and any added later) is negative and therefore not reliably stored.
+     */
+    public static boolean isReliablyStoredTopologyEpoch(int storedEpoch) {
+        return storedEpoch >= 0;
+    }
+
     public enum StreamsGroupState {
         EMPTY("Empty"),
         NOT_READY("NotReady"),
@@ -159,8 +178,11 @@ public class StreamsGroup implements Group {
     private final TimelineInteger validatedTopologyEpoch;
 
     /**
-     * The topology epoch most recently accepted by the topology description plugin (KIP-1331). -1 if none stored.
-     * Drives the heartbeat-side decision to set TopologyDescriptionRequired=true.
+     * The broker's record of which topology the group's plugin entry holds (KIP-1331): a real epoch
+     * ({@code >= 0}) when the plugin definitely holds that topology, {@link #STORED_TOPOLOGY_EPOCH_NONE}
+     * when it definitely holds nothing, or {@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN} when a barrier was
+     * written before a plugin operation that may not have completed. Drives the heartbeat-side decision
+     * to set TopologyDescriptionRequired=true and the eligibility for plugin deletion.
      */
     private final TimelineInteger storedDescriptionTopologyEpoch;
 
@@ -202,6 +224,35 @@ public class StreamsGroup implements Group {
      * on the task-offset interval (and is therefore lost on coordinator failover until re-reported).
      */
     private final Map<String, MemberTaskOffsets> taskOffsets = new HashMap<>();
+
+    /**
+     * The intermediate assignment the members are reconciled toward, as derived by the {@link AssignmentRefiner} from
+     * the target assignment, together with the assignment epoch it was derived for. Like {@link #taskOffsets}, this is
+     * held in memory only and never persisted; it is derived again from the persisted assignments after a coordinator
+     * failover.
+     * <p>
+     * Every refinement step is an assignment epoch of its own, so the intermediate assignment is derived once per
+     * epoch, when that epoch is minted, and stays fixed while the members reconcile toward it. It is therefore cached
+     * together with the epoch it belongs to, and a cached value from another epoch is never used.
+     * <p>
+     * Unlike {@link #taskOffsets} it is kept in a timeline container, because it is derived from state that a failed
+     * write rolls back. Rolling back restores an earlier assignment epoch, which the next epoch to be minted then
+     * reuses -- with a target assignment that may differ from the one this was derived from. Left outside the rollback,
+     * the cache would be hit for that epoch and reconcile the members toward an intermediate assignment of an
+     * assignment that no longer exists. The epoch and the assignment share one container so that a rollback can never
+     * restore one without the other.
+     */
+    private final TimelineObject<RefinedAssignment> refinedAssignment;
+
+    /**
+     * An intermediate assignment together with the assignment epoch it was derived for.
+     *
+     * @param assignmentEpoch The assignment epoch, or {@code -1} if nothing was derived yet.
+     * @param assignment      The intermediate assignment keyed by member ID.
+     */
+    private record RefinedAssignment(int assignmentEpoch, Map<String, TasksTuple> assignment) {
+        private static final RefinedAssignment NONE = new RefinedAssignment(-1, Map.of());
+    }
 
     /**
      * The Streams topology.
@@ -268,7 +319,7 @@ public class StreamsGroup implements Group {
         // group.validatedTopologyEpoch()` comparison reads 0 here vs. -1 after replay.
         this.validatedTopologyEpoch.set(-1);
         this.storedDescriptionTopologyEpoch = new TimelineInteger(snapshotRegistry);
-        this.storedDescriptionTopologyEpoch.set(-1);
+        this.storedDescriptionTopologyEpoch.set(STORED_TOPOLOGY_EPOCH_NONE);
         this.failedDescriptionTopologyEpoch = new TimelineInteger(snapshotRegistry);
         this.failedDescriptionTopologyEpoch.set(-1);
         this.metadataHash = new TimelineLong(snapshotRegistry);
@@ -277,6 +328,7 @@ public class StreamsGroup implements Group {
         this.currentActiveTaskToProcessId = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentStandbyTaskToProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentWarmupTaskToProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.refinedAssignment = new TimelineObject<>(snapshotRegistry, RefinedAssignment.NONE);
         this.topology = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.configuredTopology = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.lastAssignmentConfigs = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -565,6 +617,67 @@ public class StreamsGroup implements Group {
     }
 
     /**
+     * Returns the intermediate assignment that was derived for the given assignment epoch, if any. A value derived for
+     * an earlier epoch is not returned: the intermediate assignment of an epoch is fixed, but a new epoch means a new
+     * refinement step, which has to be derived anew.
+     *
+     * @param assignmentEpoch The assignment epoch to return the intermediate assignment for.
+     *
+     * @return The intermediate assignment keyed by member ID, or {@code null} if it was not derived for that epoch.
+     */
+    public Map<String, TasksTuple> refinedAssignment(int assignmentEpoch) {
+        final RefinedAssignment cached = refinedAssignment.get();
+        return cached.assignmentEpoch() == assignmentEpoch ? cached.assignment() : null;
+    }
+
+    /**
+     * Caches the intermediate assignment derived for the given assignment epoch. This is transient state; it must be
+     * set from the heartbeat path only, never while replaying records.
+     * <p>
+     * The given map is copied, so that the cached assignment is genuinely fixed for its epoch rather than tracking
+     * whatever the caller hands over: a refiner that returns the target assignment as-is would otherwise leave the
+     * cache holding a view of {@link #targetAssignment()}, which changes as records are replayed. Only the map itself
+     * is copied -- a {@link TasksTuple} already owns its task sets, so there is nothing else that could change
+     * underneath. The copy is free once the refiner returns a map it built itself, because {@link Map#copyOf} hands
+     * back an already-immutable map unchanged.
+     *
+     * @param assignmentEpoch    The assignment epoch the intermediate assignment was derived for.
+     * @param refinedAssignment  The intermediate assignment keyed by member ID.
+     */
+    public void setRefinedAssignment(int assignmentEpoch, Map<String, TasksTuple> refinedAssignment) {
+        this.refinedAssignment.set(new RefinedAssignment(
+            assignmentEpoch,
+            Map.copyOf(Objects.requireNonNull(refinedAssignment))
+        ));
+    }
+
+    /**
+     * Re-keys the cached intermediate assignment from an old to a new member ID.
+     * <p>
+     * Replacing a static member relabels its target assignment the same way, without advancing the assignment epoch.
+     * The cached intermediate assignment is therefore still the one the other members are reconciling towards; only its
+     * key for the replaced member went stale. Re-keying it keeps the decisions of the epoch fixed, whereas dropping it
+     * would derive a new one mid-epoch, which could revise the slice of a member that already reconciled and is
+     * therefore not reconciled again within this epoch.
+     *
+     * @param oldMemberId The member ID the intermediate assignment was derived for.
+     * @param newMemberId The member ID replacing it.
+     */
+    public void relabelRefinedAssignment(String oldMemberId, String newMemberId) {
+        final RefinedAssignment cached = refinedAssignment.get();
+        final TasksTuple refinedTasks = cached.assignment().get(oldMemberId);
+        if (refinedTasks == null) {
+            // Either nothing was derived for the replaced member, or the cached assignment belongs to another epoch --
+            // in which case refinedAssignment(int) does not hand it out anyway.
+            return;
+        }
+        final Map<String, TasksTuple> relabeled = new HashMap<>(cached.assignment());
+        relabeled.remove(oldMemberId);
+        relabeled.put(newMemberId, refinedTasks);
+        this.refinedAssignment.set(new RefinedAssignment(cached.assignmentEpoch(), Map.copyOf(relabeled)));
+    }
+
+    /**
      * Remove the static member mapping if the removed member is static.
      *
      * @param oldMember The member to remove.
@@ -757,7 +870,8 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * @return The topology epoch most recently successfully stored by the topology description plugin, or -1 if none.
+     * @return The stored topology epoch: a real epoch ({@code >= 0}), {@link #STORED_TOPOLOGY_EPOCH_NONE},
+     *         or {@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN}.
      */
     public int storedDescriptionTopologyEpoch() {
         return storedDescriptionTopologyEpoch.get();
@@ -766,7 +880,9 @@ public class StreamsGroup implements Group {
     /**
      * Defer tombstoning of an empty streams group while the broker-level topology-description
      * cleanup cycle still has work to do for it: a plugin is configured and the persisted
-     * {@code StoredDescriptionTopologyEpoch} is not the {@code -1} default. The cycle drives
+     * {@code StoredDescriptionTopologyEpoch} is not {@link #STORED_TOPOLOGY_EPOCH_NONE}. Both a
+     * real epoch and {@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN} defer — an UNCERTAIN group may
+     * still hold plugin data, so it must stay reclaimable by the cycle. The cycle drives
      * {@code plugin.deleteTopology} and clears the stored epoch; the next sweep then proceeds
      * with tombstoning. When no plugin is configured the gate never holds, so deferring
      * indefinitely is not possible.
@@ -778,13 +894,13 @@ public class StreamsGroup implements Group {
     @Override
     public boolean shouldExpire(GroupCoordinatorConfig config) {
         return !(config.isStreamsGroupTopologyDescriptionPluginConfigured()
-            && storedDescriptionTopologyEpoch() != -1);
+            && storedDescriptionTopologyEpoch() != STORED_TOPOLOGY_EPOCH_NONE);
     }
 
     /**
      * @param committedOffset A committed offset corresponding to the desired snapshot.
-     * @return The topology epoch most recently successfully stored by the topology description plugin at the given
-     *         committed offset, or -1 if none.
+     * @return The stored topology epoch at the given committed offset: a real epoch ({@code >= 0}),
+     *         {@link #STORED_TOPOLOGY_EPOCH_NONE}, or {@link #STORED_TOPOLOGY_EPOCH_UNCERTAIN}.
      */
     public int storedDescriptionTopologyEpoch(long committedOffset) {
         return storedDescriptionTopologyEpoch.get(committedOffset);
@@ -1287,14 +1403,21 @@ public class StreamsGroup implements Group {
         });
     }
 
+    /**
+     * @param committedOffset The last committed offset of this shard.
+     * @param assignorName    The name of the assignor that the coordinator will use for the next assignment
+     *                        computation, already resolved against the assignors registered on this broker.
+     */
     public StreamsGroupDescribeResponseData.DescribedGroup asDescribedGroup(
-        long committedOffset
+        long committedOffset,
+        String assignorName
     ) {
         StreamsGroupDescribeResponseData.DescribedGroup describedGroup = new StreamsGroupDescribeResponseData.DescribedGroup()
             .setGroupId(groupId)
             .setGroupEpoch(groupEpoch.get(committedOffset))
             .setGroupState(state.get(committedOffset).toString())
             .setAssignmentEpoch(targetAssignmentMetadata.get(committedOffset).assignmentEpoch())
+            .setAssignorName(assignorName)
             .setTopology(
                 configuredTopology.get(committedOffset)
                     .filter(ConfiguredTopology::isReady)
@@ -1308,7 +1431,8 @@ public class StreamsGroup implements Group {
         members.entrySet(committedOffset).forEach(
             entry -> describedGroup.members().add(
                 entry.getValue().asStreamsGroupDescribeMember(
-                    targetAssignment.get(entry.getValue().memberId(), committedOffset)
+                    targetAssignment.get(entry.getValue().memberId(), committedOffset),
+                    taskOffsets(entry.getValue().memberId())
                 )
             )
         );
