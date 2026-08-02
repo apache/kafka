@@ -36,6 +36,7 @@ import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.server.util.Csv;
 
 import net.sourceforge.argparse4j.ArgumentParsers;
+import net.sourceforge.argparse4j.helper.HelpScreenException;
 import net.sourceforge.argparse4j.impl.Arguments;
 import net.sourceforge.argparse4j.inf.ArgumentGroup;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
@@ -44,7 +45,6 @@ import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import net.sourceforge.argparse4j.inf.Namespace;
 import net.sourceforge.argparse4j.inf.Subparser;
 import net.sourceforge.argparse4j.inf.Subparsers;
-import net.sourceforge.argparse4j.internal.HelpScreenException;
 
 import java.io.File;
 import java.io.IOException;
@@ -97,7 +97,8 @@ public class MetadataQuorumCommand {
 
     static void execute(String... args) throws Exception {
         ArgumentParser parser = ArgumentParsers
-            .newArgumentParser("kafka-metadata-quorum")
+            .newFor("kafka-metadata-quorum")
+            .build()
             .defaultHelp(true)
             .description("This tool describes kraft metadata quorum status.");
         MutuallyExclusiveGroup connectionOptions = parser.addMutuallyExclusiveGroup().required(true);

@@ -18,11 +18,11 @@
 package org.apache.kafka.message.checker;
 
 import net.sourceforge.argparse4j.ArgumentParsers;
+import net.sourceforge.argparse4j.helper.HelpScreenException;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.Namespace;
 import net.sourceforge.argparse4j.inf.Subparser;
 import net.sourceforge.argparse4j.inf.Subparsers;
-import net.sourceforge.argparse4j.internal.HelpScreenException;
 
 import java.io.PrintStream;
 
@@ -41,7 +41,8 @@ public class MetadataSchemaCheckerTool {
         PrintStream writer
     ) throws Exception {
         ArgumentParser argumentParser = ArgumentParsers.
-            newArgumentParser("metadata-schema-checker").
+            newFor("metadata-schema-checker").
+            build().
             defaultHelp(true).
             description("The Kafka metadata schema checker tool.");
         Subparsers subparsers = argumentParser.addSubparsers().dest("command");
