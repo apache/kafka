@@ -1290,46 +1290,27 @@ public class RecordAccumulator {
     }
 
     /*
-     * Result of an attempt to append a record to the accumulator. Carries exactly one of three
-     * mutually-exclusive outcomes: the record was appended ({@link RecordAppendResult#appended()}, {@code future} is set),
-     * the open batch needs more chunk capacity first ({@link RecordAppendResult#needsBufferExtension()}),
-     * or a new batch must be created for the record ({@link RecordAppendResult#needsNewBatch()}).
+     * Result of an attempt to append a record to the accumulator. A regular result represents
+     * either a successful append or a request to create a new batch. The incremental strategy
+     * uses a private subtype when an existing chunked batch needs more capacity.
      */
-    public static final class RecordAppendResult {
-        /**
-         * The three mutually-exclusive outcomes of an append attempt. Internal representation only;
-         * callers use {@link #appended()}, {@link #needsBufferExtension()}, and {@link #needsNewBatch()}.
-         */
-        private enum Outcome { APPENDED, NEEDS_BUFFER_EXTENSION, NEEDS_NEW_BATCH }
-
-        private final Outcome outcome;
+    public static class RecordAppendResult {
         public final FutureRecordMetadata future;
         public final boolean batchIsFull;
         public final boolean newBatchCreated;
-        /**
-         * Bytes of chunk capacity the open batch needs before the record fits (incremental
-         * strategy). Meaningful only for {@link Outcome#NEEDS_BUFFER_EXTENSION}: the append was NOT
-         * attempted ({@code future} is null); the caller allocates this many bytes, attaches them
-         * via {@link ChunkedProducerBatch#addBuffers}, and retries.
-         */
-        public final int extensionBytesNeeded;
         public final int appendedBytes;
 
-        /** The shared signal-only result for {@link Outcome#NEEDS_NEW_BATCH}; carries no per-append state. */
+        /** The shared signal-only result for a full or absent open batch. */
         public static final RecordAppendResult NEEDS_NEW_BATCH =
-                new RecordAppendResult(Outcome.NEEDS_NEW_BATCH, null, false, false, 0, 0);
+                new RecordAppendResult(null, false, false, 0);
 
-        private RecordAppendResult(Outcome outcome,
-                                   FutureRecordMetadata future,
+        private RecordAppendResult(FutureRecordMetadata future,
                                    boolean batchIsFull,
                                    boolean newBatchCreated,
-                                   int extensionBytesNeeded,
                                    int appendedBytes) {
-            this.outcome = outcome;
             this.future = future;
             this.batchIsFull = batchIsFull;
             this.newBatchCreated = newBatchCreated;
-            this.extensionBytesNeeded = extensionBytesNeeded;
             this.appendedBytes = appendedBytes;
         }
 
@@ -1339,7 +1320,7 @@ public class RecordAccumulator {
                                                   boolean newBatchCreated,
                                                   int appendedBytes) {
             Objects.requireNonNull(future, "future must be non-null for an appended result");
-            return new RecordAppendResult(Outcome.APPENDED, future, batchIsFull, newBatchCreated, 0, appendedBytes);
+            return new RecordAppendResult(future, batchIsFull, newBatchCreated, appendedBytes);
         }
 
         /**
@@ -1348,7 +1329,7 @@ public class RecordAccumulator {
          * bytes of chunk capacity and retry. The append was not attempted.
          */
         public static RecordAppendResult needsExtension(int extensionBytesNeeded) {
-            return new RecordAppendResult(Outcome.NEEDS_BUFFER_EXTENSION, null, false, false, extensionBytesNeeded, 0);
+            return new BufferExtensionResult(extensionBytesNeeded);
         }
 
         /**
@@ -1356,17 +1337,55 @@ public class RecordAccumulator {
          * non-null), {@code false} for the {@link #needsBufferExtension()} and {@link #needsNewBatch()} results.
          */
         public boolean appended() {
-            return outcome == Outcome.APPENDED;
+            return future != null;
         }
 
         /** @return {@code true} if the open batch needs more chunk capacity before the record fits. */
         public boolean needsBufferExtension() {
-            return outcome == Outcome.NEEDS_BUFFER_EXTENSION;
+            return false;
         }
 
         /** @return {@code true} if there is no open batch that can take the record, so a new one must be created. */
         public boolean needsNewBatch() {
-            return outcome == Outcome.NEEDS_NEW_BATCH;
+            return future == null;
+        }
+
+        /**
+         * Return the chunk capacity required by a buffer-extension result.
+         *
+         * @return the number of bytes to allocate
+         * @throws IllegalStateException if this is not a buffer-extension result
+         */
+        int extensionBytesNeeded() {
+            throw new IllegalStateException("Only a buffer-extension result has extension bytes");
+        }
+
+        /**
+         * The only result that carries incremental-strategy-specific state. Keeping this state
+         * out of the regular result avoids allocating space for it on every full-strategy append.
+         */
+        private static final class BufferExtensionResult extends RecordAppendResult {
+            private final int extensionBytesNeeded;
+
+            private BufferExtensionResult(int extensionBytesNeeded) {
+                super(null, false, false, 0);
+                this.extensionBytesNeeded = extensionBytesNeeded;
+            }
+
+            @Override
+            public boolean needsBufferExtension() {
+                return true;
+            }
+
+            @Override
+            public boolean needsNewBatch() {
+                return false;
+            }
+
+            @Override
+            int extensionBytesNeeded() {
+                return extensionBytesNeeded;
+            }
         }
     }
 

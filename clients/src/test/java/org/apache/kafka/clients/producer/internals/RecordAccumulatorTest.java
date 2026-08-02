@@ -135,6 +135,16 @@ public class RecordAccumulatorTest {
     }
 
     @Test
+    public void testNeedsBufferExtensionResultExposesRequiredCapacity() {
+        RecordAccumulator.RecordAppendResult result = RecordAccumulator.RecordAppendResult.needsExtension(128);
+
+        assertFalse(result.appended());
+        assertTrue(result.needsBufferExtension());
+        assertFalse(result.needsNewBatch());
+        assertEquals(128, result.extensionBytesNeeded());
+    }
+
+    @Test
     public void testDrainBatches() throws Exception {
         // test case: node1(tp1,tp2) , node2(tp3,tp4)
         // add tp-4
