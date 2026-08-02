@@ -978,6 +978,27 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    public void testCreateTopicsReturnsTopicIdWhenTopicAlreadyExists() throws Exception {
+        Uuid topicId = Uuid.fromString("AAAAAAAAAAAAAAAAAAAAAA");
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(
+                expectCreateTopicsRequestWithTopics("myTopic"),
+                prepareCreateTopicsResponse(0,
+                    new CreatableTopicResult()
+                        .setName("myTopic")
+                        .setErrorCode(Errors.TOPIC_ALREADY_EXISTS.code())
+                        .setTopicId(topicId)));
+
+            CreateTopicsResult result = env.adminClient().createTopics(
+                singleton(new NewTopic("myTopic", 1, (short) 1)));
+
+            assertEquals(topicId, result.topicId("myTopic").get());
+            TestUtils.assertFutureThrows(TopicExistsException.class, result.values().get("myTopic"));
+        }
+    }
+
+    @Test
     public void testCreateTopicsPartialResponse() throws Exception {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());

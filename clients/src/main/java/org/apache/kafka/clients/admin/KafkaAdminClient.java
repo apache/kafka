@@ -1876,30 +1876,37 @@ public class KafkaAdminClient extends AdminClient {
     public CreateTopicsResult createTopics(final Collection<NewTopic> newTopics,
                                            final CreateTopicsOptions options) {
         final Map<String, KafkaFutureImpl<TopicMetadataAndConfig>> topicFutures = new HashMap<>(newTopics.size());
+        final Map<String, KafkaFutureImpl<Uuid>> topicIdFutures = new HashMap<>(newTopics.size());
         final CreatableTopicCollection topics = new CreatableTopicCollection();
         for (NewTopic newTopic : newTopics) {
             if (topicNameIsUnrepresentable(newTopic.name())) {
                 KafkaFutureImpl<TopicMetadataAndConfig> future = new KafkaFutureImpl<>();
-                future.completeExceptionally(new InvalidTopicException("The given topic name '" +
-                    newTopic.name() + "' cannot be represented in a request."));
+                InvalidTopicException exception = new InvalidTopicException("The given topic name '" +
+                    newTopic.name() + "' cannot be represented in a request.");
+                future.completeExceptionally(exception);
                 topicFutures.put(newTopic.name(), future);
+                KafkaFutureImpl<Uuid> topicIdFuture = new KafkaFutureImpl<>();
+                topicIdFuture.completeExceptionally(exception);
+                topicIdFutures.put(newTopic.name(), topicIdFuture);
             } else if (!topicFutures.containsKey(newTopic.name())) {
                 topicFutures.put(newTopic.name(), new KafkaFutureImpl<>());
+                topicIdFutures.put(newTopic.name(), new KafkaFutureImpl<>());
                 topics.add(newTopic.convertToCreatableTopic());
             }
         }
         if (!topics.isEmpty()) {
             final long now = time.milliseconds();
             final long deadline = calcDeadlineMs(now, options.timeoutMs());
-            final Call call = getCreateTopicsCall(options, topicFutures, topics,
+            final Call call = getCreateTopicsCall(options, topicFutures, topicIdFutures, topics,
                 Collections.emptyMap(), now, deadline);
             runnable.call(call, now);
         }
-        return new CreateTopicsResult(new HashMap<>(topicFutures));
+        return new CreateTopicsResult(new HashMap<>(topicFutures), new HashMap<>(topicIdFutures));
     }
 
     private Call getCreateTopicsCall(final CreateTopicsOptions options,
                                      final Map<String, KafkaFutureImpl<TopicMetadataAndConfig>> futures,
+                                     final Map<String, KafkaFutureImpl<Uuid>> topicIdFutures,
                                      final CreatableTopicCollection topics,
                                      final Map<String, ThrottlingQuotaExceededException> quotaExceededExceptions,
                                      final long now,
@@ -1927,6 +1934,7 @@ public class KafkaAdminClient extends AdminClient {
                     if (future == null) {
                         log.warn("Server response mentioned unknown topic {}", result.name());
                     } else {
+                        KafkaFutureImpl<Uuid> topicIdFuture = topicIdFutures.get(result.name());
                         ApiError error = new ApiError(result.errorCode(), result.errorMessage());
                         if (error.isFailure()) {
                             if (error.is(Errors.THROTTLING_QUOTA_EXCEEDED)) {
@@ -1937,9 +1945,15 @@ public class KafkaAdminClient extends AdminClient {
                                     retryTopicQuotaExceededExceptions.put(result.name(), quotaExceededException);
                                 } else {
                                     future.completeExceptionally(quotaExceededException);
+                                    topicIdFuture.completeExceptionally(quotaExceededException);
                                 }
-                            } else {
+                            } else if (error.is(Errors.TOPIC_ALREADY_EXISTS)) {
+                                topicIdFuture.complete(result.topicId());
                                 future.completeExceptionally(error.exception());
+                            } else {
+                                ApiException exception = error.exception();
+                                future.completeExceptionally(exception);
+                                topicIdFuture.completeExceptionally(exception);
                             }
                         } else {
                             TopicMetadataAndConfig topicMetadataAndConfig;
@@ -1958,6 +1972,7 @@ public class KafkaAdminClient extends AdminClient {
                                     result.replicationFactor(),
                                     topicConfig);
                             }
+                            topicIdFuture.complete(result.topicId());
                             future.complete(topicMetadataAndConfig);
                         }
                     }
@@ -1967,9 +1982,11 @@ public class KafkaAdminClient extends AdminClient {
                     // The server should send back a response for every topic. But do a sanity check anyway.
                     completeUnrealizedFutures(futures.entrySet().stream(),
                         topic -> "The controller response did not contain a result for topic " + topic);
+                    completeUnrealizedFutures(topicIdFutures.entrySet().stream(),
+                        topic -> "The controller response did not contain a result for topic " + topic);
                 } else {
                     final long now = time.milliseconds();
-                    final Call call = getCreateTopicsCall(options, futures, retryTopics,
+                    final Call call = getCreateTopicsCall(options, futures, topicIdFutures, retryTopics,
                         retryTopicQuotaExceededExceptions, now, deadline);
                     runnable.call(call, now);
                 }
