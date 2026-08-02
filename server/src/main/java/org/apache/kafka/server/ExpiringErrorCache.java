@@ -17,11 +17,15 @@
 
 package org.apache.kafka.server;
 
+import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Time;
 
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -50,17 +54,46 @@ class ExpiringErrorCache {
         this.time = time;
     }
 
-    void put(Map<String, String> topicErrorMessages, long ttlMs) {
+    void put(Collection<CreateTopicsResponseData.CreatableTopicResult> creatableTopicResults, long ttlMs) {
         lock.lock();
         try {
             var currentTimeMs = time.milliseconds();
             var expirationTimeMs = currentTimeMs + ttlMs;
-            topicErrorMessages.forEach((topicName, errorMessage) -> {
+            creatableTopicResults.stream()
+                .filter(result -> result.errorCode() != Errors.NONE.code())
+                .forEach(result -> {
+                    var errorMessage = Optional.ofNullable(result.errorMessage())
+                        .filter(s -> !s.isEmpty())
+                        .orElse(Errors.forCode(result.errorCode()).message());
+                    var entry = new Entry(result.name(), errorMessage, expirationTimeMs);
+                    byTopic.put(result.name(), entry);
+                    expiryQueue.add(entry);
+                    // Keep oversized batches from growing the cache far beyond its configured capacity.
+                    if (byTopic.size() > maxSize) {
+                        evictExpiredOrOverCapacity(currentTimeMs);
+                    }
+                });
+            evictExpiredOrOverCapacity(currentTimeMs);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    void put(Set<String> topicNames, String errorMessage, long ttlMs) {
+        lock.lock();
+        try {
+            var currentTimeMs = time.milliseconds();
+            var expirationTimeMs = currentTimeMs + ttlMs;
+            topicNames.forEach(topicName -> {
                 var entry = new Entry(topicName, errorMessage, expirationTimeMs);
                 byTopic.put(topicName, entry);
                 expiryQueue.add(entry);
-                evictExpiredOrOverCapacity(currentTimeMs);
+                // Keep oversized batches from growing the cache far beyond its configured capacity.
+                if (byTopic.size() > maxSize) {
+                    evictExpiredOrOverCapacity(currentTimeMs);
+                }
             });
+            evictExpiredOrOverCapacity(currentTimeMs);
         } finally {
             lock.unlock();
         }

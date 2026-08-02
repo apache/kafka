@@ -17,13 +17,18 @@
 
 package org.apache.kafka.server;
 
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.server.util.MockTime;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
@@ -49,14 +54,13 @@ public class ExpiringErrorCacheTest {
 
     // Basic Functionality Tests
 
-    @Test
-    void testPutAndGet() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testPutAndGet(boolean useCreatableTopicResultPut) {
         cache = new ExpiringErrorCache(10, mockTime);
 
-        cache.put(Map.of(
-            "topic1", "error1",
-            "topic2", "error2"
-        ), 1000L);
+        cachePut("topic1", "error1", 1000L, useCreatableTopicResultPut);
+        cachePut("topic2", "error2", 1000L, useCreatableTopicResultPut);
 
         var errors = cache.getErrorsForTopics(Set.of("topic1", "topic2"), mockTime.milliseconds());
         assertEquals(2, errors.size());
@@ -64,11 +68,12 @@ public class ExpiringErrorCacheTest {
         assertEquals("error2", errors.get("topic2"));
     }
 
-    @Test
-    void testGetNonExistentTopic() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testGetNonExistentTopic(boolean useCreatableTopicResultPut) {
         cache = new ExpiringErrorCache(10, mockTime);
 
-        cache.put(Map.of("topic1", "error1"), 1000L);
+        cachePut("topic1", "error1", 1000L, useCreatableTopicResultPut);
 
         var errors = cache.getErrorsForTopics(Set.of("topic1", "topic2"), mockTime.milliseconds());
         assertEquals(1, errors.size());
@@ -76,27 +81,27 @@ public class ExpiringErrorCacheTest {
         assertFalse(errors.containsKey("topic2"));
     }
 
-    @Test
-    void testUpdateExistingEntry() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testUpdateExistingEntry(boolean useCreatableTopicResultPut) {
         cache = new ExpiringErrorCache(10, mockTime);
 
-        cache.put(Map.of("topic1", "error1"), 1000L);
+        cachePut("topic1", "error1", 1000L, useCreatableTopicResultPut);
         assertEquals("error1", cache.getErrorsForTopics(Set.of("topic1"), mockTime.milliseconds()).get("topic1"));
 
         // Update with new error
-        cache.put(Map.of("topic1", "error2"), 2000L);
+        cachePut("topic1", "error2", 2000L, useCreatableTopicResultPut);
         assertEquals("error2", cache.getErrorsForTopics(Set.of("topic1"), mockTime.milliseconds()).get("topic1"));
     }
 
-    @Test
-    void testGetMultipleTopics() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testGetMultipleTopics(boolean useCreatableTopicResultPut) {
         cache = new ExpiringErrorCache(10, mockTime);
 
-        cache.put(Map.of(
-            "topic1", "error1",
-            "topic2", "error2",
-            "topic3", "error3"
-        ), 1000L);
+        cachePut("topic1", "error1", 1000L, useCreatableTopicResultPut);
+        cachePut("topic2", "error2", 1000L, useCreatableTopicResultPut);
+        cachePut("topic3", "error3", 1000L, useCreatableTopicResultPut);
 
         var errors = cache.getErrorsForTopics(Set.of("topic1", "topic3", "topic4"), mockTime.milliseconds());
         assertEquals(2, errors.size());
@@ -108,11 +113,12 @@ public class ExpiringErrorCacheTest {
 
     // Expiration Tests
 
-    @Test
-    void testExpiredEntryNotReturned() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testExpiredEntryNotReturned(boolean useCreatableTopicResultPut) {
         cache = new ExpiringErrorCache(10, mockTime);
 
-        cache.put(Map.of("topic1", "error1"), 1000L);
+        cachePut("topic1", "error1", 1000L, useCreatableTopicResultPut);
 
         // Entry should be available before expiration
         assertEquals(1, cache.getErrorsForTopics(Set.of("topic1"), mockTime.milliseconds()).size());
@@ -124,19 +130,20 @@ public class ExpiringErrorCacheTest {
         assertTrue(cache.getErrorsForTopics(Set.of("topic1"), mockTime.milliseconds()).isEmpty());
     }
 
-    @Test
-    void testExpiredEntriesCleanedOnPut() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testExpiredEntriesCleanedOnPut(boolean useCreatableTopicResultPut) {
         cache = new ExpiringErrorCache(10, mockTime);
 
         // Add entries with different TTLs
-        cache.put(Map.of("topic1", "error1"), 1000L);
-        cache.put(Map.of("topic2", "error2"), 2000L);
+        cachePut("topic1", "error1", 1000L, useCreatableTopicResultPut);
+        cachePut("topic2", "error2", 2000L, useCreatableTopicResultPut);
 
         // Advance time to expire topic1 but not topic2
         mockTime.sleep(1500L);
 
         // Add a new entry - this should trigger cleanup
-        cache.put(Map.of("topic3", "error3"), 1000L);
+        cachePut("topic3", "error3", 1000L, useCreatableTopicResultPut);
 
         // Verify only non-expired entries remain
         var errors = cache.getErrorsForTopics(Set.of("topic1", "topic2", "topic3"), mockTime.milliseconds());
@@ -146,13 +153,14 @@ public class ExpiringErrorCacheTest {
         assertEquals("error3", errors.get("topic3"));
     }
 
-    @Test
-    void testMixedExpiredAndValidEntries() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testMixedExpiredAndValidEntries(boolean useCreatableTopicResultPut) {
         cache = new ExpiringErrorCache(10, mockTime);
 
-        cache.put(Map.of("topic1", "error1"), 500L);
-        cache.put(Map.of("topic2", "error2"), 1000L);
-        cache.put(Map.of("topic3", "error3"), 1500L);
+        cachePut("topic1", "error1", 500L, useCreatableTopicResultPut);
+        cachePut("topic2", "error2", 1000L, useCreatableTopicResultPut);
+        cachePut("topic3", "error3", 1500L, useCreatableTopicResultPut);
 
         // Advance time to expire only topic1
         mockTime.sleep(600L);
@@ -166,13 +174,14 @@ public class ExpiringErrorCacheTest {
 
     // Capacity Enforcement Tests
 
-    @Test
-    void testCapacityEnforcement() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testCapacityEnforcement(boolean useCreatableTopicResultPut) {
         cache = new ExpiringErrorCache(3, mockTime);
 
         // Add 5 entries, exceeding capacity of 3
         IntStream.rangeClosed(1, 5).forEach(i -> {
-            cache.put(Map.of("topic" + i, "error" + i), 1000L);
+            cachePut("topic" + i, "error" + i, 1000L, useCreatableTopicResultPut);
             // Small time advance between entries to ensure different insertion order
             mockTime.sleep(10L);
         });
@@ -191,18 +200,19 @@ public class ExpiringErrorCacheTest {
         assertTrue(errors.containsKey("topic5"));
     }
 
-    @Test
-    void testEvictionOrder() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testEvictionOrder(boolean useCreatableTopicResultPut) {
         cache = new ExpiringErrorCache(3, mockTime);
 
         // Add entries with different TTLs
-        cache.put(Map.of("topic1", "error1"), 3000L); // Expires at 3000
+        cachePut("topic1", "error1", 3000L, useCreatableTopicResultPut); // Expires at 3000
         mockTime.sleep(100L);
-        cache.put(Map.of("topic2", "error2"), 1000L); // Expires at 1100
+        cachePut("topic2", "error2", 1000L, useCreatableTopicResultPut); // Expires at 1100
         mockTime.sleep(100L);
-        cache.put(Map.of("topic3", "error3"), 2000L); // Expires at 2200
+        cachePut("topic3", "error3", 2000L, useCreatableTopicResultPut); // Expires at 2200
         mockTime.sleep(100L);
-        cache.put(Map.of("topic4", "error4"), 500L);  // Expires at 800
+        cachePut("topic4", "error4", 500L, useCreatableTopicResultPut);  // Expires at 800
 
         // With capacity 3, topic4 (earliest expiration) should be evicted
         var errors = cache.getErrorsForTopics(Set.of("topic1", "topic2", "topic3", "topic4"), mockTime.milliseconds());
@@ -213,13 +223,14 @@ public class ExpiringErrorCacheTest {
         assertFalse(errors.containsKey("topic4"));
     }
 
-    @Test
-    void testCapacityWithDifferentTTLs() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testCapacityWithDifferentTTLs(boolean useCreatableTopicResultPut) {
         cache = new ExpiringErrorCache(2, mockTime);
 
-        cache.put(Map.of("topic1", "error1"), 5000L); // Long TTL
-        cache.put(Map.of("topic2", "error2"), 100L); // Short TTL
-        cache.put(Map.of("topic3", "error3"), 3000L); // Medium TTL
+        cachePut("topic1", "error1", 5000L, useCreatableTopicResultPut); // Long TTL
+        cachePut("topic2", "error2", 100L, useCreatableTopicResultPut); // Short TTL
+        cachePut("topic3", "error3", 3000L, useCreatableTopicResultPut); // Medium TTL
 
         // topic2 has earliest expiration, so it should be evicted
         var errors = cache.getErrorsForTopics(Set.of("topic1", "topic2", "topic3"), mockTime.milliseconds());
@@ -231,22 +242,21 @@ public class ExpiringErrorCacheTest {
 
     // Update and Stale Entry Tests
 
-    @Test
-    void testUpdateDoesNotLeaveStaleEntries() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testUpdateDoesNotLeaveStaleEntries(boolean useCreatableTopicResultPut) {
         cache = new ExpiringErrorCache(3, mockTime);
 
         // Fill cache to capacity
-        cache.put(Map.of(
-            "topic1", "error1",
-            "topic2", "error2",
-            "topic3", "error3"
-        ), 1000L);
+        cachePut("topic1", "error1", 1000L, useCreatableTopicResultPut);
+        cachePut("topic2", "error2", 1000L, useCreatableTopicResultPut);
+        cachePut("topic3", "error3", 1000L, useCreatableTopicResultPut);
 
         // Update topic2 with longer TTL
-        cache.put(Map.of("topic2", "error2_updated"), 5000L);
+        cachePut("topic2", "error2_updated", 5000L, useCreatableTopicResultPut);
 
         // Add new entry to trigger eviction
-        cache.put(Map.of("topic4", "error4"), 1000L);
+        cachePut("topic4", "error4", 1000L, useCreatableTopicResultPut);
 
         // Should evict topic1 or topic3 (earliest expiration), not the updated topic2
         var errors = cache.getErrorsForTopics(Set.of("topic1", "topic2", "topic3", "topic4"), mockTime.milliseconds());
@@ -255,14 +265,15 @@ public class ExpiringErrorCacheTest {
         assertEquals("error2_updated", errors.get("topic2"));
     }
 
-    @Test
-    void testStaleEntriesInQueueHandledCorrectly() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testStaleEntriesInQueueHandledCorrectly(boolean useCreatableTopicResultPut) {
         cache = new ExpiringErrorCache(10, mockTime);
 
         // Add and update same topic multiple times
-        cache.put(Map.of("topic1", "error1"), 1000L);
-        cache.put(Map.of("topic1", "error2"), 2000L);
-        cache.put(Map.of("topic1", "error3"), 3000L);
+        cachePut("topic1", "error1", 1000L, useCreatableTopicResultPut);
+        cachePut("topic1", "error2", 2000L, useCreatableTopicResultPut);
+        cachePut("topic1", "error3", 3000L, useCreatableTopicResultPut);
 
         // Only latest value should be returned
         var errors = cache.getErrorsForTopics(Set.of("topic1"), mockTime.milliseconds());
@@ -273,7 +284,7 @@ public class ExpiringErrorCacheTest {
         mockTime.sleep(2500L);
 
         // Force cleanup by adding new entry
-        cache.put(Map.of("topic2", "error_new"), 1000L);
+        cachePut("topic2", "error_new", 1000L, useCreatableTopicResultPut);
 
         // topic1 should still be available with latest value
         var errorsAfterCleanup = cache.getErrorsForTopics(Set.of("topic1"), mockTime.milliseconds());
@@ -291,12 +302,14 @@ public class ExpiringErrorCacheTest {
         assertTrue(errors.isEmpty());
     }
 
-    @Test
-    void testSingleEntryCache() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testSingleEntryCache(boolean useCreatableTopicResultPut) {
         cache = new ExpiringErrorCache(1, mockTime);
 
-        cache.put(Map.of("topic1", "error1"), 1000L);
-        cache.put(Map.of("topic2", "error2"), 1000L);
+        cachePut("topic1", "error1", 1000L, useCreatableTopicResultPut);
+        mockTime.sleep(1L);
+        cachePut("topic2", "error2", 1000L, useCreatableTopicResultPut);
 
         // Only most recent should remain
         var errors = cache.getErrorsForTopics(Set.of("topic1", "topic2"), mockTime.milliseconds());
@@ -305,11 +318,12 @@ public class ExpiringErrorCacheTest {
         assertTrue(errors.containsKey("topic2"));
     }
 
-    @Test
-    void testZeroTTL() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testZeroTTL(boolean useCreatableTopicResultPut) {
         cache = new ExpiringErrorCache(10, mockTime);
 
-        cache.put(Map.of("topic1", "error1"), 0L);
+        cachePut("topic1", "error1", 0L, useCreatableTopicResultPut);
 
         // Entry expires immediately
         assertTrue(cache.getErrorsForTopics(Set.of("topic1"), mockTime.milliseconds()).isEmpty());
@@ -317,8 +331,9 @@ public class ExpiringErrorCacheTest {
 
     // Concurrent Access Tests
 
-    @Test
-    void testConcurrentPutOperations() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testConcurrentPutOperations(boolean useCreatableTopicResultPut) {
         cache = new ExpiringErrorCache(100, mockTime);
         var numThreads = 10;
         var numTopicsPerThread = 20;
@@ -334,7 +349,8 @@ public class ExpiringErrorCacheTest {
                         i -> "topic_" + finalThreadId + "_" + i,
                         i -> "error_" + finalThreadId + "_" + i
                     ));
-                cache.put(topicErrors, 1000L);
+                topicErrors.forEach((topicName, errorMessage) ->
+                    cachePut(topicName, errorMessage, 1000L, useCreatableTopicResultPut));
             });
             futures.add(future);
         });
@@ -351,8 +367,9 @@ public class ExpiringErrorCacheTest {
         assertEquals(100, errors.size()); // Limited by cache capacity
     }
 
-    @Test
-    void testConcurrentPutAndGet() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testConcurrentPutAndGet(boolean useCreatableTopicResultPut) {
         cache = new ExpiringErrorCache(100, mockTime);
         var numOperations = 1000;
         var random = new Random();
@@ -364,7 +381,7 @@ public class ExpiringErrorCacheTest {
                 if (random.nextBoolean()) {
                     // Put operation
                     var topic = topics[random.nextInt(topics.length)];
-                    cache.put(Map.of(topic, "error_" + random.nextInt()), 1000L);
+                    cachePut(topic, "error_" + random.nextInt(), 1000L, useCreatableTopicResultPut);
                 } else {
                     // Get operation
                     var topicsToGet = Set.of(topics[random.nextInt(topics.length)]);
@@ -378,8 +395,9 @@ public class ExpiringErrorCacheTest {
         assertDoesNotThrow(() -> CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join());
     }
 
-    @Test
-    void testConcurrentUpdates() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testConcurrentUpdates(boolean useCreatableTopicResultPut) {
         cache = new ExpiringErrorCache(50, mockTime);
         var numThreads = 10;
         var numUpdatesPerThread = 100;
@@ -391,7 +409,7 @@ public class ExpiringErrorCacheTest {
                 var random = new Random();
                 IntStream.rangeClosed(1, numUpdatesPerThread).forEach(i -> {
                     var topic = sharedTopics[random.nextInt(sharedTopics.length)];
-                    cache.put(Map.of(topic, "error_thread" + threadId + "_update" + i), 1000L);
+                    cachePut(topic, "error_thread" + threadId + "_update" + i, 1000L, useCreatableTopicResultPut);
                 });
             });
             futures.add(future);
@@ -407,4 +425,56 @@ public class ExpiringErrorCacheTest {
             assertTrue(errors.get(topic).startsWith("error_thread"), "Value should be from one of the threads");
         }
     }
+
+    @Test
+    void testBothPutMethodsWriteToSameCache() {
+        cache = new ExpiringErrorCache(10, mockTime);
+
+        cache.put(Set.of("set-topic"), "set error", 1000L);
+        cache.put(List.of(
+            creatableTopicResult("result-topic", Errors.UNKNOWN_SERVER_ERROR, "result error")
+        ), 1000L);
+
+        var errors = cache.getErrorsForTopics(Set.of("set-topic", "result-topic"), mockTime.milliseconds());
+        assertEquals(Map.of(
+            "set-topic", "set error",
+            "result-topic", "result error"
+        ), errors);
+    }
+
+    @Test
+    void testPutCreatableTopicResultsUsesDefaultErrorMessageWhenMissing() {
+        cache = new ExpiringErrorCache(10, mockTime);
+
+        cache.put(List.of(
+            creatableTopicResult("null-message-topic", Errors.INVALID_TOPIC_EXCEPTION, null),
+            creatableTopicResult("empty-message-topic", Errors.TOPIC_ALREADY_EXISTS, "")
+        ), 1000L);
+
+        var errors = cache.getErrorsForTopics(
+            Set.of("null-message-topic", "empty-message-topic"), mockTime.milliseconds());
+        assertEquals(Errors.INVALID_TOPIC_EXCEPTION.message(), errors.get("null-message-topic"));
+        assertEquals(Errors.TOPIC_ALREADY_EXISTS.message(), errors.get("empty-message-topic"));
+    }
+
+    private void cachePut(
+            String topicName,
+            String errorMessage,
+            long ttlMs,
+            boolean useCreatableTopicResultPut
+    ) {
+        if (useCreatableTopicResultPut) {
+            cache.put(List.of(creatableTopicResult(topicName, Errors.UNKNOWN_SERVER_ERROR, errorMessage)), ttlMs);
+        } else {
+            cache.put(Set.of(topicName), errorMessage, ttlMs);
+        }
+    }
+
+    private static CreatableTopicResult creatableTopicResult(String topicName, Errors error, String errorMessage) {
+        return new CreatableTopicResult()
+            .setName(topicName)
+            .setErrorCode(error.code())
+            .setErrorMessage(errorMessage);
+    }
+
 }

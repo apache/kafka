@@ -26,11 +26,9 @@ import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicConfig;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicConfigCollection;
-import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
-import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
@@ -51,7 +49,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager {
@@ -308,32 +305,15 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
             if (throwable != null) {
                 logError(creatableTopics, throwable);
                 var errorMessage = throwable.getMessage() != null ? throwable.getMessage() : throwable.toString();
-                cacheTopicCreationErrors(creatableTopics.keySet(), errorMessage, timeoutMs);
+                topicCreationErrorCache.put(creatableTopics.keySet(), errorMessage, timeoutMs);
             } else if (response != null) {
                 LOGGER.debug("Auto topic creation completed for {} with response {}.", creatableTopics.keySet(), response);
-                cacheTopicCreationErrorsFromResponse(response, timeoutMs);
+                topicCreationErrorCache.put(response.data().topics(), timeoutMs);
             } else {
                 var ex = new IllegalStateException("CreateTopicsResponse future completed with null response and no exception");
                 LOGGER.error("Auto topic creation failed for {} due to unexpected future completion state.", creatableTopics.keySet(), ex);
-                cacheTopicCreationErrors(creatableTopics.keySet(), ex.getMessage(), timeoutMs);
+                topicCreationErrorCache.put(creatableTopics.keySet(), ex.getMessage(), timeoutMs);
             }
         });
-    }
-
-    private void cacheTopicCreationErrors(Set<String> topicNames, String errorMessage, long ttlMs) {
-        topicCreationErrorCache.put(topicNames.stream()
-            .collect(Collectors.toMap(topicName -> topicName, topicName -> errorMessage)), ttlMs);
-    }
-
-    private void cacheTopicCreationErrorsFromResponse(CreateTopicsResponse response, long ttlMs) {
-        topicCreationErrorCache.put(response.data().topics().stream()
-            .filter(topicResult -> topicResult.errorCode() != Errors.NONE.code())
-            .collect(Collectors.toMap(CreateTopicsResponseData.CreatableTopicResult::name, topicResult -> {
-                var errorMessage = Optional.ofNullable(topicResult.errorMessage())
-                    .filter(s -> !s.isEmpty())
-                    .orElse(Errors.forCode(topicResult.errorCode()).message());
-                LOGGER.debug("Cached topic creation error for {}: {}", topicResult.name(), errorMessage);
-                return errorMessage;
-            })), ttlMs);
     }
 }
