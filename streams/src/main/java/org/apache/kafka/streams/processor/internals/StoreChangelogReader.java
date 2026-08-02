@@ -203,6 +203,105 @@ public class StoreChangelogReader implements ChangelogReader {
 
     private final Time time;
     private final Logger log;
+    /** Bound on the backward probe for the newest data record, per partition. */
+    private static final int PROBE_MAX_ATTEMPTS = 10;
+
+    // not 1: under EOS the last offset is nearly always a transaction control record, which is
+    // never delivered to a consumer, so probing there is a guaranteed empty poll. Starting further
+    // back is free, since the probe takes the newest record of the returned batch
+    private static final long PROBE_INITIAL_BACK = 32L;
+
+    /**
+     * Walk backwards from each partition's end offset until a data record materialises, so its
+     * timestamp can drive the retention-based seek.
+     *
+     * @return the number of polls issued
+     */
+    private int runBackwardProbe(final Set<TopicPartition> unresolved,
+                                 final Map<TopicPartition, Long> backByPartition,
+                                 final Map<TopicPartition, Long> probeOffset,
+                                 final Map<TopicPartition, Long> latestTimestamps,
+                                 final Map<TopicPartition, Long> beginningOffsets,
+                                 final Map<TopicPartition, Long> endOffsets) {
+        int attempts = 0;
+        final Set<TopicPartition> probing = new HashSet<>(unresolved);
+        // every probed partition needs a position before the first poll: poll() updates fetch
+        // positions for the whole assignment, not just the resumed partition, and the restore
+        // consumer has auto.offset.reset=none
+        for (final TopicPartition partition : probing) {
+            final long begin = beginningOffsets.getOrDefault(partition, 0L);
+            restoreConsumer.seek(partition,
+                Math.max(begin, endOffsets.get(partition) - backByPartition.get(partition)));
+        }
+        for (final TopicPartition partition : probing) {
+            // one partition at a time: with a shared poll an empty result may only mean another
+            // partition's fetch landed first, which would double this one's step-back on false
+            // evidence and spend the shared attempt budget on its behalf
+            restoreConsumer.pause(restoreConsumer.assignment());
+            restoreConsumer.resume(Collections.singleton(partition));
+            final long begin = beginningOffsets.getOrDefault(partition, 0L);
+
+            for (int attempt = 0; attempt < PROBE_MAX_ATTEMPTS; attempt++) {
+                attempts++;
+                final long back = backByPartition.get(partition);
+                final long target = Math.max(begin, endOffsets.get(partition) - back);
+                restoreConsumer.seek(partition, target);
+
+                final ConsumerRecords<byte[], byte[]> probed = restoreConsumer.poll(pollTime);
+                final List<ConsumerRecord<byte[], byte[]>> records = probed.records(partition);
+                if (!records.isEmpty()) {
+                    // the LAST record in the batch is the newest one seen
+                    final ConsumerRecord<byte[], byte[]> newest = records.get(records.size() - 1);
+                    latestTimestamps.put(partition, newest.timestamp());
+                    probeOffset.put(partition, newest.offset());
+                    unresolved.remove(partition);
+                    break;
+                }
+                if (target <= begin) {
+                    // probed the whole log; nothing more to find
+                    unresolved.remove(partition);
+                    break;
+                }
+                backByPartition.put(partition, back * 2L);
+            }
+        }
+        // Restore the pause state the caller set up before the probe.
+        restoreConsumer.resume(probing);
+        return attempts;
+    }
+
+    /** SOAK INSTRUMENTATION (not for upstream): how far into the retained log a seek landed. */
+    private static String pctThroughLog(final long position, final long begin, final long end) {
+        return end > begin ? String.format("%.1f", 100.0 * (position - begin) / (end - begin)) : "n/a";
+    }
+
+    /** SOAK INSTRUMENTATION (not for upstream): where each restore was seeked to, and its margin. */
+    private void logSeekOutcomes(final Map<TopicPartition, Long> windowedPartitionsRetention,
+                                 final Map<TopicPartition, Long> beginningOffsets,
+                                 final Map<TopicPartition, Long> endOffsets,
+                                 final Set<TopicPartition> seekToBeginningPartitions,
+                                 final Map<TopicPartition, Long> probeOffset,
+                                 final Map<TopicPartition, Long> backByPartition) {
+        for (final Map.Entry<TopicPartition, Long> entry : windowedPartitionsRetention.entrySet()) {
+            final TopicPartition partition = entry.getKey();
+            final long begin = beginningOffsets.getOrDefault(partition, 0L);
+            final long end = endOffsets.get(partition);
+            if (seekToBeginningPartitions.contains(partition)) {
+                log.info("OOORE-SEEK partition={} outcome=FALLBACK_TO_BEGINNING begin={} end={} "
+                        + "marginRecords=0 retentionMs={}", partition, begin, end, entry.getValue());
+                continue;
+            }
+            final long position = restoreConsumer.position(partition);
+            log.info("OOORE-SEEK partition={} outcome=OPTIMISED seekedTo={} begin={} end={} "
+                    + "marginRecords={} behindHead={} pctThroughLog={} probeOffset={} "
+                    + "backUsed={} retentionMs={}",
+                partition, position, begin, end,
+                position - begin, end - position,
+                pctThroughLog(position, begin, end),
+                probeOffset.get(partition), backByPartition.get(partition), entry.getValue());
+        }
+    }
+
     private final Duration pollTime;
     private final long updateOffsetIntervalMs;
 
@@ -1076,21 +1175,51 @@ public class StoreChangelogReader implements ChangelogReader {
 
                 final Map<TopicPartition, Long> endOffsets =
                     restoreConsumer.endOffsets(windowedPartitionsRetention.keySet());
+                final Map<TopicPartition, Long> beginningOffsets =
+                    restoreConsumer.beginningOffsets(windowedPartitionsRetention.keySet());
 
                 for (final TopicPartition partition : windowedPartitionsRetention.keySet()) {
                     final Long endOffset = endOffsets.get(partition);
-                    if (endOffset != null && endOffset > 0) {
-                        restoreConsumer.seek(partition, endOffset - 1);
-                    } else {
+                    if (endOffset == null || endOffset <= 0) {
                         restoreConsumer.seekToBeginning(Collections.singleton(partition));
                         seekToBeginningPartitions.add(partition);
                     }
                 }
                 windowedPartitionsRetention.keySet().removeAll(seekToBeginningPartitions);
 
-                final ConsumerRecords<byte[], byte[]> polledRecords = restoreConsumer.poll(pollTime);
+                // probe backwards from the head for the newest data record: a single probe at
+                // endOffset-1 is not enough, since under EOS that offset is usually a transaction
+                // control record, which is never returned to a consumer at any isolation level,
+                // and the optimisation would then silently degrade to seekToBeginning
+                final Map<TopicPartition, Long> latestTimestamps = new HashMap<>();
+                final Set<TopicPartition> unresolved = new HashSet<>(windowedPartitionsRetention.keySet());
+                // SOAK INSTRUMENTATION (not for upstream): profile the windowed seek path
+                final int probeTargets = unresolved.size();
+                final long probeStartNs = System.nanoTime();
+                final int probeAttempts;
+                // each partition walks its own step-back ladder
+                final Map<TopicPartition, Long> backByPartition = new HashMap<>();
+                final Map<TopicPartition, Long> probeOffset = new HashMap<>();
+                for (final TopicPartition partition : unresolved) {
+                    backByPartition.put(partition, PROBE_INITIAL_BACK);
+                }
+                probeAttempts = runBackwardProbe(unresolved, backByPartition, probeOffset,
+                    latestTimestamps, beginningOffsets, endOffsets);
 
-                seekByRetentionFromPolledRecords(polledRecords, windowedPartitionsRetention, seekToBeginningPartitions);
+                final long probeMs = (System.nanoTime() - probeStartNs) / 1_000_000L;
+                final int fallbacksBefore = seekToBeginningPartitions.size();
+                final long seekStartNs = System.nanoTime();
+                seekByRetentionFromPolledRecords(latestTimestamps, windowedPartitionsRetention, seekToBeginningPartitions);
+                final long seekMs = (System.nanoTime() - seekStartNs) / 1_000_000L;
+                // SOAK INSTRUMENTATION (not for upstream): probeMs is the head-timestamp probe,
+                // seekMs the offsetsForTimes round trip, newFallbacks those still at log-start
+                log.info("OOORE-PROBE targets={} attempts={} resolved={} newFallbacks={} "
+                        + "probeMs={} seekMs={} totalMs={}",
+                    probeTargets, probeAttempts, latestTimestamps.size(),
+                    seekToBeginningPartitions.size() - fallbacksBefore,
+                    probeMs, seekMs, probeMs + seekMs);
+                logSeekOutcomes(windowedPartitionsRetention, beginningOffsets, endOffsets,
+                    seekToBeginningPartitions, probeOffset, backByPartition);
             } catch (final TimeoutException e) {
                 log.debug("Could not seek by timestamp for changelog partitions {}, falling back to seek-to-beginning",
                     windowedPartitionsRetention.keySet(), e);
@@ -1116,16 +1245,16 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
-    private void seekByRetentionFromPolledRecords(final ConsumerRecords<byte[], byte[]> polledRecords,
+    private void seekByRetentionFromPolledRecords(final Map<TopicPartition, Long> latestTimestamps,
                                                    final Map<TopicPartition, Long> windowedPartitionsRetention,
                                                    final Set<TopicPartition> seekToBeginningPartitions) {
         final Map<TopicPartition, Long> seekTimestamps = new HashMap<>();
         for (final Map.Entry<TopicPartition, Long> entry : windowedPartitionsRetention.entrySet()) {
             final TopicPartition partition = entry.getKey();
             final long retentionPeriod = entry.getValue();
-            final List<ConsumerRecord<byte[], byte[]>> records = polledRecords.records(partition);
-            if (!records.isEmpty()) {
-                final long latestTimestamp = records.get(0).timestamp();
+            final Long resolved = latestTimestamps.get(partition);
+            if (resolved != null) {
+                final long latestTimestamp = resolved;
                 final long seekTimestamp = latestTimestamp - retentionPeriod;
                 if (seekTimestamp > 0) {
                     seekTimestamps.put(partition, seekTimestamp);

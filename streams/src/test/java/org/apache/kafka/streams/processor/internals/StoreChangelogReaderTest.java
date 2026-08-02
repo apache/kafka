@@ -1462,6 +1462,123 @@ public class StoreChangelogReaderTest {
         }
     }
 
+    /**
+     * A shared probe poll returns as soon as any fetch lands, so partitions resolve a few at a
+     * time; with the attempt budget shared too, more partitions than attempts means some cannot be
+     * served at all and fall back to a log-start seek with zero margin. Here the MockConsumer
+     * delivers one partition per poll, and every partition's retention is far shorter than its log,
+     * so a log-start seek for any of them is the defect.
+     */
+    @Test
+    public void shouldNotStarveWindowedPartitionsIntoALogStartSeekWhenTheyOutnumberProbeAttempts() {
+        final long shortRetentionMs = Duration.ofSeconds(3).toMillis();
+        final long beginOffset = 900_000L;
+        final long logEndOffset = 1_000_000L;
+        final long seekTarget = 999_000L;
+        final int numPartitions = 12;      // > PROBE_MAX_ATTEMPTS (10)
+
+        final TopicPartition[] tps = new TopicPartition[numPartitions];
+        final Map<TopicPartition, Long> begins = new HashMap<>();
+        final Map<TopicPartition, Long> ends = new HashMap<>();
+        for (int i = 0; i < numPartitions; i++) {
+            tps[i] = new TopicPartition(tp.topic(), i);
+            begins.put(tps[i], beginOffset);
+            ends.put(tps[i], logEndOffset);
+        }
+
+        final MockConsumer<byte[], byte[]> probeConsumer =
+            new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+                @Override
+                public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(
+                        final Map<TopicPartition, Long> timestampsToSearch) {
+                    final Map<TopicPartition, OffsetAndTimestamp> result = new HashMap<>();
+                    timestampsToSearch.forEach((k, v) ->
+                        result.put(k, new OffsetAndTimestamp(seekTarget, v)));
+                    return result;
+                }
+            };
+        probeConsumer.updateBeginningOffsets(begins);
+        probeConsumer.updateEndOffsets(ends);
+        adminClient.updateEndOffsets(ends);
+
+        // One partition's record becomes available per poll: the shared poll, made deterministic.
+        // Records can only be added once the partition is assigned, and early polls happen before
+        // that, so cycle through the partitions across plenty of scheduled tasks.
+        for (int round = 0; round < numPartitions * 4; round++) {
+            final TopicPartition partition = tps[round % numPartitions];
+            probeConsumer.schedulePollTask(() -> {
+                if (probeConsumer.assignment().contains(partition)) {
+                    probeConsumer.addRecord(new ConsumerRecord<>(
+                        partition.topic(), partition.partition(), logEndOffset - 1,
+                        10_000_000L, TimestampType.CREATE_TIME,
+                        0, 0, new byte[0], new byte[0], new RecordHeaders(), Optional.empty()));
+                }
+            });
+        }
+
+        final StoreChangelogReader probeReader = new StoreChangelogReader(
+            time, config, logContext, adminClient, probeConsumer, callback, standbyListener);
+
+        for (int i = 0; i < numPartitions; i++) {
+            final StateStoreMetadata meta = mock(StateStoreMetadata.class);
+            final ProcessorStateManager manager = mock(ProcessorStateManager.class);
+            final StateStore store = mock(StateStore.class);
+            when(meta.changelogPartition()).thenReturn(tps[i]);
+            when(meta.store()).thenReturn(store);
+            when(meta.offset()).thenReturn(null);          // no checkpoint
+            when(meta.retentionPeriod()).thenReturn(shortRetentionMs);
+            when(store.name()).thenReturn(storeName);
+            when(manager.storeMetadata(tps[i])).thenReturn(meta);
+            when(manager.taskType()).thenReturn(ACTIVE);
+            when(manager.taskId()).thenReturn(new TaskId(0, i));
+            probeReader.register(tps[i], manager);
+        }
+
+        final Map<TaskId, Task> probeTasks = new HashMap<>();
+        for (int i = 0; i < numPartitions; i++) {
+            probeTasks.put(new TaskId(0, i), mock(Task.class));
+        }
+        try {
+            probeReader.restore(probeTasks);
+        } catch (final StreamsException e) {
+            // The seek decision under test happens in seekNewPartitions, before any batch is
+            // applied. Once records start being restored, the mocked ProcessorStateManager never
+            // advances storeMetadata.offset(), so restoreChangelog NPEs on a null currentOffset.
+            // That is a mock artefact downstream of what we are asserting; the consumer positions
+            // are already final by then.
+        }
+
+        final String starved = reportProbeSeeks(probeConsumer, tps, beginOffset);
+        assertEquals("", starved,
+            "every partition has a 3s retention against a 100k-record log, so none should be "
+                + "seeked to log-start (" + beginOffset + "); these were never served inside the "
+                + "shared PROBE_MAX_ATTEMPTS budget and fell back with zero margin -- partitions:"
+                + starved);
+    }
+
+    /** Reports where each probed partition was seeked to; returns the partitions left at log-start. */
+    private String reportProbeSeeks(final MockConsumer<byte[], byte[]> consumer,
+                                    final TopicPartition[] tps,
+                                    final long beginOffset) {
+        final StringBuilder starved = new StringBuilder();
+        final StringBuilder unassigned = new StringBuilder();
+        final StringBuilder positions = new StringBuilder();
+        for (final TopicPartition partition : tps) {
+            if (!consumer.assignment().contains(partition)) {
+                unassigned.append(' ').append(partition.partition());
+                continue;
+            }
+            final long position = consumer.position(partition);
+            positions.append(' ').append(partition.partition()).append('=').append(position);
+            if (position == beginOffset) {
+                starved.append(' ').append(partition.partition());
+            }
+        }
+        System.out.printf("%n=== probe seeks ===%n  positions:%s%n  unassigned:%s%n  starved:%s%n",
+            positions, unassigned, starved);
+        return starved.toString();
+    }
+
     @Test
     public void shouldSeekByTimestampForWindowedStoreWithoutCheckpoint() {
         final long retentionMs = Duration.ofHours(2).toMillis();
