@@ -2564,7 +2564,6 @@ public class QuorumStateTest {
             IllegalStateException.class,
             () -> state.transitionToFollower(epoch, localId, voters.listeners(localId))
         );
-        // KAFKA-18379 will fix this
         state.transitionToFollower(epoch, node1, voters.listeners(node1));
         assertEquals(
             ElectionState.withElectedLeader(
