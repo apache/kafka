@@ -39,7 +39,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -225,7 +224,7 @@ public class BrokerJwtValidator implements JwtValidator {
         if (scopeRaw instanceof String) {
             String scopeRawString = (String) scopeRaw;
             scopeRawCollection = scopeRawString.trim().isEmpty()
-                ? Collections.singletonList(scopeRawString)
+                ? List.of()
                 : OAuthBearerScopeClaimUtils.parseSpaceDelimitedScopeClaim(scopeRawString);
         } else if (scopeRaw instanceof Collection)
             scopeRawCollection = (Collection<String>) scopeRaw;

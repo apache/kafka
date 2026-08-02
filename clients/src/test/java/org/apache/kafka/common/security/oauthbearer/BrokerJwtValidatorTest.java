@@ -314,11 +314,10 @@ public class BrokerJwtValidatorTest extends JwtValidatorTest {
     }
 
     @Test
-    public void testBlankSpaceDelimitedStringScopesRejected() {
-        JwtValidatorException exception = assertThrows(JwtValidatorException.class,
-            () -> validateTokenWithScope("   "));
+    public void testBlankSpaceDelimitedStringScopesProduceEmptySet() throws Exception {
+        OAuthBearerToken token = validateTokenWithScope("   ");
 
-        assertErrorMessageContains(exception.getMessage(), "scope value must not contain only whitespace");
+        assertEquals(Set.of(), token.scope());
     }
 
     @Test
