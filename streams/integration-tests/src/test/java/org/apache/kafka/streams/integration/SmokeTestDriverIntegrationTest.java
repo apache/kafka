@@ -38,6 +38,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
@@ -55,7 +56,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class SmokeTestDriverIntegrationTest {
     private EmbeddedKafkaCluster cluster;
     public TestInfo testInfo;
-    private ArrayList<SmokeTestClient> clients = new ArrayList<>();
+    private final List<SmokeTestClient> clients = new ArrayList<>();
 
     protected Properties brokerConfig() {
         return new Properties();
@@ -81,13 +82,18 @@ public class SmokeTestDriverIntegrationTest {
     @AfterEach
     public void shutDown(final TestInfo testInfo) {
         // Clean up clients in case the test failed or timed out
+        closeClients(clients);
+        cluster.stop();
+        cluster = null;
+    }
+
+    static void closeClients(final List<SmokeTestClient> clients) {
         for (final SmokeTestClient client : clients) {
-            if (!client.closed() && !client.error()) {
+            if (!client.closed()) {
                 client.close();
             }
         }
-        cluster.stop();
-        cluster = null;
+        clients.clear();
     }
 
     private static class Driver extends Thread {
