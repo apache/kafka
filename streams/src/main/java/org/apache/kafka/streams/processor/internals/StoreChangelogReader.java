@@ -247,8 +247,14 @@ public class StoreChangelogReader implements ChangelogReader {
                 final long target = Math.max(begin, endOffsets.get(partition) - back);
                 restoreConsumer.seek(partition, target);
 
-                final ConsumerRecords<byte[], byte[]> probed = restoreConsumer.poll(pollTime);
-                final List<ConsumerRecord<byte[], byte[]>> records = probed.records(partition);
+                List<ConsumerRecord<byte[], byte[]>> records =
+                    restoreConsumer.poll(pollTime).records(partition);
+                if (records.isEmpty()) {
+                    // poll again at the SAME position before stepping back: an empty result may
+                    // only mean the fetch has not landed yet, and re-seeking cancels it
+                    attempts++;
+                    records = restoreConsumer.poll(pollTime).records(partition);
+                }
                 if (!records.isEmpty()) {
                     // the LAST record in the batch is the newest one seen
                     final ConsumerRecord<byte[], byte[]> newest = records.get(records.size() - 1);
