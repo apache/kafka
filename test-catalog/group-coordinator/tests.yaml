@@ -1615,6 +1615,10 @@ org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImplTest:
 - testMemberIds
 - testMemberMetadata
 - testMemberNotFound
+- testMembersAndConfigsAreUnmodifiable
+org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndStateImplTest:
+- testCollectionsAreDeeplyUnmodifiable
+- testTaskOffsetsAreDeeplyUnmodifiable
 org.apache.kafka.coordinator.group.streams.assignor.MockAssignorTest:
 - testBasicScenario
 - testDoubleAssignment
