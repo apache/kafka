@@ -92,6 +92,7 @@ import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -2000,6 +2001,48 @@ public class ConsumerMembershipManagerTest {
         testErrorsOnPartitionsRevoked(new WakeupException());
         testErrorsOnPartitionsRevoked(new InterruptException("Intentional onPartitionsRevoked() error"));
         testErrorsOnPartitionsRevoked(new IllegalArgumentException("Intentional onPartitionsRevoked() error"));
+    }
+
+    @Test
+    public void testReconciliationRetriesAfterSynchronousFailure() {
+        ConsumerMembershipManager membershipManager = createMemberInStableState();
+        Uuid topicId = Uuid.randomUuid();
+        mockOwnedPartition(membershipManager, topicId, "topic1");
+        receiveEmptyAssignment(membershipManager);
+
+        doThrow(new IllegalStateException("Intentional reconciliation failure"))
+            .doNothing()
+            .when(membershipManager)
+            .markPendingRevocationToPauseFetching(anySet());
+
+        assertDoesNotThrow(() -> membershipManager.maybeReconcile(true));
+        assertFalse(membershipManager.reconciliationInProgress());
+
+        membershipManager.maybeReconcile(true);
+        processAssignmentEventNoCallback(membershipManager);
+
+        assertFalse(membershipManager.reconciliationInProgress());
+    }
+
+    @Test
+    public void testReconciliationRetriesAfterSynchronousCallbackSetupFailure() {
+        ConsumerMembershipManager membershipManager = createMemberInStableState();
+        Uuid topicId = Uuid.randomUuid();
+        mockOwnedPartition(membershipManager, topicId, "topic1");
+        receiveEmptyAssignment(membershipManager);
+
+        doThrow(new IllegalStateException("Intentional callback setup failure"))
+            .doNothing()
+            .when(membershipManager)
+            .signalPartitionsBeingRevoked(anySet());
+
+        assertDoesNotThrow(() -> membershipManager.maybeReconcile(true));
+        assertFalse(membershipManager.reconciliationInProgress());
+
+        membershipManager.maybeReconcile(true);
+        processAssignmentEventNoCallback(membershipManager);
+
+        assertFalse(membershipManager.reconciliationInProgress());
     }
 
     private void testErrorsOnPartitionsRevoked(RuntimeException error) {
