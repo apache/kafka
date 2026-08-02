@@ -19,6 +19,7 @@ import unittest
 import subprocess
 from HTMLTestRunner import HTMLTestRunner
 import test.constants as constants
+from test.common_scripts_test import CommonScriptsTest
 import os
 
 class DockerSanityTest(unittest.TestCase):
@@ -226,9 +227,9 @@ def run_tests(image, mode, fixtures_dir):
     DockerSanityTest.FIXTURES_DIR = fixtures_dir
     DockerSanityTest.MODE = mode
 
-    test_classes_to_run = []
+    test_classes_to_run = [CommonScriptsTest]
     if mode == "jvm" or mode == "native":
-        test_classes_to_run = [DockerSanityTestCombinedMode, DockerSanityTestIsolatedMode]
+        test_classes_to_run.extend([DockerSanityTestCombinedMode, DockerSanityTestIsolatedMode])
     
     loader = unittest.TestLoader()
     suites_list = []
