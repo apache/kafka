@@ -49,7 +49,6 @@ import org.slf4j.LoggerFactory;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -67,7 +66,6 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ClientMetricsManagerTest {
@@ -1256,14 +1254,8 @@ public class ClientMetricsManagerTest {
         // Cache expiry should occur after 100 * 3 = 300 ms, wait for the eviction to happen.
         // Force clocks to advance by 300 ms.
         clientMetricsManager.expirationTimer().advanceClock(300);
-        assertTimeoutPreemptively(Duration.ofMillis(300), () -> {
-            // Validate that cache eviction happens and client instance is removed from cache.
-            while (clientMetricsManager.expirationTimer().size() != 0 ||
-                clientMetricsManager.clientInstance(response.data().clientInstanceId()) != null) {
-                // Wait for cache eviction to happen.
-                Thread.sleep(50);
-            }
-        });
+        // The reaper executes expired tasks asynchronously, so wait for both the timer and cache to drain.
+        waitForCacheEviction(response.data().clientInstanceId());
         // Metrics for instance should be removed. Should have instance count metric, 2 unknown
         // subscription count metrics and kafka metrics count registered i.e. 4 metrics.
         assertEquals(4, kafkaMetrics.metrics().size());
@@ -1301,21 +1293,23 @@ public class ClientMetricsManagerTest {
         // Cache expiry should occur after 100 * 3 = 300 ms, wait for the eviction to happen.
         // Force clocks to advance by 300 ms.
         clientMetricsManager.expirationTimer().advanceClock(300);
-        assertTimeoutPreemptively(Duration.ofMillis(300), () -> {
-            // Validate that cache eviction happens and client instance is removed from cache.
-            while (clientMetricsManager.expirationTimer().size() != 0 ||
-                clientMetricsManager.clientInstance(response1.data().clientInstanceId()) != null ||
-                clientMetricsManager.clientInstance(response2.data().clientInstanceId()) != null) {
-                // Wait for cache eviction to happen.
-                Thread.sleep(50);
-            }
-        });
+        // The reaper executes expired tasks asynchronously, so wait for both the timer and cache to drain.
+        waitForCacheEviction(response1.data().clientInstanceId(), response2.data().clientInstanceId());
         // Metrics for both instances should be removed. Should have instance count metric, 2 unknown
         // subscription count metrics and kafka metrics count registered i.e. 4 metrics.
         assertEquals(4, kafkaMetrics.metrics().size());
         assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
         // Validate client connection id map should be empty.
         assertTrue(clientMetricsManager.clientConnectionIdMap().isEmpty());
+    }
+
+    private void waitForCacheEviction(Uuid... clientInstanceIds) throws InterruptedException {
+        TestUtils.waitForCondition(
+            () -> clientMetricsManager.expirationTimer().size() == 0 &&
+                Arrays.stream(clientInstanceIds).noneMatch(clientInstanceId ->
+                    clientMetricsManager.clientInstance(clientInstanceId) != null),
+            "Client metrics instances were not evicted from the cache"
+        );
     }
 
     @Test
