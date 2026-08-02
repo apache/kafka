@@ -60,7 +60,7 @@ The test-utils package provides a `TopologyTestDriver` that can be used pipe dat
     Topology topology = builder.build();
     
     // create test driver
-    TopologyTestDriver testDriver = new TopologyTestDriver(topology);
+    TopologyTestDriver testDriver = new TopologyTestDriverBuilder(topology).build();
 
 With the test driver you can create `TestInputTopic` giving topic name and the corresponding serializers. `TestInputTopic` provides various methods to pipe new message values, keys and values, or list of KeyValue objects. 
     
@@ -119,7 +119,7 @@ The following example demonstrates how to use the test driver and helper classes
         Properties props = new Properties();
         props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass().getName());
-        testDriver = new TopologyTestDriver(topology, props);
+        testDriver = new TopologyTestDriverBuilder(topology).withConfig(props).build();
     
         // setup test topics
         inputTopic = testDriver.createInputTopic("input-topic", stringSerde.serializer(), longSerde.serializer());

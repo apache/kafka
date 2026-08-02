@@ -19,7 +19,8 @@ package kafka.server
 
 import kafka.network.SocketServer
 import kafka.raft.KafkaRaftManager
-import kafka.server.QuotaFactory.QuotaManagers
+import org.apache.kafka.server.quota.QuotaFactory
+import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
 import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicConfigPublisher}
 
 import scala.collection.immutable

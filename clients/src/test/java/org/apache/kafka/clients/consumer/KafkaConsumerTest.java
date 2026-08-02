@@ -44,6 +44,7 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
@@ -606,8 +607,10 @@ public class KafkaConsumerTest {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testConstructorClose");
-        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "invalid-23-8409-adsfsdj");
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
+        // Use an invalid interceptor class to trigger constructor failure
+        props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, "invalid.interceptor.class");
 
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
         final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
@@ -4353,6 +4356,50 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         assertNotNull(cause);
         assertInstanceOf(LoginException.class, cause);
         assertEquals("No LoginModule found for org.example.InvalidLoginModule", cause.getMessage());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class)
+    public void testConsumerBootstrapResolutionExceptionPropagatedToPoll(GroupProtocol protocol) throws InterruptedException {
+        // Use an invalid hostname that will fail DNS resolution (using RFC 6761 reserved .invalid TLD)
+        String invalidHost = "unresolvable.invalid:9092";
+
+        Map<String, Object> configs = Map.of(
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, invalidHost,
+            // Set a short bootstrap timeout so the test doesn't take too long
+            CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "3000",
+            ConsumerConfig.GROUP_PROTOCOL_CONFIG, protocol.name(),
+            ConsumerConfig.GROUP_ID_CONFIG, "test-group"
+        );
+
+        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(configs)) {
+            // Subscribe to a topic to trigger metadata fetch
+            consumer.subscribe(Set.of("test-topic"));
+
+            // Poll continuously until we get the BootstrapResolutionException
+            // The exception should be thrown after bootstrap.resolve.timeout.ms expires
+            BootstrapResolutionException exception =
+                assertThrows(BootstrapResolutionException.class, () -> {
+                    long startTime = System.currentTimeMillis();
+                    long maxWaitTime = 15000; // 15 seconds max to prevent test hanging
+
+                    while (System.currentTimeMillis() - startTime < maxWaitTime) {
+                        consumer.poll(Duration.ofMillis(100));
+                    }
+                    fail("Expected BootstrapResolutionException to be thrown within " + maxWaitTime + "ms");
+                });
+
+            // Verify the exception message contains information about DNS resolution failure
+            assertTrue(exception.getMessage().contains("Failed to resolve bootstrap servers") ||
+                       exception.getMessage().contains("DNS resolution"),
+                       "Exception message should mention DNS resolution failure: " + exception.getMessage());
+
+            // After the first failure, any further API call must also throw. This guards against
+            // accidentally clearing the bootstrap error from the metadata layer.
+            assertThrows(BootstrapResolutionException.class, () -> consumer.poll(Duration.ofMillis(100)));
+        }
     }
 
     private MetricName expectedMetricName(String clientId, String config, Class<?> clazz) {

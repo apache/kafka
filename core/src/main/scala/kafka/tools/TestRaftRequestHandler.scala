@@ -23,7 +23,7 @@ import kafka.utils.Logging
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, EndQuorumEpochResponseData, FetchResponseData, FetchSnapshotResponseData, VoteResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage}
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BeginQuorumEpochResponse, EndQuorumEpochResponse, FetchResponse, FetchSnapshotResponse, VoteResponse}
+import org.apache.kafka.common.requests.{AbstractResponse, BeginQuorumEpochResponse, EndQuorumEpochResponse, FetchResponse, FetchSnapshotResponse, VoteResponse}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.network.Request
 import org.apache.kafka.raft.RaftManager
@@ -57,7 +57,7 @@ class TestRaftRequestHandler(
       case e: Throwable =>
         error(s"Unexpected error handling request ${request.requestDesc(true)} " +
           s"with context ${request.context}", e)
-        val errorResponse = request.body(classOf[AbstractRequest]).getErrorResponse(e)
+        val errorResponse = request.body.getErrorResponse(e)
         requestChannel.sendResponse(request, errorResponse)
     } finally {
       // The local completion time may be set while processing the request. Only record it if it's unset.
@@ -94,7 +94,7 @@ class TestRaftRequestHandler(
     request: Request,
     buildResponse: ApiMessage => AbstractResponse
   ): Unit = {
-    val requestBody = request.body(classOf[AbstractRequest])
+    val requestBody = request.body
 
     val future = raftManager.handleRequest(
       request.context,

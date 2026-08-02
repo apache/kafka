@@ -955,16 +955,6 @@ public class SubscriptionState {
         return result;
     }
 
-    public synchronized boolean hasPartitionsNeedingValidation(long nowMs) {
-        for (TopicPartitionState tps  : assignment.partitionStateValues()) {
-            if (tps.awaitingValidation() && !tps.awaitingRetryBackoff(nowMs) && tps.position != null) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     public synchronized boolean isAssigned(TopicPartition tp) {
         return assignment.contains(tp);
     }

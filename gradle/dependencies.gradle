@@ -53,9 +53,8 @@ versions += [
   apacheda: "1.0.2",
   apacheds: "2.0.0-M24",
   argparse4j: "0.7.0",
-  bcpkix: "1.84",
+  bcpkix: "1.85",
   caffeine: "3.2.0",
-  bndlib: "7.1.0",
   checkstyle: project.hasProperty('checkstyleVersion') ? checkstyleVersion : "12.3.1",
   commonsValidator: "1.10.1",
   commonsNet: "3.13.0",
@@ -69,10 +68,10 @@ versions += [
   javassist: "3.30.2-GA",
   // When upgrading Jetty, verify that it does not use the SLF4J 2.x fluent API
   // (e.g. Logger.atDebug()) in production code, as Kafka uses SLF4J 1.7.x.
-  jetty: "12.0.34",
+  jetty: "12.0.37",
   jersey: "3.1.10",
-  jgit: "7.6.0.202603022253-r",
-  jline: "3.30.4",
+  jgit: "7.7.1.202607240634-r",
+  jline: "3.30.16",
   jmh: "1.37",
   hamcrest: "3.0",
   scalaLogging: "3.9.6",
@@ -83,7 +82,7 @@ versions += [
   jfreechart: "1.5.6",
   jopt: "5.0.4",
   jose4j: "0.9.6",
-  junit: "5.14.3",
+  junit: "5.14.4",
   kafka_0110: "0.11.0.3",
   kafka_10: "1.0.2",
   kafka_11: "1.1.1",
@@ -114,8 +113,8 @@ versions += [
   // When updating lz4 make sure the compression levels in org.apache.kafka.common.record.internal.CompressionType are still valid
   // https://github.com/apache/kafka/blob/trunk/clients/src/main/java/org/apache/kafka/common/record/internal/CompressionType.java#L73-L74
   // https://github.com/yawkat/lz4-java/blob/main/src/java/net/jpountz/lz4/LZ4Constants.java#L23-L24
-  lz4: "1.10.2",
-  mavenArtifact: "3.9.15",
+  lz4: "1.11.1",
+  mavenArtifact: "3.9.16",
   metrics: "2.2.0",
   mockito: "5.23.0",
   opentelemetryProto: "1.3.2-alpha",
@@ -138,7 +137,7 @@ versions += [
   // When updating the zstd version, please do as well in docker/native/native-image-configs/resource-config.json
   // Also make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid
   zstd: "1.5.6-10",
-  junitPlatform: "1.14.3",
+  junitPlatform: "1.14.4",
   hdrHistogram: "2.2.2",
   hash4j: "0.22.0"
 ]
@@ -156,7 +155,6 @@ libs += [
   apachedsJdbmPartition: "org.apache.directory.server:apacheds-jdbm-partition:$versions.apacheds",
   argparse4j: "net.sourceforge.argparse4j:argparse4j:$versions.argparse4j",
   bcpkix: "org.bouncycastle:bcpkix-jdk18on:$versions.bcpkix",
-  bndlib:"biz.aQute.bnd:biz.aQute.bndlib:$versions.bndlib",
   caffeine: "com.github.ben-manes.caffeine:caffeine:$versions.caffeine",
   classgraph: "io.github.classgraph:classgraph:$versions.classgraph",
   commonsNet: "commons-net:commons-net:$versions.commonsNet",
@@ -185,7 +183,7 @@ libs += [
   jgitSshApache: "org.eclipse.jgit:org.eclipse.jgit.ssh.apache:$versions.jgit",
   // GPG support for JGit based on BouncyCastle (commit signing)
   jgitGpgBc: "org.eclipse.jgit:org.eclipse.jgit.gpg.bc:$versions.jgit",
-  jline: "org.jline:jline:$versions.jline",
+  jline: "org.jline:jline-reader:$versions.jline",
   jmhCore: "org.openjdk.jmh:jmh-core:$versions.jmh",
   jmhCoreBenchmarks: "org.openjdk.jmh:jmh-core-benchmarks:$versions.jmh",
   jmhGeneratorAnnProcess: "org.openjdk.jmh:jmh-generator-annprocess:$versions.jmh",
@@ -194,7 +192,7 @@ libs += [
   junitJupiter: "org.junit.jupiter:junit-jupiter:$versions.junit",
   junitJupiterApi: "org.junit.jupiter:junit-jupiter-api:$versions.junit",
   junitPlatformSuiteEngine: "org.junit.platform:junit-platform-suite-engine:$versions.junitPlatform",
-  junitPlatformLanucher: "org.junit.platform:junit-platform-launcher:$versions.junitPlatform",
+  junitPlatformLauncher: "org.junit.platform:junit-platform-launcher:$versions.junitPlatform",
   hamcrest: "org.hamcrest:hamcrest:$versions.hamcrest",
   kafkaStreams_0110: "org.apache.kafka:kafka-streams:$versions.kafka_0110",
   kafkaStreams_10: "org.apache.kafka:kafka-streams:$versions.kafka_10",

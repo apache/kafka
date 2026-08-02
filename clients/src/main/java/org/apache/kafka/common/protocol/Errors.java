@@ -411,7 +411,7 @@ public enum Errors {
     INVALID_RECORD_STATE(121, "The record state is invalid. The acknowledgement of delivery could not be completed.", InvalidRecordStateException::new),
     SHARE_SESSION_NOT_FOUND(122, "The share session was not found.", ShareSessionNotFoundException::new),
     INVALID_SHARE_SESSION_EPOCH(123, "The share session epoch is invalid.", InvalidShareSessionEpochException::new),
-    FENCED_STATE_EPOCH(124, "The share coordinator rejected the request because the share-group state epoch did not match.", FencedStateEpochException::new),
+    FENCED_STATE_EPOCH(124, "The coordinator rejected the request because the state epoch did not match.", FencedStateEpochException::new),
     INVALID_VOTER_KEY(125, "The voter key doesn't match the receiving replica's key.", InvalidVoterKeyException::new),
     DUPLICATE_VOTER(126, "The voter is already part of the set of voters.", DuplicateVoterException::new),
     VOTER_NOT_FOUND(127, "The voter is not part of the set of voters.", VoterNotFoundException::new),
