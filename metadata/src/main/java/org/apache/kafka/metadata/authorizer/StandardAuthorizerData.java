@@ -343,7 +343,13 @@ public class StandardAuthorizerData {
             AclOperation.UNKNOWN,
             AclPermissionType.UNKNOWN);
         AclCache aclCacheSnapshot = aclCache;
-        checkSection(aclCacheSnapshot, action, exemplar, matchingPrincipals, host, matchingRuleBuilder);
+        if (hasResourceAcls(aclCacheSnapshot.aclsByResource(), action, exemplar)) {
+            matchingRuleBuilder.hasResourceAcls = true;
+        }
+        for (KafkaPrincipal principal : matchingPrincipals) {
+            checkSection(aclCacheSnapshot.aclsByPrincipal(principal.toString()),
+                action, exemplar, matchingPrincipals, host, matchingRuleBuilder);
+        }
         if (matchingRuleBuilder.foundDeny()) {
             return matchingRuleBuilder.build();
         }
@@ -359,7 +365,13 @@ public class StandardAuthorizerData {
             "",
             AclOperation.UNKNOWN,
             AclPermissionType.UNKNOWN);
-        checkSection(aclCacheSnapshot, action, exemplar, matchingPrincipals, host, matchingRuleBuilder);
+        if (hasResourceAcls(aclCacheSnapshot.aclsByResource(), action, exemplar)) {
+            matchingRuleBuilder.hasResourceAcls = true;
+        }
+        for (KafkaPrincipal principal : matchingPrincipals) {
+            checkSection(aclCacheSnapshot.aclsByPrincipal(principal.toString()),
+                action, exemplar, matchingPrincipals, host, matchingRuleBuilder);
+        }
         return matchingRuleBuilder.build();
     }
 
@@ -377,15 +389,50 @@ public class StandardAuthorizerData {
         return i;
     }
 
+    private boolean hasResourceAcls(
+            NavigableSet<StandardAcl> aclsByResource, Action action,
+            StandardAcl exemplar
+    ) {
+        String resourceName = action.resourcePattern().name();
+        NavigableSet<StandardAcl> tailSet = aclsByResource.tailSet(exemplar, true);
+        Iterator<StandardAcl> iterator = tailSet.iterator();
+        while (iterator.hasNext()) {
+            StandardAcl acl = iterator.next();
+            if (!acl.resourceType().equals(action.resourcePattern().resourceType())) {
+                return false;
+            }
+            int matchesUpTo = matchesUpTo(resourceName, acl.resourceName());
+            if (matchesUpTo == acl.resourceName().length()) {
+                if (acl.patternType() == LITERAL && matchesUpTo != resourceName.length()) {
+                    continue;
+                }
+                return true;
+            } else if (!(acl.resourceName().equals(WILDCARD) && acl.patternType() == LITERAL)) {
+                exemplar = new StandardAcl(exemplar.resourceType(),
+                    exemplar.resourceName().substring(0, matchesUpTo),
+                    exemplar.patternType(),
+                    exemplar.principal(),
+                    exemplar.host(),
+                    exemplar.operation(),
+                    exemplar.permissionType());
+                tailSet = aclsByResource.tailSet(exemplar, true);
+                iterator = tailSet.iterator();
+            } else {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void checkSection(
-            AclCache aclCacheSnapshot, Action action,
+            NavigableSet<StandardAcl> aclsByPrincipal, Action action,
             StandardAcl exemplar,
             Set<KafkaPrincipal> matchingPrincipals,
             String host,
             MatchingRuleBuilder matchingRuleBuilder
     ) {
         String resourceName = action.resourcePattern().name();
-        NavigableSet<StandardAcl> tailSet = aclCacheSnapshot.aclsByResource().tailSet(exemplar, true);
+        NavigableSet<StandardAcl> tailSet = aclsByPrincipal.tailSet(exemplar, true);
         Iterator<StandardAcl> iterator = tailSet.iterator();
         while (iterator.hasNext()) {
             StandardAcl acl = iterator.next();
@@ -415,7 +462,7 @@ public class StandardAuthorizerData {
                     exemplar.host(),
                     exemplar.operation(),
                     exemplar.permissionType());
-                tailSet = aclCacheSnapshot.aclsByResource().tailSet(exemplar, true);
+                tailSet = aclsByPrincipal.tailSet(exemplar, true);
                 iterator = tailSet.iterator();
                 continue;
             }
