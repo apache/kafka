@@ -370,11 +370,14 @@ class SharedServer(
 
   def ensureNotRaftLeader(): Unit = synchronized {
     // Ideally, this would just resign our leadership, if we had it. But we don't have an API in
-    // RaftManager for that yet, so shut down the RaftManager.
-    Option(raftManager).foreach(_raftManager => {
-      Utils.swallow(this.logger.underlying, () => _raftManager.shutdown())
-      raftManager = null
-    })
+    // RaftManager for that yet, so shut down the RaftManager. In combined mode, the broker still
+    // owns the shared RaftManager while the controller is restarted, so it must remain available.
+    if (!usedByBroker) {
+      Option(raftManager).foreach(_raftManager => {
+        Utils.swallow(this.logger.underlying, () => _raftManager.shutdown())
+        raftManager = null
+      })
+    }
   }
 
   private def stop(): Unit = synchronized {
