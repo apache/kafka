@@ -34,16 +34,19 @@ import org.apache.kafka.test.TestUtils;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import static org.apache.kafka.clients.ClientsTestUtils.awaitAssignment;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ClientRebootstrapTest {
     private static final String TOPIC = "topic";
+    private static final String GROUP_ID = "group";
     private static final int PARTITIONS = 1;
     private static final int REPLICAS = 2;
 
@@ -231,6 +234,77 @@ public class ClientRebootstrapTest {
         })
     public void testConsumerRebootstrap(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
         consumerRebootstrap(clusterInstance, GroupProtocol.CONSUMER);
+    }
+
+    public void consumerGroupRebootstrap(ClusterInstance clusterInstance, GroupProtocol groupProtocol)
+        throws InterruptedException, ExecutionException {
+        clusterInstance.createTopic(TOPIC, PARTITIONS, (short) REPLICAS);
+
+        var broker0 = 0;
+        var broker1 = 1;
+        var partition = new TopicPartition(TOPIC, 0);
+
+        try (var producer = clusterInstance.producer(Map.of(ProducerConfig.ACKS_CONFIG, "-1"))) {
+            var recordMetadata = producer.send(new ProducerRecord<>(TOPIC, "value 0".getBytes())).get();
+            assertEquals(0, recordMetadata.offset());
+        }
+
+        clusterInstance.shutdownBroker(broker0);
+
+        try (var consumer = clusterInstance.<byte[], byte[]>consumer(Map.of(
+            ConsumerConfig.GROUP_ID_CONFIG, GROUP_ID,
+            ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name,
+            ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
+            ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false
+        ))) {
+            consumer.subscribe(List.of(TOPIC));
+            awaitAssignment(consumer, Set.of(partition));
+            consumer.seekToBeginning(Set.of(partition));
+            TestUtils.waitForCondition(
+                () -> consumer.poll(Duration.ofMillis(100)).count() == 1,
+                10 * 1000,
+                "Failed to consume initial data."
+            );
+
+            clusterInstance.restartBrokersWithSwappedClientListenerPorts(broker0, broker1);
+            clusterInstance.waitForReadyBrokers();
+
+            try (var producer = clusterInstance.producer(Map.of(ProducerConfig.ACKS_CONFIG, "-1"))) {
+                var recordMetadata = producer.send(new ProducerRecord<>(TOPIC, "value 1".getBytes())).get();
+                assertEquals(1, recordMetadata.offset());
+            }
+
+            // The consumer must be able to rejoin the group after the server requests a rebootstrap.
+            TestUtils.waitForCondition(
+                () -> consumer.poll(Duration.ofMillis(100)).count() == 1,
+                60 * 1000,
+                "Failed to consume data after the group coordinator rebootstrap."
+            );
+        }
+    }
+
+    @ClusterTest(
+        brokers = REPLICAS,
+        types = {Type.KRAFT},
+        serverProperties = {
+            @ClusterConfigProperty(key = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, value = "true"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2"),
+        })
+    public void testClassicConsumerGroupRebootstrap(ClusterInstance clusterInstance)
+        throws InterruptedException, ExecutionException {
+        consumerGroupRebootstrap(clusterInstance, GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTest(
+        brokers = REPLICAS,
+        types = {Type.KRAFT},
+        serverProperties = {
+            @ClusterConfigProperty(key = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, value = "true"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2"),
+        })
+    public void testConsumerGroupRebootstrap(ClusterInstance clusterInstance)
+        throws InterruptedException, ExecutionException {
+        consumerGroupRebootstrap(clusterInstance, GroupProtocol.CONSUMER);
     }
 
     public void consumerRebootstrapDisabled(ClusterInstance clusterInstance, GroupProtocol groupProtocol) throws InterruptedException, ExecutionException {
