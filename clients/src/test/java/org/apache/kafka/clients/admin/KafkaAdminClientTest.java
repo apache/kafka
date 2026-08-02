@@ -16,14 +16,13 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientRequest;
-import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
+import org.apache.kafka.clients.admin.internals.InternalDescribeFeaturesResult;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
@@ -34,6 +33,7 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.DuplicateVoterException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.InvalidRequestException;
@@ -133,6 +133,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -627,10 +628,10 @@ public class KafkaAdminClientTest extends KafkaAdminClientTestBase {
             env.kafkaClient().prepareResponse(
                 body -> body instanceof ApiVersionsRequest,
                 prepareApiVersionsResponseForDescribeFeatures(Errors.NONE));
-            final KafkaFuture<FeatureMetadata> future = env.adminClient().describeFeatures(
-                new DescribeFeaturesOptions().timeoutMs(10000)).featureMetadata();
-            final FeatureMetadata metadata = future.get();
-            assertEquals(defaultFeatureMetadata(), metadata);
+            final var result = (InternalDescribeFeaturesResult) env.adminClient().describeFeatures(
+                new DescribeFeaturesOptions().timeoutMs(10000));
+            assertEquals(defaultFeatureMetadata(), result.featureMetadata().get());
+            assertNotNull(result.nodeApiVersions().get().apiVersion(ApiKeys.API_VERSIONS));
         }
     }
 
@@ -642,9 +643,9 @@ public class KafkaAdminClientTest extends KafkaAdminClientTestBase {
                 prepareApiVersionsResponseForDescribeFeatures(Errors.INVALID_REQUEST));
             final DescribeFeaturesOptions options = new DescribeFeaturesOptions();
             options.timeoutMs(10000);
-            final KafkaFuture<FeatureMetadata> future = env.adminClient().describeFeatures(options).featureMetadata();
-            final ExecutionException e = assertThrows(ExecutionException.class, future::get);
-            assertEquals(Errors.INVALID_REQUEST.exception().getClass(), e.getCause().getClass());
+            final var result = (InternalDescribeFeaturesResult) env.adminClient().describeFeatures(options);
+            TestUtils.assertFutureThrows(InvalidRequestException.class, result.featureMetadata());
+            TestUtils.assertFutureThrows(InvalidRequestException.class, result.nodeApiVersions());
         }
     }
 
@@ -669,9 +670,10 @@ public class KafkaAdminClientTest extends KafkaAdminClientTestBase {
                 body -> body instanceof ApiVersionsRequest,
                 prepareApiVersionsResponseForDescribeFeatures(Errors.NONE),
                 env.cluster().nodeById(1));
-            final KafkaFuture<FeatureMetadata> future = env.adminClient().describeFeatures(
-                new DescribeFeaturesOptions().timeoutMs(1000).nodeId(0)).featureMetadata();
-            assertThrows(ExecutionException.class, future::get);
+            final var result = (InternalDescribeFeaturesResult) env.adminClient().describeFeatures(
+                new DescribeFeaturesOptions().timeoutMs(1000).nodeId(0));
+            TestUtils.assertFutureThrows(TimeoutException.class, result.featureMetadata());
+            TestUtils.assertFutureThrows(TimeoutException.class, result.nodeApiVersions());
         }
     }
 
@@ -1492,21 +1494,24 @@ public class KafkaAdminClientTest extends KafkaAdminClientTestBase {
         // which prevents AdminClient from being able to send the initial metadata request
 
         Cluster cluster = Cluster.bootstrap(singletonList(new InetSocketAddress("localhost", 8121)));
-        Map<Node, Long> unreachableNodes = Collections.singletonMap(cluster.nodes().get(0), 200L);
+        Node bootstrapNode = cluster.nodes().get(0);
+        Map<Node, Long> unreachableNodes = Collections.singletonMap(bootstrapNode, 200L);
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM, cluster,
                 AdminClientUnitTestEnv.clientConfigs(AdminClientConfig.METADATA_RECOVERY_STRATEGY_CONFIG, metadataRecoveryStrategy.name), unreachableNodes)) {
             Cluster discoveredCluster = mockCluster(3, 0);
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-            env.kafkaClient().prepareResponse(body -> body instanceof MetadataRequest,
+            // Bind responses to specific destinations so MockClient delivery does not depend on
+            // the iteration order of AdminClient's callsToSend map (which is keyed by Node).
+            env.kafkaClient().prepareResponseFrom(body -> body instanceof MetadataRequest,
                     RequestTestUtils.metadataResponse(discoveredCluster.nodes(), discoveredCluster.clusterResource().clusterId(),
-                            1, Collections.emptyList()));
+                            1, Collections.emptyList()), bootstrapNode);
             if (metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP) {
-                env.kafkaClient().prepareResponse(body -> body instanceof MetadataRequest,
-                        RequestTestUtils.metadataResponse(discoveredCluster.nodes(),
-                                discoveredCluster.clusterResource().clusterId(), 1, Collections.emptyList()));
+                env.kafkaClient().prepareResponseFrom(body -> body instanceof MetadataRequest,
+                        RequestTestUtils.metadataResponse(discoveredCluster.nodes(), discoveredCluster.clusterResource().clusterId(),
+                                1, Collections.emptyList()), bootstrapNode);
             }
-            env.kafkaClient().prepareResponse(body -> body instanceof CreateTopicsRequest,
-                prepareCreateTopicsResponse("myTopic", Errors.NONE));
+            env.kafkaClient().prepareResponseFrom(body -> body instanceof CreateTopicsRequest,
+                prepareCreateTopicsResponse("myTopic", Errors.NONE), discoveredCluster.nodeById(1));
 
             KafkaFuture<Void> future = env.adminClient().createTopics(
                     singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
@@ -1568,8 +1573,7 @@ public class KafkaAdminClientTest extends KafkaAdminClientTestBase {
     }
 
     private static Cluster mockBootstrapCluster() {
-        return Cluster.bootstrap(ClientUtils.parseAndValidateAddresses(
-                singletonList("localhost:8121"), ClientDnsLookup.USE_ALL_DNS_IPS));
+        return Cluster.bootstrap(singletonList(InetSocketAddress.createUnresolved("localhost", 8121)));
     }
 
     private Map<String, FeatureUpdate> makeTestFeatureUpdates() {
@@ -1754,5 +1758,35 @@ public class KafkaAdminClientTest extends KafkaAdminClientTestBase {
             .setErrorCode(topLevelError.code())
             .setErrorMessage(topLevelError.message())
             .setNodes(new DescribeQuorumResponseData.NodeCollection(Collections.singleton(new DescribeQuorumResponseData.Node().setNodeId(1)))));
+    }
+
+    @Test
+    public void testAdminBootstrapResolutionExceptionPropagated() throws Exception {
+        String invalidHost = "unresolvable.invalid:9092";
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, invalidHost);
+        configs.put(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "3000");
+
+        try (Admin admin = Admin.create(configs)) {
+            assertThrows(BootstrapResolutionException.class, () -> {
+                long startTime = System.currentTimeMillis();
+                long maxWaitTime = 15000;
+                while (System.currentTimeMillis() - startTime < maxWaitTime) {
+                    try {
+                        admin.listTopics().names().get();
+                    } catch (ExecutionException e) {
+                        if (e.getCause() instanceof BootstrapResolutionException) {
+                            throw (BootstrapResolutionException) e.getCause();
+                        }
+                    }
+                }
+                fail("Expected BootstrapResolutionException to be thrown within " + maxWaitTime + "ms");
+            });
+
+            // After the first failure, any further API call must also surface the bootstrap error.
+            ExecutionException e = assertThrows(ExecutionException.class,
+                () -> admin.listTopics().names().get());
+            assertInstanceOf(BootstrapResolutionException.class, e.getCause());
+        }
     }
 }

@@ -33,7 +33,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.utils.Time;
@@ -209,61 +208,26 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
         return rackId;
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
-    public void onHeartbeatSuccess(ConsumerGroupHeartbeatResponse response) {
-        ConsumerGroupHeartbeatResponseData responseData = response.data();
-        if (responseData.errorCode() != Errors.NONE.code()) {
-            String errorMessage = String.format(
-                    "Unexpected error in Heartbeat response. Expected no error, but received: %s",
-                    Errors.forCode(responseData.errorCode())
-            );
-            throw new IllegalArgumentException(errorMessage);
-        }
-        MemberState state = state();
-        if (state == MemberState.LEAVING) {
-            log.debug("Ignoring heartbeat response received from broker. Member {} with epoch {} is " +
-                    "already leaving the group.", memberId, memberEpoch);
-            return;
-        }
-        if (state == MemberState.UNSUBSCRIBED && responseData.memberEpoch() < 0 && maybeCompleteLeaveInProgress()) {
-            log.debug("Member {} with epoch {} received a successful response to the heartbeat " +
-                    "to leave the group and completed the leave operation. ", memberId, memberEpoch);
-            return;
-        }
-        if (isNotInGroup()) {
-            log.debug("Ignoring heartbeat response received from broker. Member {} is in {} state" +
-                    " so it's not a member of the group. ", memberId, state);
-            return;
-        }
-        if (responseData.memberEpoch() < 0) {
-            log.debug("Ignoring heartbeat response received from broker. Member {} with epoch {} " +
-                    "is in {} state and the member epoch is invalid: {}. ", memberId, memberEpoch, state,
-                    responseData.memberEpoch());
-            maybeCompleteLeaveInProgress();
-            return;
-        }
+    protected short errorCode(ConsumerGroupHeartbeatResponse response) {
+        return response.data().errorCode();
+    }
 
-        updateMemberEpoch(responseData.memberEpoch());
+    @Override
+    protected int memberEpoch(ConsumerGroupHeartbeatResponse response) {
+        return response.data().memberEpoch();
+    }
 
-        ConsumerGroupHeartbeatResponseData.Assignment assignment = responseData.assignment();
-
-        if (assignment != null) {
-            if (!state.canHandleNewAssignment()) {
-                // New assignment received but member is in a state where it cannot take new
-                // assignments (ex. preparing to leave the group)
-                log.debug("Ignoring new assignment {} received from server because member is in {} state.",
-                        assignment, state);
-                return;
-            }
-
-            Map<Uuid, SortedSet<Integer>> newAssignment = new HashMap<>();
-            assignment.topicPartitions().forEach(topicPartition ->
-                newAssignment.put(topicPartition.topicId(), new TreeSet<>(topicPartition.partitions())));
-            processAssignmentReceived(newAssignment);
+    @Override
+    protected Optional<Map<Uuid, SortedSet<Integer>>> extractAssignment(ConsumerGroupHeartbeatResponse response) {
+        ConsumerGroupHeartbeatResponseData.Assignment assignment = response.data().assignment();
+        if (assignment == null) {
+            return Optional.empty();
         }
+        Map<Uuid, SortedSet<Integer>> newAssignment = new HashMap<>();
+        assignment.topicPartitions().forEach(topicPartition ->
+            newAssignment.put(topicPartition.topicId(), new TreeSet<>(topicPartition.partitions())));
+        return Optional.of(newAssignment);
     }
 
     /**

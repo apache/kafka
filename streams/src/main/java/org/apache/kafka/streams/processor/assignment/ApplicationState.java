@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.assignment;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
 
@@ -27,6 +28,7 @@ import java.util.Map;
  * of each KafkaStreams client with at least one StreamThread participating in this rebalance, the
  * assignment-related configs, and the tasks to be assigned.
  */
+@InterfaceAudience.Public
 public interface ApplicationState {
     /**
      * @param computeTaskLags whether to include task lag information in the returned metadata. Note that passing

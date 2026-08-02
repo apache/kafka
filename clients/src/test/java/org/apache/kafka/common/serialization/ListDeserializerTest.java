@@ -355,13 +355,47 @@ public class ListDeserializerTest {
     }
 
     @Test
+    public void shouldThrowOnEntryTruncatedMidStream() {
+        // entrySize (10) is within data.length (14) so it passes the bounds check, but only 5 payload bytes
+        // actually follow, so deserialization must fail rather than return a truncated entry.
+        final byte[] corruptedData = new byte[] {
+            (byte) Serdes.ListSerde.SerializationStrategy.VARIABLE_SIZE.ordinal(),
+            (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x01, // encodes length == 1
+            (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x0A, // encodes entrySize == 10
+            (byte) 'h', (byte) 'e', (byte) 'l', (byte) 'l', (byte) 'o' // only 5 of the 10 declared bytes
+        };
+        final ListDeserializer<String> testDeserializer = new ListDeserializer<>(ArrayList.class, new StringDeserializer());
+        final SerializationException exception = assertThrows(
+            SerializationException.class,
+            () -> testDeserializer.deserialize(null, corruptedData)
+        );
+        assertEquals(
+            "End of the stream was reached prematurely",
+            exception.getMessage()
+        );
+    }
+
+    @Test
+    public void shouldDeserializeListEndingInEmptyEntry() {
+        // A list whose last element serializes to zero bytes leaves the stream at EOF when that final
+        // (empty) entry is read: the deserializer must handle this correctly and should not fail.
+        final String topic = "topic";
+        final List<String> data = List.of("a", "");
+        final byte[] serializedData = new ListSerializer<>(new StringSerializer()).serialize(topic, data);
+
+        final ListDeserializer<String> testDeserializer = new ListDeserializer<>(ArrayList.class, new StringDeserializer());
+
+        assertEquals(data, testDeserializer.deserialize(topic, serializedData));
+    }
+
+    @Test
     public void shouldThrowOnNegativeNullEntryLength() {
         final byte[] corruptedData = new byte[] {
             (byte) Serdes.ListSerde.SerializationStrategy.CONSTANT_SIZE.ordinal(),
             (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF // encodes number of null entries == -1
         };
 
-        final ListDeserializer<String> testDeserializer = new ListDeserializer<>(ArrayList.class, new StringDeserializer());
+        final ListDeserializer<Integer> testDeserializer = new ListDeserializer<>(ArrayList.class, new IntegerDeserializer());
 
         final SerializationException exception = assertThrows(
             SerializationException.class,
@@ -380,14 +414,14 @@ public class ListDeserializerTest {
             (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0xFF // encodes number of null entries == 255
         };
 
-        final ListDeserializer<String> testDeserializer = new ListDeserializer<>(ArrayList.class, new StringDeserializer());
+        final ListDeserializer<Integer> testDeserializer = new ListDeserializer<>(ArrayList.class, new IntegerDeserializer());
 
         final SerializationException exception = assertThrows(
             SerializationException.class,
             () -> testDeserializer.deserialize(null, corruptedData)
         );
         assertEquals(
-            "Corrupted byte[]. The number of null list entries cannot be larger than overall number of bytes.",
+            "Corrupted byte[]. The number of null list entries cannot be larger than overall number of elements.",
             exception.getMessage()
         );
     }

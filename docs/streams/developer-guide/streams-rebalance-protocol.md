@@ -1,6 +1,6 @@
 ---
 title: Streams Rebalance Protocol
-description:
+description: Kafka Streams rebalance protocol behavior, migration paths, and limitations.
 weight: 14
 tags: ['kafka', 'docs']
 aliases:
@@ -39,7 +39,9 @@ The following features are available in the current release:
 
 * **Core Streams Group Rebalance Protocol**: The `group.protocol=streams` configuration enables the dedicated streams rebalance protocol. This separates streams groups from consumer groups and provides a streams-specific group membership lifecycle and metadata management on the broker.
 
-* **Sticky Task Assignor**: A basic task assignment strategy that minimizes task movement during rebalances is included.
+* **Sticky Task Assignor**: A basic task assignment strategy that minimizes task movement during rebalances is included. It is registered under the name `sticky` and is the default assignor.
+
+* **Custom Task Assignors**: Brokers can be configured with custom task assignors via `group.streams.assignors`, which takes a list of built-in assignor names and fully qualified class names of custom `TaskAssignor` implementations. The first entry is the default assignor. An individual group selects one of the registered assignors by name with the group configuration `streams.assignor.name`; when unset, the group uses the first entry of `group.streams.assignors`. Custom implementations must be thread-safe, since a single instance is shared across all groups on a broker.
 
 * **Interactive Query Support**: IQ operations are compatible with the new streams protocol.
 
@@ -47,17 +49,21 @@ The following features are available in the current release:
 
 * **CLI Integration**: You can list, describe, and delete streams groups via the [bin/kafka-streams-groups.sh](/{version}/streams/developer-guide/kafka-streams-group-sh/) script.
 
+* **Topology Description Plugin**: Brokers can record a human-readable description of each streams group's processing topology via a pluggable backend, configured with `group.streams.topology.description.plugin.class`. The recorded topology can be inspected via the [`Admin`](/{version}/javadoc/org/apache/kafka/clients/admin/Admin.html) interface or `kafka-streams-groups.sh --describe --topology`. See the [Topology Description Plugin](/{version}/streams/developer-guide/topology-description-plugin/) documentation for details.
+
 * **Offline Migration**: After shutting down all members and waiting for their `session.timeout.ms` to expire (or forcing an explicit group leave), a classic group can be converted to a streams group and a streams group can be converted to a classic group. The only broker-side group data that will be preserved are the committed offsets. Internal topics (changelog and repartition topics) will continue to exist as regular Kafka topics.
+
+* **Static Membership**: Streams applications can configure `group.instance.id` when using `group.protocol=streams`. Kafka Streams derives unique group instance IDs for its stream threads internally.
 
 # What's Not Supported in This Version
 
 The following features are not yet available and should be avoided when using the new protocol:
 
-* **Static Membership**: Setting a client `instance.id` will be rejected.
-
 * **Topology Updates**: If a topology is changed significantly (e.g., by adding new source topics or changing the number of subtopologies), a new streams group must be created.
 
-* **High Availability Assignor**: Only the sticky assignor is supported. This implies that "warmup tasks" and rack aware assignment are not supported yet.
+* **High Availability Assignor**: The sticky assignor is the only built-in assignor and it does not support rack aware assignment, but a custom assignor registered via `group.streams.assignors` can implement it.
+
+* **Warmup Tasks**: In contrast to the "classic" rebalance protocol, warmup tasks are not an assignor feature, but the group coordinator would inject warmup tasks into an assignment. The benefit is, that warmup tasks can be used independent of the configured assignor. However, warmup task support is not implemented yet.
 
 * **Regular Expressions**: Pattern-based topic subscription is not supported.
 
@@ -117,6 +123,8 @@ The following broker configurations control the behavior of streams groups. For 
 * [`group.streams.num.standby.replicas`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.num.standby.replicas): The default number of standby replicas for each task.
 * [`group.streams.max.standby.replicas`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.max.standby.replicas): Maximum for dynamic configurations of the standby replica configuration.
 * [`group.streams.initial.rebalance.delay.ms`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.initial.rebalance.delay.ms): The first rebalance of a new (ie, previously empty) group is delayed by this amount to allow more members to join the group.
+* [`group.streams.topology.description.plugin.class`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.topology.description.plugin.class): The fully qualified class name of a `StreamsGroupTopologyDescriptionPlugin` implementation. When not set, the [topology description feature](/{version}/streams/developer-guide/topology-description-plugin/) is disabled.
+* [`group.streams.assignors`](/{version}/configuration/broker-configs#brokerconfigs_group.streams.assignors): The task assignors available to streams groups, as a list of built-in assignor names and fully qualified class names of custom `TaskAssignor` implementations. The first entry is the default assignor for groups that do not select one with `streams.assignor.name`.
 
 ## Group Configuration
 
@@ -130,6 +138,7 @@ The following group-level configurations are available for streams groups:
 * [`streams.heartbeat.interval.ms`](/{version}/configuration/group-configs#groupconfigs_streams.heartbeat.interval.ms): The heartbeat interval given to the members.
 * [`streams.num.standby.replicas`](/{version}/configuration/group-configs#groupconfigs_streams.num.standby.replicas): The number of standby replicas for each task.
 * [`streams.initial.rebalance.delay.ms`](/{version}/configuration/group-configs#groupconfigs_streams.initial.rebalance.delay.ms): The first rebalance of a group is delayed by this amount to allow more members to join the group.
+* [`streams.assignor.name`](/{version}/configuration/group-configs#groupconfigs_streams.assignor.name): The name of the task assignor to use for this group, which must be one of the assignors registered on the broker via `group.streams.assignors`. When unset, the group uses the first entry of `group.streams.assignors`.
 
 ### Example: Setting Group-Level Configuration
 ```
@@ -159,7 +168,7 @@ The following configurations are ignored when the streams rebalance protocol is 
 * [`rack.aware.assignment.strategy`](/{version}/configuration/kafka-streams-configs#streamsconfigs_rack.aware.assignment.strategy)
 * [`rack.aware.assignment.traffic_cost`](/{version}/configuration/kafka-streams-configs#streamsconfigs_rack.aware.assignment.traffic_cost)
 * [`rack.aware.assignment.non_overlap_cost`](/{version}/configuration/kafka-streams-configs#streamsconfigs_rack.aware.assignment.non_overlap_cost)
-* [`task.assignor.class`](/{version}/configuration/kafka-streams-configs#streamsconfigs_task.assignor.class)
+* [`task.assignor.class`](/{version}/configuration/kafka-streams-configs#streamsconfigs_task.assignor.class) (assignment happens on the broker; use `group.streams.assignors` and `streams.assignor.name` instead)
 * [`session.timeout.ms`](/{version}/configuration/kafka-streams-configs#streamsconfigs_session.timeout.ms) (use group-level configuration instead)
 * [`heartbeat.interval.ms`](/{version}/configuration/kafka-streams-configs#streamsconfigs_heartbeat.interval.ms) (use group-level configuration instead)
 
@@ -178,6 +187,10 @@ The main differences from consumer group APIs are:
 ## kafka-streams-groups.sh
 
 A new tool called `bin/kafka-streams-groups.sh` is added for working with streams groups. It replaces `bin/kafka-streams-application-reset.sh` for streams groups and can be used to list, describe, and delete streams groups. See the [kafka-streams-groups.sh documentation](/{version}/streams/developer-guide/kafka-streams-group-sh/) for detailed usage information.
+
+## Topology Description
+
+When a topology description plugin is configured on the brokers via `group.streams.topology.description.plugin.class`, the group coordinator records a human-readable description of each streams group's processing topology, pushed automatically by the Kafka Streams clients. The description can be retrieved via `Admin#describeStreamsGroups` or `kafka-streams-groups.sh --describe --topology`. See the [Topology Description Plugin](/{version}/streams/developer-guide/topology-description-plugin/) documentation for the push/describe workflow, plugin implementation guidelines, and troubleshooting.
 
 # Architecture and How It Works
 

@@ -24,6 +24,7 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
@@ -78,6 +79,7 @@ import java.util.concurrent.CompletionStage;
  * </ul>
  * </p>
  */
+@InterfaceAudience.Public
 public interface Authorizer extends Configurable, Closeable {
 
     /**
