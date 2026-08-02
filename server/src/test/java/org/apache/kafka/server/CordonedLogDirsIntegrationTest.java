@@ -411,7 +411,8 @@ public class CordonedLogDirsIntegrationTest {
         try (var admin = clusterInstance.admin()) {
             List<String> logDirs = clusterInstance.brokers().get(brokerId).config().logDirs();
             assertTrue(logDirs.size() > 1, "Test requires more than one log dir per broker");
-            String logDirToRemove = logDirs.remove(logDirs.size() - 1);
+            String logDirToRemove = logDirs.get(logDirs.size() - 1);
+            List<String> remainingLogDirs = logDirs.subList(0, logDirs.size() - 1);
 
             // Create 10 topics, replicated to every broker so brokerId is guaranteed to host some
             // replicas on the log dir we're about to decommission
@@ -442,12 +443,12 @@ public class CordonedLogDirsIntegrationTest {
 
             // Physically decommission the log dir: restart the
             // broker without it in its static log.dirs config
-            Map<String, Object> propOverrides = Map.of(LOG_DIRS_CONFIG, String.join(",", logDirs), CORDONED_LOG_DIRS_CONFIG, "");
+            Map<String, Object> propOverrides = Map.of(LOG_DIRS_CONFIG, String.join(",", remainingLogDirs), CORDONED_LOG_DIRS_CONFIG, "");
             clusterInstance.restartBroker(brokerId, propOverrides);
             clusterInstance.waitForReadyBrokers();
 
             // The broker restarted with the reduced set of log dirs, and no longer reports the removed one
-            assertEquals(logDirs, clusterInstance.brokers().get(brokerId).config().logDirs());
+            assertEquals(remainingLogDirs, clusterInstance.brokers().get(brokerId).config().logDirs());
             TestUtils.waitForCondition(() ->
                 !admin.describeLogDirs(List.of(brokerId)).allDescriptions().get().get(brokerId).containsKey(logDirToRemove),
                 10_000, "Broker " + brokerId + " is still reporting the removed log dir " + logDirToRemove);
