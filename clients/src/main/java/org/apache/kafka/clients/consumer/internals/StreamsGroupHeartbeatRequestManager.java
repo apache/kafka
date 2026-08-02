@@ -884,9 +884,9 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 hostInfo,
                 new StreamsRebalanceData.EndpointPartitions(activeTopicPartitions, standbyTopicPartitions),
                 (existing, newPartitions) -> {
-                    List<TopicPartition> mergedActive = existing.activePartitions();
+                    List<TopicPartition> mergedActive = new ArrayList<>(existing.activePartitions());
                     mergedActive.addAll(newPartitions.activePartitions());
-                    List<TopicPartition> mergedStandby = existing.standbyPartitions();
+                    List<TopicPartition> mergedStandby = new ArrayList<>(existing.standbyPartitions());
                     mergedStandby.addAll(newPartitions.standbyPartitions());
                     return new StreamsRebalanceData.EndpointPartitions(mergedActive, mergedStandby);
                 }

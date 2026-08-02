@@ -2928,10 +2928,8 @@ class StreamsGroupHeartbeatRequestManagerTest {
         try (
             final MockedConstruction<HeartbeatRequestState> ignored = mockConstruction(
                 HeartbeatRequestState.class,
-                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
-            final LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister(StreamsGroupHeartbeatRequestManager.class)
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true))
         ) {
-            logAppender.setClassLogger(StreamsGroupHeartbeatRequestManager.class, Level.WARN);
             final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
             when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
             when(membershipManager.groupId()).thenReturn(GROUP_ID);

@@ -59,8 +59,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @Tag("integration")
 public class IQv2EndpointToPartitionsIntegrationTest {
     private String appId;
-    private String inputTopicTwoPartitions;
-    private String outputTopicTwoPartitions;
+    private String inputTopicFourPartitions;
+    private String outputTopicFourPartitions;
     private Properties streamsApplicationProperties = new Properties();
     private Properties streamsSecondApplicationProperties = new Properties();
 
@@ -77,10 +77,10 @@ public class IQv2EndpointToPartitionsIntegrationTest {
 
     public void setUp() throws InterruptedException {
         appId = safeUniqueTestName("endpointIntegrationTest");
-        inputTopicTwoPartitions = appId + "-input-two";
-        outputTopicTwoPartitions = appId + "-output-two";
-        cluster.createTopic(inputTopicTwoPartitions, 4, 1);
-        cluster.createTopic(outputTopicTwoPartitions, 4, 1);
+        inputTopicFourPartitions = appId + "-input-four";
+        outputTopicFourPartitions = appId + "-output-four";
+        cluster.createTopic(inputTopicFourPartitions, 4, 1);
+        cluster.createTopic(outputTopicFourPartitions, 4, 1);
     }
 
     public void closeCluster() {
@@ -145,11 +145,10 @@ public class IQv2EndpointToPartitionsIntegrationTest {
                 assertEquals(0, streamsOneInitialMetadata.standbyTopicPartitions().size());
 
                 final long repartitionTopicTaskCount = topicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
-                final long sourceTopicTaskCount = topicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
+                final long sourceTopicTaskCount = topicPartitions.stream().filter(tp -> tp.topic().contains("-input-four")).count();
                 assertEquals(4, repartitionTopicTaskCount);
                 assertEquals(4, sourceTopicTaskCount);
                 final int expectedStandbyCount = usingStandbyReplicas ? 2 : 0;
-                final int expectedStandbyStoreCount = usingStandbyReplicas ? 1 : 0;
 
                 try (final KafkaStreams streamsTwo = new KafkaStreams(topology, streamsSecondApplicationProperties)) {
                     streamsTwo.start();
@@ -183,11 +182,13 @@ public class IQv2EndpointToPartitionsIntegrationTest {
                     }, TestUtils.DEFAULT_MAX_WAIT_MS,
                             "Kafka Streams clients 1 and 2 never got metadata about standby tasks");
 
-                    waitForCondition(() -> streamsOne.metadataForAllStreamsClients().iterator().next().topicPartitions().size() == 4,
-                            IntegrationTestUtils.DEFAULT_TIMEOUT,
-                            () -> "Kafka Streams one didn't give up active tasks");
+                    waitForCondition(() -> {
+                        final List<StreamsMetadata> metadata = new ArrayList<>(streamsTwo.metadataForAllStreamsClients());
+                        return metadata.size() == 2 && metadata.stream().allMatch(m -> m.topicPartitions().size() == 4);
+                    }, IntegrationTestUtils.DEFAULT_TIMEOUT,
+                            () -> "Kafka Streams clients metadata was not updated to 4 active tasks per client");
 
-                    verifyClientMetadata(usingStandbyReplicas, new ArrayList<>(streamsTwo.metadataForAllStreamsClients()), expectedStandbyCount, expectedStandbyStoreCount);
+                    verifyClientMetadata(usingStandbyReplicas, new ArrayList<>(streamsTwo.metadataForAllStreamsClients()), expectedStandbyCount);
                 }
             }
         } finally {
@@ -198,14 +199,19 @@ public class IQv2EndpointToPartitionsIntegrationTest {
     private static void verifyClientMetadata(
             final boolean usingStandbyReplicas,
             final List<StreamsMetadata> allClientMetadataUpdated,
-            final int expectedStandbyCount,
-            final int expectedStandbyStoreCount
+            final int expectedStandbyCount
     ) {
-        final StreamsMetadata streamsOneMetadata = allClientMetadataUpdated.get(0);
-        final StreamsMetadata streamsTwoMetadata = allClientMetadataUpdated.get(1);
+        final StreamsMetadata streamsOneMetadata = allClientMetadataUpdated.stream()
+                .filter(m -> m.hostInfo().port() == 2020)
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Missing metadata for port 2020"));
+        final StreamsMetadata streamsTwoMetadata = allClientMetadataUpdated.stream()
+                .filter(m -> m.hostInfo().port() == 3030)
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Missing metadata for port 3030"));
 
-        verifyHostMetadata(streamsOneMetadata, 2020, expectedStandbyCount, expectedStandbyStoreCount, usingStandbyReplicas);
-        verifyHostMetadata(streamsTwoMetadata, 3030, expectedStandbyCount, expectedStandbyStoreCount, usingStandbyReplicas);
+        verifyHostMetadata(streamsOneMetadata, 2020, expectedStandbyCount, usingStandbyReplicas);
+        verifyHostMetadata(streamsTwoMetadata, 3030, expectedStandbyCount, usingStandbyReplicas);
 
         if (usingStandbyReplicas) {
             final Set<TopicPartition> streamsOneActiveRepartition = streamsOneMetadata.topicPartitions().stream()
@@ -221,26 +227,22 @@ public class IQv2EndpointToPartitionsIntegrationTest {
             final StreamsMetadata metadata,
             final int expectedPort,
             final int expectedStandbyCount,
-            final int expectedStandbyStoreCount,
             final boolean usingStandbyReplicas
     ) {
         final Set<TopicPartition> activeTopicPartitions = metadata.topicPartitions();
         final Set<TopicPartition> standbyTopicPartitions = metadata.standbyTopicPartitions();
-        final Set<String> storeNames = metadata.stateStoreNames();
-        final Set<String> standbyStoreNames = metadata.standbyStateStoreNames();
 
         assertEquals(expectedPort, metadata.hostInfo().port());
         assertEquals(4, activeTopicPartitions.size());
         assertEquals(expectedStandbyCount, standbyTopicPartitions.size());
-        assertEquals(1, storeNames.size());
-        assertEquals(expectedStandbyStoreCount, standbyStoreNames.size());
-        assertEquals(EXPECTED_STORE_NAME, storeNames.iterator().next());
-        if (usingStandbyReplicas) {
-            assertEquals(EXPECTED_STORE_NAME, standbyStoreNames.iterator().next());
-        }
+        assertEquals(Set.of(EXPECTED_STORE_NAME), metadata.stateStoreNames());
+        assertEquals(
+            usingStandbyReplicas ? Set.of(EXPECTED_STORE_NAME) : Set.of(),
+            metadata.standbyStateStoreNames()
+        );
 
         final long repartitionCount = activeTopicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
-        final long sourceCount = activeTopicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
+        final long sourceCount = activeTopicPartitions.stream().filter(tp -> tp.topic().contains("-input-four")).count();
         assertEquals(2, repartitionCount);
         assertEquals(2, sourceCount);
     }
@@ -267,11 +269,11 @@ public class IQv2EndpointToPartitionsIntegrationTest {
 
     private Topology complexTopology() {
         final StreamsBuilder builder = new StreamsBuilder();
-        builder.stream(inputTopicTwoPartitions, Consumed.with(Serdes.String(), Serdes.String()))
+        builder.stream(inputTopicFourPartitions, Consumed.with(Serdes.String(), Serdes.String()))
                 .flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
                 .groupBy((key, value) -> value, Grouped.as("IQTest"))
                 .count(Materialized.as(EXPECTED_STORE_NAME))
-                .toStream().to(outputTopicTwoPartitions, Produced.with(Serdes.String(), Serdes.Long()));
+                .toStream().to(outputTopicFourPartitions, Produced.with(Serdes.String(), Serdes.Long()));
         return builder.build();
     }
 }
