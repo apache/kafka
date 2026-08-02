@@ -235,8 +235,12 @@ org.apache.kafka.tools.DelegationTokenCommandTest:
 org.apache.kafka.tools.DeleteRecordsCommandTest:
 - testCommand
 - testCommandConfigNotExists
+- testExecuteDuplicatePartitionsWithoutCluster
+- testExecutePartitionErrorWithMockAdmin
+- testExecuteSuccessOutputWithMockAdmin
 - testOffsetFileNotExists
 - testParse
+- testParseInvalidJsonThrows
 - testWrongPartitions
 - testWrongVersion
 org.apache.kafka.tools.DumpLogSegmentsTest:
