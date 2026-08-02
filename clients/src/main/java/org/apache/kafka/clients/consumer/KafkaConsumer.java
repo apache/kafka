@@ -898,6 +898,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if caller lacks Read access to any of the subscribed
      *             topics or to the configured groupId. See the exception for more details
+     * @throws org.apache.kafka.common.errors.BootstrapResolutionException if DNS resolution of the bootstrap servers fails within {@code bootstrap.resolve.timeout.ms}
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. invalid groupId or
      *             session timeout, errors deserializing key/value pairs, your rebalance callback thrown exceptions,
      *             or any new error cases in future versions)
@@ -959,6 +960,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *            before successful completion of the offset commit
      * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer is using the classic group protocol
      *            and this instance gets fenced by broker.
+     * @throws org.apache.kafka.common.errors.BootstrapResolutionException if DNS resolution of the bootstrap servers fails within {@code bootstrap.resolve.timeout.ms}
      */
     @Override
     public void commitSync() {
@@ -1348,6 +1350,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      * @throws org.apache.kafka.common.errors.TimeoutException if the committed offset cannot be found before
      *             the timeout specified by {@code default.api.timeout.ms} expires.
+     * @throws org.apache.kafka.common.errors.BootstrapResolutionException if DNS resolution of the bootstrap servers fails within {@code bootstrap.resolve.timeout.ms}
      */
     @Override
     public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
@@ -1445,6 +1448,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
      *         the amount of time allocated by {@code default.api.timeout.ms} expires.
+     * @throws org.apache.kafka.common.errors.BootstrapResolutionException if DNS resolution of the bootstrap servers fails within {@code bootstrap.resolve.timeout.ms}
      */
     @Override
     public List<PartitionInfo> partitionsFor(String topic) {
@@ -1492,6 +1496,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
      *         the amount of time allocated by {@code default.api.timeout.ms} expires.
+     * @throws org.apache.kafka.common.errors.BootstrapResolutionException if DNS resolution of the bootstrap servers fails within {@code bootstrap.resolve.timeout.ms}
      */
     @Override
     public Map<String, List<PartitionInfo>> listTopics() {
@@ -1628,6 +1633,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *         the amount of time allocated by {@code default.api.timeout.ms} expires.
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException if the broker does not support looking up
      *         the offsets by timestamp
+     * @throws org.apache.kafka.common.errors.BootstrapResolutionException if DNS resolution of the bootstrap servers fails within {@code bootstrap.resolve.timeout.ms}
      */
     @Override
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch) {
