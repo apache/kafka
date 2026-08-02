@@ -52,6 +52,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TimestampedToHeadersWindowStoreAdapterTest {
@@ -99,6 +100,13 @@ public class TimestampedToHeadersWindowStoreAdapterTest {
         if (adapter != null) {
             adapter.close();
         }
+    }
+
+    @Test
+    public void shouldPreserveWrappedStoreChain() {
+        assertSame(underlyingStore, adapter.wrapped());
+        assertSame(underlyingStore, adapter.findInner(RocksDBTimestampedWindowStore.class));
+        assertTrue(WrappedStateStore.isTimestamped(adapter));
     }
 
     @Test

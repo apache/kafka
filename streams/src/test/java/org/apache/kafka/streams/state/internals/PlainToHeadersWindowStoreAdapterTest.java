@@ -51,6 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class PlainToHeadersWindowStoreAdapterTest {
@@ -98,6 +99,12 @@ public class PlainToHeadersWindowStoreAdapterTest {
         if (adapter != null) {
             adapter.close();
         }
+    }
+
+    @Test
+    public void shouldPreserveWrappedStoreChain() {
+        assertSame(underlyingStore, adapter.wrapped());
+        assertSame(underlyingStore, adapter.findInner(RocksDBWindowStore.class));
     }
 
     @Test

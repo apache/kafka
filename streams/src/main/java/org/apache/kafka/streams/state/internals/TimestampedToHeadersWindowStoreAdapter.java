@@ -56,137 +56,138 @@ import static org.apache.kafka.streams.state.internals.Utils.rawTimestampedValue
  *   <li>Read: {@code [timestamp][value]} → {@code [headers][timestamp][value]} (add empty headers)</li>
  * </ul>
  */
-public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte[]> {
-    final WindowStore<Bytes, byte[]> store;
+public class TimestampedToHeadersWindowStoreAdapter
+    extends WrappedStateStore<WindowStore<Bytes, byte[]>, Bytes, byte[]>
+    implements WindowStore<Bytes, byte[]> {
 
     public TimestampedToHeadersWindowStoreAdapter(final WindowStore<Bytes, byte[]> store) {
+        super(store);
         if (!store.persistent()) {
             throw new IllegalArgumentException("Provided store must be a persistent store, but it is not.");
         }
         if (!(store instanceof TimestampedBytesStore)) {
             throw new IllegalArgumentException("Provided store must be a timestamped store, but it is not.");
         }
-        this.store = store;
     }
 
     @Override
     public void put(final Bytes key, final byte[] valueWithTimestampAndHeaders, final long windowStartTimestamp) {
-        store.put(key, rawTimestampedValue(valueWithTimestampAndHeaders), windowStartTimestamp);
+        wrapped().put(key, rawTimestampedValue(valueWithTimestampAndHeaders), windowStartTimestamp);
     }
 
     @Override
     public byte[] fetch(final Bytes key, final long timestamp) {
-        return convertToHeaderFormat(store.fetch(key, timestamp));
+        return convertToHeaderFormat(wrapped().fetch(key, timestamp));
     }
 
     @Override
     public WindowStoreIterator<byte[]> fetch(final Bytes key, final long timeFrom, final long timeTo) {
-        return new TimestampedWindowToHeadersWindowStoreIteratorAdapter(store.fetch(key, timeFrom, timeTo));
+        return new TimestampedWindowToHeadersWindowStoreIteratorAdapter(wrapped().fetch(key, timeFrom, timeTo));
     }
 
     @Override
     public WindowStoreIterator<byte[]> fetch(final Bytes key, final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
-        return new TimestampedWindowToHeadersWindowStoreIteratorAdapter(store.fetch(key, timeFrom, timeTo));
+        return new TimestampedWindowToHeadersWindowStoreIteratorAdapter(wrapped().fetch(key, timeFrom, timeTo));
     }
 
     @Override
     public WindowStoreIterator<byte[]> backwardFetch(final Bytes key, final long timeFrom, final long timeTo) {
-        return new TimestampedWindowToHeadersWindowStoreIteratorAdapter(store.backwardFetch(key, timeFrom, timeTo));
+        return new TimestampedWindowToHeadersWindowStoreIteratorAdapter(wrapped().backwardFetch(key, timeFrom, timeTo));
     }
 
     @Override
     public WindowStoreIterator<byte[]> backwardFetch(final Bytes key, final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
-        return new TimestampedWindowToHeadersWindowStoreIteratorAdapter(store.backwardFetch(key, timeFrom, timeTo));
+        return new TimestampedWindowToHeadersWindowStoreIteratorAdapter(wrapped().backwardFetch(key, timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo,
                                                            final long timeFrom, final long timeTo) {
-        return new TimestampedToHeadersIteratorAdapter<>(store.fetch(keyFrom, keyTo, timeFrom, timeTo));
+        return new TimestampedToHeadersIteratorAdapter<>(wrapped().fetch(keyFrom, keyTo, timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo,
                                                            final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
-        return new TimestampedToHeadersIteratorAdapter<>(store.fetch(keyFrom, keyTo, timeFrom, timeTo));
+        return new TimestampedToHeadersIteratorAdapter<>(wrapped().fetch(keyFrom, keyTo, timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom, final Bytes keyTo,
                                                                    final long timeFrom, final long timeTo) {
-        return new TimestampedToHeadersIteratorAdapter<>(store.backwardFetch(keyFrom, keyTo, timeFrom, timeTo));
+        return new TimestampedToHeadersIteratorAdapter<>(wrapped().backwardFetch(keyFrom, keyTo, timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom, final Bytes keyTo,
                                                                    final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
-        return new TimestampedToHeadersIteratorAdapter<>(store.backwardFetch(keyFrom, keyTo, timeFrom, timeTo));
+        return new TimestampedToHeadersIteratorAdapter<>(wrapped().backwardFetch(keyFrom, keyTo, timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
-        return new TimestampedToHeadersIteratorAdapter<>(store.fetchAll(timeFrom, timeTo));
+        return new TimestampedToHeadersIteratorAdapter<>(wrapped().fetchAll(timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
-        return new TimestampedToHeadersIteratorAdapter<>(store.fetchAll(timeFrom, timeTo));
+        return new TimestampedToHeadersIteratorAdapter<>(wrapped().fetchAll(timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final long timeFrom, final long timeTo) {
-        return new TimestampedToHeadersIteratorAdapter<>(store.backwardFetchAll(timeFrom, timeTo));
+        return new TimestampedToHeadersIteratorAdapter<>(wrapped().backwardFetchAll(timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
-        return new TimestampedToHeadersIteratorAdapter<>(store.backwardFetchAll(timeFrom, timeTo));
+        return new TimestampedToHeadersIteratorAdapter<>(wrapped().backwardFetchAll(timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
-        return new TimestampedToHeadersIteratorAdapter<>(store.all());
+        return new TimestampedToHeadersIteratorAdapter<>(wrapped().all());
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardAll() {
-        return new TimestampedToHeadersIteratorAdapter<>(store.backwardAll());
+        return new TimestampedToHeadersIteratorAdapter<>(wrapped().backwardAll());
     }
 
     @Override
     public String name() {
-        return store.name();
+        return wrapped().name();
     }
 
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
-        store.init(context, root);
+        wrapped().init(context, root);
     }
 
     @Override
     public void commit(final Map<TopicPartition, Long> changelogOffsets) {
-        store.commit(changelogOffsets);
+        wrapped().commit(changelogOffsets);
     }
 
     @SuppressWarnings("deprecation")
     @Override
     public boolean managesOffsets() {
-        return store.managesOffsets();
+        return wrapped().managesOffsets();
     }
 
     @Override
     public Long committedOffset(final TopicPartition partition) {
-        return store.committedOffset(partition);
+        return wrapped().committedOffset(partition);
     }
 
     @Override
     public long approximateNumUncommittedBytes() {
-        return store.approximateNumUncommittedBytes();
+        return wrapped().approximateNumUncommittedBytes();
     }
 
     @Override
     public void close() {
-        store.close();
+        wrapped().close();
     }
 
     @Override
@@ -196,7 +197,7 @@ public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes
 
     @Override
     public boolean isOpen() {
-        return store.isOpen();
+        return wrapped().isOpen();
     }
 
     @SuppressWarnings("unchecked")
@@ -210,7 +211,7 @@ public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes
         // Handle WindowKeyQuery: wrap iterator to convert from timestamped to headers format
         if (query instanceof WindowKeyQuery) {
             final WindowKeyQuery<Bytes, byte[]> windowKeyQuery = (WindowKeyQuery<Bytes, byte[]>) query;
-            final QueryResult<WindowStoreIterator<byte[]>> rawResult = store.query(windowKeyQuery, positionBound, config);
+            final QueryResult<WindowStoreIterator<byte[]>> rawResult = wrapped().query(windowKeyQuery, positionBound, config);
 
             if (rawResult.isSuccess()) {
                 final WindowStoreIterator<byte[]> wrappedIterator =
@@ -223,7 +224,7 @@ public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes
             // Handle WindowRangeQuery: wrap iterator to convert values
             final WindowRangeQuery<Bytes, byte[]> windowRangeQuery = (WindowRangeQuery<Bytes, byte[]>) query;
             final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult =
-                store.query(windowRangeQuery, positionBound, config);
+                wrapped().query(windowRangeQuery, positionBound, config);
 
             if (rawResult.isSuccess()) {
                 final KeyValueIterator<Windowed<Bytes>, byte[]> wrappedIterator =
@@ -234,7 +235,7 @@ public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes
             }
         } else {
             // For other query types, delegate to the underlying store
-            result = store.query(query, positionBound, config);
+            result = wrapped().query(query, positionBound, config);
         }
 
         if (config.isCollectExecutionInfo()) {
@@ -248,7 +249,7 @@ public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes
 
     @Override
     public Position getPosition() {
-        return store.getPosition();
+        return wrapped().getPosition();
     }
 
     /**

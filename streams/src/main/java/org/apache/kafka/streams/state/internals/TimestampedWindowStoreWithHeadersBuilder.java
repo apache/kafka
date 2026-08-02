@@ -118,7 +118,7 @@ public class TimestampedWindowStoreWithHeadersBuilder<K, V>
             return true;
         }
         if (stateStore instanceof TimestampedToHeadersWindowStoreAdapter) {
-            return isTimeOrderedStore(((TimestampedToHeadersWindowStoreAdapter) stateStore).store);
+            return isTimeOrderedStore(((TimestampedToHeadersWindowStoreAdapter) stateStore).wrapped());
         }
         if (stateStore instanceof WrappedStateStore) {
             return isTimeOrderedStore(((WrappedStateStore<?, ?, ?>) stateStore).wrapped());
