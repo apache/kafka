@@ -1956,24 +1956,27 @@ public class KafkaAdminClient extends AdminClient {
                                 topicIdFuture.completeExceptionally(exception);
                             }
                         } else {
-                            TopicMetadataAndConfig topicMetadataAndConfig;
                             if (result.topicConfigErrorCode() != Errors.NONE.code()) {
-                                topicMetadataAndConfig = new TopicMetadataAndConfig(
-                                    Errors.forCode(result.topicConfigErrorCode()).exception());
+                                ApiException exception = Errors.forCode(result.topicConfigErrorCode()).exception();
+                                topicIdFuture.completeExceptionally(exception);
+                                future.complete(new TopicMetadataAndConfig(exception));
                             } else if (result.numPartitions() == CreateTopicsResult.UNKNOWN) {
-                                topicMetadataAndConfig = new TopicMetadataAndConfig(new UnsupportedVersionException(
-                                    "Topic metadata and configs in CreateTopics response not supported"));
+                                UnsupportedVersionException exception = new UnsupportedVersionException(
+                                    "Topic metadata and configs in CreateTopics response not supported");
+                                topicIdFuture.completeExceptionally(exception);
+                                future.complete(new TopicMetadataAndConfig(exception));
                             } else {
                                 List<CreatableTopicConfigs> configs = result.configs();
                                 Config topicConfig = new Config(configs.stream()
                                     .map(this::configEntry)
                                     .collect(Collectors.toSet()));
-                                topicMetadataAndConfig = new TopicMetadataAndConfig(result.topicId(), result.numPartitions(),
+                                TopicMetadataAndConfig topicMetadataAndConfig = new TopicMetadataAndConfig(
+                                    result.topicId(), result.numPartitions(),
                                     result.replicationFactor(),
                                     topicConfig);
+                                topicIdFuture.complete(result.topicId());
+                                future.complete(topicMetadataAndConfig);
                             }
-                            topicIdFuture.complete(result.topicId());
-                            future.complete(topicMetadataAndConfig);
                         }
                     }
                 }
@@ -2008,10 +2011,14 @@ public class KafkaAdminClient extends AdminClient {
             void handleFailure(Throwable throwable) {
                 // If there were any topics retries due to a quota exceeded exception, we propagate
                 // the initial error back to the caller if the request timed out.
+                int throttleTimeDelta = (int) (time.milliseconds() - now);
                 maybeCompleteQuotaExceededException(options.shouldRetryOnQuotaViolation(),
-                    throwable, futures, quotaExceededExceptions, (int) (time.milliseconds() - now));
+                    throwable, futures, quotaExceededExceptions, throttleTimeDelta);
+                maybeCompleteQuotaExceededException(options.shouldRetryOnQuotaViolation(),
+                    throwable, topicIdFutures, quotaExceededExceptions, throttleTimeDelta);
                 // Fail all the other remaining futures
                 completeAllExceptionally(futures.values(), throwable);
+                completeAllExceptionally(topicIdFutures.values(), throwable);
             }
         };
     }
