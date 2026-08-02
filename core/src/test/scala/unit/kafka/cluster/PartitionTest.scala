@@ -2284,6 +2284,63 @@ class PartitionTest extends AbstractPartitionTest {
   }
 
   @Test
+  def testIsrNotExpandedWhenFollowerHasNotCaughtUpToLeaderLogEnd(): Unit = {
+    configRepository.setTopicConfig(topicPartition.topic, TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3")
+    val leaderEpoch = 5
+    val log = logManager.getOrCreateLog(topicPartition, topicId.toJava)
+
+    val remoteBrokerId = brokerId + 1
+    val replicas = Array(brokerId, remoteBrokerId, brokerId + 2)
+    val isr = Array(brokerId)
+    addBrokerEpochToMockMetadataCache(metadataCache, replicas)
+
+    val partition = new Partition(
+      topicPartition,
+      replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
+      localBrokerId = brokerId,
+      () => defaultBrokerEpoch(brokerId),
+      time,
+      alterPartitionListener,
+      delayedOperations,
+      metadataCache,
+      logManager,
+      alterPartitionManager
+    )
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, topicId)
+
+    val partitionRegistration = new PartitionRegistration.Builder()
+      .setLeader(brokerId)
+      .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
+      .setLeaderEpoch(leaderEpoch)
+      .setIsr(isr)
+      .setPartitionEpoch(1)
+      .setReplicas(replicas)
+      .setDirectories(DirectoryId.unassignedArray(replicas.length))
+      .build()
+    assertTrue(partition.makeLeader(partitionRegistration, isNew = true, offsetCheckpoints, topicId),
+      "Expected become leader transition to succeed")
+    seedLogData(log, numRecords = 10, leaderEpoch = leaderEpoch)
+    time.sleep(partition.replicaLagTimeMaxMs + 1)
+
+    // The partition is under min ISR, so its HWM remains at zero. Reaching the HWM alone
+    // must not add a follower which is still behind the leader's log end offset.
+    fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = 1L)
+    assertReplicaState(partition, remoteBrokerId,
+      lastCaughtUpTimeMs = 0L,
+      logStartOffset = 0L,
+      logEndOffset = 1L
+    )
+    assertEquals(util.Set.of(brokerId), partition.partitionState.isr)
+    assertEquals(0, alterPartitionManager.isrUpdates.size)
+
+    // Once the follower catches up to the leader's log end, it can be added to the ISR.
+    fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = log.logEndOffset)
+    assertEquals(1, alterPartitionManager.isrUpdates.size)
+    assertEquals(util.Set.of[Integer](brokerId, remoteBrokerId),
+      alterPartitionManager.isrUpdates.peek().leaderAndIsr.isr)
+  }
+
+  @Test
   def testAlterIsrLeaderAndIsrRace(): Unit = {
     val log = logManager.getOrCreateLog(topicPartition, topicId.toJava)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)

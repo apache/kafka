@@ -867,9 +867,10 @@ class Partition(val topicPartition: TopicPartition,
    * leader's HW and LEO, the replica may become the leader before it fetches the committed data
    * and the data will be lost.
    *
-   * Technically, a replica shouldn't be in ISR if it hasn't caught up for longer than replicaLagTimeMaxMs,
-   * even if its log end offset is >= HW. However, to be consistent with how the follower determines
-   * whether a replica is in-sync, we only check HW.
+   * When the partition is under min ISR, the HW may be behind the leader's LEO. In that case, a
+   * replica is not considered caught up just because it has reached the HW. The same caught-up
+   * check used when shrinking the ISR is also required to avoid repeatedly expanding and shrinking
+   * the ISR for a follower that remains behind the leader's LEO.
    *
    * This function can be triggered when a replica's LEO has incremented.
    */
@@ -906,8 +907,13 @@ class Partition(val topicPartition: TopicPartition,
 
   private def isFollowerInSync(followerReplica: Replica): Boolean = {
     leaderLogIfLocal.exists { leaderLog =>
-      val followerEndOffset = followerReplica.stateSnapshot.logEndOffset
-      followerEndOffset >= leaderLog.highWatermark && leaderEpochStartOffsetOpt.exists(followerEndOffset >= _)
+      val followerState = followerReplica.stateSnapshot
+      val followerEndOffset = followerState.logEndOffset
+      val followerIsCaughtUp = !isUnderMinIsr ||
+        followerState.isCaughtUp(leaderLog.logEndOffset, time.milliseconds(), replicaLagTimeMaxMs)
+      followerEndOffset >= leaderLog.highWatermark &&
+        leaderEpochStartOffsetOpt.exists(followerEndOffset >= _) &&
+        followerIsCaughtUp
     }
   }
 
