@@ -1326,8 +1326,9 @@ public class MirrorConnectorsIntegrationBaseTest {
         Timer timer = Time.SYSTEM.timer(RECORD_PRODUCE_DURATION_MS);
 
         try {
-            for (ProducerRecord<byte[], byte[]> record : records) {
-                producer.send(record).get(timer.remainingMs(), TimeUnit.MILLISECONDS);
+            var futures = records.stream().map(producer::send).toList();
+            for (var future : futures) {
+                future.get(timer.remainingMs(), TimeUnit.MILLISECONDS);
                 timer.update();
             }
         } catch (ExecutionException | InterruptedException | TimeoutException e) {
