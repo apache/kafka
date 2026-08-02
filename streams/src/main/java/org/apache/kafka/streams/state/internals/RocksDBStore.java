@@ -75,6 +75,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -111,6 +112,23 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     private static final long BLOCK_SIZE = 4096L;
     private static final int MAX_WRITE_BUFFERS = 3;
     static final String DB_FILE_DIR = "rocksdb";
+
+    // RocksDB allocates a ReadOptions per instance in a field initializer but never closes it, and
+    // AbstractNativeReference has no finalizer, so its native memory is leaked for the lifetime of
+    // the JVM. Null if a future rocksdbjni renames the field or fixes the leak, which turns
+    // releaseDefaultReadOptions into a no-op.
+    private static final Field DEFAULT_READ_OPTIONS_FIELD = resolveDefaultReadOptionsField();
+
+    private static Field resolveDefaultReadOptionsField() {
+        try {
+            final Field field = RocksDB.class.getDeclaredField("defaultReadOptions_");
+            field.setAccessible(true);
+            return field;
+        } catch (final NoSuchFieldException | RuntimeException e) {
+            log.debug("Could not resolve RocksDB.defaultReadOptions_; its native memory will not be reclaimed", e);
+            return null;
+        }
+    }
 
     final String name;
     private final String parentDir;
@@ -963,6 +981,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
         dbAccessor.close();
         db.close();
+        releaseDefaultReadOptions(db);
         userSpecifiedOptions.close();
         if (offsetsCfOptions != null) {
             offsetsCfOptions.close();
@@ -985,6 +1004,26 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         filter = null;
         cache = null;
         statistics = null;
+    }
+
+    // Important: only call this after db.close(). The newIterator overloads that take no explicit
+    // ReadOptions pass this field to JNI, and Streams uses newIterator(ColumnFamilyHandle), so
+    // releasing it while an iterator is live would be a use-after-free. Closing the database first
+    // invalidates any such iterator anyway, and close() closes all open iterators before this.
+    // Never throws, and is safe to call twice.
+    // VisibleForTesting
+    static void releaseDefaultReadOptions(final RocksDB db) {
+        if (db == null || DEFAULT_READ_OPTIONS_FIELD == null) {
+            return;
+        }
+        try {
+            final ReadOptions defaultReadOptions = (ReadOptions) DEFAULT_READ_OPTIONS_FIELD.get(db);
+            if (defaultReadOptions != null) {
+                defaultReadOptions.close();
+            }
+        } catch (final IllegalAccessException | RuntimeException e) {
+            log.debug("Failed to release RocksDB's default ReadOptions", e);
+        }
     }
 
     /**
@@ -1014,6 +1053,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
         if (db != null) {
             db.close();
+            releaseDefaultReadOptions(db);
             db = null;
         }
     }
