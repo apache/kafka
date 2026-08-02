@@ -1050,8 +1050,11 @@ public class MirrorConnectorsIntegrationBaseTest {
         String topic = "test-topic-metrics";
         primary.kafka().createTopic(topic);
         try (KafkaProducer<byte[], byte[]> producer = primary.kafka().createProducer(Map.of())) {
-            for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
-                producer.send(new ProducerRecord<>(topic, ("value" + i).getBytes())).get();
+            var futures = IntStream.range(0, NUM_RECORDS_PRODUCED)
+                    .mapToObj(i -> producer.send(new ProducerRecord<byte[], byte[]>(topic, ("value" + i).getBytes())))
+                    .toList();
+            for (var future : futures) {
+                future.get();
             }
         }
 
