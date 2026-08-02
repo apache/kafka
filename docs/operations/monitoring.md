@@ -1560,7 +1560,7 @@ Classic Group Count
 </td>  
 <td>
 
-kafka.server:type=GroupMetadataManager,name=NumGroups
+kafka.server:type=group-coordinator-metrics,name=group-count,protocol=classic
 </td>  
 <td>
 
@@ -1573,7 +1573,7 @@ Classic Group Count, per State
 </td>  
 <td>
 
-kafka.server:type=GroupMetadataManager,name=NumGroups[PreparingRebalance,CompletingRebalance,Empty,Stable,Dead]
+kafka.server:type=group-coordinator-metrics,name=classic-group-count,state={PreparingRebalance,CompletingRebalance,Empty,Stable,Dead}
 </td>  
 <td>
 
@@ -1612,7 +1612,7 @@ Group Offset Count
 </td>  
 <td>
 
-kafka.server:type=GroupMetadataManager,name=NumOffsets
+kafka.server:type=group-coordinator-metrics,name=offset-count
 </td>  
 <td>
 

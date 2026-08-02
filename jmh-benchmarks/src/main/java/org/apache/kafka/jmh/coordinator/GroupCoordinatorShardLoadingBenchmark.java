@@ -47,8 +47,6 @@ import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
-import com.yammer.metrics.core.MetricsRegistry;
-
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -294,9 +292,8 @@ public class GroupCoordinatorShardLoadingBenchmark {
         LogContext logContext = new LogContext();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
 
-        MetricsRegistry metricsRegistry = new MetricsRegistry();
         Metrics metrics = new Metrics();
-        GroupCoordinatorMetrics coordinatorMetrics = new GroupCoordinatorMetrics(metricsRegistry, metrics);
+        GroupCoordinatorMetrics coordinatorMetrics = new GroupCoordinatorMetrics(metrics);
 
         coordinatorShard = new GroupCoordinatorShard.Builder(config, configManager)
             .withAuthorizerPlugin(Optional.empty())

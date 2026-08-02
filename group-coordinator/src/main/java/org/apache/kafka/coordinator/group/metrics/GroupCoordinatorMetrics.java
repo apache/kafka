@@ -30,10 +30,7 @@ import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState;
-import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.timeline.SnapshotRegistry;
-
-import com.yammer.metrics.core.MetricsRegistry;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -48,58 +45,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoCloseable {
 
     public static final String METRICS_GROUP = "group-coordinator-metrics";
-
-    /**
-     * @deprecated Since 4.4. Use kafka.server:type=group-coordinator-metrics,name=group-count,protocol=classic
-     *             instead. This metric will be removed in Kafka 5.0.
-     */
-    @Deprecated(since = "4.4", forRemoval = true)
-    public static final com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS = getMetricName(
-        "GroupMetadataManager", "NumGroups");
-    /**
-     * @deprecated Since 4.4. Use kafka.server:type=group-coordinator-metrics,name=offset-count instead.
-     *             This metric will be removed in Kafka 5.0.
-     */
-    @Deprecated(since = "4.4", forRemoval = true)
-    public static final com.yammer.metrics.core.MetricName NUM_OFFSETS = getMetricName(
-        "GroupMetadataManager", "NumOffsets");
-    /**
-     * @deprecated Since 4.4. Use
-     *             kafka.server:type=group-coordinator-metrics,name=classic-group-count,state=PreparingRebalance
-     *             instead. This metric will be removed in Kafka 5.0.
-     */
-    @Deprecated(since = "4.4", forRemoval = true)
-    public static final com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_PREPARING_REBALANCE = getMetricName(
-        "GroupMetadataManager", "NumGroupsPreparingRebalance");
-    /**
-     * @deprecated Since 4.4. Use
-     *             kafka.server:type=group-coordinator-metrics,name=classic-group-count,state=CompletingRebalance
-     *             instead. This metric will be removed in Kafka 5.0.
-     */
-    @Deprecated(since = "4.4", forRemoval = true)
-    public static final com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_COMPLETING_REBALANCE = getMetricName(
-        "GroupMetadataManager", "NumGroupsCompletingRebalance");
-    /**
-     * @deprecated Since 4.4. Use kafka.server:type=group-coordinator-metrics,name=classic-group-count,state=Stable
-     *             instead. This metric will be removed in Kafka 5.0.
-     */
-    @Deprecated(since = "4.4", forRemoval = true)
-    public static final com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_STABLE = getMetricName(
-        "GroupMetadataManager", "NumGroupsStable");
-    /**
-     * @deprecated Since 4.4. Use kafka.server:type=group-coordinator-metrics,name=classic-group-count,state=Dead
-     *             instead. This metric will be removed in Kafka 5.0.
-     */
-    @Deprecated(since = "4.4", forRemoval = true)
-    public static final com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_DEAD = getMetricName(
-        "GroupMetadataManager", "NumGroupsDead");
-    /**
-     * @deprecated Since 4.4. Use kafka.server:type=group-coordinator-metrics,name=classic-group-count,state=Empty
-     *             instead. This metric will be removed in Kafka 5.0.
-     */
-    @Deprecated(since = "4.4", forRemoval = true)
-    public static final com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_EMPTY = getMetricName(
-        "GroupMetadataManager", "NumGroupsEmpty");
 
     public static final String GROUP_COUNT_METRIC_NAME = "group-count";
     public static final String GROUP_COUNT_PROTOCOL_TAG = "protocol";
@@ -156,7 +101,6 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     private final MetricName streamsGroupCountDeadMetricName;
     private final MetricName streamsGroupCountNotReadyMetricName;
 
-    private final MetricsRegistry registry;
     private final Metrics metrics;
     private final Map<TopicPartition, GroupCoordinatorMetricsShard> shards = new ConcurrentHashMap<>();
 
@@ -166,12 +110,11 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     public final Map<String, Sensor> globalSensors;
 
     public GroupCoordinatorMetrics() {
-        this(KafkaYammerMetrics.defaultRegistry(), new Metrics());
+        this(new Metrics());
     }
 
     @SuppressWarnings("MethodLength")
-    public GroupCoordinatorMetrics(MetricsRegistry registry, Metrics metrics) {
-        this.registry = Objects.requireNonNull(registry);
+    public GroupCoordinatorMetrics(Metrics metrics) {
         this.metrics = Objects.requireNonNull(metrics);
 
         offsetCountMetricName = metrics.metricName(
@@ -341,7 +284,7 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             Map.of(STREAMS_GROUP_COUNT_STATE_TAG, StreamsGroupState.NOT_READY.toString())
         );
 
-        registerGauges();
+        registerMetrics();
 
         Sensor offsetCommitsSensor = metrics.sensor(OFFSET_COMMITS_SENSOR_NAME);
         offsetCommitsSensor.add(new Meter(
@@ -571,16 +514,6 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     @Override
     public void close() {
         Arrays.asList(
-            NUM_OFFSETS,
-            NUM_CLASSIC_GROUPS,
-            NUM_CLASSIC_GROUPS_PREPARING_REBALANCE,
-            NUM_CLASSIC_GROUPS_COMPLETING_REBALANCE,
-            NUM_CLASSIC_GROUPS_STABLE,
-            NUM_CLASSIC_GROUPS_DEAD,
-            NUM_CLASSIC_GROUPS_EMPTY
-        ).forEach(registry::removeMetric);
-
-        Arrays.asList(
             offsetCountMetricName,
             classicGroupCountMetricName,
             classicGroupCountPreparingRebalanceMetricName,
@@ -652,60 +585,7 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
         }
     }
 
-    public static com.yammer.metrics.core.MetricName getMetricName(String type, String name) {
-        return getMetricName("kafka.coordinator.group", type, name);
-    }
-
-    private void registerGauges() {
-        registry.newGauge(NUM_OFFSETS, new com.yammer.metrics.core.Gauge<Long>() {
-            @Override
-            public Long value() {
-                return numOffsets();
-            }
-        });
-
-        registry.newGauge(NUM_CLASSIC_GROUPS, new com.yammer.metrics.core.Gauge<Long>() {
-            @Override
-            public Long value() {
-                return numClassicGroups();
-            }
-        });
-
-        registry.newGauge(NUM_CLASSIC_GROUPS_PREPARING_REBALANCE, new com.yammer.metrics.core.Gauge<Long>() {
-            @Override
-            public Long value() {
-                return numClassicGroups(ClassicGroupState.PREPARING_REBALANCE);
-            }
-        });
-
-        registry.newGauge(NUM_CLASSIC_GROUPS_COMPLETING_REBALANCE, new com.yammer.metrics.core.Gauge<Long>() {
-            @Override
-            public Long value() {
-                return numClassicGroups(ClassicGroupState.COMPLETING_REBALANCE);
-            }
-        });
-
-        registry.newGauge(NUM_CLASSIC_GROUPS_STABLE, new com.yammer.metrics.core.Gauge<Long>() {
-            @Override
-            public Long value() {
-                return numClassicGroups(ClassicGroupState.STABLE);
-            }
-        });
-
-        registry.newGauge(NUM_CLASSIC_GROUPS_DEAD, new com.yammer.metrics.core.Gauge<Long>() {
-            @Override
-            public Long value() {
-                return numClassicGroups(ClassicGroupState.DEAD);
-            }
-        });
-
-        registry.newGauge(NUM_CLASSIC_GROUPS_EMPTY, new com.yammer.metrics.core.Gauge<Long>() {
-            @Override
-            public Long value() {
-                return numClassicGroups(ClassicGroupState.EMPTY);
-            }
-        });
-
+    private void registerMetrics() {
         metrics.addMetric(
             offsetCountMetricName,
             (Gauge<Long>) (config, now) -> numOffsets()

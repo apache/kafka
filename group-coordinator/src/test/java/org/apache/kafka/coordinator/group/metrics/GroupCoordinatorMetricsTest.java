@@ -32,8 +32,6 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroup.ShareGroupStat
 import org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
-import com.yammer.metrics.core.MetricsRegistry;
-
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -48,8 +46,6 @@ import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.SHARE_GROUP_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.STREAMS_GROUP_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.MetricsTestUtils.assertGaugeValue;
-import static org.apache.kafka.coordinator.group.metrics.MetricsTestUtils.assertMetricsForTypeEqual;
-import static org.apache.kafka.coordinator.group.metrics.MetricsTestUtils.metricName;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -58,7 +54,6 @@ public class GroupCoordinatorMetricsTest {
 
     @Test
     public void testMetricNames() {
-        MetricsRegistry registry = new MetricsRegistry();
         Metrics metrics = new Metrics();
 
         Set<org.apache.kafka.common.MetricName> expectedMetrics = Set.of(
@@ -192,33 +187,16 @@ public class GroupCoordinatorMetricsTest {
                 Map.of("state", StreamsGroupState.NOT_READY.toString()))
         );
 
-        try {
-            try (GroupCoordinatorMetrics ignored = new GroupCoordinatorMetrics(registry, metrics)) {
-                Set<String> expectedRegistry = Set.of(
-                    "kafka.coordinator.group:type=GroupMetadataManager,name=NumOffsets",
-                    "kafka.coordinator.group:type=GroupMetadataManager,name=NumGroups",
-                    "kafka.coordinator.group:type=GroupMetadataManager,name=NumGroupsPreparingRebalance",
-                    "kafka.coordinator.group:type=GroupMetadataManager,name=NumGroupsCompletingRebalance",
-                    "kafka.coordinator.group:type=GroupMetadataManager,name=NumGroupsStable",
-                    "kafka.coordinator.group:type=GroupMetadataManager,name=NumGroupsDead",
-                    "kafka.coordinator.group:type=GroupMetadataManager,name=NumGroupsEmpty"
-                );
-
-                assertMetricsForTypeEqual(registry, "kafka.coordinator.group", expectedRegistry);
-                expectedMetrics.forEach(metricName -> assertTrue(metrics.metrics().containsKey(metricName), metricName + " is missing"));
-            }
-            assertMetricsForTypeEqual(registry, "kafka.coordinator.group", Set.of());
-            expectedMetrics.forEach(metricName -> assertFalse(metrics.metrics().containsKey(metricName)));
-        } finally {
-            registry.shutdown();
+        try (GroupCoordinatorMetrics ignored = new GroupCoordinatorMetrics(metrics)) {
+            expectedMetrics.forEach(metricName -> assertTrue(metrics.metrics().containsKey(metricName), metricName + " is missing"));
         }
+        expectedMetrics.forEach(metricName -> assertFalse(metrics.metrics().containsKey(metricName)));
     }
 
     @Test
     public void aggregateShards() {
-        MetricsRegistry registry = new MetricsRegistry();
         Metrics metrics = new Metrics();
-        GroupCoordinatorMetrics coordinatorMetrics = new GroupCoordinatorMetrics(registry, metrics);
+        GroupCoordinatorMetrics coordinatorMetrics = new GroupCoordinatorMetrics(metrics);
         SnapshotRegistry snapshotRegistry0 = new SnapshotRegistry(new LogContext());
         SnapshotRegistry snapshotRegistry1 = new SnapshotRegistry(new LogContext());
         TopicPartition tp0 = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0);
@@ -268,7 +246,6 @@ public class GroupCoordinatorMetricsTest {
 
         assertEquals(4, shard0.numClassicGroups());
         assertEquals(5, shard1.numClassicGroups());
-        assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroups"), 9);
         assertGaugeValue(
             metrics,
             metrics.metricName("group-count", METRICS_GROUP, Map.of("protocol", "classic")),
@@ -290,14 +267,12 @@ public class GroupCoordinatorMetricsTest {
             metrics.metricName("group-count", METRICS_GROUP, Map.of("protocol", "consumer")),
             7
         );
-        assertGaugeValue(registry, metricName("GroupMetadataManager", "NumOffsets"), 7);
         assertGaugeValue(
             metrics,
             metrics.metricName(GroupCoordinatorMetrics.OFFSET_COUNT_METRIC_NAME, METRICS_GROUP),
             7
         );
 
-        assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroupsPreparingRebalance"), 2);
         assertGaugeValue(
             metrics,
             metrics.metricName(
@@ -307,7 +282,6 @@ public class GroupCoordinatorMetricsTest {
             2
         );
 
-        assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroupsCompletingRebalance"), 2);
         assertGaugeValue(
             metrics,
             metrics.metricName(
@@ -317,7 +291,6 @@ public class GroupCoordinatorMetricsTest {
             2
         );
 
-        assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroupsStable"), 2);
         assertGaugeValue(
             metrics,
             metrics.metricName(
@@ -327,7 +300,6 @@ public class GroupCoordinatorMetricsTest {
             2
         );
 
-        assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroupsDead"), 1);
         assertGaugeValue(
             metrics,
             metrics.metricName(
@@ -337,7 +309,6 @@ public class GroupCoordinatorMetricsTest {
             1
         );
 
-        assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroupsEmpty"), 2);
         assertGaugeValue(
             metrics,
             metrics.metricName(
@@ -366,10 +337,9 @@ public class GroupCoordinatorMetricsTest {
 
     @Test
     public void testGlobalSensors() {
-        MetricsRegistry registry = new MetricsRegistry();
         Time time = new MockTime();
         Metrics metrics = new Metrics(time);
-        GroupCoordinatorMetrics coordinatorMetrics = new GroupCoordinatorMetrics(registry, metrics);
+        GroupCoordinatorMetrics coordinatorMetrics = new GroupCoordinatorMetrics(metrics);
         GroupCoordinatorMetricsShard shard = coordinatorMetrics.newMetricsShard(
             new SnapshotRegistry(new LogContext()), new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
         );
@@ -417,10 +387,9 @@ public class GroupCoordinatorMetricsTest {
 
     @Test
     public void testStreamsGroupTopologyDescriptionSetAndGetSensors() {
-        MetricsRegistry registry = new MetricsRegistry();
         Time time = new MockTime();
         Metrics metrics = new Metrics(time);
-        GroupCoordinatorMetrics coordinatorMetrics = new GroupCoordinatorMetrics(registry, metrics);
+        GroupCoordinatorMetrics coordinatorMetrics = new GroupCoordinatorMetrics(metrics);
 
         coordinatorMetrics.recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_SUCCESS_SENSOR_NAME);
         coordinatorMetrics.recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_ERROR_SENSOR_NAME);

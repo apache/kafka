@@ -22,8 +22,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
-import com.yammer.metrics.core.MetricsRegistry;
-
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -32,11 +30,10 @@ public class GroupCoordinatorMetricsShardTest {
 
     @Test
     public void testTimelineGaugeCounters() {
-        MetricsRegistry registry = new MetricsRegistry();
         Metrics metrics = new Metrics();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         TopicPartition tp = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0);
-        GroupCoordinatorMetrics coordinatorMetrics = new GroupCoordinatorMetrics(registry, metrics);
+        GroupCoordinatorMetrics coordinatorMetrics = new GroupCoordinatorMetrics(metrics);
         GroupCoordinatorMetricsShard shard = coordinatorMetrics.newMetricsShard(snapshotRegistry, tp);
 
         shard.incrementNumOffsets();
