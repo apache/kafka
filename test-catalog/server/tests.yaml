@@ -188,6 +188,7 @@ org.apache.kafka.server.CordonedLogDirsIntegrationTest:
 - testCordonUncordonLogDirs
 - testCordonUnknownLogDirs
 - testDecommissionBroker
+- testDecommissionLogDir
 - testFeatureNotEnabled
 - testFeatureNotEnabledStaticConfig
 - testStaticCordonUncordonLogDirs
