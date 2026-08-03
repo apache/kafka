@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM ghcr.io/graalvm/graalvm-community:21 AS build-native-image
+FROM ghcr.io/graalvm/graalvm-community:25 AS build-native-image
 
 ARG kafka_url
 
