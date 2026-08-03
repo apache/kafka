@@ -61,8 +61,10 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.time.Duration;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -1463,14 +1465,16 @@ public class StoreChangelogReaderTest {
     }
 
     /**
-     * A shared probe poll returns as soon as any fetch lands, so partitions resolve a few at a
-     * time; with the attempt budget shared too, more partitions than attempts means some cannot be
-     * served at all and fall back to a log-start seek with zero margin. Here the MockConsumer
-     * delivers one partition per poll, and every partition's retention is far shorter than its log,
-     * so a log-start seek for any of them is the defect.
+     * An empty probe poll does not mean the offset holds no record: the fetch may simply not have
+     * landed, or another partition's may have landed first. Giving up on the first empty poll
+     * sends every windowed partition to a log-start seek with zero margin against retention.
+     *
+     * <p>Here the first poll after assignment returns nothing and every partition's record arrives
+     * from the next poll on. Each retention is far shorter than its log, so a log-start seek for
+     * any of them is the defect.
      */
     @Test
-    public void shouldNotStarveWindowedPartitionsIntoALogStartSeekWhenTheyOutnumberProbeAttempts() {
+    public void shouldRetryProbePollBeforeFallingBackToLogStart() {
         final long shortRetentionMs = Duration.ofSeconds(3).toMillis();
         final long beginOffset = 900_000L;
         final long logEndOffset = 1_000_000L;
@@ -1486,6 +1490,10 @@ public class StoreChangelogReaderTest {
             ends.put(tps[i], logEndOffset);
         }
 
+        // Record the fallback directly. A partition's position after restore reflects records it
+        // has since consumed, not where it was seeked, so seekToBeginning is the only unambiguous
+        // signal that the optimisation was abandoned.
+        final Set<TopicPartition> seekedToBeginning = new HashSet<>();
         final MockConsumer<byte[], byte[]> probeConsumer =
             new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
                 @Override
@@ -1496,18 +1504,30 @@ public class StoreChangelogReaderTest {
                         result.put(k, new OffsetAndTimestamp(seekTarget, v)));
                     return result;
                 }
+
+                @Override
+                public synchronized void seekToBeginning(final Collection<TopicPartition> partitions) {
+                    seekedToBeginning.addAll(partitions);
+                    super.seekToBeginning(partitions);
+                }
             };
         probeConsumer.updateBeginningOffsets(begins);
         probeConsumer.updateEndOffsets(ends);
         adminClient.updateEndOffsets(ends);
 
-        // One partition's record becomes available per poll: the shared poll, made deterministic.
-        // Records can only be added once the partition is assigned, and early polls happen before
-        // that, so cycle through the partitions across plenty of scheduled tasks.
+        // Records can only be added once the partitions are assigned, and earlier polls happen
+        // before that. The first poll after assignment deliberately delivers nothing -- a fetch
+        // that has not landed -- and every partition's record arrives from the next poll on.
+        final int[] assignedPolls = {0};
         for (int round = 0; round < numPartitions * 4; round++) {
-            final TopicPartition partition = tps[round % numPartitions];
             probeConsumer.schedulePollTask(() -> {
-                if (probeConsumer.assignment().contains(partition)) {
+                if (!probeConsumer.assignment().contains(tps[0])) {
+                    return;
+                }
+                if (++assignedPolls[0] <= 1) {
+                    return;
+                }
+                for (final TopicPartition partition : tps) {
                     probeConsumer.addRecord(new ConsumerRecord<>(
                         partition.topic(), partition.partition(), logEndOffset - 1,
                         10_000_000L, TimestampType.CREATE_TIME,
@@ -1548,12 +1568,10 @@ public class StoreChangelogReaderTest {
             // are already final by then.
         }
 
-        final String starved = reportProbeSeeks(probeConsumer, tps, beginOffset);
-        assertEquals("", starved,
-            "every partition has a 3s retention against a 100k-record log, so none should be "
-                + "seeked to log-start (" + beginOffset + "); these were never served inside the "
-                + "shared PROBE_MAX_ATTEMPTS budget and fell back with zero margin -- partitions:"
-                + starved);
+        assertEquals(Collections.emptySet(), seekedToBeginning,
+            "every partition has a 3s retention against a 100k-record log, so the optimisation "
+                + "should apply to all of them; these were sent to log-start because the first "
+                + "probe poll came back empty, which only meant the fetch had not landed yet");
     }
 
     /** Reports where each probed partition was seeked to; returns the partitions left at log-start. */
