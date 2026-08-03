@@ -86,7 +86,21 @@ public final class RecordsDecodingStrategy<T> {
         return new RecordsDecodingStrategy<>(false, Optional.empty());
     }
 
-    Batch<T> readBatch(DefaultRecordBatch batch, BufferSupplier bufferSupplier, int numRecords) {
+    /**
+     * Decodes {@code batch} into a {@link Batch} according to this strategy. Control and data records
+     * are decoded only when this strategy is interested in them; records that are skipped produce a
+     * {@link Batch#skipped} batch that carries only the offset information.
+     *
+     * @param batch the batch to decode
+     * @param bufferSupplier supplier used to allocate buffers while decoding the records
+     * @return the decoded batch
+     */
+    public Batch<T> readBatch(DefaultRecordBatch batch, BufferSupplier bufferSupplier) {
+        Integer numRecords = batch.countOrNull();
+        if (numRecords == null) {
+            throw new IllegalStateException("Expected a record count for the records batch");
+        }
+
         if (batch.isControlBatch()) {
             return decodeControlRecords ? readControlBatch(batch, bufferSupplier, numRecords) : skippedBatch(batch, numRecords);
         } else {

@@ -19,16 +19,15 @@ package org.apache.kafka.raft.internals;
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.DefaultRecordBatch;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
-import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.ControlRecord;
 import org.apache.kafka.raft.internals.RecordsIteratorTest.TestBatch;
 
 import org.junit.jupiter.api.Test;
 
-import java.nio.ByteBuffer;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -43,49 +42,33 @@ final class RecordsDecodingStrategyTest {
     private static final List<String> DATA_RECORDS = List.of("a", "b", "c");
     private static final long DATA_LAST_OFFSET = DATA_BASE_OFFSET + DATA_RECORDS.size() - 1;
     private static final List<ControlRecord> CONTROL_RECORDS = List.of(ControlRecord.of(new KRaftVersionRecord()));
-    private static final MemoryRecords RECORDS = controlBatchThenDataBatch();
-
-    private static RecordsIterator<String> iterator(RecordsDecodingStrategy<String> strategy) {
-        return new RecordsIterator<>(
-            RECORDS,
-            strategy,
-            BufferSupplier.NO_CACHING,
-            Integer.MAX_VALUE,
-            true,
-            new LogContext()
-        );
-    }
 
     @Test
     void testDataAndControl() {
-        try (RecordsIterator<String> iterator = iterator(RecordsDecodingStrategy.dataAndControl(STRING_SERDE))) {
-            assertControlBatchDecoded(iterator.next());
-            assertDataBatchDecoded(iterator.next());
-        }
+        RecordsDecodingStrategy<String> strategy = RecordsDecodingStrategy.dataAndControl(STRING_SERDE);
+        assertControlBatchDecoded(strategy.readBatch(controlBatch(), BufferSupplier.NO_CACHING));
+        assertDataBatchDecoded(strategy.readBatch(dataBatch(), BufferSupplier.NO_CACHING));
     }
 
     @Test
     void testControlOnly() {
-        try (RecordsIterator<String> iterator = iterator(RecordsDecodingStrategy.controlOnly())) {
-            assertControlBatchDecoded(iterator.next());
-            assertDataBatchSkipped(iterator.next());
-        }
+        RecordsDecodingStrategy<String> strategy = RecordsDecodingStrategy.controlOnly();
+        assertControlBatchDecoded(strategy.readBatch(controlBatch(), BufferSupplier.NO_CACHING));
+        assertDataBatchSkipped(strategy.readBatch(dataBatch(), BufferSupplier.NO_CACHING));
     }
 
     @Test
     void testDataOnly() {
-        try (RecordsIterator<String> iterator = iterator(RecordsDecodingStrategy.dataOnly(STRING_SERDE))) {
-            assertControlBatchSkipped(iterator.next());
-            assertDataBatchDecoded(iterator.next());
-        }
+        RecordsDecodingStrategy<String> strategy = RecordsDecodingStrategy.dataOnly(STRING_SERDE);
+        assertControlBatchSkipped(strategy.readBatch(controlBatch(), BufferSupplier.NO_CACHING));
+        assertDataBatchDecoded(strategy.readBatch(dataBatch(), BufferSupplier.NO_CACHING));
     }
 
     @Test
     void testNone() {
-        try (RecordsIterator<String> iterator = iterator(RecordsDecodingStrategy.none())) {
-            assertControlBatchSkipped(iterator.next());
-            assertDataBatchSkipped(iterator.next());
-        }
+        RecordsDecodingStrategy<String> strategy = RecordsDecodingStrategy.none();
+        assertControlBatchSkipped(strategy.readBatch(controlBatch(), BufferSupplier.NO_CACHING));
+        assertDataBatchSkipped(strategy.readBatch(dataBatch(), BufferSupplier.NO_CACHING));
     }
 
     private static void assertControlBatchDecoded(Batch<String> batch) {
@@ -112,16 +95,14 @@ final class RecordsDecodingStrategyTest {
         assertEquals(DATA_LAST_OFFSET, batch.lastOffset());
     }
 
-    // Builds records containing a control batch at CONTROL_BASE_OFFSET followed by a data batch at DATA_BASE_OFFSET.
-    private static MemoryRecords controlBatchThenDataBatch() {
-        MemoryRecords controlRecords = RecordsIteratorTest.buildControlRecords(ControlRecordType.KRAFT_VERSION);
-        TestBatch<String> dataBatch = new TestBatch<>(DATA_BASE_OFFSET, 1, 100L, DATA_RECORDS);
-        MemoryRecords dataRecords = RecordsIteratorTest.buildRecords(CompressionType.NONE, List.of(dataBatch));
+    private static DefaultRecordBatch controlBatch() {
+        MemoryRecords records = RecordsIteratorTest.buildControlRecords(ControlRecordType.KRAFT_VERSION);
+        return (DefaultRecordBatch) records.batches().iterator().next();
+    }
 
-        ByteBuffer combined = ByteBuffer.allocate(controlRecords.sizeInBytes() + dataRecords.sizeInBytes());
-        combined.put(controlRecords.buffer());
-        combined.put(dataRecords.buffer());
-        combined.flip();
-        return MemoryRecords.readableRecords(combined);
+    private static DefaultRecordBatch dataBatch() {
+        TestBatch<String> batch = new TestBatch<>(DATA_BASE_OFFSET, 1, 100L, DATA_RECORDS);
+        MemoryRecords records = RecordsIteratorTest.buildRecords(CompressionType.NONE, List.of(batch));
+        return (DefaultRecordBatch) records.batches().iterator().next();
     }
 }

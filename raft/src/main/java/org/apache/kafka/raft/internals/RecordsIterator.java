@@ -204,11 +204,6 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
             batch.ensureValid();
         }
 
-        Integer numRecords = batch.countOrNull();
-        if (numRecords == null) {
-            throw new IllegalStateException("Expected a record count for the records batch");
-        }
-
-        return decodingStrategy.readBatch(batch, bufferSupplier, numRecords);
+        return decodingStrategy.readBatch(batch, bufferSupplier);
     }
 }
