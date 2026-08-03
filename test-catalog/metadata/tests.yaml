@@ -89,6 +89,9 @@ org.apache.kafka.controller.ClusterControlManagerTest:
 - testReplayBrokerRegistrationChangeRecord
 - testReplayRegisterBrokerRecord
 - testUnregister
+- testUnregisterController
+- testUnregisterControllerWithUnsupportedMetadataVersion
+- testUnregisterUnknownController
 org.apache.kafka.controller.ConfigurationControlManagerTest:
 - testCordonedLogDirsFeature
 - testElrUpgrade

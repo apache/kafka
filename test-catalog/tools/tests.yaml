@@ -54,6 +54,7 @@ org.apache.kafka.tools.ClusterToolTest:
 - testCommandConfigAndDeprecatedConfigPresent
 - testDeprecatedConfig
 - testLegacyModeClusterCannotUnregisterBroker
+- testLegacyModeClusterCannotUnregisterController
 - testListEndpointsArgumentWithBootstrapController
 - testListEndpointsArgumentWithBootstrapServer
 - testListEndpointsWithBootstrapController
@@ -61,6 +62,7 @@ org.apache.kafka.tools.ClusterToolTest:
 - testPrintClusterId
 - testUnregister
 - testUnregisterBroker
+- testUnregisterController
 - testUnregisterWithBootstrapController
 org.apache.kafka.tools.ConfigCommandIntegrationTest:
 - testAddConfigKeyValuesUsingCommand
@@ -490,6 +492,11 @@ org.apache.kafka.tools.MetadataQuorumCommandUnitTest:
 - testGetMetadataDirectoryIdWhenThereIsNoId
 - testGetNegativeControllerId
 - testRemoveControllerDryRun
+- testRemoveControllerDryRunWithUnregister
+- testRemoveControllerFailsWithUnsupportedVersion
+- testRemoveControllerFailsWithVoterNotFound
+- testRemoveControllerSucceedsButUnregisterFails
+- testRemoveControllerWithUnregisterSuccess
 org.apache.kafka.tools.ProducerPerformanceTest:
 - testBootstrapServer
 - testClientIdOverride

@@ -1296,6 +1296,7 @@ kafka.server.ControllerApisTest:
 - testUnauthorizedHandleIncrementalAlterConfigs
 - testUnauthorizedHandleListPartitionReassignments
 - testUnauthorizedHandleUnregisterBroker
+- testUnauthorizedHandleUnregisterController
 - testUnauthorizedVote
 kafka.server.ControllerConfigurationValidatorTest:
 - testDefaultTopicResourceIsRejected
@@ -1332,6 +1333,8 @@ kafka.server.ControllerMutationQuotaTest:
 kafka.server.ControllerRegistrationManagerTest:
 - testCreateAndClose
 - testCreateStartAndClose
+- testReRegistrationAfterDifferentIncarnationId
+- testReRegistrationAfterUnregister
 - testRegistration
 - testRetransmitRegistration
 - testRetransmitRegistrationAfterTimeout

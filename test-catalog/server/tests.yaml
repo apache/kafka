@@ -319,6 +319,8 @@ org.apache.kafka.server.KRaftClusterTest:
 - testTimedOutHeartbeats
 - testTopicDeletedAndRecreatedWhileBrokerIsDown
 - testUnregisterBroker
+- testUnregisterController
+- testUnregisterControllerError
 - testUpdateMetadataVersion
 org.apache.kafka.server.KRaftTopicCreatorTest:
 - testAuthenticationException
