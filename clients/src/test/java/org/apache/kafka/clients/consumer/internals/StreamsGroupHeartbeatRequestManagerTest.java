@@ -71,6 +71,7 @@ import static org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest.LEAV
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -1707,7 +1708,9 @@ class StreamsGroupHeartbeatRequestManagerTest {
                 )
             );
 
-            completeSuccessfulHeartbeat(heartbeatRequestManager, response);
+            final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+            assertEquals(1, result.unsentRequests.size());
+            result.unsentRequests.get(0).handler().onComplete(response);
 
             final StreamsRebalanceData.EndpointPartitions endpointPartitions = streamsRebalanceData.partitionsByHost()
                 .get(new StreamsRebalanceData.HostInfo("localhost", 8080));
