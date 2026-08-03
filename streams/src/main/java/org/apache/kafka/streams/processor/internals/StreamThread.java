@@ -972,7 +972,9 @@ public class StreamThread extends Thread implements ProcessingThread {
     boolean runLoop() {
         // Populate the task-offset-sum snapshot before subscribing: subscribing triggers the join heartbeat,
         // which must already carry the offset sums of tasks discovered in the local state directory, so that
-        // the broker-side sticky assignor can assign those tasks back to this client on a cold start.
+        // the broker-side sticky assignor can assign those tasks back to this client on a cold start. The sums
+        // are available this early because StateDirectory#initializeStartupStores runs during KafkaStreams#start,
+        // before any stream thread is started.
         taskManager.maybeUpdateTaskOffsetSumSnapshot();
         subscribeConsumer();
 

@@ -21,6 +21,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.errors.TopologyException;
@@ -138,6 +139,10 @@ public class TopologyMetadata {
     
     public ProcessingMode processingMode() {
         return processingMode;
+    }
+
+    public boolean streamsProtocolEnabled() {
+        return config.getString(StreamsConfig.GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.STREAMS.name);
     }
 
     public long topologyVersion() {

@@ -1454,6 +1454,49 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
+    public void shouldPreferPreviousStandbyWithHigherReportedTaskOffsetSum() {
+        // Several previous standbys of the same task: the one reporting the most caught-up state is promoted to
+        // active, rather than whichever one the member iteration order happened to visit first.
+        final Map<String, Set<Integer>> standbyForTask0 = mkMap(mkEntry("test-subtopology", Set.of(0)));
+        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadataWithStandbysAndOffsets("process1",
+            standbyForTask0, mkMap(mkEntry("test-subtopology", mkMap(mkEntry(0, 50L)))));
+        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadataWithStandbysAndOffsets("process2",
+            standbyForTask0, mkMap(mkEntry("test-subtopology", mkMap(mkEntry(0, 100L)))));
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("member1", memberMetadata1),
+            mkEntry("member2", memberMetadata2));
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, new HashMap<>()),
+            new TopologyDescriberImpl(2, true, List.of("test-subtopology"))
+        );
+
+        assertEquals(Set.of(0), getActiveTasks(result, "test-subtopology", "member2"));
+        assertEquals(Set.of(1), getActiveTasks(result, "test-subtopology", "member1"));
+    }
+
+    @Test
+    public void shouldPreferPreviousStandbyWithoutReportedOffsetsOverOffsetOnlyCandidate() {
+        // Upgrade case: a previous standby on an old client that does not report offsets yet must still outrank a
+        // member that is only known to hold state through its reported offsets.
+        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1",
+            Map.of(), mkMap(mkEntry("test-subtopology", Set.of(0))));
+        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadataWithOffsets("process2",
+            mkMap(mkEntry("test-subtopology", mkMap(mkEntry(0, 1_000_000L)))));
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("member1", memberMetadata1),
+            mkEntry("member2", memberMetadata2));
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, new HashMap<>()),
+            new TopologyDescriberImpl(2, true, List.of("test-subtopology"))
+        );
+
+        assertEquals(Set.of(0), getActiveTasks(result, "test-subtopology", "member1"));
+        assertEquals(Set.of(1), getActiveTasks(result, "test-subtopology", "member2"));
+    }
+
+    @Test
     public void shouldPreferMemberReportingHigherTaskOffsetSum() {
         // When several processes hold state for the same task, the most caught-up one wins.
         final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadataWithOffsets("process1",
@@ -1667,6 +1710,23 @@ public class StickyTaskAssignorTest {
             Map.of(),
             Map.of(),
             Map.of(),
+            Map.of());
+    }
+
+    private MemberMetadataAndStateImpl createMemberMetadataWithStandbysAndOffsets(
+        final String processId,
+        final Map<String, Set<Integer>> prevStandbyTasks,
+        final Map<String, Map<Integer, Long>> taskOffsets
+    ) {
+        return new MemberMetadataAndStateImpl(
+            Optional.empty(),
+            Optional.empty(),
+            processId,
+            Map.of(),
+            Map.of(),
+            prevStandbyTasks,
+            Map.of(),
+            taskOffsets,
             Map.of());
     }
 
