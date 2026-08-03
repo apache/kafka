@@ -115,7 +115,7 @@ public class EndpointToPartitionsManager {
             // fewer partitions therefore has no partition for the higher task IDs, mirroring the client-side
             // grouping in PartitionGrouper#partitionGroups.
             List<Integer> partitions = taskSet.stream()
-                .filter(taskId -> taskId < numPartitionsForTopic)
+                .filter(partitionId -> partitionId < numPartitionsForTopic)
                 .sorted()
                 .toList();
             if (!partitions.isEmpty()) {
