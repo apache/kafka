@@ -18,6 +18,7 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.BootstrapResolutionException;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.TestUtils;
@@ -26,10 +27,12 @@ import org.junit.jupiter.api.Test;
 
 import java.net.InetSocketAddress;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -161,6 +164,42 @@ public class BootstrapServerResolverTest {
         }
 
         verify(metadataUpdater).bootstrapFailed(any(BootstrapResolutionException.class));
+        verify(metadataUpdater, never()).bootstrap(any());
+    }
+
+    @Test
+    public void testInterruptedResolutionIsCancelled() throws Exception {
+        MockTime time = new MockTime();
+        MetadataUpdater metadataUpdater = metadataUpdater();
+        CountDownLatch resolutionStarted = new CountDownLatch(1);
+        CountDownLatch resolutionMayFinish = new CountDownLatch(1);
+
+        try (BootstrapServerResolver resolver = new BootstrapServerResolver(
+            configuration(1000, 10),
+            time,
+            new LogContext(),
+            () -> {
+                resolutionStarted.countDown();
+                try {
+                    resolutionMayFinish.await();
+                } catch (InterruptedException e) {
+                    throw new AssertionError("Resolution was interrupted before the test released it", e);
+                }
+                return RESOLVED_ADDRESSES;
+            })) {
+            TestUtils.waitForCondition(() -> resolutionStarted.getCount() == 0,
+                "Bootstrap resolution did not start");
+
+            Thread.currentThread().interrupt();
+            try {
+                assertThrows(InterruptException.class,
+                    () -> resolver.ensureBootstrapped(time.milliseconds(), metadataUpdater));
+            } finally {
+                Thread.interrupted();
+                resolutionMayFinish.countDown();
+            }
+        }
+
         verify(metadataUpdater, never()).bootstrap(any());
     }
 
