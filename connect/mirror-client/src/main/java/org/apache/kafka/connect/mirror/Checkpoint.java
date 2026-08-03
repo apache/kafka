@@ -136,13 +136,18 @@ public class Checkpoint {
         long upstreamOffset = valueStruct.getLong(UPSTREAM_OFFSET_KEY);
         long downstreamOffset = valueStruct.getLong(DOWNSTREAM_OFFSET_KEY);
         String metadata = valueStruct.getString(METADATA_KEY);
-        Struct keyStruct = KEY_SCHEMA.read(ByteBuffer.wrap(record.key()));
-        String group = keyStruct.getString(CONSUMER_GROUP_ID_KEY);
-        String topic = keyStruct.getString(TOPIC_KEY);
-        int partition = keyStruct.getInt(PARTITION_KEY);
-        return new Checkpoint(group, new TopicPartition(topic, partition), upstreamOffset,
+        Key key = deserializeKey(record.key());
+        return new Checkpoint(key.consumerGroupId(), key.topicPartition(), upstreamOffset,
             downstreamOffset, metadata);
     }
+
+    static Key deserializeKey(byte[] key) {
+        Struct keyStruct = KEY_SCHEMA.read(ByteBuffer.wrap(key));
+        return new Key(keyStruct.getString(CONSUMER_GROUP_ID_KEY),
+            new TopicPartition(keyStruct.getString(TOPIC_KEY), keyStruct.getInt(PARTITION_KEY)));
+    }
+
+    record Key(String consumerGroupId, TopicPartition topicPartition) { }
 
     private static Schema valueSchema(short version) {
         if (version != VERSION) {

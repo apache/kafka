@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AlterConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -25,6 +26,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -41,7 +43,11 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -72,6 +78,8 @@ public class MirrorCheckpointTask extends SourceTask {
     private Scheduler scheduler;
     private Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset;
     private CheckpointStore checkpointStore;
+    private final Map<Checkpoint.Key, Checkpoint> staleCheckpoints = new ConcurrentHashMap<>();
+    private final Queue<SourceRecord> pendingCheckpointRecords = new ConcurrentLinkedQueue<>();
 
     public MirrorCheckpointTask() {}
 
@@ -80,6 +88,15 @@ public class MirrorCheckpointTask extends SourceTask {
             ReplicationPolicy replicationPolicy, OffsetSyncStore offsetSyncStore, Set<String> consumerGroups,
             Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset,
             CheckpointStore checkpointStore) {
+        this(sourceClusterAlias, targetClusterAlias, replicationPolicy, offsetSyncStore, consumerGroups,
+                idleConsumerGroupsOffset, checkpointStore, null);
+    }
+
+    // for testing
+    MirrorCheckpointTask(String sourceClusterAlias, String targetClusterAlias,
+            ReplicationPolicy replicationPolicy, OffsetSyncStore offsetSyncStore, Set<String> consumerGroups,
+            Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset,
+            CheckpointStore checkpointStore, Admin targetAdminClient) {
         this.sourceClusterAlias = sourceClusterAlias;
         this.targetClusterAlias = targetClusterAlias;
         this.replicationPolicy = replicationPolicy;
@@ -87,6 +104,8 @@ public class MirrorCheckpointTask extends SourceTask {
         this.consumerGroups = consumerGroups;
         this.idleConsumerGroupsOffset = idleConsumerGroupsOffset;
         this.checkpointStore = checkpointStore;
+        this.targetAdminClient = targetAdminClient;
+        this.checkpointsTopic = "checkpoints.internal";
         this.topicFilter = topic -> true;
         this.interval = Duration.ofNanos(1);
         this.pollTimeout = Duration.ofNanos(1);
@@ -96,6 +115,8 @@ public class MirrorCheckpointTask extends SourceTask {
     public void start(Map<String, String> props) {
         MirrorCheckpointTaskConfig config = new MirrorCheckpointTaskConfig(props);
         stopping = false;
+        staleCheckpoints.clear();
+        pendingCheckpointRecords.clear();
         sourceClusterAlias = config.sourceClusterAlias();
         targetClusterAlias = config.targetClusterAlias();
         consumerGroups = config.taskConsumerGroups();
@@ -163,6 +184,10 @@ public class MirrorCheckpointTask extends SourceTask {
                 return null;
             }
             List<SourceRecord> records = new ArrayList<>();
+            SourceRecord pendingRecord;
+            while ((pendingRecord = pendingCheckpointRecords.poll()) != null) {
+                records.add(pendingRecord);
+            }
             for (String group : consumerGroups) {
                 records.addAll(sourceRecordsForGroup(group));
             }
@@ -201,6 +226,7 @@ public class MirrorCheckpointTask extends SourceTask {
             .map(x -> checkpoint(group, x.getKey(), x.getValue()))
             .flatMap(Optional::stream) // do not emit checkpoints for partitions that don't have offset-syncs
             .filter(x -> x.downstreamOffset() >= 0)  // ignore offsets we cannot translate accurately
+            .filter(this::isNotStaleCheckpoint)
             .filter(this::checkpointIsMoreRecent) // do not emit checkpoints for partitions that have a later checkpoint
             .collect(Collectors.toMap(Checkpoint::topicPartition, Function.identity()));
     }
@@ -261,11 +287,19 @@ public class MirrorCheckpointTask extends SourceTask {
     }
 
     SourceRecord checkpointRecord(Checkpoint checkpoint, long timestamp) {
+        return checkpointRecord(checkpoint, checkpoint.recordValue(), timestamp);
+    }
+
+    private SourceRecord checkpointTombstoneRecord(Checkpoint checkpoint, long timestamp) {
+        return checkpointRecord(checkpoint, null, timestamp);
+    }
+
+    private SourceRecord checkpointRecord(Checkpoint checkpoint, byte[] value, long timestamp) {
         return new SourceRecord(
             checkpoint.connectPartition(), MirrorUtils.wrapOffset(0),
             checkpointsTopic, 0,
             Schema.BYTES_SCHEMA, checkpoint.recordKey(),
-            Schema.BYTES_SCHEMA, checkpoint.recordValue(),
+            Schema.BYTES_SCHEMA, value,
             timestamp);
     }
 
@@ -342,7 +376,12 @@ public class MirrorCheckpointTask extends SourceTask {
             String consumerGroupId = group.getKey();
             // for each idle consumer at target, read the checkpoints (converted upstream offset)
             // from the pre-populated map
-            Map<TopicPartition, OffsetAndMetadata> convertedUpstreamOffset = group.getValue();
+            Map<TopicPartition, OffsetAndMetadata> convertedUpstreamOffset = group.getValue().entrySet().stream()
+                    .filter(entry -> !staleCheckpoints.containsKey(new Checkpoint.Key(consumerGroupId, entry.getKey())))
+                    .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+            if (convertedUpstreamOffset.isEmpty()) {
+                continue;
+            }
 
             Map<TopicPartition, OffsetAndMetadata> offsetToSync = new HashMap<>();
             Map<TopicPartition, OffsetAndMetadata> targetConsumerOffset = idleConsumerGroupsOffset.get(consumerGroupId);
@@ -397,22 +436,71 @@ public class MirrorCheckpointTask extends SourceTask {
 
     void syncGroupOffset(String consumerGroupId, Map<TopicPartition, OffsetAndMetadata> offsetToSync) throws ExecutionException, InterruptedException {
         if (targetAdminClient != null) {
-            adminCall(
-                    () -> targetAdminClient.alterConsumerGroupOffsets(consumerGroupId, offsetToSync).all()
-                            .whenComplete((v, throwable) -> {
-                                if (throwable != null) {
-                                    if (throwable.getCause() instanceof UnknownMemberIdException) {
-                                        log.warn("Unable to sync offsets for consumer group {}. This is likely caused " +
-                                                "by consumers currently using this group in the target cluster.", consumerGroupId);
-                                    } else {
-                                        log.error("Unable to sync offsets for consumer group {}.", consumerGroupId, throwable);
-                                    }
-                                } else {
-                                    log.trace("Sync-ed {} offsets for consumer group {}.", offsetToSync.size(), consumerGroupId);
-                                }
-                            }),
+            AlterConsumerGroupOffsetsResult result = adminCall(
+                    () -> targetAdminClient.alterConsumerGroupOffsets(consumerGroupId, offsetToSync),
                     () -> String.format("alter offsets for consumer group %s on %s cluster", consumerGroupId, targetClusterAlias)
             );
+            offsetToSync.keySet().forEach(topicPartition -> result.partitionResult(topicPartition)
+                    .whenComplete((v, throwable) -> handleOffsetSyncResult(consumerGroupId, topicPartition, throwable)));
         }
+    }
+
+    private void handleOffsetSyncResult(String consumerGroupId, TopicPartition topicPartition, Throwable throwable) {
+        if (throwable == null) {
+            log.trace("Sync-ed offset for {} partition {}.", consumerGroupId, topicPartition);
+            return;
+        }
+
+        Throwable cause = unwrap(throwable);
+        if (cause instanceof UnknownMemberIdException) {
+            log.warn("Unable to sync offsets for consumer group {}. This is likely caused " +
+                    "by consumers currently using this group in the target cluster.", consumerGroupId);
+        } else if (cause instanceof UnknownTopicOrPartitionException) {
+            removeStaleCheckpoint(consumerGroupId, topicPartition);
+        } else {
+            log.error("Unable to sync offset for consumer group {} and partition {}.",
+                    consumerGroupId, topicPartition, throwable);
+        }
+    }
+
+    private void removeStaleCheckpoint(String consumerGroupId, TopicPartition topicPartition) {
+        Checkpoint.Key key = new Checkpoint.Key(consumerGroupId, topicPartition);
+        Map<TopicPartition, Checkpoint> checkpoints = checkpointStore.get(consumerGroupId);
+        Checkpoint checkpoint = checkpoints == null ? null : checkpoints.get(topicPartition);
+        if (checkpoint == null) {
+            return;
+        }
+        if (staleCheckpoints.putIfAbsent(key, checkpoint) != null) {
+            return;
+        }
+
+        pendingCheckpointRecords.add(checkpointTombstoneRecord(checkpoint, System.currentTimeMillis()));
+        checkpointStore.remove(consumerGroupId, topicPartition);
+        log.info("Skipping offset for deleted topic partition {} in consumer group {} and emitting a checkpoint tombstone.",
+                topicPartition, consumerGroupId);
+    }
+
+    private boolean isNotStaleCheckpoint(Checkpoint checkpoint) {
+        Checkpoint.Key key = checkpointKey(checkpoint);
+        Checkpoint staleCheckpoint = staleCheckpoints.get(key);
+        if (staleCheckpoint == null) {
+            return true;
+        }
+        if (staleCheckpoint.equals(checkpoint)) {
+            return false;
+        }
+        return staleCheckpoints.remove(key, staleCheckpoint);
+    }
+
+    private static Checkpoint.Key checkpointKey(Checkpoint checkpoint) {
+        return new Checkpoint.Key(checkpoint.consumerGroupId(), checkpoint.topicPartition());
+    }
+
+    private static Throwable unwrap(Throwable throwable) {
+        Throwable cause = throwable;
+        while ((cause instanceof CompletionException || cause instanceof ExecutionException) && cause.getCause() != null) {
+            cause = cause.getCause();
+        }
+        return cause;
     }
 }

@@ -74,7 +74,7 @@ public class CheckpointStore implements AutoCloseable {
     }
 
     // potentially long running
-    public boolean start()  {
+    public synchronized boolean start()  {
         checkpointsPerConsumerGroup = readCheckpoints();
         isInitialized = true;
         if (log.isTraceEnabled()) {
@@ -89,17 +89,17 @@ public class CheckpointStore implements AutoCloseable {
         return isInitialized;
     }
 
-    public void update(String group, Map<TopicPartition, Checkpoint> newCheckpoints) {
+    public synchronized void update(String group, Map<TopicPartition, Checkpoint> newCheckpoints) {
         Map<TopicPartition, Checkpoint> oldCheckpoints = checkpointsPerConsumerGroup.computeIfAbsent(group, ignored -> new HashMap<>());
         oldCheckpoints.putAll(newCheckpoints);
     }
 
-    public Map<TopicPartition, Checkpoint> get(String group) {
+    public synchronized Map<TopicPartition, Checkpoint> get(String group) {
         Map<TopicPartition, Checkpoint> result = checkpointsPerConsumerGroup.get(group);
         return result == null ? null : Map.copyOf(result);
     }
 
-    public Map<String, Map<TopicPartition, OffsetAndMetadata>> computeConvertedUpstreamOffset() {
+    public synchronized Map<String, Map<TopicPartition, OffsetAndMetadata>> computeConvertedUpstreamOffset() {
         Map<String, Map<TopicPartition, OffsetAndMetadata>> result = new HashMap<>();
 
         for (Map.Entry<String, Map<TopicPartition, Checkpoint>> entry : checkpointsPerConsumerGroup.entrySet()) {
@@ -143,10 +143,22 @@ public class CheckpointStore implements AutoCloseable {
                 }
             } else {
                 try {
-                    Checkpoint cp = Checkpoint.deserializeRecord(cpRecord);
-                    if (consumerGroups.contains(cp.consumerGroupId())) {
-                        Map<TopicPartition, Checkpoint> cps = checkpoints.computeIfAbsent(cp.consumerGroupId(), ignored1 -> new HashMap<>());
-                        cps.put(cp.topicPartition(), cp);
+                    Checkpoint.Key key = Checkpoint.deserializeKey(cpRecord.key());
+                    if (consumerGroups.contains(key.consumerGroupId())) {
+                        if (cpRecord.value() == null) {
+                            Map<TopicPartition, Checkpoint> cps = checkpoints.get(key.consumerGroupId());
+                            if (cps != null) {
+                                cps.remove(key.topicPartition());
+                                if (cps.isEmpty()) {
+                                    checkpoints.remove(key.consumerGroupId());
+                                }
+                            }
+                        } else {
+                            Checkpoint cp = Checkpoint.deserializeRecord(cpRecord);
+                            Map<TopicPartition, Checkpoint> cps = checkpoints.computeIfAbsent(key.consumerGroupId(),
+                                    ignored1 -> new HashMap<>());
+                            cps.put(key.topicPartition(), cp);
+                        }
                     }
                 } catch (SchemaException ex) {
                     log.warn("Ignored invalid checkpoint record at offset {}", cpRecord.offset(), ex);
@@ -174,6 +186,17 @@ public class CheckpointStore implements AutoCloseable {
             }
         }
         return checkpoints;
+    }
+
+    synchronized void remove(String group, TopicPartition topicPartition) {
+        Map<TopicPartition, Checkpoint> checkpoints = checkpointsPerConsumerGroup.get(group);
+        if (checkpoints == null) {
+            return;
+        }
+        checkpoints.remove(topicPartition);
+        if (checkpoints.isEmpty()) {
+            checkpointsPerConsumerGroup.remove(group);
+        }
     }
 
     // accessible for testing

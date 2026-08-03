@@ -67,6 +67,28 @@ public class CheckpointStoreTest {
     }
 
     @Test
+    public void testReadCheckpointTombstone() {
+        Set<String> consumerGroups = Set.of("group1");
+
+        MirrorCheckpointTaskConfig config = mock(MirrorCheckpointTaskConfig.class);
+        when(config.checkpointsTopic()).thenReturn("checkpoint.topic");
+
+        try (CheckpointStore store = new CheckpointStore(config, consumerGroups) {
+            @Override
+            void readCheckpointsImpl(MirrorCheckpointTaskConfig config, Callback<ConsumerRecord<byte[], byte[]>> consumedCallback) {
+                Checkpoint checkpoint = new Checkpoint("group1", new TopicPartition("topic", 0), 1, 0, "");
+                consumedCallback.onCompletion(null,
+                        new ConsumerRecord<>("checkpoint.topic", 0, 0L, checkpoint.recordKey(), checkpoint.recordValue()));
+                consumedCallback.onCompletion(null,
+                        new ConsumerRecord<>("checkpoint.topic", 0, 1L, checkpoint.recordKey(), null));
+            }
+        }) {
+            assertTrue(store.start(), "expected start to return success");
+            assertTrue(store.checkpointsPerConsumerGroup.isEmpty());
+        }
+    }
+
+    @Test
     public void testReadCheckpointsTopicError() {
         Set<String> consumerGroups = Set.of("group1");
 

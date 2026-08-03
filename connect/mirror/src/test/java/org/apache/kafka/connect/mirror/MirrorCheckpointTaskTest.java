@@ -16,8 +16,12 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AlterConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.connect.source.SourceRecord;
 
 import org.junit.jupiter.api.Test;
@@ -35,7 +39,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class MirrorCheckpointTaskTest {
@@ -203,6 +210,119 @@ public class MirrorCheckpointTaskTest {
         Map<String, Map<TopicPartition, OffsetAndMetadata>> output = mirrorCheckpointTask.syncGroupOffset();
 
         assertEquals(101, output.get(consumer).get(tp).offset(), "Consumer " + topic + " failed");
+    }
+
+    @Test
+    public void testDeletedTopicPartitionIsRemovedFromCheckpointSync() throws Exception {
+        String consumerGroup = "consumer";
+        TopicPartition topicPartition = new TopicPartition("source.topic", 0);
+        Checkpoint checkpoint = new Checkpoint(consumerGroup, topicPartition, 200, 101, "metadata");
+        Map<TopicPartition, Checkpoint> checkpoints = new HashMap<>();
+        checkpoints.put(topicPartition, checkpoint);
+        Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup = new HashMap<>();
+        checkpointsPerConsumerGroup.put(consumerGroup, checkpoints);
+        CheckpointStore checkpointStore = new CheckpointStore(checkpointsPerConsumerGroup);
+
+        Admin targetAdmin = mock(Admin.class);
+        AlterConsumerGroupOffsetsResult alterResult = mock(AlterConsumerGroupOffsetsResult.class);
+        KafkaFutureImpl<Void> allFuture = new KafkaFutureImpl<>();
+        allFuture.completeExceptionally(new UnknownTopicOrPartitionException());
+        KafkaFutureImpl<Void> partitionFuture = new KafkaFutureImpl<>();
+        partitionFuture.completeExceptionally(new UnknownTopicOrPartitionException());
+        when(alterResult.all()).thenReturn(allFuture);
+        when(alterResult.partitionResult(topicPartition)).thenReturn(partitionFuture);
+        when(targetAdmin.alterConsumerGroupOffsets(eq(consumerGroup),
+                eq(Map.of(topicPartition, checkpoint.offsetAndMetadata())))).thenReturn(alterResult);
+
+        MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source", "target",
+                new DefaultReplicationPolicy(), null, Set.of(), new HashMap<>(), checkpointStore, targetAdmin);
+
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> firstSync = mirrorCheckpointTask.syncGroupOffset();
+        List<SourceRecord> tombstones = mirrorCheckpointTask.poll();
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> secondSync = mirrorCheckpointTask.syncGroupOffset();
+
+        assertEquals(checkpoint.offsetAndMetadata(), firstSync.get(consumerGroup).get(topicPartition));
+        assertEquals(1, tombstones.size());
+        assertEquals("checkpoints.internal", tombstones.get(0).topic());
+        assertEquals(checkpoint.connectPartition(), tombstones.get(0).sourcePartition());
+        assertNull(tombstones.get(0).value());
+        assertTrue(secondSync.isEmpty());
+        verify(targetAdmin, times(1)).alterConsumerGroupOffsets(eq(consumerGroup),
+                eq(Map.of(topicPartition, checkpoint.offsetAndMetadata())));
+    }
+
+    @Test
+    public void testDeletedTopicPartitionDoesNotPreventOtherPartitionsFromSyncing() throws Exception {
+        String consumerGroup = "consumer";
+        TopicPartition deletedTopicPartition = new TopicPartition("source.deleted", 0);
+        TopicPartition existingTopicPartition = new TopicPartition("source.existing", 0);
+        Checkpoint deletedCheckpoint = new Checkpoint(consumerGroup, deletedTopicPartition, 200, 101, "metadata");
+        Checkpoint existingCheckpoint = new Checkpoint(consumerGroup, existingTopicPartition, 300, 201, "metadata");
+        Map<TopicPartition, Checkpoint> checkpoints = new HashMap<>();
+        checkpoints.put(deletedTopicPartition, deletedCheckpoint);
+        checkpoints.put(existingTopicPartition, existingCheckpoint);
+        Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup = new HashMap<>();
+        checkpointsPerConsumerGroup.put(consumerGroup, checkpoints);
+
+        Admin targetAdmin = mock(Admin.class);
+        AlterConsumerGroupOffsetsResult alterResult = mock(AlterConsumerGroupOffsetsResult.class);
+        KafkaFutureImpl<Void> deletedPartitionFuture = new KafkaFutureImpl<>();
+        deletedPartitionFuture.completeExceptionally(new UnknownTopicOrPartitionException());
+        KafkaFutureImpl<Void> existingPartitionFuture = new KafkaFutureImpl<>();
+        existingPartitionFuture.complete(null);
+        when(alterResult.partitionResult(deletedTopicPartition)).thenReturn(deletedPartitionFuture);
+        when(alterResult.partitionResult(existingTopicPartition)).thenReturn(existingPartitionFuture);
+        Map<TopicPartition, OffsetAndMetadata> offsets = Map.of(
+                deletedTopicPartition, deletedCheckpoint.offsetAndMetadata(),
+                existingTopicPartition, existingCheckpoint.offsetAndMetadata());
+        when(targetAdmin.alterConsumerGroupOffsets(eq(consumerGroup), eq(offsets))).thenReturn(alterResult);
+
+        MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source", "target",
+                new DefaultReplicationPolicy(), null, Set.of(), new HashMap<>(),
+                new CheckpointStore(checkpointsPerConsumerGroup), targetAdmin);
+
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> synced = mirrorCheckpointTask.syncGroupOffset();
+        List<SourceRecord> tombstones = mirrorCheckpointTask.poll();
+
+        assertEquals(offsets, synced.get(consumerGroup));
+        assertEquals(1, tombstones.size());
+        assertEquals(deletedCheckpoint.connectPartition(), tombstones.get(0).sourcePartition());
+        verify(targetAdmin, times(1)).alterConsumerGroupOffsets(eq(consumerGroup), eq(offsets));
+    }
+
+    @Test
+    public void testDeletedTopicPartitionDoesNotEmitAnotherCheckpointAfterTombstone() throws Exception {
+        String consumerGroup = "consumer";
+        TopicPartition topicPartition = new TopicPartition("source.topic", 0);
+        Checkpoint checkpoint = new Checkpoint(consumerGroup, topicPartition, 200, 100, "metadata");
+        Map<TopicPartition, Checkpoint> checkpoints = new HashMap<>();
+        checkpoints.put(topicPartition, checkpoint);
+        CheckpointStore checkpointStore = new CheckpointStore(new HashMap<>(Map.of(consumerGroup, checkpoints)));
+
+        OffsetSyncStoreTest.FakeOffsetSyncStore offsetSyncStore = new OffsetSyncStoreTest.FakeOffsetSyncStore();
+        offsetSyncStore.start(true);
+        offsetSyncStore.sync(new TopicPartition("topic", 0), 200, 100);
+
+        Admin targetAdmin = mock(Admin.class);
+        AlterConsumerGroupOffsetsResult alterResult = mock(AlterConsumerGroupOffsetsResult.class);
+        KafkaFutureImpl<Void> partitionFuture = new KafkaFutureImpl<>();
+        partitionFuture.completeExceptionally(new UnknownTopicOrPartitionException());
+        when(alterResult.partitionResult(topicPartition)).thenReturn(partitionFuture);
+        when(targetAdmin.alterConsumerGroupOffsets(eq(consumerGroup),
+                eq(Map.of(topicPartition, checkpoint.offsetAndMetadata())))).thenReturn(alterResult);
+
+        MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source", "target",
+                new DefaultReplicationPolicy(), offsetSyncStore, Set.of(), new HashMap<>(), checkpointStore, targetAdmin);
+        mirrorCheckpointTask.syncGroupOffset();
+
+        Map<TopicPartition, Checkpoint> emittedCheckpoints = mirrorCheckpointTask.checkpointsForGroup(
+                Map.of(new TopicPartition("topic", 0), new OffsetAndMetadata(200, "metadata")), consumerGroup);
+        assertTrue(emittedCheckpoints.isEmpty(), emittedCheckpoints.toString());
+
+        offsetSyncStore.sync(new TopicPartition("topic", 0), 201, 101);
+        Map<TopicPartition, Checkpoint> recoveredCheckpoints = mirrorCheckpointTask.checkpointsForGroup(
+                Map.of(new TopicPartition("topic", 0), new OffsetAndMetadata(201, "metadata")), consumerGroup);
+        assertEquals(201, recoveredCheckpoints.get(topicPartition).upstreamOffset());
     }
 
     @Test
