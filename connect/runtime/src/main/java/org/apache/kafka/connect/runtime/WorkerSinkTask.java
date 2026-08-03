@@ -451,6 +451,9 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
                     log.debug("{} Rewinding topic partition {} to offset {}", this, entry.getKey(), entry.getValue().offset());
                     consumer.seek(entry.getKey(), entry.getValue().offset());
                 }
+                // Discard the pending batch and its offsets so the next poll re-reads from the last committed position.
+                messageBatch.clear();
+                origOffsets.clear();
                 currentOffsets.putAll(lastCommittedOffsetsForPartitions);
             }
             onCommitCompleted(t, commitSeqno, null);
