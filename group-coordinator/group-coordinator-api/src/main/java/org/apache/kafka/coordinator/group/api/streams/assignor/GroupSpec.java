@@ -51,7 +51,7 @@ public interface GroupSpec {
     MemberAssignmentState memberAssignmentState(String memberId);
 
     /**
-     * @return Any configurations passed to the assignor.
+     * @return Any configurations passed to the assignor. The map is unmodifiable.
      */
     Map<String, String> configs();
 
