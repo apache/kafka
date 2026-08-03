@@ -326,31 +326,33 @@ public class StreamsGroupCommand {
 
         private void printMembers(StreamsGroupDescription description, boolean verbose) {
             final int groupLen = Math.max(15, description.groupId().length());
-            int maxMemberIdLen = 15, maxHostLen = 15, maxClientIdLen = 15;
+            int maxMemberIdLen = 15, maxInstanceIdLen = 15, maxHostLen = 15, maxClientIdLen = 15;
             Collection<StreamsGroupMemberDescription> members = description.members();
             if (isGroupStateValid(description.groupState(), description.members().size())) {
                 maybePrintEmptyGroupState(description.groupId(), description.groupState());
                 for (StreamsGroupMemberDescription member : members) {
                     maxMemberIdLen = Math.max(maxMemberIdLen, member.memberId().length());
+                    maxInstanceIdLen = Math.max(maxInstanceIdLen, member.instanceId().orElse(MISSING_COLUMN_VALUE).length());
                     maxHostLen = Math.max(maxHostLen, member.processId().length());
                     maxClientIdLen = Math.max(maxClientIdLen, member.clientId().length());
                 }
 
                 if (!verbose) {
-                    String fmt = "%" + -groupLen + "s %" + -maxMemberIdLen + "s %" + -maxHostLen + "s %" + -maxClientIdLen + "s %s\n";
-                    System.out.printf(fmt, "GROUP", "MEMBER", "PROCESS", "CLIENT-ID", "ASSIGNMENTS");
+                    String fmt = "%" + -groupLen + "s %" + -maxMemberIdLen + "s %" + -maxInstanceIdLen + "s %" + -maxHostLen + "s %" + -maxClientIdLen + "s %s\n";
+                    System.out.printf(fmt, "GROUP", "MEMBER", "INSTANCE-ID", "PROCESS", "CLIENT-ID", "ASSIGNMENTS");
                     for (StreamsGroupMemberDescription member : members) {
-                        System.out.printf(fmt, description.groupId(), member.memberId(), member.processId(), member.clientId(),
+                        System.out.printf(fmt, description.groupId(), member.memberId(), member.instanceId().orElse(MISSING_COLUMN_VALUE), member.processId(), member.clientId(),
                             getTasksForPrinting(member.assignment(), Optional.empty()));
                     }
                 } else {
                     final int targetAssignmentEpochLen = 25, topologyEpochLen = 15, memberProtocolLen = 15, memberEpochLen = 15;
                     String fmt = "%" + -groupLen + "s %" + -targetAssignmentEpochLen + "s %" + -topologyEpochLen + "s%" + -maxMemberIdLen
-                        + "s %" + -memberProtocolLen + "s %" + -memberEpochLen + "s %" + -maxHostLen + "s %" + -maxClientIdLen + "s %s\n";
-                    System.out.printf(fmt, "GROUP", "TARGET-ASSIGNMENT-EPOCH", "TOPOLOGY-EPOCH", "MEMBER", "MEMBER-PROTOCOL", "MEMBER-EPOCH", "PROCESS", "CLIENT-ID", "ASSIGNMENTS");
+                        + "s %" + -memberProtocolLen + "s %" + -memberEpochLen + "s %" + -maxInstanceIdLen + "s %" + -maxHostLen + "s %" + -maxClientIdLen + "s %s\n";
+                    System.out.printf(fmt, "GROUP", "TARGET-ASSIGNMENT-EPOCH", "TOPOLOGY-EPOCH", "MEMBER", "MEMBER-PROTOCOL", "MEMBER-EPOCH", "INSTANCE-ID", "PROCESS", "CLIENT-ID", "ASSIGNMENTS");
                     for (StreamsGroupMemberDescription member : members) {
                         System.out.printf(fmt, description.groupId(), description.targetAssignmentEpoch(), description.topologyEpoch(), member.memberId(),
-                            member.isClassic() ? "classic" : "streams", member.memberEpoch(), member.processId(), member.clientId(), getTasksForPrinting(member.assignment(), Optional.of(member.targetAssignment())));
+                            member.isClassic() ? "classic" : "streams", member.memberEpoch(), member.instanceId().orElse(MISSING_COLUMN_VALUE), member.processId(), member.clientId(),
+                            getTasksForPrinting(member.assignment(), Optional.of(member.targetAssignment())));
                     }
                 }
             }

@@ -126,6 +126,36 @@ public class DescribeStreamsGroupTest {
         }
     }
 
+    @ClusterTest
+    public void testDescribeStreamsGroupWithInstanceId(ClusterInstance cluster) throws Exception {
+        cluster.createTopic(INPUT_TOPIC, 2, (short) 1);
+        final String instanceId = "streams-group-instance";
+        try (KafkaStreams ignored = startStreamsApp(cluster, APP_ID, INPUT_TOPIC, OUTPUT_TOPIC, instanceId)) {
+            final List<String> expectedHeader = List.of("GROUP", "MEMBER", "INSTANCE-ID", "PROCESS", "CLIENT-ID", "ASSIGNMENTS");
+            final Set<List<String>> expectedRows = Set.of(
+                List.of(APP_ID, "", instanceId + "-1", "", "", "", "", ""),
+                List.of(APP_ID, "", instanceId + "-2", "", "", "", "", ""));
+            // The member and process names, client-id, and assignments are not deterministic, so we don't care about them.
+            final List<Integer> dontCares = List.of(1, 3, 4, 5, 6, 7);
+
+            validateDescribeOutput(
+                List.of("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--members", "--group", APP_ID),
+                expectedHeader, expectedRows, dontCares);
+
+            final List<String> verboseExpectedHeader = List.of(
+                "GROUP", "TARGET-ASSIGNMENT-EPOCH", "TOPOLOGY-EPOCH", "MEMBER", "MEMBER-PROTOCOL", "MEMBER-EPOCH", "INSTANCE-ID", "PROCESS", "CLIENT-ID", "ASSIGNMENTS");
+            final Set<List<String>> verboseExpectedRows = Set.of(
+                List.of(APP_ID, "", "0", "", "streams", "", instanceId + "-1", "", "", "", "", "", "", "", ""),
+                List.of(APP_ID, "", "0", "", "streams", "", instanceId + "-2", "", "", "", "", "", "", "", ""));
+            // The target/member epochs and assignments are also not deterministic, so we don't care about them.
+            final List<Integer> verboseDontCares = List.of(1, 3, 5, 7, 8, 9, 10, 11, 12, 13, 14);
+
+            validateDescribeOutput(
+                List.of("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--members", "--verbose", "--group", APP_ID),
+                verboseExpectedHeader, verboseExpectedRows, verboseDontCares);
+        }
+    }
+
     private static void assertDescribeStreamsGroup(String clusterBootstrapServers) throws Exception {
         final List<String> expectedHeader = List.of("GROUP", "TOPIC", "PARTITION", "OFFSET-LAG");
         final Set<List<String>> expectedRows = Set.of(
@@ -183,25 +213,25 @@ public class DescribeStreamsGroupTest {
     }
 
     private static void assertDescribeStreamsGroupWithMembersOption(String clusterBootstrapServers) throws Exception {
-        final List<String> expectedHeader = List.of("GROUP", "MEMBER", "PROCESS", "CLIENT-ID", "ASSIGNMENTS");
+        final List<String> expectedHeader = List.of("GROUP", "MEMBER", "INSTANCE-ID", "PROCESS", "CLIENT-ID", "ASSIGNMENTS");
         final Set<List<String>> expectedRows = Set.of(
-            List.of(APP_ID, "", "", "", "ACTIVE:", "0:[1];", "1:[1];"),
-            List.of(APP_ID, "", "", "", "ACTIVE:", "0:[0];", "1:[0];"));
+            List.of(APP_ID, "", "-", "", "", "ACTIVE:", "0:[1];", "1:[1];"),
+            List.of(APP_ID, "", "-", "", "", "ACTIVE:", "0:[0];", "1:[0];"));
         // The member and process names as well as client-id are not deterministic, so we don't care about them.
-        final List<Integer> dontCares = List.of(1, 2, 3);
+        final List<Integer> dontCares = List.of(1, 3, 4);
 
         validateDescribeOutput(
             List.of("--bootstrap-server", clusterBootstrapServers, "--describe", "--members", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
     }
 
     private static void assertDescribeStreamsGroupWithMembersAndVerboseOptions(String clusterBootstrapServers) throws Exception {
-        final List<String> expectedHeader = List.of("GROUP", "TARGET-ASSIGNMENT-EPOCH", "TOPOLOGY-EPOCH", "MEMBER", "MEMBER-PROTOCOL", "MEMBER-EPOCH", "PROCESS", "CLIENT-ID", "ASSIGNMENTS");
+        final List<String> expectedHeader = List.of("GROUP", "TARGET-ASSIGNMENT-EPOCH", "TOPOLOGY-EPOCH", "MEMBER", "MEMBER-PROTOCOL", "MEMBER-EPOCH", "INSTANCE-ID", "PROCESS", "CLIENT-ID", "ASSIGNMENTS");
         final Set<List<String>> expectedRows = Set.of(
-            List.of(APP_ID, "", "0", "", "streams", "", "", "", "ACTIVE:", "0:[1];", "1:[1];", "TARGET-ACTIVE:", "0:[1];", "1:[1];"),
-            List.of(APP_ID, "", "0", "", "streams", "", "", "", "ACTIVE:", "0:[0];", "1:[0];", "TARGET-ACTIVE:", "0:[0];", "1:[0];"));
+            List.of(APP_ID, "", "0", "", "streams", "", "-", "", "", "ACTIVE:", "0:[1];", "1:[1];", "TARGET-ACTIVE:", "0:[1];", "1:[1];"),
+            List.of(APP_ID, "", "0", "", "streams", "", "-", "", "", "ACTIVE:", "0:[0];", "1:[0];", "TARGET-ACTIVE:", "0:[0];", "1:[0];"));
         // The member and process names as well as client-id are not deterministic, so we don't care about them.
         // The TARGET-ASSIGNMENT-EPOCH and MEMBER-EPOCH can vary due to rebalance timing, so we don't care about them either.
-        final List<Integer> dontCares = List.of(1, 3, 5, 6, 7);
+        final List<Integer> dontCares = List.of(1, 3, 5, 7, 8);
 
         validateDescribeOutput(
             List.of("--bootstrap-server", clusterBootstrapServers, "--describe", "--members", "--verbose", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
@@ -210,20 +240,20 @@ public class DescribeStreamsGroupTest {
     }
 
     private static void assertDescribeMultipleStreamsGroupWithMembersAndVerboseOptions(String clusterBootstrapServers) throws Exception {
-        final List<String> expectedHeader = List.of("GROUP", "TARGET-ASSIGNMENT-EPOCH", "TOPOLOGY-EPOCH", "MEMBER", "MEMBER-PROTOCOL", "MEMBER-EPOCH", "PROCESS", "CLIENT-ID", "ASSIGNMENTS");
+        final List<String> expectedHeader = List.of("GROUP", "TARGET-ASSIGNMENT-EPOCH", "TOPOLOGY-EPOCH", "MEMBER", "MEMBER-PROTOCOL", "MEMBER-EPOCH", "INSTANCE-ID", "PROCESS", "CLIENT-ID", "ASSIGNMENTS");
         final Set<List<String>> expectedRows1 = Set.of(
-            List.of(APP_ID, "", "0", "", "streams", "", "", "", "ACTIVE:", "0:[1];", "1:[1];", "TARGET-ACTIVE:", "0:[1];", "1:[1];"),
-            List.of(APP_ID, "", "0", "", "streams", "", "", "", "ACTIVE:", "0:[0];", "1:[0];", "TARGET-ACTIVE:", "0:[0];", "1:[0];"));
+            List.of(APP_ID, "", "0", "", "streams", "", "-", "", "", "ACTIVE:", "0:[1];", "1:[1];", "TARGET-ACTIVE:", "0:[1];", "1:[1];"),
+            List.of(APP_ID, "", "0", "", "streams", "", "-", "", "", "ACTIVE:", "0:[0];", "1:[0];", "TARGET-ACTIVE:", "0:[0];", "1:[0];"));
         final Set<List<String>> expectedRows2 = Set.of(
-            List.of(APP_ID_2, "", "0", "", "streams", "", "", "", "ACTIVE:", "1:[0];", "TARGET-ACTIVE:", "1:[0];"),
-            List.of(APP_ID_2, "", "0", "", "streams", "", "", "", "ACTIVE:", "0:[0];", "TARGET-ACTIVE:", "0:[0];"));
+            List.of(APP_ID_2, "", "0", "", "streams", "", "-", "", "", "ACTIVE:", "1:[0];", "TARGET-ACTIVE:", "1:[0];"),
+            List.of(APP_ID_2, "", "0", "", "streams", "", "-", "", "", "ACTIVE:", "0:[0];", "TARGET-ACTIVE:", "0:[0];"));
         final Map<String, Set<List<String>>> expectedRowsMap = new HashMap<>();
         expectedRowsMap.put(APP_ID, expectedRows1);
         expectedRowsMap.put(APP_ID_2, expectedRows2);
 
         // The member and process names as well as client-id are not deterministic, so we don't care about them.
         // The TARGET-ASSIGNMENT-EPOCH and MEMBER-EPOCH can vary due to rebalance timing, so we don't care about them either.
-        final List<Integer> dontCares = List.of(1, 3, 5, 6, 7);
+        final List<Integer> dontCares = List.of(1, 3, 5, 7, 8);
 
         validateDescribeOutput(
             List.of("--bootstrap-server", clusterBootstrapServers, "--describe", "--members", "--verbose", "--group", APP_ID, "--group", APP_ID_2),
@@ -269,7 +299,11 @@ public class DescribeStreamsGroupTest {
     }
 
     private KafkaStreams startStreamsApp(ClusterInstance cluster, String appId, String inputTopic, String outputTopic) throws InterruptedException {
-        KafkaStreams streams = new KafkaStreams(topology(inputTopic, outputTopic), streamsProp(cluster, appId));
+        return startStreamsApp(cluster, appId, inputTopic, outputTopic, null);
+    }
+
+    private KafkaStreams startStreamsApp(ClusterInstance cluster, String appId, String inputTopic, String outputTopic, String groupInstanceId) throws InterruptedException {
+        KafkaStreams streams = new KafkaStreams(topology(inputTopic, outputTopic), streamsProp(cluster, appId, groupInstanceId));
         StreamsGroupCommandTestUtils.startApplicationAndWaitUntilRunning(streams);
         return streams;
     }
@@ -285,6 +319,10 @@ public class DescribeStreamsGroupTest {
     }
 
     private Properties streamsProp(ClusterInstance cluster, String appId) {
+        return streamsProp(cluster, appId, null);
+    }
+
+    private Properties streamsProp(ClusterInstance cluster, String appId, String groupInstanceId) {
         Properties streamsProp = new Properties();
         streamsProp.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsProp.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
@@ -294,6 +332,9 @@ public class DescribeStreamsGroupTest {
         streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         streamsProp.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
         streamsProp.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
+        if (groupInstanceId != null) {
+            streamsProp.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId);
+        }
         return streamsProp;
     }
 
