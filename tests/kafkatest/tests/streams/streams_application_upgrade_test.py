@@ -32,6 +32,8 @@ smoke_test_versions = [str(LATEST_2_4), str(LATEST_2_5), str(LATEST_2_6),
                        str(LATEST_3_7), str(LATEST_3_8), str(LATEST_3_9),
                        str(LATEST_4_0), str(LATEST_4_1), str(LATEST_4_2),
                        str(LATEST_4_3)]
+DSL_STORE_FORMAT_CONFIG = "dsl.store.format"
+DSL_STORE_FORMAT_HEADERS = "HEADERS"
 
 class StreamsUpgradeTest(Test):
     """
@@ -63,9 +65,32 @@ class StreamsUpgradeTest(Test):
         """
         Starts 3 KafkaStreams instances with <old_version>, and upgrades one-by-one to <new_version>
         """
+        self._run_app_transition(from_version, str(DEV_VERSION), bounce_type)
 
-        to_version = str(DEV_VERSION)
+    @cluster(num_nodes=9)
+    @matrix(direction=["upgrade", "downgrade"], metadata_quorum=[quorum.combined_kraft])
+    def test_app_upgrade_downgrade_with_headers(self, direction, metadata_quorum):
+        """
+        Verifies that suppress() changelogs remain readable when the DSL store format is HEADERS.
 
+        The test covers both directions across the 4.3/4.4 boundary because 4.3 is the first
+        release that supports the headers-aware DSL store format.
+        """
+        transition_versions = {
+            "upgrade": (str(LATEST_4_3), str(DEV_VERSION)),
+            "downgrade": (str(DEV_VERSION), str(LATEST_4_3)),
+        }
+        from_version, to_version = transition_versions[direction]
+
+        self._run_app_transition(
+            from_version=from_version,
+            to_version=to_version,
+            bounce_type="full",
+            extra_configs={DSL_STORE_FORMAT_CONFIG: DSL_STORE_FORMAT_HEADERS}
+        )
+
+    def _run_app_transition(self, from_version, to_version, bounce_type, extra_configs=None):
+        """Run a Streams application transition while preserving the existing smoke workload."""
         if from_version == to_version:
             return
 
@@ -89,9 +114,27 @@ class StreamsUpgradeTest(Test):
 
         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
         self.driver.disable_auto_terminate()
-        self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee = "at_least_once", replication_factor = 1)
-        self.processor2 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee = "at_least_once", replication_factor = 1)
-        self.processor3 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee = "at_least_once", replication_factor = 1)
+        self.processor1 = StreamsSmokeTestJobRunnerService(
+            self.test_context,
+            self.kafka,
+            processing_guarantee="at_least_once",
+            replication_factor=1,
+            extra_configs=extra_configs
+        )
+        self.processor2 = StreamsSmokeTestJobRunnerService(
+            self.test_context,
+            self.kafka,
+            processing_guarantee="at_least_once",
+            replication_factor=1,
+            extra_configs=extra_configs
+        )
+        self.processor3 = StreamsSmokeTestJobRunnerService(
+            self.test_context,
+            self.kafka,
+            processing_guarantee="at_least_once",
+            replication_factor=1,
+            extra_configs=extra_configs
+        )
 
         self.purge_state_dir(self.processor1)
         self.purge_state_dir(self.processor2)
