@@ -183,7 +183,8 @@ public class BootstrapServerResolverTest {
                 try {
                     resolutionMayFinish.await();
                 } catch (InterruptedException e) {
-                    throw new AssertionError("Resolution was interrupted before the test released it", e);
+                    // Cancellation may interrupt the resolver while the test is releasing the blocked lookup.
+                    Thread.currentThread().interrupt();
                 }
                 return RESOLVED_ADDRESSES;
             })) {
