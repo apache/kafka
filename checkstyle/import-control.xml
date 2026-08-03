@@ -424,6 +424,10 @@
       <allow pkg="org.apache.kafka.coordinator.group" />
       <allow pkg="org.apache.kafka.network" />
       <allow pkg="org.apache.kafka.server.streams" />
+
+      <subpackage name="utils">
+        <allow pkg="org.rocksdb" />
+      </subpackage>
     </subpackage>
 
     <subpackage name="test">

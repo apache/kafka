@@ -28,7 +28,6 @@ import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndStat
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -241,7 +240,7 @@ public class TargetAssignmentBuilder {
             }
             newGroupAssignment = assignor.assign(
                 new GroupSpecImpl(
-                    Collections.unmodifiableMap(memberMetadataMap),
+                    memberMetadataMap,
                     assignmentConfigs
                 ),
                 new TopologyMetadata(metadataImage, topology.subtopologies().get())
