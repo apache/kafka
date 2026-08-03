@@ -71,6 +71,7 @@ import static org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest.LEAV
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -1612,5 +1613,68 @@ class StreamsGroupHeartbeatRequestManagerTest {
             .sorted(Comparator.comparing(StreamsGroupHeartbeatRequestData.TaskIds::subtopologyId))
             .collect(Collectors.toList());
         assertEquals(sortedExpected, sortedActual);
+    }
+
+    @Test
+    public void testPartitionsByUserEndpointMergedForDuplicateUserEndpoints() {
+        try (
+            final MockedConstruction<HeartbeatRequestState> ignored = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true))
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+            when(membershipManager.groupId()).thenReturn(GROUP_ID);
+            when(membershipManager.memberId()).thenReturn(MEMBER_ID);
+            when(membershipManager.memberEpoch()).thenReturn(MEMBER_EPOCH);
+            when(membershipManager.groupInstanceId()).thenReturn(Optional.of(INSTANCE_ID));
+
+            final List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> duplicateEndpoints = List.of(
+                new StreamsGroupHeartbeatResponseData.EndpointToPartitions()
+                    .setUserEndpoint(new StreamsGroupHeartbeatResponseData.Endpoint().setHost("localhost").setPort(8080))
+                    .setActivePartitions(List.of(new StreamsGroupHeartbeatResponseData.TopicPartition().setTopic("topicA").setPartitions(List.of(0))))
+                    .setStandbyPartitions(List.of(new StreamsGroupHeartbeatResponseData.TopicPartition().setTopic("topicB").setPartitions(List.of(0)))),
+                new StreamsGroupHeartbeatResponseData.EndpointToPartitions()
+                    .setUserEndpoint(new StreamsGroupHeartbeatResponseData.Endpoint().setHost("localhost").setPort(8080))
+                    .setActivePartitions(List.of(new StreamsGroupHeartbeatResponseData.TopicPartition().setTopic("topicA").setPartitions(List.of(1))))
+                    .setStandbyPartitions(List.of(new StreamsGroupHeartbeatResponseData.TopicPartition().setTopic("topicB").setPartitions(List.of(1))))
+            );
+
+            final ClientResponse response = new ClientResponse(
+                new RequestHeader(ApiKeys.STREAMS_GROUP_HEARTBEAT, (short) 1, "", 1),
+                null,
+                "-1",
+                time.milliseconds(),
+                time.milliseconds(),
+                false,
+                null,
+                null,
+                new StreamsGroupHeartbeatResponse(
+                    new StreamsGroupHeartbeatResponseData()
+                        .setPartitionsByUserEndpoint(duplicateEndpoints)
+                        .setHeartbeatIntervalMs((int) RECEIVED_HEARTBEAT_INTERVAL_MS)
+                )
+            );
+
+            final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+            assertEquals(1, result.unsentRequests.size());
+            result.unsentRequests.get(0).handler().onComplete(response);
+
+            final StreamsRebalanceData.EndpointPartitions endpointPartitions = streamsRebalanceData.partitionsByHost()
+                .get(new StreamsRebalanceData.HostInfo("localhost", 8080));
+
+            assertNotNull(endpointPartitions);
+            assertEquals(2, endpointPartitions.activePartitions().size());
+            assertEquals("topicA", endpointPartitions.activePartitions().get(0).topic());
+            assertEquals(0, endpointPartitions.activePartitions().get(0).partition());
+            assertEquals("topicA", endpointPartitions.activePartitions().get(1).topic());
+            assertEquals(1, endpointPartitions.activePartitions().get(1).partition());
+
+            assertEquals(2, endpointPartitions.standbyPartitions().size());
+            assertEquals("topicB", endpointPartitions.standbyPartitions().get(0).topic());
+            assertEquals(0, endpointPartitions.standbyPartitions().get(0).partition());
+            assertEquals("topicB", endpointPartitions.standbyPartitions().get(1).topic());
+            assertEquals(1, endpointPartitions.standbyPartitions().get(1).partition());
+        }
     }
 }

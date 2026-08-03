@@ -263,7 +263,7 @@
 
     <!-- Streams test-utils -->
     <suppress checks="ClassFanOutComplexity"
-              files="TopologyTestDriver.java"/>
+              files="(TopologyTestDriver|StreamsGroupHeartbeatRequestManagerTest).java"/>
     <suppress checks="ClassDataAbstractionCoupling"
               files="TopologyTestDriver.java"/>
 

@@ -696,8 +696,18 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             List<TopicPartition> activeTopicPartitions = getTopicPartitionList(endpoint.activePartitions());
             List<TopicPartition> standbyTopicPartitions = getTopicPartitionList(endpoint.standbyPartitions());
             StreamsGroupHeartbeatResponseData.Endpoint userEndpoint = endpoint.userEndpoint();
-            StreamsRebalanceData.EndpointPartitions endpointPartitions = new StreamsRebalanceData.EndpointPartitions(activeTopicPartitions, standbyTopicPartitions);
-            partitionsByHost.put(new StreamsRebalanceData.HostInfo(userEndpoint.host(), userEndpoint.port()), endpointPartitions);
+            StreamsRebalanceData.HostInfo hostInfo = new StreamsRebalanceData.HostInfo(userEndpoint.host(), userEndpoint.port());
+            partitionsByHost.merge(
+                hostInfo,
+                new StreamsRebalanceData.EndpointPartitions(activeTopicPartitions, standbyTopicPartitions),
+                (existing, newPartitions) -> {
+                    List<TopicPartition> mergedActive = new ArrayList<>(existing.activePartitions());
+                    mergedActive.addAll(newPartitions.activePartitions());
+                    List<TopicPartition> mergedStandby = new ArrayList<>(existing.standbyPartitions());
+                    mergedStandby.addAll(newPartitions.standbyPartitions());
+                    return new StreamsRebalanceData.EndpointPartitions(mergedActive, mergedStandby);
+                }
+            );
         });
         return partitionsByHost;
     }
