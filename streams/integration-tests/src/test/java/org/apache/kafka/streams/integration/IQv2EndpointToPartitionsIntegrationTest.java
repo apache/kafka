@@ -182,11 +182,14 @@ public class IQv2EndpointToPartitionsIntegrationTest {
                     }, TestUtils.DEFAULT_MAX_WAIT_MS,
                             "Kafka Streams clients 1 and 2 never got metadata about standby tasks");
 
-                    waitForCondition(() -> {
-                        final List<StreamsMetadata> metadata = new ArrayList<>(streamsTwo.metadataForAllStreamsClients());
-                        return metadata.size() == 2 && metadata.stream().allMatch(m -> m.topicPartitions().size() == 4);
-                    }, IntegrationTestUtils.DEFAULT_TIMEOUT,
-                            () -> "Kafka Streams clients metadata was not updated to 4 active tasks per client");
+                    waitForCondition(
+                        () -> {
+                            final List<StreamsMetadata> metadata = new ArrayList<>(streamsTwo.metadataForAllStreamsClients());
+                            return metadata.size() == 2 && metadata.stream().allMatch(m -> m.topicPartitions().size() == 4);
+                        }, 
+                        IntegrationTestUtils.DEFAULT_TIMEOUT,
+                        () -> "Kafka Streams clients metadata was not updated to 4 active tasks per client"
+                    );
 
                     verifyClientMetadata(usingStandbyReplicas, new ArrayList<>(streamsTwo.metadataForAllStreamsClients()), expectedStandbyCount);
                 }
