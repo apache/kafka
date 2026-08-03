@@ -20,15 +20,25 @@ from kafkatest.services.connect import ConnectServiceBase
 
 class CheckConnectServiceBase(object):
     def check_append_module_to_classpath_ignores_javadoc_jar(self):
+        classpath = self._append_module_to_classpath([
+            "connect-file-4.0.0-SNAPSHOT-javadoc.jar",
+            "connect-file-4.0.0-SNAPSHOT.jar",
+        ])
+
+        assert classpath == "export CLASSPATH=${CLASSPATH}:/opt/kafka-dev/connect/file/build/libs/connect-file-4.0.0-SNAPSHOT.jar; "
+
+    def check_append_module_to_classpath_returns_empty_for_javadoc_only(self):
+        classpath = self._append_module_to_classpath([
+            "connect-file-4.0.0-SNAPSHOT-javadoc.jar",
+        ])
+
+        assert classpath == ""
+
+    @staticmethod
+    def _append_module_to_classpath(jar_files):
         service = Mock()
         service.path.home.return_value = "/opt/kafka-dev"
 
-        jar_files = [
-            "connect-file-4.0.0-SNAPSHOT-javadoc.jar",
-            "connect-file-4.0.0-SNAPSHOT.jar",
-        ]
         with patch("kafkatest.services.connect.os.getcwd", return_value="/workspace"), \
                 patch("kafkatest.services.connect.os.walk", return_value=[("", [], jar_files)]):
-            classpath = ConnectServiceBase.append_module_to_classpath(service, "file")
-
-        assert classpath == "export CLASSPATH=${CLASSPATH}:/opt/kafka-dev/connect/file/build/libs/connect-file-4.0.0-SNAPSHOT.jar; "
+            return ConnectServiceBase.append_module_to_classpath(service, "file")
