@@ -185,6 +185,7 @@ public final class RaftClientTestContext {
         private boolean canBecomeVoter = false;
         private VoterSet startingVoters = VoterSet.empty();
         private Endpoints localListeners = Endpoints.empty();
+        private NodeEndpointProvider nodeEndpointProvider = NodeEndpointProvider.NOOP;
         private boolean isStartingVotersStatic = false;
         private boolean autoJoin = false;
         private int fetchSnapshotMaxBytes = QuorumConfig.DEFAULT_QUORUM_FETCH_SNAPSHOT_MAX_BYTES;
@@ -391,6 +392,11 @@ public final class RaftClientTestContext {
             return this;
         }
 
+        Builder withNodeEndpointProvider(NodeEndpointProvider nodeEndpointProvider) {
+            this.nodeEndpointProvider = nodeEndpointProvider;
+            return this;
+        }
+
         Builder withAutoJoin(boolean autoJoin) {
             this.autoJoin = autoJoin;
             return this;
@@ -473,6 +479,7 @@ public final class RaftClientTestContext {
                 clusterId,
                 computedBootstrapServers,
                 localListeners,
+                nodeEndpointProvider,
                 Feature.KRAFT_VERSION.supportedVersionRange(),
                 logContext,
                 random,
@@ -2367,7 +2374,9 @@ public final class RaftClientTestContext {
         // HWM in FETCH request support
         KIP_1166_PROTOCOL,
         // autoJoin support
-        KIP_1186_PROTOCOL;
+        KIP_1186_PROTOCOL,
+        // add/remove voter convenience support
+        KIP_1141_PROTOCOL;
 
         boolean isReconfigSupported() {
             return isAtLeast(KIP_853_PROTOCOL);
@@ -2430,7 +2439,9 @@ public final class RaftClientTestContext {
         }
 
         short addVoterRpcVersion() {
-            if (isAtLeast(KIP_1186_PROTOCOL)) {
+            if (isAtLeast(KIP_1141_PROTOCOL)) {
+                return 2;
+            } else if (isAtLeast(KIP_1186_PROTOCOL)) {
                 return 1;
             } else if (isAtLeast(KIP_853_PROTOCOL)) {
                 return 0;
@@ -2440,7 +2451,9 @@ public final class RaftClientTestContext {
         }
 
         short removeVoterRpcVersion() {
-            if (isAtLeast(KIP_853_PROTOCOL)) {
+            if (isAtLeast(KIP_1141_PROTOCOL)) {
+                return 1;
+            } else if (isAtLeast(KIP_853_PROTOCOL)) {
                 return 0;
             } else {
                 throw new IllegalStateException("Reconfiguration must be enabled by calling withRaftProtocol(KIP_853_PROTOCOL)");

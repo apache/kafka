@@ -19,7 +19,9 @@
   "listeners": ["controller", "broker"],
   "name": "AddRaftVoterRequest",
   // Version 1 adds the AckWhenCommitted field.
-  "validVersions": "0-1",
+  // Version 2 allows VoterDirectoryId to be ZERO_UUID and Listeners to be empty, in which
+  // case the server will derive these values from its in-memory state.
+  "validVersions": "0-2",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "ClusterId", "type": "string", "versions": "0+", "nullableVersions": "0+",

@@ -31,10 +31,10 @@ import org.apache.kafka.image.MetadataProvenance
 import org.apache.kafka.image.loader.MetadataLoader
 import org.apache.kafka.image.loader.metrics.MetadataLoaderMetrics
 import org.apache.kafka.image.publisher.metrics.SnapshotEmitterMetrics
-import org.apache.kafka.image.publisher.{SnapshotEmitter, SnapshotGenerator}
+import org.apache.kafka.image.publisher.{ControllerRegistrationsPublisher, SnapshotEmitter, SnapshotGenerator}
 import org.apache.kafka.metadata.{SupportedConfigChecker, ListenerInfo, MetadataRecordSerde}
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble
-import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics}
+import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics, NodeEndpointProvider}
 import org.apache.kafka.server.{ProcessRole, ServerSocketFactory}
 import org.apache.kafka.server.config.DefaultSupportedConfigChecker
 import org.apache.kafka.server.common.ApiMessageAndVersion
@@ -115,6 +115,22 @@ class SharedServer(
   val brokerConfig = new KafkaConfig(sharedServerConfig.props, false)
   val controllerConfig = new KafkaConfig(sharedServerConfig.props, false)
   val supportedConfigChecker: SupportedConfigChecker = new DefaultSupportedConfigChecker()
+  val controllerRegistrationsPublisher: Option[ControllerRegistrationsPublisher] =
+    if (sharedServerConfig.processRoles.contains(ProcessRole.ControllerRole)) {
+      Some(new ControllerRegistrationsPublisher())
+    } else {
+      None
+    }
+  private val nodeEndpointProvider: NodeEndpointProvider = controllerRegistrationsPublisher match {
+    case Some(publisher) => nodeId => Option(publisher.controllers().get(nodeId)).map { registration =>
+      val endpoints = registration.listeners().asScala.map { case (listenerName, endpoint) =>
+        ListenerName.normalised(listenerName) ->
+          InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
+      }.asJava
+      Endpoints.fromInetSocketAddresses(endpoints)
+    }.getOrElse(Endpoints.empty())
+    case None => NodeEndpointProvider.NOOP
+  }
   
   // Factory for creating request handler pools with shared aggregate thread counter
   val requestHandlerPoolFactory = new KafkaRequestHandlerPoolFactory()
@@ -304,6 +320,7 @@ class SharedServer(
           controllerQuorumVotersFuture,
           bootstrapServers,
           listenerEndpoints,
+          nodeEndpointProvider,
           raftManagerFaultHandler
         )
         raftManager = _raftManager

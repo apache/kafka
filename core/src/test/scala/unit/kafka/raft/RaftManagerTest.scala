@@ -32,7 +32,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.{Endpoints, KRaftConfigs, MetadataLogConfig, QuorumConfig}
+import org.apache.kafka.raft.{Endpoints, KRaftConfigs, MetadataLogConfig, NodeEndpointProvider, QuorumConfig}
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.fault.FaultHandler
@@ -110,6 +110,7 @@ class RaftManagerTest {
       CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig.voters)),
       QuorumConfig.parseBootstrapServers(config.quorumConfig.bootstrapServers),
       endpoints,
+      NodeEndpointProvider.NOOP,
       mock(classOf[FaultHandler])
     )
   }

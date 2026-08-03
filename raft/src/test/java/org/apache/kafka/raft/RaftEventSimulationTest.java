@@ -846,6 +846,7 @@ public class RaftEventSimulationTest {
                 clusterId,
                 List.of(),
                 endpointsFromId(nodeId, channel.listenerName()),
+                NodeEndpointProvider.NOOP,
                 Feature.KRAFT_VERSION.supportedVersionRange(),
                 logContext,
                 random,

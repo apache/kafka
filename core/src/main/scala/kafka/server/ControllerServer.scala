@@ -155,7 +155,9 @@ class ControllerServer(
 
       featuresPublisher = new FeaturesPublisher(logContext, sharedServer.metadataPublishingFaultHandler)
 
-      registrationsPublisher = new ControllerRegistrationsPublisher()
+      registrationsPublisher = sharedServer.controllerRegistrationsPublisher.getOrElse(
+        throw new IllegalStateException("Controller registrations publisher is not configured")
+      )
 
       incarnationId = Uuid.randomUuid()
 

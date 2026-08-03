@@ -47,7 +47,7 @@ public class MetadataQuorumCommandUnitTest {
                     "--controller-id", "2",
                     "--controller-directory-id", "_KWDkTahTVaiVVVTaugNew",
                     "--dry-run"))).split("\n"));
-        assertTrue(outputs.contains("DRY RUN of removing  KRaft controller 2 with directory id _KWDkTahTVaiVVVTaugNew"),
+        assertTrue(outputs.contains("DRY RUN of removing KRaft controller 2 with directory id _KWDkTahTVaiVVVTaugNew"),
             "Failed to find expected output in stdout: " + outputs);
     }
 
@@ -259,5 +259,29 @@ public class MetadataQuorumCommandUnitTest {
                 "wZoXPqWoSu6F6c8MkmdyAg and endpoints: CONTROLLER://example.com:9093, CONTROLLER_SSL://example.com:9094"),
                     "Failed to find expected output in stdout: " + outputs);
         }
+    }
+
+    @Test
+    public void testAddControllerByIdDryRun() {
+        List<String> outputs = List.of(
+            ToolsTestUtils.captureStandardOut(() ->
+                assertEquals(0, MetadataQuorumCommand.mainNoExit("--bootstrap-server", "localhost:9092",
+                    "add-controller",
+                    "--controller-id", "5",
+                    "--dry-run"))).split("\n"));
+        assertTrue(outputs.contains("DRY RUN of adding KRaft controller 5"),
+            "Failed to find expected output in stdout: " + outputs);
+    }
+
+    @Test
+    public void testRemoveControllerWithoutDirectoryIdDryRun() {
+        List<String> outputs = List.of(
+            ToolsTestUtils.captureStandardOut(() ->
+                assertEquals(0, MetadataQuorumCommand.mainNoExit("--bootstrap-server", "localhost:9092",
+                    "remove-controller",
+                    "--controller-id", "3",
+                    "--dry-run"))).split("\n"));
+        assertTrue(outputs.contains("DRY RUN of removing KRaft controller 3"),
+            "Failed to find expected output in stdout: " + outputs);
     }
 }

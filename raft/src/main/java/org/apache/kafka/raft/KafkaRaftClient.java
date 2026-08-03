@@ -183,6 +183,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private final boolean canBecomeVoter;
     private final String clusterId;
     private final Endpoints localListeners;
+    private final NodeEndpointProvider nodeEndpointProvider;
     private final SupportedVersionRange localSupportedKRaftVersion;
     private final NetworkChannel channel;
     private final RaftLog log;
@@ -244,6 +245,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         String clusterId,
         Collection<InetSocketAddress> bootstrapServers,
         Endpoints localListeners,
+        NodeEndpointProvider nodeEndpointProvider,
         SupportedVersionRange localSupportedKRaftVersion,
         QuorumConfig quorumConfig
     ) {
@@ -262,6 +264,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             clusterId,
             bootstrapServers,
             localListeners,
+            nodeEndpointProvider,
             localSupportedKRaftVersion,
             logContext,
             new Random(),
@@ -284,6 +287,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         String clusterId,
         Collection<InetSocketAddress> bootstrapServers,
         Endpoints localListeners,
+        NodeEndpointProvider nodeEndpointProvider,
         SupportedVersionRange localSupportedKRaftVersion,
         LogContext logContext,
         Random random,
@@ -306,6 +310,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         this.time = time;
         this.clusterId = clusterId;
         this.localListeners = localListeners;
+        this.nodeEndpointProvider = Objects.requireNonNull(nodeEndpointProvider);
         this.localSupportedKRaftVersion = localSupportedKRaftVersion;
         this.fetchMaxWaitMs = fetchMaxWaitMs;
         this.canBecomeVoter = canBecomeVoter;
@@ -2275,37 +2280,80 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             );
         }
 
-        Optional<ReplicaKey> newVoter = RaftUtil.addVoterRequestVoterKey(data);
-        if (newVoter.isEmpty() || newVoter.get().directoryId().isEmpty()) {
-            return completedFuture(
-                new AddRaftVoterResponseData()
-                    .setErrorCode(Errors.INVALID_REQUEST.code())
-                    .setErrorMessage("Add voter request didn't include a valid voter")
-            );
-        }
-
-        Endpoints newVoterEndpoints = Endpoints.fromAddVoterRequest(data.listeners());
-        if (newVoterEndpoints.address(channel.listenerName()).isEmpty()) {
-            return completedFuture(
-                new AddRaftVoterResponseData()
-                    .setErrorCode(Errors.INVALID_REQUEST.code())
-                    .setErrorMessage(
-                        String.format(
-                            "Add voter request didn't include the endpoint (%s) for the default listener %s",
-                            newVoterEndpoints,
-                            channel.listenerName()
-                        )
-                    )
-            );
+        final ReplicaKey newVoter;
+        final Endpoints newVoterEndpoints;
+        try {
+            newVoter = resolveAddVoterKey(data, requestMetadata.apiVersion(), currentTimeMs);
+            newVoterEndpoints = resolveAddVoterEndpoints(data, requestMetadata.apiVersion());
+        } catch (IllegalArgumentException e) {
+            return completedFuture(RaftUtil.addVoterResponse(Errors.INVALID_REQUEST, e.getMessage()));
         }
 
         return addVoterHandler.handleAddVoterRequest(
             quorum.leaderStateOrThrow(),
-            newVoter.get(),
+            newVoter,
             newVoterEndpoints,
             data.ackWhenCommitted(),
             currentTimeMs
         );
+    }
+
+    private ReplicaKey resolveAddVoterKey(
+        AddRaftVoterRequestData data,
+        short apiVersion,
+        long currentTimeMs
+    ) {
+        if (apiVersion >= 2 && data.voterDirectoryId().equals(Uuid.ZERO_UUID)) {
+            List<ReplicaKey> matchingObservers = quorum.leaderStateOrThrow()
+                .observerStates(currentTimeMs)
+                .keySet()
+                .stream()
+                .filter(key -> key.id() == data.voterId())
+                .toList();
+            if (matchingObservers.size() > 1) {
+                throw new IllegalArgumentException(String.format(
+                    "Multiple observers with node ID %d were found: %s. " +
+                        "Remove all but one of these observers and try again.",
+                    data.voterId(),
+                    matchingObservers
+                ));
+            } else if (matchingObservers.isEmpty() || matchingObservers.get(0).directoryId().isEmpty()) {
+                throw new IllegalArgumentException(
+                    String.format(
+                        "Could not find a unique observer with node ID %d to derive its directory ID. " +
+                            "Ensure the node is running and fetching before adding it as a voter",
+                        data.voterId()
+                    )
+                );
+            } else {
+                return matchingObservers.get(0);
+            }
+        }
+
+        return RaftUtil.addVoterRequestVoterKey(data)
+            .filter(voterKey -> voterKey.directoryId().isPresent())
+            .orElseThrow(() -> new IllegalArgumentException("Add voter request didn't include a valid voter"));
+    }
+
+    private Endpoints resolveAddVoterEndpoints(
+        AddRaftVoterRequestData data,
+        short apiVersion
+    ) {
+        Endpoints endpoints = apiVersion < 2 || !data.listeners().isEmpty() ?
+            Endpoints.fromAddVoterRequest(data.listeners()) :
+            nodeEndpointProvider.endpointsOf(data.voterId());
+
+        if (endpoints.address(channel.listenerName()).isEmpty()) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Could not find an endpoint for voter %d on listener %s.",
+                    data.voterId(),
+                    channel.listenerName()
+                )
+            );
+        }
+
+        return endpoints;
     }
 
     private boolean handleApiVersionsResponse(
@@ -2414,20 +2462,40 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             );
         }
 
-        Optional<ReplicaKey> oldVoter = RaftUtil.removeVoterRequestVoterKey(data);
-        if (oldVoter.isEmpty() || oldVoter.get().directoryId().isEmpty()) {
+        final ReplicaKey oldVoter;
+        try {
+            oldVoter = resolveRemoveVoterKey(data, requestMetadata.apiVersion());
+        } catch (IllegalArgumentException e) {
             return completedFuture(
                 new RemoveRaftVoterResponseData()
                     .setErrorCode(Errors.INVALID_REQUEST.code())
-                    .setErrorMessage("Remove voter request didn't include a valid voter")
+                    .setErrorMessage(e.getMessage())
             );
         }
 
         return removeVoterHandler.handleRemoveVoterRequest(
             quorum.leaderStateOrThrow(),
-            oldVoter.get(),
+            oldVoter,
             currentTimeMs
         );
+    }
+
+    private ReplicaKey resolveRemoveVoterKey(RemoveRaftVoterRequestData data, short apiVersion) {
+        if (apiVersion >= 1 && data.voterDirectoryId().equals(Uuid.ZERO_UUID)) {
+            return partitionState.lastVoterSet()
+                .voterKey(data.voterId())
+                .filter(voterKey -> voterKey.directoryId().isPresent())
+                .orElseThrow(() -> new IllegalArgumentException(
+                    String.format(
+                        "Could not find voter with node ID %d in the current voter set to derive its directory ID",
+                        data.voterId()
+                    )
+                ));
+        }
+
+        return RaftUtil.removeVoterRequestVoterKey(data)
+            .filter(voterKey -> voterKey.directoryId().isPresent())
+            .orElseThrow(() -> new IllegalArgumentException("Remove voter request didn't include a valid voter"));
     }
 
     private boolean handleRemoveVoterResponse(

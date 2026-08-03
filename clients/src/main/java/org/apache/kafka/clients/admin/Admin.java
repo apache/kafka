@@ -1869,6 +1869,22 @@ public interface Admin extends AutoCloseable {
     /**
      * Add a new voter node to the KRaft metadata quorum.
      *
+     * <p>
+     * This is a convenience method that derives the voter's directory ID and endpoints
+     * from the active controller's in-memory state. It is not idempotent.
+     * For scenarios such as node disk failure where multiple observers may share the same
+     * node ID with different directory UUIDs, use
+     * {@link #addRaftVoter(int, Uuid, Set, AddRaftVoterOptions)} instead.
+     *
+     * @param voterId The node ID of the voter to add.
+     */
+    default AddRaftVoterResult addRaftVoter(int voterId) {
+        return addRaftVoter(voterId, Uuid.ZERO_UUID, Set.of(), new AddRaftVoterOptions());
+    }
+
+    /**
+     * Add a new voter node to the KRaft metadata quorum.
+     *
      * @param voterId           The node ID of the voter.
      * @param voterDirectoryId  The directory ID of the voter.
      * @param endpoints         The endpoints that the new voter has.
@@ -1902,6 +1918,19 @@ public interface Admin extends AutoCloseable {
         Set<RaftVoterEndpoint> endpoints,
         AddRaftVoterOptions options
     );
+
+    /**
+     * Remove a voter node from the KRaft metadata quorum.
+     *
+     * <p>
+     * This is a convenience method that derives the voter's directory ID from the active
+     * controller's in-memory LeaderState.
+     *
+     * @param voterId The node ID of the voter to remove.
+     */
+    default RemoveRaftVoterResult removeRaftVoter(int voterId) {
+        return removeRaftVoter(voterId, Uuid.ZERO_UUID, new RemoveRaftVoterOptions());
+    }
 
     /**
      * Remove a voter node from the KRaft metadata quorum.

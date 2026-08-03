@@ -39,7 +39,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.utils.internals.LogContext
 import org.apache.kafka.raft.internals.KafkaRaftLog
-import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics, FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, MetadataLogConfig, QuorumConfig, RaftLog, RaftManager, TimingWheelExpirationService}
+import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics, FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, MetadataLogConfig, NodeEndpointProvider, QuorumConfig, RaftLog, RaftManager, TimingWheelExpirationService}
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.Feature
 import org.apache.kafka.server.common.serialization.RecordSerde
@@ -97,6 +97,7 @@ class KafkaRaftManager[T](
   val controllerQuorumVotersFuture: CompletableFuture[JMap[Integer, InetSocketAddress]],
   bootstrapServers: JCollection[InetSocketAddress],
   localListeners: Endpoints,
+  nodeEndpointProvider: NodeEndpointProvider,
   fatalFaultHandler: FaultHandler
 ) extends RaftManager[T] with Logging {
 
@@ -177,6 +178,7 @@ class KafkaRaftManager[T](
       clusterId,
       bootstrapServers,
       localListeners,
+      nodeEndpointProvider,
       Feature.KRAFT_VERSION.supportedVersionRange(),
       raftConfig
     )

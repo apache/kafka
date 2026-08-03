@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.QuorumInfo;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTests;
@@ -30,6 +32,8 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -195,5 +199,62 @@ class MetadataQuorumCommandTest {
         assertTrue(lastFetchTimestampValue.matches("\\d*"));
         assertTrue(lastCaughtUpTimestamp.contains("ms ago"));
         assertTrue(lastCaughtUpTimestampValue.matches("\\d*"));
+    }
+
+    /**
+     * Verify that add-controller and remove-controller work using only the
+     * controller node ID (no directory ID or endpoints required from the user).
+     */
+    @ClusterTest(types = {Type.KRAFT}, controllers = 2, standalone = true)
+    public void testAddAndRemoveControllerByIdSuccessful(ClusterInstance cluster) throws Exception {
+        AtomicInteger controllerId = new AtomicInteger();
+        try (Admin admin = cluster.admin(Map.of(), true)) {
+            TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
+                QuorumInfo info = admin.describeMetadataQuorum().quorumInfo().get();
+                controllerId.set(info.observers().stream()
+                    .mapToInt(QuorumInfo.ReplicaState::replicaId)
+                    .filter(cluster.controllerIds()::contains)
+                    .findFirst()
+                    .orElseThrow(() -> new AssertionError("No controller observer found in quorum info " + info)));
+                assertEquals(1, info.voters().size());
+            });
+        }
+
+        int addedControllerId = controllerId.get();
+        String addOutput = ToolsTestUtils.captureStandardOut(() ->
+            MetadataQuorumCommand.mainNoExit(
+                "--bootstrap-controller", cluster.bootstrapControllers(),
+                "add-controller",
+                "--controller-id", String.valueOf(addedControllerId)
+            )
+        );
+        assertTrue(addOutput.contains("Added KRaft controller " + addedControllerId),
+            "Expected output to contain 'Added KRaft controller " + addedControllerId + "' but was: " + addOutput);
+
+        try (Admin admin = cluster.admin(Map.of(), true)) {
+            TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
+                QuorumInfo info = admin.describeMetadataQuorum().quorumInfo().get();
+                assertEquals(2, info.voters().size());
+            });
+        }
+
+        String removeOutput = ToolsTestUtils.captureStandardOut(() ->
+            MetadataQuorumCommand.mainNoExit(
+                "--bootstrap-controller", cluster.bootstrapControllers(),
+                "remove-controller",
+                "--controller-id", String.valueOf(addedControllerId)
+            )
+        );
+        assertTrue(removeOutput.contains("Removed KRaft controller " + addedControllerId),
+            "Expected output to contain 'Removed KRaft controller " + addedControllerId + "' but was: " + removeOutput);
+
+        try (Admin admin = cluster.admin(Map.of(), true)) {
+            TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
+                QuorumInfo info = admin.describeMetadataQuorum().quorumInfo().get();
+                assertEquals(1, info.voters().size());
+                assertTrue(info.observers().stream().anyMatch(o -> o.replicaId() == addedControllerId),
+                    "Controller " + addedControllerId + " has not yet transitioned to observer state");
+            });
+        }
     }
 }
