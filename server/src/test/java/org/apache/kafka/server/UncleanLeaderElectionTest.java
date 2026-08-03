@@ -68,6 +68,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -252,7 +253,7 @@ public class UncleanLeaderElectionTest {
             try (Consumer<String, String> consumer = new KafkaConsumer<>(consumerConfig)) {
                 consumer.assign(List.of(TOPIC_PARTITION));
                 consumer.seekToBeginning(List.of(TOPIC_PARTITION));
-                List<String> values = new java.util.ArrayList<>();
+                List<String> values = new ArrayList<>();
                 waitForCondition(
                         () -> {
                             for (ConsumerRecord<String, String> record : consumer.poll(Duration.ofMillis(100))) {
