@@ -48,7 +48,7 @@ public class TestKitNodes {
 
     public static class Builder {
         private boolean combined;
-        private String clusterId;
+        private final String clusterId;
         private Path baseDirectory;
         private int numControllerNodes;
         private int numBrokerNodes;
@@ -58,7 +58,8 @@ public class TestKitNodes {
         private Set<String> disabledFeatures = Set.of();
 
         public Builder() {
-            this(BootstrapMetadata.fromVersions(
+            this.clusterId = Uuid.randomUuid().toString();
+            this.bootstrapMetadata = BootstrapMetadata.fromVersions(
                     MetadataVersion.latestTesting(),
                     Feature.PRODUCTION_FEATURES.stream()
                             .collect(Collectors.toMap(
@@ -66,23 +67,16 @@ public class TestKitNodes {
                                     feature -> feature.defaultLevel(MetadataVersion.latestTesting()),
                                     (existing, replacement) -> existing,
                                     TreeMap::new)),
-                    "testkit"));
+                    clusterId,
+                    "testkit");
         }
 
-        public Builder(BootstrapMetadata bootstrapMetadata) {
-            this.bootstrapMetadata = bootstrapMetadata;
-        }
         // The broker and controller listener name and SecurityProtocol configurations must
         // be kept in sync with the default values in ClusterTest.
         private ListenerName brokerListenerName = ListenerName.normalised(TestKitDefaults.DEFAULT_BROKER_LISTENER_NAME);
         private SecurityProtocol brokerSecurityProtocol = TestKitDefaults.DEFAULT_BROKER_SECURITY_PROTOCOL;
         private ListenerName controllerListenerName = ListenerName.normalised(TestKitDefaults.DEFAULT_CONTROLLER_LISTENER_NAME);
         private SecurityProtocol controllerSecurityProtocol = TestKitDefaults.DEFAULT_CONTROLLER_SECURITY_PROTOCOL;
-
-        public Builder setClusterId(String clusterId) {
-            this.clusterId = clusterId;
-            return this;
-        }
 
         public Builder setBootstrapMetadataVersion(MetadataVersion metadataVersion) {
             this.bootstrapMetadata = bootstrapMetadata.copyWithFeatureRecord(
@@ -167,9 +161,6 @@ public class TestKitNodes {
             }
             if (baseDirectory == null) {
                 this.baseDirectory = TestUtils.tempDirectory().toPath();
-            }
-            if (clusterId == null) {
-                clusterId = Uuid.randomUuid().toString();
             }
 
             int controllerId = combined ? TestKitDefaults.BROKER_ID_OFFSET : TestKitDefaults.BROKER_ID_OFFSET + TestKitDefaults.CONTROLLER_ID_OFFSET;

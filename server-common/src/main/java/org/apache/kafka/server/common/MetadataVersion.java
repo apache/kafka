@@ -135,7 +135,12 @@ public enum MetadataVersion {
     IBP_4_4_IV0(31, "4.4", "IV0", false),
 
     // Add support for CIDR-based ACL host patterns (KIP-1276).
-    IBP_4_4_IV1(32, "4.4", "IV1", true);
+    IBP_4_4_IV1(32, "4.4", "IV1", true),
+
+    // Enables auto-formatting directories; adds ClusterIdRecord (KIP-1262).
+    IBP_4_4_IV2(33, "4.4", "IV2", true),
+
+    IBP_4_4_IV3(34, "4.4", "IV3", false);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
@@ -224,6 +229,10 @@ public enum MetadataVersion {
 
     public boolean isCordonedLogDirsSupported() {
         return this.isAtLeast(MetadataVersion.IBP_4_3_IV0);
+    }
+
+    public boolean isClusterIdSupported() {
+        return this.isAtLeast(MetadataVersion.IBP_4_4_IV2);
     }
 
     public short registerBrokerRecordVersion() {

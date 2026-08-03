@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Timeout;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -36,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 @Timeout(value = 40)
 public class ClusterImageControllersNodeTest {
-    private static final ClusterImage TEST_IMAGE = new ClusterImage(
+    private static final ClusterImage TEST_IMAGE = new ClusterImage(Optional.empty(), 
             Map.of(),
             Map.of(2, new ControllerRegistration.Builder().
                     setId(2).

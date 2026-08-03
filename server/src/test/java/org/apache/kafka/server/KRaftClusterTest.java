@@ -1417,7 +1417,8 @@ public class KRaftClusterTest {
                 .setName("num.io.threads")
                 .setValue("9"), (short) 0));
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder(BootstrapMetadata.fromRecords(bootstrapRecords, "testRecords"))
+            new TestKitNodes.Builder()
+                .setBootstrapMetadata(BootstrapMetadata.fromRecords(bootstrapRecords, "testRecords"))
                 .setNumBrokerNodes(1)
                 .setNumControllerNodes(1)
                 .build())

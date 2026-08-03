@@ -109,10 +109,10 @@ class KafkaRaftServerTest {
     PropertiesUtils.writePropertiesFile(metaProperties.toProperties, metaPropertiesFile.getAbsolutePath, false)
   }
 
-  private def writeBootstrapMetadata(logDir: File, metadataVersion: MetadataVersion): Unit = {
+  private def writeBootstrapMetadata(logDir: File, metadataVersion: MetadataVersion, clusterId: String = clusterIdBase64): Unit = {
     Formatter.writeBoostrapSnapshot(
       logDir.toString,
-      BootstrapMetadata.fromVersion(metadataVersion, "test"),
+      BootstrapMetadata.fromVersion(metadataVersion, clusterId, "test"),
       Optional.empty(),
       0.toShort,
       "CONTROLLER"

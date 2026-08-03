@@ -53,6 +53,7 @@ import static org.apache.kafka.common.metadata.MetadataRecordType.UNFENCE_BROKER
 public final class ClusterImageFixtures {
 
     public static final ClusterImage IMAGE1 = new ClusterImage(
+        Optional.empty(),
         Map.of(
             0, new BrokerRegistration.Builder().
                 setId(0).
@@ -127,6 +128,7 @@ public final class ClusterImageFixtures {
     );
 
     public static final ClusterImage IMAGE2 = new ClusterImage(
+        Optional.empty(),
         Map.of(
             0, new BrokerRegistration.Builder().
                 setId(0).
@@ -195,6 +197,7 @@ public final class ClusterImageFixtures {
     );
 
     public static final ClusterImage IMAGE3 = new ClusterImage(
+        Optional.empty(),
         Map.of(
             0, new BrokerRegistration.Builder().
                 setId(0).

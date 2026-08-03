@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -43,7 +44,7 @@ public class ActivationRecordsGeneratorTest {
             logMsg -> assertEquals("Performing controller activation. The metadata log appears to be empty. " +
                 "Appending 1 bootstrap record(s) at metadata.version 3.3-IV3 from bootstrap source 'test'.", logMsg),
             -1L,
-            BootstrapMetadata.fromVersion(MetadataVersion.MINIMUM_VERSION, "test"),
+            BootstrapMetadata.fromVersion(MetadataVersion.MINIMUM_VERSION, "test-cluster-id", "test"),
             MetadataVersion.MINIMUM_VERSION,
             2
         );
@@ -58,7 +59,7 @@ public class ActivationRecordsGeneratorTest {
                 "Appending 1 bootstrap record(s) at metadata.version 3.4-IV0 from bootstrap " +
                 "source 'test'.", logMsg),
             -1L,
-            BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_4_IV0, "test"),
+            BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_4_IV0, "test-cluster-id", "test"),
             MetadataVersion.IBP_3_4_IV0,
             2
         );
@@ -73,7 +74,7 @@ public class ActivationRecordsGeneratorTest {
                 "Appending 1 bootstrap record(s) in metadata transaction at metadata.version 3.6-IV1 from bootstrap " +
                 "source 'test'.", logMsg),
             -1L,
-            BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"),
+            BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test-cluster-id", "test"),
             MetadataVersion.IBP_3_6_IV1,
             2
         );
@@ -88,7 +89,7 @@ public class ActivationRecordsGeneratorTest {
                 "transaction at offset 0. Re-appending 1 bootstrap record(s) in new metadata transaction at " +
                 "metadata.version 3.6-IV1 from bootstrap source 'test'.", logMsg),
             0L,
-            BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"),
+            BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test-cluster-id", "test"),
             MetadataVersion.IBP_3_6_IV1,
             2
         );
@@ -103,7 +104,7 @@ public class ActivationRecordsGeneratorTest {
                 "transaction at offset 0. Re-appending 2 bootstrap record(s) in new metadata transaction at " +
                 "metadata.version 4.0-IV1 from bootstrap source 'test'.", logMsg),
             0L,
-            BootstrapMetadata.fromVersion(MetadataVersion.IBP_4_0_IV1, "test").copyWithFeatureRecord(
+            BootstrapMetadata.fromVersion(MetadataVersion.IBP_4_0_IV1, "test-cluster-id", "test").copyWithFeatureRecord(
                 EligibleLeaderReplicasVersion.FEATURE_NAME,
                 EligibleLeaderReplicasVersion.ELRV_1.featureLevel()),
             MetadataVersion.IBP_4_0_IV1,
@@ -116,5 +117,38 @@ public class ActivationRecordsGeneratorTest {
             setResourceName("").
             setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).
             setValue("2"), (short) 0)));
+    }
+
+    @Test
+    public void testActivationRequiresClusterIdRecordWhenMvSupportsIt() {
+        // Create a bootstrap metadata for a version that supports ClusterIdRecord,
+        // but WITHOUT a ClusterIdRecord (simulating an improperly formatted cluster)
+        BootstrapMetadata bootstrapWithoutClusterId = BootstrapMetadata.defaultBootstrap();
+
+        // If the MV supports ClusterIdRecord but bootstrap doesn't contain one, should throw
+        RuntimeException exception = assertThrows(RuntimeException.class, () ->
+            ActivationRecordsGenerator.recordsForEmptyLog(
+                logMsg -> { },
+                -1L,
+                bootstrapWithoutClusterId,
+                MetadataVersion.IBP_4_4_IV2,  // Version that supports ClusterIdRecord
+                2
+            ));
+        assertTrue(exception.getMessage().contains("requires a ClusterIdRecord"));
+    }
+
+    @Test
+    public void testActivationWithClusterIdRecordWhenMvSupportsIt() {
+        // Bootstrap metadata with ClusterIdRecord should work
+        ControllerResult<Void> result = ActivationRecordsGenerator.recordsForEmptyLog(
+            logMsg -> assertTrue(logMsg.contains("Appending 2 bootstrap record(s)")),
+            -1L,
+            BootstrapMetadata.fromVersion(MetadataVersion.IBP_4_4_IV2, "test-cluster-id", "test"),
+            MetadataVersion.IBP_4_4_IV2,
+            2
+        );
+        assertFalse(result.isAtomic());
+        // Should have: BeginTransactionRecord, FeatureLevelRecord, ClusterIdRecord, EndTransactionRecord
+        assertEquals(4, result.records().size());
     }
 }

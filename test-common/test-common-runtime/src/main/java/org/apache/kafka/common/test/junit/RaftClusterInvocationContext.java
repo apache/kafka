@@ -21,6 +21,7 @@ import kafka.server.ControllerServer;
 import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.network.ListenerName;
@@ -364,7 +365,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                     .collect(Collectors.toSet());
 
                 TestKitNodes nodes = new TestKitNodes.Builder()
-                        .setBootstrapMetadata(BootstrapMetadata.fromVersions(clusterConfig.metadataVersion(), newFeatureLevels, "testkit"))
+                        .setBootstrapMetadata(BootstrapMetadata.fromVersions(clusterConfig.metadataVersion(), newFeatureLevels, Uuid.randomUuid().toString(), "testkit"))
                         .setDisabledFeatures(disabledFeatures)
                         .setCombined(isCombined)
                         .setNumBrokerNodes(clusterConfig.numBrokers())

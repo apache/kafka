@@ -117,7 +117,7 @@ public class ClusterImageTest {
 
     @Test
     public void testHandleLossOfControllerRegistrations() {
-        ClusterImage testImage = new ClusterImage(Map.of(),
+        ClusterImage testImage = new ClusterImage(Optional.empty(), Map.of(),
             Map.of(1000, new ControllerRegistration.Builder().
                 setId(1000).
                 setIncarnationId(Uuid.fromString("9ABu6HEgRuS-hjHLgC4cHw")).

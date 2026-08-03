@@ -44,6 +44,11 @@ public class ActivationRecordsGenerator {
         MetadataVersion metadataVersion,
         int defaultMinInSyncReplicas
     ) {
+        if (metadataVersion.isClusterIdSupported() && !bootstrapMetadata.containsClusterIdRecord()) {
+            throw new RuntimeException("The metadata version " + metadataVersion + " requires a ClusterIdRecord " +
+                "in the bootstrap metadata, but none was found. This indicates the cluster was not properly formatted.");
+        }
+
         StringBuilder logMessageBuilder = new StringBuilder("Performing controller activation. ");
         List<ApiMessageAndVersion> records = new ArrayList<>();
 
