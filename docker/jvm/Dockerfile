@@ -33,7 +33,7 @@ RUN set -eux ; \
     apk upgrade ; \
     apk add --no-cache bash; \
     mkdir opt/kafka; \
-    if [ -n "$kafka_url" ]; then \
+    if [ -n "${kafka_url:-}" ]; then \
         apk add --no-cache wget gcompat gpg gpg-agent procps; \
         wget -nv -O kafka.tgz "$kafka_url"; \
         wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
@@ -73,7 +73,7 @@ RUN mkdir opt/kafka; \
     apk update ; \
     apk upgrade ; \
     apk add --no-cache bash; \
-    if [ -n "$kafka_url" ]; then \
+    if [ -n "${kafka_url:-}" ]; then \
         apk add --no-cache wget gcompat gpg gpg-agent procps; \
         wget -nv -O kafka.tgz "$kafka_url"; \
         wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
