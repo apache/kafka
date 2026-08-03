@@ -32,6 +32,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
@@ -65,6 +66,28 @@ public class BootstrapServerResolverTest {
         }
 
         verify(metadataUpdater).bootstrap(RESOLVED_ADDRESSES);
+    }
+
+    @Test
+    public void testDisabledConfigurationDoesNotResolveOrBootstrap() {
+        MockTime time = new MockTime();
+        MetadataUpdater metadataUpdater = metadataUpdater();
+        AtomicBoolean resolved = new AtomicBoolean();
+
+        try (BootstrapServerResolver resolver = new BootstrapServerResolver(
+            BootstrapConfiguration.DISABLED,
+            time,
+            new LogContext(),
+            () -> {
+                resolved.set(true);
+                return RESOLVED_ADDRESSES;
+            })) {
+            resolver.ensureBootstrapped(time.milliseconds(), metadataUpdater);
+        }
+
+        assertFalse(resolved.get());
+        verify(metadataUpdater, never()).bootstrap(any());
+        verify(metadataUpdater, never()).bootstrapFailed(any());
     }
 
     @Test
