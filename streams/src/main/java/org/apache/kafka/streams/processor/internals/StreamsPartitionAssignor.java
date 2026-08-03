@@ -975,14 +975,20 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                               final Map<HostInfo, Set<TopicPartition>> standbyPartitionsByHost,
                                               final Map<TaskId, Set<TopicPartition>> partitionsForTask,
                                               final Map<ProcessId, ClientMetadata> clientMetadataMap) {
+        final boolean hasConfiguredHost = clientMetadataMap.values().stream()
+            .anyMatch(clientMetadata -> clientMetadata.hostInfo != null);
+
         for (final Map.Entry<ProcessId, ClientMetadata> entry : clientMetadataMap.entrySet()) {
             final HostInfo hostInfo = entry.getValue().hostInfo;
+            final ClientState state = entry.getValue().state;
 
-            // if application server is configured, also include host state map
-            if (hostInfo != null) {
+            // If application.server is configured on at least one client, preserve partitions from clients without
+            // an endpoint under the unavailable host. This keeps the partition count complete for IQ queries while
+            // still reporting that those partitions cannot be queried through an application server.
+            if (hostInfo != null || (hasConfiguredHost && (!state.activeTasks().isEmpty() || !state.standbyTasks().isEmpty()))) {
+                final HostInfo effectiveHostInfo = hostInfo == null ? HostInfo.unavailable() : hostInfo;
                 final Set<TopicPartition> topicPartitions = new HashSet<>();
                 final Set<TopicPartition> standbyPartitions = new HashSet<>();
-                final ClientState state = entry.getValue().state;
 
                 for (final TaskId id : state.activeTasks()) {
                     topicPartitions.addAll(partitionsForTask.get(id));
@@ -992,8 +998,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                     standbyPartitions.addAll(partitionsForTask.get(id));
                 }
 
-                partitionsByHost.put(hostInfo, topicPartitions);
-                standbyPartitionsByHost.put(hostInfo, standbyPartitions);
+                partitionsByHost.computeIfAbsent(effectiveHostInfo, ignored -> new HashSet<>()).addAll(topicPartitions);
+                standbyPartitionsByHost.computeIfAbsent(effectiveHostInfo, ignored -> new HashSet<>()).addAll(standbyPartitions);
             }
         }
     }

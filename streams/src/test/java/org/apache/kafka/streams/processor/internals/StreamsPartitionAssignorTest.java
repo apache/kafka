@@ -128,6 +128,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NODE_4;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_3;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.RACK_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.RACK_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.RACK_2;
@@ -1238,6 +1239,91 @@ public class StreamsPartitionAssignorTest {
         assertEquals(partitionsByHost, info20.partitionsByHost());
         assertEquals(standbyPartitionsByHost, info11.standbyPartitionByHost());
         assertEquals(standbyPartitionsByHost, info20.standbyPartitionByHost());
+    }
+
+    @ParameterizedTest
+    @MethodSource("parameter")
+    public void shouldPreservePartitionsForMultipleClientsWithoutApplicationServer(final Map<String, Object> parameterizedConfig) {
+        setUp(parameterizedConfig, false);
+        builder.addSource(null, "source1", null, null, null, "topic1");
+        createDefaultMockTaskManager();
+        configureDefaultPartitionAssignor(parameterizedConfig);
+
+        subscriptions.put(CONSUMER_1,
+            new Subscription(
+                singletonList("topic1"),
+                getInfo(PID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_0)
+            ));
+        subscriptions.put(CONSUMER_2,
+            new Subscription(
+                singletonList("topic1"),
+                getInfo(PID_2, EMPTY_TASKS, EMPTY_TASKS).encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_1)
+            ));
+        subscriptions.put(CONSUMER_3,
+            new Subscription(
+                singletonList("topic1"),
+                getInfo(PID_3, EMPTY_TASKS, EMPTY_TASKS).encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_2)
+            ));
+
+        final AssignmentInfo assignmentInfo = AssignmentInfo.decode(
+            partitionAssignor.assign(metadata, new GroupSubscription(subscriptions))
+                .groupAssignment()
+                .get(CONSUMER_1)
+                .userData()
+        );
+
+        final Set<TopicPartition> assignedPartitions = assignmentInfo.partitionsByHost().values().stream()
+            .flatMap(Collection::stream)
+            .collect(Collectors.toSet());
+        assertEquals(Set.of(new HostInfo("localhost", 8080), StreamsMetadataState.UNKNOWN_HOST),
+            assignmentInfo.partitionsByHost().keySet());
+        assertEquals(2, assignmentInfo.partitionsByHost().get(StreamsMetadataState.UNKNOWN_HOST).size());
+        assertEquals(Set.of(t1p0, t1p1, t1p2), assignedPartitions);
+    }
+
+    @ParameterizedTest
+    @MethodSource("parameter")
+    public void shouldNotCreateHostMetadataWhenNoClientHasApplicationServer(final Map<String, Object> parameterizedConfig) {
+        setUp(parameterizedConfig, false);
+        builder.addSource(null, "source1", null, null, null, "topic1");
+        createDefaultMockTaskManager();
+        configureDefaultPartitionAssignor(parameterizedConfig);
+
+        subscriptions.put(CONSUMER_1,
+            new Subscription(
+                singletonList("topic1"),
+                getInfo(PID_1, EMPTY_TASKS, EMPTY_TASKS).encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_0)
+            ));
+        subscriptions.put(CONSUMER_2,
+            new Subscription(
+                singletonList("topic1"),
+                getInfo(PID_2, EMPTY_TASKS, EMPTY_TASKS).encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_1)
+            ));
+
+        final AssignmentInfo assignmentInfo = AssignmentInfo.decode(
+            partitionAssignor.assign(metadata, new GroupSubscription(subscriptions))
+                .groupAssignment()
+                .get(CONSUMER_1)
+                .userData()
+        );
+
+        assertTrue(assignmentInfo.partitionsByHost().isEmpty());
+        assertTrue(assignmentInfo.standbyPartitionByHost().isEmpty());
     }
 
     @ParameterizedTest
