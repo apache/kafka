@@ -179,7 +179,7 @@ public interface Consumer<K, V> extends Closeable {
     Map<TopicPartition, OffsetAndMetadata> committed(Set<TopicPartition> partitions, final Duration timeout);
 
     /**
-     * See {@link KafkaConsumer#clientInstanceId(Duration)}}
+     * See {@link KafkaConsumer#clientInstanceId(Duration)}
      */
     Uuid clientInstanceId(Duration timeout);
 

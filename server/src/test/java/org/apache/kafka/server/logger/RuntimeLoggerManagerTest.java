@@ -14,14 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.server.logger;
+package org.apache.kafka.server.logger;
 
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfig;
-import org.apache.kafka.server.logger.LoggingController;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -64,6 +63,28 @@ public class RuntimeLoggerManagerTest {
                 () -> MANAGER.validateLogLevelConfigs(List.of(new AlterableConfig().
                     setName(LOG.getName()).
                     setConfigOperation(id).
+                    setValue("TRACE")))).getMessage());
+    }
+
+    @Test
+    public void testUnknownOperationNotAllowed() {
+        byte unknownOperation = 99;
+        assertEquals("Unknown operation type 99 is not allowed for the BROKER_LOGGER resource",
+            Assertions.assertThrows(InvalidRequestException.class,
+                () -> MANAGER.validateLogLevelConfigs(List.of(new AlterableConfig().
+                    setName(LOG.getName()).
+                    setConfigOperation(unknownOperation).
+                    setValue("TRACE")))).getMessage());
+    }
+
+    @Test
+    public void testAlterUnknownOperationNotAllowed() {
+        byte unknownOperation = 99;
+        assertEquals("Invalid log4j configOperation: 99",
+            Assertions.assertThrows(IllegalArgumentException.class,
+                () -> MANAGER.alterLogLevelConfigs(List.of(new AlterableConfig().
+                    setName(LOG.getName()).
+                    setConfigOperation(unknownOperation).
                     setValue("TRACE")))).getMessage());
     }
 

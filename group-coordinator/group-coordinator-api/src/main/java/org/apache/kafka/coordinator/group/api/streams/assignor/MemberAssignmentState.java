@@ -25,6 +25,8 @@ import java.util.Set;
 /**
  * The active, standby, and warm-up tasks that a streams group member currently has,
  * used by the {@link TaskAssignor} to compute a new target assignment.
+ *
+ * <p>All maps returned by this interface, including their nested collections, are unmodifiable.
  */
 @InterfaceAudience.Public
 @InterfaceStability.Evolving

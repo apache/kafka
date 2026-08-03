@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.producer.internals.BufferPool;
 import org.apache.kafka.clients.producer.internals.BuiltInPartitioner;
+import org.apache.kafka.clients.producer.internals.ChunkedRecordAccumulator;
 import org.apache.kafka.clients.producer.internals.KafkaProducerMetrics;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.clients.producer.internals.ProducerMetadata;
@@ -50,6 +51,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
@@ -87,11 +89,11 @@ import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch;
 
 import org.slf4j.Logger;
 
-import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -432,7 +434,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             int deliveryTimeoutMs = configureDeliveryTimeout(config, log);
 
             this.apiVersions = apiVersions;
-            List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
             if (metadata != null) {
                 this.metadata = metadata;
             } else {
@@ -442,7 +443,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         config.getLong(ProducerConfig.METADATA_MAX_IDLE_CONFIG),
                         logContext,
                         clusterResourceListeners);
-                this.metadata.bootstrap(addresses);
             }
             this.transactionManager = configureTransactionState(config, logContext);
             // There is no need to do work required for adaptive partitioning, if we use a custom partitioner.
@@ -457,19 +457,57 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // As per Kafka producer configuration documentation batch.size may be set to 0 to explicitly disable
             // batching which in practice actually means using a batch size of 1.
             int batchSize = Math.max(1, config.getInt(ProducerConfig.BATCH_SIZE_CONFIG));
-            this.accumulator = new RecordAccumulator(logContext,
-                    batchSize,
-                    compression,
-                    lingerMs(config),
-                    retryBackoffMs,
-                    retryBackoffMaxMs,
-                    deliveryTimeoutMs,
-                    partitionerConfig,
-                    metrics,
-                    PRODUCER_METRIC_GROUP_NAME,
-                    time,
-                    transactionManager,
-                    new BufferPool(this.totalMemorySize, batchSize, metrics, time, PRODUCER_METRIC_GROUP_NAME));
+            String allocationStrategy = config.getString(ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_CONFIG)
+                    .toLowerCase(Locale.ROOT);
+            boolean incremental = ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL.equals(allocationStrategy);
+            // Use the chunked path only when a batch is at least one full chunk
+            // (batch.size >= CHUNK_SIZE). Below that, a batch can't fill even one chunk, so chunking
+            // would over-reserve and the producer falls back to the full strategy instead.
+            boolean useIncremental = incremental && batchSize >= ChunkedRecordAccumulator.CHUNK_SIZE;
+            if (incremental && !useIncremental) {
+                log.warn("Ignoring {}={} and falling back to {}: {} is {} bytes, below the {} byte chunk size, " +
+                                "so a batch cannot fill a single chunk.",
+                        ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_CONFIG,
+                        ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL,
+                        ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL,
+                        ProducerConfig.BATCH_SIZE_CONFIG, batchSize, ChunkedRecordAccumulator.CHUNK_SIZE);
+            }
+            // The chunked path does not support compression yet (TODO: KAFKA-20579)
+            if (useIncremental && compression.type() != CompressionType.NONE) {
+                throw new ConfigException("The " + ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL
+                        + " " + ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_CONFIG
+                        + " does not support compression yet. " + ProducerConfig.COMPRESSION_TYPE_CONFIG
+                        + " must be set to none.");
+            }
+            if (useIncremental) {
+                this.accumulator = new ChunkedRecordAccumulator(logContext,
+                        batchSize,
+                        compression,
+                        lingerMs(config),
+                        retryBackoffMs,
+                        retryBackoffMaxMs,
+                        deliveryTimeoutMs,
+                        partitionerConfig,
+                        metrics,
+                        PRODUCER_METRIC_GROUP_NAME,
+                        time,
+                        transactionManager,
+                        new BufferPool(this.totalMemorySize, ChunkedRecordAccumulator.CHUNK_SIZE, metrics, time, PRODUCER_METRIC_GROUP_NAME, BufferPool.AllocationMode.INCREMENTAL));
+            } else {
+                this.accumulator = new RecordAccumulator(logContext,
+                        batchSize,
+                        compression,
+                        lingerMs(config),
+                        retryBackoffMs,
+                        retryBackoffMaxMs,
+                        deliveryTimeoutMs,
+                        partitionerConfig,
+                        metrics,
+                        PRODUCER_METRIC_GROUP_NAME,
+                        time,
+                        transactionManager,
+                        new BufferPool(this.totalMemorySize, batchSize, metrics, time, PRODUCER_METRIC_GROUP_NAME, BufferPool.AllocationMode.FULL));
+            }
 
             this.errors = this.metrics.sensor("errors");
             this.sender = newSender(logContext, kafkaClient, this.metadata);
@@ -534,6 +572,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         ProducerMetrics metricsRegistry = new ProducerMetrics(this.metrics);
         Sensor throttleTimeSensor = Sender.throttleTimeSensor(metricsRegistry.senderMetrics);
         KafkaClient client = kafkaClient != null ? kafkaClient : ClientUtils.createNetworkClient(producerConfig,
+                producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG),
                 this.metrics,
                 "producer",
                 logContext,
@@ -770,6 +809,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws TimeoutException if the combined time taken for resolving topic metadata and sending the offsets
      *         has surpassed <code>max.block.ms</code>.
      * @throws InterruptException if the thread is interrupted while blocked
+     * @throws BootstrapResolutionException if DNS resolution of the bootstrap servers fails within {@code bootstrap.resolve.timeout.ms}
      */
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                          ConsumerGroupMetadata groupMetadata) throws ProducerFencedException {
@@ -799,7 +839,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private long awaitTopicMetadata(Set<String> topics) {
         long startNanos = time.nanoseconds();
         OptionalInt versionOpt = metadata.add(topics, time.milliseconds());
-        if (versionOpt.isEmpty()) return 0L;
+        if (versionOpt.isEmpty()) {
+            // Even when no metadata refresh is needed for these topics, a permanent bootstrap
+            // failure must still be surfaced so every API call sees the error.
+            metadata.maybeThrowBootstrapFatalException();
+            return 0L;
+        }
         sender.wakeup();
         try {
             metadata.awaitUpdate(versionOpt.getAsInt(), time.timer(maxBlockTimeMs));
@@ -1086,6 +1131,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *                                when send is invoked after producer has been closed.
      * @throws InterruptException     If the thread is interrupted while blocked
      * @throws SerializationException If the key or value are not valid objects given the configured serializers
+     * @throws BootstrapResolutionException if DNS resolution of the bootstrap servers fails within {@code bootstrap.resolve.timeout.ms}
      * @throws KafkaException         If a Kafka related error occurs that does not belong to the public API exceptions.
      * @see #partitionsFor(String)
      */
@@ -1394,6 +1440,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws AuthorizationException  if not authorized to the specified topic. See the exception for more details
      * @throws InterruptException      if the thread is interrupted while blocked
      * @throws TimeoutException        if the topic cannot be found in metadata within {@code max.block.ms}
+     * @throws BootstrapResolutionException if DNS resolution of the bootstrap servers fails within {@code bootstrap.resolve.timeout.ms}
      * @throws KafkaException          for all Kafka-related exceptions, including the case where this method is called after producer close
      */
     @Override
