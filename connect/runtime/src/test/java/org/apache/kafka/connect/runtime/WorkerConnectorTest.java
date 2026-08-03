@@ -30,6 +30,7 @@ import org.apache.kafka.connect.storage.ConnectorOffsetBackingStore;
 import org.apache.kafka.connect.util.Callback;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -54,6 +55,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -135,6 +137,45 @@ public class WorkerConnectorTest {
         verifyInitialize();
         verify(listener).onFailure(CONNECTOR, exception);
         verifyCleanShutdown(false);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
+    @Timeout(5)
+    public void testInitializeFailureReleasesResourcesImmediately(ConnectorType connectorType) throws InterruptedException {
+        setup(connectorType);
+        RuntimeException exception = new RuntimeException();
+
+        when(connector.version()).thenReturn(VERSION);
+        doThrow(exception).when(connector).initialize(any());
+
+        WorkerConnector workerConnector = new WorkerConnector(
+                CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, offsetStore, classLoader);
+
+        runAndVerifyFailureCleanup(workerConnector, () -> {
+            verify(listener).onFailure(CONNECTOR, exception);
+            assertFailedMetric(workerConnector);
+        });
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
+    @Timeout(5)
+    public void testExternalFailureReleasesResourcesImmediately(ConnectorType connectorType) throws InterruptedException {
+        setup(connectorType);
+        RuntimeException exception = new RuntimeException();
+
+        when(connector.version()).thenReturn(VERSION);
+
+        WorkerConnector workerConnector = new WorkerConnector(
+                CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, offsetStore, classLoader);
+        workerConnector.fail(exception);
+
+        runAndVerifyFailureCleanup(workerConnector, () -> {
+            verifyInitialize();
+            verify(listener).onFailure(CONNECTOR, exception);
+            assertFailedMetric(workerConnector);
+        });
     }
 
     @ParameterizedTest
@@ -366,6 +407,51 @@ public class WorkerConnectorTest {
 
         verify(onStateChange).onCompletion(any(Exception.class), isNull());
         verifyNoMoreInteractions(onStateChange);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
+    @Timeout(5)
+    public void testStartupFailureReleasesResourcesImmediately(ConnectorType connectorType) throws InterruptedException {
+        setup(connectorType);
+        RuntimeException exception = new RuntimeException();
+
+        when(connector.version()).thenReturn(VERSION);
+        doThrow(exception).when(connector).start(CONFIG);
+
+        Callback<TargetState> onStateChange = mockCallback();
+        WorkerConnector workerConnector = new WorkerConnector(
+                CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, offsetStore, classLoader);
+        workerConnector.transitionTo(TargetState.STARTED, onStateChange);
+
+        runAndVerifyFailureCleanup(workerConnector, () -> {
+            verify(connector).start(CONFIG);
+            verify(listener).onFailure(CONNECTOR, exception);
+            verify(onStateChange).onCompletion(any(Exception.class), isNull());
+            assertFailedMetric(workerConnector);
+        });
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ConnectorType.class, names = {"SOURCE", "SINK"})
+    @Timeout(5)
+    public void testFailureCleanupContinuesWhenStopFails(ConnectorType connectorType) throws InterruptedException {
+        setup(connectorType);
+        RuntimeException initializationException = new RuntimeException();
+        RuntimeException stopException = new RuntimeException();
+
+        when(connector.version()).thenReturn(VERSION);
+        doThrow(initializationException).when(connector).initialize(any());
+        doThrow(stopException).when(connector).stop();
+
+        WorkerConnector workerConnector = new WorkerConnector(
+                CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, offsetStore, classLoader);
+
+        runAndVerifyFailureCleanup(workerConnector, () -> {
+            verify(listener).onFailure(CONNECTOR, initializationException);
+            verifyNoMoreInteractions(listener);
+            assertFailedMetric(workerConnector);
+        });
     }
 
     @ParameterizedTest
@@ -633,6 +719,19 @@ public class WorkerConnectorTest {
             verify(connector).initialize(any(SourceConnectorContext.class));
         } else if (connectorType == ConnectorType.SINK) {
             verify(connector).initialize(any(SinkConnectorContext.class));
+        }
+    }
+
+    private void runAndVerifyFailureCleanup(WorkerConnector workerConnector, Runnable assertions) throws InterruptedException {
+        Thread connectorThread = new Thread(workerConnector);
+        connectorThread.start();
+        try {
+            verify(connector, timeout(1000)).stop();
+            verify(ctx, timeout(1000)).close();
+            assertions.run();
+        } finally {
+            workerConnector.shutdown();
+            assertTrue(workerConnector.awaitShutdown(1000));
         }
     }
 
