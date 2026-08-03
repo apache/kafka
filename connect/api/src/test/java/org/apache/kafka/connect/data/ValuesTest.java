@@ -485,6 +485,13 @@ public class ValuesTest {
     }
 
     @Test
+    public void shouldReturnSchemaAndValueAcceptedByConnectSchemaForIncompatibleMap() {
+        SchemaAndValue schemaAndValue = Values.parseString("{1:1, 2:\"two\"}");
+
+        assertDoesNotThrow(() -> ConnectSchema.validateValue(schemaAndValue.schema(), schemaAndValue.value()));
+    }
+
+    @Test
     public void shouldReturnOriginalStringWhenNestedArrayHasNoCommonElementSchema() {
         String input = "[[1, \"four\"]]";
 
