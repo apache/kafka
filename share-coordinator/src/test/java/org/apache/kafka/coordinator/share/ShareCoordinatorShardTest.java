@@ -34,6 +34,7 @@ import org.apache.kafka.common.requests.DeleteShareGroupStateResponse;
 import org.apache.kafka.common.requests.InitializeShareGroupStateResponse;
 import org.apache.kafka.common.requests.ReadShareGroupStateResponse;
 import org.apache.kafka.common.requests.ReadShareGroupStateSummaryResponse;
+import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.WriteShareGroupStateResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -54,6 +55,7 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.TransactionVersion;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.persister.PartitionFactory;
 import org.apache.kafka.server.share.persister.PersisterStateBatch;
@@ -92,6 +94,15 @@ class ShareCoordinatorShardTest {
     private static final int PARTITION = 0;
     private static final SharePartitionKey SHARE_PARTITION_KEY = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, PARTITION);
     private static final Time TIME = new MockTime();
+    private static final long PRODUCER_ID = 100L;
+    private static final short PRODUCER_EPOCH = 3;
+    private static final byte DELIVERY_STATE_AVAILABLE = 0;
+    private static final byte DELIVERY_STATE_ACKNOWLEDGED = 2;
+    private static final byte DELIVERY_STATE_ARCHIVING = 3;
+    private static final byte DELIVERY_STATE_ARCHIVED = 4;
+    private static final byte DELIVERY_STATE_TX_PENDING = 5;
+    private static final byte ACKNOWLEDGE_TYPE_ACCEPT = 1;
+    private static final byte ACKNOWLEDGE_TYPE_REJECT = 3;
 
     public static class ShareCoordinatorShardBuilder {
         private final LogContext logContext = new LogContext();
@@ -659,6 +670,60 @@ class ShareCoordinatorShardTest {
         ), result.response());
 
         assertEquals(0, shard.getLeaderMapValue(SHARE_PARTITION_KEY));
+    }
+
+    @Test
+    public void testWriteReplayReadPreservesStagedAckMetadata() {
+        initSharePartition(shard, SHARE_PARTITION_KEY);
+        writeAndReplayRecord(shard, 0);
+
+        WriteShareGroupStateRequestData request = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
+                    .setStateEpoch(0)
+                    .setLeaderEpoch(0)
+                    .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
+                        .setFirstOffset(0)
+                        .setLastOffset(10)
+                        .setDeliveryCount((short) 1)
+                        .setDeliveryState((byte) 5)
+                        .setStagedProducerId(123L)
+                        .setStagedProducerEpoch((short) 7)
+                        .setStagedAckType((byte) 1)))))));
+
+        CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> writeResult = shard.writeState(request);
+        shard.replay(0L, 0L, (short) 0, writeResult.records().get(0));
+
+        ReadShareGroupStateRequestData readRequest = new ReadShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new ReadShareGroupStateRequestData.ReadStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new ReadShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setLeaderEpoch(0)))));
+
+        CoordinatorResult<ReadShareGroupStateResponseData, CoordinatorRecord> readResult = shard.readStateAndMaybeUpdateLeaderEpoch(readRequest);
+
+        assertEquals(ReadShareGroupStateResponse.toResponseData(
+            TOPIC_ID,
+            PARTITION,
+            0,
+            0,
+            List.of(new ReadShareGroupStateResponseData.StateBatch()
+                .setFirstOffset(0)
+                .setLastOffset(10)
+                .setDeliveryCount((short) 1)
+                .setDeliveryState((byte) 5)
+                .setStagedProducerId(123L)
+                .setStagedProducerEpoch((short) 7)
+                .setStagedAckType((byte) 1)
+            )
+        ), readResult.response());
     }
 
     @Test
@@ -1940,11 +2005,160 @@ class ShareCoordinatorShardTest {
         assertEquals(expectedResult, shard.maybeCleanupShareState(Set.of(TOPIC_ID)));
     }
 
+    @Test
+    public void testCompleteTransactionCommitAcceptFinalizesPendingAck() {
+        replayPendingShareState(ACKNOWLEDGE_TYPE_ACCEPT, DELIVERY_STATE_ACKNOWLEDGED, PRODUCER_EPOCH);
+
+        CoordinatorResult<Set<SharePartitionKey>, CoordinatorRecord> result = shard.completeTransaction(
+            PRODUCER_ID,
+            PRODUCER_EPOCH,
+            TransactionResult.COMMIT
+        );
+
+        assertEquals(1, result.records().size());
+        assertEquals(Set.of(SHARE_PARTITION_KEY), result.response());
+        ShareGroupOffset offset = groupOffset(result.records().get(0).value().message());
+        assertEquals(List.of(new PersisterStateBatch(10, 12, DELIVERY_STATE_ACKNOWLEDGED, (short) 1)), offset.stateBatches());
+        assertEquals(3, offset.deliveryCompleteCount());
+
+        shard.replay(1L, PRODUCER_ID, PRODUCER_EPOCH, result.records().get(0));
+        assertEquals(offset, shard.getShareStateMapValue(SHARE_PARTITION_KEY));
+    }
+
+    @Test
+    public void testCompleteTransactionCommitAcceptMatchesTransactionV2BumpedProducerEpoch() {
+        replayPendingShareState(ACKNOWLEDGE_TYPE_ACCEPT, DELIVERY_STATE_ACKNOWLEDGED, PRODUCER_EPOCH);
+
+        CoordinatorResult<Set<SharePartitionKey>, CoordinatorRecord> result = shard.completeTransaction(
+            PRODUCER_ID,
+            (short) (PRODUCER_EPOCH + 1),
+            TransactionResult.COMMIT,
+            TransactionVersion.TV_2.featureLevel()
+        );
+
+        assertEquals(1, result.records().size());
+        assertEquals(Set.of(SHARE_PARTITION_KEY), result.response());
+        ShareGroupOffset offset = groupOffset(result.records().get(0).value().message());
+        assertEquals(List.of(new PersisterStateBatch(10, 12, DELIVERY_STATE_ACKNOWLEDGED, (short) 1)), offset.stateBatches());
+        assertEquals(3, offset.deliveryCompleteCount());
+    }
+
+    @Test
+    public void testCompleteTransactionCommitRejectPreservesStagedArchivingState() {
+        replayPendingShareState(ACKNOWLEDGE_TYPE_REJECT, DELIVERY_STATE_ARCHIVING, PRODUCER_EPOCH);
+
+        CoordinatorResult<Set<SharePartitionKey>, CoordinatorRecord> result = shard.completeTransaction(
+            PRODUCER_ID,
+            PRODUCER_EPOCH,
+            TransactionResult.COMMIT
+        );
+
+        assertEquals(1, result.records().size());
+        assertEquals(Set.of(SHARE_PARTITION_KEY), result.response());
+        ShareGroupOffset offset = groupOffset(result.records().get(0).value().message());
+        assertEquals(List.of(new PersisterStateBatch(10, 12, DELIVERY_STATE_ARCHIVING, (short) 1)), offset.stateBatches());
+        assertEquals(0, offset.deliveryCompleteCount());
+    }
+
+    @Test
+    public void testCompleteTransactionAbortMakesPendingAckAvailable() {
+        replayPendingShareState(ACKNOWLEDGE_TYPE_ACCEPT, DELIVERY_STATE_ACKNOWLEDGED, PRODUCER_EPOCH);
+
+        CoordinatorResult<Set<SharePartitionKey>, CoordinatorRecord> result = shard.completeTransaction(
+            PRODUCER_ID,
+            PRODUCER_EPOCH,
+            TransactionResult.ABORT
+        );
+
+        assertEquals(1, result.records().size());
+        assertEquals(Set.of(SHARE_PARTITION_KEY), result.response());
+        ShareGroupOffset offset = groupOffset(result.records().get(0).value().message());
+        assertEquals(List.of(new PersisterStateBatch(10, 12, DELIVERY_STATE_AVAILABLE, (short) 1)), offset.stateBatches());
+        assertEquals(0, offset.deliveryCompleteCount());
+    }
+
+    @Test
+    public void testCompleteTransactionDuplicateMarkerIsIdempotent() {
+        replayPendingShareState(ACKNOWLEDGE_TYPE_ACCEPT, DELIVERY_STATE_ACKNOWLEDGED, PRODUCER_EPOCH);
+        CoordinatorResult<Set<SharePartitionKey>, CoordinatorRecord> firstResult = shard.completeTransaction(
+            PRODUCER_ID,
+            PRODUCER_EPOCH,
+            TransactionResult.COMMIT
+        );
+        shard.replay(1L, PRODUCER_ID, PRODUCER_EPOCH, firstResult.records().get(0));
+
+        CoordinatorResult<Set<SharePartitionKey>, CoordinatorRecord> duplicateResult = shard.completeTransaction(
+            PRODUCER_ID,
+            PRODUCER_EPOCH,
+            TransactionResult.COMMIT
+        );
+
+        assertTrue(duplicateResult.records().isEmpty());
+        assertTrue(duplicateResult.response().isEmpty());
+    }
+
+    @Test
+    public void testCompleteTransactionStaleProducerEpochDoesNotMutatePendingAck() {
+        replayPendingShareState(ACKNOWLEDGE_TYPE_ACCEPT, DELIVERY_STATE_ACKNOWLEDGED, PRODUCER_EPOCH);
+
+        CoordinatorResult<Set<SharePartitionKey>, CoordinatorRecord> result = shard.completeTransaction(
+            PRODUCER_ID,
+            (short) (PRODUCER_EPOCH - 1),
+            TransactionResult.COMMIT
+        );
+
+        assertTrue(result.records().isEmpty());
+        assertTrue(result.response().isEmpty());
+        assertEquals(
+            List.of(new PersisterStateBatch(
+                10,
+                12,
+                DELIVERY_STATE_TX_PENDING,
+                (short) 1,
+                PRODUCER_ID,
+                PRODUCER_EPOCH,
+                ACKNOWLEDGE_TYPE_ACCEPT,
+                DELIVERY_STATE_ACKNOWLEDGED
+            )),
+            shard.getShareStateMapValue(SHARE_PARTITION_KEY).stateBatches()
+        );
+    }
+
     private static ShareGroupOffset groupOffset(ApiMessage record) {
         if (record instanceof ShareSnapshotValue) {
             return ShareGroupOffset.fromRecord((ShareSnapshotValue) record);
         }
         return ShareGroupOffset.fromRecord((ShareUpdateValue) record);
+    }
+
+    private void replayPendingShareState(byte stagedAckType, byte stagedDeliveryState, short producerEpoch) {
+        shard.replay(0L, PRODUCER_ID, producerEpoch, CoordinatorRecord.record(
+            new ShareSnapshotKey()
+                .setGroupId(GROUP_ID)
+                .setTopicId(TOPIC_ID)
+                .setPartition(PARTITION),
+            new ApiMessageAndVersion(
+                new ShareSnapshotValue()
+                    .setSnapshotEpoch(0)
+                    .setStateEpoch(0)
+                    .setStartOffset(10)
+                    .setDeliveryCompleteCount(0)
+                    .setLeaderEpoch(1)
+                    .setCreateTimestamp(TIME.milliseconds())
+                    .setWriteTimestamp(TIME.milliseconds())
+                    .setStateBatches(List.of(
+                        new ShareSnapshotValue.StateBatch()
+                            .setFirstOffset(10)
+                            .setLastOffset(12)
+                            .setDeliveryCount((short) 1)
+                            .setDeliveryState(DELIVERY_STATE_TX_PENDING)
+                            .setStagedProducerId(PRODUCER_ID)
+                            .setStagedProducerEpoch(producerEpoch)
+                            .setStagedAckType(stagedAckType)
+                            .setStagedDeliveryState(stagedDeliveryState))),
+                (short) 0
+            )
+        ));
     }
 
     private void initSharePartition(ShareCoordinatorShard shard, SharePartitionKey key) {

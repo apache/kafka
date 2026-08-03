@@ -49,6 +49,7 @@ import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
+import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollection;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
@@ -129,6 +130,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -2495,6 +2497,181 @@ public class SharePartitionManagerTest {
     }
 
     @Test
+    public void testShareFetchReinitializesPendingTransactionalSharePartition() {
+        String groupId = "grp";
+        String memberId = "member-id";
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        SharePartitionKey sharePartitionKey = new SharePartitionKey(groupId, tp0);
+        SharePartition staleSharePartition = mock(SharePartition.class);
+        SharePartition refreshedSharePartition = mock(SharePartition.class);
+        SharePartitionManager.SharePartitionListener listener = mock(SharePartitionManager.SharePartitionListener.class);
+
+        when(staleSharePartition.maybeInitialize()).thenReturn(CompletableFuture.completedFuture(null));
+        when(staleSharePartition.hasPendingTransactionalRecords()).thenReturn(true);
+        when(staleSharePartition.listener()).thenReturn(listener);
+        when(refreshedSharePartition.maybeInitialize()).thenReturn(CompletableFuture.completedFuture(null));
+        when(refreshedSharePartition.hasPendingTransactionalRecords()).thenReturn(false);
+
+        SharePartitionCache partitionCache = mock(SharePartitionCache.class);
+        when(partitionCache.computeIfAbsent(ArgumentMatchers.eq(sharePartitionKey), any()))
+            .thenReturn(staleSharePartition, refreshedSharePartition);
+        when(partitionCache.remove(sharePartitionKey)).thenReturn(staleSharePartition);
+
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withReplicaManager(replicaManager)
+            .withPartitionCache(partitionCache)
+            .withBrokerTopicStats(brokerTopicStats)
+            .build();
+
+        sharePartitionManager.fetchMessages(groupId, memberId, FETCH_PARAMS, BATCH_OPTIMIZED, 0,
+            MAX_FETCH_RECORDS, BATCH_SIZE, List.of(tp0));
+
+        verify(partitionCache, times(2)).computeIfAbsent(ArgumentMatchers.eq(sharePartitionKey), any());
+        verify(partitionCache).remove(sharePartitionKey);
+        verify(staleSharePartition).markFenced();
+        verify(replicaManager).removeListener(tp0.topicPartition(), listener);
+        verify(refreshedSharePartition).maybeInitialize();
+        verify(replicaManager).addDelayedShareFetchRequest(any(), any());
+    }
+
+    @Test
+    public void testTransactionalAcknowledgeInitializesSharePartitionOnCacheMiss() throws Exception {
+        String groupId = "grp";
+        String memberId = "member-id";
+        long producerId = 10L;
+        short producerEpoch = 2;
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        SharePartitionKey sharePartitionKey = new SharePartitionKey(groupId, tp0);
+        SharePartition sharePartition = mock(SharePartition.class);
+        SharePartitionCache partitionCache = mock(SharePartitionCache.class);
+
+        when(partitionCache.computeIfAbsent(ArgumentMatchers.eq(sharePartitionKey), any()))
+            .thenReturn(sharePartition);
+        when(sharePartition.maybeInitialize()).thenReturn(CompletableFuture.completedFuture(null));
+        when(sharePartition.stageTxnAcknowledge(
+            ArgumentMatchers.eq(memberId),
+            ArgumentMatchers.eq(producerId),
+            ArgumentMatchers.eq(producerEpoch),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(null));
+
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withPartitionCache(partitionCache)
+            .withBrokerTopicStats(brokerTopicStats)
+            .build();
+
+        Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> response = sharePartitionManager.acknowledgeTransactional(
+            memberId,
+            groupId,
+            producerId,
+            producerEpoch,
+            Map.of(tp0, List.of(new ShareAcknowledgementBatch(5L, 6L, List.of(AcknowledgeType.ACCEPT.id))))
+        ).get();
+
+        assertEquals(Errors.NONE.code(), response.get(tp0).errorCode());
+        verify(partitionCache).computeIfAbsent(ArgumentMatchers.eq(sharePartitionKey), any());
+        verify(sharePartition).maybeInitialize();
+        verify(sharePartition).stageTxnAcknowledge(
+            ArgumentMatchers.eq(memberId),
+            ArgumentMatchers.eq(producerId),
+            ArgumentMatchers.eq(producerEpoch),
+            any()
+        );
+    }
+
+    @Test
+    public void testTransactionalAcknowledgeUsesCachedSharePartitionWithPendingTransactionalRecords() throws Exception {
+        String groupId = "grp";
+        String memberId = "member-id";
+        long producerId = 10L;
+        short producerEpoch = 2;
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        SharePartitionKey sharePartitionKey = new SharePartitionKey(groupId, tp0);
+        SharePartition sharePartition = mock(SharePartition.class);
+        SharePartitionCache partitionCache = mock(SharePartitionCache.class);
+
+        when(sharePartition.maybeInitialize()).thenReturn(CompletableFuture.completedFuture(null));
+        when(sharePartition.hasPendingTransactionalRecords()).thenReturn(true);
+        when(sharePartition.stageTxnAcknowledge(
+            ArgumentMatchers.eq(memberId),
+            ArgumentMatchers.eq(producerId),
+            ArgumentMatchers.eq(producerEpoch),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(null));
+
+        when(partitionCache.computeIfAbsent(ArgumentMatchers.eq(sharePartitionKey), any()))
+            .thenReturn(sharePartition);
+
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withPartitionCache(partitionCache)
+            .withBrokerTopicStats(brokerTopicStats)
+            .build();
+
+        Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> response = sharePartitionManager.acknowledgeTransactional(
+            memberId,
+            groupId,
+            producerId,
+            producerEpoch,
+            Map.of(tp0, List.of(new ShareAcknowledgementBatch(5L, 6L, List.of(AcknowledgeType.ACCEPT.id))))
+        ).get();
+
+        assertEquals(Errors.NONE.code(), response.get(tp0).errorCode());
+        verify(partitionCache).computeIfAbsent(ArgumentMatchers.eq(sharePartitionKey), any());
+        verify(partitionCache, Mockito.never()).remove(sharePartitionKey);
+        verify(sharePartition, Mockito.never()).hasPendingTransactionalRecords();
+        verify(sharePartition, Mockito.never()).markFenced();
+        verify(sharePartition).stageTxnAcknowledge(
+            ArgumentMatchers.eq(memberId),
+            ArgumentMatchers.eq(producerId),
+            ArgumentMatchers.eq(producerEpoch),
+            any()
+        );
+    }
+
+    @Test
+    public void testTransactionalAcknowledgeCacheMissInitializationFailureRemovesSharePartition() throws Exception {
+        String groupId = "grp";
+        String memberId = "member-id";
+        long producerId = 10L;
+        short producerEpoch = 2;
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        SharePartitionKey sharePartitionKey = new SharePartitionKey(groupId, tp0);
+        SharePartition sharePartition = mock(SharePartition.class);
+        SharePartitionListener listener = mock(SharePartitionListener.class);
+        SharePartitionCache partitionCache = mock(SharePartitionCache.class);
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+
+        when(partitionCache.computeIfAbsent(ArgumentMatchers.eq(sharePartitionKey), any()))
+            .thenReturn(sharePartition);
+        when(partitionCache.remove(sharePartitionKey)).thenReturn(sharePartition);
+        when(sharePartition.listener()).thenReturn(listener);
+        when(sharePartition.maybeInitialize()).thenReturn(CompletableFuture.failedFuture(
+            new NotLeaderOrFollowerException("Not leader or follower")
+        ));
+
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withReplicaManager(replicaManager)
+            .withPartitionCache(partitionCache)
+            .withBrokerTopicStats(brokerTopicStats)
+            .build();
+
+        Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> response = sharePartitionManager.acknowledgeTransactional(
+            memberId,
+            groupId,
+            producerId,
+            producerEpoch,
+            Map.of(tp0, List.of(new ShareAcknowledgementBatch(5L, 6L, List.of(AcknowledgeType.ACCEPT.id))))
+        ).get();
+
+        assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.code(), response.get(tp0).errorCode());
+        verify(partitionCache).remove(sharePartitionKey);
+        verify(sharePartition).markFenced();
+        verify(replicaManager).removeListener(tp0.topicPartition(), listener);
+        verify(sharePartition, Mockito.never()).stageTxnAcknowledge(anyString(), anyLong(), ArgumentMatchers.anyShort(), any());
+    }
+
+    @Test
     public void testSharePartitionInitializationFailure() throws Exception {
         String groupId = "grp";
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
@@ -3029,6 +3206,86 @@ public class SharePartitionManagerTest {
         cache.connectionDisconnectListener().onDisconnect(CONNECTION_ID);
         // Verify that the listener is called for the group.
         Mockito.verify(partitionCache, times(1)).topicIdPartitionsForGroup(groupId);
+    }
+
+    @Test
+    public void testAcknowledgeTransactionalDelegatesToSharePartition() {
+        String groupId = "grp";
+        String memberId = Uuid.randomUuid().toString();
+        TopicIdPartition tp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        SharePartition sp = mock(SharePartition.class);
+        when(sp.stageTxnAcknowledge(ArgumentMatchers.eq(memberId), ArgumentMatchers.eq(100L), ArgumentMatchers.eq((short) 1), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+
+        SharePartitionCache partitionCache = new SharePartitionCache();
+        partitionCache.put(new SharePartitionKey(groupId, tp), sp);
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withPartitionCache(partitionCache).withBrokerTopicStats(brokerTopicStats).build();
+
+        Map<TopicIdPartition, List<ShareAcknowledgementBatch>> ackTopics = Map.of(
+            tp, List.of(new ShareAcknowledgementBatch(10, 14, List.of((byte) 1))));
+        Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result =
+            sharePartitionManager.acknowledgeTransactional(memberId, groupId, 100L, (short) 1, ackTopics).join();
+
+        assertEquals(Errors.NONE.code(), result.get(tp).errorCode());
+        Mockito.verify(sp).stageTxnAcknowledge(ArgumentMatchers.eq(memberId), ArgumentMatchers.eq(100L), ArgumentMatchers.eq((short) 1), any());
+    }
+
+    @Test
+    public void testApplyTxnMarkerBroadcastsToAllSharePartitions() {
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("bar", 0));
+        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp2 = mock(SharePartition.class);
+        Mockito.when(sp1.applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT))
+            .thenReturn(CompletableFuture.completedFuture(null));
+        Mockito.when(sp2.applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT))
+            .thenReturn(CompletableFuture.completedFuture(null));
+
+        SharePartitionCache partitionCache = new SharePartitionCache();
+        partitionCache.put(new SharePartitionKey("grp", tp1), sp1);
+        partitionCache.put(new SharePartitionKey("grp", tp2), sp2);
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withPartitionCache(partitionCache).withBrokerTopicStats(brokerTopicStats).build();
+
+        assertNull(sharePartitionManager.applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT).join());
+
+        Mockito.verify(sp1).applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT);
+        Mockito.verify(sp2).applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT);
+    }
+
+    @Test
+    public void testInvalidateSharePartitionsRemovesOnlyAffectedSharePartition() {
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("bar", 0));
+        SharePartitionKey key1 = new SharePartitionKey("grp", tp1);
+        SharePartitionKey key2 = new SharePartitionKey("grp", tp2);
+        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp2 = mock(SharePartition.class);
+        SharePartitionListener listener1 = mock(SharePartitionListener.class);
+        SharePartitionListener listener2 = mock(SharePartitionListener.class);
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+
+        when(sp1.listener()).thenReturn(listener1);
+        when(sp2.listener()).thenReturn(listener2);
+
+        SharePartitionCache partitionCache = new SharePartitionCache();
+        partitionCache.put(key1, sp1);
+        partitionCache.put(key2, sp2);
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withReplicaManager(replicaManager)
+            .withPartitionCache(partitionCache)
+            .withBrokerTopicStats(brokerTopicStats)
+            .build();
+
+        sharePartitionManager.invalidateSharePartitions(Set.of(key1));
+
+        assertNull(partitionCache.get(key1));
+        assertEquals(sp2, partitionCache.get(key2));
+        Mockito.verify(sp1).markFenced();
+        Mockito.verify(sp2, Mockito.never()).markFenced();
+        Mockito.verify(replicaManager).removeListener(tp1.topicPartition(), listener1);
+        Mockito.verify(replicaManager, Mockito.never()).removeListener(tp2.topicPartition(), listener2);
     }
 
     private Timer systemTimerReaper() {

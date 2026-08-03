@@ -58,6 +58,7 @@ import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
 import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics;
 import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetricsShard;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.TransactionVersion;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.persister.PartitionFactory;
 import org.apache.kafka.server.share.persister.PersisterStateBatch;
@@ -69,9 +70,11 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+@SuppressWarnings("ClassFanOutComplexity")
 public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord> {
     private final Logger log;
     private final ShareCoordinatorConfig config;
@@ -86,6 +89,15 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     private CoordinatorMetadataImage metadataImage;
     private final ShareCoordinatorOffsetsManager offsetsManager;
     private final Time time;
+
+    private static final byte DELIVERY_STATE_AVAILABLE = 0;
+    private static final byte DELIVERY_STATE_ACQUIRED = 1;
+    private static final byte DELIVERY_STATE_ACKNOWLEDGED = 2;
+    private static final byte DELIVERY_STATE_ARCHIVING = 3;
+    private static final byte DELIVERY_STATE_ARCHIVED = 4;
+    private static final byte DELIVERY_STATE_TX_PENDING = 5;
+    private static final byte ACKNOWLEDGE_TYPE_ACCEPT = 1;
+    private static final byte ACKNOWLEDGE_TYPE_REJECT = 3;
 
     public static final Exception NULL_TOPIC_ID = new Exception("The topic id cannot be null.");
     public static final Exception NEGATIVE_PARTITION_ID = new Exception("The partition id cannot be a negative number.");
@@ -224,7 +236,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     @Override
-    public void replay(long offset, long producerId, short producerEpoch, CoordinatorRecord record) throws RuntimeException {
+    public void replay(long offset, long txnOwnerId, short txnOwnerEpoch, CoordinatorRecord record) throws RuntimeException {
         ApiMessage key = record.key();
         ApiMessageAndVersion value = record.value();
 
@@ -299,8 +311,102 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     @Override
-    public void replayEndTransactionMarker(long producerId, short producerEpoch, TransactionResult result) throws RuntimeException {
-        CoordinatorShard.super.replayEndTransactionMarker(producerId, producerEpoch, result);
+    public void replayEndTransactionMarker(long txnOwnerId, short txnOwnerEpoch, TransactionResult result) throws RuntimeException {
+        CoordinatorShard.super.replayEndTransactionMarker(txnOwnerId, txnOwnerEpoch, result);
+    }
+
+    public CoordinatorResult<Set<SharePartitionKey>, CoordinatorRecord> completeTransaction(
+        long txnOwnerId,
+        short txnOwnerEpoch,
+        TransactionResult result
+    ) {
+        return completeTransaction(txnOwnerId, txnOwnerEpoch, result, TransactionVersion.TV_1.featureLevel());
+    }
+
+    public CoordinatorResult<Set<SharePartitionKey>, CoordinatorRecord> completeTransaction(
+        long txnOwnerId,
+        short txnOwnerEpoch,
+        TransactionResult result,
+        short transactionVersion
+    ) {
+        List<CoordinatorRecord> records = new ArrayList<>();
+        Set<SharePartitionKey> affectedKeys = new HashSet<>();
+        long timestamp = time.milliseconds();
+
+        for (Map.Entry<SharePartitionKey, ShareGroupOffset> entry : shareStateMap.entrySet()) {
+            SharePartitionKey key = entry.getKey();
+            ShareGroupOffset currentState = entry.getValue();
+            List<PersisterStateBatch> finalizedBatches = new ArrayList<>(currentState.stateBatches().size());
+            int deliveryCompleteCount = currentState.deliveryCompleteCount();
+            boolean hasMatchingPendingBatch = false;
+
+            for (PersisterStateBatch batch : currentState.stateBatches()) {
+                if (isMatchingPendingBatch(batch, txnOwnerId, txnOwnerEpoch, transactionVersion)) {
+                    byte finalState = finalDeliveryState(batch, result);
+                    finalizedBatches.add(new PersisterStateBatch(
+                        batch.firstOffset(),
+                        batch.lastOffset(),
+                        finalState,
+                        batch.deliveryCount()
+                    ));
+                    if (isTerminalDeliveryState(finalState)) {
+                        deliveryCompleteCount += Math.toIntExact(batch.lastOffset() - batch.firstOffset() + 1);
+                    }
+                    hasMatchingPendingBatch = true;
+                } else {
+                    finalizedBatches.add(batch);
+                }
+            }
+
+            if (hasMatchingPendingBatch) {
+                affectedKeys.add(key);
+                records.add(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
+                    key.groupId(),
+                    key.topicId(),
+                    key.partition(),
+                    new ShareGroupOffset.Builder()
+                        .setSnapshotEpoch(currentState.snapshotEpoch() + 1)
+                        .setStateEpoch(currentState.stateEpoch())
+                        .setStartOffset(currentState.startOffset())
+                        .setDeliveryCompleteCount(deliveryCompleteCount)
+                        .setLeaderEpoch(currentState.leaderEpoch())
+                        .setStateBatches(finalizedBatches)
+                        .setCreateTimestamp(currentState.createTimestamp())
+                        .setWriteTimestamp(timestamp)
+                        .build()
+                ));
+            }
+        }
+
+        return new CoordinatorResult<>(records, affectedKeys);
+    }
+
+    private boolean isMatchingPendingBatch(
+        PersisterStateBatch batch,
+        long txnOwnerId,
+        short txnOwnerEpoch,
+        short transactionVersion
+    ) {
+        short expectedStagedTxnOwnerEpoch = transactionVersion >= TransactionVersion.TV_2.featureLevel() ?
+            (short) (txnOwnerEpoch - 1) :
+            txnOwnerEpoch;
+        return batch.deliveryState() == DELIVERY_STATE_TX_PENDING
+            && batch.stagedProducerId() == txnOwnerId
+            && batch.stagedProducerEpoch() == expectedStagedTxnOwnerEpoch;
+    }
+
+    private byte finalDeliveryState(PersisterStateBatch batch, TransactionResult result) {
+        if (result == TransactionResult.ABORT) {
+            return DELIVERY_STATE_AVAILABLE;
+        }
+        if (batch.stagedDeliveryState() != PersisterStateBatch.NO_STAGED_DELIVERY_STATE) {
+            return batch.stagedDeliveryState();
+        }
+        return batch.stagedAckType() == ACKNOWLEDGE_TYPE_ACCEPT ? DELIVERY_STATE_ACKNOWLEDGED : DELIVERY_STATE_ARCHIVED;
+    }
+
+    private boolean isTerminalDeliveryState(byte deliveryState) {
+        return deliveryState == DELIVERY_STATE_ACKNOWLEDGED || deliveryState == DELIVERY_STATE_ARCHIVED;
     }
 
     /**
@@ -377,6 +483,10 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                         .setLastOffset(stateBatch.lastOffset())
                         .setDeliveryState(stateBatch.deliveryState())
                         .setDeliveryCount(stateBatch.deliveryCount())
+                        .setStagedProducerId(stateBatch.stagedProducerId())
+                        .setStagedProducerEpoch(stateBatch.stagedProducerEpoch())
+                        .setStagedAckType(stateBatch.stagedAckType())
+                        .setStagedDeliveryState(stateBatch.stagedDeliveryState())
                 ).toList() : List.of();
 
         ReadShareGroupStateResponseData responseData = ReadShareGroupStateResponse.toResponseData(
@@ -1057,7 +1167,11 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             batch.firstOffset(),
             batch.lastOffset(),
             batch.deliveryState(),
-            batch.deliveryCount()
+            batch.deliveryCount(),
+            batch.stagedProducerId(),
+            batch.stagedProducerEpoch(),
+            batch.stagedAckType(),
+            batch.stagedDeliveryState()
         );
     }
 }

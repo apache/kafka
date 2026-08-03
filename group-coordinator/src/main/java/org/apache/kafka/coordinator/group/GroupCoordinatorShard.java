@@ -509,6 +509,14 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         return groupMetadataManager.shareGroupHeartbeat(context, request);
     }
 
+    public Errors validateShareGroupMember(
+        String groupId,
+        String memberId,
+        int memberEpoch
+    ) {
+        return groupMetadataManager.validateShareGroupMember(groupId, memberId, memberEpoch);
+    }
+
     /**
      * Handles record creation, if needed, related to ShareGroupStatePartitionMetadata
      * corresponding to a share group heartbeat request.

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.coordinator.share;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
 import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
 import org.apache.kafka.common.message.InitializeShareGroupStateRequestData;
@@ -28,12 +29,14 @@ import org.apache.kafka.common.message.ReadShareGroupStateSummaryResponseData;
 import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
 import org.apache.kafka.common.requests.RequestContext;
+import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.share.SharePartitionKey;
 
 import java.util.Map;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.IntSupplier;
 
@@ -105,6 +108,15 @@ public interface ShareCoordinator {
      * @return completable future representing initialize share group RPC response data
      */
     CompletableFuture<InitializeShareGroupStateResponseData> initializeState(RequestContext context, InitializeShareGroupStateRequestData request);
+
+    CompletableFuture<Set<SharePartitionKey>> completeTransaction(
+        TopicPartition tp,
+        long txnOwnerId,
+        short txnOwnerEpoch,
+        int coordinatorEpoch,
+        TransactionResult result,
+        short transactionVersion
+    );
 
     /**
      * Called when new coordinator is elected

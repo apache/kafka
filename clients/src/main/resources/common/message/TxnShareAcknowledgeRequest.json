@@ -1,0 +1,58 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 94,
+  "type": "request",
+  "listeners": ["broker"],
+  "name": "TxnShareAcknowledgeRequest",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  "fields": [
+    { "name": "TransactionalId", "type": "string", "versions": "0+",
+      "nullableVersions": "0+", "entityType": "transactionalId",
+      "about": "The transactional ID of the producer." },
+    { "name": "GroupId", "type": "string", "versions": "0+",
+      "entityType": "groupId", "about": "The share group ID." },
+    { "name": "ProducerId", "type": "int64", "versions": "0+",
+      "entityType": "producerId", "about": "The producer ID." },
+    { "name": "ProducerEpoch", "type": "int16", "versions": "0+",
+      "about": "The producer epoch." },
+    { "name": "MemberId", "type": "string", "versions": "0+",
+      "about": "The share group member ID." },
+    { "name": "MemberEpoch", "type": "int32", "versions": "0+",
+      "about": "The share group member epoch for fencing." },
+    { "name": "Topics", "type": "[]TxnShareAcknowledgeTopic", "versions": "0+",
+      "about": "The topics and partitions to acknowledge.", "fields": [
+      { "name": "TopicId", "type": "uuid", "versions": "0+",
+        "about": "The unique topic ID." },
+      { "name": "Partitions", "type": "[]TxnShareAcknowledgePartition", "versions": "0+",
+        "fields": [
+        { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+          "about": "The partition index." },
+        { "name": "AcknowledgementBatches", "type": "[]TxnShareAcknowledgeBatch", "versions": "0+",
+          "about": "Record ranges to acknowledge. Only ACCEPT (1) and REJECT (3) are valid inside a transaction.",
+          "fields": [
+          { "name": "FirstOffset", "type": "int64", "versions": "0+",
+            "about": "First offset of the batch (inclusive)." },
+          { "name": "LastOffset", "type": "int64", "versions": "0+",
+            "about": "Last offset of the batch (inclusive)." },
+          { "name": "AcknowledgeTypes", "type": "[]int8", "versions": "0+",
+            "about": "Per-offset acknowledge types: 1=ACCEPT, 3=REJECT. Size 1 = uniform type for whole range." }
+        ]}
+      ]}
+    ]}
+  ]
+}

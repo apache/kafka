@@ -27,6 +27,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.ShareAcknowledgements;
+import org.apache.kafka.clients.consumer.ShareGroupMetadata;
 import org.apache.kafka.clients.producer.internals.BufferPool;
 import org.apache.kafka.clients.producer.internals.BuiltInPartitioner;
 import org.apache.kafka.clients.producer.internals.ChunkedRecordAccumulator;
@@ -830,6 +832,23 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
     }
 
+    @Override
+    public void sendShareAcknowledgementsToTransaction(
+            ShareAcknowledgements acknowledgements,
+            ShareGroupMetadata groupMetadata) throws ProducerFencedException {
+        Objects.requireNonNull(acknowledgements, "acknowledgements cannot be null");
+        throwIfNoTransactionManager();
+        throwIfProducerClosed();
+        throwIfInPreparedState();
+
+        if (!acknowledgements.isEmpty()) {
+            TransactionalRequestResult result =
+                transactionManager.sendShareAcknowledgementsToTransaction(acknowledgements, groupMetadata);
+            sender.wakeup();
+            result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS, SEND_OFFSETS_TIMEOUT_MSG);
+        }
+    }
+
     /**
      * Request a partial metadata refresh for the given topics and await the next
      * metadata update on a best-effort basis (up to {@code max.block.ms}). Returns
@@ -895,8 +914,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         flush();
         transactionManager.prepareTransaction();
         producerMetrics.recordPrepareTxn(time.nanoseconds() - now);
-        ProducerIdAndEpoch producerIdAndEpoch = transactionManager.preparedTransactionState();
-        return new PreparedTxnState(producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
+        ProducerIdAndEpoch transactionOwner = transactionManager.preparedTransactionState();
+        return new PreparedTxnState(transactionOwner.producerId, transactionOwner.epoch);
     }
 
     /**
@@ -999,9 +1018,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 "Call prepareTransaction() first, or make sure initTransaction(true) was called.");
         }
         
-        // Get the current prepared transaction state
-        ProducerIdAndEpoch currentProducerIdAndEpoch = transactionManager.preparedTransactionState();
-        PreparedTxnState currentPreparedState = new PreparedTxnState(currentProducerIdAndEpoch.producerId, currentProducerIdAndEpoch.epoch);
+        ProducerIdAndEpoch currentTransactionOwner = transactionManager.preparedTransactionState();
+        PreparedTxnState currentPreparedState = new PreparedTxnState(currentTransactionOwner.producerId, currentTransactionOwner.epoch);
         
         // Compare the prepared transaction state token and commit or abort accordingly
         if (currentPreparedState.equals(preparedTxnState)) {

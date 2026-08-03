@@ -73,6 +73,7 @@ import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.SchemaException;
+import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
@@ -5710,6 +5711,25 @@ public class GroupMetadataManager {
             context.clientId(),
             context.clientAddress().toString(),
             request.subscribedTopicNames());
+    }
+
+    public Errors validateShareGroupMember(
+        String groupId,
+        String memberId,
+        int memberEpoch
+    ) {
+        try {
+            ShareGroup group = shareGroup(groupId);
+            ShareGroupMember member = group.getOrMaybeCreateMember(memberId, false);
+            throwIfShareGroupMemberEpochIsInvalid(member, memberEpoch);
+            return Errors.NONE;
+        } catch (UnknownMemberIdException e) {
+            return Errors.UNKNOWN_MEMBER_ID;
+        } catch (FencedMemberEpochException e) {
+            return Errors.STALE_MEMBER_EPOCH;
+        } catch (ApiException e) {
+            return ApiError.fromThrowable(e).error();
+        }
     }
 
     /**

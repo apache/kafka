@@ -26,19 +26,19 @@ import java.util.TreeMap;
 
 /**
  * Combines an existing list of {@link PersisterStateBatch} entries with a list of newly produced
- * entries and returns the shortest non-overlapping, {@code (deliveryState, deliveryCount)}-distinct
- * cover of the union, clipped at {@code startOffset} (SPSO).
+ * entries and returns the shortest non-overlapping, state-distinct cover of the union, clipped at
+ * {@code startOffset} (SPSO).
  *
  * <p>The merge is performed by an event-driven sweep-line over the union of both inputs. Each
  * input batch contributes one BEGIN event at {@code firstOffset} and one END event at
  * {@code lastOffset + 1}. Events are processed in offset order (END before BEGIN at the same
  * offset). A counted ordered map tracks the currently active priorities; the first key defines the
- * {@code (state, count)} that wins on the current sub-range. Successive sub-ranges with identical
- * {@code (state, count)} are coalesced on the fly.
+ * state that wins on the current sub-range. Successive sub-ranges with identical state are
+ * coalesced on the fly.
  *
  * <p>Complexity: {@code O((n + k) log p)} where {@code n} is the total number of input batches,
  * {@code k} is the number of overlap transitions encountered, and {@code p} is the number of
- * distinct {@code (deliveryState, deliveryCount)} priorities.
+ * distinct state priorities.
  */
 public class PersisterStateBatchCombiner {
     private static final Comparator<BatchPriority> PRIORITY_DESC = (a, b) -> {
@@ -46,7 +46,23 @@ public class PersisterStateBatchCombiner {
         if (cmpCount != 0) {
             return cmpCount;
         }
-        return Byte.compare(b.deliveryState(), a.deliveryState());
+        int cmpState = Byte.compare(b.deliveryState(), a.deliveryState());
+        if (cmpState != 0) {
+            return cmpState;
+        }
+        int cmpProducerId = Long.compare(b.stagedProducerId(), a.stagedProducerId());
+        if (cmpProducerId != 0) {
+            return cmpProducerId;
+        }
+        int cmpProducerEpoch = Short.compare(b.stagedProducerEpoch(), a.stagedProducerEpoch());
+        if (cmpProducerEpoch != 0) {
+            return cmpProducerEpoch;
+        }
+        int cmpAckType = Byte.compare(b.stagedAckType(), a.stagedAckType());
+        if (cmpAckType != 0) {
+            return cmpAckType;
+        }
+        return Byte.compare(b.stagedDeliveryState(), a.stagedDeliveryState());
     };
 
     private final List<PersisterStateBatch> batchesSoFar;
@@ -91,14 +107,12 @@ public class PersisterStateBatchCombiner {
     private void addPruned(List<PersisterStateBatch> out, List<PersisterStateBatch> src) {
         for (PersisterStateBatch b : src) {
             if (startOffset != -1 && b.lastOffset() < startOffset) {
-                // batch fully expired
                 continue;
             }
             if (startOffset == -1 || b.firstOffset() >= startOffset) {
                 out.add(b);
             } else {
-                // start offset intersects batch -> clip
-                out.add(new PersisterStateBatch(startOffset, b.lastOffset(), b.deliveryState(), b.deliveryCount()));
+                out.add(copyWithOffsets(b, startOffset, b.lastOffset()));
             }
         }
     }
@@ -115,8 +129,6 @@ public class PersisterStateBatchCombiner {
             events[i * 2] = new Event(b.firstOffset(), true, priority);
             events[i * 2 + 1] = new Event(b.lastOffset() + 1, false, priority);
         }
-        // END (isBegin=false) sorts before BEGIN (isBegin=true) at the same offset so that
-        // contiguous same-state ranges meeting at offset X collapse to a single emit.
         java.util.Arrays.sort(events, (e1, e2) -> {
             int cmp = Long.compare(e1.offset, e2.offset);
             if (cmp != 0) {
@@ -134,12 +146,10 @@ public class PersisterStateBatchCombiner {
         while (i < events.length) {
             long offset = events[i].offset;
 
-            // Emit the sub-range that ended at `offset - 1` (if one was open).
             if (openWinner != null && offset > openFrom) {
                 appendCoalesced(out, openFrom, offset - 1, openWinner);
             }
 
-            // Apply every event at this offset (END before BEGIN by sort order).
             while (i < events.length && events[i].offset == offset) {
                 Event e = events[i++];
                 if (e.isBegin) {
@@ -167,20 +177,66 @@ public class PersisterStateBatchCombiner {
     private void appendCoalesced(List<PersisterStateBatch> out, long from, long to, BatchPriority winner) {
         if (!out.isEmpty()) {
             PersisterStateBatch tail = out.get(out.size() - 1);
-            if (tail.lastOffset() + 1 == from
-                && tail.deliveryState() == winner.deliveryState()
-                && tail.deliveryCount() == winner.deliveryCount()) {
-                out.set(out.size() - 1, new PersisterStateBatch(
-                    tail.firstOffset(), to, winner.deliveryState(), winner.deliveryCount()));
+            if (tail.lastOffset() + 1 == from && winner.sameState(tail)) {
+                out.set(out.size() - 1, winner.toBatch(tail.firstOffset(), to));
                 return;
             }
         }
-        out.add(new PersisterStateBatch(from, to, winner.deliveryState(), winner.deliveryCount()));
+        out.add(winner.toBatch(from, to));
     }
 
-    private record BatchPriority(short deliveryCount, byte deliveryState) {
+    private static PersisterStateBatch copyWithOffsets(PersisterStateBatch batch, long firstOffset, long lastOffset) {
+        return new PersisterStateBatch(
+            firstOffset,
+            lastOffset,
+            batch.deliveryState(),
+            batch.deliveryCount(),
+            batch.stagedProducerId(),
+            batch.stagedProducerEpoch(),
+            batch.stagedAckType(),
+            batch.stagedDeliveryState()
+        );
+    }
+
+    private record BatchPriority(
+        short deliveryCount,
+        byte deliveryState,
+        long stagedProducerId,
+        short stagedProducerEpoch,
+        byte stagedAckType,
+        byte stagedDeliveryState
+    ) {
         private static BatchPriority from(PersisterStateBatch batch) {
-            return new BatchPriority(batch.deliveryCount(), batch.deliveryState());
+            return new BatchPriority(
+                batch.deliveryCount(),
+                batch.deliveryState(),
+                batch.stagedProducerId(),
+                batch.stagedProducerEpoch(),
+                batch.stagedAckType(),
+                batch.stagedDeliveryState()
+            );
+        }
+
+        private boolean sameState(PersisterStateBatch batch) {
+            return deliveryCount == batch.deliveryCount()
+                && deliveryState == batch.deliveryState()
+                && stagedProducerId == batch.stagedProducerId()
+                && stagedProducerEpoch == batch.stagedProducerEpoch()
+                && stagedAckType == batch.stagedAckType()
+                && stagedDeliveryState == batch.stagedDeliveryState();
+        }
+
+        private PersisterStateBatch toBatch(long firstOffset, long lastOffset) {
+            return new PersisterStateBatch(
+                firstOffset,
+                lastOffset,
+                deliveryState,
+                deliveryCount,
+                stagedProducerId,
+                stagedProducerEpoch,
+                stagedAckType,
+                stagedDeliveryState
+            );
         }
     }
 

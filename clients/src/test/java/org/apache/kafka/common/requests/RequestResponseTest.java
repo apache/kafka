@@ -240,6 +240,8 @@ import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
+import org.apache.kafka.common.message.TxnShareAcknowledgeRequestData;
+import org.apache.kafka.common.message.TxnShareAcknowledgeResponseData;
 import org.apache.kafka.common.message.UnregisterBrokerRequestData;
 import org.apache.kafka.common.message.UnregisterBrokerResponseData;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
@@ -981,6 +983,24 @@ public class RequestResponseTest {
             UnsupportedVersionException.class, () -> bld.build((short) 2).serialize());
         assertTrue(exception.getMessage().contains("Attempted to write a non-default producerId at version 2"));
         bld.build((short) 3);
+
+        InitProducerIdRequest.Builder twoPcBuilder = new InitProducerIdRequest.Builder(
+            new InitProducerIdRequestData().setTransactionTimeoutMs(1000)
+                .setTransactionalId("abracadabra")
+                .setEnable2Pc(true));
+        assertEquals(6, twoPcBuilder.oldestAllowedVersion());
+        assertEquals(6, twoPcBuilder.latestAllowedVersion());
+        assertThrows(UnsupportedVersionException.class, () -> twoPcBuilder.build((short) 5));
+        twoPcBuilder.build((short) 6);
+
+        InitProducerIdRequest.Builder keepPreparedBuilder = new InitProducerIdRequest.Builder(
+            new InitProducerIdRequestData().setTransactionTimeoutMs(1000)
+                .setTransactionalId("abracadabra")
+                .setKeepPreparedTxn(true));
+        assertEquals(6, keepPreparedBuilder.oldestAllowedVersion());
+        assertEquals(6, keepPreparedBuilder.latestAllowedVersion());
+        assertThrows(UnsupportedVersionException.class, () -> keepPreparedBuilder.build((short) 5));
+        keepPreparedBuilder.build((short) 6);
     }
 
     @Test
@@ -1131,6 +1151,7 @@ public class RequestResponseTest {
             case SHARE_GROUP_DESCRIBE: return createShareGroupDescribeRequest(version);
             case SHARE_FETCH: return createShareFetchRequest(version);
             case SHARE_ACKNOWLEDGE: return createShareAcknowledgeRequest(version);
+            case TXN_SHARE_ACKNOWLEDGE: return createTxnShareAcknowledgeRequest(version);
             case ADD_RAFT_VOTER: return createAddRaftVoterRequest(version);
             case REMOVE_RAFT_VOTER: return createRemoveRaftVoterRequest(version);
             case UPDATE_RAFT_VOTER: return createUpdateRaftVoterRequest(version);
@@ -1227,6 +1248,7 @@ public class RequestResponseTest {
             case SHARE_GROUP_DESCRIBE: return createShareGroupDescribeResponse();
             case SHARE_FETCH: return createShareFetchResponse();
             case SHARE_ACKNOWLEDGE: return createShareAcknowledgeResponse();
+            case TXN_SHARE_ACKNOWLEDGE: return createTxnShareAcknowledgeResponse();
             case ADD_RAFT_VOTER: return createAddRaftVoterResponse();
             case REMOVE_RAFT_VOTER: return createRemoveRaftVoterResponse();
             case UPDATE_RAFT_VOTER: return createUpdateRaftVoterResponse();
@@ -1569,6 +1591,42 @@ public class RequestResponseTest {
         data.setThrottleTimeMs(345);
         data.setErrorCode(Errors.NONE.code());
         return new ShareAcknowledgeResponse(data);
+    }
+
+    private TxnShareAcknowledgeRequest createTxnShareAcknowledgeRequest(short version) {
+        TxnShareAcknowledgeRequestData.TxnShareAcknowledgeBatch batch = new TxnShareAcknowledgeRequestData.TxnShareAcknowledgeBatch()
+                .setFirstOffset(0)
+                .setLastOffset(0)
+                .setAcknowledgeTypes(Collections.singletonList((byte) 1));
+        TxnShareAcknowledgeRequestData.TxnShareAcknowledgePartition partition = new TxnShareAcknowledgeRequestData.TxnShareAcknowledgePartition()
+                .setPartitionIndex(0)
+                .setAcknowledgementBatches(singletonList(batch));
+        TxnShareAcknowledgeRequestData.TxnShareAcknowledgeTopic topic = new TxnShareAcknowledgeRequestData.TxnShareAcknowledgeTopic()
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(singletonList(partition));
+        TxnShareAcknowledgeRequestData data = new TxnShareAcknowledgeRequestData()
+                .setTransactionalId("transactional-id")
+                .setGroupId("share-group")
+                .setProducerId(1L)
+                .setProducerEpoch((short) 0)
+                .setMemberId(Uuid.randomUuid().toString())
+                .setMemberEpoch(1)
+                .setTopics(singletonList(topic));
+        return new TxnShareAcknowledgeRequest.Builder(data).build(version);
+    }
+
+    private TxnShareAcknowledgeResponse createTxnShareAcknowledgeResponse() {
+        TxnShareAcknowledgeResponseData.TxnShareAcknowledgePartitionResponse partition = new TxnShareAcknowledgeResponseData.TxnShareAcknowledgePartitionResponse()
+                .setPartitionIndex(0)
+                .setErrorCode(Errors.NONE.code());
+        TxnShareAcknowledgeResponseData.TxnShareAcknowledgeTopicResponse topic = new TxnShareAcknowledgeResponseData.TxnShareAcknowledgeTopicResponse()
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(singletonList(partition));
+        TxnShareAcknowledgeResponseData data = new TxnShareAcknowledgeResponseData()
+                .setThrottleTimeMs(345)
+                .setErrorCode(Errors.NONE.code())
+                .setResponses(singletonList(topic));
+        return new TxnShareAcknowledgeResponse(data);
     }
 
     private ControllerRegistrationRequest createControllerRegistrationRequest(short version) {

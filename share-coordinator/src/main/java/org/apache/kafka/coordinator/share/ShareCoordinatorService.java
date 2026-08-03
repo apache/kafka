@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
 import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
@@ -38,6 +39,7 @@ import org.apache.kafka.common.requests.InitializeShareGroupStateResponse;
 import org.apache.kafka.common.requests.ReadShareGroupStateResponse;
 import org.apache.kafka.common.requests.ReadShareGroupStateSummaryResponse;
 import org.apache.kafka.common.requests.RequestContext;
+import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.WriteShareGroupStateResponse;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -56,6 +58,7 @@ import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ShareVersion;
+import org.apache.kafka.server.common.TransactionVersion;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.util.FutureUtils;
@@ -1018,6 +1021,38 @@ public class ShareCoordinatorService implements ShareCoordinator {
             return new InitializeShareGroupStateResponseData()
                 .setResults(initializeStateResult);
         });
+    }
+
+    @Override
+    public CompletableFuture<Set<SharePartitionKey>> completeTransaction(
+        TopicPartition tp,
+        long txnOwnerId,
+        short txnOwnerEpoch,
+        int coordinatorEpoch,
+        TransactionResult result,
+        short transactionVersion
+    ) {
+        if (!isActive.get()) {
+            return CompletableFuture.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
+        }
+
+        if (!tp.topic().equals(Topic.SHARE_GROUP_STATE_TOPIC_NAME)) {
+            return CompletableFuture.failedFuture(new IllegalStateException(
+                "Completing a transaction for " + tp + " is not expected"
+            ));
+        }
+
+        if (transactionVersion < TransactionVersion.TV_2.featureLevel()) {
+            return CompletableFuture.failedFuture(new UnsupportedVersionException(
+                "Transactional share markers require transaction.version 2 or newer."
+            ));
+        }
+
+        return runtime.scheduleWriteOperation(
+            "complete-share-transaction",
+            tp,
+            coordinator -> coordinator.completeTransaction(txnOwnerId, txnOwnerEpoch, result, transactionVersion)
+        );
     }
 
     private ReadShareGroupStateResponseData generateErrorReadStateResponse(

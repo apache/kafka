@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -24,12 +25,22 @@ import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.record.internal.RecordBatch;
 
 public class InitProducerIdRequest extends AbstractRequest {
+    private static final short TWO_PHASE_COMMIT_VERSION = 6;
+
     public static class Builder extends AbstractRequest.Builder<InitProducerIdRequest> {
         public final InitProducerIdRequestData data;
 
         public Builder(InitProducerIdRequestData data) {
-            super(ApiKeys.INIT_PRODUCER_ID);
+            super(
+                ApiKeys.INIT_PRODUCER_ID,
+                requiresTwoPhaseCommitVersion(data) ? TWO_PHASE_COMMIT_VERSION : ApiKeys.INIT_PRODUCER_ID.oldestVersion(),
+                ApiKeys.INIT_PRODUCER_ID.latestVersion(requiresTwoPhaseCommitVersion(data))
+            );
             this.data = data;
+        }
+
+        private static boolean requiresTwoPhaseCommitVersion(InitProducerIdRequestData data) {
+            return data.enable2Pc() || data.keepPreparedTxn();
         }
 
         @Override
@@ -39,6 +50,9 @@ public class InitProducerIdRequest extends AbstractRequest {
 
             if (data.transactionalId() != null && data.transactionalId().isEmpty())
                 throw new IllegalArgumentException("Must set either a null or a non-empty transactional id.");
+
+            if (requiresTwoPhaseCommitVersion(data) && version < TWO_PHASE_COMMIT_VERSION)
+                throw new UnsupportedVersionException("Broker doesn't support 2PC InitProducerId API on version " + version);
 
             return new InitProducerIdRequest(data, version);
         }

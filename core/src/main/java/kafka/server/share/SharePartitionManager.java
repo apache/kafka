@@ -29,6 +29,7 @@ import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
+import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollection;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
@@ -403,6 +404,58 @@ public class SharePartitionManager implements AutoCloseable {
         return mapAcknowledgementFutures(futures, Optional.of(failedShareAcknowledgeMetricsHandler()));
     }
 
+    public CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> acknowledgeTransactional(
+        String memberId,
+        String groupId,
+        long txnOwnerId,
+        short txnOwnerEpoch,
+        Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgeTopics
+    ) {
+        log.trace("Txn acknowledge request for topicIdPartitions: {} groupId: {} txnOwnerId={}",
+            acknowledgeTopics.keySet(), groupId, txnOwnerId);
+        Map<TopicIdPartition, CompletableFuture<Throwable>> futures = new HashMap<>();
+        acknowledgeTopics.forEach((topicIdPartition, acknowledgePartitionBatches) -> {
+            SharePartitionKey sharePartitionKey = sharePartitionKey(groupId, topicIdPartition);
+            CompletableFuture<Throwable> future = new CompletableFuture<>();
+            try {
+                initializeSharePartitionForTransactionalAcknowledge(sharePartitionKey)
+                    .whenComplete((sharePartition, initializationThrowable) -> {
+                        if (initializationThrowable != null) {
+                            Throwable throwable = Errors.maybeUnwrapException(initializationThrowable);
+                            fencedSharePartitionHandler().accept(sharePartitionKey, throwable);
+                            future.complete(throwable);
+                            return;
+                        }
+                        sharePartition.stageTxnAcknowledge(memberId, txnOwnerId, txnOwnerEpoch, acknowledgePartitionBatches)
+                            .whenComplete((result, throwable) -> {
+                                if (throwable != null) {
+                                    throwable = Errors.maybeUnwrapException(throwable);
+                                    fencedSharePartitionHandler().accept(sharePartitionKey, throwable);
+                                }
+                                future.complete(throwable);
+                            });
+                    });
+            } catch (Throwable throwable) {
+                futures.put(topicIdPartition, CompletableFuture.completedFuture(throwable));
+                return;
+            }
+            futures.put(topicIdPartition, future);
+        });
+        return mapAcknowledgementFutures(futures, Optional.empty());
+    }
+
+    public CompletableFuture<Void> applyTxnMarker(long txnOwnerId, short txnOwnerEpoch, TransactionResult result) {
+        log.debug("Broadcasting txn marker txnOwnerId={} epoch={} result={}", txnOwnerId, txnOwnerEpoch, result);
+        return CompletableFuture.allOf(partitionCache.values().stream()
+            .map(sp -> sp.applyTxnMarker(txnOwnerId, txnOwnerEpoch, result))
+            .toArray(CompletableFuture[]::new));
+    }
+
+    public void invalidateSharePartitions(Set<SharePartitionKey> sharePartitionKeys) {
+        sharePartitionKeys.forEach(sharePartitionKey ->
+            removeSharePartitionFromCache(sharePartitionKey, partitionCache, metadataProvider, delayedRequestNotifier));
+    }
+
     /**
      * The release session method is used to release the session for the memberId of respective group.
      * The method post removing session also releases acquired records for the respective member.
@@ -722,7 +775,13 @@ public class SharePartitionManager implements AutoCloseable {
             delayedShareFetchWatchKeys.add(new DelayedShareFetchPartitionKey(topicIdPartition.topicId(), topicIdPartition.partition()));
 
             CompletableFuture<Void> initializationFuture = sharePartition.maybeInitialize();
+            if (initializationFuture.isDone() && !initializationFuture.isCompletedExceptionally()
+                && sharePartition.hasPendingTransactionalRecords()) {
+                sharePartition = reinitializePendingTransactionalSharePartition(sharePartitionKey);
+                initializationFuture = sharePartition.maybeInitialize();
+            }
             final boolean initialized = initializationFuture.isDone();
+            final SharePartition initializedSharePartition = sharePartition;
             initializationFuture.whenComplete((result, throwable) -> {
                 if (throwable != null) {
                     handleInitializationException(sharePartitionKey, shareFetch, throwable);
@@ -733,11 +792,11 @@ public class SharePartitionManager implements AutoCloseable {
                 // is initialized. Hence, trigger the completion of all pending delayed share fetch requests
                 // for the share partition.
                 if (!initialized) {
-                    shareGroupMetrics.partitionLoadTime(sharePartition.loadStartTimeMs());
+                    shareGroupMetrics.partitionLoadTime(initializedSharePartition.loadStartTimeMs());
                     delayedRequestNotifier.accept(delayedShareFetchKey);
                 }
             });
-            sharePartitions.put(topicIdPartition, sharePartition);
+            sharePartitions.put(topicIdPartition, initializedSharePartition);
         }
 
         // Update the metrics for the topics for which we have received a share fetch request.
@@ -757,6 +816,19 @@ public class SharePartitionManager implements AutoCloseable {
         // The request will be added irrespective of whether the share partition is initialized or not.
         // Once the share partition is initialized, the delayed share fetch will be completed.
         addDelayedShareFetch(new DelayedShareFetch(shareFetch, replicaManager, logReader, metadataProvider, fencedSharePartitionHandler(), sharePartitions, shareGroupMetrics, time, remoteFetchMaxWaitMs), delayedShareFetchWatchKeys);
+    }
+
+    private SharePartition reinitializePendingTransactionalSharePartition(SharePartitionKey sharePartitionKey) {
+        log.debug("Reinitializing share partition with pending transactional state: {}", sharePartitionKey);
+        removeSharePartitionFromCache(sharePartitionKey, partitionCache, metadataProvider, delayedRequestNotifier);
+        return getOrCreateSharePartition(sharePartitionKey);
+    }
+
+    private CompletableFuture<SharePartition> initializeSharePartitionForTransactionalAcknowledge(
+        SharePartitionKey sharePartitionKey
+    ) {
+        SharePartition sharePartition = getOrCreateSharePartition(sharePartitionKey);
+        return sharePartition.maybeInitialize().thenApply(ignored -> sharePartition);
     }
 
     private SharePartition getOrCreateSharePartition(SharePartitionKey sharePartitionKey) {

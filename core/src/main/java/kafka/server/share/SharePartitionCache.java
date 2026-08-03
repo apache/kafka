@@ -19,6 +19,7 @@ package kafka.server.share;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.server.share.SharePartitionKey;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -102,6 +103,10 @@ public class SharePartitionCache {
      *
      * @return The set of all share partition keys.
      */
+    public Collection<SharePartition> values() {
+        return partitions.values();
+    }
+
     public Set<SharePartitionKey> cachedSharePartitionKeys() {
         return partitions.keySet();
     }

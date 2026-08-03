@@ -185,6 +185,8 @@ import org.apache.kafka.common.message.SyncGroupRequestDataJsonConverter;
 import org.apache.kafka.common.message.SyncGroupResponseDataJsonConverter;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestDataJsonConverter;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseDataJsonConverter;
+import org.apache.kafka.common.message.TxnShareAcknowledgeRequestDataJsonConverter;
+import org.apache.kafka.common.message.TxnShareAcknowledgeResponseDataJsonConverter;
 import org.apache.kafka.common.message.UnregisterBrokerRequestDataJsonConverter;
 import org.apache.kafka.common.message.UnregisterBrokerResponseDataJsonConverter;
 import org.apache.kafka.common.message.UpdateFeaturesRequestDataJsonConverter;
@@ -370,6 +372,8 @@ import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
+import org.apache.kafka.common.requests.TxnShareAcknowledgeRequest;
+import org.apache.kafka.common.requests.TxnShareAcknowledgeResponse;
 import org.apache.kafka.common.requests.UnregisterBrokerRequest;
 import org.apache.kafka.common.requests.UnregisterBrokerResponse;
 import org.apache.kafka.common.requests.UpdateFeaturesRequest;
@@ -562,6 +566,8 @@ public class RequestConvertToJson {
                 SyncGroupRequestDataJsonConverter.write(((SyncGroupRequest) request).data(), request.version());
             case TXN_OFFSET_COMMIT ->
                 TxnOffsetCommitRequestDataJsonConverter.write(((TxnOffsetCommitRequest) request).data(), request.version());
+            case TXN_SHARE_ACKNOWLEDGE ->
+                TxnShareAcknowledgeRequestDataJsonConverter.write(((TxnShareAcknowledgeRequest) request).data(), request.version());
             case UNREGISTER_BROKER ->
                 UnregisterBrokerRequestDataJsonConverter.write(((UnregisterBrokerRequest) request).data(), request.version());
             case UPDATE_FEATURES ->
@@ -741,6 +747,8 @@ public class RequestConvertToJson {
             case SYNC_GROUP -> SyncGroupResponseDataJsonConverter.write(((SyncGroupResponse) response).data(), version);
             case TXN_OFFSET_COMMIT ->
                 TxnOffsetCommitResponseDataJsonConverter.write(((TxnOffsetCommitResponse) response).data(), version);
+            case TXN_SHARE_ACKNOWLEDGE ->
+                TxnShareAcknowledgeResponseDataJsonConverter.write(((TxnShareAcknowledgeResponse) response).data(), version);
             case UNREGISTER_BROKER ->
                 UnregisterBrokerResponseDataJsonConverter.write(((UnregisterBrokerResponse) response).data(), version);
             case UPDATE_FEATURES ->

@@ -1077,6 +1077,74 @@ class TransactionCoordinatorTest {
   }
 
   @Test
+  def shouldKeepPrepared2pcTransactionOnHandleInitPidWhenExistingTransactionInOngoingState(): Unit = {
+    val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
+      producerEpoch, (producerEpoch - 1).toShort, Int.MaxValue, TransactionState.ONGOING, partitions, time.milliseconds(), time.milliseconds(), TV_0)
+
+    when(transactionManager.isTransaction2pcEnabled())
+      .thenReturn(true)
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
+      .thenReturn(true)
+
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = true,
+      keepPreparedTxn = true,
+      None,
+      initProducerIdMockCallback
+    )
+
+    assertEquals(new InitProducerIdResult(producerId, producerEpoch, Errors.NONE, producerId, producerEpoch), result)
+    verify(transactionManager).validateTransactionTimeoutMs(anyBoolean(), anyInt())
+    verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
+    verify(transactionManager, never()).appendTransactionToLog(
+      any[String](),
+      anyInt(),
+      any[TxnTransitMetadata](),
+      any(),
+      any(),
+      any())
+  }
+
+  @Test
+  def shouldRejectKeepPreparedTxnWhenExistingOngoingTransactionIsNot2pc(): Unit = {
+    val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
+      producerEpoch, (producerEpoch - 1).toShort, txnTimeoutMs, TransactionState.ONGOING, partitions, time.milliseconds(), time.milliseconds(), TV_0)
+
+    when(transactionManager.isTransaction2pcEnabled())
+      .thenReturn(true)
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
+      .thenReturn(true)
+
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = true,
+      keepPreparedTxn = true,
+      None,
+      initProducerIdMockCallback
+    )
+
+    assertEquals(new InitProducerIdResult(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Errors.INVALID_TXN_STATE), result)
+    verify(transactionManager).validateTransactionTimeoutMs(anyBoolean(), anyInt())
+    verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
+    verify(transactionManager, never()).appendTransactionToLog(
+      any[String](),
+      anyInt(),
+      any[TxnTransitMetadata](),
+      any(),
+      any(),
+      any())
+  }
+
+  @Test
   def shouldFailToAbortTransactionOnHandleInitPidWhenProducerEpochIsSmaller(): Unit = {
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
       producerEpoch, (producerEpoch - 1).toShort, txnTimeoutMs, TransactionState.ONGOING, partitions, time.milliseconds(), time.milliseconds(), TV_0)

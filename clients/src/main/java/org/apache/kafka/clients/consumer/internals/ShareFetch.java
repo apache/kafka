@@ -19,6 +19,8 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaShareConsumer;
+import org.apache.kafka.clients.consumer.ShareAcknowledgementBatch;
+import org.apache.kafka.clients.consumer.ShareAcknowledgements;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 
@@ -30,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * {@link ShareFetch} represents the records fetched from the broker to be returned to the consumer
@@ -234,6 +237,24 @@ public class ShareFetch<K, V> {
                 acknowledgementMap.put(tip, new NodeAcknowledgements(nodeId, acknowledgements));
         });
         return acknowledgementMap;
+    }
+
+    public ShareAcknowledgements takeAcknowledgementsForTransaction() {
+        Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgementMap = new LinkedHashMap<>();
+        takeAcknowledgedRecords().forEach((tip, nodeAcknowledgements) -> {
+            List<ShareAcknowledgementBatch> acknowledgementBatches = nodeAcknowledgements.acknowledgements()
+                .getAcknowledgementBatches()
+                .stream()
+                .map(batch -> new ShareAcknowledgementBatch(
+                    batch.firstOffset(),
+                    batch.lastOffset(),
+                    batch.acknowledgeTypes()))
+                .collect(Collectors.toList());
+            if (!acknowledgementBatches.isEmpty()) {
+                acknowledgementMap.put(tip, acknowledgementBatches);
+            }
+        });
+        return new ShareAcknowledgements(acknowledgementMap);
     }
 
     /**
