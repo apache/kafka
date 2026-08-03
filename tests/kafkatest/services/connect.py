@@ -316,7 +316,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
         lib_dir = self.path.home() + relative_path
         for pwd, dirs, files in os.walk(local_dir):
             for file in files:
-                if file.endswith(".jar"):
+                if file.endswith(".jar") and not file.endswith("-javadoc.jar"):
                     # Use the expected directory on the node instead of the path in the driver node
                     file_path = lib_dir + file
                     self.logger.info("Appending %s to Connect worker's CLASSPATH" % file_path)
