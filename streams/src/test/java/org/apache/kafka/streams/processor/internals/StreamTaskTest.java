@@ -1153,24 +1153,24 @@ public class StreamTaskTest {
         assertThat(totalMetric.metricValue(), equalTo(25.0));
         // the rate measures restored records per second, not restore batches per second; with no time
         // elapsed the rate window is (metrics.num.samples - 1) * metrics.sample.window.ms == 30s
-        assertTrue(
-            // regression test for KAFKA-20877: previously we did incorrectly count batches which would result in 0.03333
-            // using 0.5 as good intermediate to the expected value of 0.83333
-            // -> avoid equalTo(...) on floating point numbers
-            0.5d < ((Number) rateMetric.metricValue()).doubleValue(),
-            "Expected a value larger 0.5 [precisely 0.83333...], but got " + rateMetric.metricValue()
+        assertEquals(
+            25.0 / 30.0,
+            ((Number) rateMetric.metricValue()).doubleValue(),
+            0.0001d,
+            "restore-rate must measure restored records per second, not restore batches per second; "
+                + "counting batches would give 1/30 == 0.03333 (KAFKA-20877)"
         );
         assertThat(remainMetric.metricValue(), equalTo(70.0));
 
         task.recordRestoration(time, 50L, 55L, false);
 
         assertThat(totalMetric.metricValue(), equalTo(75.0));
-        assertTrue(
-            // regression test for KAFKA-20877: previously we did incorrectly count batches which would result in 0.06666
-            // using 2.0 as good intermediate to the expected value of 2.5
-            // -> avoid equalTo(...) on floating point numbers
-            2.0d < ((Number) rateMetric.metricValue()).doubleValue(),
-            "Expected a value larger 2.0 [precisely 2.5], but got " + rateMetric.metricValue()
+        assertEquals(
+            75.0 / 30.0,
+            ((Number) rateMetric.metricValue()).doubleValue(),
+            0.0001d,
+            "restore-rate must measure restored records per second, not restore batches per second; "
+                + "counting batches would give 2/30 == 0.06666 (KAFKA-20877)"
         );
         assertThat(remainMetric.metricValue(), equalTo(15.0));
     }
