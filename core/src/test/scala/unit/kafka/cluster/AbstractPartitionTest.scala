@@ -24,6 +24,7 @@ import org.apache.kafka.metadata.{LeaderRecoveryState, MetadataCache, MockConfig
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.partition.AlterPartitionListener
+import org.apache.kafka.server.util.ServerTestUtils
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.server.util.MockAlterPartitionManager
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
@@ -65,7 +66,7 @@ class AbstractPartitionTest {
 
   @BeforeEach
   def setup(): Unit = {
-    TestUtils.clearYammerMetrics()
+    ServerTestUtils.clearYammerMetrics()
 
     val logProps = createLogProperties(Map.empty)
     logConfig = new LogConfig(logProps)
@@ -111,7 +112,7 @@ class AbstractPartitionTest {
     if (tmpDir.exists()) {
       logManager.shutdown()
       Utils.delete(tmpDir)
-      TestUtils.clearYammerMetrics()
+      ServerTestUtils.clearYammerMetrics()
     }
   }
 

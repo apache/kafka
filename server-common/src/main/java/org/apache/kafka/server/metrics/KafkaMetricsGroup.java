@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.server.metrics;
 
-import org.apache.kafka.common.utils.Sanitizer;
+import org.apache.kafka.common.utils.internals.Sanitizer;
 
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.Histogram;

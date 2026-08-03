@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackNeededEvent;
@@ -31,14 +32,16 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
@@ -59,6 +62,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
@@ -83,6 +87,7 @@ import static org.mockito.Mockito.when;
 public class StreamsMembershipManagerTest {
 
     private static final String GROUP_ID = "test-group";
+    private static final String INSTANCE_ID = "instance-1";
     private static final int MEMBER_EPOCH = 1;
 
     private static final String SUBTOPOLOGY_ID_0 = "subtopology-0";
@@ -125,6 +130,7 @@ public class StreamsMembershipManagerTest {
     public void setup() {
         membershipManager = new StreamsMembershipManager(
             GROUP_ID,
+            Optional.empty(),
             streamsRebalanceData, subscriptionState, backgroundEventHandler,
             new LogContext("test"),
             time,
@@ -1155,7 +1161,7 @@ public class StreamsMembershipManagerTest {
 
     @Test
     public void testLeaveGroupOnCloseWhenNotInGroup() {
-        testLeaveGroupWhenNotInGroup(membershipManager::leaveGroupOnClose);
+        testLeaveGroupWhenNotInGroup(() -> membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.DEFAULT));
     }
 
     @Test
@@ -1231,7 +1237,7 @@ public class StreamsMembershipManagerTest {
 
     @Test
     public void testLeaveGroupOnCloseWhenNotInGroupAndFenced() {
-        testLeaveGroupOnCloseWhenNotInGroupAndFenced(membershipManager::leaveGroupOnClose);
+        testLeaveGroupOnCloseWhenNotInGroupAndFenced(() -> membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.DEFAULT));
     }
 
     private void testLeaveGroupOnCloseWhenNotInGroupAndFenced(final Supplier<CompletableFuture<Void>> leaveGroup) {
@@ -1274,7 +1280,8 @@ public class StreamsMembershipManagerTest {
         verifyInStatePrepareLeaving(membershipManager);
         final CompletableFuture<Void> onGroupLeftBeforeRevocationCallback = membershipManager.leaveGroup();
         assertEquals(onGroupLeft, onGroupLeftBeforeRevocationCallback);
-        final CompletableFuture<Void> onGroupLeftOnCloseBeforeRevocationCallback = membershipManager.leaveGroupOnClose();
+        final CompletableFuture<Void> onGroupLeftOnCloseBeforeRevocationCallback = 
+                membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.DEFAULT);
         assertEquals(onGroupLeft, onGroupLeftOnCloseBeforeRevocationCallback);
         onTasksRevokedCallbackExecuted.complete(null);
         verify(memberStateListener).onGroupAssignmentUpdated(Set.of());
@@ -1315,7 +1322,8 @@ public class StreamsMembershipManagerTest {
 
         acknowledging(onTasksAssignedCallbackExecutedSetup);
 
-        final CompletableFuture<Void> onGroupLeft = membershipManager.leaveGroupOnClose();
+        final CompletableFuture<Void> onGroupLeft = 
+                membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.DEFAULT);
 
         assertFalse(onGroupLeft.isDone());
         verifyInStateLeaving(membershipManager);
@@ -1324,7 +1332,8 @@ public class StreamsMembershipManagerTest {
         verify(backgroundEventHandler, never()).add(any(StreamsOnTasksRevokedCallbackNeededEvent.class));
         final CompletableFuture<Void> onGroupLeftBeforeHeartbeatRequestGenerated = membershipManager.leaveGroup();
         assertEquals(onGroupLeft, onGroupLeftBeforeHeartbeatRequestGenerated);
-        final CompletableFuture<Void> onGroupLeftOnCloseBeforeHeartbeatRequestGenerated = membershipManager.leaveGroupOnClose();
+        final CompletableFuture<Void> onGroupLeftOnCloseBeforeHeartbeatRequestGenerated = 
+                membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.DEFAULT);
         assertEquals(onGroupLeft, onGroupLeftOnCloseBeforeHeartbeatRequestGenerated);
         assertFalse(onGroupLeft.isDone());
         membershipManager.onHeartbeatRequestGenerated();
@@ -1380,6 +1389,45 @@ public class StreamsMembershipManagerTest {
     }
 
     @Test
+    public void testLeaveGroupOnCloseWithRemainInGroupSkipsLeaveHeartbeat() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
+        final Set<StreamsRebalanceData.TaskId> activeTasks =
+            Set.of(new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_0));
+        joining();
+        reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
+        final StreamsTasksAssignedEvent onTasksAssignedCallbackExecuted =
+            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(
+                activeTasks, Set.of(), Set.of());
+        acknowledging(onTasksAssignedCallbackExecuted);
+
+        final CompletableFuture<Void> onGroupLeft =
+            membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+
+        assertFalse(onGroupLeft.isDone());
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+        assertEquals(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP, membershipManager.leaveGroupOperation());
+        verify(backgroundEventHandler, never()).add(any(StreamsOnTasksRevokedCallbackNeededEvent.class));
+
+        membershipManager.onHeartbeatRequestSkipped();
+
+        assertTrue(onGroupLeft.isDone());
+        assertFalse(onGroupLeft.isCompletedExceptionally());
+        verifyInStateUnsubscribed(membershipManager);
+        verify(subscriptionState).unsubscribe();
+    }
+
+    @Test
+    public void testLeaveGroupOnCloseWithRemainInGroupWhenNotInGroup() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
+
+        final CompletableFuture<Void> onGroupLeft =
+            membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+
+        assertTrue(onGroupLeft.isDone());
+        assertFalse(onGroupLeft.isCompletedExceptionally());
+    }
+
+    @Test
     public void testOnHeartbeatRequestSkippedWhenInLeaving() {
         setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, "topic");
         final Set<StreamsRebalanceData.TaskId> activeTasksSetup = Set.of(
@@ -1402,6 +1450,48 @@ public class StreamsMembershipManagerTest {
         assertTrue(future.isDone());
         assertFalse(future.isCancelled());
         assertFalse(future.isCompletedExceptionally());
+    }
+
+    @Test
+    public void testLeaveGroupEpochIsStaticMemberEpochForStaticMember() {
+        try (final Metrics localMetrics = new Metrics(time)) {
+            final StreamsMembershipManager staticMember = new StreamsMembershipManager(
+                GROUP_ID,
+                Optional.of(INSTANCE_ID),
+                streamsRebalanceData, subscriptionState, backgroundEventHandler,
+                new LogContext("test"), time, localMetrics
+            );
+            assertEquals(StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH, staticMember.leaveGroupEpoch());
+        }
+    }
+
+    @Test
+    public void testIsLeavingGroupReturnsTrueForStaticMemberWithRemainInGroupOperation() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, "topic");
+        try (final Metrics localMetrics = new Metrics(time)) {
+            final StreamsMembershipManager staticMember = new StreamsMembershipManager(
+                GROUP_ID,
+                Optional.of(INSTANCE_ID),
+                streamsRebalanceData, subscriptionState, backgroundEventHandler,
+                new LogContext("test"), time, localMetrics
+            );
+            staticMember.registerStateListener(memberStateListener);
+            staticMember.onSubscriptionUpdated();
+            staticMember.onConsumerPoll();
+            assertEquals(MemberState.JOINING, staticMember.state());
+            staticMember.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+            assertEquals(MemberState.LEAVING, staticMember.state());
+            assertTrue(staticMember.isLeavingGroup());
+        }
+    }
+
+    @Test
+    public void testIsLeavingGroupReturnsFalseForDynamicMemberWithRemainInGroupOperation() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, "topic");
+        joining();
+        membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+        assertFalse(membershipManager.isLeavingGroup());
     }
 
     @Test
@@ -1432,6 +1522,51 @@ public class StreamsMembershipManagerTest {
         assertFalse(future.isCancelled());
         assertFalse(future.isCompletedExceptionally());
         verify(memberStateListener, never()).onMemberEpochUpdated(Optional.of(MEMBER_EPOCH + 1), membershipManager.memberId());
+    }
+
+    @ParameterizedTest
+    @MethodSource("staticMemberLeaveOnCloseOperations")
+    public void testStaticMemberUsesExpectedLeaveEpochOnClose(
+        final CloseOptions.GroupMembershipOperation operation,
+        final int expectedEpoch
+    ) {
+        try (final Metrics localMetrics = new Metrics(time)) {
+            StreamsMembershipManager membershipManagerWithStaticMember = new StreamsMembershipManager(
+                GROUP_ID,
+                Optional.of(INSTANCE_ID),
+                streamsRebalanceData,
+                subscriptionState,
+                backgroundEventHandler,
+                new LogContext("test"),
+                time,
+                localMetrics
+            );
+            membershipManagerWithStaticMember.registerStateListener(memberStateListener);
+            joining(membershipManagerWithStaticMember);
+
+            CompletableFuture<Void> onGroupLeft = membershipManagerWithStaticMember.leaveGroupOnClose(operation);
+
+            assertEquals(MemberState.LEAVING, membershipManagerWithStaticMember.state());
+            assertEquals(expectedEpoch, membershipManagerWithStaticMember.memberEpoch());
+            assertFalse(onGroupLeft.isDone());
+        }
+    }
+
+    private static Stream<Arguments> staticMemberLeaveOnCloseOperations() {
+        return Stream.of(
+            Arguments.of(
+                CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP,
+                StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH
+            ),
+            Arguments.of(
+                CloseOptions.GroupMembershipOperation.DEFAULT,
+                StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH
+            ),
+            Arguments.of(
+                CloseOptions.GroupMembershipOperation.LEAVE_GROUP,
+                StreamsGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH
+            )
+        );
     }
 
     @Test
@@ -2578,6 +2713,12 @@ public class StreamsMembershipManagerTest {
         membershipManager.onSubscriptionUpdated();
         membershipManager.onConsumerPoll();
         verifyInStateJoining(membershipManager);
+    }
+
+    private void joining(StreamsMembershipManager givenMembershipManager) {
+        givenMembershipManager.onSubscriptionUpdated();
+        givenMembershipManager.onConsumerPoll();
+        verifyInStateJoining(givenMembershipManager);
     }
 
     private void reconcile(final StreamsGroupHeartbeatResponse response) {

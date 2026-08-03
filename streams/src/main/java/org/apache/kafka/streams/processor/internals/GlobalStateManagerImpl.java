@@ -25,10 +25,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.utils.FixedOrderMap;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.FixedOrderMap;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.ErrorHandlerContext;
@@ -568,6 +568,17 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         }
 
         return currentDeadlineMs;
+    }
+
+    @Override
+    public long approximateNumUncommittedBytes() {
+        long total = 0;
+        for (final Optional<StateStore> entry : globalStores.values()) {
+            if (entry.isPresent()) {
+                total += entry.get().approximateNumUncommittedBytes();
+            }
+        }
+        return total;
     }
 
     @Override

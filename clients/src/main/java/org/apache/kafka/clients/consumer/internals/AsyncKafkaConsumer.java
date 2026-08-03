@@ -106,15 +106,14 @@ import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
-import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 import org.slf4j.event.Level;
 
-import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
@@ -420,6 +419,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final AtomicLong currentThread = new AtomicLong(NO_CURRENT_THREAD);
     private final AtomicInteger refCount = new AtomicInteger(0);
 
+    private volatile boolean hasPendingReconciliation = false;
+
     private final MemberStateListener memberStateListener = new MemberStateListener() {
         @Override
         public void onMemberEpochUpdated(Optional<Integer> memberEpoch, String memberId) {
@@ -429,6 +430,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         @Override
         public void onGroupAssignmentUpdated(Set<TopicPartition> partitions) {
             setGroupAssignmentSnapshot(partitions);
+        }
+
+        @Override
+        public void onMemberStateChange(MemberState memberState) {
+            setHasPendingReconciliation(memberState == MemberState.RECONCILING);
         }
     };
 
@@ -493,8 +499,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     interceptorList,
                     Arrays.asList(deserializers.keyDeserializer(), deserializers.valueDeserializer()));
             this.metadata = metadataFactory.build(config, subscriptions, logContext, clusterResourceListeners);
-            final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
-            metadata.bootstrap(addresses);
 
             this.fetchMetricsManager = createFetchMetricsManager(metrics);
             FetchConfig fetchConfig = new FetchConfig(config);
@@ -873,6 +877,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         groupAssignmentSnapshot.set(Collections.unmodifiableSet(partitions));
     }
 
+    void setHasPendingReconciliation(final boolean hasPendingReconciliation) {
+        this.hasPendingReconciliation = hasPendingReconciliation;
+    }
+
     @Override
     public void registerMetricForSubscription(KafkaMetric metric) {
         if (!metrics().containsKey(metric.metricName())) {
@@ -971,15 +979,20 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     /**
-     * {@code checkInflightPoll()} manages the lifetime of the {@link AsyncPollEvent} processing. If it is
-     * called when no event is currently processing, it will start a new event processing asynchronously. A check
-     * is made during each invocation to see if the <em>inflight</em> event has completed. If it has, it will be
-     * processed accordingly.
+     * {@code checkInflightPoll()} manages the lifecycle of the {@link AsyncPollEvent}. If no event is
+     * currently processing, a new one is started asynchronously. Each invocation checks whether the
+     * <em>inflight</em> event has completed; if so, a new event is submitted in its place so a fetch request
+     * stays in flight. If the completed event left records buffered no new
+     * event is submitted here (it would gate those records behind a fresh validate-positions stage).
+     * Instead the buffered records are returned and the next fetch is pipelined by {@link #poll(Duration)} via
+     * {@link #sendPrefetches(Timer)}.
      */
     private void checkInflightPoll(Timer timer, boolean firstPass) {
-        if (firstPass && inflightPoll != null) {
-            // Handle the case where there's a remaining inflight poll from the *previous* invocation
-            // of AsyncKafkaConsumer.poll().
+        // Clear the current inflight poll if we can, so a new one (and a new fetch) is submitted below.
+        // On the first pass this may clear a leftover from the previous poll(). On later passes it clears
+        // inflights that have completed. A completed poll that filled the buffer is kept, so its records
+        // are returned first (see maybeClearPreviousInflightPoll).
+        if (inflightPoll != null && (firstPass || inflightPoll.isComplete())) {
             maybeClearPreviousInflightPoll();
         }
 
@@ -2028,7 +2041,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         // This is key because partitions may need revocation, so we need to wait for the reconciliation check
         // that triggers commits and marks partitions as pending revocation, before we can
         // safely collect records from the buffer.
-        if (inflightPoll != null && !inflightPoll.isReconciliationCheckComplete()) {
+        if (hasPendingReconciliation && inflightPoll != null && !inflightPoll.isReconciliationCheckComplete()) {
             // If the background hasn't had the time to check for pending reconciliation,
             // we need to wait for that check before moving on (instead of returning empty right away,
             // which will lead to blocking on buffer data)
@@ -2192,6 +2205,13 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         if (this.closed) {
             release();
             throw new IllegalStateException("This consumer has already been closed.");
+        }
+
+        try {
+            metadata.maybeThrowBootstrapFatalException();
+        } catch (RuntimeException e) {
+            release();
+            throw e;
         }
     }
 
@@ -2397,7 +2417,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      *
      * Each iteration gives the application thread an opportunity to process background events, which may be
      * necessary to complete the overall processing.
-     *
      * <p/>
      *
      * As an example, take {@link #unsubscribe()}. To start unsubscribing, the application thread enqueues an

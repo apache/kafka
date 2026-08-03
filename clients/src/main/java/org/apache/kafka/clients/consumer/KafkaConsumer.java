@@ -28,15 +28,16 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidRegularExpression;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import java.time.Duration;
 import java.util.Collection;
@@ -430,7 +431,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *
  * <p>
  * Partitions with transactional messages will include commit or abort markers which indicate the result of a transaction.
- * There markers are not returned to applications, yet have an offset in the log. As a result, applications reading from
+ * These markers are not returned to applications, yet have an offset in the log. As a result, applications reading from
  * topics with transactional messages will see gaps in the consumed offsets. These missing messages would be the transaction
  * markers, and they are filtered out for consumers in both isolation levels. Additionally, applications using
  * {@code read_committed} consumers may also see gaps due to aborted transactions, since those messages would not
@@ -536,6 +537,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * the consumer threads can hash into these queues using the TopicPartition to ensure in-order consumption and simplify
  * commit.
  */
+@InterfaceAudience.Public
 public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private static final ConsumerDelegateCreator CREATOR = new ConsumerDelegateCreator();
@@ -896,6 +898,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if caller lacks Read access to any of the subscribed
      *             topics or to the configured groupId. See the exception for more details
+     * @throws org.apache.kafka.common.errors.BootstrapResolutionException if DNS resolution of the bootstrap servers fails within {@code bootstrap.resolve.timeout.ms}
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. invalid groupId or
      *             session timeout, errors deserializing key/value pairs, your rebalance callback thrown exceptions,
      *             or any new error cases in future versions)
@@ -957,6 +960,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *            before successful completion of the offset commit
      * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer is using the classic group protocol
      *            and this instance gets fenced by broker.
+     * @throws org.apache.kafka.common.errors.BootstrapResolutionException if DNS resolution of the bootstrap servers fails within {@code bootstrap.resolve.timeout.ms}
      */
     @Override
     public void commitSync() {
@@ -1346,6 +1350,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      * @throws org.apache.kafka.common.errors.TimeoutException if the committed offset cannot be found before
      *             the timeout specified by {@code default.api.timeout.ms} expires.
+     * @throws org.apache.kafka.common.errors.BootstrapResolutionException if DNS resolution of the bootstrap servers fails within {@code bootstrap.resolve.timeout.ms}
      */
     @Override
     public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
@@ -1443,6 +1448,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
      *         the amount of time allocated by {@code default.api.timeout.ms} expires.
+     * @throws org.apache.kafka.common.errors.BootstrapResolutionException if DNS resolution of the bootstrap servers fails within {@code bootstrap.resolve.timeout.ms}
      */
     @Override
     public List<PartitionInfo> partitionsFor(String topic) {
@@ -1490,6 +1496,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
      *         the amount of time allocated by {@code default.api.timeout.ms} expires.
+     * @throws org.apache.kafka.common.errors.BootstrapResolutionException if DNS resolution of the bootstrap servers fails within {@code bootstrap.resolve.timeout.ms}
      */
     @Override
     public Map<String, List<PartitionInfo>> listTopics() {
@@ -1521,8 +1528,21 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * any records from these partitions until they have been resumed using {@link #resume(Collection)}.
      * Note that this method does not affect partition subscription. In particular, it does not cause a group
      * rebalance when automatic assignment is used.
+     * <p/>
+     * The pause state is preserved across a rebalance for partitions that remain assigned to this
+     * consumer, but it is lost for partitions that are revoked. Which partitions are revoked depends
+     * on the group protocol in use (see {@link ConsumerConfig#GROUP_PROTOCOL_CONFIG}):
+     * <ul>
+     * <li>Classic group protocol: the behavior depends on the assignor configured in
+     * {@link ConsumerConfig#PARTITION_ASSIGNMENT_STRATEGY_CONFIG}: eager assignors (e.g., {@link RangeAssignor},
+     * {@link RoundRobinAssignor}) revoke all partitions on every rebalance (pause state is
+     * not preserved); cooperative assignors (e.g., {@link CooperativeStickyAssignor}) only revoke the
+     * partitions that are reassigned to another consumer (pause state preserved for partitions that remain
+     * assigned)</li>
+     * <li>Consumer group protocol (KIP-848): only revokes partitions that are reassigned to another consumer
+     * (pause state preserved for partitions that remain assigned)</li>
+     * </ul>
      *
-     * Note: Rebalance will not preserve the pause/resume state.
      * @param partitions The partitions which should be paused
      * @throws IllegalStateException if any of the provided partitions are not currently assigned to this consumer
      */
@@ -1613,6 +1633,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *         the amount of time allocated by {@code default.api.timeout.ms} expires.
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException if the broker does not support looking up
      *         the offsets by timestamp
+     * @throws org.apache.kafka.common.errors.BootstrapResolutionException if DNS resolution of the bootstrap servers fails within {@code bootstrap.resolve.timeout.ms}
      */
     @Override
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch) {

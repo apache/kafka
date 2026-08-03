@@ -18,7 +18,7 @@
 package org.apache.kafka.coordinator.share;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.timeline.SnapshotRegistry;
 

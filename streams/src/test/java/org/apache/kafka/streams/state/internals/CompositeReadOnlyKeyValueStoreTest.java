@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
@@ -45,6 +46,7 @@ import static java.util.Collections.singletonList;
 import static org.apache.kafka.test.StreamsTestUtils.toListAndCloseIterator;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -519,6 +521,52 @@ public class CompositeReadOnlyKeyValueStoreTest {
         });
 
         assertEquals(Long.MAX_VALUE, theStore.approximateNumEntries());
+    }
+
+    @Test
+    public void readOnlyShouldReturnNewInstanceWithOverride() {
+        final CompositeReadOnlyKeyValueStore<String, String> override =
+            (CompositeReadOnlyKeyValueStore<String, String>) theStore.readOnly(IsolationLevel.READ_COMMITTED);
+        assertNotSame(theStore, override);
+    }
+
+    @Test
+    public void readOnlyShouldPropagateLevelToUnderlyingStore() {
+        final StateStoreProviderStub stub = new StateStoreProviderStub(false);
+        final NoOpReadOnlyStore<String, String> recorder = new NoOpReadOnlyStore<>();
+        stub.addStore(storeName, recorder);
+        final CompositeReadOnlyKeyValueStore<String, String> store = new CompositeReadOnlyKeyValueStore<>(
+            new WrappingStoreProvider(singletonList(stub), StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore())),
+            QueryableStoreTypes.keyValueStore(),
+            storeName
+        );
+
+        store.readOnly(IsolationLevel.READ_COMMITTED).get("k");
+
+        assertEquals(IsolationLevel.READ_COMMITTED, recorder.isolationLevel);
+    }
+
+    @Test
+    public void readOnlyOverrideShouldBeatProviderDefault() {
+        final StateStoreProviderStub stub = new StateStoreProviderStub(false);
+        final NoOpReadOnlyStore<String, String> recorder = new NoOpReadOnlyStore<>();
+        stub.addStore(storeName, recorder);
+        final CompositeReadOnlyKeyValueStore<String, String> store = new CompositeReadOnlyKeyValueStore<>(
+            new WrappingStoreProvider(singletonList(stub),
+                StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore()),
+                IsolationLevel.READ_UNCOMMITTED),
+            QueryableStoreTypes.keyValueStore(),
+            storeName
+        );
+
+        store.readOnly(IsolationLevel.READ_COMMITTED).get("k");
+
+        assertEquals(IsolationLevel.READ_COMMITTED, recorder.isolationLevel);
+    }
+
+    @Test
+    public void readOnlyShouldRejectNullLevel() {
+        assertThrows(NullPointerException.class, () -> theStore.readOnly(null));
     }
 
     private CompositeReadOnlyKeyValueStore<Object, Object> rebalancing() {

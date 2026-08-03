@@ -18,10 +18,13 @@ package org.apache.kafka.common.metrics;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.common.utils.Time;
 
 import java.util.Objects;
 
+@InterfaceAudience.Public
 public final class KafkaMetric implements Metric {
 
     private final MetricName metricName;
@@ -39,6 +42,7 @@ public final class KafkaMetric implements Metric {
      * @param config The configuration of the metric
      * @param time The time instance to use with the metrics
      */
+    @SuppressKafkaInternalApiUsage("KIP-1265: ctor leaks internal Time for test injection — pending KIP review to promote Time or refactor")
     public KafkaMetric(Object lock, MetricName metricName, MetricValueProvider<?> valueProvider,
             MetricConfig config, Time time) {
         this.metricName = metricName;
@@ -123,5 +127,25 @@ public final class KafkaMetric implements Metric {
         synchronized (lock) {
             this.config = config;
         }
+    }
+
+    /**
+     * Returns a human-readable representation of this metric.
+     *
+     * <p>The metricValueProvider is represented by its class name rather than its full
+     * toString() to avoid dumping internal stat state (e.g. SampledStat's samples list) into
+     * logs, which could be verbose and is rarely useful for identifying which metric changed.
+     */
+    @Override
+    public String toString() {
+        Class<?> cls = metricValueProvider.getClass();
+        if (cls.isSynthetic() || cls.isAnonymousClass()) {
+            return "KafkaMetric [metricName=" + metricName + "]";
+        }
+
+        return "KafkaMetric [" +
+                "metricName=" + metricName +
+                ", metricValueProvider=" + metricValueProvider.getClass().getName() +
+                ']';
     }
 }

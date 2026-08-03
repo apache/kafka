@@ -96,7 +96,12 @@ public abstract class AbstractSegments<S extends Segment> implements Segments<S>
                 throw new IllegalStateException(newSegment.getClass().getSimpleName() + " already exists. Possible concurrent access.");
             }
 
-            openSegmentDB(newSegment, context);
+            try {
+                openSegmentDB(newSegment, context);
+            } catch (final Exception openException) {
+                segments.remove(segmentId);
+                throw openException;
+            }
             return newSegment;
         }
     }
@@ -192,7 +197,7 @@ public abstract class AbstractSegments<S extends Segment> implements Segments<S>
 
     @Override
     public Long committedOffset(final TopicPartition partition) {
-        for (final S segment : segments.values()) {
+        for (final S segment : segments.descendingMap().values()) {
             final Long offset = segment.committedOffset(partition);
             if (offset != null) {
                 return offset;

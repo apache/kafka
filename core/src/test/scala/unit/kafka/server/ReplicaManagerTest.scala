@@ -22,7 +22,8 @@ import kafka.cluster.PartitionTest.MockPartitionListener
 import kafka.cluster.Partition
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManagerConfig.INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS
 import org.apache.kafka.server.log.remote.quota.RLMQuotaMetrics
-import kafka.server.QuotaFactory.{QuotaManagers, UNBOUNDED_QUOTA}
+import org.apache.kafka.server.quota.QuotaFactory
+import org.apache.kafka.server.quota.QuotaFactory.{QuotaManagers, UNBOUNDED_QUOTA}
 import kafka.server.epoch.util.MockBlockingSender
 import kafka.server.share.{DelayedShareFetch, SharePartition}
 import kafka.utils.TestUtils.waitUntilTrue
@@ -47,10 +48,13 @@ import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.replica.ReplicaView.DefaultReplicaView
 import org.apache.kafka.common.replica.{ClientMetadata, PartitionView, ReplicaSelector, ReplicaView}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
+import org.apache.kafka.server.share.LogReader
+import org.apache.kafka.server.share.PartitionMetadataProvider
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.utils.{LogContext, Time, Utils}
+import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.internals.LogContext
 import org.apache.kafka.coordinator.transaction.{AddPartitionsToTxnConfig, TransactionLogConfig}
 import org.apache.kafka.image._
 import org.apache.kafka.metadata.KRaftMetadataCache
@@ -76,6 +80,7 @@ import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPa
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.TransactionSupportedOperation
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.TransactionSupportedOperation.{ADD_PARTITION, GENERIC_ERROR_SUPPORTED}
+import org.apache.kafka.server.util.ServerTestUtils
 import org.apache.kafka.server.util.timer.{MockTimer, SystemTimer}
 import org.apache.kafka.server.util.{MockScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.checkpoint.LazyOffsetCheckpoints
@@ -108,7 +113,7 @@ import scala.jdk.OptionConverters.{RichOption, RichOptional}
 object ReplicaManagerTest {
   @AfterAll
   def tearDownClass(): Unit = {
-    TestUtils.clearYammerMetrics()
+    ServerTestUtils.clearYammerMetrics()
   }
 }
 
@@ -4310,7 +4315,7 @@ class ReplicaManagerTest {
 
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, setupLogDirMetaProperties = true, directoryEventHandler = directoryEventHandler)
     try {
-      val directoryIds = replicaManager.logManager.directoryIdsSet.asScala.toList
+      val directoryIds = replicaManager.logManager.directoryIds.values.asScala.toList
       assertEquals(directoryIds.size, 2)
       val leaderTopicsDelta: TopicsDelta = topicsCreateDelta(localId, true, partitions = List(0), directoryIds = directoryIds)
       val (partition: Partition, isNewWhenCreatedForFirstTime: Boolean) = replicaManager.getOrCreatePartition(topicPartition0.topicPartition(), leaderTopicsDelta, FOO_UUID).get
@@ -4358,7 +4363,7 @@ class ReplicaManagerTest {
     try {
 
       // Test applying delta as leader
-      val directoryIds = replicaManager.logManager.directoryIdsSet.asScala.toList
+      val directoryIds = replicaManager.logManager.directoryIds.values.asScala.toList
       // Make the local replica the leader
       val leaderTopicsDelta = topicsCreateDelta(localId, true, partitions = List(0), directoryIds = directoryIds)
       val leaderMetadataImage = imageFromTopics(leaderTopicsDelta.apply())
@@ -4541,7 +4546,7 @@ class ReplicaManagerTest {
       }
 
       val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
-      val otherEndpoint = ClusterImageTest.IMAGE1.broker(otherId).listeners().get("PLAINTEXT")
+      val otherEndpoint = ClusterImageFixtures.IMAGE1.broker(otherId).listeners().get("PLAINTEXT")
       assertEquals(Some(new BrokerEndPoint(otherId, otherEndpoint.host(), otherEndpoint.port())), fetcher.map(_.leader.brokerEndPoint()))
     } finally {
       replicaManager.shutdown(checkpointHW = false)
@@ -4574,7 +4579,7 @@ class ReplicaManagerTest {
       }
 
       val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
-      val otherEndpoint = ClusterImageTest.IMAGE1.broker(otherId).listeners().get("PLAINTEXT")
+      val otherEndpoint = ClusterImageFixtures.IMAGE1.broker(otherId).listeners().get("PLAINTEXT")
       assertEquals(Some(new BrokerEndPoint(otherId, otherEndpoint.host(), otherEndpoint.port())), fetcher.map(_.leader.brokerEndPoint()))
 
       // Append on a follower should fail
@@ -4638,7 +4643,7 @@ class ReplicaManagerTest {
       }
 
       val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
-      val otherEndpoint = ClusterImageTest.IMAGE1.broker(otherId).listeners().get("PLAINTEXT")
+      val otherEndpoint = ClusterImageFixtures.IMAGE1.broker(otherId).listeners().get("PLAINTEXT")
       assertEquals(Some(new BrokerEndPoint(otherId, otherEndpoint.host(), otherEndpoint.port())), fetcher.map(_.leader.brokerEndPoint()))
 
       // Apply the same delta again
@@ -4685,7 +4690,7 @@ class ReplicaManagerTest {
       }
 
       val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
-      val otherEndpoint = ClusterImageTest.IMAGE1.broker(otherId).listeners().get("PLAINTEXT")
+      val otherEndpoint = ClusterImageFixtures.IMAGE1.broker(otherId).listeners().get("PLAINTEXT")
       assertEquals(Some(new BrokerEndPoint(otherId, otherEndpoint.host(), otherEndpoint.port())), fetcher.map(_.leader.brokerEndPoint()))
 
       // Apply changes that remove replica
@@ -4733,7 +4738,7 @@ class ReplicaManagerTest {
       }
 
       val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
-      val otherEndpoint = ClusterImageTest.IMAGE1.broker(otherId).listeners().get("PLAINTEXT")
+      val otherEndpoint = ClusterImageFixtures.IMAGE1.broker(otherId).listeners().get("PLAINTEXT")
       assertEquals(Some(new BrokerEndPoint(otherId, otherEndpoint.host(), otherEndpoint.port())), fetcher.map(_.leader.brokerEndPoint()))
 
       // Apply changes that remove topic and replica
@@ -5039,7 +5044,7 @@ class ReplicaManagerTest {
 
       // Verify that addFetcherForPartitions was called with the correct
       // init offset.
-      val otherEndpoint = ClusterImageTest.IMAGE1.broker(otherId).listeners().get("PLAINTEXT")
+      val otherEndpoint = ClusterImageFixtures.IMAGE1.broker(otherId).listeners().get("PLAINTEXT")
       verify(mockReplicaFetcherManager)
         .addFetcherForPartitions(
           Map(topicPartition -> InitialFetchState(
@@ -5140,7 +5145,7 @@ class ReplicaManagerTest {
       }
 
       // Verify that the partition was removed and added back.
-      val localIdPlus1Endpoint = ClusterImageTest.IMAGE1.broker(localId + 1).listeners().get("PLAINTEXT")
+      val localIdPlus1Endpoint = ClusterImageFixtures.IMAGE1.broker(localId + 1).listeners().get("PLAINTEXT")
       verify(mockReplicaFetcherManager).removeFetcherForPartitions(Set(topicPartition))
       verify(mockReplicaFetcherManager).addFetcherForPartitions(Map(topicPartition -> InitialFetchState(
         topicId = Some(FOO_UUID),
@@ -5201,7 +5206,7 @@ class ReplicaManagerTest {
       }
 
       // Verify that the partition was removed and added back.
-      val localIdPlus2Endpoint = ClusterImageTest.IMAGE1.broker(localId + 2).listeners().get("PLAINTEXT")
+      val localIdPlus2Endpoint = ClusterImageFixtures.IMAGE1.broker(localId + 2).listeners().get("PLAINTEXT")
       verify(mockReplicaFetcherManager).removeFetcherForPartitions(Set(topicPartition))
       verify(mockReplicaFetcherManager).addFetcherForPartitions(Map(topicPartition -> InitialFetchState(
         topicId = Some(FOO_UUID),
@@ -5441,6 +5446,53 @@ class ReplicaManagerTest {
     }
   }
 
+  @Test
+  def testPartitionListenerWhenPartitionBecomesFollower(): Unit = {
+    val aliveBrokersIds = Seq(0, 1)
+    val leaderEpoch = 5
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
+      brokerId = 0, aliveBrokersIds)
+    try {
+      val tp = new TopicPartition(topic, 0)
+      val replicas = aliveBrokersIds.toList.map(Int.box).asJava
+
+      val listener = new MockPartitionListener
+      listener.verify()
+
+      // Broker 0 becomes leader of the partition.
+      val leaderDelta = createLeaderDelta(
+        topicId = topicId,
+        partition = tp,
+        leaderId = 0,
+        replicas = replicas,
+        isr = replicas,
+        leaderEpoch = leaderEpoch
+      )
+      replicaManager.applyDelta(leaderDelta, imageFromTopics(leaderDelta.apply()))
+
+      // Register a listener.
+      assertTrue(replicaManager.maybeAddListener(tp, listener))
+      listener.verify()
+
+      // Broker 0 transitions to follower of the partition with broker 1 as the new
+      // leader. The listener is notified that the partition is becoming a follower.
+      // This happens before the follower starts fetching from the new leader, hence
+      // before any high watermark update reflecting the new leader's records.
+      val followerDelta = createFollowerDelta(
+        topicId = topicId,
+        partition = tp,
+        followerId = 0,
+        leaderId = 1,
+        leaderEpoch = leaderEpoch + 1
+      )
+      replicaManager.applyDelta(followerDelta, imageFromTopics(followerDelta.apply()))
+
+      listener.verify(expectedFollower = true)
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
   private def topicsCreateDelta(startId: Int, isStartIdLeader: Boolean, partitions:List[Int] = List(0), directoryIds: List[Uuid] = List.empty, topicName: String = "foo", topicId: Uuid = FOO_UUID, leaderEpoch: Int = 0): TopicsDelta = {
     val leader = if (isStartIdLeader) startId else startId + 1
     val delta = new TopicsDelta(TopicsImage.EMPTY)
@@ -5498,7 +5550,7 @@ class ReplicaManagerTest {
     new MetadataImage(
       new MetadataProvenance(100L, 10, 1000L, true),
       featuresImageLatest,
-      ClusterImageTest.IMAGE1,
+      ClusterImageFixtures.IMAGE1,
       topicsImage,
       ConfigurationsImage.EMPTY,
       ClientQuotasImage.EMPTY,
@@ -5884,7 +5936,7 @@ class ReplicaManagerTest {
 
     val rm = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, setupLogDirMetaProperties = true, directoryEventHandler = directoryEventHandler)
     try {
-      val directoryIds = rm.logManager.directoryIdsSet.asScala.toList
+      val directoryIds = rm.logManager.directoryIds.values.asScala.toList
       assertEquals(directoryIds.size, 2)
       val leaderTopicsDelta: TopicsDelta = topicsCreateDelta(localId, isStartIdLeader = true, directoryIds = directoryIds)
       val (partition: Partition, _) = rm.getOrCreatePartition(topicPartition0.topicPartition(), leaderTopicsDelta, FOO_UUID).get
@@ -5917,7 +5969,7 @@ class ReplicaManagerTest {
 
     val rm = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, setupLogDirMetaProperties = true, directoryEventHandler = directoryEventHandler)
     try {
-      val directoryIds = rm.logManager.directoryIdsSet.asScala.toList
+      val directoryIds = rm.logManager.directoryIds.values.asScala.toList
       assertEquals(directoryIds.size, 2)
       val leaderTopicsDelta: TopicsDelta = topicsCreateDelta(localId, isStartIdLeader = true, directoryIds = directoryIds)
       val (partition: Partition, _) = rm.getOrCreatePartition(topicPartition0.topicPartition(), leaderTopicsDelta, FOO_UUID).get
@@ -5980,6 +6032,8 @@ class ReplicaManagerTest {
       val delayedShareFetch = spy(new DelayedShareFetch(
         shareFetch,
         rm,
+        mock(classOf[LogReader]),
+        mock(classOf[PartitionMetadataProvider]),
         mock(classOf[BiConsumer[SharePartitionKey, Throwable]]),
         sharePartitions,
         mock(classOf[ShareGroupMetrics]),

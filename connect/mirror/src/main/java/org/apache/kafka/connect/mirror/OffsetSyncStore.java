@@ -150,13 +150,13 @@ public class OffsetSyncStore implements AutoCloseable {
             //          | /
             //          vv
             // target |-sg----r-----|
-            long upstreamStep = upstreamOffset == offsetSync.get().upstreamOffset() ? 0 : 1;
+            long translatedDownstreamOffset = offsetSync.get().translateDownstream(upstreamOffset);
             log.debug("translateDownstream({},{},{}): Translated {} (relative to {})",
                     group, sourceTopicPartition, upstreamOffset,
-                    offsetSync.get().downstreamOffset() + upstreamStep,
+                    translatedDownstreamOffset,
                     offsetSync.get()
             );
-            return OptionalLong.of(offsetSync.get().downstreamOffset() + upstreamStep);
+            return OptionalLong.of(translatedDownstreamOffset);
         } else {
             log.debug("translateDownstream({},{},{}): Skipped (offset sync not found)",
                     group, sourceTopicPartition, upstreamOffset);

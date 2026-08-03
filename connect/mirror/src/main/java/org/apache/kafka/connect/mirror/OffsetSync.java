@@ -45,6 +45,14 @@ public record OffsetSync(TopicPartition topicPartition, long upstreamOffset, lon
             topicPartition, upstreamOffset, downstreamOffset);
     }
 
+    static long downstreamOffsetAfterSync(long downstreamOffset) {
+        return downstreamOffset + 1;
+    }
+
+    long translateDownstream(long upstreamOffset) {
+        return upstreamOffset == this.upstreamOffset ? downstreamOffset : downstreamOffsetAfterSync(downstreamOffset);
+    }
+
     ByteBuffer serializeValue() {
         Struct struct = valueStruct();
         ByteBuffer buffer = ByteBuffer.allocate(VALUE_SCHEMA.sizeOf(struct));

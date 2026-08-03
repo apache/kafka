@@ -33,9 +33,9 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.CloseableIterator;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -75,6 +75,7 @@ public class ShareCompletedFetch {
     private KafkaException cachedRecordException = null;
     private boolean isConsumed = false;
     private boolean initialized = false;
+    private ShareInFlightBatch<?, ?> deliveredBatch;
     private final List<OffsetAndDeliveryCount> acquiredRecordList;
     private ListIterator<OffsetAndDeliveryCount> acquiredRecordIterator;
     private OffsetAndDeliveryCount nextAcquired;
@@ -137,6 +138,22 @@ public class ShareCompletedFetch {
     }
 
     /**
+     * Track the batch that carries records delivered to the application so we can tell when their acknowledgements
+     * are still outstanding. We only advance to a new batch once the previous one has been drained of its
+     * in-flight records and its acknowledgements have been taken by the background thread to be sent.
+     */
+    void trackDeliveredBatch(ShareInFlightBatch<?, ?> inFlightBatch) {
+        if (deliveredBatch == null || (deliveredBatch.numRecords() == 0 && !deliveredBatch.hasRenewals())) {
+            deliveredBatch = inFlightBatch;
+        }
+    }
+
+    public boolean hasPendingAcknowledgements() {
+        // Records being renewed are removed and readded to the in-flight set as the renewals are confirmed.
+        return deliveredBatch != null && (deliveredBatch.numRecords() > 0 || deliveredBatch.hasRenewals());
+    }
+
+    /**
      * Draining a {@link ShareCompletedFetch} will signal that the data has been consumed and the underlying resources
      * are closed. This is somewhat analogous to {@link Closeable#close() closing}, though no error will result if a
      * caller invokes {@link #fetchRecords(Deserializers, int, boolean)}; an empty {@link List list} will be
@@ -177,6 +194,7 @@ public class ShareCompletedFetch {
                                                  final boolean checkCrcs) {
         // Creating an empty ShareInFlightBatch
         ShareInFlightBatch<K, V> inFlightBatch = new ShareInFlightBatch<>(nodeId, partition, acquisitionLockTimeoutMs);
+        trackDeliveredBatch(inFlightBatch);
 
         if (cachedBatchException != null) {
             // In the event that a CRC check fails, reject the entire record batch because it is corrupt.

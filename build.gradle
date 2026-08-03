@@ -14,6 +14,7 @@
 // limitations under the License.
 
 import org.ajoberstar.grgit.Grgit
+import org.gradle.api.artifacts.FileCollectionDependency
 import java.nio.charset.StandardCharsets
 
 buildscript {
@@ -29,18 +30,23 @@ buildscript {
 }
 
 plugins {
-  id 'com.github.ben-manes.versions' version '0.53.0'
+  id 'io.github.ben-manes.versions' version '0.56.0'
   id 'idea'
   id 'jacoco'
   id 'java-library'
-  id 'org.owasp.dependencycheck' version '12.1.8'
+  id 'org.owasp.dependencycheck' version '12.2.2'
   id 'org.nosphere.apache.rat' version "0.8.1"
   id "io.swagger.core.v3.swagger-gradle-plugin" version "${swaggerVersion}"
 
-  id "com.github.spotbugs" version '6.4.4' apply false
-  id 'org.scoverage' version '8.1' apply false
-  id 'com.gradleup.shadow' version '9.3.1' apply false
-  id 'com.diffplug.spotless' version "8.3.0"
+  id "com.github.spotbugs" version '6.5.9' apply false
+  id 'org.scoverage' version '9.1' apply false
+  id 'com.gradleup.shadow' version '9.6.1' apply false
+  id 'com.diffplug.spotless' version "8.4.0"
+
+  // Pre-register the KIP-1265 checker so `apply plugin:` resolves it inside subprojects { }.
+  // The plugin itself ships from the `:api-checker` included build (see settings.gradle's
+  // pluginManagement block).
+  id 'org.apache.kafka.public-api-checker' apply false
 }
 
 ext {
@@ -139,7 +145,7 @@ ext {
 
   runtimeTestLibs = [
     libs.slf4jLog4j2,
-    libs.junitPlatformLanucher,
+    libs.junitPlatformLauncher,
     libs.jacksonDataformatYaml,
     project(":test-common:test-common-util")
   ]
@@ -284,6 +290,7 @@ if (repo != null) {
         'gradle/wrapper/gradle-wrapper.properties',
         'trogdor/README.md',
         '**/README.md',
+        '**/AGENTS.md',
         '**/id_rsa',
         '**/id_rsa.pub',
         'checkstyle/suppressions.xml',
@@ -313,8 +320,28 @@ subprojects {
   task allDepInsight(type: DependencyInsightReportTask) {showingAllVariants = false} doLast {}
 
   apply plugin: 'java-library'
+
+  // Resolve conflict between testFixtures and shadow in clients:
+  // testFixtures(project(':clients)) depends on the raw main classpath for clients (apiElements) - see "Rewire
+  // test fixtures dependencies to avoid depending on the shadow JAR" in the clients project - and this creates
+  // a conflicting variant with the shadow jar. e.g. main classpath for streams depends the clients shadow jar,
+  // and the test classpath for streams depends on the client test fixtures, which transitively depends on
+  // clients raw main classpath (apiElements) conflicting with the shadow jar. To resolve this, we configure
+  // a resolution strategy for every other module that prefers the shadow jar. As an alternative to this general
+  // rule, each module that includes the test fixtures dependency could exclude the conflicting variant:
+  // testImplementation(testFixtures(project(':clients'))) { exclude group: 'org.apache.kafka', module: 'clients' }
+  if (project.name != 'clients') {
+    configurations.configureEach {
+      resolutionStrategy.capabilitiesResolution.withCapability('org.apache.kafka:clients') {
+        select(candidates.find { it.variantName.toLowerCase().contains('shadow') })
+      }
+    }
+  }
+
   apply plugin: 'checkstyle'
   apply plugin: "com.github.spotbugs"
+  apply plugin: 'org.apache.kafka.public-api-checker'
+
 
   // We use the shadow plugin for the jmh-benchmarks module and the `-all` jar can get pretty large, so
   // don't publish it
@@ -394,7 +421,14 @@ subprojects {
           }
 
           afterEvaluate {
-            ["srcJar", "javadocJar", "scaladocJar", "testJar", "testSrcJar"].forEach { taskName ->
+            // testFixturesJar is automatically included by components.java when the java-test-fixtures
+            // plugin is applied, so it should only be added explicitly when publishing the shadow
+            // component (which does not include the test-fixtures variant).
+            def artifactTaskNames = ["srcJar", "javadocJar", "scaladocJar", "testJar", "testSrcJar"]
+            if (shouldPublishWithShadow) {
+              artifactTaskNames += "testFixturesJar"
+            }
+            artifactTaskNames.forEach { taskName ->
               def task = tasks.findByName(taskName)
               if (task != null)
                 artifact task
@@ -696,8 +730,42 @@ subprojects {
 
   task docsJar(dependsOn: javadocJar)
 
+  // Consumed by root aggregatedJavadoc; mirrors compileClasspath.
+  configurations {
+    javadocClasspathElements {
+      canBeConsumed = true
+      canBeResolved = false
+      extendsFrom configurations.compileClasspath
+    }
+  }
+
   check.dependsOn('javadoc')
 
+kafkaPublicApiChecker {
+
+    // Jars produced by this project — the surface that's actually validated.
+    projectJarFiles.from(jar.archiveFile)
+
+    // Sibling Kafka modules this project depends on (direct or transitive). Their classes
+    // are merged into the scanned surface so cross-module @InterfaceAudience.Public references
+    // resolve, but they don't contribute to this module's MISSING_JAVADOC or cascade
+    // iteration — each module checks its own surface.
+    referenceJarFiles.from(
+        configurations.compileClasspath.incoming.artifactView {
+            // Resolve project deps to their assembled JAR (not the classes-dir variant Gradle
+            // picks by default for compile-classpath), so the scanner only sees real jars.
+            attributes {
+                attribute(org.gradle.api.attributes.LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE,
+                          objects.named(org.gradle.api.attributes.LibraryElements,
+                                        org.gradle.api.attributes.LibraryElements.JAR))
+            }
+            componentFilter { it instanceof org.gradle.api.artifacts.component.ProjectComponentIdentifier }
+        }.files
+    )
+
+    enabled = true
+    failOnViolation = true
+}
   task systemTestLibs(dependsOn: jar)
 
   if (!sourceSets.test.allSource.isEmpty()) {
@@ -871,14 +939,11 @@ subprojects {
     java {
       targetExclude('**/generated/**/*.java','**/generated-test/**/*.java')
       importOrder('kafka', 'org.apache.kafka', 'com', 'net', 'org', 'java', 'javax', '', '\\#')
-      // The default engine (google-java-format) uses the JDK compiler's internal
-      // parser (com.sun.tools.javac.*), which JPMS blocks without --add-exports.
-      // Gradle 9.3+ / Spotless 8.x no longer pass those exports to the worker JVM,
-      // so the default engine fails at runtime. The cleanthat engine uses the
-      // JavaParser library instead, which ships its own Java parser and does not
-      // rely on any JDK internal classes, so it works out of the box.
-      // See KAFKA-20182.
-      removeUnusedImports('cleanthat-javaparser-unnecessaryimport')
+      // removeUnusedImports is intentionally omitted because its engines
+      // (google-java-format, cleanthat) can non-deterministically throw
+      // InvocationTargetException under parallel execution. Unused imports are
+      // still enforced by checkstyle (UnusedImports + RedundantImport).
+      // Re-enable once https://github.com/diffplug/spotless/issues/2850 is fixed.
     }
   }
 
@@ -972,10 +1037,18 @@ project(':server') {
     archivesName = "kafka-server"
   }
 
-  dependencies {
-    compileOnly libs.bndlib
-    compileOnly libs.spotbugs
+  apply plugin: 'java-test-fixtures'
+  configurations {
+    // To prevent a UniqueResourceException due the same resource existing in both
+    // org.apache.directory.api/api-all and org.apache.directory.api/api-ldap-schema-data
+    testImplementation.exclude module: 'api-ldap-schema-data'
+    testFixturesImplementation.exclude module: 'api-ldap-schema-data'
+    testFixturesImplementation.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
+    testCompileClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
+    testRuntimeClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
+  }
 
+  dependencies {
     implementation libs.commonsValidator
 
     implementation project(':clients')
@@ -983,6 +1056,7 @@ project(':server') {
     implementation project(':server-common')
     implementation project(':storage')
     implementation project(':group-coordinator')
+    implementation project(':group-coordinator:group-coordinator-api')
     implementation project(':transaction-coordinator')
     implementation project(':raft')
     implementation project(':share-coordinator')
@@ -992,15 +1066,36 @@ project(':server') {
     implementation libs.slf4jApi
     implementation log4j2Libs
 
-    testImplementation project(':clients').sourceSets.test.output
-
+    testImplementation testFixtures(project(':clients'))
     testImplementation libs.mockitoCore
     testImplementation libs.junitJupiter
     testImplementation testLog4j2Libs
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
-    testImplementation project(':storage:storage-api').sourceSets.test.output
-    testImplementation project(':server-common').sourceSets.test.output
+    testImplementation testFixtures(project(':storage:storage-api'))
+    testImplementation testFixtures(project(':server-common'))
+    testImplementation testFixtures(project(':metadata'))
+
+    testFixturesImplementation project(':clients')
+    testFixturesImplementation testFixtures(project(':clients'))
+    testFixturesImplementation project(':metadata')
+    testFixturesImplementation project(':server-common')
+    testFixturesImplementation testFixtures(project(':server-common'))
+    testFixturesImplementation libs.junitJupiter
+    testFixturesImplementation(libs.apacheda) {
+      exclude group: 'xml-apis', module: 'xml-apis'
+      // `mina-core` is a transitive dependency for `apacheds` and `apacheda`.
+      // It is safer to use from `apacheds` since that is the implementation.
+      exclude module: 'mina-core'
+    }
+    testFixturesImplementation libs.apachedsCoreApi
+    testFixturesImplementation libs.apachedsInterceptorKerberos
+    testFixturesImplementation libs.apachedsProtocolShared
+    testFixturesImplementation libs.apachedsProtocolKerberos
+    testFixturesImplementation libs.apachedsProtocolLdap
+    testFixturesImplementation libs.apachedsLdifPartition
+    testFixturesImplementation libs.apachedsMavibotPartition
+    testFixturesImplementation libs.apachedsJdbmPartition
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -1069,9 +1164,6 @@ project(':core') {
     implementation.exclude module: 'jmxri'
     implementation.exclude module: 'jmxtools'
     implementation.exclude module: 'mail'
-    // To prevent a UniqueResourceException due the same resource existing in both
-    // org.apache.directory.api/api-all and org.apache.directory.api/api-ldap-schema-data
-    testImplementation.exclude module: 'api-ldap-schema-data'
     releaseOnly
   }
 
@@ -1101,7 +1193,6 @@ project(':core') {
 
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
-    implementation libs.jacksonDataformatCsv
     implementation libs.jacksonJDK8Datatypes
     implementation libs.jacksonDataformatYaml
     implementation libs.joptSimple
@@ -1113,18 +1204,22 @@ project(':core') {
     implementation libs.slf4jApi
     implementation libs.re2j
 
-    testImplementation project(':clients').sourceSets.test.output
-    testImplementation project(':group-coordinator').sourceSets.test.output
-    testImplementation project(':share-coordinator').sourceSets.test.output
-    testImplementation project(':metadata').sourceSets.test.output
-    testImplementation project(':raft').sourceSets.test.output
-    testImplementation project(':server-common').sourceSets.test.output
-    testImplementation project(':storage:storage-api').sourceSets.test.output
-    testImplementation project(':server').sourceSets.test.output
+    testImplementation testFixtures(project(':clients'))
+    testImplementation testFixtures(project(':group-coordinator'))
+    testImplementation testFixtures(project(':share-coordinator'))
+    testImplementation testFixtures(project(':metadata'))
+    testImplementation testFixtures(project(':raft'))
+    testImplementation testFixtures(project(':server-common'))
+    testImplementation testFixtures(project(':storage:storage-api'))
+    // No source need - added for scala flattening/classpath presence so LocalTieredStorage lands in
+    // core/build/dependant-testlibs/ for ducktape system tests.
+    testImplementation testFixtures(project(':storage'))
+    testImplementation testFixtures(project(':server'))
     testImplementation project(':streams')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-util')
+    testImplementation libs.apachedsCoreApi
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
     testImplementation(libs.apacheda) {
@@ -1142,10 +1237,25 @@ project(':core') {
     testImplementation libs.apachedsMavibotPartition
     testImplementation libs.apachedsJdbmPartition
     testImplementation libs.junitJupiter
-    testImplementation libs.caffeine
     testImplementation testLog4j2Libs
     testImplementation libs.mockOAuth2Server
 
+    configurations {
+      // To prevent a UniqueResourceException due the same resource existing in both
+      // org.apache.directory.api/api-all and org.apache.directory.api/api-ldap-schema-data
+      testRuntimeOnly.exclude module: 'api-ldap-schema-data'
+    }
+
+    testRuntimeOnly(libs.apacheda) {
+      exclude group: 'xml-apis', module: 'xml-apis'
+      // `mina-core` is a transitive dependency for `apacheds` and `apacheda`.
+      // It is safer to use from `apacheds` since that is the implementation.
+      exclude module: 'mina-core'
+    }
+    testRuntimeOnly libs.apachedsInterceptorKerberos
+    testRuntimeOnly libs.apachedsProtocolKerberos
+    testRuntimeOnly libs.apachedsProtocolLdap
+    testRuntimeOnly libs.apachedsLdifPartition
     testRuntimeOnly runtimeTestLibs
   }
 
@@ -1265,6 +1375,8 @@ project(':core') {
     archiveClassifier = 'site-docs'
     compression = Compression.GZIP
     from project.file("$rootDir/docs")
+    from "$rootDir/LICENSE"
+    from "$rootDir/NOTICE"
     into 'site-docs'
     duplicatesStrategy 'exclude'
   }
@@ -1374,6 +1486,8 @@ project(':metadata') {
     archivesName = "kafka-metadata"
   }
 
+  apply plugin: 'java-test-fixtures'
+
   configurations {
     generator
   }
@@ -1382,18 +1496,24 @@ project(':metadata') {
     implementation project(':server-common')
     implementation project(':clients')
     implementation project(':raft')
+    // commons-io is a transitive dependency not needed by SubnetUtils/SubnetUtils6
+    implementation(libs.commonsNet) {
+      exclude group: 'commons-io', module: 'commons-io'
+    }
     implementation libs.jacksonDatabind
-    implementation libs.jacksonJDK8Datatypes
     implementation libs.metrics
     implementation libs.slf4jApi
 
     testImplementation testLog4j2Libs
+    testFixturesImplementation testFixtures(project(':server-common'))
+    testFixturesImplementation project(':raft')
+    testFixturesImplementation libs.junitJupiter
+
     testImplementation libs.junitJupiter
-    testImplementation libs.jqwik
     testImplementation libs.mockitoCore
-    testImplementation project(':clients').sourceSets.test.output
-    testImplementation project(':raft').sourceSets.test.output
-    testImplementation project(':server-common').sourceSets.test.output
+    testImplementation testFixtures(project(':clients'))
+    testImplementation testFixtures(project(':raft'))
+    testImplementation testFixtures(project(':server-common'))
     testImplementation project(':test-common:test-common-util')
 
     testRuntimeOnly runtimeTestLibs
@@ -1495,6 +1615,8 @@ project(':group-coordinator') {
     archivesName = "kafka-group-coordinator"
   }
 
+  apply plugin: 'java-test-fixtures'
+
   configurations {
     generator
   }
@@ -1507,17 +1629,19 @@ project(':group-coordinator') {
     implementation project(':storage')
     implementation project(':coordinator-common')
     implementation libs.jacksonDatabind
-    implementation libs.jacksonJDK8Datatypes
     implementation libs.metrics
-    implementation libs.hdrHistogram
     implementation libs.re2j
     implementation libs.slf4jApi
     implementation libs.hash4j
 
-    testImplementation project(':clients').sourceSets.test.output
-    testImplementation project(':server-common').sourceSets.test.output
-    testImplementation project(':coordinator-common').sourceSets.test.output
-    testImplementation libs.jacksonDataformatYaml
+    testFixturesImplementation project(':clients')
+    testFixturesImplementation project(':coordinator-common')
+    testFixturesImplementation project(':server-common')
+    testFixturesImplementation libs.junitJupiter
+
+    testImplementation testFixtures(project(':clients'))
+    testImplementation testFixtures(project(':server-common'))
+    testImplementation testFixtures(project(':coordinator-common'))
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
@@ -1603,7 +1727,7 @@ project(':test-common:test-common-util') {
   }
 
   dependencies {
-    implementation libs.junitPlatformLanucher
+    implementation libs.junitPlatformLauncher
     implementation libs.junitJupiterApi
     implementation libs.junitJupiter
     implementation libs.slf4jApi
@@ -1637,11 +1761,13 @@ project(':test-common:test-common-runtime') {
     implementation project(':raft')
     implementation project(':storage')
 
-    implementation libs.junitPlatformLanucher
+    implementation libs.junitPlatformLauncher
     implementation libs.junitJupiter
     implementation libs.jacksonDataformatYaml
     implementation libs.slf4jApi
+    implementation testFixtures(project(':clients'))
 
+    testImplementation testFixtures(project(':clients'))
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
@@ -1677,7 +1803,7 @@ project(':transaction-coordinator') {
     testImplementation testLog4j2Libs
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    testImplementation project(':clients').sourceSets.test.output
+    testImplementation testFixtures(project(':clients'))
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':test-common:test-common-internal-api')
 
@@ -1732,6 +1858,8 @@ project(':coordinator-common') {
     archivesName = "kafka-coordinator-common"
   }
 
+  apply plugin: 'java-test-fixtures'
+
   dependencies {
     implementation project(':clients')
     implementation project(':server-common')
@@ -1741,8 +1869,12 @@ project(':coordinator-common') {
     implementation libs.metrics
     implementation libs.hdrHistogram
 
-    testImplementation project(':clients').sourceSets.test.output
-    testImplementation project(':server-common').sourceSets.test.output
+    testFixturesImplementation project(':clients')
+    testFixturesImplementation project(':metadata')
+    testFixturesImplementation libs.junitJupiter
+
+    testImplementation testFixtures(project(':clients'))
+    testImplementation testFixtures(project(':server-common'))
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
@@ -1764,6 +1896,8 @@ project(':share-coordinator') {
     archivesName = "kafka-share-coordinator"
   }
 
+  apply plugin: 'java-test-fixtures'
+
   configurations {
     generator
   }
@@ -1777,9 +1911,11 @@ project(':share-coordinator') {
     implementation libs.metrics
     implementation libs.slf4jApi
 
-    testImplementation project(':clients').sourceSets.test.output
-    testImplementation project(':server-common').sourceSets.test.output
-    testImplementation project(':coordinator-common').sourceSets.test.output
+    testFixturesImplementation project(':clients')
+
+    testImplementation testFixtures(project(':clients'))
+    testImplementation testFixtures(project(':server-common'))
+    testImplementation testFixtures(project(':coordinator-common'))
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
@@ -1853,7 +1989,6 @@ project(':generator') {
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
-    implementation libs.jacksonJakartarsJsonProvider
     implementation libs.jgit
     implementation libs.jgitSshApache
     implementation libs.jgitGpgBc
@@ -1872,6 +2007,8 @@ project(':clients') {
   base {
     archivesName = "kafka-clients"
   }
+
+  apply plugin: 'java-test-fixtures'
 
   configurations {
     generator
@@ -1893,27 +2030,25 @@ project(':clients') {
     shadowed libs.slf4jApi
 
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
-    compileOnly libs.jacksonJDK8Datatypes
     compileOnly libs.jose4j          // for SASL/OAUTHBEARER JWT validation; only used by broker
 
+    testFixturesImplementation project(':test-common:test-common-util')
+    testFixturesImplementation libs.bcpkix
+    testFixturesImplementation libs.junitJupiter
+    testFixturesImplementation testLog4j2Libs
 
-    testImplementation project(':test-common:test-common-util')
     testImplementation libs.bcpkix
+    testImplementation libs.junitJupiter
+    testImplementation testLog4j2Libs
+    testImplementation project(':test-common:test-common-util')
     testImplementation libs.jacksonJakartarsJsonProvider
     testImplementation libs.jose4j
-    testImplementation libs.junitJupiter
-    testImplementation libs.jqwik
-    testImplementation libs.spotbugs
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
-    testImplementation testLog4j2Libs
     testImplementation libs.testcontainersKeycloak
     testImplementation libs.testcontainersJunitJupiter
 
-    testCompileOnly libs.bndlib
-
     testRuntimeOnly libs.jacksonDatabind
-    testRuntimeOnly libs.jacksonJDK8Datatypes
     testRuntimeOnly runtimeTestLibs
 
     generator project(':generator')
@@ -2039,6 +2174,7 @@ project(':clients') {
     include "**/org/apache/kafka/common/annotation/*"
     include "**/org/apache/kafka/common/config/*"
     include "**/org/apache/kafka/common/config/provider/*"
+    include "**/org/apache/kafka/common/config/types/*"
     include "**/org/apache/kafka/common/errors/*"
     include "**/org/apache/kafka/common/header/*"
     include "**/org/apache/kafka/common/metrics/*"
@@ -2074,18 +2210,16 @@ project(':clients:clients-integration-tests') {
     testImplementation project(':raft')
     testImplementation project(':server')
     testImplementation project(':storage')
-    testImplementation project(':core').sourceSets.test.output
-    testImplementation project(':clients').sourceSets.test.output
+    testImplementation testFixtures(project(':storage'))
+    testImplementation testFixtures(project(':clients'))
     implementation project(':server-common')
-    testImplementation project(':server-common').sourceSets.test.output
-    testImplementation project(':metadata')
+    testImplementation testFixtures(project(':server-common'))
     implementation project(':group-coordinator')
     implementation project(':group-coordinator:group-coordinator-api')
     implementation project(':transaction-coordinator')
     testImplementation project(':test-common:test-common-util')
 
     testImplementation libs.junitJupiter
-    testImplementation libs.junitPlatformSuiteEngine
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -2101,6 +2235,8 @@ project(':raft') {
     archivesName = "kafka-raft"
   }
 
+  apply plugin: 'java-test-fixtures'
+
   configurations {
     generator
   }
@@ -2112,14 +2248,19 @@ project(':raft') {
     implementation libs.jacksonDatabind
     implementation libs.slf4jApi
 
+    testFixturesImplementation project(':clients')
+    testFixturesImplementation testFixtures(project(':clients'))
+    testFixturesImplementation project(':server-common')
+    testFixturesImplementation libs.junitJupiter
+    testFixturesImplementation libs.mockitoCore
+    testFixturesImplementation libs.slf4jApi
+
     testImplementation project(':server-common')
-    testImplementation project(':server-common').sourceSets.test.output
+    testImplementation testFixtures(project(':server-common'))
     testImplementation project(':clients')
-    testImplementation project(':clients').sourceSets.test.output
-    testImplementation libs.jacksonDataformatYaml
+    testImplementation testFixtures(project(':clients'))
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    testImplementation libs.jqwik
     testImplementation testLog4j2Libs
 
     testRuntimeOnly runtimeTestLibs
@@ -2185,7 +2326,7 @@ project(':raft') {
 
   test {
     useJUnitPlatform {
-      includeEngines 'jqwik', 'junit-jupiter'
+      includeEngines 'junit-jupiter'
     }
   }
 
@@ -2203,6 +2344,8 @@ project(':server-common') {
     archivesName = "kafka-server-common"
   }
 
+  apply plugin: 'java-test-fixtures'
+
   dependencies {
     api project(':clients')
     implementation libs.metrics
@@ -2211,9 +2354,14 @@ project(':server-common') {
     implementation libs.pcollections
     implementation libs.slf4jApi
 
+    testFixturesImplementation testFixtures(project(':clients'))
+    testFixturesImplementation libs.slf4jApi
+    testFixturesImplementation libs.metrics
+    testFixturesImplementation libs.mockitoCore
+    testFixturesImplementation libs.junitJupiter
+
     testImplementation project(':clients')
-    testImplementation project(':clients').sourceSets.test.output
-    testImplementation libs.jacksonDataformatYaml
+    testImplementation testFixtures(project(':clients'))
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
@@ -2265,14 +2413,18 @@ project(':storage:storage-api') {
     archivesName = "kafka-storage-api"
   }
 
+  apply plugin: 'java-test-fixtures'
+
   dependencies {
     implementation project(':clients')
     implementation project(':server-common')
     implementation libs.metrics
     implementation libs.slf4jApi
 
+    testFixturesImplementation project(':clients')
+
     testImplementation project(':clients')
-    testImplementation project(':clients').sourceSets.test.output
+    testImplementation testFixtures(project(':clients'))
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
@@ -2324,6 +2476,8 @@ project(':storage') {
     archivesName = "kafka-storage"
   }
 
+  apply plugin: 'java-test-fixtures'
+
   configurations {
     generator
   }
@@ -2340,23 +2494,28 @@ project(':storage') {
     implementation libs.jacksonDatabind
     implementation libs.metrics
 
+    testFixturesImplementation project(':storage:storage-api')
+    testFixturesImplementation project(':clients')
+    testFixturesImplementation testFixtures(project(':clients'))
+    testFixturesImplementation project(':server-common')
+    testFixturesImplementation libs.slf4jApi
+
     testImplementation project(':clients')
-    testImplementation project(':clients').sourceSets.test.output
+    testImplementation testFixtures(project(':clients'))
     testImplementation project(':core')
-    testImplementation project(':core').sourceSets.test.output
-    testImplementation project(':storage:storage-api').sourceSets.test.output
+    testImplementation testFixtures(project(':storage:storage-api'))
+    testImplementation project(':metadata')
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':test-common:test-common-util')
     testImplementation project(':server')
+    testImplementation testFixtures(project(':server'))
     testImplementation project(':server-common')
-    testImplementation project(':server-common').sourceSets.test.output
+    testImplementation testFixtures(project(':server-common'))
+    testImplementation testFixtures(project(':metadata'))
     testImplementation project(':transaction-coordinator')
-    testImplementation libs.hamcrest
-    testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    testImplementation libs.bcpkix
     testImplementation testLog4j2Libs
 
     testRuntimeOnly runtimeTestLibs
@@ -2523,47 +2682,34 @@ project(':tools') {
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonDataformatCsv
-    implementation libs.jacksonJDK8Datatypes
     implementation libs.joptSimple
     implementation libs.slf4jApi
     implementation libs.re2j
 
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
-    implementation libs.jacksonJakartarsJsonProvider
-
-    compileOnly libs.spotbugs
 
     testImplementation project(':clients')
-    testImplementation project(':clients').sourceSets.test.output
+    testImplementation testFixtures(project(':clients'))
     testImplementation project(':server')
-    testImplementation project(':server').sourceSets.test.output
     testImplementation project(':core')
-    testImplementation project(':core').sourceSets.test.output
+    testImplementation testFixtures(project(':server'))
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
+    testImplementation project(':test-common:test-common-util')
     testImplementation project(':server-common')
-    testImplementation project(':server-common').sourceSets.test.output
+    testImplementation testFixtures(project(':server-common'))
     testImplementation project(':connect:api')
     testImplementation project(':connect:runtime')
-    testImplementation project(':connect:runtime').sourceSets.test.output
-    testImplementation project(':storage:storage-api').sourceSets.main.output
-    testImplementation project(':storage').sourceSets.test.output
+    testImplementation testFixtures(project(':connect:runtime'))
+    testImplementation testFixtures(project(':storage'))
     testImplementation project(':streams')
-    testImplementation project(':streams').sourceSets.test.output
-    testImplementation project(':streams:integration-tests').sourceSets.test.output
+    testImplementation testFixtures(project(':streams'))
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
-    testImplementation libs.bcpkix // required by the clients test module, but we have to specify it explicitly as gradle does not include the transitive test dependency automatically
     testImplementation(libs.jfreechart) {
       exclude group: 'junit', module: 'junit'
     }
-    testImplementation libs.apachedsCoreApi
-    testImplementation libs.apachedsInterceptorKerberos
-    testImplementation libs.apachedsProtocolShared
-    testImplementation libs.apachedsProtocolKerberos
-    testImplementation libs.apachedsProtocolLdap
-    testImplementation libs.apachedsLdifPartition
     testImplementation testLog4j2Libs
 
     testRuntimeOnly runtimeTestLibs
@@ -2619,14 +2765,13 @@ project(':trogdor') {
     implementation project(':group-coordinator:group-coordinator-api')
 
     testImplementation project(':clients')
-    testImplementation project(':clients').sourceSets.test.output
+    testImplementation testFixtures(project(':clients'))
     testImplementation project(':group-coordinator')
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
 
     testRuntimeOnly runtimeTestLibs
-    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   javadoc {
@@ -2654,7 +2799,6 @@ project(':shell') {
   dependencies {
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
-    implementation libs.jacksonJDK8Datatypes
     implementation libs.jline
     implementation libs.slf4jApi
     implementation project(':server-common')
@@ -2664,15 +2808,10 @@ project(':shell') {
     implementation project(':raft')
     implementation project(':server')
 
-    implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
-    implementation libs.jacksonJakartarsJsonProvider
-
     testImplementation project(':clients')
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':server-common')
-    testImplementation project(':server-common').sourceSets.test.output
-    testImplementation libs.jacksonDataformatYaml
+    testImplementation testFixtures(project(':server-common'))
     testImplementation libs.junitJupiter
     testImplementation testLog4j2Libs
 
@@ -2701,6 +2840,8 @@ project(':streams') {
     archivesName = "kafka-streams"
   }
 
+  apply plugin: 'java-test-fixtures'
+
   ext.buildStreamsVersionFileName = "kafka-streams-version.properties"
 
   configurations {
@@ -2716,14 +2857,17 @@ project(':streams') {
     implementation libs.jacksonDatabind
     implementation libs.slf4jApi
 
+    testFixturesImplementation testFixtures(project(':clients'))
+    testFixturesImplementation libs.hamcrest
+    testFixturesImplementation libs.junitJupiter
+    testFixturesImplementation libs.mockitoCore
+    testFixturesImplementation libs.slf4jApi
+
     // testCompileOnly prevents streams from exporting a dependency on test-utils, which would cause a dependency cycle
     testCompileOnly project(':streams:test-utils')
-    testCompileOnly libs.bndlib
 
-    testImplementation project(':clients').sourceSets.test.output
-    testImplementation libs.jacksonDataformatYaml
+    testImplementation testFixtures(project(':clients'))
     testImplementation libs.junitJupiter
-    testImplementation libs.bcpkix
     testImplementation libs.hamcrest
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
@@ -2808,6 +2952,7 @@ project(':streams') {
 
   systemTestLibs {
     dependsOn testJar
+    dependsOn testFixturesJar
   }
 
   task genStreamsConfigDocs(type: JavaExec) {
@@ -2846,6 +2991,9 @@ project(':streams') {
             ':streams:upgrade-system-tests-38:test',
             ':streams:upgrade-system-tests-39:test',
             ':streams:upgrade-system-tests-40:test',
+            ':streams:upgrade-system-tests-41:test',
+            ':streams:upgrade-system-tests-42:test',
+            ':streams:upgrade-system-tests-43:test',
             ':streams:examples:test'
     ]
   )
@@ -2862,11 +3010,9 @@ project(':streams:streams-scala') {
     api project(':streams')
 
     api libs.scalaLibrary
-    testImplementation project(':streams').sourceSets.test.output
-    testImplementation project(':clients').sourceSets.test.output
+    testImplementation testFixtures(project(':clients'))
     testImplementation project(':streams:test-utils')
 
-    testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation testLog4j2Libs
@@ -2898,35 +3044,31 @@ project(':streams:streams-scala') {
   spotless {
     scala {
       target '**/*.scala'
-      scalafmt("$versions.scalafmt").configFile('../../checkstyle/.scalafmt.conf').scalaMajorVersion(versions.baseScala)
+      // Skip scalafmt while Spotless is affected by https://github.com/diffplug/spotless/issues/2850.
       licenseHeaderFile '../../checkstyle/java.header', 'package'
     }
   }
 }
 
 project(':streams:integration-tests') {
-  apply plugin: 'scala'
-
   base {
     archivesName = "kafka-streams-integration-tests"
   }
 
   dependencies {
     implementation libs.slf4jApi
-    implementation libs.scalaLibrary
 
-    testImplementation project(':clients').sourceSets.test.output
+    testImplementation testFixtures(project(':clients'))
+    testImplementation testFixtures(project(':streams'))
     testImplementation project(':group-coordinator')
+    testImplementation project(':group-coordinator:group-coordinator-api')
     testImplementation project(':server')
     testImplementation project(':server-common')
-    testImplementation project(':server-common').sourceSets.test.output
+    testImplementation testFixtures(project(':server-common'))
     testImplementation project(':storage')
-    testImplementation project(':streams').sourceSets.test.output
-    testImplementation project(':streams:streams-scala')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':tools')
     testImplementation project(':transaction-coordinator')
-    testImplementation libs.bcpkix
     testImplementation libs.hamcrest
     testImplementation libs.junitJupiter
     testImplementation libs.junitPlatformSuiteEngine // supports suite test
@@ -2935,26 +3077,6 @@ project(':streams:integration-tests') {
     testImplementation project(':streams:test-utils')
 
     testRuntimeOnly runtimeTestLibs
-  }
-
-  sourceSets {
-    // Set java/scala source folders in the `scala` block to enable joint compilation
-    main {
-      java {
-        srcDirs = []
-      }
-      scala {
-        srcDirs = []
-      }
-    }
-    test {
-      java {
-        srcDirs = []
-      }
-      scala {
-        srcDirs = ["src/test/java", "src/test/scala"]
-      }
-    }
   }
 }
 
@@ -2969,8 +3091,7 @@ project(':streams:test-utils') {
 
     implementation libs.slf4jApi
 
-    testImplementation project(':clients').sourceSets.test.output
-    testImplementation libs.jacksonDataformatYaml
+    testImplementation testFixtures(project(':clients'))
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.hamcrest
@@ -3005,7 +3126,7 @@ project(':streams:examples') {
     implementation libs.jacksonAnnotations
 
     testImplementation project(':streams:test-utils')
-    testImplementation project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
+    testImplementation testFixtures(project(':clients'))
     testImplementation libs.junitJupiter
     testImplementation libs.hamcrest
     testImplementation testLog4j2Libs
@@ -3414,6 +3535,38 @@ project(':streams:upgrade-system-tests-41') {
   }
 }
 
+project(':streams:upgrade-system-tests-42') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-42"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_42
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-43') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-43"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_43
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
 project(':jmh-benchmarks') {
 
   apply plugin: 'com.gradleup.shadow'
@@ -3432,7 +3585,7 @@ project(':jmh-benchmarks') {
     implementation project(':raft')
     implementation project(':clients')
     implementation project(':coordinator-common')
-    implementation project(':coordinator-common').sourceSets.test.output
+    implementation testFixtures(project(':coordinator-common'))
     implementation project(':group-coordinator')
     implementation project(':group-coordinator:group-coordinator-api')
     implementation project(':metadata')
@@ -3444,14 +3597,12 @@ project(':jmh-benchmarks') {
     implementation project(':connect:api')
     implementation project(':connect:transforms')
     implementation project(':connect:json')
-    implementation project(':clients').sourceSets.test.output
-    implementation project(':server-common').sourceSets.test.output
-    implementation project(':server').sourceSets.test.output
-    implementation project(':metadata').sourceSets.test.output
+    implementation testFixtures(project(':clients'))
+    implementation testFixtures(project(':server-common'))
+    implementation testFixtures(project(':metadata'))
 
     implementation libs.jmhCore
     annotationProcessor libs.jmhGeneratorAnnProcess
-    implementation libs.jmhCoreBenchmarks
     implementation libs.jacksonDatabind
     implementation libs.metrics
     implementation libs.mockitoCore
@@ -3502,7 +3653,7 @@ project(':connect:api') {
     implementation libs.slf4jApi
 
     testImplementation libs.junitJupiter
-    testImplementation project(':clients').sourceSets.test.output
+    testImplementation testFixtures(project(':clients'))
     testImplementation testLog4j2Libs
 
     testRuntimeOnly runtimeTestLibs
@@ -3537,7 +3688,7 @@ project(':connect:transforms') {
     implementation libs.slf4jApi
 
     testImplementation libs.junitJupiter
-    testImplementation project(':clients').sourceSets.test.output
+    testImplementation testFixtures(project(':clients'))
     testImplementation testLog4j2Libs
 
     testRuntimeOnly runtimeTestLibs
@@ -3570,14 +3721,13 @@ project(':connect:json') {
     api project(':connect:api')
 
     api libs.jacksonDatabind
-    api libs.jacksonJDK8Datatypes
     api libs.jacksonBlackbird
 
     implementation libs.slf4jApi
 
     testImplementation libs.junitJupiter
     testImplementation testLog4j2Libs
-    testImplementation project(':clients').sourceSets.test.output
+    testImplementation testFixtures(project(':clients'))
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -3601,6 +3751,8 @@ project(':connect:json') {
 }
 
 project(':connect:runtime') {
+  apply plugin: 'java-test-fixtures'
+
   configurations {
     swagger
   }
@@ -3643,15 +3795,26 @@ project(':connect:runtime') {
     implementation libs.mavenArtifact
     implementation libs.swaggerAnnotations
 
-    compileOnly libs.bndlib
-    compileOnly libs.spotbugs
 
     // We use this library to generate OpenAPI docs for the REST API, but we don't want or need it at compile
     // or run time. So, we add it to a separate configuration, which we use later on during docs generation
     swagger libs.jakartaServletApi
     swagger libs.jaxrs2Jakarta
 
-    testImplementation project(':clients').sourceSets.test.output
+    testFixturesImplementation testFixtures(project(':clients'))
+    testFixturesImplementation project(':core')
+    testFixturesImplementation project(':metadata')
+    testFixturesImplementation project(':server')
+    testFixturesImplementation project(':server-common')
+    testFixturesImplementation project(':group-coordinator')
+    testFixturesImplementation project(':test-common:test-common-runtime')
+    testFixturesImplementation libs.jettyClient
+    testFixturesImplementation libs.jacksonDatabind
+    testFixturesImplementation libs.jakartaRsApi
+    testFixturesImplementation libs.slf4jApi
+    testFixturesImplementation libs.junitJupiter
+
+    testImplementation testFixtures(project(':clients'))
     testImplementation project(':core')
     testImplementation project(':server')
     testImplementation project(':metadata')
@@ -3665,16 +3828,13 @@ project(':connect:runtime') {
     testImplementation project(':group-coordinator')
     testImplementation project(':storage')
     testImplementation project(':connect:test-plugins')
-    testImplementation project(':server-common').sourceSets.test.output
+    testImplementation testFixtures(project(':server-common'))
 
-    testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter
     testImplementation libs.httpclient
     testImplementation testLog4j2Libs
-
-    testCompileOnly libs.bndlib
 
     testRuntimeOnly libs.bcpkix
     testRuntimeOnly runtimeTestLibs
@@ -3779,12 +3939,12 @@ project(':connect:file') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
 
-    testImplementation project(':clients').sourceSets.test.output
+    testImplementation testFixtures(project(':clients'))
     testImplementation project(':connect:runtime')
-    testImplementation project(':connect:runtime').sourceSets.test.output
+    testImplementation testFixtures(project(':connect:runtime'))
     testImplementation project(':core')
     testImplementation project(':test-common:test-common-runtime')
-    testImplementation project(':server-common').sourceSets.test.output
+    testImplementation testFixtures(project(':server-common'))
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -3817,13 +3977,12 @@ project(':connect:basic-auth-extension') {
 
     implementation libs.slf4jApi
     implementation libs.jakartaRsApi
-    implementation libs.jaxAnnotationApi
+    implementation libs.jakartaAnnotationApi
 
-    testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
     testImplementation libs.junitJupiter
     testImplementation testLog4j2Libs
-    testImplementation project(':clients').sourceSets.test.output
+    testImplementation testFixtures(project(':clients'))
 
     testRuntimeOnly libs.jerseyContainerServlet
     testRuntimeOnly runtimeTestLibs
@@ -3860,8 +4019,6 @@ project(':connect:mirror') {
 
     implementation libs.argparse4j
     implementation libs.slf4jApi
-    implementation libs.jacksonAnnotations
-    implementation libs.jacksonJakartarsJsonProvider
     implementation libs.jerseyContainerServlet
     implementation libs.jerseyHk2
     implementation libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
@@ -3882,10 +4039,9 @@ project(':connect:mirror') {
 
     testImplementation testLog4j2Libs
     testImplementation libs.junitJupiter
-    testImplementation libs.bndlib
     testImplementation libs.mockitoCore
-    testImplementation project(':clients').sourceSets.test.output
-    testImplementation project(':connect:runtime').sourceSets.test.output
+    testImplementation testFixtures(project(':clients'))
+    testImplementation testFixtures(project(':connect:runtime'))
     testImplementation project(':core')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':raft')
@@ -3955,7 +4111,7 @@ project(':connect:mirror-client') {
 
     testImplementation testLog4j2Libs
     testImplementation libs.junitJupiter
-    testImplementation project(':clients').sourceSets.test.output
+    testImplementation testFixtures(project(':clients'))
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -3994,12 +4150,71 @@ project(':connect:test-plugins') {
   }
 }
 
-task aggregatedJavadoc(type: Javadoc, dependsOn: compileJava) {
+// Gradle 9+ forbids resolving a subproject's Configuration from the root.
+// Consume each subproject's javadocClasspathElements via project dependencies instead.
+configurations {
+  aggregatedJavadocClasspath {
+    canBeConsumed = false
+    canBeResolved = true
+  }
+}
+
+task aggregatedJavadoc(type: Javadoc) {
+  destinationDir = file("${layout.buildDirectory.get().asFile.path}/docs/javadoc")
+}
+
+gradle.projectsEvaluated {
+  // Validate that no module depends on test output directly
+  def protectedModules = [
+    'clients': ':clients',
+    'server-common': ':server-common',
+    'server': ':server',
+    'storage/api': ':storage:storage-api',
+    'coordinator-common': ':coordinator-common',
+    'storage': ':storage',
+    'group-coordinator': ':group-coordinator',
+    'share-coordinator': ':share-coordinator',
+    'metadata': ':metadata',
+    'raft': ':raft',
+    'connect/runtime': ':connect:runtime',
+    'core': ':core',
+    'streams': ':streams',
+    'streams/integration-tests': ':streams:integration-tests',
+  ]
+  allprojects { proj ->
+    proj.configurations.all { config ->
+      config.dependencies.each { dep ->
+        if (dep instanceof FileCollectionDependency) {
+          dep.files.files.each { file ->
+            protectedModules.each { dir, projectPath ->
+              if (file.absolutePath.endsWith("/${dir}/build/classes/java/test")) {
+                throw new GradleException("""
+ERROR: Dependency on ${projectPath} test output is not allowed.
+Found in project ${proj.path} configuration '${config.name}'.
+Use `testFixtures(project('${projectPath}'))` instead of `project('${projectPath}').sourceSets.test.output`
+""")
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
   def projectsWithJavadoc = subprojects.findAll { it.javadoc.enabled }
-  source = projectsWithJavadoc.collect { it.sourceSets.main.allJava }
-  classpath = files(projectsWithJavadoc.collect { it.sourceSets.main.compileClasspath })
-  includes = projectsWithJavadoc.collectMany { it.javadoc.getIncludes() }
-  excludes = projectsWithJavadoc.collectMany { it.javadoc.getExcludes() }
+
+  projectsWithJavadoc.each { sp ->
+    dependencies.add('aggregatedJavadocClasspath',
+        dependencies.project(path: sp.path, configuration: 'javadocClasspathElements'))
+  }
+
+  tasks.named('aggregatedJavadoc').configure {
+    dependsOn projectsWithJavadoc.collect { "${it.path}:compileJava" }
+    source    projectsWithJavadoc.collect { it.sourceSets.main.allJava }
+    classpath = configurations.aggregatedJavadocClasspath
+    includes  = projectsWithJavadoc.collectMany { it.javadoc.getIncludes() }
+    excludes  = projectsWithJavadoc.collectMany { it.javadoc.getExcludes() }
+  }
 }
 
 

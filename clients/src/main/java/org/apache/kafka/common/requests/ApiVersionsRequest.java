@@ -22,7 +22,7 @@ import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollect
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
-import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
 
 import java.util.regex.Pattern;
 
@@ -54,6 +54,14 @@ public class ApiVersionsRequest extends AbstractRequest {
         ) {
             super(ApiKeys.API_VERSIONS, oldestAllowedVersion, latestAllowedVersion);
             this.data = data.duplicate();
+        }
+
+        public void setClusterId(String clusterId) {
+            this.data.setClusterId(clusterId);
+        }
+
+        public void setNodeId(int nodeId) {
+            this.data.setNodeId(nodeId);
         }
 
         @Override
@@ -94,6 +102,13 @@ public class ApiVersionsRequest extends AbstractRequest {
     }
 
     public boolean isValid() {
+        if (version() >= 5) {
+            // Either cluster ID and node ID are both specified, or neither is.
+            if ((data.clusterId() == null && data.nodeId() != -1) || (data.clusterId() != null && data.nodeId() == -1)) {
+                return false;
+            }
+        }
+
         if (version() >= 3) {
             return SOFTWARE_NAME_VERSION_PATTERN.matcher(data.clientSoftwareName()).matches() &&
                 SOFTWARE_NAME_VERSION_PATTERN.matcher(data.clientSoftwareVersion()).matches();

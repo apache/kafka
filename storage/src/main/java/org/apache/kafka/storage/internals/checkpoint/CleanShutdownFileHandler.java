@@ -17,8 +17,8 @@
 
 package org.apache.kafka.storage.internals.checkpoint;
 
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.server.util.Json;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;

@@ -41,10 +41,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.metrics.KafkaMetric;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.mirror.Checkpoint;
 import org.apache.kafka.connect.mirror.DefaultConfigPropertyFilter;
@@ -287,6 +287,8 @@ public class MirrorConnectorsIntegrationBaseTest {
             } finally {
                 Exit.resetExitProcedure();
                 Exit.resetHaltProcedure();
+                // Shared by all CollectAllMetricsReporter instances; avoid cross-test accumulation.
+                CollectAllMetricsReporter.METRICS.clear();
             }
         }
     }
@@ -1627,6 +1629,11 @@ public class MirrorConnectorsIntegrationBaseTest {
         @Override
         public void metricChange(KafkaMetric metric) {
             METRICS.put(metric.metricName(), metric);
+        }
+
+        @Override
+        public void metricRemoval(KafkaMetric metric) {
+            METRICS.remove(metric.metricName());
         }
     }
 }
