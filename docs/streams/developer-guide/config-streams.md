@@ -91,6 +91,7 @@ This section contains the most common Streams configuration parameters. For a fu
     * topology.optimization
   * Kafka consumers and producer configuration parameters
     * Naming
+    * group.instance.id
     * Default Values
     * Parameters controlled by Kafka Streams
     * enable.auto.commit
@@ -1806,6 +1807,10 @@ If you call `streamsBuilder.build()` without passing the `Properties` object, op
      // alternatively, you can use
      streamsSettings.put(StreamsConfig.topicPrefix("PARAMETER_NAME"), "topic-value");
  
+ #### group.instance.id {#group-instance-id}
+
+ `group.instance.id` is an embedded consumer configuration that enables static membership. Kafka Streams appends the 1-based stream thread index to the configured value; for example, `my-app` produces `my-app-1`, `my-app-2`, and so on. The configured value must be unique to each `KafkaStreams` instance so that the derived IDs are unique within the application. The setting may be provided without a prefix or with `consumer.` or `main.consumer.`. Static membership is supported with both `group.protocol=classic` and, starting in 4.4, `group.protocol=streams`.
+
  #### Default Values
  
  Kafka Streams uses different default values for some of the underlying client configs, which are summarized below. For detailed descriptions of these configs, see [Producer Configs](/43/documentation.html#producerconfigs) and [Consumer Configs](/43/documentation.html#consumerconfigs).  
