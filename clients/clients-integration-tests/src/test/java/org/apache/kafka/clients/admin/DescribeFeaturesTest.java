@@ -54,6 +54,17 @@ public class DescribeFeaturesTest {
         }
     }
 
+    @ClusterTest(types = {Type.KRAFT}, brokers = 1, controllers = 1, standalone = true)
+    public void testDescribeKRaftVersion(ClusterInstance clusterInstance) throws Exception {
+        try (Admin admin = clusterInstance.admin()) {
+            assertKRaftVersion(admin);
+        }
+
+        try (Admin admin = clusterInstance.admin(Map.of(), true)) {
+            assertKRaftVersion(admin);
+        }
+    }
+
     @ClusterTest(
         types = {Type.KRAFT},
         metadataVersion = MetadataVersion.IBP_3_7_IV0,
@@ -117,6 +128,18 @@ public class DescribeFeaturesTest {
                 ExecutionException.class,
                 () -> admin.describeFeatures(new DescribeFeaturesOptions().nodeId(0).timeoutMs(1000)).featureMetadata().get());
         }
+    }
+
+    private void assertKRaftVersion(Admin admin) throws Exception {
+        FeatureMetadata featureMetadata = admin.describeFeatures().featureMetadata().get();
+        assertEquals(
+            new SupportedVersionRange(KRaftVersion.KRAFT_VERSION_0.featureLevel(), KRaftVersion.KRAFT_VERSION_1.featureLevel()),
+            featureMetadata.supportedFeatures().get(KRaftVersion.FEATURE_NAME)
+        );
+        assertEquals(
+            new FinalizedVersionRange(KRaftVersion.KRAFT_VERSION_1.featureLevel(), KRaftVersion.KRAFT_VERSION_1.featureLevel()),
+            featureMetadata.finalizedFeatures().get(KRaftVersion.FEATURE_NAME)
+        );
     }
 
     private void assertFeatures(Admin admin, int nodeId, boolean unstable, MetadataVersion metadataVersion) {

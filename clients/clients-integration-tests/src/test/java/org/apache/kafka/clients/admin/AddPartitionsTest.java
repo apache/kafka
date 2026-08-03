@@ -16,14 +16,18 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
 import org.apache.kafka.common.test.AdminUtils;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.Comparator;
 import java.util.List;
@@ -117,6 +121,31 @@ public class AddPartitionsTest {
                 assertNotNull(partition.leader());
                 assertTrue(partition.replicas().contains(partition.leader()));
             }
+        }
+    }
+
+    @ClusterTests(value = {
+        @ClusterTest(types = {Type.KRAFT}, brokers = 3, controllers = 3, metadataVersion = MetadataVersion.IBP_3_7_IV0),
+        @ClusterTest(types = {Type.KRAFT}, brokers = 3, controllers = 3, metadataVersion = MetadataVersion.IBP_3_7_IV2)
+    })
+    public void testCreatePartitionsWithPartialFailure(ClusterInstance cluster) throws Exception {
+        try (Admin admin = cluster.admin()) {
+            Map<String, KafkaFuture<Void>> createResults = admin.createTopics(List.of(
+                new NewTopic("foo", 1, (short) 3),
+                new NewTopic("bar", 2, (short) 3)
+            )).values();
+            createResults.get("foo").get();
+            createResults.get("bar").get();
+
+            Map<String, KafkaFuture<Void>> increaseResults = admin.createPartitions(Map.of(
+                "foo", NewPartitions.increaseTo(3),
+                "bar", NewPartitions.increaseTo(2)
+            )).values();
+
+            increaseResults.get("foo").get();
+
+            ExecutionException exception = assertThrows(ExecutionException.class, () -> increaseResults.get("bar").get());
+            assertEquals(InvalidPartitionsException.class, exception.getCause().getClass());
         }
     }
 
