@@ -24,6 +24,7 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -87,6 +88,27 @@ public class StructTest {
         assertEquals(ByteBuffer.wrap("foobar".getBytes()), ByteBuffer.wrap(struct.getBytes("bytes")));
 
         struct.validate();
+    }
+
+    @Test
+    public void testGetBytesPreservesByteBufferRemainingBytes() {
+        ByteBuffer bytes = ByteBuffer.wrap(new byte[]{1, 2, 3, 4});
+        bytes.position(1);
+        bytes.limit(3);
+        Struct struct = new Struct(FLAT_STRUCT_SCHEMA).put("bytes", bytes);
+
+        assertArrayEquals(new byte[]{2, 3}, struct.getBytes("bytes"));
+        assertEquals(1, bytes.position());
+        assertEquals(3, bytes.limit());
+    }
+
+    @Test
+    public void testGetBytesSupportsDirectByteBuffer() {
+        ByteBuffer bytes = ByteBuffer.allocateDirect(2);
+        bytes.put((byte) 1).put((byte) 2).flip();
+        Struct struct = new Struct(FLAT_STRUCT_SCHEMA).put("bytes", bytes);
+
+        assertArrayEquals(new byte[]{1, 2}, struct.getBytes("bytes"));
     }
 
     @Test
@@ -286,6 +308,21 @@ public class StructTest {
         assertEquals(struct1.hashCode(), struct2.hashCode());
         assertNotEquals(struct1.hashCode(), struct3.hashCode());
         assertNotEquals(struct2.hashCode(), struct3.hashCode());
+    }
+
+    @Test
+    public void testEqualsAndHashCodeWithEquivalentByteBufferValue() {
+        ByteBuffer bytes = ByteBuffer.wrap(new byte[]{1, 2, 3, 4});
+        bytes.position(1);
+        bytes.limit(3);
+        Struct byteBufferStruct = new Struct(FLAT_STRUCT_SCHEMA).put("bytes", bytes);
+        Struct byteArrayStruct = new Struct(FLAT_STRUCT_SCHEMA).put("bytes", new byte[]{2, 3});
+
+        assertEquals(byteArrayStruct, byteBufferStruct);
+        assertEquals(byteBufferStruct, byteArrayStruct);
+        assertEquals(byteArrayStruct.hashCode(), byteBufferStruct.hashCode());
+        assertEquals(1, bytes.position());
+        assertEquals(3, bytes.limit());
     }
 
     @Test

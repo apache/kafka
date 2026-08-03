@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.data;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.DataException;
 
 import java.nio.ByteBuffer;
@@ -162,11 +163,12 @@ public class Struct {
 
     /**
      * Equivalent to calling {@link #get(String)} and casting the result to a byte[].
+     * For {@link ByteBuffer} values, only the bytes between the current position and limit are returned.
      */
     public byte[] getBytes(String fieldName) {
         Object bytes = getCheckType(fieldName, Schema.Type.BYTES);
-        if (bytes instanceof ByteBuffer)
-            return ((ByteBuffer) bytes).array();
+        if (bytes instanceof ByteBuffer byteBuffer)
+            return Utils.toArray(byteBuffer);
         return (byte[]) bytes;
     }
 
@@ -242,12 +244,26 @@ public class Struct {
         if (o == null || getClass() != o.getClass()) return false;
         Struct struct = (Struct) o;
         return Objects.equals(schema, struct.schema) &&
-                Arrays.deepEquals(values, struct.values);
+                Arrays.deepEquals(normalizedValues(), struct.normalizedValues());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(schema, Arrays.deepHashCode(values));
+        return Objects.hash(schema, Arrays.deepHashCode(normalizedValues()));
+    }
+
+    /**
+     * Normalize BYTES values to byte arrays so byte[] and ByteBuffer representations compare by content.
+     */
+    private Object[] normalizedValues() {
+        Object[] normalizedValues = values.clone();
+        for (Field field : schema.fields()) {
+            Object value = normalizedValues[field.index()];
+            if (field.schema().type() == Schema.Type.BYTES && value instanceof ByteBuffer byteBuffer) {
+                normalizedValues[field.index()] = Utils.toArray(byteBuffer);
+            }
+        }
+        return normalizedValues;
     }
 
     private Field lookupField(String fieldName) {
