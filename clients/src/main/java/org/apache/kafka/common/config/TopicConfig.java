@@ -202,9 +202,12 @@ public class TopicConfig {
         "loss. Enabling this configuration for a topic that uses transactions is incompatible with exactly-once " +
         "semantics. An unclean election can remove a transaction's COMMIT or ABORT marker from the elected replica, " +
         "causing consumers with <code>isolation.level=read_committed</code> to stop at the last stable offset. " +
-        "If this occurs, use <code>kafka-transactions.sh find-hanging</code> to identify the affected transaction and " +
-        "<code>kafka-transactions.sh abort</code> to recover it. Verify the transaction and partition before aborting " +
-        "it, since an unclean election may already have caused data loss." +
+        "If this occurs, use <code>kafka-transactions.sh find-hanging</code> with <code>--topic</code> or " +
+        "<code>--broker-id</code> to look for an open transaction whose marker is missing. If it reports a transaction " +
+        "whose producer state is still available, use <code>kafka-transactions.sh abort</code> with its topic, partition, " +
+        "and start offset to abort it. These commands cannot restore records or markers lost by an unclean election. " +
+        "Verify the transaction and partition before aborting it, since an unclean election may already have caused " +
+        "data loss." +
         "<p>Note: In KRaft mode, when enabling this config dynamically, it needs to wait for the unclean leader election " +
         "thread to trigger election periodically (default is 5 minutes). Please run <code>kafka-leader-election.sh</code> with <code>unclean</code> option " +
          "to trigger the unclean leader election immediately if needed.</p>";
