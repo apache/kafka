@@ -142,6 +142,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.coordinator.group.streams.MemberTaskOffsets;
 import org.apache.kafka.coordinator.group.streams.MockTaskAssignor;
+import org.apache.kafka.coordinator.group.streams.StreamsAssignmentConfigs;
 import org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState;
@@ -19143,7 +19144,7 @@ public class GroupMetadataManagerTest {
                 .withTargetAssignmentTimestamp(12345L)
                 .withMetadataHash(groupMetadataHash)
                 .withValidatedTopologyEpoch(0)
-                .withLastAssignmentConfigs(Map.of("num.standby.replicas", "0"))
+                .withLastAssignmentConfigs(Map.of(StreamsAssignmentConfigs.NUM_STANDBY_REPLICAS, "0"))
             )
             .build();
 
@@ -19213,7 +19214,7 @@ public class GroupMetadataManagerTest {
                 .withTargetAssignmentEpoch(10)
                 .withMetadataHash(groupMetadataHash)
                 .withValidatedTopologyEpoch(0)
-                .withLastAssignmentConfigs(Map.of("num.standby.replicas", "0"))
+                .withLastAssignmentConfigs(Map.of(StreamsAssignmentConfigs.NUM_STANDBY_REPLICAS, "0"))
             )
             .build();
 
@@ -19275,7 +19276,7 @@ public class GroupMetadataManagerTest {
                 .withTargetAssignmentEpoch(10)
                 .withMetadataHash(groupMetadataHash)
                 .withValidatedTopologyEpoch(0)
-                .withLastAssignmentConfigs(Map.of("num.standby.replicas", "0"))
+                .withLastAssignmentConfigs(Map.of(StreamsAssignmentConfigs.NUM_STANDBY_REPLICAS, "0"))
             )
             .build();
 
@@ -23016,7 +23017,7 @@ public class GroupMetadataManagerTest {
         assertFalse(assignmentConfigs.isEmpty(), "Expected assignment configs to be present");
 
         StreamsGroupMetadataValue.LastAssignmentConfig standbyReplicasConfig = assignmentConfigs.stream()
-            .filter(config -> "num.standby.replicas".equals(config.key()))
+            .filter(config -> StreamsAssignmentConfigs.NUM_STANDBY_REPLICAS.equals(config.key()))
             .findFirst()
             .orElse(null);
 
@@ -23027,7 +23028,7 @@ public class GroupMetadataManagerTest {
         StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
         int newGroupEpoch = group.groupEpoch();
         assertEquals(11, newGroupEpoch);
-        assertEquals("2", group.lastAssignmentConfigs().get("num.standby.replicas"));
+        assertEquals("2", group.lastAssignmentConfigs().get(StreamsAssignmentConfigs.NUM_STANDBY_REPLICAS));
     }
 
     @Test
@@ -23693,7 +23694,7 @@ public class GroupMetadataManagerTest {
 
         // Verify that the new number of standby replicas is used
         assertEquals(
-            Map.of("num.standby.replicas", "2"),
+            Map.of(StreamsAssignmentConfigs.NUM_STANDBY_REPLICAS, "2"),
             assignor.lastPassedAssignmentConfigs()
         );
 
@@ -24081,7 +24082,7 @@ public class GroupMetadataManagerTest {
         // Verify that the number of standby replicas is evaluated to max,
         // and task offset interval is evaluated to min
         assertEquals(
-            Map.of("num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT)),
+            Map.of(StreamsAssignmentConfigs.NUM_STANDBY_REPLICAS, String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT)),
             assignor.lastPassedAssignmentConfigs());
         assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT,
             result.response().data().taskOffsetIntervalMs());
@@ -30358,7 +30359,7 @@ public class GroupMetadataManagerTest {
     private Map<String, String> getDefaultAssignmentConfigs() {
         // Use the same default value as GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT
         return new TreeMap<>(Map.of(
-            "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT)
+            StreamsAssignmentConfigs.NUM_STANDBY_REPLICAS, String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT)
         ));
     }
 }

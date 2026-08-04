@@ -20,6 +20,7 @@ package org.apache.kafka.coordinator.group.streams.assignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TopologyDescriber;
+import org.apache.kafka.coordinator.group.streams.StreamsAssignmentConfigs;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.internal.util.collections.Sets;
@@ -46,7 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StickyTaskAssignorTest {
 
-    public static final String NUM_STANDBY_REPLICAS_CONFIG = "num.standby.replicas";
+    public static final String NUM_STANDBY_REPLICAS_CONFIG = StreamsAssignmentConfigs.NUM_STANDBY_REPLICAS;
     private final StickyTaskAssignor assignor = new StickyTaskAssignor();
 
     @Test

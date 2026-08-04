@@ -22,6 +22,7 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TopologyDescriber;
+import org.apache.kafka.coordinator.group.streams.StreamsAssignmentConfigs;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.TopologyMetadata;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
@@ -107,7 +108,7 @@ public class StreamsStickyAssignorBenchmark {
 
         Map<String, StreamsGroupMember> members = createMembers();
         this.assignmentConfigs = Map.of(
-            "num.standby.replicas",
+            StreamsAssignmentConfigs.NUM_STANDBY_REPLICAS,
             Integer.toString(standbyReplicas)
         );
         this.groupSpec = StreamsAssignorBenchmarkUtils.createGroupSpec(members, assignmentConfigs);

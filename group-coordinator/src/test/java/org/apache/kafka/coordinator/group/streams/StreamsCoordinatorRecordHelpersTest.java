@@ -262,7 +262,7 @@ class StreamsCoordinatorRecordHelpersTest {
     public void testNewStreamsGroupMetadataRecord() {
         List<StreamsGroupMetadataValue.LastAssignmentConfig> expectedAssignmentConfigs = List.of(
             new StreamsGroupMetadataValue.LastAssignmentConfig()
-                .setKey("num.standby.replicas")
+                .setKey(StreamsAssignmentConfigs.NUM_STANDBY_REPLICAS)
                 .setValue("2")
         );
         CoordinatorRecord expectedRecord = CoordinatorRecord.record(
@@ -279,7 +279,7 @@ class StreamsCoordinatorRecordHelpersTest {
         );
 
         assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(GROUP_ID, 42, 43, 44, Map.of(
-            "num.standby.replicas", "2"
+            StreamsAssignmentConfigs.NUM_STANDBY_REPLICAS, "2"
         ), -1, -1));
     }
 

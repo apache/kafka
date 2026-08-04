@@ -155,6 +155,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroup.ShareGroupStat
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupAssignmentBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.coordinator.group.streams.AssignmentRefiner;
+import org.apache.kafka.coordinator.group.streams.StreamsAssignmentConfigs;
 import org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
@@ -2397,7 +2398,7 @@ public class GroupMetadataManager {
                 )
         ));
 
-        String rackAwareTagsValue = currentAssignmentConfigs.getOrDefault("rack.aware.assignment.tags", "").trim();
+        String rackAwareTagsValue = currentAssignmentConfigs.getOrDefault(StreamsAssignmentConfigs.RACK_AWARE_ASSIGNMENT_TAGS, "").trim();
         // The MISSING_CLIENT_TAGS status (code 6) requires version 1 of the RPC: version 0 clients
         // throw on unknown status codes, so it must not be sent to them.
         if (requestApiVersion >= 1 && !rackAwareTagsValue.isEmpty()) {
@@ -9914,9 +9915,9 @@ public class GroupMetadataManager {
         final List<String> rackAwareAssignmentTags = groupConfig.flatMap(GroupConfig::streamsRackAwareAssignmentTags)
             .orElse(config.streamsGroupRackAwareAssignmentTags());
         Map<String, String> configs = new TreeMap<>();
-        configs.put("num.standby.replicas", numStandbyReplicas.toString());
+        configs.put(StreamsAssignmentConfigs.NUM_STANDBY_REPLICAS, numStandbyReplicas.toString());
         if (!rackAwareAssignmentTags.isEmpty()) {
-            configs.put("rack.aware.assignment.tags", String.join(",", rackAwareAssignmentTags));
+            configs.put(StreamsAssignmentConfigs.RACK_AWARE_ASSIGNMENT_TAGS, String.join(",", rackAwareAssignmentTags));
         }
         return configs;
     }

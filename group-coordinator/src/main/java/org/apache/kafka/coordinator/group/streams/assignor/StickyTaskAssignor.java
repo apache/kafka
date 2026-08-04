@@ -24,6 +24,7 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignmentS
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TopologyDescriber;
+import org.apache.kafka.coordinator.group.streams.StreamsAssignmentConfigs;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -97,7 +98,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         final LocalState localState = new LocalState();
         localState.numStandbyReplicas =
             groupSpec.configs().isEmpty() ? 0
-                : Integer.parseInt(groupSpec.configs().get("num.standby.replicas"));
+                : Integer.parseInt(groupSpec.configs().get(StreamsAssignmentConfigs.NUM_STANDBY_REPLICAS));
 
         // Helpers for computing active tasks per member, and tasks per member
         localState.totalActiveTasks = 0;

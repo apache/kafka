@@ -23,6 +23,7 @@ import org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.streams.MemberState;
+import org.apache.kafka.coordinator.group.streams.StreamsAssignmentConfigs;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
@@ -73,7 +74,7 @@ class StreamsGroupTestUtil {
     static Map<String, String> getDefaultAssignmentConfigs() {
         // Use the same default value as GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT
         return new TreeMap<>(Map.of(
-            "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT)
+            StreamsAssignmentConfigs.NUM_STANDBY_REPLICAS, String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT)
         ));
     }
 
