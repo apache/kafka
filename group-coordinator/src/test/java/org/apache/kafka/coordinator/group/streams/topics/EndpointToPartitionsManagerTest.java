@@ -147,6 +147,45 @@ class EndpointToPartitionsManagerTest {
         assertEquals(List.of(0, 1, 2), standbyPartitionsForTopicB);
     }
 
+    @Test
+    void testEndpointToPartitionsExcludesPartitionsMissingFromSmallerSourceTopic() {
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(Uuid.randomUuid(), "Topic-A", 5)
+            .addTopic(Uuid.randomUuid(), "Topic-B", 2)
+            .build();
+        configuredSubtopologyOne = new ConfiguredSubtopology(5, Set.of("Topic-A", "Topic-B"), new HashMap<>(), new HashSet<>(), new HashMap<>());
+
+        when(streamsGroupMember.assignedTasks()).thenReturn(
+            new TasksTupleWithEpochs(
+                mkTasksPerSubtopologyWithCommonEpoch(0, mkEntry("0", Set.of(1, 3))),
+                mkTasksPerSubtopology(mkEntry("0", Set.of(4))),
+                Map.of()
+            )
+        );
+        when(streamsGroup.configuredTopology()).thenReturn(Optional.of(configuredTopology));
+        SortedMap<String, ConfiguredSubtopology> configuredSubtopologyMap = new TreeMap<>();
+        configuredSubtopologyMap.put("0", configuredSubtopologyOne);
+        when(configuredTopology.subtopologies()).thenReturn(Optional.of(configuredSubtopologyMap));
+
+        StreamsGroupHeartbeatResponseData.EndpointToPartitions result =
+            EndpointToPartitionsManager.endpointToPartitions(streamsGroupMember, responseEndpoint, streamsGroup, new KRaftCoordinatorMetadataImage(metadataImage));
+
+        List<StreamsGroupHeartbeatResponseData.TopicPartition> activePartitions = result.activePartitions();
+        activePartitions.sort(Comparator.comparing(StreamsGroupHeartbeatResponseData.TopicPartition::topic));
+        assertEquals(2, activePartitions.size());
+        assertEquals("Topic-A", activePartitions.get(0).topic());
+        assertEquals(List.of(1, 3), activePartitions.get(0).partitions());
+        // Topic-B has only partitions 0 and 1, so active task 3 contributes no Topic-B partition.
+        assertEquals("Topic-B", activePartitions.get(1).topic());
+        assertEquals(List.of(1), activePartitions.get(1).partitions());
+
+        // Standby task 4 is beyond the last partition of Topic-B, so Topic-B is not reported as standby at all.
+        List<StreamsGroupHeartbeatResponseData.TopicPartition> standbyPartitions = result.standbyPartitions();
+        assertEquals(1, standbyPartitions.size());
+        assertEquals("Topic-A", standbyPartitions.get(0).topic());
+        assertEquals(List.of(4), standbyPartitions.get(0).partitions());
+    }
+
     private static void assertTopicPartitionsAssigned(List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitions, String topicName) {
         StreamsGroupHeartbeatResponseData.TopicPartition topicPartition = topicPartitions.stream().filter(tp -> tp.topic().equals(topicName)).findFirst().get();
         assertEquals(topicName, topicPartition.topic());
