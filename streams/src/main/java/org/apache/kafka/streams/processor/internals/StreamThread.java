@@ -1833,11 +1833,6 @@ public class StreamThread extends Thread implements ProcessingThread {
         durationForPartitions.put(partition, durationTime);
     }
 
-    // This method is added for usage in tests where mocking the underlying native call is not possible.
-    public boolean isThreadAlive() {
-        return isAlive();
-    }
-
     // Call method when a topology is resumed
     public void signalResume() {
         taskManager.signalResume();

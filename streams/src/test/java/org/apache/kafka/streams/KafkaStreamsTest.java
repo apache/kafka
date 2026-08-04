@@ -94,8 +94,11 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -800,7 +803,6 @@ public class KafkaStreamsTest {
         prepareThreadState(streamThreadTwo, state2);
         when(streamThreadOne.groupInstanceID()).thenReturn(Optional.empty());
         when(streamThreadOne.waitOnThreadState(isA(StreamThread.State.class), anyLong())).thenReturn(true);
-        when(streamThreadOne.isThreadAlive()).thenReturn(true);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
@@ -813,27 +815,41 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    @Timeout(30)
-    public void removeStreamThreadShouldReleaseLockBeforeWaitingForShutdown() throws Exception {
-        // `removeStreamThread` used to call `waitOnThreadState(DEAD)` while holding
-        // `changeThreadCount`. If the target thread happened to be the same
-        // StreamThread that concurrently entered the REPLACE_THREAD uncaught-exception
-        // handler, that thread's `replaceStreamThread -> addStreamThread` path would
-        // block on the same lock — so it never reached `setState(DEAD)` and the waiter waited
-        // forever. Verify the lock is released before we wait.
+    @Timeout(60)
+    public void shouldNotBlockOtherThreadChangesWhileRemovalWaitsForShutdown() throws Exception {
+        // `removeStreamThread` used to wait for the removed thread to reach DEAD while holding
+        // `changeThreadCount`. A thread that hit an uncaught exception and was being replaced
+        // acquired the same lock in `replaceStreamThread -> addStreamThread`, so it never
+        // finished shutting down and the removal waited for it forever. Any other thread-count
+        // change must therefore stay possible while a removal is waiting; a second removal is
+        // used here because it takes the same lock and additionally shows that it picks a
+        // different thread rather than the one already shutting down.
         prepareStreams();
         final AtomicReference<StreamThread.State> state1 = prepareStreamThread(streamThreadOne, 1);
         final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
         when(streamThreadOne.groupInstanceID()).thenReturn(Optional.empty());
-        when(streamThreadOne.isThreadAlive()).thenReturn(true);
+        when(streamThreadTwo.groupInstanceID()).thenReturn(Optional.empty());
+        when(streamThreadTwo.waitOnThreadState(isA(StreamThread.State.class), anyLong())).thenReturn(true);
+        // The real `shutdown()` moves the thread to PENDING_SHUTDOWN synchronously, which is what
+        // keeps the second removal from picking the same thread.
+        doAnswer(invocation -> {
+            state1.set(StreamThread.State.PENDING_SHUTDOWN);
+            return null;
+        }).when(streamThreadOne).shutdown(any());
+        doAnswer(invocation -> {
+            state2.set(StreamThread.State.PENDING_SHUTDOWN);
+            return null;
+        }).when(streamThreadTwo).shutdown(any());
 
-        final CountDownLatch waitEntered = new CountDownLatch(1);
-        final CountDownLatch releaseWait = new CountDownLatch(1);
-        when(streamThreadOne.waitOnThreadState(isA(StreamThread.State.class), anyLong())).thenAnswer(inv -> {
-            waitEntered.countDown();
-            releaseWait.await();
+        final CountDownLatch removalIsWaiting = new CountDownLatch(1);
+        final CountDownLatch allowShutdownToComplete = new CountDownLatch(1);
+        when(streamThreadOne.waitOnThreadState(isA(StreamThread.State.class), anyLong())).thenAnswer(invocation -> {
+            removalIsWaiting.countDown();
+            // Bounded so that a regression fails the assertions below instead of leaving the
+            // second removal blocked on the lock for the rest of the JVM's life.
+            allowShutdownToComplete.await(30, TimeUnit.SECONDS);
             return true;
         });
 
@@ -843,38 +859,25 @@ public class KafkaStreamsTest {
             waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L,
                 "Kafka Streams client did not reach state RUNNING");
 
-            final java.util.concurrent.ExecutorService removeExec = Executors.newSingleThreadExecutor();
+            final ExecutorService executor = Executors.newFixedThreadPool(2);
             try {
-                final java.util.concurrent.Callable<Optional<String>> removeTask = streams::removeStreamThread;
-                final java.util.concurrent.Future<Optional<String>> removeFuture = removeExec.submit(removeTask);
-                assertTrue(waitEntered.await(10, TimeUnit.SECONDS),
-                    "removeStreamThread never reached waitOnThreadState");
+                final Callable<Optional<String>> removeThread = streams::removeStreamThread;
+                final Future<Optional<String>> firstRemoval = executor.submit(removeThread);
+                assertTrue(removalIsWaiting.await(10, TimeUnit.SECONDS),
+                    "removeStreamThread did not reach the wait for the removed thread's shutdown");
 
-                // Attempt to acquire `changeThreadCount` from a different thread.
-                // Before the fix, the removal path holds it across the wait, so this
-                // probe would block indefinitely. After the fix, it acquires
-                // immediately.
-                final java.lang.reflect.Field field = KafkaStreams.class.getDeclaredField("changeThreadCount");
-                field.setAccessible(true);
-                final Object changeThreadCount = field.get(streams);
+                final Future<Optional<String>> secondRemoval = executor.submit(removeThread);
+                try {
+                    assertEquals(Optional.of("processId-StreamThread-2"), secondRemoval.get(10, TimeUnit.SECONDS));
+                } catch (final java.util.concurrent.TimeoutException e) {
+                    fail("removeStreamThread held changeThreadCount while waiting for a thread to shut down");
+                }
 
-                final AtomicBoolean acquired = new AtomicBoolean(false);
-                final Thread probe = new Thread(() -> {
-                    synchronized (changeThreadCount) {
-                        acquired.set(true);
-                    }
-                }, "changeThreadCount-probe");
-                probe.start();
-                probe.join(TimeUnit.SECONDS.toMillis(5));
-                assertTrue(acquired.get(),
-                    "changeThreadCount is still held while removeStreamThread waits on state — pattern A deadlock");
-
-                releaseWait.countDown();
-                assertEquals(Optional.of("processId-StreamThread-1"),
-                    removeFuture.get(10, TimeUnit.SECONDS));
+                allowShutdownToComplete.countDown();
+                assertEquals(Optional.of("processId-StreamThread-1"), firstRemoval.get(10, TimeUnit.SECONDS));
             } finally {
-                releaseWait.countDown();
-                removeExec.shutdownNow();
+                allowShutdownToComplete.countDown();
+                executor.shutdownNow();
             }
         }
     }
