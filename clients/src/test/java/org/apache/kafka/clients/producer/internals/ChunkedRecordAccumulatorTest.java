@@ -165,11 +165,11 @@ public class ChunkedRecordAccumulatorTest {
 
     /**
      * Pool that adds one append right after a chunk allocation returns, mocking a concurrent
-     * appender racing the same batch.
+     * appender racing the same batch, and then advances the mock clock by {@code elapseMs}.
      */
     private BufferPool poolMockingConcurrentChunkAllocation(int chunkSize, long totalMemory,
                                                             AtomicReference<ChunkedRecordAccumulator> injectAppendOnce,
-                                                            byte[] injectedValue) {
+                                                            byte[] injectedValue, long elapseMs) {
         return new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
             @Override
             public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
@@ -178,6 +178,7 @@ public class ChunkedRecordAccumulatorTest {
                 if (toInject != null) {
                     toInject.append(topic, partition1, 0L, key, injectedValue, Record.EMPTY_HEADERS, null,
                             maxBlockTimeMs, time.milliseconds(), cluster);
+                    time.sleep(elapseMs);
                 }
                 return chunks;
             }
@@ -199,7 +200,8 @@ public class ChunkedRecordAccumulatorTest {
         final byte[] value = new byte[350];  // needs 2 chunks
         final AtomicReference<ChunkedRecordAccumulator> injectAppendOnce = new AtomicReference<>();
 
-        BufferPool pool = poolMockingConcurrentChunkAllocation(chunkSize, 64L * chunkSize, injectAppendOnce, value);
+        BufferPool pool = poolMockingConcurrentChunkAllocation(chunkSize, 64L * chunkSize, injectAppendOnce, value,
+                /* elapseMs */ 0);
         ChunkedRecordAccumulator accum = new ChunkedRecordAccumulator(logContext, 8192, Compression.NONE,
                 /* lingerMs */ 0, /* retryBackoffMs */ 0L, /* retryBackoffMaxMs */ 0L,
                 /* deliveryTimeoutMs */ 3200, metrics, "producer-metrics", time,
@@ -607,11 +609,11 @@ public class ChunkedRecordAccumulatorTest {
 
     /**
      * The extension acquire fails with the batch it was sized against, which is already replaced, so
-     * nothing is closed, the budget is spent, and the replacement needs memory too. The append must
-     * give up rather than come back to the same non-blocking acquire indefinitely.
+     * nothing is closed, the append's {@code max.block.ms} is spent, and the replacement needs memory
+     * too. The append must give up rather than come back to the extension path indefinitely.
      */
     @Test
-    public void testExtensionRetryStopsOnceMaxBlockTimeIsUsedUp() throws Exception {
+    public void testExtensionRetriesBoundedByMaxBlockTimeWhenAcquireFails() throws Exception {
         AtomicBoolean injected = new AtomicBoolean();
         AtomicReference<ChunkedRecordAccumulator> accumRef = new AtomicReference<>();
         // A chunk barely bigger than a record, so the replacement batch cannot take the retried one
@@ -648,9 +650,46 @@ public class ChunkedRecordAccumulatorTest {
     }
 
     /**
-     * A failed extension acquire burns part of {@code max.block.ms} before closing the batch and
-     * falling through to the blocking new-batch acquire. That acquire must get only what is left of
-     * the budget, not the whole of it again.
+     * The extension acquire succeeds, but a concurrent appender fills the batch first, so the chunks it
+     * attaches are no longer enough and the post-attach tryAppend fails, with the append's
+     * {@code max.block.ms} spent by then. The append must give up rather than come back to the extension
+     * path indefinitely.
+     */
+    @Test
+    public void testExtensionRetriesBoundedByMaxBlockTimeWhenAcquireSucceeds() throws Exception {
+        int chunkSize = 256;
+        byte[] value = new byte[350];  // needs 2 chunks, so the open batch always needs an extension for it
+        AtomicReference<ChunkedRecordAccumulator> injectAppendOnce = new AtomicReference<>();
+
+        BufferPool pool = poolMockingConcurrentChunkAllocation(chunkSize, 64L * chunkSize, injectAppendOnce, value,
+                /* elapseMs */ maxBlockTimeMs + 1);
+        ChunkedRecordAccumulator accum = newAccumulator(8192, Compression.NONE, pool);
+        try {
+            KafkaMetric exhausted = metrics.metric(metrics.metricName("buffer-exhausted-total", "producer-metrics"));
+
+            // Tiny first record opens the batch.
+            accum.append(topic, partition1, 0L, key, new byte[1], Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+
+            // This append sizes its gap and acquires it successfully, but the injected append takes the
+            // capacity first, so its own attach is too small and it has to extend again — with the whole
+            // budget gone by then.
+            injectAppendOnce.set(accum);
+            BufferExhaustedException e = assertThrows(BufferExhaustedException.class,
+                    () -> accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null,
+                            maxBlockTimeMs, time.milliseconds(), cluster));
+            assertTrue(e.getMessage().contains("Failed to extend the open batch"), e.getMessage());
+            assertEquals(1.0, (double) exhausted.metricValue(),
+                    "giving up on the extension path must count the dropped record exactly once");
+        } finally {
+            accum.close();
+        }
+    }
+
+    /**
+     * A failed extension acquire burns part of the append's {@code max.block.ms} before closing the
+     * batch and falling through to the blocking new-batch acquire. That acquire must get only what is
+     * left of that {@code max.block.ms}, not the whole of it again.
      */
     @Test
     public void testBlockingAcquireGetsOnlyWhatIsLeftOfMaxBlockTimeAfterFailedExtension() throws Exception {
@@ -681,7 +720,7 @@ public class ChunkedRecordAccumulatorTest {
             accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
                     maxBlockTimeMs, time.milliseconds(), cluster);
 
-            // Needs an extension; the failed acquire burns part of the budget before the batch is
+            // Needs an extension; the failed acquire burns part of max.block.ms before the batch is
             // closed and the record retries on the blocking path.
             accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
                     maxBlockTimeMs, time.milliseconds(), cluster);
@@ -694,9 +733,10 @@ public class ChunkedRecordAccumulatorTest {
     }
 
     /**
-     * Same as the give-up case above, except the replacement batch has room to spare, so the retried
-     * record needs no memory at all. The append must land it there even with the budget spent, rather
-     * than fail on a deadline that only bounds waiting for memory.
+     * Same as {@link #testExtensionRetriesBoundedByMaxBlockTimeWhenAcquireFails}, except the replacement
+     * batch has room to spare, so the retried record needs no memory at all. The append must land it there
+     * even with the append's {@code max.block.ms} spent, rather than fail on a deadline that only bounds
+     * waiting for memory.
      */
     @Test
     public void testExtensionRetryStillAppendsToRoomierBatchAfterMaxBlockTimeIsUsedUp() throws Exception {

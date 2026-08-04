@@ -129,10 +129,11 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
         // and block again on a later iteration, so the blocking acquire is given whatever is left of the deadline.
         long deadlineMs = maxTimeToBlock > Long.MAX_VALUE - nowMs ? Long.MAX_VALUE : nowMs + maxTimeToBlock;
 
-        // Set once the extension acquire has failed on an exhausted pool. That acquire is non-blocking, so we
-        // always allow a first attempt (even with max.block.ms 0), and only check retries of it against the
-        // deadline (see throwIfExtensionBudgetExceeded), to avoid retrying it continuously with no bound.
-        boolean extensionAcquireFailed = false;
+        // Set once this append took the extension path, so any later pass through it is a retry: the acquire failed,
+        // or succeeded without getting the record appended (not enough capacity by then, or no longer the batch it was
+        // sized against). Neither blocks, so a retry never times out on its own and is checked against the deadline
+        // based on this flag. A first attempt always runs, even with max.block.ms 0.
+        boolean extensionRetried = false;
 
         if (headers == null) headers = Record.EMPTY_HEADERS;
         try {
@@ -171,15 +172,16 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                 }
 
                 if (appendResult.needsBufferExtension()) {
-                    if (extensionAcquireFailed)
+                    // The tryAppend above has re-confirmed the record still needs chunks, so bound the retry here.
+                    if (extensionRetried)
                         throwIfExtensionBudgetExceeded(deadlineMs, maxTimeToBlock, topic, effectivePartition);
+                    extensionRetried = true;
                     extensionChunks = allocateExtensionChunks(appendResult.extensionBytesNeeded, batchToExtend, dq,
                             topic, effectivePartition);
                     if (extensionChunks == null) {
                         // Pool exhausted, nothing is held here. allocateExtensionChunks has already
                         // decided whether to close the open batch; retry either way, bounded by the
                         // deadline check above.
-                        extensionAcquireFailed = true;
                         continue;
                     }
                     nowMs = time.milliseconds();
@@ -285,9 +287,8 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
     }
 
     /**
-     * Give up on the extension path once this append's share of {@code max.block.ms} is spent. Called
-     * on re-entry only, after {@code tryAppend} has re-confirmed the record needs chunks the exhausted
-     * pool would not hand over: the extension acquire never blocks, so we enforce the max.block.ms here.
+     * Throw once this append's share of {@code max.block.ms} has run out, counting the record as dropped in
+     * the buffer-exhausted metrics. A no-op if there is time left.
      */
     private void throwIfExtensionBudgetExceeded(long deadlineMs, long maxTimeToBlock, String topic, int partition) {
         if (time.milliseconds() < deadlineMs)
