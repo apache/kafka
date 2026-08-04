@@ -505,20 +505,8 @@ public class ChunkedRecordAccumulatorTest {
                 // Only the first non-blocking (extension) acquire is intercepted; the deque lock is not
                 // held here, which is exactly what lets the open batch change under the appender.
                 if (maxTimeToBlockMs == 0L && injected.compareAndSet(false, true)) {
-                    ChunkedRecordAccumulator accum = accumRef.get();
-                    Deque<ProducerBatch> dq = accum.getDeque(tp1);
-                    ProducerBatch drained;
-                    synchronized (dq) {
-                        drained = dq.pollFirst();
-                    }
-                    // Simulate the sender draining the sized batch, returning its chunks to the pool...
-                    drainedRef.set(drained);
-                    accum.deallocate(drained);
-                    // Simulate a concurrent appender claiming that memory for a new batch on the same
-                    // partition. This replaces the batch, so from here on dq.peekLast() is
-                    // no longer the batch the gap was sized against.
-                    accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
-                            maxBlockTimeMs, time.milliseconds(), cluster);
+                    // From here on dq.peekLast() is no longer the batch the gap was sized against.
+                    drainedRef.set(simulateConcurrentDrainAndReplace(accumRef.get()));
                     throw new BufferExhaustedException("injected: pool exhausted");
                 }
                 return super.allocateChunks(totalSize, maxTimeToBlockMs);
@@ -571,8 +559,10 @@ public class ChunkedRecordAccumulatorTest {
      * Simulates the concurrent activity that can move the deque while an extension acquire runs off
      * the deque lock: the sender drains the open batch, returning its chunks to the pool, and another
      * appender claims that memory for a fresh batch in its place.
+     *
+     * @return the batch that was drained
      */
-    private void simulateConcurrentDrainAndReplace(ChunkedRecordAccumulator accum) throws InterruptedException {
+    private ProducerBatch simulateConcurrentDrainAndReplace(ChunkedRecordAccumulator accum) throws InterruptedException {
         Deque<ProducerBatch> dq = batchesFor(accum, tp1);
         ProducerBatch drained;
         synchronized (dq) {
@@ -582,6 +572,7 @@ public class ChunkedRecordAccumulatorTest {
         accum.deallocate(drained);
         accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
                 maxBlockTimeMs, time.milliseconds(), cluster);
+        return drained;
     }
 
     /**
@@ -595,8 +586,8 @@ public class ChunkedRecordAccumulatorTest {
      * it has room to spare for the retried one.
      */
     private BufferPool poolFailingFirstExtensionAfterBatchReplaced(int chunkSize,
-                                                                  AtomicReference<ChunkedRecordAccumulator> accumRef,
-                                                                  AtomicBoolean injected) {
+                                                                   AtomicReference<ChunkedRecordAccumulator> accumRef,
+                                                                   AtomicBoolean injected) {
         return new BufferPool(16L * chunkSize, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
             @Override
             public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
@@ -615,9 +606,9 @@ public class ChunkedRecordAccumulatorTest {
     }
 
     /**
-     * The extension acquire fails with the batch it was sized against already replaced, so nothing is
-     * closed, the budget is spent, and the replacement needs memory too. The append must give up
-     * rather than come back to the same non-blocking acquire indefinitely.
+     * The extension acquire fails with the batch it was sized against, which is already replaced, so
+     * nothing is closed, the budget is spent, and the replacement needs memory too. The append must
+     * give up rather than come back to the same non-blocking acquire indefinitely.
      */
     @Test
     public void testExtensionRetryStopsOnceMaxBlockTimeIsUsedUp() throws Exception {
@@ -634,7 +625,7 @@ public class ChunkedRecordAccumulatorTest {
             accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
                     maxBlockTimeMs, time.milliseconds(), cluster);
 
-            // Needs an extension, which fails with the budget already spent.
+            // Needs an extension, which fails with the time budget already spent.
             BufferExhaustedException e = assertThrows(BufferExhaustedException.class,
                     () -> accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
                             maxBlockTimeMs, time.milliseconds(), cluster));
@@ -644,7 +635,7 @@ public class ChunkedRecordAccumulatorTest {
             assertEquals(1.0, (double) exhausted.metricValue(),
                     "giving up on the extension path must count the dropped record exactly once");
 
-            // Giving up must leave the batch it declined to close untouched.
+            // Giving up must leave the open batch untouched.
             Deque<ProducerBatch> dq = batchesFor(accum, tp1);
             assertEquals(1, dq.size(), "only the replacement batch is expected");
             ProducerBatch replacement = dq.peekLast();

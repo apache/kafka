@@ -131,7 +131,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
 
         // Set once the extension acquire has failed on an exhausted pool. That acquire is non-blocking, so we
         // always allow a first attempt (even with max.block.ms 0), and only check retries of it against the
-        // deadline (see throwIfExtensionBudgetSpent), to avoid retrying it continuously with no bound.
+        // deadline (see throwIfExtensionBudgetExceeded), to avoid retrying it continuously with no bound.
         boolean extensionAcquireFailed = false;
 
         if (headers == null) headers = Record.EMPTY_HEADERS;
@@ -172,7 +172,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
 
                 if (appendResult.needsBufferExtension()) {
                     if (extensionAcquireFailed)
-                        throwIfExtensionBudgetSpent(deadlineMs, maxTimeToBlock, topic, effectivePartition);
+                        throwIfExtensionBudgetExceeded(deadlineMs, maxTimeToBlock, topic, effectivePartition);
                     extensionChunks = allocateExtensionChunks(appendResult.extensionBytesNeeded, batchToExtend, dq,
                             topic, effectivePartition);
                     if (extensionChunks == null) {
@@ -289,7 +289,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
      * on re-entry only, after {@code tryAppend} has re-confirmed the record needs chunks the exhausted
      * pool would not hand over: the extension acquire never blocks, so we enforce the max.block.ms here.
      */
-    private void throwIfExtensionBudgetSpent(long deadlineMs, long maxTimeToBlock, String topic, int partition) {
+    private void throwIfExtensionBudgetExceeded(long deadlineMs, long maxTimeToBlock, String topic, int partition) {
         if (time.milliseconds() < deadlineMs)
             return;
         chunkedFree.recordBufferExhausted();
@@ -305,7 +305,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
      * {@code batchToExtend} for appends so the record retries on the new-batch path (blocks for memory)
      * <p>
      * The acquire runs off the deque lock, so the open batch may no longer be the one the gap was
-     * sized against by the time this would close it: it can have been drained and replaced by a batch
+     * sized against by the time this would close it: it could have been drained and replaced by a batch
      * a concurrent appender created. So close only if the open batch is still
      * {@code batchToExtend}; when it is not, nothing is closed and the caller's next iteration
      * re-evaluates against whatever is open then.
