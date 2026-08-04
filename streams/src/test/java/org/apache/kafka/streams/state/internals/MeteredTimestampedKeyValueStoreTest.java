@@ -67,6 +67,7 @@ import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -505,7 +506,73 @@ public class MeteredTimestampedKeyValueStoreTest {
 
         assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
     }
-    
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    @Test
+    public void shouldDecrementOpenIteratorsTwiceWhenClosedTwiceForRangeQuery() {
+        setUp();
+
+        when(inner.query(
+            any(),
+            any(PositionBound.class),
+            any(QueryConfig.class)
+        )).thenReturn((QueryResult) QueryResult.forResult(
+            KeyValueIterators.emptyIterator()
+        ));
+
+        init();
+
+        final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
+        final QueryResult<?> result = metered.query(
+            RangeQuery.<String, String>withNoBounds(),
+            PositionBound.unbounded(),
+            new QueryConfig(false)
+        );
+        final KeyValueIterator<?, ?> iterator =
+            (KeyValueIterator<?, ?>) result.getResult();
+
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(1L));
+
+        iterator.close();
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+
+        iterator.close();
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(-1L));
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    @Test
+    public void shouldLeaveIteratorOpenWhenNextThrowsAndNotClosedForRangeQuery() {
+        setUp();
+
+        final KeyValueIterator<Bytes, byte[]> rawIterator =
+            mock(KeyValueIterator.class);
+        when(rawIterator.next())
+            .thenThrow(new IllegalStateException("boom"));
+
+        when(inner.query(
+            any(),
+            any(PositionBound.class),
+            any(QueryConfig.class)
+        )).thenReturn((QueryResult) QueryResult.forResult(rawIterator));
+
+        init();
+
+        final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
+        final QueryResult<?> result = metered.query(
+            RangeQuery.<String, String>withNoBounds(),
+            PositionBound.unbounded(),
+            new QueryConfig(false)
+        );
+        final KeyValueIterator<?, ?> iterator =
+            (KeyValueIterator<?, ?>) result.getResult();
+
+        assertThrows(IllegalStateException.class, iterator::next);
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(1L));
+
+        iterator.close();
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+    }
 
     @SuppressWarnings("unused")
     @Test
