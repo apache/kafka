@@ -2614,6 +2614,7 @@ org.apache.kafka.clients.consumer.internals.StreamsGroupHeartbeatRequestManagerT
 - testNotSendingHeartbeatIfMemberIsJoiningOrAcknowledgingWhenHeartbeatInFlight
 - testNotSendingLeaveHeartbeatIfPollTimerExpiredAndMemberIsLeaving
 - testOtherErrorResponse
+- testPartitionsByUserEndpointMergedForDuplicateUserEndpoints
 - testPollOnCloseWhenIsLeaving
 - testPollOnCloseWhenIsNotLeaving
 - testPollOnCloseWhenStaticMemberIsLeaving
