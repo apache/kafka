@@ -893,9 +893,7 @@ public abstract class AbstractSessionBytesStoreTest {
             new StreamsConfig(streamsConfig),
             recordCollector
         );
-        final Time time = Time.SYSTEM;
         context.setTime(1L);
-        context.setSystemTimeMs(time.milliseconds());
         sessionStore.init(context, sessionStore);
 
         // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired

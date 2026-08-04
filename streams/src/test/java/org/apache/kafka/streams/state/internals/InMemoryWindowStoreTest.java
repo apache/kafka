@@ -23,7 +23,6 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -173,8 +172,6 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
 
     @Test
     public void shouldMeasureExpiredRecordsDroppedDuringRestoreAsRecords() {
-        context.setSystemTimeMs(Time.SYSTEM.milliseconds());
-
         final StateSerdes<Integer, String> serdes = new StateSerdes<>("", Serdes.Integer(), Serdes.String());
 
         final List<KeyValue<byte[], byte[]>> batch = new LinkedList<>();

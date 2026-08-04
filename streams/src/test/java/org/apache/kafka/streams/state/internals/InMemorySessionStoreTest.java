@@ -22,7 +22,6 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -330,10 +329,6 @@ public class InMemorySessionStoreTest extends AbstractSessionBytesStoreTest {
         // The restore path reports every record skipped for an expired segment in a single sensor
         // recording, so the rate has to reflect the number of records dropped rather than the number of
         // recordings. Mirrors the same coverage for InMemoryWindowStore.
-        //
-        // Align the context's cached system time with the metrics clock, so the rate's sampling window is
-        // the un-elapsed default of (metrics.num.samples - 1) * metrics.sample.window.ms == 30s.
-        context.setSystemTimeMs(Time.SYSTEM.milliseconds());
 
         final List<KeyValue<byte[], byte[]>> batch = new LinkedList<>();
         // advances observed stream time far enough that every record after it falls outside retention

@@ -961,8 +961,6 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             TestUtils.tempDirectory(),
             new StreamsConfig(streamsConfig)
         );
-        final Time time = Time.SYSTEM;
-        context.setSystemTimeMs(time.milliseconds());
         bytesStore.init(context, bytesStore);
 
         // write a record to advance stream time, with a high enough timestamp
