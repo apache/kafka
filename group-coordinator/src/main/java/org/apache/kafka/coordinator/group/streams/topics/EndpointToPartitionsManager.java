@@ -24,7 +24,6 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -100,25 +99,32 @@ public class EndpointToPartitionsManager {
         return topicPartitionsForTasks;
     }
 
-    private static List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitionListForTask(final Set<Integer> taskSet,
-                                                                                                    final Set<String> topicNames,
-                                                                                                    final CoordinatorMetadataImage metadataImage) {
-        return topicNames.stream().map(topic -> {
+    private static List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitionListForTask(
+        final Set<Integer> taskSet,
+        final Set<String> topicNames,
+        final CoordinatorMetadataImage metadataImage
+    ) {
+        List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitionsForTask = new ArrayList<>();
+        for (String topic : topicNames) {
             Optional<CoordinatorMetadataImage.TopicMetadata> topicMetadata = metadataImage.topicMetadata(topic);
             if (topicMetadata.isEmpty()) {
                 throw new IllegalStateException("Topic " + topic + " not found in metadata image");
             }
             int numPartitionsForTopic = topicMetadata.get().partitionCount();
-            StreamsGroupHeartbeatResponseData.TopicPartition tp = new StreamsGroupHeartbeatResponseData.TopicPartition();
-            tp.setTopic(topic);
-            List<Integer> tpPartitions = new ArrayList<>(taskSet);
-            if (numPartitionsForTopic < taskSet.size()) {
-                Collections.sort(tpPartitions);
-                tp.setPartitions(tpPartitions.subList(0, numPartitionsForTopic));
-            } else {
-                tp.setPartitions(tpPartitions);
+            // A subtopology has as many tasks as its source topic with the most partitions. A source topic with
+            // fewer partitions therefore has no partition for the higher task IDs, mirroring the client-side
+            // grouping in PartitionGrouper#partitionGroups.
+            List<Integer> partitions = taskSet.stream()
+                .filter(partitionId -> partitionId < numPartitionsForTopic)
+                .sorted()
+                .toList();
+            if (!partitions.isEmpty()) {
+                StreamsGroupHeartbeatResponseData.TopicPartition tp = new StreamsGroupHeartbeatResponseData.TopicPartition();
+                tp.setTopic(topic);
+                tp.setPartitions(partitions);
+                topicPartitionsForTask.add(tp);
             }
-            return tp;
-        }).toList();
+        }
+        return topicPartitionsForTask;
     }
 }
