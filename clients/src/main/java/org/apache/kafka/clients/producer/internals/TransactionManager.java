@@ -2200,11 +2200,9 @@ public class TransactionManager {
                 if (remainingRequests.decrementAndGet() == 0) {
                     result.done();
                 }
-            } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
-                    || error == Errors.NOT_COORDINATOR
-                    || error == Errors.REQUEST_TIMED_OUT) {
-                reenqueue();
             } else if (error.exception() instanceof RetriableException) {
+                // Covers COORDINATOR_NOT_AVAILABLE, NOT_COORDINATOR and REQUEST_TIMED_OUT, whose
+                // exceptions all extend RetriableException.
                 reenqueue();
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                 abortableError(GroupAuthorizationException.forGroupId(builder.data.groupId()));
@@ -2212,6 +2210,14 @@ public class TransactionManager {
                 abortableError(error.exception());
             } else if (error == Errors.INVALID_RECORD_STATE) {
                 abortableError(error.exception());
+            } else if (error == Errors.INVALID_REQUEST) {
+                // The acknowledgement payload was rejected by the broker (for example an ack type
+                // that is not valid inside a transaction). The transaction must be aborted, but the
+                // producer itself is still usable.
+                abortableError(error.exception());
+            } else if (error == Errors.UNSUPPORTED_VERSION) {
+                fatalError(new UnsupportedVersionException("Transactional share acknowledgement requires "
+                    + "share.version=3 and transaction.version=2 to be finalized on the cluster."));
             } else if (error == Errors.UNKNOWN_MEMBER_ID
                     || error == Errors.GROUP_ID_NOT_FOUND
                     || error == Errors.STALE_MEMBER_EPOCH) {

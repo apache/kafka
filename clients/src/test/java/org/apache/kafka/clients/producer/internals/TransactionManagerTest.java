@@ -38,6 +38,7 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
@@ -1406,6 +1407,30 @@ public class TransactionManagerTest {
         assertFalse(sendAcksResult.isSuccessful());
         assertInstanceOf(InvalidRecordStateException.class, sendAcksResult.error());
         assertAbortableError(InvalidRecordStateException.class);
+    }
+
+    @Test
+    public void testInvalidRequestInTxnShareAcknowledgePartitionResponseIsAbortable() {
+        // A rejected acknowledgement payload must abort the transaction, not kill the producer.
+        // Previously INVALID_REQUEST matched no branch and fell through to fatalError, so an
+        // acknowledgement type the broker refuses left the producer permanently unusable.
+        TopicIdPartition tip = new TopicIdPartition(TOPIC_ID, tp0);
+
+        doInitTransactionsWithTransactionV2();
+
+        transactionManager.beginTransaction();
+        TransactionalRequestResult sendAcksResult = transactionManager.sendShareAcknowledgementsToTransaction(
+            shareAcknowledgements(tip),
+            new ShareGroupMetadata(consumerGroupId, memberId, generationId));
+
+        prepareTxnShareAcknowledgeResponse(consumerGroupId, producerId, epoch, tip, Errors.INVALID_REQUEST);
+
+        runUntil(transactionManager::hasError);
+        assertFalse(transactionManager.hasFatalError());
+        assertInstanceOf(InvalidRequestException.class, transactionManager.lastError());
+        assertTrue(sendAcksResult.isCompleted());
+        assertFalse(sendAcksResult.isSuccessful());
+        assertAbortableError(InvalidRequestException.class);
     }
 
     @Test
