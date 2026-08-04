@@ -420,20 +420,30 @@ public class SharePartitionManager implements AutoCloseable {
             try {
                 initializeSharePartitionForTransactionalAcknowledge(sharePartitionKey)
                     .whenComplete((sharePartition, initializationThrowable) -> {
-                        if (initializationThrowable != null) {
-                            Throwable throwable = Errors.maybeUnwrapException(initializationThrowable);
-                            fencedSharePartitionHandler().accept(sharePartitionKey, throwable);
-                            future.complete(throwable);
-                            return;
-                        }
-                        sharePartition.stageTxnAcknowledge(memberId, txnOwnerId, txnOwnerEpoch, acknowledgePartitionBatches)
-                            .whenComplete((result, throwable) -> {
-                                if (throwable != null) {
-                                    throwable = Errors.maybeUnwrapException(throwable);
-                                    fencedSharePartitionHandler().accept(sharePartitionKey, throwable);
-                                }
+                        // Any throwable escaping this callback would be captured by whenComplete's
+                        // discarded dependent stage, leaving `future` uncompleted forever: the
+                        // TxnShareAcknowledge response would never be sent and the records staged so
+                        // far would leak in TX_PENDING with no acquisition lock timer. Contain it.
+                        try {
+                            if (initializationThrowable != null) {
+                                Throwable throwable = Errors.maybeUnwrapException(initializationThrowable);
+                                fencedSharePartitionHandler().accept(sharePartitionKey, throwable);
                                 future.complete(throwable);
-                            });
+                                return;
+                            }
+                            sharePartition.stageTxnAcknowledge(memberId, txnOwnerId, txnOwnerEpoch, acknowledgePartitionBatches)
+                                .whenComplete((result, throwable) -> {
+                                    if (throwable != null) {
+                                        throwable = Errors.maybeUnwrapException(throwable);
+                                        fencedSharePartitionHandler().accept(sharePartitionKey, throwable);
+                                    }
+                                    future.complete(throwable);
+                                });
+                        } catch (Throwable throwable) {
+                            log.error("Unexpected error staging transactional acknowledgement for {}",
+                                sharePartitionKey, throwable);
+                            future.complete(throwable);
+                        }
                     });
             } catch (Throwable throwable) {
                 futures.put(topicIdPartition, CompletableFuture.completedFuture(throwable));

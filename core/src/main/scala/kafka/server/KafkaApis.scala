@@ -3834,6 +3834,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       (tip: TopicIdPartition) => tip.topicPartition.topic
     )
 
+    // Reject malformed batches before staging, exactly as the non-transactional path does. Without
+    // this an acknowledgeTypes list shorter than the offset range produces a partially populated
+    // ack-type map, and the per-offset staging path then unboxes a null Byte inside the
+    // SharePartition write lock.
+    val erroneousTopicIdPartitions = validateAcknowledgementBatches(
+      acknowledgeBatchesMap, erroneous, supportsRenewAcknowledgements = false, isRenewAck = false)
+    erroneousTopicIdPartitions.foreach(tip => acknowledgeBatchesMap.remove(tip))
+
     val validAcknowledgeBatches = mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]]()
     acknowledgeBatchesMap.foreach { case (tip, batches) =>
       if (!authorizedTopics.contains(tip.topicPartition.topic)) {
