@@ -113,16 +113,9 @@ public final class SourceConnectorConfig extends ConnectorConfig {
             + "has been overridden from the worker's). Only applicable in distributed mode; in standalone mode, setting this property will have no effect.";
     private static final String OFFSETS_TOPIC_DISPLAY = "Offsets topic";
 
-    private static class EnrichedSourceConnectorConfig extends ConnectorConfig {
-        EnrichedSourceConnectorConfig(Plugins plugins, ConfigDef configDef, Map<String, String> props) {
-            super(plugins, configDef, props);
-        }
-
-    }
-
     private final TransactionBoundary transactionBoundary;
     private final Long transactionBoundaryInterval;
-    private final EnrichedSourceConnectorConfig enrichedSourceConfig;
+    private final ConnectorConfig enrichedSourceConfig;
     private final String offsetsTopic;
 
     private static ConfigDef configDef(ConfigDef baseConfigDef) {
@@ -273,7 +266,7 @@ public final class SourceConnectorConfig extends ConnectorConfig {
             propsWithoutRegexForDefaultGroup.entrySet()
                     .removeIf(e -> e.getKey().equals(DEFAULT_TOPIC_CREATION_PREFIX + INCLUDE_REGEX_CONFIG)
                             || e.getKey().equals(DEFAULT_TOPIC_CREATION_PREFIX + EXCLUDE_REGEX_CONFIG));
-            enrichedSourceConfig = new EnrichedSourceConnectorConfig(plugins,
+            enrichedSourceConfig = new ConnectorConfig(plugins,
                     enrich(defaultConfigDef, props, defaultGroup),
                     propsWithoutRegexForDefaultGroup);
         } else {
