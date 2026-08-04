@@ -2814,6 +2814,7 @@ org.apache.kafka.streams.processor.internals.StreamTaskTest:
 - shouldNotThrowExceptionOnAnchoredSchedule
 - shouldNotThrowExceptionOnScheduleIfCurrentNodeIsNotNull
 - shouldNotThrowFromStateManagerCloseInCloseDirty
+- shouldNotWipeStateDirectoryWhenCloseDirtyAndEosEnabledWithTransactionalStateStores
 - shouldPauseAndResumeBasedOnBufferedRecords
 - shouldPrepareRecycleSuspendedTask
 - shouldProcessInOrder
