@@ -169,6 +169,15 @@ public class ShareInFlightBatch<K, V> {
         return recordsRenewed;
     }
 
+    /**
+     * The acknowledgement types recorded so far, keyed by offset, without draining them. Unlike
+     * {@link #hasRenewals()} this reflects what {@code acknowledge()} has actually recorded, so it
+     * is usable before the first {@link #takeAcknowledgedRecords()} call.
+     */
+    Map<Long, AcknowledgeType> pendingAcknowledgementTypes() {
+        return acknowledgements.getAcknowledgementsTypeMap();
+    }
+
     boolean hasRenewals() {
         if (renewingRecords == null) {
             return false;

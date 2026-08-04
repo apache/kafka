@@ -1140,9 +1140,12 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             handleCompletedAcknowledgements();
             ensureExplicitAcknowledgement();
             ensureInFlightAcknowledgedIfExplicitAcknowledgement();
+            // Records already handed to a previous renewal round are not ours to acknowledge.
             if (currentFetch.hasRenewals()) {
                 throw new IllegalStateException("Renew acknowledgements cannot be sent to a transaction.");
             }
+            // hasRenewals() above only sees renewals from a completed drain; a RENEW recorded on this
+            // fetch is caught inside takeAcknowledgementsForTransaction, before anything is drained.
             return currentFetch.takeAcknowledgementsForTransaction();
         } finally {
             release();
