@@ -103,10 +103,13 @@ subprojects {
             // come from ~/.gradle/gradle.properties via the same -PmavenUrl / -PmavenUsername /
             // -PmavenPassword properties release.py uses.
             maven {
-                url = project.hasProperty('mavenUrl') ? project.mavenUrl : ''
-                credentials {
-                    username = project.hasProperty('mavenUsername') ? project.mavenUsername : ''
-                    password = project.hasProperty('mavenPassword') ? project.mavenPassword : ''
+                def repositoryUrl = project.hasProperty('mavenUrl') ? project.mavenUrl : ''
+                url = repositoryUrl
+                if (!repositoryUrl || !'file'.equalsIgnoreCase(uri(repositoryUrl).scheme)) {
+                    credentials {
+                        username = project.hasProperty('mavenUsername') ? project.mavenUsername : ''
+                        password = project.hasProperty('mavenPassword') ? project.mavenPassword : ''
+                    }
                 }
             }
         }
