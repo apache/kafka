@@ -138,13 +138,9 @@ class EndpointToPartitionsManagerTest {
 
         assertEquals(responseEndpoint, result.userEndpoint());
         assertTopicPartitionsAssigned(result.activePartitions(), "Topic-A");
-        // The standby task and the warm-up tasks of subtopology 1 are reported as separate entries for the same topic.
-        List<Integer> standbyPartitionsForTopicB = result.standbyPartitions().stream()
-            .filter(topicPartition -> topicPartition.topic().equals("Topic-B"))
-            .flatMap(topicPartition -> topicPartition.partitions().stream())
-            .sorted()
-            .toList();
-        assertEquals(List.of(0, 1, 2), standbyPartitionsForTopicB);
+        // The standby task and the warm-up tasks of subtopology 1 are merged into a single standby entry.
+        assertEquals(1, result.standbyPartitions().size());
+        assertTopicPartitionsAssigned(result.standbyPartitions(), "Topic-B");
     }
 
     @Test
