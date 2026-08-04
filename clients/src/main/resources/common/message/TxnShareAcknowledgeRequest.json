@@ -43,14 +43,14 @@
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
           "about": "The partition index." },
         { "name": "AcknowledgementBatches", "type": "[]TxnShareAcknowledgeBatch", "versions": "0+",
-          "about": "Record ranges to acknowledge. Only ACCEPT (1) and REJECT (3) are valid inside a transaction.",
+          "about": "Record ranges to acknowledge. Only ACCEPT (1), REJECT (3) and the gap marker (0) are valid inside a transaction.",
           "fields": [
           { "name": "FirstOffset", "type": "int64", "versions": "0+",
             "about": "First offset of the batch (inclusive)." },
           { "name": "LastOffset", "type": "int64", "versions": "0+",
             "about": "Last offset of the batch (inclusive)." },
           { "name": "AcknowledgeTypes", "type": "[]int8", "versions": "0+",
-            "about": "Per-offset acknowledge types: 1=ACCEPT, 3=REJECT. Size 1 = uniform type for whole range." }
+            "about": "Per-offset acknowledge types: 1=ACCEPT, 3=REJECT, 0=gap (an acquired offset holding no non-control record). Size 1 = uniform type for whole range." }
         ]}
       ]}
     ]}
