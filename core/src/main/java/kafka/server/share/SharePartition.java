@@ -145,10 +145,17 @@ public class SharePartition {
     }
 
     /**
+     * The acknowledgement type byte the client sends for an acquired offset that holds no
+     * non-control record. It has no {@link AcknowledgeType} constant because it is not a
+     * disposition the application can choose.
+     */
+    private static final byte ACKNOWLEDGE_TYPE_GAP = (byte) 0;
+
+    /**
      * To provide static mapping between acknowledgement type bytes to RecordState.
      */
     private static final Map<Byte, RecordState> ACK_TYPE_TO_RECORD_STATE = Map.of(
-        (byte) 0, RecordState.ARCHIVED,                             // Represents gap
+        ACKNOWLEDGE_TYPE_GAP, RecordState.ARCHIVED,
         AcknowledgeType.ACCEPT.id, RecordState.ACKNOWLEDGED,
         AcknowledgeType.RELEASE.id, RecordState.AVAILABLE,
         AcknowledgeType.REJECT.id, RecordState.ARCHIVED
@@ -1107,9 +1114,18 @@ public class SharePartition {
                     break;
                 }
 
+                // ACCEPT and REJECT are the only ack types a client may choose inside a transaction.
+                // GAP (0) is not a client choice: the consumer emits it for an acquired offset that
+                // holds no non-control record (see ShareCompletedFetch), which is unavoidable on any
+                // topic written by a transactional producer. It is terminal everywhere else in the
+                // ack path (ACK_TYPE_TO_RECORD_STATE maps it to ARCHIVED), so it is staged like any
+                // other terminal ack: archived on commit, released on abort.
                 for (Byte ackType : ackTypeMap.values()) {
-                    if (ackType != AcknowledgeType.ACCEPT.id && ackType != AcknowledgeType.REJECT.id) {
-                        throwable = new InvalidRequestException("Only ACCEPT or REJECT permitted in transactional ack");
+                    if (ackType != AcknowledgeType.ACCEPT.id
+                        && ackType != AcknowledgeType.REJECT.id
+                        && ackType != ACKNOWLEDGE_TYPE_GAP) {
+                        throwable = new InvalidRequestException(
+                            "Only ACCEPT, REJECT or gap permitted in transactional ack, got: " + ackType);
                         break;
                     }
                 }
@@ -1212,7 +1228,7 @@ public class SharePartition {
                     return new InvalidRecordStateException("A different transactional acknowledgement is already pending");
                 }
                 InFlightState staged = inFlightBatch.stageBatchTxnAcknowledge(
-                    txnOwnerId, txnOwnerEpoch, AcknowledgeType.forId(ackType), stagedDeliveryState);
+                    txnOwnerId, txnOwnerEpoch, ackType, stagedDeliveryState);
                 if (staged == null) {
                     return new InvalidRecordStateException("Cannot stage txn ack: batch not in ACQUIRED state");
                 }
@@ -1238,7 +1254,7 @@ public class SharePartition {
                         return new InvalidRecordStateException("A different transactional acknowledgement is already pending");
                     }
                     InFlightState staged = os.getValue().stageTxnAcknowledge(
-                        txnOwnerId, txnOwnerEpoch, AcknowledgeType.forId(ackType), stagedDeliveryState);
+                        txnOwnerId, txnOwnerEpoch, ackType, stagedDeliveryState);
                     if (staged == null) {
                         return new InvalidRecordStateException("Cannot stage txn ack: offset " + os.getKey() + " not ACQUIRED");
                     }

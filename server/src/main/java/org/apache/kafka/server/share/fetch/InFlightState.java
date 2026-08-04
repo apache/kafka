@@ -42,6 +42,13 @@ public class InFlightState {
      */
     public static final String EMPTY_MEMBER_ID = "";
 
+    /**
+     * The acknowledgement type byte the client sends for an acquired offset that holds no
+     * non-control record. It has no {@link AcknowledgeType} constant because it is not a
+     * disposition the application can choose.
+     */
+    public static final byte ACKNOWLEDGE_TYPE_GAP = (byte) 0;
+
     // The state of the fetch batch records.
     private RecordState state;
     // The number of times the records has been delivered to the client.
@@ -303,24 +310,31 @@ public class InFlightState {
     }
 
     public InFlightState stageTxnAcknowledge(long txnOwnerId, short txnOwnerEpoch, AcknowledgeType ackType) {
-        return stageTxnAcknowledge(txnOwnerId, txnOwnerEpoch, ackType, defaultStagedDeliveryState(ackType));
+        return stageTxnAcknowledge(txnOwnerId, txnOwnerEpoch, ackType.id, defaultStagedDeliveryState(ackType));
     }
 
     /**
      * Stage this record into an open producer transaction. Transitions state from ACQUIRED to TX_PENDING,
      * cancels the acquisition lock timer (transaction timeout governs the hold instead), and records the
      * transaction owner identity and ack type for later resolution by {@link #applyTxnMarker}.
-     * Only ACCEPT and REJECT are valid ack types inside a transaction.
+     * <p>
+     * The ack type is taken as a raw byte rather than an {@link AcknowledgeType} because the gap
+     * marker (0) has no enum constant: it is emitted by the consumer for an acquired offset holding
+     * no non-control record, and must be stageable like any other terminal disposition. ACCEPT,
+     * REJECT and gap are valid inside a transaction; RELEASE and RENEW are not, since they concern
+     * the acquisition lock, which the transaction timeout has taken over.
      */
-    public InFlightState stageTxnAcknowledge(long txnOwnerId, short txnOwnerEpoch, AcknowledgeType ackType, RecordState stagedDeliveryState) {
-        if (ackType != AcknowledgeType.ACCEPT && ackType != AcknowledgeType.REJECT) {
-            throw new IllegalArgumentException("Only ACCEPT or REJECT are valid inside a transaction, got: " + ackType);
+    public InFlightState stageTxnAcknowledge(long txnOwnerId, short txnOwnerEpoch, byte ackType, RecordState stagedDeliveryState) {
+        if (ackType != AcknowledgeType.ACCEPT.id
+            && ackType != AcknowledgeType.REJECT.id
+            && ackType != ACKNOWLEDGE_TYPE_GAP) {
+            throw new IllegalArgumentException("Only ACCEPT, REJECT or gap are valid inside a transaction, got: " + ackType);
         }
         try {
             state = state.validateTransition(RecordState.TX_PENDING);
             this.stagedTxnOwnerId = txnOwnerId;
             this.stagedTxnOwnerEpoch = txnOwnerEpoch;
-            this.stagedAckType = ackType.id;
+            this.stagedAckType = ackType;
             this.stagedDeliveryState = stagedDeliveryState.id;
             cancelAndClearAcquisitionLockTimeoutTask();
             return this;
@@ -391,6 +405,10 @@ public class InFlightState {
     private RecordState fallbackDeliveryState(boolean dlqSupportEnabled) {
         if (stagedAckType == AcknowledgeType.ACCEPT.id) {
             return RecordState.ACKNOWLEDGED;
+        }
+        // A gap holds no record, so it is never a DLQ candidate however the group is configured.
+        if (stagedAckType == ACKNOWLEDGE_TYPE_GAP) {
+            return RecordState.ARCHIVED;
         }
         return dlqSupportEnabled ? RecordState.ARCHIVING : RecordState.ARCHIVED;
     }

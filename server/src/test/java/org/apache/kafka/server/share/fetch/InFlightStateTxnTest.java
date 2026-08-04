@@ -96,6 +96,60 @@ public class InFlightStateTxnTest {
             () -> state.stageTxnAcknowledge(TXN_OWNER_ID, TXN_OWNER_EPOCH, AcknowledgeType.RENEW));
     }
 
+    // ── stageTxnAcknowledge — gap marker (ack type 0) ────────────────────────
+    // A gap is not an application choice: the consumer emits it for an acquired offset holding no
+    // non-control record, which happens on any topic written by a transactional producer. It must
+    // be stageable, otherwise the broker rejects the request and the producer is killed.
+
+    @Test
+    public void testStageTxnAcknowledge_withGap_succeedsAndArchivesOnCommit() {
+        InFlightState state = acquired();
+        InFlightState result = state.stageTxnAcknowledge(
+            TXN_OWNER_ID, TXN_OWNER_EPOCH, InFlightState.ACKNOWLEDGE_TYPE_GAP, RecordState.ARCHIVED);
+
+        assertNotNull(result);
+        assertEquals(RecordState.TX_PENDING, result.state());
+        assertEquals(InFlightState.ACKNOWLEDGE_TYPE_GAP, result.stagedAckType());
+        assertEquals(RecordState.ARCHIVED.id, result.stagedDeliveryState());
+        assertNull(result.acquisitionLockTimeoutTask());
+
+        InFlightState committed = result.applyTxnMarker(TXN_OWNER_ID, TXN_OWNER_EPOCH, TransactionResult.COMMIT);
+        assertNotNull(committed);
+        assertEquals(RecordState.ARCHIVED, committed.state());
+    }
+
+    @Test
+    public void testStageTxnAcknowledge_withGap_returnsToAvailableOnAbort() {
+        InFlightState state = acquired();
+        state.stageTxnAcknowledge(
+            TXN_OWNER_ID, TXN_OWNER_EPOCH, InFlightState.ACKNOWLEDGE_TYPE_GAP, RecordState.ARCHIVED);
+
+        InFlightState aborted = state.applyTxnMarker(TXN_OWNER_ID, TXN_OWNER_EPOCH, TransactionResult.ABORT);
+        assertNotNull(aborted);
+        assertEquals(RecordState.AVAILABLE, aborted.state());
+    }
+
+    @Test
+    public void testStageTxnAcknowledge_withGap_neverGoesToDlqEvenWhenEnabled() {
+        // The staged delivery state is normally supplied by the caller, but if it is ever the -1
+        // sentinel the fallback must not route a gap to the DLQ - there is no record to send.
+        InFlightState state = acquired();
+        state.stageTxnAcknowledge(
+            TXN_OWNER_ID, TXN_OWNER_EPOCH, InFlightState.ACKNOWLEDGE_TYPE_GAP, RecordState.ARCHIVED);
+
+        InFlightState committed = state.applyTxnMarker(
+            TXN_OWNER_ID, TXN_OWNER_EPOCH, TransactionResult.COMMIT, true);
+        assertNotNull(committed);
+        assertEquals(RecordState.ARCHIVED, committed.state());
+    }
+
+    @Test
+    public void testStageTxnAcknowledge_withUnknownAckType_throwsIllegalArgument() {
+        InFlightState state = acquired();
+        assertThrows(IllegalArgumentException.class,
+            () -> state.stageTxnAcknowledge(TXN_OWNER_ID, TXN_OWNER_EPOCH, (byte) 9, RecordState.ARCHIVED));
+    }
+
     // ── applyTxnMarker — COMMIT paths ────────────────────────────────────────
 
     @Test

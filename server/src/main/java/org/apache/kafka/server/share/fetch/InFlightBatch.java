@@ -242,7 +242,7 @@ public class InFlightBatch {
     public InFlightState stageBatchTxnAcknowledge(
         long txnOwnerId,
         short txnOwnerEpoch,
-        org.apache.kafka.clients.consumer.AcknowledgeType ackType,
+        byte ackType,
         RecordState stagedDeliveryState
     ) {
         return inFlightState().stageTxnAcknowledge(txnOwnerId, txnOwnerEpoch, ackType, stagedDeliveryState);
