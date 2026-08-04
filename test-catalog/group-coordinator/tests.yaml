@@ -1720,6 +1720,7 @@ org.apache.kafka.coordinator.group.streams.topics.CopartitionedTopicsEnforcerTes
 - shouldThrowTopicConfigurationExceptionIfPartitionCountsForCoPartitionedTopicsDontMatch
 org.apache.kafka.coordinator.group.streams.topics.EndpointToPartitionsManagerTest:
 - Should
+- testEndpointToPartitionsExcludesPartitionsMissingFromSmallerSourceTopic
 - testEndpointToPartitionsWithStandbyTaskAssignments
 org.apache.kafka.coordinator.group.streams.topics.InternalTopicManagerTest:
 - testConfigureTopics
