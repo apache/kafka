@@ -36,6 +36,7 @@ import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.message.AddOffsetsToTxnRequestData;
 import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopic;
@@ -242,6 +243,8 @@ import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.UnregisterBrokerRequestData;
 import org.apache.kafka.common.message.UnregisterBrokerResponseData;
+import org.apache.kafka.common.message.UnregisterControllerRequestData;
+import org.apache.kafka.common.message.UnregisterControllerResponseData;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.message.UpdateRaftVoterRequestData;
@@ -319,6 +322,7 @@ import static org.apache.kafka.common.protocol.ApiKeys.PRODUCE;
 import static org.apache.kafka.common.protocol.ApiKeys.SASL_AUTHENTICATE;
 import static org.apache.kafka.common.protocol.ApiKeys.SYNC_GROUP;
 import static org.apache.kafka.common.protocol.ApiKeys.UNREGISTER_BROKER;
+import static org.apache.kafka.common.protocol.ApiKeys.UNREGISTER_CONTROLLER;
 import static org.apache.kafka.common.requests.EndTxnRequest.LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -347,6 +351,8 @@ public class RequestResponseTest {
         toSkip.put(ELECT_LEADERS, List.of((short) 0));
         // UnregisterBroker v0 contains the error message in the response
         toSkip.put(UNREGISTER_BROKER, List.of((short) 0));
+        // UnregisterController v0 contains the error message in the response
+        toSkip.put(UNREGISTER_CONTROLLER, List.of((short) 0));
 
         for (ApiKeys apikey : ApiKeys.values()) {
             for (short version : apikey.allVersions()) {
@@ -740,8 +746,8 @@ public class RequestResponseTest {
 
     @Test
     public void testCreateTopicRequestV3FailsIfNoPartitionsOrReplicas() {
-        final UnsupportedVersionException exception = assertThrows(
-            UnsupportedVersionException.class, () -> {
+        final UnsupportedProtocolFieldException exception = assertThrows(
+            UnsupportedProtocolFieldException.class, () -> {
                 CreateTopicsRequestData data = new CreateTopicsRequestData()
                     .setTimeoutMs(123)
                     .setValidateOnly(false);
@@ -756,8 +762,7 @@ public class RequestResponseTest {
 
                 new Builder(data).build((short) 3);
             });
-        assertTrue(exception.getMessage().contains("supported in CreateTopicRequest version 4+"));
-        assertTrue(exception.getMessage().contains("[foo, bar]"));
+        assertTrue(exception.getMessage().contains("does not support [default partitions/replication for topics [foo,bar]] in CREATE_TOPICS API version 3"));
     }
 
     @Test
@@ -929,16 +934,33 @@ public class RequestResponseTest {
         UnregisterBrokerRequest request = new UnregisterBrokerRequest.Builder(
             new UnregisterBrokerRequestData()
         ).build((short) 0);
-        String customerErrorMessage = "customer error message";
+        String customErrorMessage = "custom error message";
 
         UnregisterBrokerResponse response = request.getErrorResponse(
             0,
-            new RuntimeException(customerErrorMessage)
+            new RuntimeException(customErrorMessage)
         );
 
         assertEquals(0, response.throttleTimeMs());
         assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), response.data().errorCode());
-        assertEquals(customerErrorMessage, response.data().errorMessage());
+        assertEquals(customErrorMessage, response.data().errorMessage());
+    }
+
+    @Test
+    public void testUnregisterControllerResponseWithUnknownServerError() {
+        UnregisterControllerRequest request = new UnregisterControllerRequest.Builder(
+            new UnregisterControllerRequestData()
+        ).build((short) 0);
+        String customErrorMessage = "custom error message";
+
+        UnregisterControllerResponse response = request.getErrorResponse(
+            0,
+            new RuntimeException(customErrorMessage)
+        );
+
+        assertEquals(0, response.throttleTimeMs());
+        assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), response.data().errorCode());
+        assertEquals(customErrorMessage, response.data().errorMessage());
     }
 
     private ApiVersionsResponse defaultApiVersionsResponse() {
@@ -1145,6 +1167,7 @@ public class RequestResponseTest {
             case ALTER_SHARE_GROUP_OFFSETS: return createAlterShareGroupOffsetsRequest(version);
             case DELETE_SHARE_GROUP_OFFSETS: return createDeleteShareGroupOffsetsRequest(version);
             case STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE: return createStreamsGroupTopologyDescriptionUpdateRequest(version);
+            case UNREGISTER_CONTROLLER: return createUnregisterControllerRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1241,6 +1264,7 @@ public class RequestResponseTest {
             case ALTER_SHARE_GROUP_OFFSETS: return createAlterShareGroupOffsetsResponse();
             case DELETE_SHARE_GROUP_OFFSETS: return createDeleteShareGroupOffsetsResponse();
             case STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE: return createStreamsGroupTopologyDescriptionUpdateResponse();
+            case UNREGISTER_CONTROLLER: return createUnregisterControllerResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -3628,6 +3652,15 @@ public class RequestResponseTest {
 
     private UnregisterBrokerResponse createUnregisterBrokerResponse() {
         return new UnregisterBrokerResponse(new UnregisterBrokerResponseData());
+    }
+
+    private UnregisterControllerRequest createUnregisterControllerRequest(short version) {
+        UnregisterControllerRequestData data = new UnregisterControllerRequestData().setControllerId(1);
+        return new UnregisterControllerRequest.Builder(data).build(version);
+    }
+
+    private UnregisterControllerResponse createUnregisterControllerResponse() {
+        return new UnregisterControllerResponse(new UnregisterControllerResponseData());
     }
 
     private DescribeTransactionsRequest createDescribeTransactionsRequest(short version) {

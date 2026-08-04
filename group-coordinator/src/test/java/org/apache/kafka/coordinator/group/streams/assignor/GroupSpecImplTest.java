@@ -83,4 +83,10 @@ public class GroupSpecImplTest {
         assertTrue(groupSpec.configs().isEmpty());
     }
 
+    @Test
+    void testMembersAndConfigsAreUnmodifiable() {
+        assertThrows(UnsupportedOperationException.class, () -> groupSpec.members().put("other-member", member));
+        assertThrows(UnsupportedOperationException.class, () -> groupSpec.configs().put("key", "value"));
+    }
+
 }
