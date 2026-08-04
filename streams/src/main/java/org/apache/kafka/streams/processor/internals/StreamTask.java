@@ -421,6 +421,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     public void flush() {
         stateMgr.flushCache();
+        // flushing the caches may evict records into terminal nodes, so record their e2e latency
+        // before we leave the processing path; otherwise those samples would either be attributed
+        // to the next batch's end time or dropped entirely if the task never processes again
+        maybeFlushTerminalE2ELatency(time.milliseconds());
         recordCollector.flush();
     }
 
@@ -932,9 +936,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             null,
             new RecordHeaders()
         );
-        // reused as the terminal e2e flush time below, so punctuation needs no extra clock read
-        final long punctuateWallClockMs = time.milliseconds();
-        updateProcessorContext(node, punctuateWallClockMs, recordContext);
+        updateProcessorContext(node, time.milliseconds(), recordContext);
 
         if (log.isTraceEnabled()) {
             log.trace("Punctuating processor {} with timestamp {} and punctuation type {}", node.name(), timestamp, type);
@@ -1012,8 +1014,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 droppedRecordsSensor.record();
             }
         } finally {
-            // flush e2e latency for any records the punctuator forwarded to terminal nodes
-            maybeFlushTerminalE2ELatency(punctuateWallClockMs);
+            // flush e2e latency for any records the punctuator forwarded to terminal nodes; the clock
+            // must be re-read because the punctuator itself is part of the latency we are measuring,
+            // and punctuators fire on a schedule so the extra read is not on the per-record path
+            maybeFlushTerminalE2ELatency(time.milliseconds());
             processorContext.setCurrentNode(null);
         }
     }
@@ -1371,12 +1375,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 maxTs = recordTimestamp;
                 sumOffset = 0L;
             } else {
-                if (recordTimestamp < minTs) {
-                    minTs = recordTimestamp;
-                }
-                if (recordTimestamp > maxTs) {
-                    maxTs = recordTimestamp;
-                }
+                minTs = Math.min(minTs, recordTimestamp);
+                maxTs = Math.max(maxTs, recordTimestamp);
                 sumOffset += recordTimestamp - baseTs;
             }
             count++;

@@ -184,8 +184,11 @@ public interface Task {
     }
 
     /**
-     * Record terminal-node e2e latency buffered during the current batch/punctuation against a
-     * single wall-clock time. No-op for tasks that do not forward to terminal nodes.
+     * Record terminal-node e2e latency for everything buffered since the last flush against a single
+     * wall-clock time. Must be called on every path that can forward to a terminal node -- the end of
+     * a processing batch, punctuation, and flushing the caches -- with a clock read taken after that
+     * work completed, so the processing delay is part of the measured latency.
+     * No-op for tasks that do not forward to terminal nodes.
      */
     default void maybeFlushTerminalE2ELatency(final long endMs) {
     }
