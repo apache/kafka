@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.SubscriptionPattern;
@@ -93,20 +94,10 @@ public class SubscriptionState {
     /* the list of topics the user has requested */
     private Set<String> subscription;
 
-    /**
-     * Topic IDs received in an assignment from the coordinator when using the Consumer rebalance protocol.
-     * This will be used to include assigned topic IDs in metadata requests when the consumer
-     * does not know the topic names (ex. when the user subscribes to a RE2J regex computed on the broker)
-     */
-    private Set<Uuid> assignedTopicIds;
-
     /* The list of topics the group has subscribed to. This may include some topics which are not part
      * of `subscription` for the leader of a group since it is responsible for detecting metadata changes
      * which require a group rebalance. */
     private Set<String> groupSubscription;
-
-    /* the partitions that are currently assigned, note that the order of partition matters (see FetchBuilder for more details) */
-    private final PartitionStates<TopicPartitionState> assignment;
 
     /* Default offset reset strategy */
     private final AutoOffsetResetStrategy defaultResetStrategy;
@@ -114,7 +105,7 @@ public class SubscriptionState {
     /* User-provided listener to be invoked when assignment changes */
     private Optional<ConsumerRebalanceListener> rebalanceListener = Optional.empty();
 
-    private int assignmentId = 0;
+    private final AssignState assignState;
 
     @Override
     public synchronized String toString() {
@@ -124,7 +115,7 @@ public class SubscriptionState {
             ", subscription=" + String.join(",", subscription) +
             ", groupSubscription=" + String.join(",", groupSubscription) +
             ", defaultResetStrategy=" + defaultResetStrategy +
-            ", assignment=" + assignment.partitionStateValues() + " (id=" + assignmentId + ")}";
+            ", assignment=" + assignState.partitionStateValues() + " (id=" + assignState.getAssignmentId() + ")}";
     }
 
     private Object subscribedPatternInUse() {
@@ -146,7 +137,7 @@ public class SubscriptionState {
             case AUTO_PATTERN_RE2J:
                 return "Subscribe(" + subscribedRe2JPattern + ")";
             case USER_ASSIGNED:
-                return "Assign(" + assignedPartitions() + " , id=" + assignmentId + ")";
+                return "Assign(" + assignedPartitions() + " , id=" + assignState.getAssignmentId() + ")";
             case AUTO_TOPICS_SHARE:
                 return "Subscribe to Share Group(" + String.join(",", subscription) + ")";
             default:
@@ -158,12 +149,11 @@ public class SubscriptionState {
         this.log = logContext.logger(this.getClass());
         this.defaultResetStrategy = defaultResetStrategy;
         this.subscription = new TreeSet<>(); // use a sorted set for better logging
-        this.assignedTopicIds = new TreeSet<>();
-        this.assignment = new PartitionStates<>();
         this.groupSubscription = new HashSet<>();
         this.subscribedPattern = null;
         this.subscribedRe2JPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
+        this.assignState = new AssignState();
     }
 
     /**
@@ -173,7 +163,7 @@ public class SubscriptionState {
      * @return The current assignment Id
      */
     synchronized int assignmentId() {
-        return assignmentId;
+        return assignState.getAssignmentId();
     }
 
     /**
@@ -258,16 +248,16 @@ public class SubscriptionState {
     public synchronized boolean assignFromUser(Set<TopicPartition> partitions) {
         setSubscriptionType(SubscriptionType.USER_ASSIGNED);
 
-        if (this.assignment.partitionSet().equals(partitions))
+        if (this.assignState.topicPartitionSet().equals(partitions))
             return false;
 
-        assignmentId++;
+        this.assignState.increaseAssignmentId();
 
         // update the subscribed topics
         Set<String> manualSubscribedTopics = new HashSet<>();
         Map<TopicPartition, TopicPartitionState> partitionToState = new HashMap<>();
         for (TopicPartition partition : partitions) {
-            TopicPartitionState state = assignment.stateValue(partition);
+            TopicPartitionState state = this.assignState.stateValue(partition);
             if (state == null)
                 state = new TopicPartitionState();
             partitionToState.put(partition, state);
@@ -275,7 +265,7 @@ public class SubscriptionState {
             manualSubscribedTopics.add(partition.topic());
         }
 
-        this.assignment.set(partitionToState);
+        this.assignState.setPartitionToState(partitionToState);
         return changeSubscription(manualSubscribedTopics);
     }
 
@@ -318,14 +308,14 @@ public class SubscriptionState {
 
         Map<TopicPartition, TopicPartitionState> assignedPartitionStates = new LinkedHashMap<>(assignments.size());
         for (TopicPartition tp : assignments) {
-            TopicPartitionState state = this.assignment.stateValue(tp);
+            TopicPartitionState state = this.assignState.stateValue(tp);
             if (state == null)
                 state = new TopicPartitionState();
             assignedPartitionStates.put(tp, state);
         }
 
-        assignmentId++;
-        this.assignment.set(assignedPartitionStates);
+        this.assignState.increaseAssignmentId();
+        this.assignState.setPartitionToState(assignedPartitionStates);
     }
 
     private void registerRebalanceListener(Optional<ConsumerRebalanceListener> listener) {
@@ -347,11 +337,9 @@ public class SubscriptionState {
     public synchronized void unsubscribe() {
         this.subscription = Collections.emptySet();
         this.groupSubscription = Collections.emptySet();
-        this.assignment.clear();
-        this.assignedTopicIds = Collections.emptySet();
         this.subscribedPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
-        this.assignmentId++;
+        this.assignState.unsubscribe();
     }
 
     /**
@@ -424,14 +412,14 @@ public class SubscriptionState {
     }
 
     private TopicPartitionState assignedState(TopicPartition tp) {
-        TopicPartitionState state = this.assignment.stateValue(tp);
+        TopicPartitionState state = this.assignState.stateValue(tp);
         if (state == null)
             throw new IllegalStateException("No current assignment for partition " + tp);
         return state;
     }
 
     private TopicPartitionState assignedStateOrNull(TopicPartition tp) {
-        return this.assignment.stateValue(tp);
+        return this.assignState.stateValue(tp);
     }
 
     public synchronized void seekValidated(TopicPartition tp, FetchPosition position) {
@@ -464,14 +452,14 @@ public class SubscriptionState {
      * @return a modifiable copy of the currently assigned partitions
      */
     public synchronized Set<TopicPartition> assignedPartitions() {
-        return new HashSet<>(this.assignment.partitionSet());
+        return assignState.assignedPartitions();
     }
 
     /**
      * @return a modifiable copy of the currently assigned partitions as a list
      */
     public synchronized List<TopicPartition> assignedPartitionsList() {
-        return new ArrayList<>(this.assignment.partitionSet());
+        return this.assignState.assignedPartitionsList();
     }
 
     /**
@@ -479,14 +467,14 @@ public class SubscriptionState {
      * @return the number of assigned partitions.
      */
     public synchronized int numAssignedPartitions() {
-        return this.assignment.size();
+        return this.assignState.numAssignedPartitions();
     }
 
     // Visible for testing
     public synchronized List<TopicPartition> fetchablePartitions(Predicate<TopicPartition> isAvailable) {
         // Since this is in the hot-path for fetching, we do this instead of using java.util.stream API
         List<TopicPartition> result = new ArrayList<>();
-        assignment.forEach((topicPartition, topicPartitionState) -> {
+        this.assignState.getAssignment().forEach((topicPartition, topicPartitionState) -> {
             // Cheap check is first to avoid evaluating the predicate if possible
             if ((subscriptionType.equals(SubscriptionType.AUTO_TOPICS_SHARE) || isFetchableAndSubscribed(topicPartition, topicPartitionState))
                     && isAvailable.test(topicPartition)) {
@@ -523,7 +511,7 @@ public class SubscriptionState {
             return false;
         }
 
-        return this.assignedTopicIds.contains(topicId);
+        return this.assignState.isAssignedFromRe2j(topicId);
     }
 
     public synchronized void position(TopicPartition tp, FetchPosition position) {
@@ -784,13 +772,7 @@ public class SubscriptionState {
     }
 
     public synchronized Map<TopicPartition, OffsetAndMetadata> allConsumed() {
-        Map<TopicPartition, OffsetAndMetadata> allConsumed = new HashMap<>();
-        assignment.forEach((topicPartition, partitionState) -> {
-            if (partitionState.hasValidPosition())
-                allConsumed.put(topicPartition, new OffsetAndMetadata(partitionState.position.offset,
-                        partitionState.position.offsetEpoch, ""));
-        });
-        return allConsumed;
+        return this.assignState.allConsumed();
     }
 
     public synchronized void requestOffsetReset(TopicPartition partition, AutoOffsetResetStrategy offsetResetStrategy) {
@@ -836,7 +818,7 @@ public class SubscriptionState {
 
     public synchronized boolean hasAllFetchPositions() {
         // Since this is in the hot-path for fetching, we do this instead of using java.util.stream API
-        Iterator<TopicPartitionState> it = assignment.stateIterator();
+        Iterator<TopicPartitionState> it = assignState.assignmentIterator();
         while (it.hasNext()) {
             if (!it.next().hasValidPosition()) {
                 return false;
@@ -850,13 +832,7 @@ public class SubscriptionState {
     }
 
     private Set<TopicPartition> collectPartitions(Predicate<TopicPartitionState> filter) {
-        Set<TopicPartition> result = new HashSet<>();
-        assignment.forEach((topicPartition, topicPartitionState) -> {
-            if (filter.test(topicPartitionState)) {
-                result.add(topicPartition);
-            }
-        });
-        return result;
+        return this.assignState.collectPartitions(filter);
     }
 
     /**
@@ -869,7 +845,7 @@ public class SubscriptionState {
      */
     public synchronized void resetInitializingPositions(Predicate<TopicPartition> initPartitionsToInclude) {
         final Set<TopicPartition> partitionsWithNoOffsets = new HashSet<>();
-        assignment.forEach((tp, partitionState) -> {
+        this.assignState.getAssignment().forEach((tp, partitionState) -> {
             if (partitionState.shouldInitialize() && initPartitionsToInclude.test(tp)) {
                 if (defaultResetStrategy == AutoOffsetResetStrategy.NONE)
                     partitionsWithNoOffsets.add(tp);
@@ -903,7 +879,7 @@ public class SubscriptionState {
     }
 
     public synchronized boolean isAssigned(TopicPartition tp) {
-        return assignment.contains(tp);
+        return assignState.isAssigned(tp);
     }
 
     public synchronized boolean isPaused(TopicPartition tp) {
@@ -956,15 +932,19 @@ public class SubscriptionState {
      * @return Topic IDs received in an assignment that have not been reconciled yet, so we need metadata for them.
      */
     public synchronized Set<Uuid> assignedTopicIds() {
-        return assignedTopicIds;
+        return this.assignState.assignedTopicIds();
     }
 
     /**
      * Set the set of topic IDs that have been assigned to the consumer by the coordinator.
      * This is used for topic IDs received in an assignment when using the new consumer rebalance protocol (KIP-848).
      */
-    public synchronized  void setAssignedTopicIds(Set<Uuid> assignedTopicIds) {
-        this.assignedTopicIds = assignedTopicIds;
+    public synchronized void setAssignedTopicIds(Set<Uuid> assignedTopicIds) {
+        this.assignState.setAssignedTopicIds(assignedTopicIds);
+    }
+
+    public synchronized void putAssignedTopicNames(Uuid topicId, String nameFromMetadataCache) {
+        this.assignState.putAssignedTopicNames(topicId, nameFromMetadataCache);
     }
 
     /**
@@ -991,13 +971,26 @@ public class SubscriptionState {
     }
 
     synchronized void movePartitionToEnd(TopicPartition tp) {
-        assignment.moveToEnd(tp);
+        assignState.movePartitionToEnd(tp);
     }
 
     public synchronized Optional<ConsumerRebalanceListener> rebalanceListener() {
         return rebalanceListener;
     }
 
+    public synchronized String getAssignTopicNamesFromCacheOrDefault(Uuid topicId, String defaultValue) {
+        return assignState.getAssignedTopicNamesFromCacheOrDefault(topicId, defaultValue);
+    }
+
+    public synchronized void clearAssignedTopicNamesCache() {
+        assignState.clearAssignedTopicNamesCache();
+    }
+
+    public synchronized void removeNotAssignedTopicsFromCache(Set<String> assignedTopics) {
+        assignState.removeNotAssignedTopicsFromCache(assignedTopics);
+    }
+    
+    
     private static class TopicPartitionState {
 
         private FetchState fetchState;
@@ -1447,4 +1440,145 @@ public class SubscriptionState {
 
         }
     }
+
+    static class AssignState {
+
+        /**
+         * Topic IDs received in an assignment from the coordinator when using the Consumer rebalance protocol.
+         * This will be used to include assigned topic IDs in metadata requests when the consumer
+         * does not know the topic names (ex. when the user subscribes to a RE2J regex computed on the broker)
+         */
+        private Set<Uuid> assignedTopicIds;
+
+        /* the partitions that are currently assigned, note that the order of partition matters (see FetchBuilder for more details) */
+        private final PartitionStates<TopicPartitionState> assignment;
+
+        private int assignmentId = 0;
+
+        /**
+         * Local cache of assigned topic IDs and names. Topics are added here when received in a
+         * target assignment, as we discover their names in the Metadata cache, and removed when the
+         * topic is not in the subscription anymore. The purpose of this cache is to avoid metadata
+         * requests in cases where a currently assigned topic is in the target assignment (new
+         * partition assigned, or revoked), but it is not present the Metadata cache at that moment.
+         * The cache is cleared when the subscription changes ({@link AbstractMembershipManager#transitionToJoining()}, the
+         * member fails ({@link AbstractMembershipManager#transitionToFatal()} or leaves the group
+         * ({@link AbstractMembershipManager#leaveGroup()}/{@link AbstractMembershipManager#leaveGroupOnClose(CloseOptions.GroupMembershipOperation)}).
+         */
+        private final Map<Uuid, String> assignedTopicNamesCache;
+        
+
+        public AssignState() {
+            this.assignedTopicIds = new TreeSet<>();
+            this.assignment = new PartitionStates<>();
+            this.assignedTopicNamesCache = new HashMap<>(); 
+        }
+
+        public void unsubscribe() {
+            this.assignedTopicIds = Collections.emptySet();
+            this.assignment.clear();
+            increaseAssignmentId();
+        }
+
+        public boolean isAssignedFromRe2j(Uuid topicId) {
+            return this.assignedTopicIds.contains(topicId);
+        }
+
+        public Set<Uuid> assignedTopicIds() {
+            return assignedTopicIds;
+        }
+
+        public void setAssignedTopicIds(Set<Uuid> assignedTopicIds) {
+            this.assignedTopicIds = assignedTopicIds;
+        }
+
+        public int getAssignmentId() {
+            return assignmentId;
+        }
+
+        public void increaseAssignmentId() {
+            assignmentId++;
+        }
+
+        PartitionStates<TopicPartitionState> getAssignment() {
+            return assignment;
+        }
+
+        public Set<TopicPartition> topicPartitionSet() {
+            return this.assignment.partitionSet();
+        }
+
+        public Set<TopicPartition> assignedPartitions() {
+            return new HashSet<>(this.assignment.partitionSet());
+        }
+
+        public List<TopicPartition> assignedPartitionsList() {
+            return new ArrayList<>(this.assignment.partitionSet());
+        }
+
+        TopicPartitionState stateValue(TopicPartition topicPartition) {
+            return this.assignment.stateValue(topicPartition);
+        }
+
+        void setPartitionToState(Map<TopicPartition, TopicPartitionState> partitionToState) {
+            this.assignment.set(partitionToState);
+        }
+
+        public void movePartitionToEnd(TopicPartition tp) {
+            assignment.moveToEnd(tp);
+        }
+
+        Iterator<TopicPartitionState> assignmentIterator() {
+            return this.assignment.stateIterator();
+        }
+
+        public boolean isAssigned(TopicPartition tp) {
+            return assignment.contains(tp);
+        }
+
+        public int numAssignedPartitions() {
+            return this.assignment.size();
+        }
+
+        List<TopicPartitionState> partitionStateValues() {
+            return this.assignment.partitionStateValues();
+        }
+
+        public Map<TopicPartition, OffsetAndMetadata> allConsumed() {
+            Map<TopicPartition, OffsetAndMetadata> allConsumed = new HashMap<>();
+            this.assignment.forEach((topicPartition, partitionState) -> {
+                if (partitionState.hasValidPosition())
+                    allConsumed.put(topicPartition, new OffsetAndMetadata(partitionState.position.offset,
+                            partitionState.position.offsetEpoch, ""));
+            });
+            return allConsumed;
+        }
+
+        Set<TopicPartition> collectPartitions(Predicate<TopicPartitionState> filter) {
+            Set<TopicPartition> result = new HashSet<>();
+            this.assignment.forEach((topicPartition, topicPartitionState) -> {
+                if (filter.test(topicPartitionState)) {
+                    result.add(topicPartition);
+                }
+            });
+            return result;
+        }
+
+        public void putAssignedTopicNames(Uuid topicId, String nameFromMetadataCache) {
+            this.assignedTopicNamesCache.put(topicId, nameFromMetadataCache);
+        }
+        
+        public String getAssignedTopicNamesFromCacheOrDefault(Uuid topicId, String defaultValue) {
+            return this.assignedTopicNamesCache.getOrDefault(topicId, defaultValue);
+        }
+
+        public void clearAssignedTopicNamesCache() {
+            this.assignedTopicNamesCache.clear();
+        }
+
+        public void removeNotAssignedTopicsFromCache(Set<String> assignedTopics) {
+            assignedTopicNamesCache.values().retainAll(assignedTopics);
+        }
+    }
+    
 }
