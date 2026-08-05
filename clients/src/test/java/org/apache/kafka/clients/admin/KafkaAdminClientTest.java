@@ -6461,6 +6461,8 @@ public class KafkaAdminClientTest {
             final StreamsGroupDescription groupDescription = result.describedGroups().get(GROUP_ID).get();
 
             assertNull(groupDescription.authorizedOperations());
+            String descriptionText = assertDoesNotThrow(groupDescription::toString);
+            assertTrue(descriptionText.contains(", authorizedOperations=null,"));
         }
     }
 
