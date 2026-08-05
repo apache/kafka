@@ -40,6 +40,11 @@ public final class RaftClientBenchmarkContext {
     public static final int AVERAGE_TIME_MEASUREMENT_ITERATIONS = 10;
     public static final int AVERAGE_TIME_FORKS = 3;
 
+    /**
+     * Sized so that mock time cannot outrun the append purgatory.
+     */
+    private static final int BENCHMARK_ELECTION_TIMEOUT_MS = 50;
+
     public static final KRaftVersion DEFAULT_KRAFT_VERSION = KRaftVersion.LATEST_PRODUCTION;
     // Default to the newest version of each (the highest-ordinal enum constant).
     public static final RaftProtocol DEFAULT_RAFT_PROTOCOL =
@@ -111,11 +116,13 @@ public final class RaftClientBenchmarkContext {
         }
         List<ReplicaKey> voterKeys = replicaKeys(randomReplicaId(), voterCount);
         ReplicaKey local = voterKeys.get(0);
-        return new RaftClientBenchmarkContext(
-            buildContext(local, voterKeys, kraftVersion, raftProtocol),
-            local,
-            voterKeys,
-            List.of());
+        RaftClientTestContext context =
+            benchmarkContextBuilder(local, voterKeys, kraftVersion, raftProtocol)
+                .withUnknownLeader(0)
+                .withMessageRoundTrip(false)
+                .withFastPoll(true)
+                .build();
+        return new RaftClientBenchmarkContext(context, local, voterKeys, List.of());
     }
 
     /**
@@ -136,7 +143,10 @@ public final class RaftClientBenchmarkContext {
         ReplicaKey local = voterKeys.get(0);
 
         List<ReplicaKey> observerKeys = replicaKeys(local.id() + voterCount, observerCount);
-        RaftClientTestContext context = buildContext(local, voterKeys, kraftVersion, raftProtocol);
+        RaftClientTestContext context =
+            benchmarkContextBuilder(local, voterKeys, kraftVersion, raftProtocol)
+                .withUnknownLeader(0)
+                .build();
         context.unattachedToLeader();
 
         return new RaftClientBenchmarkContext(context, local, voterKeys, observerKeys);
@@ -157,24 +167,23 @@ public final class RaftClientBenchmarkContext {
     }
 
     /**
-     * Initializes the local node {@code local}, unattached, in a cluster whose voter set is
-     * {@code voterKeys}.
+     * A {@link RaftClientTestContext.Builder} for {@code local} in a cluster whose voter set is
+     * {@code voterKeys}, pre-configured with the settings shared by every raft benchmark.
      */
-    private static RaftClientTestContext buildContext(
+    private static RaftClientTestContext.Builder benchmarkContextBuilder(
         ReplicaKey local,
         List<ReplicaKey> voterKeys,
         KRaftVersion kraftVersion,
         RaftProtocol raftProtocol
-    ) throws IOException {
+    ) {
         VoterSet voters = VoterSetTestUtil.voterSet(voterKeys.stream());
 
         return new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
             .withStartingVoters(voters, kraftVersion)
             .withRaftProtocol(raftProtocol)
+            .withElectionTimeoutMs(BENCHMARK_ELECTION_TIMEOUT_MS)
             .withPollIntervalMs(0)
-            .withUnknownLeader(0)
-            .withMemoryPool(new BatchMemoryPool(5, KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
-            .build();
+            .withMemoryPool(new BatchMemoryPool(5, KafkaRaftClient.MAX_BATCH_SIZE_BYTES));
     }
 
     public RaftClientTestContext testContext() {

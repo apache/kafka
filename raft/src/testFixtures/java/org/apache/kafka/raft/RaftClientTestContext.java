@@ -127,6 +127,8 @@ public final class RaftClientTestContext {
     private int requestTimeoutMs;
     private int appendLingerMs;
     private long pollIntervalMs;
+    private boolean roundTripMessages = true;
+    private boolean fastPoll = false;
 
     private final MockQuorumStateStore quorumStateStore;
     final String clusterId;
@@ -152,6 +154,8 @@ public final class RaftClientTestContext {
     private final List<Throwable> uncaughtExceptions = new ArrayList<>();
 
     private static final int NUMBER_FETCH_TIMEOUTS_IN_UPDATE_VOTER_SET_PERIOD = 1;
+
+    private static final int MAX_POLLS = 100;
 
     public static final class Builder {
         static final int DEFAULT_ELECTION_TIMEOUT_MS = 10000;
@@ -189,6 +193,8 @@ public final class RaftClientTestContext {
         private Endpoints localListeners = Endpoints.empty();
         private boolean isStartingVotersStatic = false;
         private boolean autoJoin = false;
+        private boolean roundTripMessages = true;
+        private boolean fastPoll = false;
         private int fetchSnapshotMaxBytes = QuorumConfig.DEFAULT_QUORUM_FETCH_SNAPSHOT_MAX_BYTES;
         private int fetchMaxBytes = QuorumConfig.DEFAULT_QUORUM_FETCH_MAX_BYTES;
 
@@ -413,6 +419,25 @@ public final class RaftClientTestContext {
             return this;
         }
 
+        /**
+         * Controls whether delivered requests and responses are serialized and deserialized to mimic
+         * the network layer (default {@code true}). Benchmarks that measure the raft client itself
+         * disable this so the fixture's wire simulation does not dominate the measurement.
+         */
+        public Builder withMessageRoundTrip(boolean roundTripMessages) {
+            this.roundTripMessages = roundTripMessages;
+            return this;
+        }
+
+        /**
+         * Enables a non-throwing poll loop for {@link RaftClientTestContext#pollUntil} (default
+         * {@code false}).
+         */
+        public Builder withFastPoll(boolean fastPoll) {
+            this.fastPoll = fastPoll;
+            return this;
+        }
+
         public RaftClientTestContext build() throws IOException {
             Metrics metrics = new Metrics(time);
             MockNetworkChannel channel = new MockNetworkChannel();
@@ -525,6 +550,8 @@ public final class RaftClientTestContext {
             context.requestTimeoutMs = requestTimeoutMs;
             context.appendLingerMs = appendLingerMs;
             context.pollIntervalMs = pollIntervalMs;
+            context.roundTripMessages = roundTripMessages;
+            context.fastPoll = fastPoll;
 
             return context;
         }
@@ -738,10 +765,33 @@ public final class RaftClientTestContext {
     }
 
     public void pollUntil(TestCondition condition) throws InterruptedException {
+        if (fastPoll) {
+            pollUntilFast(condition);
+            return;
+        }
         TestUtils.waitForCondition(() -> {
             poll();
             return condition.conditionMet();
         }, 5000, pollIntervalMs, () -> "Condition failed to be satisfied before timeout");
+    }
+
+    /**
+     * A non-throwing variant of {@link #pollUntil} used only by the JMH benchmarks (enabled via
+     * {@link Builder#withFastPoll}).
+     */
+    private void pollUntilFast(TestCondition condition) {
+        try {
+            for (int remaining = MAX_POLLS; remaining > 0; remaining--) {
+                poll();
+                if (condition.conditionMet()) {
+                    return;
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        throw new IllegalStateException(String.format(
+            "Condition not met within %d polls", MAX_POLLS));
     }
 
     public void pollUntilResponse() throws InterruptedException {
@@ -986,6 +1036,9 @@ public final class RaftClientTestContext {
     }
 
     private ApiMessage roundTripApiMessage(ApiMessage message, short version) {
+        if (!roundTripMessages) {
+            return message;
+        }
         ObjectSerializationCache cache =  new ObjectSerializationCache();
         ByteArrayOutputStream  buffer = new ByteArrayOutputStream(message.size(cache, version));
 
@@ -2338,7 +2391,8 @@ public final class RaftClientTestContext {
             // was not received early on the leader.
             assertTrue(
                 leaderAndEpoch.epoch() >= currentLeaderAndEpoch.epoch(),
-                String.format("new epoch (%d) not >= than old epoch (%d)", leaderAndEpoch.epoch(), currentLeaderAndEpoch.epoch())
+                // Lazy message
+                () -> String.format("new epoch (%d) not >= than old epoch (%d)", leaderAndEpoch.epoch(), currentLeaderAndEpoch.epoch())
             );
             assertNotEquals(currentLeaderAndEpoch, leaderAndEpoch);
             this.currentLeaderAndEpoch = leaderAndEpoch;
