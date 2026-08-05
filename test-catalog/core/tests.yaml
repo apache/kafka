@@ -2018,8 +2018,6 @@ kafka.server.ReplicaAlterLogDirsThreadTest:
 - shouldTruncateToInitialFetchOffsetIfReplicaReturnsUndefinedOffset
 - shouldTruncateToReplicaOffset
 - shouldUpdateLeaderEpochAfterFencedEpochError
-kafka.server.ReplicaFetchTest:
-- testReplicaFetcherThread
 kafka.server.ReplicaFetcherThreadTest:
 - shouldCatchExceptionFromBlockingSendWhenShuttingDownReplicaFetcherThread
 - shouldHandleExceptionFromBlockingSend
