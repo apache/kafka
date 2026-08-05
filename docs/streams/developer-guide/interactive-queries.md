@@ -471,8 +471,93 @@ Use `withLowerBound`, `withUpperBound`, or `withNoBounds` for open-ended or full
 
   * **Window start range is required.** As with the existing window queries, `TimestampedWindowKeyWithHeadersQuery` and the `withWindowStartRange` form of `TimestampedWindowRangeWithHeadersQuery` require a closed window-start range — both `timeFrom` and `timeTo` must be present, and both bounds are inclusive.
   * **Close iterators exactly once.** The range and window queries return a `ReadOnlyRecordIterator`; close it when you are done — always, even if a `next()` call throws partway through — or the underlying store iterator (and the store's `num-open-iterators` metric) leaks. A try-with-resources block does this correctly. The iterator does not support `remove()`.
-  * **Headers depend on how the store was built.** With a `*WithHeaders` builder over a native (RocksDB) header supplier — or over an *in-memory* non-header supplier, which keeps the header-format bytes verbatim through a marker — the queries return the stored headers. With a `*WithHeaders` builder over a non-header *persistent* supplier the underlying store cannot persist headers, so the outcome depends on the supplier: over a *timestamped* supplier, store-served reads succeed with an empty `headers()`; over a *plain* supplier that keeps no timestamp, the entry has no representable timestamp, so `TimestampedKeyWithHeadersQuery` fails with a store-exception error and the range and window-key queries (plus the `withWindowStartRange` form of `TimestampedWindowRangeWithHeadersQuery`) return an iterator that throws a `StreamsException` when it reaches that entry. The session `withKey` form never throws — a session window always carries a valid end timestamp, so such an entry is returned with a `null` `value()` instead. (Session stores have no plain/timestamped split, only a persistent adapter and an in-memory marker.) Read-your-writes applies only to the single-key `TimestampedKeyWithHeadersQuery`, which reads through the record cache; the range, window, and session queries bypass the cache, so a not-yet-flushed write is invisible to them and, with a position bound, fails with a not-up-to-bound error. Against a plain, non-`WithHeaders` store, the new query types are unsupported and fail cleanly with an unknown-query-type error.
   * **Existing query types are unchanged.** The pre-existing IQv2 query types (`KeyQuery`, `TimestampedKeyQuery`, `RangeQuery`, `TimestampedRangeQuery`, `WindowKeyQuery`, `WindowRangeQuery`) also run against header-aware stores, returning header-stripped results, and now behave identically whether the header store was built on the native or the *timestamped* adapter path. (The *plain* adapter is not equivalent: it surfaces a `-1` timestamp rather than a real event-time, and its window queries return plain values instead of `ValueAndTimestamp`.)
+
+**How the store was built determines what the queries return.** For key-value and window stores, the outcome depends on the supplier the `*WithHeaders` builder wraps:
+
+<table>
+<tr>
+<th>
+
+`*WithHeaders` store built over…
+</th>
+<th>
+
+Headers
+</th>
+<th>
+
+Query outcome
+</th> </tr>
+<tr>
+<td>
+
+Native (RocksDB) header supplier
+</td>
+<td>
+
+Returned
+</td>
+<td>
+
+All succeed
+</td> </tr>
+<tr>
+<td>
+
+In-memory non-header supplier
+</td>
+<td>
+
+Returned (a marker keeps the header-format bytes verbatim)
+</td>
+<td>
+
+All succeed
+</td> </tr>
+<tr>
+<td>
+
+Persistent *timestamped* non-header supplier
+</td>
+<td>
+
+Empty
+</td>
+<td>
+
+All succeed
+</td> </tr>
+<tr>
+<td>
+
+Persistent *plain* non-header supplier
+</td>
+<td>
+
+—
+</td>
+<td>
+
+Point query fails with a store-exception error; the range, window-key, and `withWindowStartRange` window-range iterators throw a `StreamsException` mid-iteration. (The `withKey` form of the window-range query targets session stores, covered in the note below.)
+</td> </tr>
+<tr>
+<td>
+
+*(no `*WithHeaders` builder at all)*
+</td>
+<td>
+
+—
+</td>
+<td>
+
+Unknown-query-type
+</td> </tr> </table>
+
+Session stores have no plain/timestamped split: a `*WithHeaders` session store built over a non-header supplier uses a single adapter and behaves like the *timestamped* row above. The `withKey` form of `TimestampedWindowRangeWithHeadersQuery` (the session-store form) never throws — a session window always carries a valid end timestamp — so it returns empty `headers()` and surfaces a `null` `value()` only where the stored value itself is null.
+
+Read-your-writes applies only to the single-key `TimestampedKeyWithHeadersQuery`, which reads through the record cache; the range, window, and session queries bypass the cache, so a not-yet-flushed write is invisible to them and, with a position bound, fails with a not-up-to-bound error.
 
 # Querying remote state stores for the entire app
 
