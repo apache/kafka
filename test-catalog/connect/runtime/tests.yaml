@@ -1292,6 +1292,10 @@ org.apache.kafka.connect.storage.KafkaConfigBackingStoreTest:
 - testStartStop
 - testTaskCountRecordsAndGenerations
 - testWritePrivileges
+org.apache.kafka.connect.storage.KafkaOffsetBackingStoreGetTopicConfigTest:
+- testConnectorSpecificReadOnlyStoreReturnsCorrectTopicConfig
+- testConnectorSpecificReadWriteStoreReturnsCorrectTopicConfig
+- testWorkerLevelStoreReturnsCorrectTopicConfig
 org.apache.kafka.connect.storage.KafkaOffsetBackingStoreTest:
 - testClientIds
 - testConnectorPartitions
