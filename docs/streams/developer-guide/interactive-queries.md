@@ -182,7 +182,8 @@ After the application has started, you can get access to "CountsKeyValueStore" a
     
     // Get the key-value store CountsKeyValueStore
     ReadOnlyKeyValueStore<String, Long> keyValueStore =
-        streams.store("CountsKeyValueStore", QueryableStoreTypes.keyValueStore());
+        streams.store(StoreQueryParameters.fromNameAndType(
+            "CountsKeyValueStore", QueryableStoreTypes.keyValueStore()));
     
     // Get value by key
     System.out.println("count for hello:" + keyValueStore.get("hello"));
@@ -242,7 +243,8 @@ After the application has started, you can get access to "CountsWindowStore" and
     
     // Get the window store named "CountsWindowStore"
     ReadOnlyWindowStore<String, Long> windowStore =
-        streams.store("CountsWindowStore", QueryableStoreTypes.windowStore());
+        streams.store(StoreQueryParameters.fromNameAndType(
+            "CountsWindowStore", QueryableStoreTypes.windowStore()));
     
     // Fetch values for the key "world" for all of the windows available in this application instance.
     // To get *all* available windows we fetch windows from the beginning of time until now.
@@ -368,7 +370,8 @@ You can now find and query your custom store:
     streams.start();
     
     // Get access to the custom store
-    MyReadableCustomStore<String,String> store = streams.store("the-custom-store", new MyCustomStoreType<String,String>());
+    MyReadableCustomStore<String,String> store =
+        streams.store(StoreQueryParameters.fromNameAndType("the-custom-store", new MyCustomStoreType<String,String>()));
     // Query the store
     String value = store.read("key");
 
