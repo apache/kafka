@@ -282,6 +282,45 @@ public class FetchRequestManagerTest {
         }
     }
 
+    /**
+     * A fetch response that carries no records must still wake up a thread blocked on the fetch buffer.
+     */
+    @Test
+    public void testEmptyFetchResponseWakesUpBuffer() throws InterruptedException {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        // Establish an incremental fetch session with a non-empty response first, then consume the records
+        // and the resulting wakeup so the buffer below starts empty.
+        LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> partitions = new LinkedHashMap<>();
+        partitions.put(tidp0, new FetchResponseData.PartitionData()
+                .setPartitionIndex(tp0.partition())
+                .setHighWatermark(100)
+                .setRecords(records));
+        client.prepareResponse(FetchResponse.of(Errors.NONE, 0, 123, partitions, List.of()));
+        assertEquals(1, sendFetches());
+        networkClientDelegate.poll(time.timer(0));
+        fetchRecords();
+        fetcher.fetchBuffer.awaitWakeup(time.timer(0));
+
+        // A consumer thread blocked waiting for data on the empty buffer.
+        Thread blockedOnBuffer = new Thread(() -> fetcher.fetchBuffer.awaitWakeup(time.timer(3_600_000L)));
+        blockedOnBuffer.setDaemon(true);
+        blockedOnBuffer.start();
+
+        // An empty incremental fetch response (same session, no partition data) must wake the thread blocked on the buffer.
+        client.prepareResponse(FetchResponse.of(Errors.NONE, 0, 123, new LinkedHashMap<>(), List.of()));
+        assertEquals(1, sendFetches());
+        networkClientDelegate.poll(time.timer(0));
+
+        // On a successful run the blocked thread gets unblocked with the response above so this join completes promptly.
+        // This timeout only caps how long we wait before declaring the wakeup missing (failure).
+        blockedOnBuffer.join(2_000);
+        assertFalse(blockedOnBuffer.isAlive(), "Empty fetch response did not wake the thread blocked on the fetch buffer");
+    }
+
     @Test
     public void testInflightFetchOnPendingPartitions() {
         buildFetcher();

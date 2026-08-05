@@ -35,6 +35,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Joined;
@@ -94,7 +95,7 @@ public class KStreamKTableJoinTest {
         stream.join(table, MockValueJoiner.TOSTRING_JOINER).process(supplier);
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
         StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
-        driver = new TopologyTestDriver(builder.build(), props);
+        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build();
         inputStreamTopic = driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
         inputTableTopic = driver.createInputTopic(tableTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
@@ -155,7 +156,7 @@ public class KStreamKTableJoinTest {
             Joined.with(Serdes.Integer(), Serdes.String(), Serdes.String(), "Grace", grace)
         ).process(supplier);
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
-        driver = new TopologyTestDriver(builder.build(), props);
+        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build();
         inputStreamTopic = driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
         inputTableTopic = driver.createInputTopic("tableTopic2", new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
@@ -337,7 +338,7 @@ public class KStreamKTableJoinTest {
         ).process(supplier);
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
         StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
-        driver = new TopologyTestDriver(builder.build(), props);
+        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build();
         inputStreamTopic = driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
         inputTableTopic = driver.createInputTopic("tableTopic2", new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
         processor = supplier.theCapturedProcessor();

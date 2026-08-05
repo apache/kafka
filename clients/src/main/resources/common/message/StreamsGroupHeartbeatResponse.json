@@ -17,7 +17,8 @@
   "apiKey": 88,
   "type": "response",
   "name": "StreamsGroupHeartbeatResponse",
-  // Version 1 adds TopologyDescriptionRequired (KIP-1331).
+  // Version 1 adds TopologyDescriptionRequired (KIP-1331), and allows the broker to return the
+  // MISSING_CLIENT_TAGS status (code 6), which version 0 clients do not understand (KAFKA-20744).
   "validVersions": "0-1",
   "flexibleVersions": "0+",
   // Supported errors:
@@ -82,7 +83,7 @@
         { "name": "ActivePartitions", "type": "[]TopicPartition", "versions": "0+",
           "about": "All topic partitions materialized by active tasks on the node" },
         { "name": "StandbyPartitions", "type": "[]TopicPartition", "versions": "0+",
-          "about": "All topic partitions materialized by standby tasks on the node" }
+          "about": "All topic partitions materialized by standby and warm-up tasks on the node" }
       ]
     }
   ],
@@ -102,6 +103,7 @@
       //                                       topic creation, this will be indicated in StatusDetail.
       //  4 - SHUTDOWN_APPLICATION           - A client requested the shutdown of the whole application.
       //  5 - ASSIGNMENT_DELAYED             - No assignment was provided because assignment computation was delayed.
+      //  6 - MISSING_CLIENT_TAGS            - One or more required client tags for rack-aware standby task assignment are missing.
       { "name": "StatusCode", "type": "int8", "versions": "0+",
         "about": "A code to indicate that a particular status is active for the group membership" },
       { "name": "StatusDetail", "type": "string", "versions": "0+",

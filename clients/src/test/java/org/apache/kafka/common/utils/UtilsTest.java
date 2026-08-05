@@ -218,6 +218,7 @@ public class UtilsTest {
     @Test
     public void testFormatBytes() {
         assertEquals("-1", formatBytes(-1));
+        assertEquals("0 B", formatBytes(0));
         assertEquals("1023 B", formatBytes(1023));
         assertEquals("1 KB", formatBytes(1024));
         assertEquals("1024 KB", formatBytes((1024 * 1024) - 1));

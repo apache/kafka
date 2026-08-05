@@ -32,6 +32,7 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -542,15 +543,22 @@ public class ConsumerHeartbeatRequestManagerTest
      * REGEX_RESOLUTION_NOT_SUPPORTED_MSG only generated on the client side.
      */
     @ParameterizedTest
-    @ValueSource(strings = {CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG, REGEX_RESOLUTION_NOT_SUPPORTED_MSG})
-    public void testUnsupportedVersionFromClient(String errorMsg) {
-        mockResponseWithException(new UnsupportedVersionException(errorMsg), false);
+    @MethodSource("unsupportedVersionFromClientCases")
+    public void testUnsupportedVersionFromClient(UnsupportedVersionException thrown, String errorMsg) {
+        mockResponseWithException(thrown, false);
         ArgumentCaptor<ErrorEvent> errorEventArgumentCaptor = ArgumentCaptor.forClass(ErrorEvent.class);
         verify(backgroundEventHandler).add(errorEventArgumentCaptor.capture());
         ErrorEvent errorEvent = errorEventArgumentCaptor.getValue();
         assertInstanceOf(Errors.UNSUPPORTED_VERSION.exception().getClass(), errorEvent.error());
         assertEquals(errorMsg, errorEvent.error().getMessage());
         clearInvocations(backgroundEventHandler);
+    }
+
+    private static Stream<Arguments> unsupportedVersionFromClientCases() {
+        return Stream.of(
+            Arguments.of(new UnsupportedVersionException(CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG), CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG),
+            Arguments.of(new UnsupportedProtocolFieldException(REGEX_RESOLUTION_NOT_SUPPORTED_MSG), REGEX_RESOLUTION_NOT_SUPPORTED_MSG)
+        );
     }
 
     private void mockResponseWithException(UnsupportedVersionException exception, boolean isFromBroker) {
@@ -590,7 +598,7 @@ public class ConsumerHeartbeatRequestManagerTest
         // Mock a response from the group coordinator, that supplies the member ID and a new epoch
         when(membershipManager.state()).thenReturn(MemberState.STABLE);
         when(subscriptions.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptions.rebalanceListener()).thenReturn(Optional.empty());
+        when(subscriptions.hasRebalanceListener()).thenReturn(false);
         mockStableMemberData(null);
         data = heartbeatState.buildRequestData();
         assertEquals(DEFAULT_GROUP_ID, data.groupId());

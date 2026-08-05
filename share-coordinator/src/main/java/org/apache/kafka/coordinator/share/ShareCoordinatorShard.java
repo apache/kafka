@@ -311,6 +311,9 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * This method as called by the ShareCoordinatorService will be provided with
      * the request data which covers only a single key i.e. group1:topic1:partition1. The implementation
      * below was done keeping this in mind.
+     * <p>
+     * If the value of startOffset is lower than that of the current state, the current state
+     * version will be used.
      *
      * @param request - WriteShareGroupStateRequestData for a single key
      * @return CoordinatorResult(records, response)
@@ -655,13 +658,10 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         long timestamp = time.milliseconds();
         int updatesPerSnapshotLimit = config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot();
         ShareGroupOffset currentState = shareStateMap.get(key); // This method assumes containsKey is true.
-
         int newLeaderEpoch = updateLeaderEpoch ? partitionData.leaderEpoch() : currentState.leaderEpoch();
+        long newStartOffset = Math.max(partitionData.startOffset(), currentState.startOffset());
 
         if (snapshotUpdateCount.getOrDefault(key, 0) >= updatesPerSnapshotLimit) {
-            // shareStateMap will have the entry as containsKey is true
-            long newStartOffset = partitionData.startOffset() == -1 ? currentState.startOffset() : partitionData.startOffset();
-
             // Since the number of update records for this share part key exceeds snapshotUpdateRecordsPerSnapshot
             // or state epoch has incremented, we should be creating a share snapshot record.
             // The incoming partition data could have overlapping state batches, we must merge them.
@@ -685,10 +685,10 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 key.groupId(), key.topicId(), partitionData.partition(),
                 new ShareGroupOffset.Builder()
                     .setSnapshotEpoch(currentState.snapshotEpoch()) // Use same snapshotEpoch as last share snapshot.
-                    .setStartOffset(partitionData.startOffset())
+                    .setStartOffset(newStartOffset) // Prevents start offset from regressing.
                     .setDeliveryCompleteCount(partitionData.deliveryCompleteCount())
                     .setLeaderEpoch(newLeaderEpoch)
-                    .setStateBatches(mergeBatches(List.of(), partitionData))
+                    .setStateBatches(mergeBatches(List.of(), partitionData, newStartOffset))
                     .build());
         }
     }
@@ -717,12 +717,6 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             key.partition(),
             ShareGroupOffset.fromRequest(partitionData, snapshotEpoch, time.milliseconds())
         );
-    }
-
-    private List<PersisterStateBatch> mergeBatches(
-        List<PersisterStateBatch> soFar,
-        WriteShareGroupStateRequestData.PartitionData partitionData) {
-        return mergeBatches(soFar, partitionData, partitionData.startOffset());
     }
 
     private List<PersisterStateBatch> mergeBatches(
