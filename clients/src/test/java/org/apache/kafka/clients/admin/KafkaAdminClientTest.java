@@ -981,6 +981,46 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    public void testCreateTopicsReturnsTopicIdWhenTopicAlreadyExists() throws Exception {
+        Uuid topicId = Uuid.fromString("AAAAAAAAAAAAAAAAAAAAAA");
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(
+                expectCreateTopicsRequestWithTopics("myTopic"),
+                prepareCreateTopicsResponse(0,
+                    new CreatableTopicResult()
+                        .setName("myTopic")
+                        .setErrorCode(Errors.TOPIC_ALREADY_EXISTS.code())
+                        .setTopicId(topicId)));
+
+            CreateTopicsResult result = env.adminClient().createTopics(
+                singleton(new NewTopic("myTopic", 1, (short) 1)));
+
+            assertEquals(topicId, result.topicId("myTopic").get());
+            TestUtils.assertFutureThrows(TopicExistsException.class, result.values().get("myTopic"));
+        }
+    }
+
+    @Test
+    public void testCreateTopicsTopicIdFailsWhenTopicMetadataIsUnsupported() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(
+                expectCreateTopicsRequestWithTopics("myTopic"),
+                prepareCreateTopicsResponse(0,
+                    new CreatableTopicResult()
+                        .setName("myTopic")
+                        .setNumPartitions(CreateTopicsResult.UNKNOWN)));
+
+            CreateTopicsResult result = env.adminClient().createTopics(
+                singleton(new NewTopic("myTopic", 1, (short) 1)));
+
+            TestUtils.assertFutureThrows(UnsupportedVersionException.class, result.topicId("myTopic"));
+            assertNull(result.values().get("myTopic").get());
+        }
+    }
+
+    @Test
     public void testCreateTopicsPartialResponse() throws Exception {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
@@ -1142,6 +1182,8 @@ public class KafkaAdminClientTest {
 
             assertNull(result.values().get("topic1").get());
             ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(ThrottlingQuotaExceededException.class, result.values().get("topic2"));
+            assertEquals(0, e.throttleTimeMs());
+            e = TestUtils.assertFutureThrows(ThrottlingQuotaExceededException.class, result.topicId("topic2"));
             assertEquals(0, e.throttleTimeMs());
             TestUtils.assertFutureThrows(TopicExistsException.class, result.values().get("topic3"));
         }

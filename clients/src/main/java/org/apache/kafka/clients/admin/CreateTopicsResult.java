@@ -33,9 +33,18 @@ public class CreateTopicsResult {
     static final int UNKNOWN = -1;
 
     private final Map<String, KafkaFuture<TopicMetadataAndConfig>> futures;
+    private final Map<String, KafkaFuture<Uuid>> topicIdFutures;
 
     protected CreateTopicsResult(Map<String, KafkaFuture<TopicMetadataAndConfig>> futures) {
+        this(futures, futures.entrySet().stream().collect(Collectors.toMap(
+            Map.Entry::getKey,
+            entry -> entry.getValue().thenApply(TopicMetadataAndConfig::topicId))));
+    }
+
+    CreateTopicsResult(Map<String, KafkaFuture<TopicMetadataAndConfig>> futures,
+                       Map<String, KafkaFuture<Uuid>> topicIdFutures) {
         this.futures = futures;
+        this.topicIdFutures = topicIdFutures;
     }
 
     /**
@@ -69,7 +78,9 @@ public class CreateTopicsResult {
     }
 
     /**
-     * Returns a future that provides topic ID for the topic when the request completes.
+     * Returns a future that provides the topic ID when the request completes.
+     * If the topic already exists, this future can succeed with the existing topic ID even though
+     * the future returned by {@link #values()} fails with {@link org.apache.kafka.common.errors.TopicExistsException}.
      * <p>
      * If broker version doesn't support replication factor in the response, throw
      * {@link org.apache.kafka.common.errors.UnsupportedVersionException}.
@@ -78,7 +89,7 @@ public class CreateTopicsResult {
      * have permission to describe topic configs.
      */
     public KafkaFuture<Uuid> topicId(String topic) {
-        return futures.get(topic).thenApply(TopicMetadataAndConfig::topicId);
+        return topicIdFutures.get(topic);
     }
     
     /**

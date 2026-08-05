@@ -702,7 +702,8 @@ public class ReplicationControlManagerTest {
         CreateTopicsResponseData expectedResponse4 = new CreateTopicsResponseData();
         expectedResponse4.topics().add(new CreatableTopicResult().setName("foo").
                 setErrorCode(Errors.TOPIC_ALREADY_EXISTS.code()).
-                setErrorMessage("Topic 'foo' already exists."));
+                setErrorMessage("Topic 'foo' already exists.").
+                setTopicId(result3.response().topics().find("foo").topicId()));
         assertEquals(expectedResponse4, result4.response());
     }
 
