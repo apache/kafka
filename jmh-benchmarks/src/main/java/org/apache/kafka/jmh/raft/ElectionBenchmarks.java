@@ -63,13 +63,17 @@ public class ElectionBenchmarks {
         }
     }
 
-    /** The local node wins an election and becomes leader, then resigns back to Unattached. */
+    /**
+     * The local node wins an election, commits the epoch it just took, then resigns back to
+     * Unattached.
+     */
     @Benchmark
     public void electLeader(
         UnattachedWithMultipleVoters state,
         KRaftBenchmarkingCounters counters
     ) throws Exception {
         state.benchmark.testContext().unattachedToLeader();
+        state.benchmark.commitEpoch();
         state.benchmark.toUnattachedWithHigherEpoch();
         counters.recordInvocation(state.benchmark);
     }

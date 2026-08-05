@@ -41,7 +41,10 @@ public final class RaftClientBenchmarkContext {
     public static final int AVERAGE_TIME_FORKS = 3;
 
     /**
-     * Sized so that mock time cannot outrun the append purgatory.
+     * Keeps mock time in a plausible range. Fixture helpers advance the mock clock to fire timers
+     * rather than waiting on them, and a benchmark runs millions of operations, so a production-sized
+     * timeout moves the clock weeks ahead within one iteration, which is far enough to reach
+     * deadlines meant to be unreachable.
      */
     private static final int BENCHMARK_ELECTION_TIMEOUT_MS = 50;
 
@@ -306,6 +309,28 @@ public final class RaftClientBenchmarkContext {
      */
     public long getRpcResponsesSentDelta() {
         return rpcResponsesSent.drainDelta();
+    }
+
+    /**
+     * Commits the local leader's epoch by delivering a fetch at the log end offset from every other
+     * voter, which advances the high watermark over the {@code LeaderChange} record the leader wrote
+     * when it took the epoch.
+     */
+    public void commitEpoch() throws InterruptedException {
+        int epoch = context.currentEpoch();
+        long logEndOffset = log.endOffset().offset();
+        for (ReplicaKey voter : remoteVoters()) {
+            deliverAndAwaitResponse(
+                context.inboundRequest(
+                    context.fetchRequest(epoch, voter, logEndOffset, epoch, 0)),
+                Optional.of(ApiKeys.FETCH)
+            );
+        }
+        if (context.client.highWatermark().orElse(-1) < logEndOffset) {
+            throw new IllegalStateException(
+                "expected the high watermark to reach the log end offset " + logEndOffset
+                    + ", but it is " + context.client.highWatermark());
+        }
     }
 
     /**
