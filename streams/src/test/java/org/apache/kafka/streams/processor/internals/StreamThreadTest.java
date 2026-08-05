@@ -27,7 +27,6 @@ import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
-import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -1572,7 +1571,7 @@ public class StreamThreadTest {
         final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.LATEST.name());
         final MockConsumer<byte[], byte[]> restoreConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
 
-        consumer.subscribe(Collections.singletonList(topic1), new MockRebalanceListener());
+        consumer.subscribe(Collections.singletonList(topic1));
         consumer.rebalance(Collections.singletonList(t1p1));
         consumer.updateEndOffsets(Collections.singletonMap(t1p1, 10L));
         consumer.seekToEnd(Collections.singletonList(t1p1));
