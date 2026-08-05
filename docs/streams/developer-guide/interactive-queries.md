@@ -753,7 +753,7 @@ Issuing an IQv2 query follows four steps:
 
   1. **Build a query.** Create a `Query` object that describes what you want to read, for example a [KeyQuery](/{version}/javadoc/org/apache/kafka/streams/query/KeyQuery.html) for a single-key lookup or a [RangeQuery](/{version}/javadoc/org/apache/kafka/streams/query/RangeQuery.html) for a scan.
   2. **Build a request.** Wrap the query in a [StateQueryRequest](/{version}/javadoc/org/apache/kafka/streams/query/StateQueryRequest.html) that names the store to query: `StateQueryRequest.inStore(storeName).withQuery(query)`. Optionally configure the request (partitions, position bound, isolation level, and so on).
-  3. **Execute the request.** Call `streams.query(request)`, which runs the query against every locally available partition of the store (or just the partitions you requested) and returns a `StateQueryResult`.
+  3. **Execute the request.** Call `streams.query(request)`, which runs the query against every locally available partition of the store (or just the partitions you requested) and returns a `StateQueryResult`. Like the original API, `query(...)` reads only the state hosted locally on this instance; to discover which instance holds a given key, use the same metadata APIs as IQv1 (see [Querying remote state stores for the entire app](#querying-remote-state-stores-for-the-entire-app)).
   4. **Read the results.** For a query that targets a single partition, use `getOnlyPartitionResult()`. For a query that may span multiple partitions, use `getPartitionResults()` to get a `Map` from partition number to `QueryResult`. Each `QueryResult` reports whether the query succeeded on that partition and holds either the result value or a typed failure reason.
 
 ## Building and executing a query
@@ -804,11 +804,14 @@ Kafka Streams ships with a set of query types covering the standard store types.
 | `RangeQuery<K, V>` | `KeyValueIterator<K, V>` | `withRange(lower, upper)`, `withLowerBound(lower)`, `withUpperBound(upper)`, `withNoBounds()`; `.withAscendingKeys()` / `.withDescendingKeys()` |
 | `TimestampedRangeQuery<K, V>` | `KeyValueIterator<K, ValueAndTimestamp<V>>` | `withRange(lower, upper)`, `withLowerBound(lower)`, `withUpperBound(upper)`, `withNoBounds()`; `.withAscendingKeys()` / `.withDescendingKeys()` |
 | `WindowKeyQuery<K, V>` | `WindowStoreIterator<V>` | `withKeyAndWindowStartRange(key, timeFrom, timeTo)` |
-| `WindowRangeQuery<K, V>` | `KeyValueIterator<Windowed<K>, V>` | `withKey(key)`, `withWindowStartRange(timeFrom, timeTo)` |
+| `WindowRangeQuery<K, V>` (window store) | `KeyValueIterator<Windowed<K>, V>` | `withWindowStartRange(timeFrom, timeTo)` |
+| `WindowRangeQuery<K, V>` (session store) | `KeyValueIterator<Windowed<K>, V>` | `withKey(key)` |
 | `VersionedKeyQuery<K, V>` | `VersionedRecord<V>` | `withKey(key)`; `.asOf(instant)` |
 | `MultiVersionedKeyQuery<K, V>` | `VersionedRecordIterator<V>` | `withKey(key)`; `.fromTime(instant)`, `.toTime(instant)`, `.withAscendingTimestamps()` / `.withDescendingTimestamps()` |
 
 For range and scan queries (`RangeQuery`, `TimestampedRangeQuery`), passing no bounds performs a full scan, and result ordering is based on the serialized `byte[]` of the keys, not on the logical key order.
+
+The two `WindowRangeQuery` forms are store-specific: window stores accept only `withWindowStartRange`, and session stores only `withKey` — submitting the wrong form fails with `UNKNOWN_QUERY_TYPE`. `WindowRangeQuery.withKey` is how a session store is queried through IQv2.
 
 Versioned key-value stores are queryable **only** through IQv2 — use `VersionedKeyQuery` for a single version (latest, or as of a timestamp) and `MultiVersionedKeyQuery` for a range of versions. The original `KafkaStreams#store(...)` API has no queryable store type for versioned stores.
 
@@ -826,10 +829,13 @@ Which accessor to use is determined by the *query type* you chose, not by inspec
 The accessors are:
 
   * `getPartitionResults()` returns a `Map<Integer, QueryResult<R>>`, keyed by partition number — one entry per partition that ran the query. This is the general form and works for any query.
-  * `getOnlyPartitionResult()` is a convenience that filters to the single partition that produced a value and returns it (or `null` if none did). It throws `IllegalArgumentException` if more than one partition produced a value, so only use it when you know the query matches at most one partition.
+  * `getOnlyPartitionResult()` is a convenience that returns the single partition result that is either a non-`null` value or a failure, or `null` if there is none. It throws `IllegalArgumentException` if more than one partition returned a value **or a failure** — failures count toward that limit, so avoid it when a query may fan out across partitions (for example a `KeyQuery` issued with `requireActive()`, where non-active partitions come back as `NOT_ACTIVE` failures). Use it only when you know the query matches at most one partition.
+  * `getGlobalResult()` returns the `QueryResult` for a global-store query, or `null` for a partitioned store (conversely, `getPartitionResults()` is empty for a global-store query). Global stores are not yet supported by `query(...)`, so this is where that rejection surfaces — as a failed result with `UNKNOWN_QUERY_TYPE`.
   * `getPosition()` returns the merged `Position` observed across the partition results.
 
 Each `QueryResult` reports the outcome for one partition. Use `isSuccess()` / `isFailure()` before reading: `getResult()` returns the value on success (which may itself be `null`, for example when a key is not found), while `getFailureReason()` and `getFailureMessage()` describe a failure. Results are always **per-partition** — a query may succeed on some partitions and fail on others (for example, if one partition has migrated off this instance).
+
+These `FailureReason`s describe per-partition outcomes. Problems with the request itself still raise exceptions from `query()`: `UnknownStateStoreException` if the named store is not registered in the topology, `StreamsNotStartedException` if the instance has not been started yet, and `StreamsStoppedException` once it is shutting down or has stopped.
 
 When a query returns an iterator (`RangeQuery`, `WindowKeyQuery`, `MultiVersionedKeyQuery`, and so on), the iterator must be closed after use. Iterate over every partition's result and use a try-with-resources block:
 
@@ -875,20 +881,20 @@ A failed `QueryResult` carries one of the [FailureReason](/{version}/javadoc/org
 | `NOT_ACTIVE` | `requireActive()` was set, but the partition is a standby or an active task that is not yet in the `RUNNING` state. | Retry later or query a different replica. |
 | `NOT_UP_TO_BOUND` | The partition has not yet caught up to the requested `PositionBound`. | Retry later or query a different replica. |
 | `NOT_PRESENT` | The requested partition is not present on this instance (for example, it migrated during a rebalance). | Query a different replica. |
-| `DOES_NOT_EXIST` | The requested partition does not exist for this store. | Correct the requested set of partitions. |
+| `DOES_NOT_EXIST` | Defined for store implementations to signal a partition that does not exist, but **not currently emitted by the Streams runtime** — a missing or non-existent partition comes back as `NOT_PRESENT` instead. | n/a (not produced by `query()` today). |
 | `STORE_EXCEPTION` | The store threw an exception while executing the query. | Depending on the exception, retry this instance or a different one. |
 
 ## Controlling consistency and availability
 
 A `StateQueryRequest` is immutable; each configuration method returns a new request. Beyond `inStore(...).withQuery(...)`, the following options let you trade off consistency, availability, and cost:
 
-  * `withPartitions(Set<Integer>)` / `withAllPartitions()`: run against a specific set of partitions or against all locally available partitions (the default). Partitions that are missing return `NOT_PRESENT`; partitions that do not exist return `DOES_NOT_EXIST`.
+  * `withPartitions(Set<Integer>)` / `withAllPartitions()`: run against a specific set of partitions or against all locally available partitions (the default). Any requested partition that is not present on this instance returns `NOT_PRESENT`, whether it migrated away or does not exist for the store at all — the runtime does not currently distinguish the two.
   * `requireActive()`: run only on active (leader) partitions. Non-active partitions return `NOT_ACTIVE`. Use this when you need the most up-to-date data and want to avoid reading from standby replicas.
-  * `withPositionBound(PositionBound)`: by default a request is `PositionBound.unbounded()`. Use `PositionBound.at(position)` to require that each queried partition has consumed up to a given `Position` before serving the query; a partition that is behind returns `NOT_UP_TO_BOUND`. Combined with the `Position` returned by `StateQueryResult#getPosition()`, this lets you implement read-your-writes / monotonic reads: feed the position from one query into the bound of the next so repeated queries never appear to move backwards in time, while still allowing reads to be served from any replica that is caught up.
-  * `withIsolationLevel(IsolationLevel)`: override the isolation level for this query. When not set, the effective level falls back to the `default.interactive.query.isolation.level` configuration.
+  * `withPositionBound(PositionBound)`: by default a request is `PositionBound.unbounded()`. Use `PositionBound.at(position)` to require that each queried partition has consumed up to a given `Position` before serving the query; a partition that is behind returns `NOT_UP_TO_BOUND`. Combined with the `Position` returned by `StateQueryResult#getPosition()`, this lets you implement read-your-writes / monotonic reads: feed the position from one query into the bound of the next so repeated queries never appear to move backwards in time, while still allowing reads to be served from any replica that is caught up. Note that `withPositionBound(...)` is ignored when `requireActive()` is also set: an active, running task is always served without a bound check, so it never returns `NOT_UP_TO_BOUND`.
+  * `withIsolationLevel(IsolationLevel)`: override the isolation level for this query. When not set, the effective level falls back to the `default.interactive.query.isolation.level` configuration (default `READ_UNCOMMITTED`). The isolation level is only meaningful when `enable.transactional.statestores` is `true`: `READ_UNCOMMITTED` reads include writes staged in the transaction buffer since the last commit, while `READ_COMMITTED` skips the buffer and returns only committed data.
   * `enableExecutionInfo()`: ask stores and the runtime to record details about how the query executed, retrievable via `QueryResult#getExecutionInfo()`.
 
-For example, the following request reads the latest committed value for a key from the active replica, but only for partitions 0 and 1, and only once the store has caught up to a known input position:
+For example, the following request reads a key from the active replica only, and only for partitions 0 and 1:
 
 ```java
 KeyQuery<String, Long> query = KeyQuery.withKey("alice");
@@ -896,8 +902,19 @@ StateQueryRequest<Long> request =
     inStore("CountsKeyValueStore")
         .withQuery(query)
         .requireActive()
-        .withPartitions(Set.of(0, 1))
-        .withPositionBound(PositionBound.at(inputPosition));
+        .withPartitions(Set.of(0, 1));
+
+StateQueryResult<Long> result = streams.query(request);
+```
+
+For monotonic reads, bound the query on a `Position` instead of requiring an active task — the two do not combine, since `requireActive()` discards the position bound. Feed the `Position` returned by one query into the bound of the next so repeated reads never appear to move backwards, while still letting any caught-up replica serve them:
+
+```java
+KeyQuery<String, Long> query = KeyQuery.withKey("alice");
+StateQueryRequest<Long> request =
+    inStore("CountsKeyValueStore")
+        .withQuery(query)
+        .withPositionBound(PositionBound.at(knownPosition));
 
 StateQueryResult<Long> result = streams.query(request);
 Position position = result.getPosition(); // pass into a later query for monotonic reads
