@@ -218,33 +218,27 @@ public class StoreChangelogReader implements ChangelogReader {
     /**
      * Walk backwards from each partition's end offset until a data record materialises, so its
      * timestamp can drive the retention-based seek.
-     *
-     * @return the number of polls issued
      */
-    private int runBackwardProbe(final Set<TopicPartition> unresolved,
-                                 final Map<TopicPartition, Long> backByPartition,
-                                 final Map<TopicPartition, Long> probeOffset,
-                                 final Map<TopicPartition, Long> latestTimestamps,
-                                 final Map<TopicPartition, Long> beginningOffsets,
-                                 final Map<TopicPartition, Long> endOffsets) {
-        int attempts = 0;
-        // Every partition needs a position before the first poll: poll() updates fetch positions
-        // for the whole assignment and the restore consumer has auto.offset.reset=none.
+    private void runBackwardProbe(final Set<TopicPartition> unresolved,
+                                  final Map<TopicPartition, Long> backByPartition,
+                                  final Map<TopicPartition, Long> latestTimestamps,
+                                  final Map<TopicPartition, Long> beginningOffsets,
+                                  final Map<TopicPartition, Long> endOffsets) {
+        // every partition needs a position before the first poll: poll() updates fetch positions
+        // for the whole assignment and the restore consumer has auto.offset.reset=none
         seekProbePositions(unresolved, backByPartition, beginningOffsets, endOffsets);
 
         for (int position = 0; position < PROBE_MAX_ATTEMPTS && !unresolved.isEmpty(); position++) {
-            // Poll repeatedly at the current positions rather than stepping back on the first
-            // empty result. One poll returns as soon as any fetch lands, so a partition can come
-            // back empty simply because another was served first, or because its own fetch has
-            // not arrived -- neither of which says anything about the offset. Re-seeking on that
-            // basis also cancels the fetch that was about to answer.
+            // poll repeatedly at the current positions rather than stepping back on the first
+            // empty result: one poll returns as soon as any fetch lands, so a partition can come
+            // back empty because another was served first or because its own fetch has not
+            // arrived, neither of which says anything about the offset -- and re-seeking on that
+            // basis cancels the fetch that was about to answer
             for (int poll = 0; poll < PROBE_POLLS_PER_POSITION && !unresolved.isEmpty(); poll++) {
-                attempts++;
-                collectProbed(restoreConsumer.poll(pollTime), unresolved, latestTimestamps, probeOffset);
+                collectProbed(restoreConsumer.poll(pollTime), unresolved, latestTimestamps);
             }
             stepProbeBack(unresolved, backByPartition, beginningOffsets, endOffsets);
         }
-        return attempts;
     }
 
     /** Seeks each unresolved partition to its current step-back position. */
@@ -262,16 +256,13 @@ public class StoreChangelogReader implements ChangelogReader {
     /** Resolves any partition the poll returned records for, taking the newest record seen. */
     private void collectProbed(final ConsumerRecords<byte[], byte[]> probed,
                                final Set<TopicPartition> unresolved,
-                               final Map<TopicPartition, Long> latestTimestamps,
-                               final Map<TopicPartition, Long> probeOffset) {
+                               final Map<TopicPartition, Long> latestTimestamps) {
         final Iterator<TopicPartition> iterator = unresolved.iterator();
         while (iterator.hasNext()) {
             final TopicPartition partition = iterator.next();
             final List<ConsumerRecord<byte[], byte[]>> records = probed.records(partition);
             if (!records.isEmpty()) {
-                final ConsumerRecord<byte[], byte[]> newest = records.get(records.size() - 1);
-                latestTimestamps.put(partition, newest.timestamp());
-                probeOffset.put(partition, newest.offset());
+                latestTimestamps.put(partition, records.get(records.size() - 1).timestamp());
                 iterator.remove();
             }
         }
@@ -294,38 +285,6 @@ public class StoreChangelogReader implements ChangelogReader {
             final long back = backByPartition.get(partition) * 2L;
             backByPartition.put(partition, back);
             restoreConsumer.seek(partition, Math.max(begin, endOffsets.get(partition) - back));
-        }
-    }
-
-    /** SOAK INSTRUMENTATION (not for upstream): how far into the retained log a seek landed. */
-    private static String pctThroughLog(final long position, final long begin, final long end) {
-        return end > begin ? String.format("%.1f", 100.0 * (position - begin) / (end - begin)) : "n/a";
-    }
-
-    /** SOAK INSTRUMENTATION (not for upstream): where each restore was seeked to, and its margin. */
-    private void logSeekOutcomes(final Map<TopicPartition, Long> windowedPartitionsRetention,
-                                 final Map<TopicPartition, Long> beginningOffsets,
-                                 final Map<TopicPartition, Long> endOffsets,
-                                 final Set<TopicPartition> seekToBeginningPartitions,
-                                 final Map<TopicPartition, Long> probeOffset,
-                                 final Map<TopicPartition, Long> backByPartition) {
-        for (final Map.Entry<TopicPartition, Long> entry : windowedPartitionsRetention.entrySet()) {
-            final TopicPartition partition = entry.getKey();
-            final long begin = beginningOffsets.getOrDefault(partition, 0L);
-            final long end = endOffsets.get(partition);
-            if (seekToBeginningPartitions.contains(partition)) {
-                log.info("OOORE-SEEK partition={} outcome=FALLBACK_TO_BEGINNING begin={} end={} "
-                        + "marginRecords=0 retentionMs={}", partition, begin, end, entry.getValue());
-                continue;
-            }
-            final long position = restoreConsumer.position(partition);
-            log.info("OOORE-SEEK partition={} outcome=OPTIMISED seekedTo={} begin={} end={} "
-                    + "marginRecords={} behindHead={} pctThroughLog={} probeOffset={} "
-                    + "backUsed={} retentionMs={}",
-                partition, position, begin, end,
-                position - begin, end - position,
-                pctThroughLog(position, begin, end),
-                probeOffset.get(partition), backByPartition.get(partition), entry.getValue());
         }
     }
 
@@ -1220,33 +1179,15 @@ public class StoreChangelogReader implements ChangelogReader {
                 // and the optimisation would then silently degrade to seekToBeginning
                 final Map<TopicPartition, Long> latestTimestamps = new HashMap<>();
                 final Set<TopicPartition> unresolved = new HashSet<>(windowedPartitionsRetention.keySet());
-                // SOAK INSTRUMENTATION (not for upstream): profile the windowed seek path
-                final int probeTargets = unresolved.size();
-                final long probeStartNs = System.nanoTime();
-                final int probeAttempts;
                 // each partition walks its own step-back ladder
                 final Map<TopicPartition, Long> backByPartition = new HashMap<>();
-                final Map<TopicPartition, Long> probeOffset = new HashMap<>();
                 for (final TopicPartition partition : unresolved) {
                     backByPartition.put(partition, PROBE_INITIAL_BACK);
                 }
-                probeAttempts = runBackwardProbe(unresolved, backByPartition, probeOffset,
-                    latestTimestamps, beginningOffsets, endOffsets);
+                runBackwardProbe(unresolved, backByPartition, latestTimestamps,
+                    beginningOffsets, endOffsets);
 
-                final long probeMs = (System.nanoTime() - probeStartNs) / 1_000_000L;
-                final int fallbacksBefore = seekToBeginningPartitions.size();
-                final long seekStartNs = System.nanoTime();
                 seekByRetentionFromPolledRecords(latestTimestamps, windowedPartitionsRetention, seekToBeginningPartitions);
-                final long seekMs = (System.nanoTime() - seekStartNs) / 1_000_000L;
-                // SOAK INSTRUMENTATION (not for upstream): probeMs is the head-timestamp probe,
-                // seekMs the offsetsForTimes round trip, newFallbacks those still at log-start
-                log.info("OOORE-PROBE targets={} attempts={} resolved={} newFallbacks={} "
-                        + "probeMs={} seekMs={} totalMs={}",
-                    probeTargets, probeAttempts, latestTimestamps.size(),
-                    seekToBeginningPartitions.size() - fallbacksBefore,
-                    probeMs, seekMs, probeMs + seekMs);
-                logSeekOutcomes(windowedPartitionsRetention, beginningOffsets, endOffsets,
-                    seekToBeginningPartitions, probeOffset, backByPartition);
             } catch (final TimeoutException e) {
                 log.debug("Could not seek by timestamp for changelog partitions {}, falling back to seek-to-beginning",
                     windowedPartitionsRetention.keySet(), e);

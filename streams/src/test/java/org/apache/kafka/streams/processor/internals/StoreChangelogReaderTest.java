@@ -1574,28 +1574,6 @@ public class StoreChangelogReaderTest {
                 + "probe poll came back empty, which only meant the fetch had not landed yet");
     }
 
-    /** Reports where each probed partition was seeked to; returns the partitions left at log-start. */
-    private String reportProbeSeeks(final MockConsumer<byte[], byte[]> consumer,
-                                    final TopicPartition[] tps,
-                                    final long beginOffset) {
-        final StringBuilder starved = new StringBuilder();
-        final StringBuilder unassigned = new StringBuilder();
-        final StringBuilder positions = new StringBuilder();
-        for (final TopicPartition partition : tps) {
-            if (!consumer.assignment().contains(partition)) {
-                unassigned.append(' ').append(partition.partition());
-                continue;
-            }
-            final long position = consumer.position(partition);
-            positions.append(' ').append(partition.partition()).append('=').append(position);
-            if (position == beginOffset) {
-                starved.append(' ').append(partition.partition());
-            }
-        }
-        System.out.printf("%n=== probe seeks ===%n  positions:%s%n  unassigned:%s%n  starved:%s%n",
-            positions, unassigned, starved);
-        return starved.toString();
-    }
 
     @Test
     public void shouldSeekByTimestampForWindowedStoreWithoutCheckpoint() {
