@@ -960,8 +960,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         recordsToAppend
                     );
 
-                    if (!currentBatch.builder.hasRoomFor(estimatedSizeUpperBound) &&
-                        currentBatch.builder.numRecords() > 0) {
+                    if (currentBatch.builder.numRecords() > 0 &&
+                        !currentBatch.builder.hasRoomFor(estimatedSizeUpperBound)) {
                         // Start a new batch when the total uncompressed data size would exceed
                         // the max batch size. We still allow atomic writes with an uncompressed size
                         // larger than the max batch size as long as they compress down to under the max
