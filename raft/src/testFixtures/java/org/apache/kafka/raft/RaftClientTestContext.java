@@ -127,8 +127,7 @@ public final class RaftClientTestContext {
     private int requestTimeoutMs;
     private int appendLingerMs;
     private long pollIntervalMs;
-    private boolean roundTripMessages = true;
-    private boolean fastPoll = false;
+    private boolean isBenchmarking = false;
 
     private final MockQuorumStateStore quorumStateStore;
     final String clusterId;
@@ -193,8 +192,7 @@ public final class RaftClientTestContext {
         private Endpoints localListeners = Endpoints.empty();
         private boolean isStartingVotersStatic = false;
         private boolean autoJoin = false;
-        private boolean roundTripMessages = true;
-        private boolean fastPoll = false;
+        private boolean isBenchmarking = false;
         private int fetchSnapshotMaxBytes = QuorumConfig.DEFAULT_QUORUM_FETCH_SNAPSHOT_MAX_BYTES;
         private int fetchMaxBytes = QuorumConfig.DEFAULT_QUORUM_FETCH_MAX_BYTES;
 
@@ -420,21 +418,12 @@ public final class RaftClientTestContext {
         }
 
         /**
-         * Controls whether delivered requests and responses are serialized and deserialized to mimic
-         * the network layer (default {@code true}). Benchmarks that measure the raft client itself
-         * disable this so the fixture's wire simulation does not dominate the measurement.
+         * Drops fixture work a benchmark would otherwise measure as the client's own (default
+         * {@code false}): messages are no longer serialized and deserialized to mimic the network,
+         * and {@link #pollUntil} skips {@link TestUtils#waitForCondition}, which throws per attempt.
          */
-        public Builder withMessageRoundTrip(boolean roundTripMessages) {
-            this.roundTripMessages = roundTripMessages;
-            return this;
-        }
-
-        /**
-         * Enables a non-throwing poll loop for {@link RaftClientTestContext#pollUntil} (default
-         * {@code false}).
-         */
-        public Builder withFastPoll(boolean fastPoll) {
-            this.fastPoll = fastPoll;
+        public Builder withBenchmarking(boolean isBenchmarking) {
+            this.isBenchmarking = isBenchmarking;
             return this;
         }
 
@@ -550,8 +539,7 @@ public final class RaftClientTestContext {
             context.requestTimeoutMs = requestTimeoutMs;
             context.appendLingerMs = appendLingerMs;
             context.pollIntervalMs = pollIntervalMs;
-            context.roundTripMessages = roundTripMessages;
-            context.fastPoll = fastPoll;
+            context.isBenchmarking = isBenchmarking;
 
             return context;
         }
@@ -765,19 +753,19 @@ public final class RaftClientTestContext {
     }
 
     public void pollUntil(TestCondition condition) throws InterruptedException {
-        if (fastPoll) {
+        if (isBenchmarking) {
             pollUntilFast(condition);
-            return;
+        } else {
+            TestUtils.waitForCondition(() -> {
+                poll();
+                return condition.conditionMet();
+            }, 5000, pollIntervalMs, () -> "Condition failed to be satisfied before timeout");
         }
-        TestUtils.waitForCondition(() -> {
-            poll();
-            return condition.conditionMet();
-        }, 5000, pollIntervalMs, () -> "Condition failed to be satisfied before timeout");
     }
 
     /**
      * A non-throwing variant of {@link #pollUntil} used only by the JMH benchmarks (enabled via
-     * {@link Builder#withFastPoll}).
+     * {@link Builder#withBenchmarking}).
      */
     private void pollUntilFast(TestCondition condition) {
         try {
@@ -1036,7 +1024,7 @@ public final class RaftClientTestContext {
     }
 
     private ApiMessage roundTripApiMessage(ApiMessage message, short version) {
-        if (!roundTripMessages) {
+        if (isBenchmarking) {
             return message;
         }
         ObjectSerializationCache cache =  new ObjectSerializationCache();

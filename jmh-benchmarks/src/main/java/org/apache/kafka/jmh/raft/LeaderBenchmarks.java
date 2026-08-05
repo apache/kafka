@@ -109,8 +109,8 @@ public class LeaderBenchmarks {
     /**
      * Starting state: the local node is leader with the high watermark at the log end. The
      * {@code rpc} param selects which inbound request the benchmark delivers. The request is built
-     * and round-tripped through serialization once here, so the measured region starts from a
-     * parsed request on the queue and excludes request parsing.
+     * once here, so the measured region starts from a request already on the queue and excludes
+     * building it.
      */
     @State(Scope.Thread)
     public static class LeaderWithHwmAtLogEnd {

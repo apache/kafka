@@ -119,8 +119,6 @@ public final class RaftClientBenchmarkContext {
         RaftClientTestContext context =
             benchmarkContextBuilder(local, voterKeys, kraftVersion, raftProtocol)
                 .withUnknownLeader(0)
-                .withMessageRoundTrip(false)
-                .withFastPoll(true)
                 .build();
         return new RaftClientBenchmarkContext(context, local, voterKeys, List.of());
     }
@@ -183,6 +181,7 @@ public final class RaftClientBenchmarkContext {
             .withRaftProtocol(raftProtocol)
             .withElectionTimeoutMs(BENCHMARK_ELECTION_TIMEOUT_MS)
             .withPollIntervalMs(0)
+            .withBenchmarking(true)
             .withMemoryPool(new BatchMemoryPool(5, KafkaRaftClient.MAX_BATCH_SIZE_BYTES));
     }
 

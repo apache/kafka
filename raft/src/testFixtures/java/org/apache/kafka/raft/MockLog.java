@@ -230,16 +230,14 @@ public class MockLog implements RaftLog {
 
     @Override
     public LogOffsetMetadata endOffset() {
-        return new LogOffsetMetadata(endOffsetValue(), Optional.of(new MockOffsetMetadata(nextId)));
-    }
-
-    /** The offset {@link #endOffset()} reports, computed without allocating. */
-    private long endOffsetValue() {
+        long nextOffset;
         if (!batches.isEmpty()) {
-            return batches.get(batches.size() - 1).last().offset + 1;
+            nextOffset = batches.get(batches.size() - 1).last().offset + 1;
+        } else {
+            Map.Entry<OffsetAndEpoch, MockRawSnapshotReader> latestSnapshot = snapshots.lastEntry();
+            nextOffset = latestSnapshot == null ? 0L : latestSnapshot.getKey().offset();
         }
-        Map.Entry<OffsetAndEpoch, MockRawSnapshotReader> latestSnapshot = snapshots.lastEntry();
-        return latestSnapshot == null ? 0L : latestSnapshot.getKey().offset();
+        return new LogOffsetMetadata(nextOffset, Optional.of(new MockOffsetMetadata(nextId)));
     }
 
     @Override
