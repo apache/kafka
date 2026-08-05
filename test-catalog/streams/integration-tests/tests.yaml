@@ -33,6 +33,7 @@ org.apache.kafka.streams.integration.EosIntegrationTest:
 - shouldBeAbleToRunWithEosEnabled
 - shouldBeAbleToRunWithTwoSubtopologies
 - shouldBeAbleToRunWithTwoSubtopologiesAndMultiplePartitions
+- shouldBufferStateStoreWritesUntilCommitUnderEos
 - shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoring
 - shouldCommitCorrectOffsetIfInputTopicIsTransactional
 - shouldNotCommitActiveTasksWithPendingInputIfRevokedTaskDidNotMakeProgress
@@ -100,6 +101,13 @@ org.apache.kafka.streams.integration.HeadersStoreUpgradeIntegrationTest:
 org.apache.kafka.streams.integration.HighAvailabilityTaskAssignorIntegrationTest:
 - shouldScaleOutWithWarmupTasksAndInMemoryStores
 - shouldScaleOutWithWarmupTasksAndPersistentStores
+org.apache.kafka.streams.integration.IQv1IsolationLevelIntegrationTest:
+- IN_MEMORY_KV
+- IN_MEMORY_SESSION
+- IN_MEMORY_WINDOW
+- PERSISTENT_KV
+- PERSISTENT_SESSION
+- PERSISTENT_WINDOW
 org.apache.kafka.streams.integration.IQv2EndpointToPartitionsIntegrationTest:
 - CLASSIC
 - STREAMS

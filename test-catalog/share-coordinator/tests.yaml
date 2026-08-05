@@ -107,6 +107,7 @@ org.apache.kafka.coordinator.share.ShareCoordinatorShardTest:
 - testSubsequentWriteStateSnapshotEpochUpdatesSuccessfully
 - testWriteFailsOnUninitializedPartition
 - testWriteNullMetadataImage
+- testWriteStateDiscardsStartOffsetRegression
 - testWriteStateFencedLeaderEpochError
 - testWriteStateFencedStateEpochError
 - testWriteStateInvalidLeaderEpochRequestData

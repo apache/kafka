@@ -1721,6 +1721,7 @@ org.apache.kafka.coordinator.group.streams.topics.CopartitionedTopicsEnforcerTes
 org.apache.kafka.coordinator.group.streams.topics.EndpointToPartitionsManagerTest:
 - Should
 - testEndpointToPartitionsExcludesPartitionsMissingFromSmallerSourceTopic
+- testEndpointToPartitionsWithStandbyAndWarmupTasksInSameSubtopology
 - testEndpointToPartitionsWithStandbyTaskAssignments
 org.apache.kafka.coordinator.group.streams.topics.InternalTopicManagerTest:
 - testConfigureTopics
