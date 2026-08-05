@@ -383,7 +383,8 @@ Look up the store with the `*WithHeaders()` entry from `QueryableStoreTypes` tha
     
     // Key-value store built with a *WithHeaders supplier
     ReadOnlyKeyValueStore<String, ValueTimestampHeaders<Long>> keyValueStore =
-        streams.store("counts-store", QueryableStoreTypes.timestampedKeyValueStoreWithHeaders());
+        streams.store(StoreQueryParameters.fromNameAndType(
+            "counts-store", QueryableStoreTypes.timestampedKeyValueStoreWithHeaders()));
     
     ValueTimestampHeaders<Long> vth = keyValueStore.get("hello");
     if (vth != null) {
@@ -398,7 +399,7 @@ Session stores return `AggregationWithHeaders<V>`, which exposes the aggregated 
 
 Interactive Queries v2 (IQv2) is the query-based interactive-queries API: instead of accessing a store object directly, you build a `Query`, wrap it in a [StateQueryRequest](/{version}/javadoc/org/apache/kafka/streams/query/StateQueryRequest.html), and run it with `KafkaStreams#query(...)`. The call returns a [StateQueryResult](/{version}/javadoc/org/apache/kafka/streams/query/StateQueryResult.html) that holds a per-partition [QueryResult](/{version}/javadoc/org/apache/kafka/streams/query/QueryResult.html): use `getOnlyPartitionResult()` for a single-key lookup, or `getPartitionResults()` for the full `Map<Integer, QueryResult<R>>`. Each `QueryResult` exposes the query result via `getResult()` and its data-freshness `Position` via `getPosition()`.
 
-Before KIP-1356, no IQv2 query type exposed record headers. KIP-1356 adds four `@Evolving` query types whose results carry headers. Each returns a [ReadOnlyRecord](/{version}/javadoc/org/apache/kafka/streams/processor/api/ReadOnlyRecord.html) — a read-only view exposing `key()`, `value()`, `timestamp()`, and `headers()` — or, for the range and window queries, a closeable [ReadOnlyRecordIterator](/{version}/javadoc/org/apache/kafka/streams/state/ReadOnlyRecordIterator.html) of such records. The result is an immutable snapshot: `headers()` is never null (an empty `Headers` when the record had none) and must not be modified — calling a mutating method on it (for example `add(...)`) throws `IllegalStateException`.
+Before KIP-1356, no IQv2 query type exposed record headers. KIP-1356 adds four `@Evolving` query types whose results carry headers. Each returns a [ReadOnlyRecord](/{version}/javadoc/org/apache/kafka/streams/processor/api/ReadOnlyRecord.html) — a read-only view exposing `key()`, `value()`, `timestamp()`, and `headers()` — or, for the range and window queries, a closeable [ReadOnlyRecordIterator](/{version}/javadoc/org/apache/kafka/streams/state/ReadOnlyRecordIterator.html) of such records. `headers()` is never null (an empty `Headers` when the record had none) and must be treated as read-only: records served as IQv2 results have their headers frozen, so adding or removing a header (for example `add(...)`) throws `IllegalStateException`. The freeze is shallow, though — the byte array behind an individual header value can still be mutated in place, so treat header values as read-only too.
 
 `TimestampedKeyWithHeadersQuery` is a single-key lookup against a header-aware key-value store, parallel to `TimestampedKeyQuery`:
     
@@ -410,10 +411,13 @@ Before KIP-1356, no IQv2 query type exposed record headers. KIP-1356 adds four `
         StateQueryRequest.inStore("counts-store").withQuery(query);
     
     StateQueryResult<ReadOnlyRecord<String, Long>> result = streams.query(request);
-    ReadOnlyRecord<String, Long> record = result.getOnlyPartitionResult().getResult();
-    if (record != null) {
-      System.out.println("value:   " + record.value());
-      System.out.println("headers: " + record.headers());
+    QueryResult<ReadOnlyRecord<String, Long>> partitionResult = result.getOnlyPartitionResult();
+    if (partitionResult != null && partitionResult.isSuccess()) {
+      ReadOnlyRecord<String, Long> record = partitionResult.getResult();
+      if (record != null) {
+        System.out.println("value:   " + record.value());
+        System.out.println("headers: " + record.headers());
+      }
     }
 
 Call `skipCache()` on the query to bypass the record cache and read directly from the underlying store (only this single-key query offers `skipCache()`).
@@ -429,6 +433,10 @@ Call `skipCache()` on the query to bypass the record cache and read directly fro
     
     StateQueryResult<ReadOnlyRecordIterator<String, Long>> result = streams.query(request);
     for (QueryResult<ReadOnlyRecordIterator<String, Long>> partition : result.getPartitionResults().values()) {
+      if (partition.isFailure()) {
+        System.out.println("failed: " + partition.getFailureReason() + " - " + partition.getFailureMessage());
+        continue;
+      }
       try (ReadOnlyRecordIterator<String, Long> iterator = partition.getResult()) {
         while (iterator.hasNext()) {
           ReadOnlyRecord<String, Long> record = iterator.next();
@@ -463,8 +471,8 @@ Use `withLowerBound`, `withUpperBound`, or `withNoBounds` for open-ended or full
 
   * **Window start range is required.** As with the existing window queries, `TimestampedWindowKeyWithHeadersQuery` and the `withWindowStartRange` form of `TimestampedWindowRangeWithHeadersQuery` require a closed window-start range — both `timeFrom` and `timeTo` must be present, and both bounds are inclusive.
   * **Close iterators exactly once.** The range and window queries return a `ReadOnlyRecordIterator`; close it when you are done — always, even if a `next()` call throws partway through — or the underlying store iterator (and the store's `num-open-iterators` metric) leaks. A try-with-resources block does this correctly. The iterator does not support `remove()`.
-  * **Headers depend on how the store was built.** With a `*WithHeaders` builder over a native (RocksDB) header supplier, the queries return the stored headers. With a `*WithHeaders` builder over a non-header supplier the underlying store cannot persist headers, so the outcome depends on the supplier: over a *timestamped* supplier, store-served reads succeed with an empty `headers()`; over a *plain* supplier that keeps no timestamp, the entry has no representable timestamp, so `TimestampedKeyWithHeadersQuery` fails with a store-exception error while the range and window queries return an iterator that throws a `StreamsException` when it reaches that entry. (With caching enabled, a not-yet-evicted write is still served from the record cache with its original headers — read-your-writes.) Against a plain, non-`WithHeaders` store, the new query types are unsupported and fail cleanly with an unknown-query-type error.
-  * **Existing query types are unchanged.** The pre-existing IQv2 query types (`KeyQuery`, `TimestampedKeyQuery`, `RangeQuery`, `TimestampedRangeQuery`, `WindowKeyQuery`, `WindowRangeQuery`) also run against header-aware stores, returning header-stripped results, and now behave identically whether the header store was built on the native or the adapter path.
+  * **Headers depend on how the store was built.** With a `*WithHeaders` builder over a native (RocksDB) header supplier — or over an *in-memory* non-header supplier, which keeps the header-format bytes verbatim through a marker — the queries return the stored headers. With a `*WithHeaders` builder over a non-header *persistent* supplier the underlying store cannot persist headers, so the outcome depends on the supplier: over a *timestamped* supplier, store-served reads succeed with an empty `headers()`; over a *plain* supplier that keeps no timestamp, the entry has no representable timestamp, so `TimestampedKeyWithHeadersQuery` fails with a store-exception error and the range and window-key queries (plus the `withWindowStartRange` form of `TimestampedWindowRangeWithHeadersQuery`) return an iterator that throws a `StreamsException` when it reaches that entry. The session `withKey` form never throws — a session window always carries a valid end timestamp, so such an entry is returned with a `null` `value()` instead. (Session stores have no plain/timestamped split, only a persistent adapter and an in-memory marker.) Read-your-writes applies only to the single-key `TimestampedKeyWithHeadersQuery`, which reads through the record cache; the range, window, and session queries bypass the cache, so a not-yet-flushed write is invisible to them and, with a position bound, fails with a not-up-to-bound error. Against a plain, non-`WithHeaders` store, the new query types are unsupported and fail cleanly with an unknown-query-type error.
+  * **Existing query types are unchanged.** The pre-existing IQv2 query types (`KeyQuery`, `TimestampedKeyQuery`, `RangeQuery`, `TimestampedRangeQuery`, `WindowKeyQuery`, `WindowRangeQuery`) also run against header-aware stores, returning header-stripped results, and now behave identically whether the header store was built on the native or the *timestamped* adapter path. (The *plain* adapter is not equivalent: it surfaces a `-1` timestamp rather than a real event-time, and its window queries return plain values instead of `ValueAndTimestamp`.)
 
 # Querying remote state stores for the entire app
 
