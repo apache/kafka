@@ -276,6 +276,23 @@ import static org.apache.kafka.coordinator.group.streams.StreamsGroupMember.hasA
 public class GroupMetadataManager {
     private static final int METADATA_REFRESH_INTERVAL_MS = Integer.MAX_VALUE;
 
+    /**
+     * The default value of every streams group assignment configuration, keyed by the name under which the
+     * configuration is passed to the assignor.
+     *
+     * <p>Used to drop default-valued configurations from both sides of the comparison that detects configuration
+     * changes (see {@link #withoutDefaults}). A configuration at its default value is thereby equivalent to an
+     * absent one, so adding a configuration does not read as a change for a group that does not set it, which
+     * would otherwise bump the group epoch of every such group on a broker upgrade.
+     *
+     * <p>These are the static defaults of the configurations, not the broker-level defaults in effect: a
+     * broker-level default that is changed away from the static default must still bump the group epoch.
+     */
+    private static final Map<String, String> ASSIGNMENT_CONFIG_DEFAULTS = Map.of(
+        "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT),
+        "rack.aware.assignment.tags", GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT
+    );
+
     private static class UpdateSubscriptionMetadataResult {
         private final int groupEpoch;
         private final SubscriptionType subscriptionType;
@@ -2227,10 +2244,13 @@ public class GroupMetadataManager {
             assignmentUpdate = AssignmentUpdate.RECOMPUTE;
         }
 
-        // Check if assignment configurations have changed
+        // Check if assignment configurations have changed. Both sides are compared without their default-valued
+        // configurations, so that a configuration that an older version wrote out explicitly at its default value
+        // does not read as a change.
         Map<String, String> currentAssignmentConfigs = streamsGroupAssignmentConfigs(groupId);
         Map<String, String> storedAssignmentConfigs = group.lastAssignmentConfigs();
-        if (assignmentUpdate == AssignmentUpdate.NONE && !currentAssignmentConfigs.equals(storedAssignmentConfigs)) {
+        if (assignmentUpdate == AssignmentUpdate.NONE
+                && !withoutDefaults(currentAssignmentConfigs).equals(withoutDefaults(storedAssignmentConfigs))) {
             log.info("[GroupId {}][MemberId {}] Assignment configurations changed to {}. Triggering rebalance.",
                 groupId, memberId, currentAssignmentConfigs);
             assignmentUpdate = AssignmentUpdate.RECOMPUTE;
@@ -9905,7 +9925,9 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Get the assignor of the provided streams group.
+     * Get the assignment configurations of the provided streams group. A configuration is only included once it is
+     * set to a non-default value, so that the configurations of a group that does not use it stay byte-identical to
+     * the ones a version without the configuration computes.
      */
     private Map<String, String> streamsGroupAssignmentConfigs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
@@ -9919,6 +9941,16 @@ public class GroupMetadataManager {
             configs.put("rack.aware.assignment.tags", String.join(",", rackAwareAssignmentTags));
         }
         return configs;
+    }
+
+    /**
+     * Drop the assignment configurations that are at their default value, so that configurations written before a
+     * configuration was added compare equal to the ones written after.
+     */
+    private static Map<String, String> withoutDefaults(Map<String, String> configs) {
+        Map<String, String> result = new TreeMap<>(configs);
+        result.entrySet().removeIf(entry -> entry.getValue().equals(ASSIGNMENT_CONFIG_DEFAULTS.get(entry.getKey())));
+        return result;
     }
 
     private static boolean hasUserEndpointChanged(StreamsGroupMember maybeOldMember, StreamsGroupMember updatedMember) {
