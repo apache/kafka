@@ -94,7 +94,11 @@ public class SingleByteBufferOutputStream extends ByteBufferOutputStream {
         return buffer.remaining();
     }
 
-    @Override
+    /**
+     * The limit of the underlying buffer, ie. the number of bytes that can be written before the buffer needs to
+     * be expanded. This is specific to this single-buffer implementation, where all the writable space is
+     * contiguous in a single buffer.
+     */
     public int limit() {
         return buffer.limit();
     }
@@ -110,7 +114,13 @@ public class SingleByteBufferOutputStream extends ByteBufferOutputStream {
         return initialCapacity;
     }
 
-    @Override
+    /**
+     * Ensure there is enough space to write some number of bytes, expanding the underlying buffer if necessary.
+     * This can be used to avoid incremental expansions through calls to {@link #write(int)} when you know how
+     * many total bytes are needed.
+     *
+     * @param remainingBytesRequired The number of bytes required
+     */
     public void ensureRemaining(int remainingBytesRequired) {
         if (remainingBytesRequired > buffer.remaining())
             expandBuffer(remainingBytesRequired);

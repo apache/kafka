@@ -41,20 +41,9 @@ public abstract class ByteBufferOutputStream extends OutputStream {
 
     public abstract int remaining();
 
-    public abstract int limit();
-
     /**
      * The capacity of the first internal ByteBuffer used by this class. This is useful in cases where a pooled
      * ByteBuffer was passed via the constructor and it needs to be returned to the pool.
      */
     public abstract int initialCapacity();
-
-    /**
-     * Ensure there is enough space to write some number of bytes, expanding the underlying buffer if necessary.
-     * This can be used to avoid incremental expansions through calls to {@link #write(int)} when you know how
-     * many total bytes are needed.
-     *
-     * @param remainingBytesRequired The number of bytes required
-     */
-    public abstract void ensureRemaining(int remainingBytesRequired);
 }

@@ -62,7 +62,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
      * @param pool          the buffer pool used for deallocation
      */
     public ChunkedByteBufferOutputStream(List<ByteBuffer> initialChunks, int chunkSize, BufferPool pool) {
-        super(validatedFirstChunk(initialChunks, chunkSize));
+        validateInitialChunks(initialChunks, chunkSize);
         this.chunkSize = chunkSize;
         this.pool = pool;
         this.chunks = new ArrayList<>(initialChunks);
@@ -72,13 +72,12 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
 
     /**
      * Validates the chunk contract: {@code initialChunks} non-empty, each chunk's capacity equal to
-     * {@code chunkSize}. Returns the first chunk.
+     * {@code chunkSize}.
      */
-    private static ByteBuffer validatedFirstChunk(List<ByteBuffer> initialChunks, int chunkSize) {
+    private static void validateInitialChunks(List<ByteBuffer> initialChunks, int chunkSize) {
         if (initialChunks == null || initialChunks.isEmpty())
             throw new IllegalArgumentException("initialChunks must be non-empty");
         validateChunkCapacities(initialChunks, chunkSize);
-        return initialChunks.get(0);
     }
 
     /**
@@ -311,25 +310,25 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     }
 
     @Override
-    public int limit() {
-        ensureNotDeallocated();
-        return Integer.MAX_VALUE;
-    }
-
-    @Override
     public int initialCapacity() {
         ensureNotDeallocated();
         return chunkSize;
     }
 
-    @Override
-    public void ensureRemaining(int remainingBytesRequired) {
+    /**
+     * Throws if {@code requiredBytes} cannot be written to this stream.
+     * This only checks the attached chunks, it does not make room.
+     *
+     * @throws IllegalStateException if the attached chunks have less free space than required
+     */
+    public void throwIfInsufficientRemaining(int requiredBytes) {
         ensureNotDeallocated();
         // A single write can be split across several chunks, so the required bytes needn't be
         // contiguous: only the total free space matters. Advancing here would waste the tail of the
-        // current chunk, so writes advance lazily and this only validates. TODO: KAFKA-20579, grow here.
-        if (remainingBytesRequired > remaining())
-            throw new IllegalStateException("required " + remainingBytesRequired
+        // current chunk, so writes advance lazily and this only validates.
+        // TODO: review with KAFKA-20579, but growth support should belong in advanceToNextChunk, not here.
+        if (requiredBytes > remaining())
+            throw new IllegalStateException("required " + requiredBytes
                 + " bytes but only " + remaining() + " remaining across the attached chunks");
     }
 

@@ -148,7 +148,7 @@ public class MemoryRecords extends AbstractRecords {
     private static FilterResult filterTo(Iterable<MutableRecordBatch> batches, RecordFilter filter,
                                          ByteBuffer destinationBuffer, BufferSupplier decompressionBufferSupplier) {
         FilterResult filterResult = new FilterResult(destinationBuffer);
-        ByteBufferOutputStream bufferOutputStream = new SingleByteBufferOutputStream(destinationBuffer);
+        SingleByteBufferOutputStream bufferOutputStream = new SingleByteBufferOutputStream(destinationBuffer);
         for (MutableRecordBatch batch : batches) {
             final BatchRetentionResult batchRetentionResult = filter.checkBatchRetention(batch);
             final boolean containsMarkerForEmptyTxn = batchRetentionResult.containsMarkerForEmptyTxn;
@@ -263,7 +263,7 @@ public class MemoryRecords extends AbstractRecords {
 
     private static MemoryRecordsBuilder buildRetainedRecordsInto(RecordBatch originalBatch,
                                                                  List<Record> retainedRecords,
-                                                                 ByteBufferOutputStream bufferOutputStream,
+                                                                 SingleByteBufferOutputStream bufferOutputStream,
                                                                  final long deleteHorizonMs) {
         Compression compression = Compression.of(originalBatch.compressionType()).build();
         // V0 has no timestamp type or timestamp, so we set the timestamp to CREATE_TIME and timestamp to NO_TIMESTAMP.
