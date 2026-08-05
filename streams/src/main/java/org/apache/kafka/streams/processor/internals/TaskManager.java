@@ -1255,11 +1255,20 @@ public class TaskManager {
 
         final Map<TaskId, Long> taskOffsetSums = stateDirectory.taskOffsetSums(lockedTaskDirectoriesOfNonOwnedTasksAndClosedAndCreatedTasks);
 
-        // overlay latest offsets from assigned tasks
+        // Overlay latest offsets from assigned tasks.
+        // `stateDirectory.taskOffsetSums` above only cover what is recoverable from disk (potentially stale),
+        // including offsets from persistent stores which tasks are owned by sibling thread, as well as dormant tasks;
+        // We update this (potentially state) information with latest changelog offset inforamtion for all other
+        // tasks assigned to this thread; this step also adds offset-sum information for in-memory state stores
         for (final Task task : tasks.values()) {
             // exclude stateless and non-logged tasks
             if (task.isActive() && task.state() == State.RUNNING && !task.changelogPartitions().isEmpty()) {
                 taskOffsetSums.put(task.id(), Task.LATEST_OFFSET);
+            } else if (task.state() != State.CREATED && task.state() != State.CLOSED) {
+                final Map<TopicPartition, Long> changelogOffsets = task.changelogOffsets();
+                if (!changelogOffsets.isEmpty()) {
+                    taskOffsetSums.put(task.id(), StateDirectory.sumOfChangelogOffsets(task.id(), changelogOffsets));
+                }
             }
         }
 
