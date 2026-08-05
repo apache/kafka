@@ -40,14 +40,6 @@ public final class RaftClientBenchmarkContext {
     public static final int AVERAGE_TIME_MEASUREMENT_ITERATIONS = 10;
     public static final int AVERAGE_TIME_FORKS = 3;
 
-    /**
-     * Keeps mock time in a plausible range. Fixture helpers advance the mock clock to fire timers
-     * rather than waiting on them, and a benchmark runs millions of operations, so a production-sized
-     * timeout moves the clock weeks ahead within one iteration, which is far enough to reach
-     * deadlines meant to be unreachable.
-     */
-    private static final int BENCHMARK_ELECTION_TIMEOUT_MS = 50;
-
     public static final KRaftVersion DEFAULT_KRAFT_VERSION = KRaftVersion.LATEST_PRODUCTION;
     // Default to the newest version of each (the highest-ordinal enum constant).
     public static final RaftProtocol DEFAULT_RAFT_PROTOCOL =
@@ -182,7 +174,6 @@ public final class RaftClientBenchmarkContext {
         return new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
             .withStartingVoters(voters, kraftVersion)
             .withRaftProtocol(raftProtocol)
-            .withElectionTimeoutMs(BENCHMARK_ELECTION_TIMEOUT_MS)
             .withPollIntervalMs(0)
             .withBenchmarking(true)
             .withMemoryPool(new BatchMemoryPool(5, KafkaRaftClient.MAX_BATCH_SIZE_BYTES));
