@@ -1008,6 +1008,7 @@ org.apache.kafka.clients.consumer.MockConsumerTest:
 - testLosePartitionsThrowsIfNotAssigned
 - testRe2JPatternSubscription
 - testRebalanceListener
+- testRebalanceWithConsumerAwareListener
 - testSimpleMock
 org.apache.kafka.clients.consumer.MockShareConsumerTest:
 - testSimpleMock
@@ -1382,17 +1383,6 @@ org.apache.kafka.clients.consumer.internals.CompletedFetchTest:
 - testNegativeFetchCount
 - testNoRecordsInFetch
 - testSimple
-org.apache.kafka.clients.consumer.internals.ConsumerAwareRebalanceListenerTest:
-- testDefaultDelegationFromTwoArgToOneArg
-- testEachCallbackGetsFreshView
-- testExceptionFromCallbackPropagates
-- testOnPartitionsAssignedCreatesViewAndDelegates
-- testOnPartitionsLostCreatesViewAndDelegates
-- testOnPartitionsRevokedCreatesViewAndDelegates
-- testViewIsClosedAfterAssignedCallback
-- testViewIsClosedAfterLostCallback
-- testViewIsClosedAfterRevokedCallback
-- testViewIsClosedEvenWhenCallbackThrows
 org.apache.kafka.clients.consumer.internals.ConsumerHeartbeatRequestManagerTest:
 - testConsumerAcksReconciledAssignmentAfterAckLost
 - testDisconnect
@@ -2818,6 +2808,9 @@ org.apache.kafka.clients.consumer.internals.SubscriptionStateTest:
 - testAssignedPartitionsWithTopicIdsForRe2Pattern
 - testAssignedTopicIdsPreservedWhenReconciliationCompletes
 - testCompleteValidationShouldClearAwaitingValidation
+- testDefaultDelegationFromTwoArgToOneArg
+- testEachCallbackGetsFreshView
+- testExceptionFromCallbackPropagates
 - testFetchablePartitionsPerformsCheapChecksFirst
 - testGroupSubscribe
 - testIsAssignedFromRe2j
@@ -2832,6 +2825,9 @@ org.apache.kafka.clients.consumer.internals.SubscriptionStateTest:
 - testMaybeValidatePositionForCurrentLeader
 - testMixedPatternSubscriptionNotAllowed
 - testOffsetResetWhileAwaitingValidation
+- testOnPartitionsAssignedCreatesViewAndDelegates
+- testOnPartitionsLostCreatesViewAndDelegates
+- testOnPartitionsRevokedCreatesViewAndDelegates
 - testPositionOrNull
 - testPreferredReadReplicaLease
 - testRequestOffsetResetIfPartitionAssigned
@@ -2849,6 +2845,10 @@ org.apache.kafka.clients.consumer.internals.SubscriptionStateTest:
 - testTryUpdatingLastStableOffset
 - testTryUpdatingLogStartOffset
 - testTryUpdatingPreferredReadReplica
+- testViewIsClosedAfterAssignedCallback
+- testViewIsClosedAfterLostCallback
+- testViewIsClosedAfterRevokedCallback
+- testViewIsClosedEvenWhenCallbackThrows
 - topicSubscription
 - unsubscribeUserAssignment
 - unsubscribeUserSubscribe
