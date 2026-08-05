@@ -629,6 +629,40 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
         assertEquals(3.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMaxMetric.metricValue());
     }
 
+    // The above shouldTimeIteratorDuration goes through metered.all() -> the KeyValueIterator sibling.
+    // This pins the same close()-path recording for the ReadOnlyRecordIterator that backs
+    // TimestampedRangeWithHeadersQuery, whose close() records both the operation sensor (get) and the
+    // iterator-duration sensor. All three Metered*WithHeaders ReadOnlyRecordIterators now share that
+    // close() via AbstractMeteredIterator, so this also guards the shared lifecycle.
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldTimeIteratorDurationForTimestampedRangeWithHeadersQuery() {
+        setUp();
+        when(inner.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+                .thenReturn((QueryResult) QueryResult.forResult(KeyValueIterators.emptyIterator()));
+        init();
+
+        final KafkaMetric iteratorDurationAvgMetric = metric("iterator-duration-avg");
+        final KafkaMetric iteratorDurationMaxMetric = metric("iterator-duration-max");
+        final KafkaMetric getLatencyAvgMetric = metric("get-latency-avg");
+        assertNotNull(iteratorDurationAvgMetric);
+        assertNotNull(iteratorDurationMaxMetric);
+        assertNotNull(getLatencyAvgMetric);
+        assertEquals(Double.NaN, (Double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(Double.NaN, (Double) iteratorDurationMaxMetric.metricValue());
+
+        final QueryResult<ReadOnlyRecordIterator<String, String>> result = metered.query(
+                TimestampedRangeWithHeadersQuery.withNoBounds(), PositionBound.unbounded(), new QueryConfig(false));
+        try (ReadOnlyRecordIterator<String, String> iterator = result.getResult()) {
+            // nothing to iterate; just hold it open, then close
+            mockTime.sleep(2);
+        }
+
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMaxMetric.metricValue());
+        assertTrue((double) getLatencyAvgMetric.metricValue() > 0.0);
+    }
+
     @SuppressWarnings("unused")
     @Test
     public void shouldTrackOldestOpenIteratorTimestamp() {

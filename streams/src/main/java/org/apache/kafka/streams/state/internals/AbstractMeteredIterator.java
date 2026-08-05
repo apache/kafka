@@ -18,30 +18,30 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.processor.api.ReadOnlyRecord;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.ReadOnlyRecordIterator;
 
 import java.util.Set;
 import java.util.concurrent.atomic.LongAdder;
 
 /**
- * Shared metering lifecycle for the {@code Metered*WithHeaders} iterators that back the
- * headers-aware IQv2 range/window/session query types and yield {@link ReadOnlyRecord}s.
+ * Shared metering lifecycle for the metered iterators of the {@code Metered*WithHeaders} stores,
+ * whatever result type they yield: the {@code KeyValueIterator}s returned by the store's own range/
+ * fetch/find methods and the {@code ReadOnlyRecordIterator}s that back the headers-aware IQv2
+ * range/window/session query types.
  *
  * <p>Every such iterator opens over a raw {@code KeyValueIterator<RawKey, byte[]>} and needs the
  * same bookkeeping: stamp the open time (for the {@code oldest-iterator-open-since-ms} metric),
  * register in {@code numOpenIterators}/{@code openIterators}, and on {@link #close()} record the
- * operation and iterator-duration sensors and deregister. Only {@link #next()} genuinely differs
- * per store -- raw key/value types, value deserialization, key derivation, timestamp source, and
- * whether a negative/absent timestamp is rejected -- so subclasses implement just that.
+ * operation and iterator-duration sensors and deregister. This base is deliberately result-type
+ * agnostic -- it implements only {@link MeteredIterator} and does not bind the yielded key/value
+ * types -- so each subclass declares its own result interface (a {@code KeyValueIterator} or a
+ * {@code ReadOnlyRecordIterator}) and implements just the parts that genuinely differ: the
+ * deserializing {@code next()} (and, for the {@code KeyValueIterator}s, a peeking {@code hasNext()}
+ * and {@code peekNextKey()}).
  *
  * @param <RawKey> the raw iterator's key type
- * @param <K>      the {@link ReadOnlyRecord} key type
- * @param <V>      the {@link ReadOnlyRecord} value type
  */
-abstract class AbstractMeteredReadOnlyRecordIterator<RawKey, K, V>
-    implements ReadOnlyRecordIterator<K, V>, MeteredIterator {
+abstract class AbstractMeteredIterator<RawKey> implements MeteredIterator {
 
     final KeyValueIterator<RawKey, byte[]> iter;
     private final Sensor operationSensor;
@@ -52,12 +52,12 @@ abstract class AbstractMeteredReadOnlyRecordIterator<RawKey, K, V>
     private final long startNs;
     private final long startTimestampMs;
 
-    AbstractMeteredReadOnlyRecordIterator(final KeyValueIterator<RawKey, byte[]> iter,
-                                          final Sensor operationSensor,
-                                          final Sensor iteratorSensor,
-                                          final Time time,
-                                          final LongAdder numOpenIterators,
-                                          final Set<MeteredIterator> openIterators) {
+    AbstractMeteredIterator(final KeyValueIterator<RawKey, byte[]> iter,
+                            final Sensor operationSensor,
+                            final Sensor iteratorSensor,
+                            final Time time,
+                            final LongAdder numOpenIterators,
+                            final Set<MeteredIterator> openIterators) {
         this.iter = iter;
         this.operationSensor = operationSensor;
         this.iteratorSensor = iteratorSensor;
@@ -75,12 +75,14 @@ abstract class AbstractMeteredReadOnlyRecordIterator<RawKey, K, V>
         return startTimestampMs;
     }
 
-    @Override
+    /**
+     * Delegates to the raw iterator. Subclasses that buffer a peeked element (the
+     * {@code KeyValueIterator}s) override this to also account for the buffered element.
+     */
     public boolean hasNext() {
         return iter.hasNext();
     }
 
-    @Override
     public void close() {
         try {
             iter.close();

@@ -74,6 +74,7 @@ import java.time.Instant;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -110,6 +111,7 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
     private WindowStore<Bytes, byte[]> innerStoreMock;
     private final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
     private MeteredTimestampedWindowStoreWithHeaders<String, String> store;
+    private MockTime mockTime;
     private Deserializer<String> keyDeserializer;
 
     public void setUp() {
@@ -130,11 +132,12 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
 
         when(innerStoreMock.name()).thenReturn(STORE_NAME);
 
+        mockTime = new MockTime();
         store = new MeteredTimestampedWindowStoreWithHeaders<>(
             innerStoreMock,
             WINDOW_SIZE_MS, // any size
             STORE_TYPE,
-            new MockTime(),
+            mockTime,
             Serdes.String(),
             new ValueTimestampHeadersSerde<>(new SerdeThatDoesntHandleNull())
         );
@@ -619,6 +622,63 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
         assertEquals(-1L, (Long) openIterators.metricValue());
     }
 
+    // The window store previously had no iterator-duration coverage at all. This mirrors the
+    // session/KV shouldTimeIteratorDuration: it goes through store.all() -> the KeyValueIterator
+    // sibling, whose close() records the operation (fetch) and iterator-duration sensors via the
+    // shared AbstractMeteredIterator lifecycle.
+    @Test
+    public void shouldTimeIteratorDuration() {
+        setUp();
+        store.init(context, store);
+        when(innerStoreMock.all()).thenReturn(windowRangeIterator(List.of()));
+
+        final KafkaMetric iteratorDurationAvg = metric("iterator-duration-avg");
+        final KafkaMetric iteratorDurationMax = metric("iterator-duration-max");
+        assertEquals(Double.NaN, (Double) iteratorDurationAvg.metricValue());
+        assertEquals(Double.NaN, (Double) iteratorDurationMax.metricValue());
+
+        try (KeyValueIterator<Windowed<String>, ValueTimestampHeaders<String>> iterator = store.all()) {
+            // nothing to iterate; just hold it open, then close
+            mockTime.sleep(2);
+        }
+
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvg.metricValue());
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMax.metricValue());
+    }
+
+    // The above shouldTimeIteratorDuration goes through store.all() -> the KeyValueIterator sibling.
+    // This pins the same close()-path recording for the ReadOnlyRecordIterator that backs
+    // TimestampedWindowKeyWithHeadersQuery, whose close() records both the operation sensor (fetch)
+    // and the iterator-duration sensor via the shared AbstractMeteredIterator lifecycle.
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    public void shouldTimeIteratorDurationForTimestampedWindowKeyWithHeadersQuery() {
+        setUp();
+        store.init(context, store);
+        when(innerStoreMock.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) QueryResult.forResult(windowKeyIterator(List.of())));
+
+        final KafkaMetric iteratorDurationAvg = metric("iterator-duration-avg");
+        final KafkaMetric iteratorDurationMax = metric("iterator-duration-max");
+        final KafkaMetric fetchLatencyAvg = metric("fetch-latency-avg");
+        assertEquals(Double.NaN, (Double) iteratorDurationAvg.metricValue());
+        assertEquals(Double.NaN, (Double) iteratorDurationMax.metricValue());
+
+        final QueryResult<ReadOnlyRecordIterator<Windowed<String>, String>> result = store.query(
+            TimestampedWindowKeyWithHeadersQuery.<String, String>withKeyAndWindowStartRange(
+                KEY, Instant.ofEpochMilli(5), Instant.ofEpochMilli(100)),
+            PositionBound.unbounded(),
+            new QueryConfig(false));
+        try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = result.getResult()) {
+            // nothing to iterate; just hold it open, then close
+            mockTime.sleep(2);
+        }
+
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvg.metricValue());
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMax.metricValue());
+        assertTrue((double) fetchLatencyAvg.metricValue() > 0.0);
+    }
+
     @SuppressWarnings({"unchecked", "rawtypes"})
     @Test
     public void shouldLeaveIteratorOpenWhenNextThrowsAndNotClosed() {
@@ -889,10 +949,14 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
     }
 
     private KafkaMetric numOpenIteratorsMetric() {
+        return metric("num-open-iterators");
+    }
+
+    private KafkaMetric metric(final String name) {
         return metrics.metrics().entrySet().stream()
-                .filter(entry -> entry.getKey().name().equals("num-open-iterators"))
+                .filter(entry -> entry.getKey().name().equals(name))
                 .findFirst()
-                .orElseThrow(() -> new AssertionError("num-open-iterators metric not registered"))
+                .orElseThrow(() -> new AssertionError(name + " metric not registered"))
                 .getValue();
     }
 }

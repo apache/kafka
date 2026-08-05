@@ -563,25 +563,14 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
     }
 
     private class MeteredTimestampedWindowStoreWithHeadersKeyValueIterator
-        implements KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>>, MeteredIterator {
+        extends AbstractMeteredIterator<Windowed<Bytes>>
+        implements KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> {
 
-        private final KeyValueIterator<Windowed<Bytes>, byte[]> iter;
-        private final long startNs;
-        private final long startTimestampMs;
         private KeyValue<Windowed<K>, ValueTimestampHeaders<V>> cachedNext;
 
         private MeteredTimestampedWindowStoreWithHeadersKeyValueIterator(
             final KeyValueIterator<Windowed<Bytes>, byte[]> iter) {
-            this.iter = iter;
-            this.startNs = time.nanoseconds();
-            this.startTimestampMs = time.milliseconds();
-            numOpenIterators.increment();
-            openIterators.add(this);
-        }
-
-        @Override
-        public long startTimestamp() {
-            return this.startTimestampMs;
+            super(iter, fetchSensor, iteratorDurationSensor, time, numOpenIterators, openIterators);
         }
 
         @Override
@@ -603,19 +592,6 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
             final K key = deserializeKey(next.key.key().get(), headers);
             final Windowed<K> windowedKey = new Windowed<>(key, next.key.window());
             return KeyValue.pair(windowedKey, valueTimestampHeaders);
-        }
-
-        @Override
-        public void close() {
-            try {
-                iter.close();
-            } finally {
-                final long duration = time.nanoseconds() - startNs;
-                fetchSensor.record(duration);
-                iteratorDurationSensor.record(duration);
-                numOpenIterators.decrement();
-                openIterators.remove(this);
-            }
         }
 
         @Override
@@ -662,7 +638,8 @@ public class MeteredTimestampedWindowStoreWithHeaders<K, V>
      *                 result, or a {@code Windowed<Bytes>} for a range result
      */
     private class MeteredWindowStoreWithHeadersReadOnlyRecordIterator<RawKey>
-        extends AbstractMeteredReadOnlyRecordIterator<RawKey, Windowed<K>, V> {
+        extends AbstractMeteredIterator<RawKey>
+        implements ReadOnlyRecordIterator<Windowed<K>, V> {
 
         private final BiFunction<RawKey, Headers, Windowed<K>> toWindowedKey;
 
