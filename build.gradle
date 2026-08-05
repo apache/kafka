@@ -1244,6 +1244,8 @@ project(':core') {
       // To prevent a UniqueResourceException due the same resource existing in both
       // org.apache.directory.api/api-all and org.apache.directory.api/api-ldap-schema-data
       testRuntimeOnly.exclude module: 'api-ldap-schema-data'
+      testCompileClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
+      testRuntimeClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
     }
 
     testRuntimeOnly(libs.apacheda) {
