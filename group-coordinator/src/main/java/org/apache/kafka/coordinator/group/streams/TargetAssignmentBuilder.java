@@ -123,10 +123,13 @@ public class TargetAssignmentBuilder {
      * Converts the raw assignment configs computed for the group into the typed configs passed to the assignor.
      */
     private static AssignmentConfigs toAssignmentConfigs(Map<String, String> assignmentConfigs) {
-        // The number of standby replicas is always set, the rack-aware assignment tags only if any are configured.
+        // Both configs can be absent: the rack-aware assignment tags are only set when any are configured, and the
+        // whole map is empty when it was replayed from a group metadata record written before the last assignment
+        // configs were persisted.
+        String numStandbyReplicas = assignmentConfigs.get("num.standby.replicas");
         String rackAwareAssignmentTags = assignmentConfigs.get("rack.aware.assignment.tags");
         return new AssignmentConfigsImpl(
-            Integer.parseInt(assignmentConfigs.get("num.standby.replicas")),
+            numStandbyReplicas == null ? 0 : Integer.parseInt(numStandbyReplicas),
             rackAwareAssignmentTags == null ? List.of() : List.of(rackAwareAssignmentTags.trim().split("\\s*,\\s*", -1))
         );
     }
