@@ -23031,10 +23031,10 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testStreamsGroupEpochShouldNotIncreaseWithAssignmentConfigStoredAtItsDefaultValue() {
-        // A version that did not omit default-valued assignment configurations recorded
-        // rack.aware.assignment.tags at its default value. Such a group must not bump the group epoch, or every
-        // group of an upgraded broker would rebalance once.
+    public void testStreamsGroupEpochBumpsOnlyWhenRackAwareAssignmentTagsLeaveOrReturnToTheirDefault() {
+        // rack.aware.assignment.tags walks default -> zone -> default. Only the two real changes may bump the
+        // group epoch: the default value that a version not omitting it recorded must not, or every group of an
+        // upgraded broker would rebalance once.
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
         String subtopology1 = "subtopology1";
@@ -23053,7 +23053,11 @@ public class GroupMetadataManagerTest {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withStreamsGroupTaskAssignors(List.of(assignor))
             .withMetadataImage(metadataImage)
-            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_CONFIG, 0)
+            // Pinned to its default, so that the tags are the only configuration that leaves its default value.
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_CONFIG,
+                GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT)
+            // Compute each assignment right away, so that the two changes below are not deferred into one.
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, 0)
             .withStreamsGroup(new StreamsGroupBuilder(groupId, 10)
                 .withMember(streamsGroupMemberBuilderWithDefaults(memberId)
                     .setState(org.apache.kafka.coordinator.group.streams.MemberState.STABLE)
@@ -23068,104 +23072,70 @@ public class GroupMetadataManagerTest {
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topology))
                 .withValidatedTopologyEpoch(0)
                 .withMetadataHash(computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))))
-                .withLastAssignmentConfigs(Map.of(
-                    "num.standby.replicas", "0",
-                    "rack.aware.assignment.tags", ""
-                ))
+                // A version that did not omit default-valued configurations recorded the tags at their default.
+                .withLastAssignmentConfigs(Map.of("rack.aware.assignment.tags", ""))
             )
             .build();
 
-        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
-            new StreamsGroupHeartbeatRequestData()
-                .setGroupId(groupId)
-                .setMemberId(memberId)
-                .setMemberEpoch(10)
-                .setActiveTasks(List.of(new StreamsGroupHeartbeatRequestData.TaskIds()
-                    .setSubtopologyId(subtopology1)
-                    .setPartitions(List.of(0, 1, 2, 3, 4, 5))))
-                .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()));
+        StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+
+        // The recorded default-valued tags are not a change: no epoch bump.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result =
+            context.streamsGroupHeartbeat(heartbeat(groupId, memberId, 10, subtopology1));
 
         assertEquals(10, result.response().data().memberEpoch());
         assertTrue(
             result.records().stream().noneMatch(record -> record.key() instanceof StreamsGroupMetadataKey),
             "Expected no StreamsGroupMetadata record, and therefore no group epoch bump"
         );
-        assertEquals(10, context.groupMetadataManager.streamsGroup(groupId).groupEpoch());
-    }
+        assertEquals(10, group.groupEpoch());
 
-    @Test
-    public void testStreamsGroupEpochIncreasesWhenNumStandbyReplicasConfigIsResetToItsDefaultValue() {
-        String groupId = "fooup";
-        String memberId = Uuid.randomUuid().toString();
-        String subtopology1 = "subtopology1";
-        String fooTopicName = "foo";
-        Uuid fooTopicId = Uuid.randomUuid();
-
-        Topology topology = new Topology().setSubtopologies(List.of(
-            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
-        ));
-
-        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
-            .addTopic(fooTopicId, fooTopicName, 6)
-            .buildCoordinatorMetadataImage();
-
-        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withStreamsGroupTaskAssignors(List.of(assignor))
-            .withMetadataImage(metadataImage)
-            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_CONFIG, 0)
-            .withStreamsGroup(new StreamsGroupBuilder(groupId, 10)
-                .withMember(streamsGroupMemberBuilderWithDefaults(memberId)
-                    .setState(org.apache.kafka.coordinator.group.streams.MemberState.STABLE)
-                    .setMemberEpoch(10)
-                    .setPreviousMemberEpoch(9)
-                    .setAssignedTasks(TaskAssignmentTestUtil.mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 10,
-                        TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)))
-                    .build())
-                .withTargetAssignment(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
-                    TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)))
-                .withTargetAssignmentEpoch(10)
-                .withTopology(StreamsTopology.fromHeartbeatRequest(topology))
-                .withValidatedTopologyEpoch(0)
-                .withMetadataHash(computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))))
-                // The group used to run with a non-default number of standby replicas.
-                .withLastAssignmentConfigs(Map.of("num.standby.replicas", "2"))
-            )
-            .build();
-
+        // Setting the tags takes them away from their default: epoch bump, and the tags are recorded.
+        Properties newConfig = new Properties();
+        newConfig.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone");
+        context.groupConfigManager.updateGroupConfig(groupId, newConfig);
         assignor.prepareGroupAssignment(
             Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                 TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)))
         );
 
-        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
-            new StreamsGroupHeartbeatRequestData()
-                .setGroupId(groupId)
-                .setMemberId(memberId)
-                .setMemberEpoch(10)
-                .setActiveTasks(List.of(new StreamsGroupHeartbeatRequestData.TaskIds()
-                    .setSubtopologyId(subtopology1)
-                    .setPartitions(List.of(0, 1, 2, 3, 4, 5))))
-                .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()));
+        result = context.streamsGroupHeartbeat(heartbeat(groupId, memberId, 10, subtopology1));
 
         assertEquals(11, result.response().data().memberEpoch());
-
-        CoordinatorRecord metadataRecord = result.records().stream()
-            .filter(record -> record.key() instanceof StreamsGroupMetadataKey)
-            .findFirst()
-            .orElse(null);
-        assertNotNull(metadataRecord, "Expected a StreamsGroupMetadata record");
-
-        StreamsGroupMetadataValue metadataValue = (StreamsGroupMetadataValue) metadataRecord.value().message();
-        assertEquals(11, metadataValue.epoch());
-
-        StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
         assertEquals(11, group.groupEpoch());
-        // The configuration is stored and passed on with its default value, not with the previous non-default one.
-        assertEquals(getDefaultAssignmentConfigs(), group.lastAssignmentConfigs());
-        assertEquals(getDefaultAssignmentConfigs(), assignor.lastPassedAssignmentConfigs());
+        assertEquals("zone", group.lastAssignmentConfigs().get("rack.aware.assignment.tags"));
+        assertEquals("zone", assignor.lastPassedAssignmentConfigs().get("rack.aware.assignment.tags"));
+
+        // Clearing the tags is a change as well, even though the value is back at its default.
+        context.groupConfigManager.updateGroupConfig(groupId, new Properties());
+        assignor.prepareGroupAssignment(
+            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+                TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)))
+        );
+
+        result = context.streamsGroupHeartbeat(heartbeat(groupId, memberId, 11, subtopology1));
+
+        assertEquals(12, result.response().data().memberEpoch());
+        assertEquals(12, group.groupEpoch());
+        assertFalse(group.lastAssignmentConfigs().containsKey("rack.aware.assignment.tags"));
+        assertFalse(assignor.lastPassedAssignmentConfigs().containsKey("rack.aware.assignment.tags"));
+    }
+
+    private static StreamsGroupHeartbeatRequestData heartbeat(
+        String groupId,
+        String memberId,
+        int memberEpoch,
+        String subtopologyId
+    ) {
+        return new StreamsGroupHeartbeatRequestData()
+            .setGroupId(groupId)
+            .setMemberId(memberId)
+            .setMemberEpoch(memberEpoch)
+            .setActiveTasks(List.of(new StreamsGroupHeartbeatRequestData.TaskIds()
+                .setSubtopologyId(subtopologyId)
+                .setPartitions(List.of(0, 1, 2, 3, 4, 5))))
+            .setStandbyTasks(List.of())
+            .setWarmupTasks(List.of());
     }
 
     @Test
