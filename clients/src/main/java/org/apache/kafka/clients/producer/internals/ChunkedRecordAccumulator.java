@@ -129,11 +129,10 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
         // and block again on a later iteration, so the blocking acquire is given whatever is left of the deadline.
         long deadlineMs = maxTimeToBlock > Long.MAX_VALUE - nowMs ? Long.MAX_VALUE : nowMs + maxTimeToBlock;
 
-        // Cleared once this append has attempted an extension, so any later pass through that path is a
-        // retry: the acquire failed, or succeeded without getting the record appended (not enough capacity
-        // by then, or no longer the batch it was sized against). Neither block, so an extension that is a retry
-        // would never time out on its own and is checked against the deadline based on this flag instead.
-        // The first attempt always runs, even with max.block.ms 0.
+        // Cleared once this append has attempted an extension, so any later pass through it is a retry: the acquire
+        // failed, or succeeded without getting the record appended (not enough capacity by then, or no longer the batch it
+        // was sized against). Neither blocks, so a retried extension never times out on its own and is checked against the
+        // deadline via this flag. The first attempt always runs, even with max.block.ms 0.
         boolean firstExtension = true;
 
         if (headers == null) headers = Record.EMPTY_HEADERS;
