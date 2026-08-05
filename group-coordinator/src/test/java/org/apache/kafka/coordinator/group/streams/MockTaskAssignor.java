@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import org.apache.kafka.coordinator.group.api.streams.assignor.AssignmentConfigs;
 import org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
@@ -31,7 +32,7 @@ public class MockTaskAssignor implements TaskAssignor {
 
     private final String name;
     private GroupAssignment preparedGroupAssignment = null;
-    private Map<String, String> assignmentConfigs = Map.of();
+    private AssignmentConfigs assignmentConfigs = null;
 
     public MockTaskAssignor(String name) {
         this.name = name;
@@ -53,7 +54,7 @@ public class MockTaskAssignor implements TaskAssignor {
                     })));
     }
 
-    public Map<String, String> lastPassedAssignmentConfigs() {
+    public AssignmentConfigs lastPassedAssignmentConfigs() {
         return assignmentConfigs;
     }
 

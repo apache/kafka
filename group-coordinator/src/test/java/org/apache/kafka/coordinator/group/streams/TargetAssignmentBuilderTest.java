@@ -27,6 +27,7 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.TaskRole;
+import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndStateImpl;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
@@ -479,7 +480,7 @@ public class TargetAssignmentBuilderTest {
             TopologyMetadata topologyMetadata = new TopologyMetadata(metadataImage, subtopologies);
 
             // Prepare the expected assignment spec.
-            GroupSpecImpl groupSpec = new GroupSpecImpl(memberMetadataMap, new HashMap<>());
+            GroupSpecImpl groupSpec = new GroupSpecImpl(memberMetadataMap, new AssignmentConfigsImpl(0, List.of()));
 
             // We use `any` here to always return an assignment but use `verify` later on
             // to ensure that the input was correct.

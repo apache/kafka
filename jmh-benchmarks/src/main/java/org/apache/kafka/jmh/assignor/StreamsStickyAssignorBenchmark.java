@@ -17,6 +17,7 @@
 package org.apache.kafka.jmh.assignor;
 
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
+import org.apache.kafka.coordinator.group.api.streams.assignor.AssignmentConfigs;
 import org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
@@ -24,6 +25,7 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TopologyDescriber;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.TopologyMetadata;
+import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndStateImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
@@ -91,7 +93,7 @@ public class StreamsStickyAssignorBenchmark {
 
     private TopologyDescriber topologyDescriber;
 
-    private Map<String, String> assignmentConfigs;
+    private AssignmentConfigs assignmentConfigs;
 
     @Setup(Level.Trial)
     public void setup() {
@@ -106,10 +108,7 @@ public class StreamsStickyAssignorBenchmark {
         taskAssignor = new StickyTaskAssignor();
 
         Map<String, StreamsGroupMember> members = createMembers();
-        this.assignmentConfigs = Map.of(
-            "num.standby.replicas",
-            Integer.toString(standbyReplicas)
-        );
+        this.assignmentConfigs = new AssignmentConfigsImpl(standbyReplicas, List.of());
         this.groupSpec = StreamsAssignorBenchmarkUtils.createGroupSpec(members, assignmentConfigs);
 
         if (assignmentType == AssignmentType.INCREMENTAL) {

@@ -19,39 +19,23 @@ package org.apache.kafka.coordinator.group.api.streams.assignor;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.Collection;
+import java.util.List;
 
 /**
- * The group metadata specifications required to compute the target assignment.
+ * The assignment configurations that the group coordinator passes to the task assignor.
  */
 @InterfaceAudience.Public
 @InterfaceStability.Evolving
-public interface GroupSpec {
+public interface AssignmentConfigs {
 
     /**
-     * @return The member Ids of all members in the group.
+     * @return The number of standby replicas for each task.
      */
-    Collection<String> memberIds();
+    int numStandbyReplicas();
 
     /**
-     * Gets the static metadata for a given member.
-     *
-     * @param memberId The member Id.
-     * @return The static member metadata.
+     * @return The client tags used to distribute standby tasks across racks. The list is unmodifiable.
      */
-    MemberAssignmentMetadata memberMetadata(String memberId);
-
-    /**
-     * Gets the current assignment state for a given member.
-     *
-     * @param memberId The member Id.
-     * @return The current member assignment state.
-     */
-    MemberAssignmentState memberAssignmentState(String memberId);
-
-    /**
-     * @return The assignment configurations passed to the assignor.
-     */
-    AssignmentConfigs configs();
+    List<String> rackAwareAssignmentTags();
 
 }
