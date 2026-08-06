@@ -2255,7 +2255,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     private void subscribeInternal(Pattern pattern, ConsumerRebalanceListener listener) {
         acquireAndEnsureOpen();
-        subscriptions.setRebalanceListener(listener, this);
+        if (listener != null)
+            subscriptions.setRebalanceListener(listener, this);
         try {
             throwIfGroupIdNotDefined();
             if (pattern == null || pattern.toString().isEmpty())
