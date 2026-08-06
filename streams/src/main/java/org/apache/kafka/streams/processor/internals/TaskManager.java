@@ -60,11 +60,11 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -718,7 +718,7 @@ public class TaskManager {
                                                          final CompletableFuture<StateUpdater.RemovedTaskResult> future) {
         final StateUpdater.RemovedTaskResult removedTaskResult;
         try {
-            removedTaskResult = future.get(5, TimeUnit.MINUTES);
+            removedTaskResult = future.get();
             if (removedTaskResult == null) {
                 throw new IllegalStateException("Task " + taskId + " was not found in the state updater. "
                     + BUG_ERROR_MESSAGE);
@@ -733,10 +733,6 @@ public class TaskManager {
             Thread.currentThread().interrupt();
             log.error(INTERRUPTED_ERROR_MESSAGE, shouldNotHappen);
             throw new IllegalStateException(INTERRUPTED_ERROR_MESSAGE, shouldNotHappen);
-        } catch (final java.util.concurrent.TimeoutException timeoutException) {
-            log.warn("The state updater wasn't able to remove task {} in time. The state updater thread may be dead. "
-                    + BUG_ERROR_MESSAGE, taskId, timeoutException);
-            return null;
         }
     }
 
@@ -862,6 +858,7 @@ public class TaskManager {
         if (stateUpdater.hasExceptionsAndFailedTasks()) {
             handleExceptionsFromStateUpdater();
         }
+        maybeThrowFatalExceptionFromStateUpdater();
         if (stateUpdater.restoresActiveTasks()) {
             handleRestoredTasksFromStateUpdater(now, offsetResetter);
         }
@@ -982,6 +979,13 @@ public class TaskManager {
             updateOrCreateBackoffRecord(task.id(), nowMs);
             log.info("Encountered timeout exception. Reattempting initialization in the next iteration. Error message was: {}",
                      timeoutException.getMessage());
+        }
+    }
+
+    private void maybeThrowFatalExceptionFromStateUpdater() {
+        final Optional<RuntimeException> fatalException = stateUpdater.fatalException();
+        if (fatalException.isPresent()) {
+            throw new StreamsException("The state updater died and cannot update tasks anymore.", fatalException.get());
         }
     }
 
