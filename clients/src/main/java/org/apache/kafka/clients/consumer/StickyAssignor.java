@@ -111,23 +111,23 @@ import java.util.Set;
  * <li><code>C2 [t2p0, t2p1, t2p2]</code></li>
  * </ul>
  *</p>
- * <h3>Impact on <code>ConsumerRebalanceListener</code></h3>
+ * <h3>Impact on <code>RebalanceListener</code></h3>
  * The sticky assignment strategy can provide some optimization to those consumers that have some partition cleanup code
  * in their <code>onPartitionsRevoked()</code> callback listeners. The cleanup code is placed in that callback listener
  * because the consumer has no assumption or hope of preserving any of its assigned partitions after a rebalance when it
  * is using range or round robin assignor. The listener code would look like this:
  * <pre>
  * {@code
- * class TheOldRebalanceListener implements ConsumerRebalanceListener {
+ * class TheOldRebalanceListener implements RebalanceListener {
  *
- *   void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+ *   void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
  *     for (TopicPartition partition: partitions) {
  *       commitOffsets(partition);
  *       cleanupState(partition);
  *     }
  *   }
  *
- *   void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+ *   void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
  *     for (TopicPartition partition: partitions) {
  *       initializeState(partition);
  *       initializeOffset(partition);
@@ -145,15 +145,15 @@ import java.util.Set;
  * clarifies this point:
  * <pre>
  * {@code
- * class TheNewRebalanceListener implements ConsumerRebalanceListener {
+ * class TheNewRebalanceListener implements RebalanceListener {
  *   Collection<TopicPartition> lastAssignment = Collections.emptyList();
  *
- *   void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+ *   void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
  *     for (TopicPartition partition: partitions)
  *       commitOffsets(partition);
  *   }
  *
- *   void onPartitionsAssigned(Collection<TopicPartition> assignment) {
+ *   void onPartitionsAssigned(Collection<TopicPartition> assignment, RebalanceConsumer consumer) {
  *     for (TopicPartition partition: difference(lastAssignment, assignment))
  *       cleanupState(partition);
  *
@@ -170,7 +170,7 @@ import java.util.Set;
  * </pre>
  *
  * Any consumer that uses sticky assignment can leverage this listener like this:
- * <code>consumer.subscribe(topics, new TheNewRebalanceListener());</code>
+ * <code>consumer.setRebalanceListener(new TheNewRebalanceListener());</code>
  *
  * Note that you can leverage the {@link CooperativeStickyAssignor} so that only partitions which are being
  * reassigned to another consumer will be revoked. That is the preferred assignor for newer cluster. See

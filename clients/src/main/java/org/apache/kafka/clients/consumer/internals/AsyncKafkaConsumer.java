@@ -186,7 +186,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      *
      * <ul>
      *     <li>Errors that occur in the network thread that need to be propagated to the application thread</li>
-     *     <li>{@link ConsumerRebalanceListener} callbacks that are to be executed on the application thread</li>
+     *     <li>{@link RebalanceListener} callbacks that are to be executed on the application thread</li>
      * </ul>
      */
     private class BackgroundEventProcessor implements EventProcessor<BackgroundEvent> {
@@ -1582,37 +1582,37 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      *
      * <ol>
      *     <li>
-     *         The execution of the {@link ConsumerRebalanceListener} callback (if applicable) must be performed on
+     *         The execution of the {@link RebalanceListener} callback (if applicable) must be performed on
      *         the application thread to ensure it does not interfere with the network I/O on the background thread.
      *     </li>
      *     <li>
-     *         The {@link ConsumerRebalanceListener} callback execution must complete before an attempt to leave
+     *         The {@link RebalanceListener} callback execution must complete before an attempt to leave
      *         the consumer group is performed. In this context, “complete” does not necessarily imply
      *         <em>success</em>; execution is “complete” even if the execution <em>fails</em> with an error.
      *     </li>
      *     <li>
-     *         Any error thrown during the {@link ConsumerRebalanceListener} callback execution will be caught to
+     *         Any error thrown during the {@link RebalanceListener} callback execution will be caught to
      *         ensure it does not prevent execution of the remaining {@link #close()} logic.
      *     </li>
      *     <li>
      *         The application thread will be blocked during the entire duration of the execution of the
-     *         {@link ConsumerRebalanceListener}. The consumer does not employ a mechanism to short-circuit the
+     *         {@link RebalanceListener}. The consumer does not employ a mechanism to short-circuit the
      *         callback execution, so execution is not bound by the timeout in {@link #close(Duration)}.
      *     </li>
      *     <li>
-     *         A given {@link ConsumerRebalanceListener} implementation may be affected by the application thread's
+     *         A given {@link RebalanceListener} implementation may be affected by the application thread's
      *         interrupt state. If the callback implementation performs any blocking operations, it may result in
      *         an error. An implementation may choose to preemptively check the thread's interrupt flag via
      *         {@link Thread#isInterrupted()} or {@link Thread#isInterrupted()} and alter its behavior.
      *     </li>
      *     <li>
      *         If the application thread was interrupted <em>prior</em> to the execution of the
-     *         {@link ConsumerRebalanceListener} callback, the thread's interrupt state will be preserved for the
-     *         {@link ConsumerRebalanceListener} execution.
+     *         {@link RebalanceListener} callback, the thread's interrupt state will be preserved for the
+     *         {@link RebalanceListener} execution.
      *     </li>
      *     <li>
      *         If the application thread was interrupted <em>prior</em> to the execution of the
-     *         {@link ConsumerRebalanceListener} callback <em>but</em> the callback cleared out the interrupt state,
+     *         {@link RebalanceListener} callback <em>but</em> the callback cleared out the interrupt state,
      *         the {@link #close()} method will not make any effort to restore the application thread's interrupt
      *         state for the remainder of the execution of {@link #close()}.
      *     </li>
@@ -2253,7 +2253,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             currentThread.set(NO_CURRENT_THREAD);
     }
 
-    private void subscribeInternal(Pattern pattern, ConsumerRebalanceListener listener) {
+    private void subscribeInternal(Pattern pattern, RebalanceListener listener) {
         acquireAndEnsureOpen();
         subscriptions.setRebalanceListener(listener, this);
         try {
@@ -2276,7 +2276,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * subscription state, so it's included in the next heartbeat request sent to the broker.
      * No validation of the pattern is performed by the client (other than null/empty checks).
      */
-    private void subscribeToRegex(SubscriptionPattern pattern, ConsumerRebalanceListener listener) {
+    private void subscribeToRegex(SubscriptionPattern pattern, RebalanceListener listener) {
         acquireAndEnsureOpen();
         try {
             throwIfGroupIdNotDefined();
@@ -2301,7 +2301,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
     }
 
-    private void subscribeInternal(Collection<String> topics, ConsumerRebalanceListener listener) {
+    private void subscribeInternal(Collection<String> topics, RebalanceListener listener) {
         acquireAndEnsureOpen();
         try {
             throwIfGroupIdNotDefined();
@@ -2436,7 +2436,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * As an example, take {@link #unsubscribe()}. To start unsubscribing, the application thread enqueues an
      * {@link UnsubscribeEvent} on the application event queue. That event will eventually trigger the
      * rebalancing logic in the background thread. Critically, as part of this rebalancing work, the
-     * {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)} callback needs to be invoked for any
+     * {@link RebalanceListener#onPartitionsRevoked(Collection, RebalanceConsumer)} callback needs to be invoked for any
      * partitions the consumer owns. However,
      * this callback must be executed on the application thread. To achieve this, the background thread enqueues a
      * {@link PartitionsRemovedEvent} on its background event queue. That event queue is
@@ -2445,7 +2445,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * {@link ConsumerRebalanceListenerCallbackCompletedEvent} is then enqueued by the application thread on the
      * application event queue. Moments later, the background thread will see that event, process it, and continue
      * execution of the rebalancing logic. The rebalancing logic cannot complete until the
-     * {@link ConsumerRebalanceListener} callback is performed.
+     * {@link RebalanceListener} callback is performed.
      *
      * @param future                    Event that contains a {@link CompletableFuture}; it is on this future that the
      *                                  application thread will wait for completion
