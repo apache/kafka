@@ -114,12 +114,6 @@ public final class ClientUtils {
         return addresses;
     }
 
-    public static List<InetSocketAddress> parseAndValidateAddresses(AbstractConfig config) {
-        List<String> urls = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
-        String clientDnsLookupConfig = config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG);
-        return parseAndValidateAddresses(urls, clientDnsLookupConfig);
-    }
-
     public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls, String clientDnsLookupConfig) {
         return parseAndValidateAddresses(urls, ClientDnsLookup.forConfig(clientDnsLookupConfig));
     }
