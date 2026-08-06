@@ -312,7 +312,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         double candidateMemberLoad = Double.MAX_VALUE;
         for (final Member member : members) {
             final ProcessState processState = localState.processIdToState.get(member.processId);
-            // A process that already owns a standby task (either as active or standby) cannot take it again,
+            // A process that already owns a standby task (either as active or standby) cannot take it again
             if (standbyTaskId.isPresent() && processState.hasTask(standbyTaskId.get())) {
                 continue;
             }
