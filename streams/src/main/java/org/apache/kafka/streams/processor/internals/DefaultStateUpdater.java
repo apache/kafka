@@ -355,7 +355,7 @@ public class DefaultStateUpdater implements StateUpdater {
         // like an error, we report the tasks of this thread as failed, so that the stream thread notices that this
         // thread is gone instead of silently losing its tasks.
         private void handleFatalThrowable(final Throwable throwable) {
-            log.error("An unexpected error occurred within the state updater thread: {}", String.valueOf(throwable));
+            log.error("An unexpected error occurred within the state updater thread.", throwable);
             final RuntimeException exception = throwable instanceof RuntimeException
                 ? (RuntimeException) throwable
                 : new StreamsException("The state updater thread failed with a fatal error.", throwable);

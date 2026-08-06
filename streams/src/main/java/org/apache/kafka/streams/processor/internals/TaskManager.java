@@ -65,6 +65,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -79,6 +80,7 @@ public class TaskManager {
     private static final String BUG_ERROR_MESSAGE = "This indicates a bug. " +
         "Please report at https://issues.apache.org/jira/projects/KAFKA/issues or to the dev-mailing list (https://kafka.apache.org/contact).";
     private static final String INTERRUPTED_ERROR_MESSAGE = "Thread got interrupted. " + BUG_ERROR_MESSAGE;
+    private static final long REMOVAL_LOG_INTERVAL_MINUTES = 1L;
 
     // initialize the task list
     // activeTasks needs to be concurrent as it can be accessed
@@ -716,9 +718,18 @@ public class TaskManager {
 
     private StateUpdater.RemovedTaskResult waitForFuture(final TaskId taskId,
                                                          final CompletableFuture<StateUpdater.RemovedTaskResult> future) {
-        final StateUpdater.RemovedTaskResult removedTaskResult;
+        StateUpdater.RemovedTaskResult removedTaskResult;
         try {
-            removedTaskResult = future.get();
+            long minutesWaited = 0L;
+            while (true) {
+                try {
+                    removedTaskResult = future.get(REMOVAL_LOG_INTERVAL_MINUTES, TimeUnit.MINUTES);
+                    break;
+                } catch (final java.util.concurrent.TimeoutException retryTimeout) {
+                    minutesWaited += REMOVAL_LOG_INTERVAL_MINUTES;
+                    log.warn("Waiting for the removal of task {} from the state updater for {} minute(s).", taskId, minutesWaited);
+                }
+            }
             if (removedTaskResult == null) {
                 throw new IllegalStateException("Task " + taskId + " was not found in the state updater. "
                     + BUG_ERROR_MESSAGE);

@@ -3600,6 +3600,32 @@ public class TaskManagerTest {
         verify(task00).closeDirty();
     }
 
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldKeepWaitingForRemovalIfStateUpdaterDoesNotCompleteItWithinLogInterval() throws Exception {
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId00Partitions)
+            .build();
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, false);
+
+        when(stateUpdater.tasks()).thenReturn(singleton(task00)).thenReturn(emptySet());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = mock(CompletableFuture.class);
+        when(future.get(anyLong(), any()))
+            .thenThrow(new java.util.concurrent.TimeoutException())
+            .thenReturn(new StateUpdater.RemovedTaskResult(task00));
+        when(stateUpdater.remove(eq(taskId00), eq(SuspendReason.MIGRATED))).thenReturn(future);
+
+        taskManager.shutdown(true);
+
+        verify(future, times(2)).get(anyLong(), any());
+        verify(tasks).addTask(task00);
+        verify(task00, never()).closeDirty();
+    }
+
     @Test
     public void shouldPropagateSuspendExceptionWhenRevokingStandbyTask() {
         final StandbyTask task00 = standbyTask(taskId00, taskId00ChangelogPartitions)
