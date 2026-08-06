@@ -171,6 +171,10 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         return Optional.ofNullable(getString(ServerConfigs.BROKER_RACK_CONFIG));
     }
 
+    public Optional<String> pod() {
+        return Optional.ofNullable(getString(ServerConfigs.BROKER_POD_CONFIG));
+    }
+
     public int nodeId() {
         return getInt(KRaftConfigs.NODE_ID_CONFIG);
     }

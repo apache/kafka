@@ -53,6 +53,7 @@ public class BrokerRegistrationTest {
             setListeners(List.of(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
             setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 2))).
             setRack(Optional.empty()).
+            setPod(Optional.empty()).
             setFenced(false).
             setInControlledShutdown(false).build(),
         new BrokerRegistration.Builder().
@@ -62,6 +63,7 @@ public class BrokerRegistrationTest {
             setListeners(List.of(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9091))).
             setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 2))).
             setRack(Optional.empty()).
+            setPod(Optional.empty()).
             setFenced(true).
             setInControlledShutdown(false).build(),
         new BrokerRegistration.Builder().
@@ -73,6 +75,7 @@ public class BrokerRegistrationTest {
                 new SimpleEntry<>("bar", VersionRange.of((short) 1, (short) 4))).collect(
                         Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue))).
             setRack(Optional.of("myrack")).
+            setPod(Optional.of("pod")).
             setFenced(false).
             setInControlledShutdown(true).build(),
         new BrokerRegistration.Builder().
@@ -83,6 +86,7 @@ public class BrokerRegistrationTest {
             setSupportedFeatures(Stream.of(new SimpleEntry<>("metadata.version", VersionRange.of((short) 7, (short) 7)))
                 .collect(Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue))).
             setRack(Optional.empty()).
+            setPod(Optional.empty()).
             setFenced(false).
             setInControlledShutdown(true).
             setIsMigratingZkBroker(true).
@@ -134,28 +138,28 @@ public class BrokerRegistrationTest {
             "incarnationId=3MfdxWlNSn2UDYsmDP1pYg, listeners=[Endpoint(" +
             "listenerName='INTERNAL', securityProtocol=PLAINTEXT, " +
             "host='localhost', port=9091)], supportedFeatures={foo: 1-2}, " +
-            "rack=Optional.empty, fenced=true, inControlledShutdown=false, isMigratingZkBroker=false, " +
+            "rack=Optional.empty, pod=Optional.empty, fenced=true, inControlledShutdown=false, isMigratingZkBroker=false, " +
             "directories=[], cordonedDirectories=null)",
             REGISTRATIONS.get(1).toString());
         assertEquals("BrokerRegistration(id=2, epoch=0, " +
             "incarnationId=eY7oaG1RREie5Kk9uy1l6g, listeners=[Endpoint(" +
             "listenerName='INTERNAL', securityProtocol=PLAINTEXT, " +
             "host='localhost', port=9092)], supportedFeatures={bar: 1-4, foo: 2-3}, " +
-            "rack=Optional[myrack], fenced=false, inControlledShutdown=true, isMigratingZkBroker=false, " +
+            "rack=Optional[myrack], pod=Optional[pod], fenced=false, inControlledShutdown=true, isMigratingZkBroker=false, " +
             "directories=[], cordonedDirectories=null)",
             REGISTRATIONS.get(2).toString());
         assertEquals("BrokerRegistration(id=3, epoch=0, " +
             "incarnationId=1t8VyWx2TCSTpUWuqj-FOw, listeners=[Endpoint(" +
             "listenerName='INTERNAL', securityProtocol=PLAINTEXT, " +
             "host='localhost', port=9093)], supportedFeatures={metadata.version: 7}, " +
-            "rack=Optional.empty, fenced=false, inControlledShutdown=true, isMigratingZkBroker=true, " +
+            "rack=Optional.empty, pod=Optional.empty, fenced=false, inControlledShutdown=true, isMigratingZkBroker=true, " +
             "directories=[r4HpEsMuST6nQ4rznIEJVA], cordonedDirectories=[r4HpEsMuST6nQ4rznIEJVA])",
             REGISTRATIONS.get(3).toString());
         assertEquals("BrokerRegistration(id=4, epoch=0, " +
             "incarnationId=Xkq84F5bTsSEwHqceVxcOQ, listeners=[Endpoint(" +
             "listenerName='INTERNAL', securityProtocol=PLAINTEXT, " +
             "host='localhost', port=9094)], supportedFeatures={foo: 1-2}, " +
-            "rack=Optional.empty, fenced=true, inControlledShutdown=false, isMigratingZkBroker=false, " +
+            "rack=Optional.empty, pod=Optional.empty, fenced=true, inControlledShutdown=false, isMigratingZkBroker=false, " +
             "directories=[r4HpEsMuST6nQ4rznIEJVA], cordonedDirectories=null)",
             REGISTRATIONS.get(4).toString());
     }
@@ -186,9 +190,9 @@ public class BrokerRegistrationTest {
         assertEquals(Optional.empty(), REGISTRATIONS.get(0).node("NONEXISTENT"));
         assertEquals(Optional.of(new Node(0, "localhost", 9090, null)),
             REGISTRATIONS.get(0).node("INTERNAL"));
-        assertEquals(Optional.of(new Node(1, "localhost", 9091, null, true)),
+        assertEquals(Optional.of(new Node(1, "localhost", 9091, null, null, true)),
             REGISTRATIONS.get(1).node("INTERNAL"));
-        assertEquals(Optional.of(new Node(2, "localhost", 9092, "myrack")),
+        assertEquals(Optional.of(new Node(2, "localhost", 9092, "myrack", "pod")),
             REGISTRATIONS.get(2).node("INTERNAL"));
         assertEquals(Optional.of(new Node(3, "localhost", 9093, null)),
             REGISTRATIONS.get(3).node("INTERNAL"));
@@ -203,6 +207,7 @@ public class BrokerRegistrationTest {
                 setListeners(List.of(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
                 setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 2))).
                 setRack(Optional.empty()).
+                setPod(Optional.empty()).
                 setFenced(false).
                 setInControlledShutdown(false).
                 setDirectories(List.of(
@@ -233,6 +238,7 @@ public class BrokerRegistrationTest {
                 setListeners(List.of(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
                 setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 2))).
                 setRack(Optional.empty()).
+                setPod(Optional.empty()).
                 setFenced(false).
                 setInControlledShutdown(false).
                 setDirectories(List.of(

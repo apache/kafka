@@ -19,7 +19,7 @@ package kafka.server
 
 import java.net.InetSocketAddress
 import java.util
-import java.util.{Arrays, Collections, Properties}
+import java.util.{Arrays, Collections, Optional, Properties}
 import kafka.utils.TestUtils.assertBadConfigContainingMessage
 import kafka.utils.TestUtils
 import org.apache.kafka.common.{Endpoint, Node}
@@ -825,6 +825,8 @@ class KafkaConfigTest {
         case MetadataLogConfig.INTERNAL_METADATA_MAX_BATCH_SIZE_IN_BYTES_CONFIG => // no op
         case MetadataLogConfig.INTERNAL_METADATA_DELETE_DELAY_MILLIS_CONFIG => // no op
         case KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG => // ignore string
+        case KRaftConfigs.CANARY_POD_NAME => assertPropertyInvalid(baseProperties, name, " ")
+        case KRaftConfigs.CANARY_PARTITION_INTERVAL => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
         case MetadataLogConfig.METADATA_MAX_IDLE_INTERVAL_MS_CONFIG  => assertPropertyInvalid(baseProperties, name, "not_a_number")
 
         case ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG => //ignore string
@@ -921,6 +923,7 @@ class KafkaConfigTest {
         case MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG => // ignore string
         case MetricConfigs.METRIC_RECORDING_LEVEL_CONFIG => // ignore string
         case ServerConfigs.BROKER_RACK_CONFIG => // ignore string
+        case ServerConfigs.BROKER_POD_CONFIG => // ignore string
 
         case ServerConfigs.COMPRESSION_GZIP_LEVEL_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case ServerConfigs.COMPRESSION_LZ4_LEVEL_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
@@ -2065,5 +2068,20 @@ class KafkaConfigTest {
         "If a broker doesn't send heartbeat request within broker.session.timeout.ms, it loses broker lease. " +
         "Please increase broker.session.timeout.ms or decrease broker.heartbeat.interval.ms."))
     }
+  }
+
+  @Test
+  def testPodAndRackProperties(): Unit = {
+    val props = new Properties()
+    props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
+    props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    props.put(KRaftConfigs.NODE_ID_CONFIG, "1")
+    props.put(ServerConfigs.BROKER_RACK_CONFIG, "rack-1")
+    props.put(ServerConfigs.BROKER_POD_CONFIG, "pod-1")
+    assertTrue(isValidKafkaConfig(props))
+    val config = KafkaConfig.fromProps(props)
+    assertEquals(Optional.of("rack-1"), config.rack)
+    assertEquals(Optional.of("pod-1"), config.pod)
   }
 }

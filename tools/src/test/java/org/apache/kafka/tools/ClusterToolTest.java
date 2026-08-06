@@ -227,9 +227,9 @@ public class ClusterToolTest {
 
         if (usingBootstrapController) {
             int id = clusterInstance.type() == Type.CO_KRAFT ? 0 : 3000;
-            assertEquals(clusterInstance.bootstrapControllers() + " (id: " + id + " rack: null isFenced: false) -> (", lineIter.next());
+            assertEquals(clusterInstance.bootstrapControllers() + " (id: " + id + " rack: null pod: null isFenced: false) -> (", lineIter.next());
         } else {
-            assertEquals(clusterInstance.bootstrapServers() + " (id: 0 rack: null isFenced: false) -> (", lineIter.next());
+            assertEquals(clusterInstance.bootstrapServers() + " (id: 0 rack: null pod: null isFenced: false) -> (", lineIter.next());
         }
 
         EnumSet<ApiKeys> apiKeys = EnumSet.copyOf(ApiKeys.clientApis());

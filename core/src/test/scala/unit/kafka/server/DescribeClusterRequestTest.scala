@@ -63,8 +63,8 @@ class DescribeClusterRequestTest extends BaseRequestTest {
         .setBrokerId(server.config.brokerId)
         .setHost("localhost")
         .setPort(server.socketServer.boundPort(listenerName))
-        .setRack(server.config.rack.orElse(null))
-    }.toSet
+        .setRack(server.config.rack().orElse(null))
+        .setPod(server.config.pod().orElse(null))}.toSet
 
     val expectedClusterId = brokers.last.clusterId
 

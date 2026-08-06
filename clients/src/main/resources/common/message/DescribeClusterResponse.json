@@ -48,7 +48,9 @@
       { "name": "Rack", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
         "about": "The rack of the broker, or null if it has not been assigned to a rack." },
       { "name": "IsFenced", "type": "bool", "versions": "2+",
-        "about": "Whether the broker is fenced" }
+        "about": "Whether the broker is fenced" },
+      { "name": "Pod", "type": "string", "versions": "0+", "nullableVersions": "0+",  "default": "null",
+        "about": "The pod of the broker, or null if it has not been assigned to a pod.", "taggedVersions": "0+", "tag": 0 }
     ]},
     { "name": "ClusterAuthorizedOperations", "type": "int32", "versions": "0+", "default": "-2147483648",
       "about": "32-bit bitfield to represent authorized operations for this cluster." }

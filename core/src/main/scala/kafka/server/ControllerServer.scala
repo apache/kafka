@@ -40,6 +40,7 @@ import org.apache.kafka.image.publisher.{ControllerRegistrationsPublisher, KRaft
 import org.apache.kafka.metadata.{KafkaConfigSchema, KRaftMetadataCache, ListenerInfo}
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
+import org.apache.kafka.metadata.placement.{PodReplicaPlacer, StripedReplicaPlacer}
 import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicTopicClusterQuotaPublisher, FeaturesPublisher, ScramPublisher}
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.{CredentialProvider, DelegationTokenManager}
@@ -58,7 +59,7 @@ import org.apache.kafka.server.NodeToControllerChannelManagerImpl
 import org.apache.kafka.server.RaftControllerNodeProvider
 
 import java.util
-import java.util.{Optional, OptionalLong}
+import java.util.{Optional, OptionalLong, Random}
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import scala.jdk.CollectionConverters._
@@ -248,6 +249,7 @@ class ControllerServer(
           setQuorumFeatures(quorumFeatures).
           setDefaultReplicationFactor(config.defaultReplicationFactor.toShort).
           setDefaultNumPartitions(config.numPartitions.intValue()).
+          setReplicaPlacer(new PodReplicaPlacer(new StripedReplicaPlacer(new Random), config.canarySpec.toMap)).
           setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
             TimeUnit.MILLISECONDS)).
           setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs).

@@ -322,25 +322,25 @@ public class ReassignPartitionsUnitTest {
     @Test
     public void testGetBrokerRackInformation() throws Exception {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().
-            brokers(List.of(new Node(0, "localhost", 9092, "rack0"),
-                new Node(1, "localhost", 9093, "rack1"),
-                new Node(2, "localhost", 9094, null))).
+            brokers(List.of(new Node(0, "localhost", 9092, "rack0", "pod0"),
+                new Node(1, "localhost", 9093, "rack1", "pod1"),
+                new Node(2, "localhost", 9094, null, null))).
             build()) {
 
             assertEquals(List.of(
-                new UsableBroker(0, Optional.of("rack0"), false),
-                new UsableBroker(1, Optional.of("rack1"), false)
+                new UsableBroker(0, Optional.of("rack0"), Optional.of("pod0"), false),
+                new UsableBroker(1, Optional.of("rack1"), Optional.of("pod1"), false)
             ), getBrokerMetadata(adminClient, List.of(0, 1), true));
             assertEquals(List.of(
-                new UsableBroker(0, Optional.empty(), false),
-                new UsableBroker(1, Optional.empty(), false)
+                new UsableBroker(0, Optional.empty(), Optional.of("pod0"), false),
+                new UsableBroker(1, Optional.empty(), Optional.of("pod1"), false)
             ), getBrokerMetadata(adminClient, List.of(0, 1), false));
             assertStartsWith("Not all brokers have rack information",
                 assertThrows(AdminOperationException.class,
                     () -> getBrokerMetadata(adminClient, List.of(1, 2), true)).getMessage());
             assertEquals(List.of(
-                new UsableBroker(1, Optional.empty(), false),
-                new UsableBroker(2, Optional.empty(), false)
+                new UsableBroker(1, Optional.empty(), Optional.of("pod1"), false),
+                new UsableBroker(2, Optional.empty(), Optional.empty(), false)
             ), getBrokerMetadata(adminClient, List.of(1, 2), false));
         }
     }
@@ -372,7 +372,7 @@ public class ReassignPartitionsUnitTest {
             addTopics(adminClient);
             assertStartsWith("The target replication factor of 3 cannot be reached because only 2 broker(s) are registered",
                 assertThrows(InvalidReplicationFactorException.class,
-                    () -> generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"},{\"topic\":\"bar\"}]}", "0,1", false),
+                    () -> generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"},{\"topic\":\"bar\"}]}", "0,1", false, "pod1", 0),
                     "Expected generateAssignment to fail").getMessage());
         }
     }
@@ -383,7 +383,7 @@ public class ReassignPartitionsUnitTest {
             addTopics(adminClient);
             assertStartsWith("Topic quux not found",
                 assertThrows(ExecutionException.class,
-                    () -> generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"},{\"topic\":\"quux\"}]}", "0,1", false),
+                    () -> generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"},{\"topic\":\"quux\"}]}", "0,1", false, "pod1", 0),
                     "Expected generateAssignment to fail").getCause().getMessage());
         }
     }
@@ -393,21 +393,21 @@ public class ReassignPartitionsUnitTest {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().
             brokers(List.of(
                 new Node(0, "localhost", 9092, "rack0"),
-                new Node(1, "localhost", 9093, "rack0"),
-                new Node(2, "localhost", 9094, null),
-                new Node(3, "localhost", 9095, "rack1"),
-                new Node(4, "localhost", 9096, "rack1"),
-                new Node(5, "localhost", 9097, "rack2"))).
+                new Node(1, "localhost", 9093, "rack0", "pod0"),
+                new Node(2, "localhost", 9094, null, null),
+                new Node(3, "localhost", 9095, "rack1", "pod1"),
+                new Node(4, "localhost", 9096, "rack1", "pod1"),
+                new Node(5, "localhost", 9097, "rack2", "pod2"))).
             build()) {
 
             addTopics(adminClient);
             assertStartsWith("Not all brokers have rack information.",
                 assertThrows(AdminOperationException.class,
-                    () -> generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"}]}", "0,1,2,3", true),
+                    () -> generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"}]}", "0,1,2,3", true, "pod1", 0),
                     "Expected generateAssignment to fail").getMessage());
             // It should succeed when --disable-rack-aware is used.
             Entry<Map<TopicPartition, List<Integer>>, Map<TopicPartition, List<Integer>>>
-                proposedCurrent = generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"}]}", "0,1,2,3", false);
+                proposedCurrent = generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"}]}", "0,1,2,3", false, "pod1", 0);
 
             Map<TopicPartition, List<Integer>> expCurrent = new HashMap<>();
 
@@ -415,6 +415,36 @@ public class ReassignPartitionsUnitTest {
             expCurrent.put(new TopicPartition("foo", 1), List.of(1, 2, 3));
 
             assertEquals(expCurrent, proposedCurrent.getValue());
+        }
+    }
+
+    @Test
+    public void testGenerateAssignmentWithCanaryIsolation() throws Exception {
+        try (MockAdminClient adminClient = new MockAdminClient.Builder().
+                brokers(List.of(
+                        new Node(0, "localhost", 9092, "rack0", "pod0"),
+                        new Node(1, "localhost", 9093, "rack0", "pod0"),
+                        new Node(2, "localhost", 9094, null, null),
+                        new Node(3, "localhost", 9095, "rack1", "pod1"),
+                        new Node(4, "localhost", 9096, "rack1", "pod1"),
+                        new Node(5, "localhost", 9097, "rack2", "pod2"))).
+                build()) {
+            addTopics(adminClient);
+
+            Entry<Map<TopicPartition, List<Integer>>, Map<TopicPartition, List<Integer>>>
+                    assignment = generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"}]}", "0,1,2,3,4", false, "pod1", 2);
+
+            Map<TopicPartition, List<Integer>> expCurrent = new HashMap<>();
+            expCurrent.put(new TopicPartition("foo", 0), List.of(0, 1, 2));
+            expCurrent.put(new TopicPartition("foo", 1), List.of(1, 2, 3));
+            assertEquals(expCurrent, assignment.getValue());
+
+            Map<TopicPartition, Set<Integer>> expProposal = new HashMap<>();
+            expProposal.put(new TopicPartition("foo", 0), Set.of(0, 1, 2));
+            expProposal.put(new TopicPartition("foo", 1), Set.of(2, 3, 4));
+
+            assertEquals(expProposal, assignment.getKey().entrySet().stream()
+                    .collect(Collectors.toMap(Map.Entry::getKey, entry -> Set.copyOf(entry.getValue()))));
         }
     }
 
@@ -427,7 +457,7 @@ public class ReassignPartitionsUnitTest {
             Entry<Map<TopicPartition, List<Integer>>, Map<TopicPartition, List<Integer>>>
                 proposedCurrent = generateAssignment(adminClient,
                     "{\"topics\":[{\"topic\":\"foo\"},{\"topic\":\"bar\"}]}",
-                    goalBrokers.stream().map(Object::toString).collect(Collectors.joining(",")), false);
+                    goalBrokers.stream().map(Object::toString).collect(Collectors.joining(",")), false, "pod1", 0);
 
             Map<TopicPartition, List<Integer>> expCurrent = new HashMap<>();
 

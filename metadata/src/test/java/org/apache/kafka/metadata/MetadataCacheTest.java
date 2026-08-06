@@ -132,7 +132,8 @@ public class MetadataCacheTest {
             records.add(new RegisterBrokerRecord()
                 .setBrokerId(brokerId)
                 .setEndPoints(endpoints)
-                .setRack("rack1"));
+                .setRack("rack1")
+                .setPod("pod"));
         }
         records.add(new TopicRecord().setName(topic0).setTopicId(topicIds.get(topic0)));
         records.add(new TopicRecord().setName(topic1).setTopicId(topicIds.get(topic1)));
@@ -398,6 +399,7 @@ public class MetadataCacheTest {
             new RegisterBrokerRecord()
                 .setBrokerId(0)
                 .setRack("rack1")
+                .setPod("pod")
                 .setFenced(false)
                 .setEndPoints(endpoints),
             new TopicRecord().setName(topic).setTopicId(topicId),
@@ -456,6 +458,7 @@ public class MetadataCacheTest {
         RegisterBrokerRecord broker = new RegisterBrokerRecord()
             .setBrokerId(0)
             .setRack("")
+            .setPod("")
             .setEndPoints(new BrokerEndpointCollection(List.of(
                 new BrokerEndpoint()
                     .setHost("foo")
@@ -516,6 +519,7 @@ public class MetadataCacheTest {
             records.add(new RegisterBrokerRecord()
                 .setBrokerId(brokerId)
                 .setRack("")
+                .setPod("")
                 .setFenced(false)
                 .setBrokerEpoch(BROKER_EPOCH)
                 .setEndPoints(new BrokerEndpointCollection(List.of(
@@ -552,6 +556,7 @@ public class MetadataCacheTest {
                 .setBrokerId(brokerId)
                 .setFenced(brokerId == fencedBrokerId)
                 .setRack("rack" + (brokerId % 3))
+                .setPod("pod")
                 .setEndPoints(new BrokerEndpointCollection(List.of(
                     new BrokerEndpoint()
                         .setHost("foo" + brokerId)
@@ -958,6 +963,7 @@ public class MetadataCacheTest {
                 .setBrokerId(0)
                 .setBrokerEpoch(BROKER_EPOCH)
                 .setRack("rack1")
+                .setPod("pod")
                 .setEndPoints(new BrokerEndpointCollection(List.of(
                     new BrokerEndpoint()
                         .setHost("foo")
@@ -1062,6 +1068,32 @@ public class MetadataCacheTest {
         assertEquals(List.of(broker0, broker1), Arrays.stream(partition.replicas()).map(Node::id).toList());
         assertEquals(List.of(broker1), Arrays.stream(partition.offlineReplicas()).map(Node::id).toList());
         assertTrue(cluster.nodeById(broker1).isFenced());
+    }
+
+    @Test
+    public void testGetClusterMetadataWithPod() {
+        MetadataCache cache = createCache();
+        SecurityProtocol securityProtocol = SecurityProtocol.PLAINTEXT;
+        ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
+        List<ApiMessage> brokers = List.of(
+                new RegisterBrokerRecord()
+                        .setBrokerId(0)
+                        .setFenced(false)
+                        .setBrokerEpoch(BROKER_EPOCH)
+                        .setRack("rack1")
+                        .setPod("pod")
+                        .setEndPoints(new BrokerEndpointCollection(List.of(
+                                new BrokerEndpoint()
+                                        .setHost("foo")
+                                        .setPort(9092)
+                                        .setSecurityProtocol(securityProtocol.id)
+                                        .setName(listenerName.value())
+                        )))
+        );
+        updateCache(cache, brokers);
+        Node aliveBroker = cache.getAliveBrokerNodes(listenerName).iterator().next();
+        assertEquals("rack1", aliveBroker.rack());
+        assertEquals("pod", aliveBroker.pod());
     }
 
     private record Partition(int id, List<Integer> replicas, List<Uuid> dirs) {

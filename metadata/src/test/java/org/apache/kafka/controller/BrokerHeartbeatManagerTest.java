@@ -111,6 +111,7 @@ public class BrokerHeartbeatManagerTest {
         for (Iterator<UsableBroker> iterator = new UsableBrokerIterator(
             manager.brokers().iterator(),
             id -> id % 2 == 0 ? Optional.of("rack1") : Optional.of("rack2"),
+            id -> Optional.empty(),
             id -> id % 3 != 0);
              iterator.hasNext(); ) {
             brokers.add(iterator.next());
@@ -132,9 +133,9 @@ public class BrokerHeartbeatManagerTest {
         manager.touch(4, true, 100);
         assertEquals(98L, manager.lowestActiveOffset());
         Set<UsableBroker> expected = new HashSet<>();
-        expected.add(new UsableBroker(1, Optional.of("rack2"), false));
-        expected.add(new UsableBroker(2, Optional.of("rack1"), false));
-        expected.add(new UsableBroker(4, Optional.of("rack1"), true));
+        expected.add(new UsableBroker(1, Optional.of("rack2"), Optional.empty(), false));
+        expected.add(new UsableBroker(2, Optional.of("rack1"), Optional.empty(), false));
+        expected.add(new UsableBroker(4, Optional.of("rack1"), Optional.empty(), true));
         assertEquals(expected, usableBrokersToSet(manager));
         manager.maybeUpdateControlledShutdownOffset(2, 0);
         assertEquals(100L, manager.lowestActiveOffset());
@@ -142,8 +143,8 @@ public class BrokerHeartbeatManagerTest {
             () -> manager.maybeUpdateControlledShutdownOffset(4, 0));
         manager.touch(4, false, 100);
         manager.maybeUpdateControlledShutdownOffset(4, 0);
-        expected.remove(new UsableBroker(2, Optional.of("rack1"), false));
-        expected.remove(new UsableBroker(4, Optional.of("rack1"), true));
+        expected.remove(new UsableBroker(2, Optional.of("rack1"), Optional.empty(), false));
+        expected.remove(new UsableBroker(4, Optional.of("rack1"), Optional.empty(), true));
         assertEquals(expected, usableBrokersToSet(manager));
     }
 

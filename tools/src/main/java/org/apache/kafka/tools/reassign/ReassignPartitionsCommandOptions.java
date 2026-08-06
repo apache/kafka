@@ -43,6 +43,8 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
     final OptionSpec<?> additionalOpt;
     final OptionSpec<?> preserveThrottlesOpt;
     final OptionSpec<?> disallowReplicationFactorChangeOpt;
+    final OptionSpec<String> canaryNameOpt;
+    final OptionSpec<Integer> canaryIntervalOpt;
 
     public ReassignPartitionsCommandOptions(String[] args) {
         super(args);
@@ -117,7 +119,16 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
             "other ongoing ones. This option can also be used to change the throttle of an ongoing reassignment.");
         preserveThrottlesOpt = parser.accepts("preserve-throttles", "Do not modify broker or topic throttles.");
         disallowReplicationFactorChangeOpt = parser.accepts("disallow-replication-factor-change", "Denies the ability to change a partition's replication factor as part of this reassignment through adding validation against it.");
-
+        canaryNameOpt = parser.accepts("canary-name", "Specify the name of canary pod, canary partition will be placed on canary pod according to name defined")
+                .withRequiredArg()
+                .describedAs("canary pod name")
+                .ofType(String.class)
+                .defaultsTo("canary-broker");
+        canaryIntervalOpt = parser.accepts("canary-interval", "Specify that every Nth partition is a canary partition; 0 disables canary placement")
+                .withRequiredArg()
+                .describedAs("canary partition interval")
+                .ofType(Integer.class)
+                .defaultsTo(0);
         options = parser.parse(args);
     }
 }

@@ -62,6 +62,8 @@
       "about": "Log directories configured in this broker which are available." },
     { "name": "CordonedLogDirs", "type":  "[]uuid", "versions":  "4+", "taggedVersions": "4+", "tag": 1,
       "nullableVersions": "4+", "default":  "null",
-      "about": "Log directories that are cordoned. This is initially null before the broker starts sending the value via its heartbeats." }
+      "about": "Log directories that are cordoned. This is initially null before the broker starts sending the value via its heartbeats." },
+    { "name": "Pod", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
+      "taggedVersions": "0+", "tag": 2, "about": "The broker pod." }
   ]
 }
