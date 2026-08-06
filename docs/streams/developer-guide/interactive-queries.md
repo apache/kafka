@@ -135,7 +135,7 @@ Every application instance can directly query any of its local state stores.
 
 The _name_ of a state store is defined when you create the store. You can create the store explicitly by using the Processor API or implicitly by using stateful operations in the DSL.
 
-The _type_ of a state store is defined by `QueryableStoreType`. Pass a built-in implementation from [`QueryableStoreTypes`](/{version}/javadoc/org/apache/kafka/streams/state/QueryableStoreTypes.html) as the second argument to `KafkaStreams#store(...)`. The available built-in helpers are:
+The _type_ of a state store is defined by `QueryableStoreType`. Pass a built-in implementation from [`QueryableStoreTypes`](/{version}/javadoc/org/apache/kafka/streams/state/QueryableStoreTypes.html) to `StoreQueryParameters.fromNameAndType(...)`, then hand that to `KafkaStreams#store(...)`. The available built-in helpers are:
 
   * **`QueryableStoreTypes#keyValueStore()`** — see [Querying local key-value stores](#querying-local-key-value-stores).
   * **`QueryableStoreTypes#timestampedKeyValueStore()`** — see [Querying local key-value stores](#querying-local-key-value-stores).
@@ -152,7 +152,7 @@ You can also implement your own QueryableStoreType as described in section Query
 
 Kafka Streams materializes one state store per stream partition. This means your application will potentially manage many underlying state stores. The API enables you to query all of the underlying stores without having to know which partition the data is in.
 
-**Note:** For a [header-aware store](/{version}/streams/developer-guide/processor-api/#headers-in-state-stores), use the **`*WithHeaders()`** entry from the list above that corresponds to your store type when interactive query results must include record headers. See [Header-aware stores and interactive queries](#header-aware-stores-interactive-queries) to read record headers back through either the legacy `store()` API or the IQv2 `query()` API.
+**Note:** For a [header-aware store](/{version}/streams/developer-guide/processor-api/#headers-in-state-stores), use the **`*WithHeaders()`** entry from the list above that corresponds to your store type when interactive query results must include record headers. See [Header-aware stores and interactive queries](#header-aware-stores-interactive-queries) to read record headers back through either the `store()` API or the IQv2 `query()` API.
 
 ## Querying local key-value stores
 
@@ -257,131 +257,13 @@ After the application has started, you can get access to "CountsWindowStore" and
       System.out.println("Count of 'world' @ time " + windowTimestamp + " is " + next.value);
     }
 
-## Querying local custom state stores
-
-**Note**
-
-Only the [Processor API](/{version}/streams/developer-guide/processor-api/#implementing-custom-state-stores) supports custom state stores.
-
-Before querying the custom state stores you must implement these interfaces:
-
-  * Your custom state store must implement `StateStore`.
-  * You must have an interface to represent the operations available on the store.
-  * You must provide an implementation of `StoreBuilder` for creating instances of your store.
-  * It is recommended that you provide an interface that restricts access to read-only operations. This prevents users of this API from mutating the state of your running Kafka Streams application out-of-band.
-
-
-
-The class/interface hierarchy for your custom store might look something like:
-    
-    
-    public class MyCustomStore<K,V> implements StateStore, MyWriteableCustomStore<K,V> {
-      // implementation of the actual store
-    }
-    
-    // Read-write interface for MyCustomStore
-    public interface MyWriteableCustomStore<K,V> extends MyReadableCustomStore<K,V> {
-      void write(K Key, V value);
-    }
-    
-    // Read-only interface for MyCustomStore
-    public interface MyReadableCustomStore<K,V> {
-      V read(K key);
-    }
-    
-    public class MyCustomStoreBuilder implements StoreBuilder {
-      // implementation of the supplier for MyCustomStore
-    }
-
-To make this store queryable you must:
-
-  * Provide an implementation of [QueryableStoreType](https://github.com/apache/kafka/blob/4.3/streams/src/main/java/org/apache/kafka/streams/state/QueryableStoreType.java).
-  * Provide a wrapper class that has access to all of the underlying instances of the store and is used for querying.
-
-
-
-Here is how to implement `QueryableStoreType`:
-    
-    
-    public class MyCustomStoreType<K,V> implements QueryableStoreType<MyReadableCustomStore<K,V>> {
-    
-      // Only accept StateStores that are of type MyCustomStore
-      public boolean accepts(final StateStore stateStore) {
-        return stateStore instanceOf MyCustomStore;
-      }
-    
-      public MyReadableCustomStore<K,V> create(final StateStoreProvider storeProvider, final String storeName) {
-          return new MyCustomStoreTypeWrapper(storeProvider, storeName, this);
-      }
-    
-    }
-
-A wrapper class is required because each instance of a Kafka Streams application may run multiple stream tasks and manage multiple local instances of a particular state store. The wrapper class hides this complexity and lets you query a "logical" state store by name without having to know about all of the underlying local instances of that state store.
-
-When implementing your wrapper class you must use the [StateStoreProvider](https://github.com/apache/kafka/blob/4.3/streams/src/main/java/org/apache/kafka/streams/state/internals/StateStoreProvider.java) interface to get access to the underlying instances of your store. `StateStoreProvider#stores(String storeName, QueryableStoreType<T> queryableStoreType)` returns a `List` of state stores with the given storeName and of the type as defined by `queryableStoreType`.
-
-Here is an example implementation of the wrapper:
-    
-    
-    // We strongly recommended implementing a read-only interface
-    // to restrict usage of the store to safe read operations!
-    public class MyCustomStoreTypeWrapper<K,V> implements MyReadableCustomStore<K,V> {
-    
-      private final QueryableStoreType<MyReadableCustomStore<K, V>> customStoreType;
-      private final String storeName;
-      private final StateStoreProvider provider;
-    
-      public CustomStoreTypeWrapper(final StateStoreProvider provider,
-                                  final String storeName,
-                                  final QueryableStoreType<MyReadableCustomStore<K, V>> customStoreType) {
-    
-        // ... assign fields ...
-      }
-    
-      // Implement a safe read method
-      @Override
-      public V read(final K key) {
-        // Get all the stores with storeName and of customStoreType
-        final List<MyReadableCustomStore<K, V>> stores = provider.getStores(storeName, customStoreType);
-        // Try and find the value for the given key
-        final Optional<V> value = stores.stream().filter(store -> store.read(key) != null).findFirst();
-        // Return the value if it exists
-        return value.orElse(null);
-      }
-    
-    }
-
-You can now find and query your custom store:
-    
-    
-    Topology topology = ...;
-    ProcessorSupplier processorSuppler = ...;
-    
-    // Create CustomStoreSupplier for store name the-custom-store
-    MyCustomStoreBuilder customStoreBuilder = new MyCustomStoreBuilder("the-custom-store") //...;
-    // Add the source topic
-    topology.addSource("input", "inputTopic");
-    // Add a custom processor that reads from the source topic
-    topology.addProcessor("the-processor", processorSupplier, "input");
-    // Connect your custom state store to the custom processor above
-    topology.addStateStore(customStoreBuilder, "the-processor");
-    
-    KafkaStreams streams = new KafkaStreams(topology, config);
-    streams.start();
-    
-    // Get access to the custom store
-    MyReadableCustomStore<String,String> store =
-        streams.store(StoreQueryParameters.fromNameAndType("the-custom-store", new MyCustomStoreType<String,String>()));
-    // Query the store
-    String value = store.read("key");
-
 ## Header-aware stores and interactive queries {#header-aware-stores-interactive-queries}
 
-A [header-aware store](/{version}/streams/developer-guide/processor-api/#headers-in-state-stores) — built with a `*WithHeaders` supplier and its matching builder ([KIP-1271](../../upgrade-guide/#kip-1271-headers-aware-stores)) — persists each record's [headers](/{version}/javadoc/org/apache/kafka/streams/processor/api/Record.html#headers()) together with its value and timestamp. This section shows how to read those headers back interactively, through both the legacy `store()` API and the IQv2 `query()` API.
+A [header-aware store](/{version}/streams/developer-guide/processor-api/#headers-in-state-stores) — built with a `*WithHeaders` supplier and its matching builder ([KIP-1271](../../upgrade-guide/#kip-1271-headers-aware-stores)) — persists each record's [headers](/{version}/javadoc/org/apache/kafka/streams/processor/api/Record.html#headers()) together with its value and timestamp. This section shows how to read those headers back interactively, through both the `store()` API and the IQv2 `query()` API.
 
-### Reading headers with the legacy `store()` API
+### Reading headers with the `store()` API
 
-Look up the store with the `*WithHeaders()` entry from `QueryableStoreTypes` that matches your store type. The returned `ReadOnly*Store` surfaces the headers as part of its value type: [ValueTimestampHeaders](/{version}/javadoc/org/apache/kafka/streams/state/ValueTimestampHeaders.html) for key-value and window stores, and [AggregationWithHeaders](/{version}/javadoc/org/apache/kafka/streams/state/AggregationWithHeaders.html) for session stores.
+Look up the store with the `*WithHeaders()` entry from `QueryableStoreTypes` that matches your store type. The returned `ReadOnly*Store` surfaces the headers as part of its value type: [ValueTimestampHeaders](/{version}/javadoc/org/apache/kafka/streams/state/ValueTimestampHeaders.html) for key-value and window stores, and [AggregationWithHeaders](/{version}/javadoc/org/apache/kafka/streams/state/AggregationWithHeaders.html) for session stores. These examples assume a header-aware store built with a `*WithHeaders` supplier, as shown in [Headers in State Stores](/{version}/streams/developer-guide/processor-api/#headers-in-state-stores).
     
     
     // Key-value store built with a *WithHeaders supplier
@@ -395,8 +277,19 @@ Look up the store with the `*WithHeaders()` entry from `QueryableStoreTypes` tha
       System.out.println("timestamp: " + vth.timestamp());
       System.out.println("headers:   " + vth.headers());
     }
+    
+    // Window store built with a *WithHeaders supplier
+    ReadOnlyWindowStore<String, ValueTimestampHeaders<Long>> windowStore =
+        streams.store(StoreQueryParameters.fromNameAndType(
+            "counts-window-store", QueryableStoreTypes.timestampedWindowStoreWithHeaders()));
 
 Session stores return `AggregationWithHeaders<V>`, which exposes the aggregated value via `aggregation()` and the headers via `headers()`.
+    
+    
+    // Session store built with a *WithHeaders supplier
+    ReadOnlySessionStore<String, AggregationWithHeaders<Long>> sessionStore =
+        streams.store(StoreQueryParameters.fromNameAndType(
+            "counts-session-store", QueryableStoreTypes.sessionStoreWithHeaders()));
 
 ### Reading headers with the IQv2 `query()` API
 
@@ -538,11 +431,11 @@ Persistent *plain* non-header supplier
 </td>
 <td>
 
-—
+Returned while cache-served; otherwise —
 </td>
 <td>
 
-Point query fails with a store-exception error; the range, window-key, and `withWindowStartRange` window-range iterators throw a `StreamsException` mid-iteration. (The `withKey` form of the window-range query targets session stores, covered in the note below.)
+Store-served point query fails with a store-exception error (a cache-served read still succeeds, with real value, timestamp, and headers, until the cache is flushed or `skipCache()` is used); the range, window-key, and `withWindowStartRange` window-range iterators throw a `StreamsException` mid-iteration. (The `withKey` form of the window-range query targets session stores, covered in the note below.)
 </td> </tr>
 <tr>
 <td>
@@ -561,6 +454,124 @@ Unknown-query-type
 Session stores have no plain/timestamped split: a `*WithHeaders` session store built over a non-header supplier uses a single adapter and behaves like the *timestamped* row above. The `withKey` form of `TimestampedWindowRangeWithHeadersQuery` (the session-store form) never throws — a session window always carries a valid end timestamp — so it returns empty `headers()` and surfaces a `null` `value()` only where the stored value itself is null.
 
 Read-your-writes applies only to the single-key `TimestampedKeyWithHeadersQuery`, which reads through the record cache; the range, window, and session queries bypass the cache, so a not-yet-flushed write is invisible to them and, with a position bound, fails with a not-up-to-bound error.
+
+## Querying local custom state stores
+
+**Note**
+
+Only the [Processor API](/{version}/streams/developer-guide/processor-api/#implementing-custom-state-stores) supports custom state stores.
+
+Before querying the custom state stores you must implement these interfaces:
+
+  * Your custom state store must implement `StateStore`.
+  * You must have an interface to represent the operations available on the store.
+  * You must provide an implementation of `StoreBuilder` for creating instances of your store.
+  * It is recommended that you provide an interface that restricts access to read-only operations. This prevents users of this API from mutating the state of your running Kafka Streams application out-of-band.
+
+
+
+The class/interface hierarchy for your custom store might look something like:
+    
+    
+    public class MyCustomStore<K,V> implements StateStore, MyWriteableCustomStore<K,V> {
+      // implementation of the actual store
+    }
+    
+    // Read-write interface for MyCustomStore
+    public interface MyWriteableCustomStore<K,V> extends MyReadableCustomStore<K,V> {
+      void write(K Key, V value);
+    }
+    
+    // Read-only interface for MyCustomStore
+    public interface MyReadableCustomStore<K,V> {
+      V read(K key);
+    }
+    
+    public class MyCustomStoreBuilder implements StoreBuilder {
+      // implementation of the supplier for MyCustomStore
+    }
+
+To make this store queryable you must:
+
+  * Provide an implementation of [QueryableStoreType](https://github.com/apache/kafka/blob/4.3/streams/src/main/java/org/apache/kafka/streams/state/QueryableStoreType.java).
+  * Provide a wrapper class that has access to all of the underlying instances of the store and is used for querying.
+
+
+
+Here is how to implement `QueryableStoreType`:
+    
+    
+    public class MyCustomStoreType<K,V> implements QueryableStoreType<MyReadableCustomStore<K,V>> {
+    
+      // Only accept StateStores that are of type MyCustomStore
+      public boolean accepts(final StateStore stateStore) {
+        return stateStore instanceOf MyCustomStore;
+      }
+    
+      public MyReadableCustomStore<K,V> create(final StateStoreProvider storeProvider, final String storeName) {
+          return new MyCustomStoreTypeWrapper(storeProvider, storeName, this);
+      }
+    
+    }
+
+A wrapper class is required because each instance of a Kafka Streams application may run multiple stream tasks and manage multiple local instances of a particular state store. The wrapper class hides this complexity and lets you query a "logical" state store by name without having to know about all of the underlying local instances of that state store.
+
+When implementing your wrapper class you must use the [StateStoreProvider](https://github.com/apache/kafka/blob/4.3/streams/src/main/java/org/apache/kafka/streams/state/internals/StateStoreProvider.java) interface to get access to the underlying instances of your store. `StateStoreProvider#stores(String storeName, QueryableStoreType<T> queryableStoreType)` returns a `List` of state stores with the given storeName and of the type as defined by `queryableStoreType`.
+
+Here is an example implementation of the wrapper:
+    
+    
+    // We strongly recommended implementing a read-only interface
+    // to restrict usage of the store to safe read operations!
+    public class MyCustomStoreTypeWrapper<K,V> implements MyReadableCustomStore<K,V> {
+    
+      private final QueryableStoreType<MyReadableCustomStore<K, V>> customStoreType;
+      private final String storeName;
+      private final StateStoreProvider provider;
+    
+      public CustomStoreTypeWrapper(final StateStoreProvider provider,
+                                  final String storeName,
+                                  final QueryableStoreType<MyReadableCustomStore<K, V>> customStoreType) {
+    
+        // ... assign fields ...
+      }
+    
+      // Implement a safe read method
+      @Override
+      public V read(final K key) {
+        // Get all the stores with storeName and of customStoreType
+        final List<MyReadableCustomStore<K, V>> stores = provider.getStores(storeName, customStoreType);
+        // Try and find the value for the given key
+        final Optional<V> value = stores.stream().filter(store -> store.read(key) != null).findFirst();
+        // Return the value if it exists
+        return value.orElse(null);
+      }
+    
+    }
+
+You can now find and query your custom store:
+    
+    
+    Topology topology = ...;
+    ProcessorSupplier processorSuppler = ...;
+    
+    // Create CustomStoreSupplier for store name the-custom-store
+    MyCustomStoreBuilder customStoreBuilder = new MyCustomStoreBuilder("the-custom-store") //...;
+    // Add the source topic
+    topology.addSource("input", "inputTopic");
+    // Add a custom processor that reads from the source topic
+    topology.addProcessor("the-processor", processorSupplier, "input");
+    // Connect your custom state store to the custom processor above
+    topology.addStateStore(customStoreBuilder, "the-processor");
+    
+    KafkaStreams streams = new KafkaStreams(topology, config);
+    streams.start();
+    
+    // Get access to the custom store
+    MyReadableCustomStore<String,String> store =
+        streams.store(StoreQueryParameters.fromNameAndType("the-custom-store", new MyCustomStoreType<String,String>()));
+    // Query the store
+    String value = store.read("key");
 
 # Querying remote state stores for the entire app
 
