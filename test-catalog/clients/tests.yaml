@@ -5277,6 +5277,7 @@ org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetrieverT
 - testErrorResponseRetryableCode
 - testErrorResponseUnretryableCode
 org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtilsTest:
+- testCreateSSLSocketFactory
 - testSSLClientConfig
 - testShouldUseSslClientConfig
 org.apache.kafka.common.security.oauthbearer.internals.secured.JwtResponseParserTest:
