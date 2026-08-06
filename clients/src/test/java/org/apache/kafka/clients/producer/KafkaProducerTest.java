@@ -3450,7 +3450,8 @@ public class KafkaProducerTest {
             new TopicPartition("test-topic", 0),
             new OffsetAndMetadata(0L)
         );
-        ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata("test-group");
+        ConsumerGroupMetadata groupMetadata = mock(ConsumerGroupMetadata.class);
+        when(groupMetadata.groupId()).thenReturn("test-group");
 
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(configs)) {
             assertThrows(BootstrapResolutionException.class,
