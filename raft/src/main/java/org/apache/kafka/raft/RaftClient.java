@@ -265,6 +265,28 @@ public interface RaftClient<T> extends AutoCloseable {
     KRaftVersion kraftVersion();
 
     /**
+     * Returns the latest set of voters, even if it hasn't been committed durably to Raft.
+     *
+     * When the kraft.version is 0, the set of voters is the one configured in
+     * {@code controller.quorum.voters} and it never changes. When the kraft.version is 1, the set
+     * of voters is the one from the latest {@code VotersRecord} in the log or snapshot.
+     *
+     * @return the latest set of voters
+     */
+    VoterSet latestVoterSet();
+
+    /**
+     * Returns the latest set of voters that has been committed durably to Raft.
+     *
+     * This returns {@code Optional.empty()} when no {@code VotersRecord} has been committed. This
+     * is always the case when the kraft.version is 0, since the set of voters comes from the
+     * {@code controller.quorum.voters} configuration instead of the log.
+     *
+     * @return the latest committed set of voters if one exists, otherwise {@code Optional.empty()}
+     */
+    Optional<VoterSet> latestCommittedVoterSet();
+
+    /**
      * Request that the leader to upgrade the kraft version.
      *
      * @param epoch the current epoch

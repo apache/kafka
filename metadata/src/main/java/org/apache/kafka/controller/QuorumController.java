@@ -511,7 +511,7 @@ public final class QuorumController implements Controller {
             if (clusterControl.brokerRegistrations().containsKey(nodeId)) {
                 return true;
             }
-            if (featureControl.isControllerId(nodeId)) {
+            if (featureControl.isVoterId(nodeId)) {
                 return true;
             }
             return clusterControl.controllerRegistrations().containsKey(nodeId);
@@ -2166,6 +2166,9 @@ public final class QuorumController implements Controller {
             () -> {
                 if (nodeId == controllerId) {
                     throw new InvalidRequestException("Controller cannot unregister itself while it is active.");
+                } else if (featureControl.isVoterId(controllerId)) {
+                    throw new InvalidRequestException("Cannot unregister controller " + controllerId +
+                        " because it is part of the voter set.");
                 }
                 return clusterControl.unregisterController(controllerId);
             },

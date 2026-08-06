@@ -79,7 +79,7 @@ public class FeatureControlManagerTest {
     public static QuorumFeatures features(Object... args) {
         Map<String, VersionRange> features = QuorumFeatures.defaultSupportedFeatureMap(true);
         features.putAll(rangeMap(args));
-        return new QuorumFeatures(0, features, List.of());
+        return new QuorumFeatures(0, features, () -> Set.of());
     }
 
     private static Map<String, Short> updateMap(Object... args) {
@@ -422,7 +422,7 @@ public class FeatureControlManagerTest {
             MetadataVersion.MINIMUM_VERSION.featureLevel(), MetadataVersion.latestTesting().featureLevel()));
         localSupportedFeatures.put(Feature.TEST_VERSION.featureName(), VersionRange.of(0, 2));
         FeatureControlManager manager = new FeatureControlManager.Builder().
-            setQuorumFeatures(new QuorumFeatures(0, localSupportedFeatures, List.of())).
+            setQuorumFeatures(new QuorumFeatures(0, localSupportedFeatures, () -> Set.of())).
             setClusterFeatureSupportDescriber(createFakeClusterFeatureSupportDescriber(
                 List.of(new SimpleImmutableEntry<>(1, Map.of(Feature.TEST_VERSION.featureName(), VersionRange.of(0, 3)))),
                 List.of())).
@@ -458,7 +458,7 @@ public class FeatureControlManagerTest {
             MetadataVersion.IBP_4_0_IV1.featureLevel(), MetadataVersion.latestTesting().featureLevel()));
         localSupportedFeatures.put(Feature.ELIGIBLE_LEADER_REPLICAS_VERSION.featureName(), VersionRange.of(0, 1));
         FeatureControlManager manager = new FeatureControlManager.Builder().
-            setQuorumFeatures(new QuorumFeatures(0, localSupportedFeatures, List.of())).
+            setQuorumFeatures(new QuorumFeatures(0, localSupportedFeatures, () -> Set.of())).
             setClusterFeatureSupportDescriber(createFakeClusterFeatureSupportDescriber(
                 List.of(new SimpleImmutableEntry<>(1, Map.of(Feature.ELIGIBLE_LEADER_REPLICAS_VERSION.featureName(), VersionRange.of(0, 1)))),
                 List.of())).

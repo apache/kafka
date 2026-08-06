@@ -24,6 +24,7 @@ import org.apache.kafka.image.FakeSnapshotWriter;
 import org.apache.kafka.image.MetadataImageTest;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.RaftClient;
+import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.OffsetAndEpoch;
@@ -131,6 +132,16 @@ public class SnapshotEmitterTest {
         @Override
         public KRaftVersion kraftVersion() {
             return KRaftVersion.KRAFT_VERSION_0;
+        }
+
+        @Override
+        public VoterSet latestVoterSet() {
+            return VoterSet.empty();
+        }
+
+        @Override
+        public Optional<VoterSet> latestCommittedVoterSet() {
+            return Optional.empty();
         }
 
         @Override

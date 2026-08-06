@@ -95,7 +95,7 @@ public class ClusterControlManagerTest {
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
-                List.of(0))).
+                () -> Set.of(0))).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setTime(time).
@@ -144,7 +144,7 @@ public class ClusterControlManagerTest {
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
-                List.of(0))).
+                () -> Set.of(0))).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
@@ -197,7 +197,7 @@ public class ClusterControlManagerTest {
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
-                List.of(0))).
+                () -> Set.of(0))).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
@@ -286,7 +286,7 @@ public class ClusterControlManagerTest {
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
-                List.of(0))).
+                () -> Set.of(0))).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
@@ -324,7 +324,7 @@ public class ClusterControlManagerTest {
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
-                List.of(0))).
+                () -> Set.of(0))).
             build();
         featureControl.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
@@ -395,7 +395,7 @@ public class ClusterControlManagerTest {
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
-                List.of(0))).
+                () -> Set.of(0))).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setTime(new MockTime(0, 0, 0)).
@@ -434,7 +434,7 @@ public class ClusterControlManagerTest {
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
-                List.of(0))).
+                () -> Set.of(0))).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setTime(time).
@@ -497,7 +497,7 @@ public class ClusterControlManagerTest {
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
-                List.of(0))).
+                () -> Set.of(0))).
             build();
         featureControl.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
@@ -580,7 +580,7 @@ public class ClusterControlManagerTest {
             TestFeatureVersion.TEST_1.featureLevel()));
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
-            setQuorumFeatures(new QuorumFeatures(0, supportedFeatures, List.of(0))).
+            setQuorumFeatures(new QuorumFeatures(0, supportedFeatures, () -> Set.of(0))).
             build();
         featureControl.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
@@ -631,7 +631,7 @@ public class ClusterControlManagerTest {
             KRaftVersion.KRAFT_VERSION_1.featureLevel()));
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
-            setQuorumFeatures(new QuorumFeatures(0, supportedFeatures, List.of(0))).
+            setQuorumFeatures(new QuorumFeatures(0, supportedFeatures, () -> Set.of(0))).
             build();
         featureControl.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
@@ -714,7 +714,7 @@ public class ClusterControlManagerTest {
                         Map.of(MetadataVersion.FEATURE_NAME, VersionRange.of(
                                 MetadataVersion.IBP_3_5_IV0.featureLevel(),
                                 MetadataVersion.IBP_3_6_IV0.featureLevel())),
-                        List.of(0))).
+                        () -> Set.of(0))).
                 build();
         featureControl.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
@@ -1148,7 +1148,7 @@ public class ClusterControlManagerTest {
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
-                List.of(0))).
+                () -> Set.of(0))).
             build();
         featureControl.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
@@ -1182,7 +1182,7 @@ public class ClusterControlManagerTest {
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
-                List.of(0))).
+                () -> Set.of(0))).
             build();
         featureControl.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
