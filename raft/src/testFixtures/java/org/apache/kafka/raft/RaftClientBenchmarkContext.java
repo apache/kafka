@@ -204,7 +204,6 @@ public final class RaftClientBenchmarkContext {
         return new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
             .withStartingVoters(voters, kraftVersion)
             .withRaftProtocol(raftProtocol)
-            .withPollIntervalMs(0)
             .withBenchmarking(true)
             .withMemoryPool(new BatchMemoryPool(5, KafkaRaftClient.MAX_BATCH_SIZE_BYTES));
     }

@@ -73,7 +73,6 @@ import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.Snapshots;
 import org.apache.kafka.test.TestCondition;
-import org.apache.kafka.test.TestUtils;
 
 import org.mockito.Mockito;
 
@@ -126,7 +125,6 @@ public final class RaftClientTestContext {
     private int electionTimeoutMs;
     private int requestTimeoutMs;
     private int appendLingerMs;
-    private long pollIntervalMs;
     private boolean isBenchmarking = false;
 
     private final MockQuorumStateStore quorumStateStore;
@@ -183,7 +181,6 @@ public final class RaftClientTestContext {
         private int requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS;
         private int electionTimeoutMs = DEFAULT_ELECTION_TIMEOUT_MS;
         private int appendLingerMs = DEFAULT_APPEND_LINGER_MS;
-        private long pollIntervalMs = TestUtils.DEFAULT_POLL_INTERVAL_MS;
         private MemoryPool memoryPool = MemoryPool.NONE;
         private Optional<List<InetSocketAddress>> bootstrapServers = Optional.empty();
         private RaftProtocol raftProtocol = RaftProtocol.KIP_595_PROTOCOL;
@@ -297,11 +294,6 @@ public final class RaftClientTestContext {
 
         Builder withElectionTimeoutMs(int electionTimeoutMs) {
             this.electionTimeoutMs = electionTimeoutMs;
-            return this;
-        }
-
-        Builder withPollIntervalMs(long pollIntervalMs) {
-            this.pollIntervalMs = pollIntervalMs;
             return this;
         }
 
@@ -419,8 +411,7 @@ public final class RaftClientTestContext {
 
         /**
          * Drops fixture work a benchmark would otherwise measure as the client's own (default
-         * {@code false}): messages are no longer serialized and deserialized to mimic the network,
-         * and {@link #pollUntil} skips {@link TestUtils#waitForCondition}, which throws per attempt.
+         * {@code false}): messages are no longer serialized and deserialized to mimic the network.
          */
         public Builder withBenchmarking(boolean isBenchmarking) {
             this.isBenchmarking = isBenchmarking;
@@ -538,7 +529,6 @@ public final class RaftClientTestContext {
             context.electionTimeoutMs = electionTimeoutMs;
             context.requestTimeoutMs = requestTimeoutMs;
             context.appendLingerMs = appendLingerMs;
-            context.pollIntervalMs = pollIntervalMs;
             context.isBenchmarking = isBenchmarking;
 
             return context;
@@ -753,21 +743,6 @@ public final class RaftClientTestContext {
     }
 
     public void pollUntil(TestCondition condition) throws InterruptedException {
-        if (isBenchmarking) {
-            pollUntilFast(condition);
-        } else {
-            TestUtils.waitForCondition(() -> {
-                poll();
-                return condition.conditionMet();
-            }, 5000, pollIntervalMs, () -> "Condition failed to be satisfied before timeout");
-        }
-    }
-
-    /**
-     * A non-throwing variant of {@link #pollUntil} used only by the JMH benchmarks (enabled via
-     * {@link Builder#withBenchmarking}).
-     */
-    private void pollUntilFast(TestCondition condition) {
         try {
             for (int remaining = MAX_POLLS; remaining > 0; remaining--) {
                 poll();
