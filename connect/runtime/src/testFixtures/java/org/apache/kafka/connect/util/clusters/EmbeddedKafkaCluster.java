@@ -49,6 +49,7 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.test.KafkaClusterTestKit;
 import org.apache.kafka.common.test.TestKitNodes;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
@@ -419,9 +420,11 @@ public class EmbeddedKafkaCluster {
 
     public void produce(List<ProducerRecord<byte[], byte[]>> records) {
         var futures = records.stream().map(producer::send).toList();
+        var timer = Time.SYSTEM.timer(DEFAULT_PRODUCE_SEND_DURATION_MS);
         for (int i = 0; i < futures.size(); i++) {
             try {
-                futures.get(i).get(DEFAULT_PRODUCE_SEND_DURATION_MS, TimeUnit.MILLISECONDS);
+                futures.get(i).get(timer.remainingMs(), TimeUnit.MILLISECONDS);
+                timer.update();
             } catch (Exception e) {
                 throw new KafkaException("Could not produce message: " + records.get(i), e);
             }
