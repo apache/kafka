@@ -1154,6 +1154,7 @@ public class SubscriptionStateTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testExceptionFromCallbackPropagates() {
         RuntimeException expected = new RuntimeException("boom");
         ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
@@ -1172,6 +1173,7 @@ public class SubscriptionStateTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testDefaultDelegationFromTwoArgToOneArg() {
         List<String> calls = new ArrayList<>();
         ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {

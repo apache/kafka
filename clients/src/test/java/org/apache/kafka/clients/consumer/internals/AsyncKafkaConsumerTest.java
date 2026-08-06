@@ -700,6 +700,7 @@ public class AsyncKafkaConsumerTest {
      * are being revoked (see KAFKA-20332).
      */
     @Test
+    @SuppressWarnings("removal")
     public void testPollWaitsForReconciliationCheckComplete() {
         final String topicName = "foo";
         final int partition = 3;
@@ -758,6 +759,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testPollDoesNotWaitForReconciliationCheckIfNoPendingReconciliation() {
         final String topicName = "foo";
         final int partition = 3;
@@ -1099,6 +1101,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testCommitSyncAllConsumed() {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(
@@ -1127,6 +1130,7 @@ public class AsyncKafkaConsumerTest {
      * See {@link org.apache.kafka.clients.consumer.KafkaConsumerTest#testPauseFlagPreservedForRetainedPartitionAcrossRebalance(GroupProtocol)}.
      */
     @Test
+    @SuppressWarnings("removal")
     public void testPauseFlagPreservedForRetainedPartitionAcrossRebalance() {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(
@@ -1162,6 +1166,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testAutoCommitSyncDisabled() {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(
@@ -2416,6 +2421,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testSubscribeToRe2JPatternValidation() {
         consumer = newConsumer();
 
@@ -2432,6 +2438,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testSubscribeToRe2JPatternThrowsIfNoGroupId() {
         consumer = newConsumer(requiredConsumerConfig());
         assertThrows(InvalidGroupIdException.class, () -> consumer.subscribe(new SubscriptionPattern("t*")));
@@ -2440,6 +2447,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testSubscribeToRe2JPatternGeneratesEvent() {
         consumer = newConsumer();
         completeTopicRe2JPatternSubscriptionChangeEventSuccessfully();

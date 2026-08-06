@@ -133,9 +133,13 @@ import java.util.Collection;
  * }
  * </pre>
  *
+ * @deprecated Since 4.4. Use {@link RebalanceListener} and register it via
+ *             {@link Consumer#setRebalanceListener(RebalanceListener)} instead. This interface will be removed in a
+ *             future major release.
  * @see RebalanceListener
  * @see RebalanceConsumer
  */
+@Deprecated(since = "4.4", forRemoval = true)
 @InterfaceAudience.Public
 public interface ConsumerRebalanceListener extends RebalanceListener {
 

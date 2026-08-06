@@ -4224,6 +4224,7 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
 
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @SuppressWarnings("removal")
     public void testSubscribeToRe2jPatternNotSupportedForClassicConsumer(GroupProtocol groupProtocol) {
         KafkaConsumer<String, String> consumer = newConsumerNoAutoCommit(groupProtocol, time, mock(NetworkClient.class), subscription,
             mock(ConsumerMetadata.class));
