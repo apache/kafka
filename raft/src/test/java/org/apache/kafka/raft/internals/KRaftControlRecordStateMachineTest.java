@@ -161,6 +161,49 @@ final class KRaftControlRecordStateMachineTest {
     }
 
     @Test
+    void testLastCommittedVoterSet() {
+        Metrics metrics = new Metrics();
+        KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        ExternalKRaftMetrics externalMetrics = Mockito.mock(ExternalKRaftMetrics.class);
+        MockLog log = buildLog();
+        VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true));
+        BufferSupplier bufferSupplier = BufferSupplier.NO_CACHING;
+        int epoch = 1;
+
+        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet, raftMetrics, externalMetrics);
+        partitionState.updateState();
+
+        // The static voter set is never considered committed since it doesn't come from the log
+        assertEquals(Optional.empty(), partitionState.lastCommittedVoterSet(0));
+        assertEquals(Optional.empty(), partitionState.lastCommittedVoterSet(log.endOffset().offset()));
+
+        // Append two voter set control records; the first one at offset 0 and the second one at offset 1
+        VoterSet firstVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3, 4), true));
+        VoterSet secondVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(2, 3, 4), true));
+        for (VoterSet voterSet : List.of(firstVoterSet, secondVoterSet)) {
+            log.appendAsLeader(
+                MemoryRecords.withVotersRecord(
+                    log.endOffset().offset(),
+                    0,
+                    epoch,
+                    bufferSupplier.get(300),
+                    voterSet.toVotersRecord((short) 0)
+                ),
+                epoch
+            );
+        }
+        partitionState.updateState();
+
+        assertEquals(secondVoterSet, partitionState.lastVoterSet());
+        // Nothing has been committed yet
+        assertEquals(Optional.empty(), partitionState.lastCommittedVoterSet(0));
+        // Only the voter set at offset 0 has been committed
+        assertEquals(Optional.of(firstVoterSet), partitionState.lastCommittedVoterSet(1));
+        // Both voter sets have been committed
+        assertEquals(Optional.of(secondVoterSet), partitionState.lastCommittedVoterSet(2));
+    }
+
+    @Test
     void testUpdateWithEmptySnapshot() {
         Metrics metrics = new Metrics();
         KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");

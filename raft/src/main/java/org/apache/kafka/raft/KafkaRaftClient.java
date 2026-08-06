@@ -3856,6 +3856,31 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     @Override
+    public VoterSet latestVoterSet() {
+        if (!isInitialized()) {
+            throw new IllegalStateException("Cannot read the voter set before the replica has been initialized");
+        }
+
+        return partitionState.lastVoterSet();
+    }
+
+    @Override
+    public Optional<VoterSet> latestCommittedVoterSet() {
+        if (!isInitialized()) {
+            throw new IllegalStateException(
+                "Cannot read the committed voter set before the replica has been initialized"
+            );
+        }
+
+        OptionalLong highWatermark = highWatermark();
+        if (highWatermark.isEmpty()) {
+            return Optional.empty();
+        }
+
+        return partitionState.lastCommittedVoterSet(highWatermark.getAsLong());
+    }
+
+    @Override
     public void upgradeKRaftVersion(int epoch, KRaftVersion version, boolean validateOnly) {
         if (!isInitialized()) {
             throw new IllegalStateException("Cannot update the kraft version before the replica has been initialized");

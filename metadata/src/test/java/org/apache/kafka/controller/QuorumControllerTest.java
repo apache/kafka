@@ -1405,6 +1405,37 @@ public class QuorumControllerTest {
     }
 
     @Test
+    public void testUnregisterControllerInVoterSet() throws Throwable {
+        try (
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(1).build();
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
+                setControllerBuilderInitializer(builder ->
+                    builder.setQuorumFeatures(new QuorumFeatures(
+                        0,
+                        QuorumFeatures.defaultSupportedFeatureMap(true),
+                        () -> Set.of(0, 1)))).
+                build()
+        ) {
+            QuorumController active = controlEnv.activeController();
+
+            // The active controller is always part of the voter set, but it gets a more specific error
+            assertEquals("Controller cannot unregister itself while it is active.",
+                assertThrows(ExecutionException.class,
+                    () -> active.unregisterController(ANONYMOUS_CONTEXT, 0).get()).getCause().getMessage());
+
+            // Controller 1 is part of the voter set
+            assertEquals("Cannot unregister controller 1 because it is part of the voter set.",
+                assertThrows(ExecutionException.class,
+                    () -> active.unregisterController(ANONYMOUS_CONTEXT, 1).get()).getCause().getMessage());
+
+            // Controller 2 is not part of the voter set, so the voter set check passes
+            assertEquals("Controller ID 2 is not currently registered.",
+                assertThrows(ExecutionException.class,
+                    () -> active.unregisterController(ANONYMOUS_CONTEXT, 2).get()).getCause().getMessage());
+        }
+    }
+
+    @Test
     public void testIsNodeIdRegisteredWithDynamicQuorum() throws Throwable {
         try (
             MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(3).build();

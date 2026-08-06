@@ -46,6 +46,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_RECORD;
@@ -104,7 +105,7 @@ public class FeatureControlManager {
                 localSupportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
                         MetadataVersion.MINIMUM_VERSION.featureLevel(),
                         MetadataVersion.latestProduction().featureLevel()));
-                quorumFeatures = new QuorumFeatures(0, localSupportedFeatures, List.of(0));
+                quorumFeatures = new QuorumFeatures(0, localSupportedFeatures, () -> Set.of(0));
             }
             if (kraftVersionAccessor == null) {
                 kraftVersionAccessor = new KRaftVersionAccessor() {
@@ -357,7 +358,7 @@ public class FeatureControlManager {
                 foundControllers.add(entry.getKey());
                 numControllersChecked++;
             }
-            for (int id : quorumFeatures.quorumNodeIds()) {
+            for (int id : quorumFeatures.voterIds()) {
                 if (!foundControllers.contains(id)) {
                     return Optional.of("controller " + id + " has not registered, and may not " +
                         "support this feature");
@@ -470,8 +471,8 @@ public class FeatureControlManager {
         }
     }
 
-    boolean isControllerId(int nodeId) {
-        return quorumFeatures.isControllerId(nodeId);
+    boolean isVoterId(int nodeId) {
+        return quorumFeatures.isVoterId(nodeId);
     }
 
     boolean isElrFeatureEnabled() {
