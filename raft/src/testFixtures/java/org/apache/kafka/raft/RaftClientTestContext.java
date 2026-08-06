@@ -612,7 +612,7 @@ public final class RaftClientTestContext {
         return appendLingerMs;
     }
 
-    MemoryRecords buildBatch(
+    public MemoryRecords buildBatch(
         long baseOffset,
         int epoch,
         List<String> records
@@ -786,7 +786,7 @@ public final class RaftClientTestContext {
         pollUntil(() -> !sentResponses.isEmpty());
     }
 
-    void pollUntilRequest() throws InterruptedException {
+    public void pollUntilRequest() throws InterruptedException {
         pollUntil(channel::hasSentRequests);
     }
 
@@ -1076,7 +1076,7 @@ public final class RaftClientTestContext {
         });
     }
 
-    void deliverResponse(int correlationId, Node source, ApiMessage response) {
+    public void deliverResponse(int correlationId, Node source, ApiMessage response) {
         short version = raftResponseVersion(response);
         ApiMessage versionedResponse = roundTripApiMessage(response, version);
         channel.mockReceive(new RaftResponse.Inbound(correlationId, versionedResponse, source));
@@ -1283,7 +1283,7 @@ public final class RaftClientTestContext {
         }
     }
 
-    RaftRequest.Outbound assertSentFetchRequest() {
+    public RaftRequest.Outbound assertSentFetchRequest() {
         List<RaftRequest.Outbound> sentRequests = channel.drainSentRequests(Optional.of(ApiKeys.FETCH));
         assertEquals(1, sentRequests.size());
         return sentRequests.get(0);
@@ -1666,7 +1666,7 @@ public final class RaftClientTestContext {
         );
     }
 
-    EndQuorumEpochRequestData endEpochRequest(
+    public EndQuorumEpochRequestData endEpochRequest(
         int epoch,
         int leaderId,
         List<ReplicaKey> preferredCandidates
@@ -1694,7 +1694,7 @@ public final class RaftClientTestContext {
         );
     }
 
-    BeginQuorumEpochRequestData beginEpochRequest(int epoch, int leaderId) {
+    public BeginQuorumEpochRequestData beginEpochRequest(int epoch, int leaderId) {
         return beginEpochRequest(clusterId, epoch, leaderId);
     }
 
@@ -2014,7 +2014,7 @@ public final class RaftClientTestContext {
             );
     }
 
-    FetchResponseData fetchResponse(
+    public FetchResponseData fetchResponse(
         int epoch,
         int leaderId,
         Records records,

@@ -146,6 +146,36 @@ public final class RaftClientBenchmarkContext {
     }
 
     /**
+     * Builds the local node as a follower of another voter in a {@code voterCount}-node cluster.
+     * The leader is the first of the {@link #remoteVoters()}.
+     */
+    public static RaftClientBenchmarkContext follower(
+        int voterCount,
+        KRaftVersion kraftVersion,
+        RaftProtocol raftProtocol
+    ) throws IOException {
+        if (voterCount < 2) {
+            throw new IllegalArgumentException(
+                "voterCount must be at least 2; a follower needs a leader to follow");
+        }
+        List<ReplicaKey> voterKeys = replicaKeys(randomReplicaId(), voterCount);
+        ReplicaKey local = voterKeys.get(0);
+        ReplicaKey leader = voterKeys.get(1);
+        RaftClientTestContext context =
+            benchmarkContextBuilder(local, voterKeys, kraftVersion, raftProtocol)
+                .withElectedLeader(1, leader.id())
+                .build();
+        return new RaftClientBenchmarkContext(context, local, voterKeys, List.of());
+    }
+
+    /**
+     * The voter this node follows when the context came from {@link #follower}.
+     */
+    public ReplicaKey leaderKey() {
+        return remoteVoters().get(0);
+    }
+
+    /**
      * {@code count} replica keys with consecutive ids starting at {@code startId}, each with a
      * random directory id.
      */
@@ -303,9 +333,9 @@ public final class RaftClientBenchmarkContext {
     }
 
     /**
-     * Commits the local leader's epoch by delivering a fetch at the log end offset from every other
-     * voter, which advances the high watermark over the {@code LeaderChange} record the leader wrote
-     * when it took the epoch.
+     * Commits the local leader's epoch by delivering a fetch at the log end offset from every
+     * other voter, which advances the high watermark over the {@code LeaderChange} record the
+     * leader wrote when it took the epoch.
      */
     public void commitEpoch() throws InterruptedException {
         int epoch = context.currentEpoch();
@@ -326,17 +356,19 @@ public final class RaftClientBenchmarkContext {
 
     /**
      * Drives the local node to the Unattached state by delivering a vote request one epoch ahead.
-     * A raft node transitions to Unattached whenever it observes an RPC with a higher epoch, so this
-     * is safe and works from any attached role, not just leader.
+     * A raft node transitions to Unattached whenever it observes an RPC with a higher epoch, so
+     * this is safe and works from any attached role, not just leader.
      */
     public void toUnattachedWithHigherEpoch() throws InterruptedException {
         if (context.client.quorum().isUnattached()) {
             throw new IllegalStateException(
-                "toUnattachedWithHigherEpoch() expects an attached node, but it is already Unattached");
+                "toUnattachedWithHigherEpoch() expects an attached node, but it is already "
+                    + "Unattached");
         }
         ReplicaKey candidate = remoteVoters().get(0);
         deliverAndAwaitResponse(
-            context.inboundRequest(context.voteRequest(context.currentEpoch() + 1, candidate, 0, 0)),
+            context.inboundRequest(
+                context.voteRequest(context.currentEpoch() + 1, candidate, 0, 0)),
             Optional.of(ApiKeys.VOTE)
         );
     }
