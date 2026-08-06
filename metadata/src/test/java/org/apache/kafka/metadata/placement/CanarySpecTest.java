@@ -25,37 +25,40 @@ import java.util.function.Predicate;
 public class CanarySpecTest {
     @Test
     public void testCanaryPodName() {
-        CanarySpec canarySpec = new CanarySpec("pod1", 0.02);
+        CanarySpec canarySpec = new CanarySpec("pod1", 50);
         Assertions.assertEquals("pod1", canarySpec.toMap().keySet().iterator().next());
     }
 
     @Test
     public void testEmptyCanaryPodName() {
-        CanarySpec canarySpec = new CanarySpec("", 0.02);
+        CanarySpec canarySpec = new CanarySpec("", 50);
         Assertions.assertTrue(canarySpec.toMap().keySet().iterator().next().isEmpty());
     }
 
     @Test
-    public void testZeroCanaryPercentage() {
-        CanarySpec canarySpec = new CanarySpec("pod1", 0.0);
+    public void testZeroCanaryInterval() {
+        CanarySpec canarySpec = new CanarySpec("pod1", 0);
         Assertions.assertEquals(CanarySpec.ALWAYS_FALSE, canarySpec.toMap().values().iterator().next());
     }
 
     @Test
-    public void testLargeCanaryPercentage() {
-        CanarySpec canarySpec = new CanarySpec("pod1", 1.1);
+    public void testNegativeCanaryInterval() {
+        CanarySpec canarySpec = new CanarySpec("pod1", -1);
         Assertions.assertEquals(CanarySpec.ALWAYS_FALSE, canarySpec.toMap().values().iterator().next());
     }
 
     @Test
-    public void testCanaryPercentageOne() {
-        CanarySpec canarySpec = new CanarySpec("pod1", 1.0);
-        Assertions.assertTrue(canarySpec.toMap().values().iterator().next().test(1));
+    public void testCanaryIntervalOne() {
+        CanarySpec canarySpec = new CanarySpec("pod1", 1);
+        Predicate<Integer> predicate = canarySpec.toMap().values().iterator().next();
+        for (int i = 0; i < 10; ++i) {
+            Assertions.assertTrue(predicate.test(i));
+        }
     }
 
     @Test
-    public void testCanaryPercentageDefault() {
-        CanarySpec canarySpec = new CanarySpec("pod1", 0.02);
+    public void testCanaryIntervalFifty() {
+        CanarySpec canarySpec = new CanarySpec("pod1", 50);
         Predicate<Integer> predicate = canarySpec.toMap().values().iterator().next();
         for (int i = 0; i < 49; ++i) {
             Assertions.assertFalse(predicate.test(i));
@@ -68,12 +71,21 @@ public class CanarySpecTest {
     }
 
     @Test
-    public void testCanaryPercentageCustom() {
-        CanarySpec canarySpec = new CanarySpec("pod1", 0.03125);
+    public void testCanaryIntervalCustom() {
+        CanarySpec canarySpec = new CanarySpec("pod1", 32);
         Predicate<Integer> predicate = canarySpec.toMap().values().iterator().next();
         Assertions.assertFalse(predicate.test(0));
         Assertions.assertTrue(predicate.test(31));
         Assertions.assertTrue(predicate.test(63));
         Assertions.assertTrue(predicate.test(95));
+    }
+
+    @Test
+    public void testTopicSmallerThanIntervalHasNoCanaryPartition() {
+        CanarySpec canarySpec = new CanarySpec("pod1", 50);
+        Predicate<Integer> predicate = canarySpec.toMap().values().iterator().next();
+        for (int i = 0; i < 12; ++i) {
+            Assertions.assertFalse(predicate.test(i));
+        }
     }
 }

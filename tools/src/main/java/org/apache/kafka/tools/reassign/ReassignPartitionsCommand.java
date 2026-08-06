@@ -176,7 +176,7 @@ public class ReassignPartitionsCommand {
                 opts.options.valueOf(opts.brokerListOpt),
                 !opts.options.has(opts.disableRackAware),
                 opts.options.valueOf(opts.canaryNameOpt),
-                opts.options.valueOf(opts.canaryPercentageOpt));
+                opts.options.valueOf(opts.canaryIntervalOpt));
         } else if (opts.options.has(opts.executeOpt)) {
             executeAssignment(adminClient,
                 opts.options.has(opts.additionalOpt),
@@ -564,7 +564,7 @@ public class ReassignPartitionsCommand {
                                                                                                                    String brokerListString,
                                                                                                                    boolean enableRackAwareness,
                                                                                                                    String canaryPod,
-                                                                                                                   double canaryPercentage
+                                                                                                                   int canaryInterval
     ) throws ExecutionException, InterruptedException, JsonProcessingException {
         Entry<List<Integer>, List<String>> t0 = parseGenerateAssignmentArgs(reassignmentJson, brokerListString);
 
@@ -575,7 +575,7 @@ public class ReassignPartitionsCommand {
         Map<TopicPartitionReplica, String> currentReplicaLogDirs = getReplicaToLogDir(adminClient, currentAssignments);
         List<UsableBroker> usableBrokers = getBrokerMetadata(adminClient, brokersToReassign, enableRackAwareness);
         Map<TopicPartition, List<Integer>> currentParts = toReplicaIds(currentAssignments);
-        Map<TopicPartition, List<Integer>> proposedAssignments = calculateAssignment(currentParts, usableBrokers, canaryPod, canaryPercentage);
+        Map<TopicPartition, List<Integer>> proposedAssignments = calculateAssignment(currentParts, usableBrokers, canaryPod, canaryInterval);
         System.out.printf("Current partition replica assignment%n%s%n%n",
             formatAsReassignmentJson(currentParts, currentReplicaLogDirs));
         System.out.printf("Proposed partition reassignment configuration%n%s%n",
@@ -594,7 +594,7 @@ public class ReassignPartitionsCommand {
     private static Map<TopicPartition, List<Integer>> calculateAssignment(Map<TopicPartition, List<Integer>> currentAssignment,
                                                                           List<UsableBroker> usableBrokers,
                                                                           String canaryPod,
-                                                                          double canaryPercentage) {
+                                                                          int canaryInterval) {
         Map<String, List<Entry<TopicPartition, List<Integer>>>> groupedByTopic = new HashMap<>();
         for (Entry<TopicPartition, List<Integer>> e : currentAssignment.entrySet())
             groupedByTopic.computeIfAbsent(e.getKey().topic(), k -> new ArrayList<>()).add(e);
@@ -603,7 +603,7 @@ public class ReassignPartitionsCommand {
             List<Integer> replicas = assignment.get(0).getValue();
             int partitionNum = assignment.size();
             // generate topic assignments
-            TopicAssignment topicAssignment = new PodReplicaPlacer(REPLICA_PLACER, new CanarySpec(canaryPod, canaryPercentage).toMap()).place(
+            TopicAssignment topicAssignment = new PodReplicaPlacer(REPLICA_PLACER, new CanarySpec(canaryPod, canaryInterval).toMap()).place(
                     new PlacementSpec(0, partitionNum, (short) replicas.size()),
                     new ClusterDescriber() {
                         @Override

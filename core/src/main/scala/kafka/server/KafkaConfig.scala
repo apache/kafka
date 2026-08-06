@@ -164,7 +164,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   val brokerSessionTimeoutMs: Int = getInt(KRaftConfigs.BROKER_SESSION_TIMEOUT_MS_CONFIG)
   val controllerPerformanceSamplePeriodMs: Long = getLong(KRaftConfigs.CONTROLLER_PERFORMANCE_SAMPLE_PERIOD_MS)
   val controllerPerformanceAlwaysLogThresholdMs: Long = getLong(KRaftConfigs.CONTROLLER_PERFORMANCE_ALWAYS_LOG_THRESHOLD_MS)
-  val canarySpec = new CanarySpec(getString(KRaftConfigs.CANARY_POD_NAME), getDouble(KRaftConfigs.CANARY_PARTITION_PERCENTAGE))
+  val canarySpec = new CanarySpec(getString(KRaftConfigs.CANARY_POD_NAME), getInt(KRaftConfigs.CANARY_PARTITION_INTERVAL))
 
   private def parseProcessRoles(): Set[ProcessRole] = {
     val roles = getList(KRaftConfigs.PROCESS_ROLES_CONFIG).asScala.map {

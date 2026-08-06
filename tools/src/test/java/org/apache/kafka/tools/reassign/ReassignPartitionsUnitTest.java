@@ -372,7 +372,7 @@ public class ReassignPartitionsUnitTest {
             addTopics(adminClient);
             assertStartsWith("The target replication factor of 3 cannot be reached because only 2 broker(s) are registered",
                 assertThrows(InvalidReplicationFactorException.class,
-                    () -> generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"},{\"topic\":\"bar\"}]}", "0,1", false, "pod1", 0.0d),
+                    () -> generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"},{\"topic\":\"bar\"}]}", "0,1", false, "pod1", 0),
                     "Expected generateAssignment to fail").getMessage());
         }
     }
@@ -383,7 +383,7 @@ public class ReassignPartitionsUnitTest {
             addTopics(adminClient);
             assertStartsWith("Topic quux not found",
                 assertThrows(ExecutionException.class,
-                    () -> generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"},{\"topic\":\"quux\"}]}", "0,1", false, "pod1", 0.0d),
+                    () -> generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"},{\"topic\":\"quux\"}]}", "0,1", false, "pod1", 0),
                     "Expected generateAssignment to fail").getCause().getMessage());
         }
     }
@@ -403,11 +403,11 @@ public class ReassignPartitionsUnitTest {
             addTopics(adminClient);
             assertStartsWith("Not all brokers have rack information.",
                 assertThrows(AdminOperationException.class,
-                    () -> generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"}]}", "0,1,2,3", true, "pod1", 0.0d),
+                    () -> generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"}]}", "0,1,2,3", true, "pod1", 0),
                     "Expected generateAssignment to fail").getMessage());
             // It should succeed when --disable-rack-aware is used.
             Entry<Map<TopicPartition, List<Integer>>, Map<TopicPartition, List<Integer>>>
-                proposedCurrent = generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"}]}", "0,1,2,3", false, "pod1", 0.0d);
+                proposedCurrent = generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"}]}", "0,1,2,3", false, "pod1", 0);
 
             Map<TopicPartition, List<Integer>> expCurrent = new HashMap<>();
 
@@ -432,7 +432,7 @@ public class ReassignPartitionsUnitTest {
             addTopics(adminClient);
 
             Entry<Map<TopicPartition, List<Integer>>, Map<TopicPartition, List<Integer>>>
-                    assignment = generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"}]}", "0,1,2,3,4", false, "pod1", 0.5d);
+                    assignment = generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"}]}", "0,1,2,3,4", false, "pod1", 2);
 
             Map<TopicPartition, List<Integer>> expCurrent = new HashMap<>();
             expCurrent.put(new TopicPartition("foo", 0), List.of(0, 1, 2));
@@ -457,7 +457,7 @@ public class ReassignPartitionsUnitTest {
             Entry<Map<TopicPartition, List<Integer>>, Map<TopicPartition, List<Integer>>>
                 proposedCurrent = generateAssignment(adminClient,
                     "{\"topics\":[{\"topic\":\"foo\"},{\"topic\":\"bar\"}]}",
-                    goalBrokers.stream().map(Object::toString).collect(Collectors.joining(",")), false, "pod1", 0.0d);
+                    goalBrokers.stream().map(Object::toString).collect(Collectors.joining(",")), false, "pod1", 0);
 
             Map<TopicPartition, List<Integer>> expCurrent = new HashMap<>();
 

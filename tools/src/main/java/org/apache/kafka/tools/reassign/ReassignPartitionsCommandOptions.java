@@ -44,7 +44,7 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
     final OptionSpec<?> preserveThrottlesOpt;
     final OptionSpec<?> disallowReplicationFactorChangeOpt;
     final OptionSpec<String> canaryNameOpt;
-    final OptionSpec<Double> canaryPercentageOpt;
+    final OptionSpec<Integer> canaryIntervalOpt;
 
     public ReassignPartitionsCommandOptions(String[] args) {
         super(args);
@@ -124,11 +124,11 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
                 .describedAs("canary pod name")
                 .ofType(String.class)
                 .defaultsTo("canary-broker");
-        canaryPercentageOpt = parser.accepts("canary-percentage", "Specify percentage of partition be canary partition")
+        canaryIntervalOpt = parser.accepts("canary-interval", "Specify that every Nth partition is a canary partition; 0 disables canary placement")
                 .withRequiredArg()
-                .describedAs("canary partition percentage")
-                .ofType(Double.class)
-                .defaultsTo(0.0d);
+                .describedAs("canary partition interval")
+                .ofType(Integer.class)
+                .defaultsTo(0);
         options = parser.parse(args);
     }
 }

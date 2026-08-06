@@ -22,7 +22,6 @@ import org.apache.kafka.common.config.SaslConfigs;
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
-import static org.apache.kafka.common.config.ConfigDef.Type.DOUBLE;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
 import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
@@ -74,9 +73,11 @@ public class KRaftConfigs {
     public static final String CANARY_POD_NAME_DEFAULT = "canary-broker";
     public static final String CANARY_POD_NAME_DOC = "The name of canary pod that should place canary partition into";
 
-    public static final String CANARY_PARTITION_PERCENTAGE = "canary.partition.percentage";
-    public static final double CANARY_PARTITION_PERCENTAGE_DEFAULT = 0.0d;
-    public static final String CANARY_PARTITION_PERCENTAGE_DOC = "Percentage of partitions that should be canary partitions; 0.0 means disabled";
+    public static final String CANARY_PARTITION_INTERVAL = "canary.partition.interval";
+    public static final int CANARY_PARTITION_INTERVAL_DEFAULT = 0;
+    public static final String CANARY_PARTITION_INTERVAL_DOC = "Every Nth partition of a topic is a canary partition, placed on the canary pod. " +
+            "For example, 10 designates partitions 9, 19, 29 and so on, so a topic with fewer than 10 partitions has none. " +
+            "0 means disabled.";
 
     public static final ConfigDef CONFIG_DEF =  new ConfigDef()
             .define(PROCESS_ROLES_CONFIG, LIST, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.ValidList.in(false, "broker", "controller"), HIGH, PROCESS_ROLES_DOC)
@@ -87,7 +88,7 @@ public class KRaftConfigs {
             .define(CONTROLLER_LISTENER_NAMES_CONFIG, LIST, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.ValidList.anyNonDuplicateValues(false, false), HIGH, CONTROLLER_LISTENER_NAMES_DOC)
             .define(SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG, STRING, SaslConfigs.DEFAULT_SASL_MECHANISM, null, HIGH, SASL_MECHANISM_CONTROLLER_PROTOCOL_DOC)
             .define(CANARY_POD_NAME, STRING, CANARY_POD_NAME_DEFAULT, new ConfigDef.NonEmptyString(), MEDIUM, CANARY_POD_NAME_DOC)
-            .define(CANARY_PARTITION_PERCENTAGE, DOUBLE, CANARY_PARTITION_PERCENTAGE_DEFAULT, ConfigDef.Range.between(0.0d, 1.0d), MEDIUM, CANARY_PARTITION_PERCENTAGE_DOC)
+            .define(CANARY_PARTITION_INTERVAL, INT, CANARY_PARTITION_INTERVAL_DEFAULT, atLeast(0), MEDIUM, CANARY_PARTITION_INTERVAL_DOC)
             .defineInternal(CONTROLLER_PERFORMANCE_SAMPLE_PERIOD_MS, LONG, CONTROLLER_PERFORMANCE_SAMPLE_PERIOD_MS_DEFAULT, atLeast(100), MEDIUM, CONTROLLER_PERFORMANCE_SAMPLE_PERIOD_MS_DOC)
             .defineInternal(CONTROLLER_PERFORMANCE_ALWAYS_LOG_THRESHOLD_MS, LONG, CONTROLLER_PERFORMANCE_ALWAYS_LOG_THRESHOLD_MS_DEFAULT, atLeast(0), MEDIUM, CONTROLLER_PERFORMANCE_ALWAYS_LOG_THRESHOLD_MS_DOC)
             .defineInternal(SERVER_MAX_STARTUP_TIME_MS_CONFIG, LONG, SERVER_MAX_STARTUP_TIME_MS_DEFAULT, atLeast(0), MEDIUM, SERVER_MAX_STARTUP_TIME_MS_DOC);

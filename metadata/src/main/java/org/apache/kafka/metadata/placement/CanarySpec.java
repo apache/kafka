@@ -24,11 +24,14 @@ import java.util.function.Predicate;
 /**
  * The class defined specification of kafka canary
  * partition meet defined condition should be placed in canary pod
- * The condition is controlled by percentage, which indicates percentage of partitions be canary partition.
+ * The condition is controlled by an interval, which designates every Nth partition as a canary partition.
  * for example,
- * if percentage is 0.1, partition 9, 19, 29,,, etc will be canary partition
- * if percentage is 0.02, partition 49, 99, 149 will be canary partition
- *
+ * if interval is 10, partition 9, 19, 29,,, etc will be canary partition
+ * if interval is 50, partition 49, 99, 149 will be canary partition
+ * <p>
+ * Because the last partition of each group is selected, a topic with fewer than {@code interval}
+ * partitions has no canary partition at all.
+ * </p>
  */
 public class CanarySpec {
     protected static final Predicate<Integer> ALWAYS_FALSE = i -> false;
@@ -36,11 +39,10 @@ public class CanarySpec {
     private final String canaryPodName;
     private final Predicate<Integer> predicate;
 
-    public CanarySpec(String canaryPodName, double percentage) {
+    public CanarySpec(String canaryPodName, int interval) {
         this.canaryPodName = canaryPodName;
-        if (percentage > 0.0 && percentage <= 1.0) {
-            final int module = (int) Math.floor(1 / percentage);
-            predicate = i -> i % module == module - 1;
+        if (interval > 0) {
+            predicate = i -> i % interval == interval - 1;
         } else {
             predicate = ALWAYS_FALSE;
         }
