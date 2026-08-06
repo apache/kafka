@@ -63,7 +63,7 @@ public class CommonClientConfigs {
     public static final String BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG = "bootstrap.resolve.timeout.ms";
     public static final long DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS = 2 * 60 * 1000L;
     public static final String BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC = "Maximum amount of time clients can spend trying to" +
-        " resolve for the bootstrap server address. If the resolution cannot be completed within this timeframe, a " +
+        " resolve DNS for the bootstrap server address. If the resolution cannot be completed within this timeframe, a " +
         "<code>BootstrapResolutionException</code> will be thrown. This failure is unrecoverable — the exception is" +
         " re-thrown on every subsequent API call, so the client must be closed and re-created after fixing the" +
         " underlying DNS or <code>bootstrap.servers</code> configuration issue.";
