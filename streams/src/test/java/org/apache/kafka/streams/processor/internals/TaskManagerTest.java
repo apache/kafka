@@ -2033,6 +2033,45 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldPublishLiveOffsetsForOwnTasksInTaskOffsetSumSnapshot() {
+        final StandbyTask ownStandbyTask = standbyTask(taskId02, taskId02ChangelogPartitions).inState(State.RUNNING).build();
+        when(ownStandbyTask.changelogOffsets()).thenReturn(mkMap(mkEntry(t1p2changelog, 90L)));
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+        when(tasks.allInitializedTasksPerId()).thenReturn(Collections.emptyMap());
+        when(stateUpdater.tasks()).thenReturn(Set.of(ownStandbyTask));
+        // the shared sums only cover what is recoverable from disk, so they can trail an open task's in-memory stores
+        when(stateDirectory.taskOffsetSums()).thenReturn(mkMap(
+            mkEntry(taskId02, 30L),
+            mkEntry(taskId03, 40L)
+        ));
+
+        taskManager.maybeUpdateTaskOffsetSumSnapshot();
+
+        // our own task reports its live sum, while a task held elsewhere on the instance keeps the on-disk sum
+        assertThat(taskManager.taskOffsetSumSnapshot(), is(mkMap(
+            mkEntry(new StreamsRebalanceData.TaskId("0", 2), 90L),
+            mkEntry(new StreamsRebalanceData.TaskId("0", 3), 40L)
+        )));
+    }
+
+    @Test
+    public void shouldComputeOffsetSumFromLiveOffsetsForOwnTasks() {
+        final StandbyTask ownStandbyTask = standbyTask(taskId02, taskId02ChangelogPartitions).inState(State.RUNNING).build();
+        when(ownStandbyTask.changelogOffsets()).thenReturn(mkMap(mkEntry(t1p2changelog, 90L)));
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+        when(tasks.allInitializedTasksPerId()).thenReturn(Collections.emptyMap());
+        when(stateUpdater.tasks()).thenReturn(Set.of(ownStandbyTask));
+        when(stateDirectory.taskOffsetSums(Collections.singleton(taskId02)))
+            .thenReturn(mkMap(mkEntry(taskId02, 30L)));
+
+        assertThat(taskManager.taskOffsetSums(), is(mkMap(mkEntry(taskId02, 90L))));
+    }
+
+    @Test
     public void shouldSkipUnknownOffsetsWhenComputingOffsetSum() {
         final StreamTask restoringStatefulTask = statefulTask(taskId01, taskId01ChangelogPartitions)
             .inState(State.RESTORING).build();
