@@ -162,16 +162,16 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
       Some(s"Did not get valid assignment for partitions ${subscriptions.asJava} after we changed subscription"))
   }
 
-  protected class TestConsumerReassignmentListener extends ConsumerRebalanceListener {
+  protected class TestConsumerReassignmentListener extends RebalanceListener {
     var callsToAssigned = 0
     var callsToRevoked = 0
 
-    def onPartitionsAssigned(partitions: java.util.Collection[TopicPartition]): Unit = {
+    def onPartitionsAssigned(partitions: java.util.Collection[TopicPartition], rebalanceConsumer: RebalanceConsumer): Unit = {
       info("onPartitionsAssigned called.")
       callsToAssigned += 1
     }
 
-    def onPartitionsRevoked(partitions: java.util.Collection[TopicPartition]): Unit = {
+    def onPartitionsRevoked(partitions: java.util.Collection[TopicPartition], rebalanceConsumer: RebalanceConsumer): Unit = {
       info("onPartitionsRevoked called.")
       callsToRevoked += 1
     }
@@ -434,7 +434,7 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
   protected class ConsumerAssignmentPoller(consumer: Consumer[Array[Byte], Array[Byte]],
                                            topicsToSubscribe: List[String],
                                            partitionsToAssign: Set[TopicPartition],
-                                           userRebalanceListener: ConsumerRebalanceListener)
+                                           userRebalanceListener: RebalanceListener)
     extends ShutdownableThread("daemon-consumer-assignment", false) {
 
     def this(consumer: Consumer[Array[Byte], Array[Byte]], topicsToSubscribe: List[String]) = {
@@ -452,22 +452,23 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     @volatile private var subscriptionChanged = false
     private var topicsSubscription = topicsToSubscribe
 
-    val rebalanceListener: ConsumerRebalanceListener = new ConsumerRebalanceListener {
-      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
+    val rebalanceListener: RebalanceListener = new RebalanceListener {
+      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition], rebalanceConsumer: RebalanceConsumer): Unit = {
         partitionAssignment ++= partitions.toArray(new Array[TopicPartition](0))
         if (userRebalanceListener != null)
-          userRebalanceListener.onPartitionsAssigned(partitions)
+          userRebalanceListener.onPartitionsAssigned(partitions, rebalanceConsumer)
       }
 
-      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
+      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition], rebalanceConsumer: RebalanceConsumer): Unit = {
         partitionAssignment --= partitions.toArray(new Array[TopicPartition](0))
         if (userRebalanceListener != null)
-          userRebalanceListener.onPartitionsRevoked(partitions)
+          userRebalanceListener.onPartitionsRevoked(partitions, rebalanceConsumer)
       }
     }
 
     if (partitionsToAssign.isEmpty) {
-      consumer.subscribe(topicsToSubscribe.asJava, rebalanceListener)
+      consumer.setRebalanceListener(rebalanceListener)
+      consumer.subscribe(topicsToSubscribe.asJava)
     } else {
       consumer.assign(partitionsToAssign.asJava)
     }
@@ -508,7 +509,8 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
 
     override def doWork(): Unit = {
       if (subscriptionChanged) {
-        consumer.subscribe(topicsSubscription.asJava, rebalanceListener)
+        consumer.setRebalanceListener(rebalanceListener)
+        consumer.subscribe(topicsSubscription.asJava)
         subscriptionChanged = false
       }
       try {
