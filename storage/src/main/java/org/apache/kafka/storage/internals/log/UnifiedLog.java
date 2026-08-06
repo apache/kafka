@@ -2004,18 +2004,17 @@ public class UnifiedLog implements AutoCloseable {
         if (retentionMs < 0) return 0;
         long startMs = time().milliseconds();
 
-        boolean remoteLogEnabledAndRemoteCopyEnabled = remoteLogEnabledAndRemoteCopyEnabled();
         DeletionCondition shouldDelete = (segment, nextSegmentOpt) -> {
-            long ageReferenceMs = segment.largestTimestamp();
-            if (startMs < ageReferenceMs) {
-                if (remoteLogEnabledAndRemoteCopyEnabled && segment.largestRecordTimestamp().isPresent()) {
-                    ageReferenceMs = segment.lastModified();
-                    futureTimestampLogger.warn("{} contains future timestamp(s), using lastModified time {} as the retention anchor", segment, ageReferenceMs);
+            long anchorTimestamp = segment.largestTimestamp();
+            if (startMs < anchorTimestamp) {
+                if (remoteLogEnabledAndRemoteCopyEnabled() && segment.largestRecordTimestamp().isPresent()) {
+                    anchorTimestamp = segment.lastModified();
+                    futureTimestampLogger.warn("{} contains future timestamp(s), using lastModified time {} as the retention anchor", segment, anchorTimestamp);
                 } else {
                     futureTimestampLogger.warn("{} contains future timestamp(s), making it ineligible to be deleted", segment);
                 }
             }
-            boolean delete = startMs - ageReferenceMs > retentionMs;
+            boolean delete = startMs - anchorTimestamp > retentionMs;
             logger.debug("{} retentionMs breached: {}, startMs={}, retentionMs={}",
                     segment, delete, startMs, retentionMs);
             return delete;
