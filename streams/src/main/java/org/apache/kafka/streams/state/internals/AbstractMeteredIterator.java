@@ -86,7 +86,10 @@ abstract class AbstractMeteredIterator<RawKey> implements MeteredIterator {
         return iter.hasNext();
     }
 
-    public void close() {
+    // Final: this owns the metering lifecycle (sensor recording, numOpenIterators decrement,
+    // openIterators deregistration). A subclass that overrode it and forgot super.close() would
+    // silently drop the decrement and deregistration. Subclasses vary only in next()/hasNext().
+    public final void close() {
         try {
             iter.close();
         } finally {

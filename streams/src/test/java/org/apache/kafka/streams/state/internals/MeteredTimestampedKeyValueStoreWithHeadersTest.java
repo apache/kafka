@@ -670,7 +670,9 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
 
         assertEquals(2.5 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvgMetric.metricValue());
         assertEquals(3.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMaxMetric.metricValue());
-        assertTrue((double) getLatencyAvgMetric.metricValue() > 0.0);
+        // getSensor is recorded only from the iterator's close() on this path, so the two samples
+        // (2ms, 3ms) average to exactly 2.5ms.
+        assertEquals(2.5 * TimeUnit.MILLISECONDS.toNanos(1), (double) getLatencyAvgMetric.metricValue());
     }
 
     @SuppressWarnings("unused")

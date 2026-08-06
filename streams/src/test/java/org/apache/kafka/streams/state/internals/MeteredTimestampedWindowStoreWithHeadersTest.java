@@ -695,7 +695,9 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
 
         assertEquals(2.5 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvg.metricValue());
         assertEquals(3.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMax.metricValue());
-        assertTrue((double) fetchLatencyAvg.metricValue() > 0.0);
+        // fetchSensor is recorded only from the iterator's close() on this path, so the two samples
+        // (2ms, 3ms) average to exactly 2.5ms.
+        assertEquals(2.5 * TimeUnit.MILLISECONDS.toNanos(1), (double) fetchLatencyAvg.metricValue());
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
