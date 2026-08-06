@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.ClientsTestUtils;
 import org.apache.kafka.clients.ClientsTestUtils.TestConsumerReassignmentListener;
+import org.apache.kafka.clients.consumer.RebalanceConsumer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
@@ -154,7 +155,8 @@ public class PlaintextConsumerPollTest {
     private void testMaxPollIntervalMs(Map<String, Object> config) throws InterruptedException {
         try (Consumer<byte[], byte[]> consumer = cluster.consumer(config)) {
             var listener = new TestConsumerReassignmentListener();
-            consumer.subscribe(List.of(topic), listener);
+            consumer.setRebalanceListener(listener);
+            consumer.subscribe(List.of(topic));
 
             // rebalance to get the initial assignment
             awaitRebalance(consumer, listener);
@@ -203,12 +205,12 @@ public class PlaintextConsumerPollTest {
         try (Consumer<byte[], byte[]> consumer = cluster.consumer(config)) {
             var listener = new TestConsumerReassignmentListener() {
                 @Override
-                public void onPartitionsLost(Collection<TopicPartition> partitions) {
+                public void onPartitionsLost(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                     // no op
                 }
 
                 @Override
-                public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                     if (!partitions.isEmpty() && partitions.contains(tp)) {
                         // on the second rebalance (after we have joined the group initially), sleep longer
                         // than session timeout and then try a commit. We should still be in the group,
@@ -219,17 +221,19 @@ public class PlaintextConsumerPollTest {
                         consumer.commitSync(offsets);
                         commitCompleted.set(true);
                     }
-                    super.onPartitionsRevoked(partitions);
+                    super.onPartitionsRevoked(partitions, rebalanceConsumer);
                 }
             };
-            consumer.subscribe(List.of(topic), listener);
+            consumer.setRebalanceListener(listener);
+            consumer.subscribe(List.of(topic));
 
             // Consume records to ensure the rebalance completed and positions are initialized
             // (position then used in callback, triggered on next rebalance)
             awaitNonEmptyRecords(consumer, tp, 100);
 
             // force a rebalance to trigger an invocation of the revocation callback while in the group
-            consumer.subscribe(List.of(otherTopic), listener);
+            consumer.setRebalanceListener(listener);
+            consumer.subscribe(List.of(otherTopic));
             // Consume records to ensure positions for otherTopic are initialized
             // (position then used in callback, triggered on close)
             awaitNonEmptyRecords(consumer, tpOther, 100);
@@ -263,13 +267,14 @@ public class PlaintextConsumerPollTest {
         try (Consumer<byte[], byte[]> consumer = cluster.consumer(config)) {
             var listener = new TestConsumerReassignmentListener() {
                 @Override
-                public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                     // sleep longer than the session timeout, we should still be in the group after invocation
                     Utils.sleep(1500);
-                    super.onPartitionsAssigned(partitions);
+                    super.onPartitionsAssigned(partitions, rebalanceConsumer);
                 }
             };
-            consumer.subscribe(List.of(topic), listener);
+            consumer.setRebalanceListener(listener);
+            consumer.subscribe(List.of(topic));
             // rebalance to get the initial assignment
             awaitRebalance(consumer, listener);
             // We should still be in the group after this invocation
@@ -297,7 +302,8 @@ public class PlaintextConsumerPollTest {
     private void testMaxPollIntervalMsShorterThanPollTimeout(Map<String, Object> config) throws InterruptedException {
         try (Consumer<byte[], byte[]> consumer = cluster.consumer(config)) {
             var listener = new TestConsumerReassignmentListener();
-            consumer.subscribe(List.of(topic), listener);
+            consumer.setRebalanceListener(listener);
+            consumer.subscribe(List.of(topic));
 
             // rebalance to get the initial assignment
             awaitRebalance(consumer, listener);
@@ -551,23 +557,25 @@ public class PlaintextConsumerPollTest {
 
             var listener = new TestConsumerReassignmentListener() {
                 @Override
-                public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                     if (!partitions.isEmpty() && partitions.contains(tp)) {
                         // on the second rebalance (after we have joined the group initially), sleep longer
                         // than rebalance timeout to get fenced.
                         Utils.sleep(rebalanceTimeout + 500);
                         rebalanceTimeoutExceeded.set(true);
                     }
-                    super.onPartitionsRevoked(partitions);
+                    super.onPartitionsRevoked(partitions, rebalanceConsumer);
                 }
             };
             // Subscribe to get first assignment (no delays) and verify consumption
-            consumer.subscribe(List.of(topic), listener);
+            consumer.setRebalanceListener(listener);
+            consumer.subscribe(List.of(topic));
             var records = awaitNonEmptyRecords(consumer, tp, 0L);
             assertEquals(numMessages, records.count());
 
             // Subscribe to different topic. This will trigger the delayed revocation exceeding rebalance timeout and get fenced
-            consumer.subscribe(List.of(otherTopic), listener);
+            consumer.setRebalanceListener(listener);
+            consumer.subscribe(List.of(otherTopic));
             ClientsTestUtils.pollUntilTrue(
                 consumer,
                 rebalanceTimeoutExceeded::get,

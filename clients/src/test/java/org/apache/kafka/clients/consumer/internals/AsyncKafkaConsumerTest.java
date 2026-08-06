@@ -30,6 +30,8 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.RebalanceConsumer;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
@@ -645,21 +647,22 @@ public class AsyncKafkaConsumerTest {
         completeCommitSyncApplicationEventSuccessfully();
         final AtomicBoolean callbackExecuted = new AtomicBoolean(false);
 
-        ConsumerRebalanceListener listener = new ConsumerRebalanceListener() {
+        RebalanceListener listener = new RebalanceListener() {
             @Override
-            public void onPartitionsRevoked(final Collection<TopicPartition> partitions) {
+            public void onPartitionsRevoked(final Collection<TopicPartition> partitions, final RebalanceConsumer rebalanceConsumer) {
                 assertDoesNotThrow(() -> consumer.commitSync(Map.of(tp, new OffsetAndMetadata(0))));
                 callbackExecuted.set(true);
             }
 
             @Override
-            public void onPartitionsAssigned(final Collection<TopicPartition> partitions) {
+            public void onPartitionsAssigned(final Collection<TopicPartition> partitions, final RebalanceConsumer rebalanceConsumer) {
                 // no-op
             }
         };
 
         completeTopicSubscriptionChangeEventSuccessfully();
-        consumer.subscribe(Collections.singletonList(topicName), listener);
+        consumer.setRebalanceListener(listener);
+        consumer.subscribe(Collections.singletonList(topicName));
         completeAsyncPollEventSuccessfully();
         consumer.poll(Duration.ZERO);
         assertTrue(callbackExecuted.get());
@@ -1043,21 +1046,21 @@ public class AsyncKafkaConsumerTest {
         final AtomicBoolean revocationCallbackCalled = new AtomicBoolean(false);
         final AtomicReference<LeaveGroupOnCloseEvent> leaveGroupEvent = new AtomicReference<>();
 
-        final ConsumerRebalanceListener listener = new ConsumerRebalanceListener() {
+        final RebalanceListener listener = new RebalanceListener() {
             @Override
-            public void onPartitionsRevoked(final Collection<TopicPartition> partitions) {
+            public void onPartitionsRevoked(final Collection<TopicPartition> partitions, final RebalanceConsumer rebalanceConsumer) {
                 assertTrue(Thread.currentThread().isInterrupted());
                 revocationCallbackCalled.set(true);
                 revokedPartitions.set(Set.copyOf(partitions));
             }
 
             @Override
-            public void onPartitionsAssigned(final Collection<TopicPartition> partitions) {
+            public void onPartitionsAssigned(final Collection<TopicPartition> partitions, final RebalanceConsumer rebalanceConsumer) {
                 // no-op
             }
 
             @Override
-            public void onPartitionsLost(final Collection<TopicPartition> partitions) {
+            public void onPartitionsLost(final Collection<TopicPartition> partitions, final RebalanceConsumer rebalanceConsumer) {
                 fail("Expected assigned partitions to be revoked on close");
             }
         };
@@ -1065,7 +1068,8 @@ public class AsyncKafkaConsumerTest {
         try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
             consumer = newConsumer(requiredConsumerConfigAndGroupId("consumerGroup"));
             completeTopicSubscriptionChangeEventSuccessfully();
-            consumer.subscribe(singletonList(topicName), listener);
+            consumer.setRebalanceListener(listener);
+            consumer.subscribe(singletonList(topicName));
             consumer.subscriptions().assignFromSubscribed(partitions);
             consumer.setGroupAssignmentSnapshot(partitions);
 
@@ -1802,12 +1806,12 @@ public class AsyncKafkaConsumerTest {
     }
 
     /**
-     * Tests that the consumer correctly invokes the callbacks for {@link ConsumerRebalanceListener} that was
+     * Tests that the consumer correctly invokes the callbacks for {@link RebalanceListener} that was
      * specified. We don't go through the full effort to emulate heartbeats and correct group management here. We're
      * simply exercising the background {@link EventProcessor} does the correct thing when
      * {@link AsyncKafkaConsumer#poll(Duration)} is called.
      *
-     * Note that we test {@link ConsumerRebalanceListener} that throws errors in its different callbacks. Failed
+     * Note that we test {@link RebalanceListener} that throws errors in its different callbacks. Failed
      * callback execution does <em>not</em> immediately errors. Instead, those errors are forwarded to the
      * application event thread for the {@link ConsumerMembershipManager} to handle.
      */

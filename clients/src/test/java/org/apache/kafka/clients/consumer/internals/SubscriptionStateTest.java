@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.RebalanceConsumer;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState.LogTruncation;
 import org.apache.kafka.common.IsolationLevel;
@@ -991,11 +992,9 @@ public class SubscriptionStateTest {
     @Test
     public void testOnPartitionsAssignedCreatesViewAndDelegates() {
         List<RebalanceConsumer> captured = new ArrayList<>();
-        ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
+        RebalanceListener userListener = new RebalanceListener() {
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {}
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
                 captured.add(rc);
@@ -1013,11 +1012,9 @@ public class SubscriptionStateTest {
     @Test
     public void testOnPartitionsRevokedCreatesViewAndDelegates() {
         List<RebalanceConsumer> captured = new ArrayList<>();
-        ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
+        RebalanceListener userListener = new RebalanceListener() {
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {}
             @Override
             public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
                 captured.add(rc);
@@ -1035,11 +1032,11 @@ public class SubscriptionStateTest {
     @Test
     public void testOnPartitionsLostCreatesViewAndDelegates() {
         List<RebalanceConsumer> captured = new ArrayList<>();
-        ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
+        RebalanceListener userListener = new RebalanceListener() {
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {}
             @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {}
             @Override
             public void onPartitionsLost(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
                 captured.add(rc);
@@ -1057,11 +1054,9 @@ public class SubscriptionStateTest {
     @Test
     public void testViewIsClosedAfterAssignedCallback() {
         List<RebalanceConsumer> captured = new ArrayList<>();
-        ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
+        RebalanceListener userListener = new RebalanceListener() {
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {}
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
                 captured.add(rc);
@@ -1078,11 +1073,9 @@ public class SubscriptionStateTest {
     @Test
     public void testViewIsClosedAfterRevokedCallback() {
         List<RebalanceConsumer> captured = new ArrayList<>();
-        ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
+        RebalanceListener userListener = new RebalanceListener() {
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {}
             @Override
             public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
                 captured.add(rc);
@@ -1099,11 +1092,11 @@ public class SubscriptionStateTest {
     @Test
     public void testViewIsClosedAfterLostCallback() {
         List<RebalanceConsumer> captured = new ArrayList<>();
-        ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
+        RebalanceListener userListener = new RebalanceListener() {
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {}
             @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {}
             @Override
             public void onPartitionsLost(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
                 captured.add(rc);
@@ -1120,11 +1113,9 @@ public class SubscriptionStateTest {
     @Test
     public void testViewIsClosedEvenWhenCallbackThrows() {
         List<RebalanceConsumer> captured = new ArrayList<>();
-        ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
+        RebalanceListener userListener = new RebalanceListener() {
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {}
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
                 captured.add(rc);
@@ -1144,11 +1135,9 @@ public class SubscriptionStateTest {
     @Test
     public void testEachCallbackGetsFreshView() {
         List<RebalanceConsumer> captured = new ArrayList<>();
-        ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
+        RebalanceListener userListener = new RebalanceListener() {
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {}
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
                 captured.add(rc);
