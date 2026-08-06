@@ -245,6 +245,19 @@ public class StreamsConfigTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"", StreamsConfig.CONSUMER_PREFIX, StreamsConfig.MAIN_CONSUMER_PREFIX})
+    public void shouldRejectEmptyGroupInstanceId(final String prefix) {
+        props.put(prefix + ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+        final ConfigException exception = assertThrows(
+            ConfigException.class,
+            () -> streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx)
+        );
+        assertTrue(exception.getMessage().contains(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", StreamsConfig.CONSUMER_PREFIX, StreamsConfig.MAIN_CONSUMER_PREFIX})
     public void shouldAllowStaticMembershipWhenStreamsProtocolUsed(final String prefix) {
         props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
         props.put(prefix + ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "static-member-1");
