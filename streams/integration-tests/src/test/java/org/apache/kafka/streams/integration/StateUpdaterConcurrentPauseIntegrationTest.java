@@ -124,11 +124,18 @@ public class StateUpdaterConcurrentPauseIntegrationTest {
 
         // Calling tasks() concurrently to avoid a deadlock
         final AtomicReference<List<TaskId>> tasksResult = new AtomicReference<>();
-        final Thread reader = new Thread(() -> tasksResult.set(stateUpdater.tasks().stream().map(Task::id).collect(Collectors.toList())));
+        final CountDownLatch readerDoneLatch = new CountDownLatch(1);
+        final Thread reader = new Thread(() -> {
+            try {
+                tasksResult.set(stateUpdater.tasks().stream().map(Task::id).collect(Collectors.toList()));
+            } finally {
+                readerDoneLatch.countDown();
+            }
+        });
         reader.start();
 
         TestUtils.waitForCondition(
-            () -> reader.getState() == Thread.State.WAITING,
+            () ->  readerDoneLatch.getCount() == 0 || reader.getState() == Thread.State.WAITING,
             TIMEOUT_MS,
             "tasks() reader never got blocked on the state updater lock"
         );
