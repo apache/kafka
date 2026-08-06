@@ -2255,13 +2255,13 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     private void subscribeInternal(Pattern pattern, ConsumerRebalanceListener listener) {
         acquireAndEnsureOpen();
-        if (listener != null)
-            subscriptions.setRebalanceListener(listener, this);
         try {
             throwIfGroupIdNotDefined();
             if (pattern == null || pattern.toString().isEmpty())
                 throw new IllegalArgumentException("Topic pattern to subscribe to cannot be " + (pattern == null ?
                     "null" : "empty"));
+            if (listener != null)
+                subscriptions.setRebalanceListener(listener, this);
             log.info("Subscribed to pattern: '{}'", pattern);
             applicationEventHandler.addAndGet(new TopicPatternSubscriptionChangeEvent(
                 pattern,
