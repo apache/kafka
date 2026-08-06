@@ -639,7 +639,9 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
     public void shouldTimeIteratorDurationForTimestampedRangeWithHeadersQuery() {
         setUp();
         when(inner.query(any(), any(PositionBound.class), any(QueryConfig.class)))
-                .thenReturn((QueryResult) QueryResult.forResult(KeyValueIterators.emptyIterator()));
+                .thenReturn(
+                    (QueryResult) QueryResult.forResult(KeyValueIterators.emptyIterator()),
+                    (QueryResult) QueryResult.forResult(KeyValueIterators.emptyIterator()));
         init();
 
         final KafkaMetric iteratorDurationAvgMetric = metric("iterator-duration-avg");
@@ -651,15 +653,23 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
         assertEquals(Double.NaN, (Double) iteratorDurationAvgMetric.metricValue());
         assertEquals(Double.NaN, (Double) iteratorDurationMaxMetric.metricValue());
 
-        final QueryResult<ReadOnlyRecordIterator<String, String>> result = metered.query(
-                TimestampedRangeWithHeadersQuery.withNoBounds(), PositionBound.unbounded(), new QueryConfig(false));
-        try (ReadOnlyRecordIterator<String, String> iterator = result.getResult()) {
-            // nothing to iterate; just hold it open, then close
+        // Two samples (2ms then 3ms) so avg (2.5ms) and max (3ms) differ -- one sample would leave them
+        // identical and not actually pin avg. Mirrors the sibling shouldTimeIteratorDuration above.
+        try (ReadOnlyRecordIterator<String, String> iterator = metered.query(
+                TimestampedRangeWithHeadersQuery.<String, String>withNoBounds(), PositionBound.unbounded(), new QueryConfig(false)).getResult()) {
             mockTime.sleep(2);
         }
 
         assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvgMetric.metricValue());
         assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMaxMetric.metricValue());
+
+        try (ReadOnlyRecordIterator<String, String> iterator = metered.query(
+                TimestampedRangeWithHeadersQuery.<String, String>withNoBounds(), PositionBound.unbounded(), new QueryConfig(false)).getResult()) {
+            mockTime.sleep(3);
+        }
+
+        assertEquals(2.5 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(3.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMaxMetric.metricValue());
         assertTrue((double) getLatencyAvgMetric.metricValue() > 0.0);
     }
 

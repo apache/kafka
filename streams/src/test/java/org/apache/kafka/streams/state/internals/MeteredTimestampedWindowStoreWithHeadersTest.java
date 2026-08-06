@@ -630,20 +630,28 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
     public void shouldTimeIteratorDuration() {
         setUp();
         store.init(context, store);
-        when(innerStoreMock.all()).thenReturn(windowRangeIterator(List.of()));
+        when(innerStoreMock.all()).thenReturn(windowRangeIterator(List.of()), windowRangeIterator(List.of()));
 
         final KafkaMetric iteratorDurationAvg = metric("iterator-duration-avg");
         final KafkaMetric iteratorDurationMax = metric("iterator-duration-max");
         assertEquals(Double.NaN, (Double) iteratorDurationAvg.metricValue());
         assertEquals(Double.NaN, (Double) iteratorDurationMax.metricValue());
 
+        // Two samples (2ms then 3ms) so avg (2.5ms) and max (3ms) differ -- one sample would leave them
+        // identical and not actually pin avg.
         try (KeyValueIterator<Windowed<String>, ValueTimestampHeaders<String>> iterator = store.all()) {
-            // nothing to iterate; just hold it open, then close
             mockTime.sleep(2);
         }
 
         assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvg.metricValue());
         assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMax.metricValue());
+
+        try (KeyValueIterator<Windowed<String>, ValueTimestampHeaders<String>> iterator = store.all()) {
+            mockTime.sleep(3);
+        }
+
+        assertEquals(2.5 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvg.metricValue());
+        assertEquals(3.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMax.metricValue());
     }
 
     // The above shouldTimeIteratorDuration goes through store.all() -> the KeyValueIterator sibling.
@@ -656,7 +664,9 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
         setUp();
         store.init(context, store);
         when(innerStoreMock.query(any(), any(PositionBound.class), any(QueryConfig.class)))
-            .thenReturn((QueryResult) QueryResult.forResult(windowKeyIterator(List.of())));
+            .thenReturn(
+                (QueryResult) QueryResult.forResult(windowKeyIterator(List.of())),
+                (QueryResult) QueryResult.forResult(windowKeyIterator(List.of())));
 
         final KafkaMetric iteratorDurationAvg = metric("iterator-duration-avg");
         final KafkaMetric iteratorDurationMax = metric("iterator-duration-max");
@@ -664,18 +674,27 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
         assertEquals(Double.NaN, (Double) iteratorDurationAvg.metricValue());
         assertEquals(Double.NaN, (Double) iteratorDurationMax.metricValue());
 
-        final QueryResult<ReadOnlyRecordIterator<Windowed<String>, String>> result = store.query(
-            TimestampedWindowKeyWithHeadersQuery.<String, String>withKeyAndWindowStartRange(
-                KEY, Instant.ofEpochMilli(5), Instant.ofEpochMilli(100)),
-            PositionBound.unbounded(),
-            new QueryConfig(false));
-        try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = result.getResult()) {
-            // nothing to iterate; just hold it open, then close
+        // Two samples (2ms then 3ms) so avg (2.5ms) and max (3ms) differ -- one sample would leave them
+        // identical and not actually pin avg. Mirrors the sibling shouldTimeIteratorDuration above.
+        try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = store.query(
+                TimestampedWindowKeyWithHeadersQuery.<String, String>withKeyAndWindowStartRange(
+                    KEY, Instant.ofEpochMilli(5), Instant.ofEpochMilli(100)),
+                PositionBound.unbounded(), new QueryConfig(false)).getResult()) {
             mockTime.sleep(2);
         }
 
         assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvg.metricValue());
         assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMax.metricValue());
+
+        try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = store.query(
+                TimestampedWindowKeyWithHeadersQuery.<String, String>withKeyAndWindowStartRange(
+                    KEY, Instant.ofEpochMilli(5), Instant.ofEpochMilli(100)),
+                PositionBound.unbounded(), new QueryConfig(false)).getResult()) {
+            mockTime.sleep(3);
+        }
+
+        assertEquals(2.5 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvg.metricValue());
+        assertEquals(3.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMax.metricValue());
         assertTrue((double) fetchLatencyAvg.metricValue() > 0.0);
     }
 

@@ -70,8 +70,11 @@ abstract class AbstractMeteredIterator<RawKey> implements MeteredIterator {
         openIterators.add(this);
     }
 
+    // Final: the constructor's openIterators.add(this) sorts through this via the set's
+    // startTimestamp comparator, i.e. on a not-yet-fully-constructed object. Keeping it final stops a
+    // subclass from overriding it with something that reads its own not-yet-assigned state.
     @Override
-    public long startTimestamp() {
+    public final long startTimestamp() {
         return startTimestampMs;
     }
 

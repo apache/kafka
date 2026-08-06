@@ -67,6 +67,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -678,24 +679,38 @@ public class MeteredSessionStoreWithHeadersTest {
         init();
 
         when(innerStore.query(any(), any(PositionBound.class), any(QueryConfig.class)))
-            .thenReturn((QueryResult) QueryResult.forResult(new KeyValueIteratorStub<>(
-                Collections.<KeyValue<Windowed<Bytes>, byte[]>>emptyList().iterator())));
+            .thenReturn(
+                (QueryResult) QueryResult.forResult(new KeyValueIteratorStub<>(
+                    Collections.<KeyValue<Windowed<Bytes>, byte[]>>emptyList().iterator())),
+                (QueryResult) QueryResult.forResult(new KeyValueIteratorStub<>(
+                    Collections.<KeyValue<Windowed<Bytes>, byte[]>>emptyList().iterator())));
 
-        final KafkaMetric iteratorDurationMetric = metric("iterator-duration-avg");
+        final KafkaMetric iteratorDurationAvgMetric = metric("iterator-duration-avg");
+        final KafkaMetric iteratorDurationMaxMetric = metric("iterator-duration-max");
         final KafkaMetric fetchLatencyMetric = metric("fetch-latency-avg");
+        assertEquals(Double.NaN, (Double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(Double.NaN, (Double) iteratorDurationMaxMetric.metricValue());
 
-        final QueryResult<ReadOnlyRecordIterator<Windowed<String>, String>> result = store.query(
-            TimestampedWindowRangeWithHeadersQuery.<String, String>withKey(KEY),
-            PositionBound.unbounded(),
-            new QueryConfig(false));
-        assertTrue(result.isSuccess());
-        try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = result.getResult()) {
-            // nothing to iterate; just hold it open, then close
-            mockTime.sleep(100L);
+        // Two samples (2ms then 3ms), deterministic under mockTime, so avg (2.5ms) and max (3ms) differ
+        // and are pinned exactly -- one sample would leave avg == max.
+        try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = store.query(
+                TimestampedWindowRangeWithHeadersQuery.<String, String>withKey(KEY),
+                PositionBound.unbounded(), new QueryConfig(false)).getResult()) {
+            mockTime.sleep(2);
         }
 
-        assertTrue((Double) iteratorDurationMetric.metricValue() > 0.0);
-        assertTrue((Double) fetchLatencyMetric.metricValue() > 0.0);
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMaxMetric.metricValue());
+
+        try (ReadOnlyRecordIterator<Windowed<String>, String> iterator = store.query(
+                TimestampedWindowRangeWithHeadersQuery.<String, String>withKey(KEY),
+                PositionBound.unbounded(), new QueryConfig(false)).getResult()) {
+            mockTime.sleep(3);
+        }
+
+        assertEquals(2.5 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(3.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMaxMetric.metricValue());
+        assertTrue((double) fetchLatencyMetric.metricValue() > 0.0);
     }
 
     @Test
