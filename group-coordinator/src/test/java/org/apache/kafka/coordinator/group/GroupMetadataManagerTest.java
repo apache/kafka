@@ -30532,9 +30532,4 @@ public class GroupMetadataManagerTest {
         return responseTopics.stream()
             .collect(Collectors.toMap(DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic::topicId, Function.identity()));
     }
-
-    /**
-     * Returns the default assignment configurations that would be used by the system.
-     * This matches what streamsGroupAssignmentConfigs() would return.
-     */
 }
