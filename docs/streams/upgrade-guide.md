@@ -116,6 +116,10 @@ Storing headers increases disk and serialization cost versus headerless stores; 
 
 `TopologyTestDriver` and Interactive Queries support the new store types. The existing `store()` facades continue to return values (or `ValueAndTimestamp`) without exposing record headers. See the [interactive queries guide](/{version}/streams/developer-guide/interactive-queries/#header-aware-stores-interactive-queries).
 
+### Header-aware Interactive Queries v2 (KIP-1356) {#kip-1356-iqv2-header-queries}
+
+[KIP-1356](https://cwiki.apache.org/confluence/spaces/KAFKA/pages/430408653/KIP-1356+Introduce+IQv2+for+headers-aware+state+stores) adds four `@Evolving` IQv2 query types that return record headers from the [header-aware state stores](#kip-1271-headers-aware-stores) introduced by KIP-1271: `TimestampedKeyWithHeadersQuery`, `TimestampedRangeWithHeadersQuery`, `TimestampedWindowKeyWithHeadersQuery`, and `TimestampedWindowRangeWithHeadersQuery`. Their results carry headers as a [`ReadOnlyRecord`](/{version}/javadoc/org/apache/kafka/streams/processor/api/ReadOnlyRecord.html) — or, for the range and window forms, a closeable [`ReadOnlyRecordIterator`](/{version}/javadoc/org/apache/kafka/streams/state/ReadOnlyRecordIterator.html). See the [interactive queries guide](/{version}/streams/developer-guide/interactive-queries/#header-aware-stores-interactive-queries) for usage and behavior details.
+
 ### Headers-Aware State Stores for DSL Operators (KIP-1285)
 
 [KIP-1285](https://cwiki.apache.org/confluence/x/4ow8G) lets DSL operators use the headers-aware state stores introduced by [KIP-1271](#kip-1271-headers-aware-stores). Set [`dsl.store.format=HEADERS`](/{version}/streams/developer-guide/config-streams.html#dsl-store-format) to use headers-aware stores for supported DSL operators. These stores can keep record headers together with the value and timestamp.
