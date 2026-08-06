@@ -647,25 +647,31 @@ public class MeteredSessionStoreWithHeadersTest {
         setUp();
         init();
 
-        final Headers headers = new RecordHeaders();
-        headers.add("key1", "value1".getBytes());
-        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
-
-        final AggregationWithHeadersSerializer<String> serializer = new AggregationWithHeadersSerializer<>(Serdes.String().serializer());
-        final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
-
         when(innerStore.fetch(KEY_BYTES))
-            .thenReturn(new KeyValueIteratorStub<>(
-                Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, serializedValue)).iterator()));
+            .thenReturn(
+                new KeyValueIteratorStub<>(Collections.<KeyValue<Windowed<Bytes>, byte[]>>emptyList().iterator()),
+                new KeyValueIteratorStub<>(Collections.<KeyValue<Windowed<Bytes>, byte[]>>emptyList().iterator()));
 
-        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.fetch(KEY);
+        final KafkaMetric iteratorDurationAvgMetric = metric("iterator-duration-avg");
+        final KafkaMetric iteratorDurationMaxMetric = metric("iterator-duration-max");
+        assertEquals(Double.NaN, (Double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(Double.NaN, (Double) iteratorDurationMaxMetric.metricValue());
 
-        mockTime.sleep(100L);
+        // Two samples (2ms then 3ms) so avg (2.5ms) and max (3ms) differ -- one sample would leave them
+        // identical and not actually pin avg. Mirrors the KV sibling shouldTimeIteratorDuration.
+        try (KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.fetch(KEY)) {
+            mockTime.sleep(2);
+        }
 
-        iterator.close();
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMaxMetric.metricValue());
 
-        final KafkaMetric iteratorDurationMetric = metric("iterator-duration-avg");
-        assertTrue((Double) iteratorDurationMetric.metricValue() > 0.0);
+        try (KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.fetch(KEY)) {
+            mockTime.sleep(3);
+        }
+
+        assertEquals(2.5 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(3.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMaxMetric.metricValue());
     }
 
     // The above shouldTimeIteratorDuration goes through store.fetch() -> the KeyValueIterator sibling.
