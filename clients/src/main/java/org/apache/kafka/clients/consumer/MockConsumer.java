@@ -222,7 +222,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         subscribeInternal(topics, listener);
     }
 
-    private synchronized void subscribeInternal(SubscriptionPattern pattern, ConsumerRebalanceListener listener) {
+    private synchronized void subscribeInternal(SubscriptionPattern pattern, RebalanceListener listener) {
         if (pattern == null || pattern.toString().isEmpty())
             throw new IllegalArgumentException("Topic pattern cannot be " + (pattern == null ? "null" : "empty"));
 
@@ -233,7 +233,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         subscriptions.subscribe(pattern);
     }
 
-    private synchronized void subscribeInternal(Collection<String> topics, ConsumerRebalanceListener listener) {
+    private synchronized void subscribeInternal(Collection<String> topics, RebalanceListener listener) {
         ensureNotClosed();
         committed.clear();
         if (listener != null)
@@ -241,7 +241,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         subscriptions.subscribe(new HashSet<>(topics));
     }
 
-    private synchronized void subscribeInternal(Pattern pattern, ConsumerRebalanceListener listener) {
+    private synchronized void subscribeInternal(Pattern pattern, RebalanceListener listener) {
         ensureNotClosed();
         committed.clear();
         if (listener != null)
