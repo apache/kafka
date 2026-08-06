@@ -17,11 +17,18 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -37,6 +44,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -250,6 +259,45 @@ public class InMemorySessionStoreTest extends AbstractSessionBytesStoreTest {
             }
         } finally {
             stop.set(true);
+            store.close();
+        }
+    }
+
+    @Test
+    public void shouldReportUncommittedPositionForTransactionalStore() {
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        props.setProperty(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, "true");
+        final InternalMockProcessorContext<Bytes, byte[]> ctx = new InternalMockProcessorContext<>(
+            TestUtils.tempDirectory(),
+            new Serdes.BytesSerde(),
+            new Serdes.ByteArraySerde(),
+            new StreamsConfig(props)
+        );
+        final InMemorySessionStore store = new InMemorySessionStore(
+            "txn-pos-session-store", RETENTION_PERIOD, "scope");
+        store.init(ctx, store);
+        try {
+            ctx.setRecordContext(new ProcessorRecordContext(0, 1, 0, "topic", new RecordHeaders()));
+            store.put(new Windowed<>(Bytes.wrap("k".getBytes()), new SessionWindow(0, 10)), "v".getBytes());
+
+            final Position expected = Position.fromMap(mkMap(mkEntry("topic", mkMap(mkEntry(0, 1L)))));
+
+            // READ_UNCOMMITTED query should expose the staged position before commit
+            final QueryResult<?> uncommitted = store.query(
+                WindowRangeQuery.withKey(Bytes.wrap("k".getBytes())),
+                PositionBound.unbounded(),
+                new QueryConfig(false));
+            assertEquals(expected, uncommitted.getPosition(), "READ_UNCOMMITTED query position");
+
+            // getPosition() reports the uncommitted (committed + staged) position, mirroring
+            // RocksDBStore, so the changelog consistency vector reflects the staged write.
+            assertEquals(expected, store.getPosition(), "getPosition before commit (uncommitted)");
+
+            // after commit, committed position populated
+            store.commit(Map.of());
+            assertEquals(expected, store.getPosition(), "getPosition after commit");
+        } finally {
             store.close();
         }
     }

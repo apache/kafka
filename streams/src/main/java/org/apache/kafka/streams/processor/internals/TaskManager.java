@@ -462,6 +462,12 @@ public class TaskManager {
 
     private void createNewTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
                                 final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate) {
+        // A task that failed to initialize is left owned (registered and flagged failed) for the corruption/
+        // failed-task path to reconcile, and the rectify pass above skips failed tasks -- so without this guard
+        // the assignment would build a second representation here and trip the single-owner invariant in Tasks.
+        activeTasksToCreate.keySet().removeIf(tasks::containsInitialized);
+        standbyTasksToCreate.keySet().removeIf(tasks::containsInitialized);
+
         final Collection<StreamTask> newActiveTasks = activeTaskCreator.createTasks(mainConsumer, activeTasksToCreate);
         final Collection<StandbyTask> newStandbyTasks = standbyTaskCreator.createTasks(standbyTasksToCreate);
 
@@ -1264,26 +1270,30 @@ public class TaskManager {
     }
 
     /**
-     * Recomputes the offset-sum snapshot reported to the streams-group coordinator from the offset sums maintained in
-     * the {@link StateDirectory}, which already cover all stateful tasks with state on disk (standby, warmup,
-     * restoring-active and dormant) using a conservative (per-partition lower-bound) sum. Running-active tasks are
-     * excluded: their assignment is not offset-driven and they are caught up by definition.
+     * Recomputes the offset-sum snapshot reported to the streams-group coordinator. The {@link StateDirectory} sums
+     * cover every task with state on disk, including tasks owned by a sibling stream thread and dormant ones.
+     * We include these, because we could take over such a task re-using the local state on disk.
+     * Running-active tasks are excluded: their assignment is not offset-driven and they are caught up by definition.
+     * For all other assigned tasks this thread owns, we overwrite the (potentially) state offset-sum from the
+     * state directory with the latest changelog offset information. This step also add offset-sums for in-memory
+     * state stores.
      */
     public void maybeUpdateTaskOffsetSumSnapshot() {
-        final Set<TaskId> runningActiveTasks = new HashSet<>();
+        final Map<TaskId, Long> offsetSums = new HashMap<>(stateDirectory.taskOffsetSums());
         for (final Task task : allTasks().values()) {
             if (task.isActive() && task.state() == State.RUNNING) {
-                runningActiveTasks.add(task.id());
+                offsetSums.remove(task.id());
+            } else if (task.state() != State.CREATED && task.state() != State.CLOSED) {
+                final Map<TopicPartition, Long> changelogOffsets = task.changelogOffsets();
+                if (!changelogOffsets.isEmpty()) {
+                    offsetSums.put(task.id(), StateDirectory.sumOfChangelogOffsets(task.id(), changelogOffsets));
+                }
             }
         }
 
-        final Map<TaskId, Long> offsetSums = stateDirectory.taskOffsetSums();
         final Map<StreamsRebalanceData.TaskId, Long> snapshot = new HashMap<>(offsetSums.size());
         for (final Map.Entry<TaskId, Long> entry : offsetSums.entrySet()) {
             final TaskId taskId = entry.getKey();
-            if (runningActiveTasks.contains(taskId)) {
-                continue;
-            }
             snapshot.put(
                 new StreamsRebalanceData.TaskId(String.valueOf(taskId.subtopology()), taskId.partition()),
                 entry.getValue()
@@ -1317,11 +1327,20 @@ public class TaskManager {
 
         final Map<TaskId, Long> taskOffsetSums = stateDirectory.taskOffsetSums(lockedTaskDirectoriesOfNonOwnedTasksAndClosedAndCreatedTasks);
 
-        // overlay latest offsets from assigned tasks
+        // Overlay latest offsets from assigned tasks.
+        // `stateDirectory.taskOffsetSums` above only cover what is recoverable from disk (potentially stale),
+        // including offsets from persistent stores which tasks are owned by sibling thread, as well as dormant tasks;
+        // We update this (potentially state) information with latest changelog offset inforamtion for all other
+        // tasks assigned to this thread; this step also adds offset-sum information for in-memory state stores
         for (final Task task : tasks.values()) {
             // exclude stateless and non-logged tasks
             if (task.isActive() && task.state() == State.RUNNING && !task.changelogPartitions().isEmpty()) {
                 taskOffsetSums.put(task.id(), Task.LATEST_OFFSET);
+            } else if (task.state() != State.CREATED && task.state() != State.CLOSED) {
+                final Map<TopicPartition, Long> changelogOffsets = task.changelogOffsets();
+                if (!changelogOffsets.isEmpty()) {
+                    taskOffsetSums.put(task.id(), StateDirectory.sumOfChangelogOffsets(task.id(), changelogOffsets));
+                }
             }
         }
 

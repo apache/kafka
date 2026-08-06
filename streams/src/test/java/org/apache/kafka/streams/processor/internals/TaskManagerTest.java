@@ -292,6 +292,51 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldNotRecreateActiveTasksThatAreAlreadyOwned() {
+        // Real-registry regression test reproducing the crash end-to-end on the active path (reached with
+        // num.standby.replicas=0). A task whose init throws is left owned-and-failed; handleAssignment's rectify
+        // pass skips failed tasks, so a second assignment used to build a second representation in createNewTasks
+        // that, once it also failed init, tripped the single-owner invariant in Tasks and killed the StreamThread.
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.CREATED).build();
+        when(activeTaskCreator.createTasks(consumer, taskId00Assignment)).thenReturn(singletonList(task00));
+        doThrow(new RuntimeException("KABOOM!")).when(task00).initializeIfNeeded();
+
+        // first assignment: 0_0 is created, its init fails, and it is left owned-but-failed in the registry
+        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+        assertThrows(StreamsException.class, () -> taskManager.checkStateUpdater(time.milliseconds(), noOpResetter));
+
+        // second assignment of the same owned-but-failed task must not build a second representation
+        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+        taskManager.checkStateUpdater(time.milliseconds(), noOpResetter); // must not throw "already own: 0_0"
+
+        verify(activeTaskCreator, times(1)).createTasks(consumer, taskId00Assignment);
+    }
+
+    @Test
+    public void shouldNotRecreateStandbyTasksThatAreAlreadyOwned() {
+        // The same guard must protect the standby side -- the original standby/active recycle crash, reached with
+        // num.standby.replicas>=1. An owned-but-failed standby that is re-assigned must not be rebuilt, or the
+        // duplicate trips "Attempted to create an standby task that we already own".
+        final StandbyTask task00 = standbyTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.CREATED).build();
+        when(standbyTaskCreator.createTasks(taskId00Assignment)).thenReturn(singletonList(task00));
+        doThrow(new RuntimeException("KABOOM!")).when(task00).initializeIfNeeded();
+
+        // first assignment: 0_0 standby is created, its init fails, and it is left owned-but-failed
+        taskManager.handleAssignment(emptyMap(), taskId00Assignment);
+        assertThrows(StreamsException.class, () -> taskManager.checkStateUpdater(time.milliseconds(), noOpResetter));
+
+        // second assignment of the same owned-but-failed standby must not build a second representation
+        taskManager.handleAssignment(emptyMap(), taskId00Assignment);
+        taskManager.checkStateUpdater(time.milliseconds(), noOpResetter); // must not throw "already own" (standby)
+
+        verify(standbyTaskCreator, times(1)).createTasks(taskId00Assignment);
+    }
+
+    @Test
     public void shouldLockAffectedTasksOnHandleRevocation() {
         final StreamTask activeTask1 = statefulTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RUNNING)
@@ -1985,6 +2030,45 @@ public class TaskManagerTest {
             mkEntry(new StreamsRebalanceData.TaskId("0", 2), 30L),
             mkEntry(new StreamsRebalanceData.TaskId("0", 3), 40L)
         )));
+    }
+
+    @Test
+    public void shouldPublishLiveOffsetsForOwnTasksInTaskOffsetSumSnapshot() {
+        final StandbyTask ownStandbyTask = standbyTask(taskId02, taskId02ChangelogPartitions).inState(State.RUNNING).build();
+        when(ownStandbyTask.changelogOffsets()).thenReturn(mkMap(mkEntry(t1p2changelog, 90L)));
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+        when(tasks.allInitializedTasksPerId()).thenReturn(Collections.emptyMap());
+        when(stateUpdater.tasks()).thenReturn(Set.of(ownStandbyTask));
+        // the shared sums only cover what is recoverable from disk, so they can trail an open task's in-memory stores
+        when(stateDirectory.taskOffsetSums()).thenReturn(mkMap(
+            mkEntry(taskId02, 30L),
+            mkEntry(taskId03, 40L)
+        ));
+
+        taskManager.maybeUpdateTaskOffsetSumSnapshot();
+
+        // our own task reports its live sum, while a task held elsewhere on the instance keeps the on-disk sum
+        assertThat(taskManager.taskOffsetSumSnapshot(), is(mkMap(
+            mkEntry(new StreamsRebalanceData.TaskId("0", 2), 90L),
+            mkEntry(new StreamsRebalanceData.TaskId("0", 3), 40L)
+        )));
+    }
+
+    @Test
+    public void shouldComputeOffsetSumFromLiveOffsetsForOwnTasks() {
+        final StandbyTask ownStandbyTask = standbyTask(taskId02, taskId02ChangelogPartitions).inState(State.RUNNING).build();
+        when(ownStandbyTask.changelogOffsets()).thenReturn(mkMap(mkEntry(t1p2changelog, 90L)));
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+        when(tasks.allInitializedTasksPerId()).thenReturn(Collections.emptyMap());
+        when(stateUpdater.tasks()).thenReturn(Set.of(ownStandbyTask));
+        when(stateDirectory.taskOffsetSums(Collections.singleton(taskId02)))
+            .thenReturn(mkMap(mkEntry(taskId02, 30L)));
+
+        assertThat(taskManager.taskOffsetSums(), is(mkMap(mkEntry(taskId02, 90L))));
     }
 
     @Test

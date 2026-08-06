@@ -125,7 +125,6 @@ import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
@@ -502,6 +501,7 @@ public class TopologyTestDriver implements Closeable {
                 streamsConfig.getBoolean(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG),
                 logContext,
                 stateDirectory,
+                mockWallClockTime,
                 processorTopology.storeToChangelogTopic(),
                 new HashSet<>(partitionsByInputTopic.values()));
             final RecordCollector recordCollector = new RecordCollectorImpl(
@@ -1359,11 +1359,6 @@ public class TopologyTestDriver implements Closeable {
             }
             timeMs.addAndGet(ms);
             highResTimeNs.addAndGet(TimeUnit.MILLISECONDS.toNanos(ms));
-        }
-
-        @Override
-        public void waitObject(final Object obj, final Supplier<Boolean> condition, final long timeoutMs) {
-            throw new UnsupportedOperationException();
         }
     }
 

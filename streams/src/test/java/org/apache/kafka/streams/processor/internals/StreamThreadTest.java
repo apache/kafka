@@ -27,7 +27,6 @@ import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
-import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -1572,7 +1571,7 @@ public class StreamThreadTest {
         final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.LATEST.name());
         final MockConsumer<byte[], byte[]> restoreConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
 
-        consumer.subscribe(Collections.singletonList(topic1), new MockRebalanceListener());
+        consumer.subscribe(Collections.singletonList(topic1));
         consumer.rebalance(Collections.singletonList(t1p1));
         consumer.updateEndOffsets(Collections.singletonMap(t1p1, 10L));
         consumer.seekToEnd(Collections.singletonList(t1p1));
@@ -4096,6 +4095,58 @@ public class StreamThreadTest {
     }
 
     @Test
+    public void shouldThrottleEnforceRebalanceOnRepeatedShutdownRequestsUnderClassicProtocol() {
+        final MockTime shutdownTime = new MockTime(0, 100_000L, 0L);
+        final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        final Properties props = configProps(false, false);
+        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
+            new TopologyMetadata(internalTopologyBuilder, new StreamsConfig(props)),
+            StreamsMetadataState.UNKNOWN_HOST,
+            new LogContext(String.format("stream-client [%s] ", CLIENT_ID))
+        );
+        final StreamsConfig config = new StreamsConfig(props);
+        thread = new StreamThread(
+            shutdownTime,
+            config,
+            null,
+            mainConsumer,
+            consumer,
+            changelogReader,
+            null,
+            mock(TaskManager.class),
+            null,
+            new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime),
+            new TopologyMetadata(internalTopologyBuilder, config),
+            PROCESS_ID,
+            CLIENT_ID,
+            new LogContext(""),
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE),
+            new LinkedList<>(),
+            mock(Runnable.class),
+            HANDLER,
+            null,
+            Optional.empty(),
+            streamsMetadataState,
+            null,
+            -1L
+        ).updateThreadMetadata(adminClientId(CLIENT_ID));
+
+        thread.sendShutdownRequest();
+
+        for (int i = 0; i < 1_000; i++) {
+            thread.maybeSendShutdown();
+        }
+        verify(mainConsumer, times(1)).enforceRebalance("Shutdown requested");
+
+        shutdownTime.sleep(10_000L);
+        thread.maybeSendShutdown();
+        verify(mainConsumer, times(2)).enforceRebalance("Shutdown requested");
+    }
+
+    @Test
     public void testStreamsProtocolRunOnceWithoutProcessingThreadsMissingSourceTopic() {
         final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
@@ -4639,6 +4690,7 @@ public class StreamThreadTest {
             config,
             streamsMetrics,
             stateDirectory,
+            mockTime,
             CLIENT_ID,
             logContext);
         return standbyTaskCreator.createTasks(singletonMap(new TaskId(1, 2), emptySet()));

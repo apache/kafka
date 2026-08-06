@@ -17,11 +17,14 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AlterConfigOp;
+import org.apache.kafka.clients.admin.AlterConfigsOptions;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
@@ -40,6 +43,7 @@ import com.yammer.metrics.core.Meter;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -48,6 +52,7 @@ import java.util.Set;
 
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -460,6 +465,246 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
 
         verifyDlqTopicRecords(dlqTopic, groupId, expectedSourceOffsets(recordCount), false);
         verifyDlqMetrics(groupId, recordCount);
+    }
+
+    /**
+     * Verifies that the DLQ topic's own {@code max.message.bytes} - not the source topic's - bounds each DLQ
+     * produce request, and that this is honored dynamically when the config changes.
+     *
+     * <p>Phase 1: the source topic allows records up to {@code sourceMaxMessageBytes}, but the DLQ topic is
+     * configured with a third of that ({@code dlqMaxMessageBytes}). Three records, each sized so that any two
+     * of their (record-copy-enabled) DLQ copies together would exceed dlqMaxMessageBytes, are rejected together
+     * in a single commit - so SharePartition issues one DLQ call spanning the whole offset range (see
+     * ShareGroupDLQStateManagerTest for the underlying chunking logic). The DLQ produce path must then split
+     * that single call into multiple sequential produce requests (one record each) rather than failing or
+     * dropping any record; this confirms all 3 records still land on the DLQ topic, and that the DLQ
+     * produce-request count increased by at least 3 (one per chunk) - concrete proof splitting occurred, since
+     * without it the single oversized request would be rejected once (non-retriable) and no records would ever
+     * arrive.
+     *
+     * <p>Phase 2: the DLQ topic's {@code max.message.bytes} is then raised via {@code IncrementalAlterConfigs}
+     * to comfortably exceed what a fresh batch of 3 more (same-sized) records needs combined, and the reject
+     * scenario is repeated with that new batch. This confirms two more things: the broker picks up the raised
+     * limit dynamically (not a value cached at startup), and the chunking logic does not split unnecessarily
+     * once the budget is actually sufficient - the produce-request count must increase by exactly 1 for the
+     * second batch, not 3.
+     */
+    @ClusterTest
+    public void testDlqRespectsDlqTopicMaxMessageBytesNotEqToSourceTopic() throws Exception {
+        String groupId = "dlq-maxbytes-group";
+        String sourceTopic = "dlq-maxbytes-source";
+        String dlqTopic = "dlq.maxbytes";
+        int recordCount = 3;
+        int sourceMaxMessageBytes = 300_000;
+        int dlqMaxMessageBytes = sourceMaxMessageBytes / 3;
+        // Leave headroom below dlqMaxMessageBytes for the DLQ context headers/record-batch framing overhead,
+        // so a single record's DLQ copy cleanly fits under the limit but two together clearly don't.
+        int payloadSize = dlqMaxMessageBytes - 2_000;
+
+        try (Admin admin = createAdminClient()) {
+            admin.createTopics(Set.of(
+                new NewTopic(sourceTopic, 1, (short) 1)
+                    .configs(Map.of(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(sourceMaxMessageBytes))),
+                new NewTopic(dlqTopic, 1, (short) 1)
+                    .configs(Map.of(
+                        TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true",
+                        TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(dlqMaxMessageBytes)))
+            )).all().get();
+        }
+
+        alterShareAutoOffsetReset(groupId, "earliest");
+        alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, dlqTopic);
+        // Record copy must be enabled - otherwise DLQ records carry headers only (tiny) and would never
+        // approach dlqMaxMessageBytes regardless of the source record size.
+        alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, "true");
+
+        byte[] payload = new byte[payloadSize];
+        try (Producer<byte[], byte[]> producer = createProducer()) {
+            for (int i = 0; i < recordCount; i++) {
+                producer.send(new ProducerRecord<>(sourceTopic, 0, "key".getBytes(StandardCharsets.UTF_8), payload));
+            }
+            producer.flush();
+        }
+
+        // Reject all 3 records together in one commit, so SharePartition issues a single DLQ call spanning
+        // the whole offset range (a fresh, contiguous, single-fetch acquisition with no prior redeliveries
+        // maps to one cached in-flight batch, so one client-side reject commit produces one DLQ call).
+        rejectRecords(groupId, sourceTopic, recordCount);
+
+        // All 3 records must still reach the DLQ, split across multiple produce requests since no pairing
+        // of their DLQ copies fits within dlqMaxMessageBytes. Verified inline (rather than via
+        // verifyDlqTopicRecords()) since that helper hardcodes checking the copied value against the fixed
+        // "value" content produced by produceMessages()/produceTo(), not this test's large payload.
+        List<ConsumerRecord<byte[], byte[]>> dlqRecords = readDlqPartition(dlqTopic, 0, recordCount);
+        assertEquals(recordCount, dlqRecords.size(), "Unexpected number of records on the DLQ topic");
+        Set<Long> actualSourceOffsets = new HashSet<>();
+        for (ConsumerRecord<byte[], byte[]> record : dlqRecords) {
+            assertArrayEquals(payload, record.value(), "DLQ record value should be the copied payload");
+            assertEquals(groupId, headerValue(record, HEADER_DLQ_ERRORS_GROUP));
+            assertEquals(sourceTopic, headerValue(record, HEADER_DLQ_ERRORS_TOPIC));
+            assertEquals("0", headerValue(record, HEADER_DLQ_ERRORS_PARTITION));
+            actualSourceOffsets.add(Long.parseLong(Objects.requireNonNull(headerValue(record, HEADER_DLQ_ERRORS_OFFSET))));
+        }
+        assertEquals(expectedSourceOffsets(recordCount), actualSourceOffsets,
+            "DLQ records should cover every expected source offset");
+        verifyDlqMetrics(groupId, recordCount);
+
+        // Concrete proof that splitting - not some other mechanism - is why all 3 records arrived: there is
+        // exactly one logical DLQ call here (one contiguous reject batch, offsets 0-2), so any produce-request
+        // count above 1 for this group can only come from the resumable-cursor chunking logic splitting that
+        // one call into multiple sequential produce requests to stay within dlqMaxMessageBytes. Without it,
+        // the single oversized request would be rejected once (MESSAGE_TOO_LARGE is not retriable) and no
+        // records would ever reach the DLQ - contradicting the assertions above. >= rather than == tolerates
+        // an occasional extra retry (e.g. a transient network blip) without being flaky.
+        assertTrue(dlqMeterCount(METRIC_DLQ_PRODUCE_TOTAL, groupId) >= recordCount,
+            "Expected at least " + recordCount + " separate DLQ produce requests (one per chunk), was "
+                + dlqMeterCount(METRIC_DLQ_PRODUCE_TOTAL, groupId));
+        long produceCountBeforeRaise = dlqMeterCount(METRIC_DLQ_PRODUCE_TOTAL, groupId);
+
+        // Now raise the DLQ topic's max.message.bytes well above what all 3 (record-copy-enabled) DLQ copies
+        // need together, and repeat the same reject scenario with a fresh batch of 3 records. This confirms
+        // two things at once: dlqTopicMaxMessageBytes() picks up the change dynamically (it wraps a live
+        // topic-config lookup, not a value captured once at startup - see ShareCoordinatorMetadataCacheHelperImpl),
+        // and the chunking logic doesn't split unnecessarily when the budget is actually sufficient - the
+        // produce-request count must increase by exactly 1 (one request for the whole new batch), not 3.
+        int raisedDlqMaxMessageBytes = sourceMaxMessageBytes * 2;
+        ConfigResource dlqTopicResource = new ConfigResource(ConfigResource.Type.TOPIC, dlqTopic);
+        try (Admin admin = createAdminClient()) {
+            admin.incrementalAlterConfigs(
+                Map.of(dlqTopicResource, List.of(new AlterConfigOp(
+                    new ConfigEntry(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(raisedDlqMaxMessageBytes)),
+                    AlterConfigOp.OpType.SET))),
+                new AlterConfigsOptions()
+            ).all().get();
+            waitForCondition(() -> {
+                Config config = admin.describeConfigs(List.of(dlqTopicResource)).all().get().get(dlqTopicResource);
+                ConfigEntry entry = config.get(TopicConfig.MAX_MESSAGE_BYTES_CONFIG);
+                return entry != null && entry.value().equals(Integer.toString(raisedDlqMaxMessageBytes));
+            }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Raised max.message.bytes did not propagate on the DLQ topic");
+        }
+
+        try (Producer<byte[], byte[]> producer = createProducer()) {
+            for (int i = 0; i < recordCount; i++) {
+                producer.send(new ProducerRecord<>(sourceTopic, 0, "key".getBytes(StandardCharsets.UTF_8), payload));
+            }
+            producer.flush();
+        }
+        rejectRecords(groupId, sourceTopic, recordCount);
+
+        List<ConsumerRecord<byte[], byte[]>> secondBatchDlqRecords = readDlqPartition(dlqTopic, 0, recordCount * 2);
+        assertEquals(recordCount * 2, secondBatchDlqRecords.size(),
+            "Unexpected number of records on the DLQ topic after the second batch");
+
+        waitForCondition(() -> dlqMeterCount(METRIC_DLQ_PRODUCE_TOTAL, groupId) == produceCountBeforeRaise + 1,
+            DEFAULT_MAX_WAIT_MS, 200L,
+            () -> "Expected exactly 1 additional DLQ produce request for the second batch (budget no longer forces "
+                + "chunking), count went from " + produceCountBeforeRaise + " to " + dlqMeterCount(METRIC_DLQ_PRODUCE_TOTAL, groupId));
+    }
+
+    /**
+     * Guards against a decompression-bomb-shaped source record: a highly compressible record that is tiny
+     * on the wire but expands to a much larger size once decompressed. The DLQ record fetcher bounds the
+     * decompression budget it will spend copying a record by the DLQ topic's own {@code max.message.bytes}
+     * (there is no point retaining more decompressed data than the DLQ topic could ever accept anyway).
+     *
+     * <p>Phase 1: the DLQ topic is configured with a deliberately low {@code max.message.bytes}. Two records
+     * with a highly compressible ~200KB payload (tiny once gzip-compressed) are rejected with record copy
+     * enabled. The decompression budget (derived from the low limit) is exhausted well before the payload can
+     * be fully decompressed, so the copy is skipped - but the DLQ write itself still succeeds, headers-only
+     * (same degraded outcome as record-copy-disabled): the DLQ metrics still fire and the records still land
+     * on the DLQ topic, just without a key/value.
+     *
+     * <p>Phase 2: the DLQ topic's {@code max.message.bytes} is raised comfortably above the decompressed
+     * payload size, and a fresh batch of the same records is rejected. This time the decompression budget is
+     * sufficient, so the copy succeeds and the new DLQ records carry the original key/value.
+     */
+    @ClusterTest
+    public void testDlqCopyRecordSkippedWhenDecompressedSizeExceedsDlqMaxMessageBytes() throws Exception {
+        String groupId = "dlq-decompress-cap-group";
+        String sourceTopic = "dlq-decompress-cap-source";
+        String dlqTopic = "dlq.decompress-cap";
+        int recordCount = 2;
+        int payloadSize = 200_000;
+        int lowDlqMaxMessageBytes = 2_000;
+        // Comfortably above the two records' combined decompressed payload (2 * payloadSize = 400,000 bytes)
+        // plus batch/record framing overhead.
+        int highDlqMaxMessageBytes = 500_000;
+
+        try (Admin admin = createAdminClient()) {
+            admin.createTopics(Set.of(
+                new NewTopic(sourceTopic, 1, (short) 1),
+                new NewTopic(dlqTopic, 1, (short) 1)
+                    .configs(Map.of(
+                        TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true",
+                        TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(lowDlqMaxMessageBytes)))
+            )).all().get();
+        }
+
+        alterShareAutoOffsetReset(groupId, "earliest");
+        alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, dlqTopic);
+        alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, "true");
+
+        // Highly compressible payload: tiny on the wire (comfortably under any max.message.bytes involved),
+        // but decompresses to `payloadSize` bytes - large enough to blow past lowDlqMaxMessageBytes once the
+        // DLQ record fetcher tries to decompress it for copying.
+        byte[] payload = new byte[payloadSize];
+        Arrays.fill(payload, (byte) 'a');
+        try (Producer<byte[], byte[]> producer = createProducer(Map.of(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip"))) {
+            for (int i = 0; i < recordCount; i++) {
+                producer.send(new ProducerRecord<>(sourceTopic, 0, "key".getBytes(StandardCharsets.UTF_8), payload));
+            }
+            producer.flush();
+        }
+        rejectRecords(groupId, sourceTopic, recordCount);
+
+        // Phase 1: DLQ write succeeds (headers-only) despite the low limit - copy is skipped, not the write.
+        waitForCondition(() -> dlqMeterCount(METRIC_DLQ_RECORD_COUNT, groupId) == recordCount,
+            DEFAULT_MAX_WAIT_MS, 200L,
+            () -> "Expected " + recordCount + " DLQ records, was " + dlqMeterCount(METRIC_DLQ_RECORD_COUNT, groupId));
+        List<ConsumerRecord<byte[], byte[]>> dlqRecords = readDlqPartition(dlqTopic, 0, recordCount);
+        assertEquals(recordCount, dlqRecords.size(), "Unexpected number of records on the DLQ topic");
+        for (ConsumerRecord<byte[], byte[]> record : dlqRecords) {
+            assertNull(record.key(), "DLQ record key should be absent - record copy must have been skipped");
+            assertNull(record.value(), "DLQ record value should be absent - record copy must have been skipped");
+            assertEquals(groupId, headerValue(record, HEADER_DLQ_ERRORS_GROUP));
+            assertEquals(sourceTopic, headerValue(record, HEADER_DLQ_ERRORS_TOPIC));
+        }
+
+        // Phase 2: point the group at a second, freshly-created DLQ topic whose max.message.bytes is set
+        // comfortably above the decompressed payload size up front - simpler than altering the first
+        // topic's config and waiting for it to propagate.
+        String dlqTopic2 = "dlq.decompress-cap-2";
+        try (Admin admin = createAdminClient()) {
+            admin.createTopics(Set.of(
+                new NewTopic(dlqTopic2, 1, (short) 1)
+                    .configs(Map.of(
+                        TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true",
+                        TopicConfig.MAX_MESSAGE_BYTES_CONFIG, Integer.toString(highDlqMaxMessageBytes)))
+            )).all().get();
+        }
+        alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, dlqTopic2);
+
+        try (Producer<byte[], byte[]> producer = createProducer(Map.of(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip"))) {
+            for (int i = 0; i < recordCount; i++) {
+                producer.send(new ProducerRecord<>(sourceTopic, 0, "key".getBytes(StandardCharsets.UTF_8), payload));
+            }
+            producer.flush();
+        }
+        rejectRecords(groupId, sourceTopic, recordCount);
+
+        // The budget is now sufficient, so the second batch's DLQ records (on the new topic) must carry the
+        // copied payload. The per-group metric accumulates across both DLQ topics used by this group.
+        waitForCondition(() -> dlqMeterCount(METRIC_DLQ_RECORD_COUNT, groupId) == recordCount * 2,
+            DEFAULT_MAX_WAIT_MS, 200L,
+            () -> "Expected " + (recordCount * 2) + " DLQ records, was " + dlqMeterCount(METRIC_DLQ_RECORD_COUNT, groupId));
+        List<ConsumerRecord<byte[], byte[]>> secondBatchDlqRecords = readDlqPartition(dlqTopic2, 0, recordCount);
+        assertEquals(recordCount, secondBatchDlqRecords.size(),
+            "Unexpected number of records on the second DLQ topic");
+        for (ConsumerRecord<byte[], byte[]> record : secondBatchDlqRecords) {
+            assertArrayEquals(payload, record.value(), "DLQ record value should be the copied payload");
+            assertEquals(groupId, headerValue(record, HEADER_DLQ_ERRORS_GROUP));
+            assertEquals(sourceTopic, headerValue(record, HEADER_DLQ_ERRORS_TOPIC));
+        }
     }
 
     /**

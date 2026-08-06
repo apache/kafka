@@ -376,6 +376,8 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
     private final StreamsRebalanceData streamsRebalanceData;
 
+    private String lastMissingClientTagsDetail = null;
+
     /**
      * Timer for tracking the time since the last consumer poll.  If the timer expires, the consumer will stop
      * sending heartbeat until the next poll.
@@ -650,9 +652,24 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         heartbeatRequestState.updateHeartbeatIntervalMs(data.heartbeatIntervalMs());
         heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
         heartbeatState.setEndpointInformationEpoch(data.endpointInformationEpoch());
-        streamsRebalanceData.setHeartbeatIntervalMs(data.heartbeatIntervalMs());
-        streamsRebalanceData.setTaskOffsetIntervalMs(data.taskOffsetIntervalMs());
-        streamsRebalanceData.setAcceptableRecoveryLag(data.acceptableRecoveryLag());
+        // A leaving member's response carries no group configuration (the fields hold protocol defaults), so do not
+        // log or store it while shutting down. Normal responses have memberEpoch >= 0; leave responses use the
+        // negative leave sentinels (fenced members take the error path instead). Log only when a value changes, to
+        // avoid repeating it on every heartbeat: this fires on first receipt (values start unset) and on any later change.
+        if (data.memberEpoch() >= 0) {
+            if (data.heartbeatIntervalMs() != streamsRebalanceData.heartbeatIntervalMs()
+                    || data.taskOffsetIntervalMs() != streamsRebalanceData.taskOffsetIntervalMs()
+                    || data.acceptableRecoveryLag() != streamsRebalanceData.acceptableRecoveryLag()) {
+                logger.info("Received Streams group configuration from the group coordinator: "
+                        + "heartbeatIntervalMs={}, taskOffsetIntervalMs={}, acceptableRecoveryLag={}",
+                    describeConfig(data.heartbeatIntervalMs(), 1),
+                    describeConfig(data.taskOffsetIntervalMs(), 1),
+                    describeConfig(data.acceptableRecoveryLag(), 0));
+            }
+            streamsRebalanceData.setHeartbeatIntervalMs(data.heartbeatIntervalMs());
+            streamsRebalanceData.setTaskOffsetIntervalMs(data.taskOffsetIntervalMs());
+            streamsRebalanceData.setAcceptableRecoveryLag(data.acceptableRecoveryLag());
+        }
 
         if (data.topologyDescriptionRequired() && streamsRebalanceData.wireTopologyDescription() != null) {
             logger.info("Broker requested topology description push");
@@ -663,18 +680,46 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             streamsRebalanceData.setPartitionsByHost(convertHostInfoMap(data));
         }
 
-        List<StreamsGroupHeartbeatResponseData.Status> statuses = data.status();
-        if (statuses != null) {
-            streamsRebalanceData.setStatuses(statuses);
-            if (!statuses.isEmpty()) {
-                String statusDetails = statuses.stream()
-                    .map(status -> "(" + status.statusCode() + ") " + status.statusDetail())
-                    .collect(Collectors.joining(", "));
-                logger.warn("Membership is in the following statuses: {}", statusDetails);
-            }
-        }
+        maybeLogStatuses(data.status());
 
         membershipManager.onHeartbeatSuccess(response);
+    }
+
+    private void maybeLogStatuses(final List<StreamsGroupHeartbeatResponseData.Status> statuses) {
+        if (statuses == null) {
+            return;
+        }
+        streamsRebalanceData.setStatuses(statuses);
+        // The broker recomputes and returns the full set of statuses on every heartbeat, so a response without a
+        // MISSING_CLIENT_TAGS status means the condition no longer holds.
+        boolean hasMissingClientTagsStatus = false;
+        List<String> statusesToLog = new ArrayList<>();
+        for (StreamsGroupHeartbeatResponseData.Status status : statuses) {
+            if (status.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_CLIENT_TAGS.code()) {
+                hasMissingClientTagsStatus = true;
+                if (!status.statusDetail().equals(lastMissingClientTagsDetail)) {
+                    lastMissingClientTagsDetail = status.statusDetail();
+                    statusesToLog.add("(" + status.statusCode() + ") " + status.statusDetail());
+                }
+            } else {
+                statusesToLog.add("(" + status.statusCode() + ") " + status.statusDetail());
+            }
+        }
+        // Reset the de-duplication marker once the MISSING_CLIENT_TAGS status clears, so that a later recurrence
+        // (even with the same detail) is logged again rather than silently suppressed.
+        if (!hasMissingClientTagsStatus) {
+            lastMissingClientTagsDetail = null;
+        }
+        if (!statusesToLog.isEmpty()) {
+            logger.warn("Membership is in the following statuses: {}", String.join(", ", statusesToLog));
+        }
+    }
+
+    // Renders a coordinator-provided config value for logging, or a note when the broker did not provide it. An older
+    // broker leaves these at their protocol defaults (intervals 0, acceptableRecoveryLag -1); a value below minValid
+    // means "not provided".
+    private static String describeConfig(final long value, final long minValid) {
+        return value < minValid ? "not provided (older broker)" : Long.toString(value);
     }
 
     private void onErrorResponse(final StreamsGroupHeartbeatResponse response, final long currentTimeMs) {
@@ -834,8 +879,18 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             List<TopicPartition> activeTopicPartitions = getTopicPartitionList(endpoint.activePartitions());
             List<TopicPartition> standbyTopicPartitions = getTopicPartitionList(endpoint.standbyPartitions());
             StreamsGroupHeartbeatResponseData.Endpoint userEndpoint = endpoint.userEndpoint();
-            StreamsRebalanceData.EndpointPartitions endpointPartitions = new StreamsRebalanceData.EndpointPartitions(activeTopicPartitions, standbyTopicPartitions);
-            partitionsByHost.put(new StreamsRebalanceData.HostInfo(userEndpoint.host(), userEndpoint.port()), endpointPartitions);
+            StreamsRebalanceData.HostInfo hostInfo = new StreamsRebalanceData.HostInfo(userEndpoint.host(), userEndpoint.port());
+            partitionsByHost.merge(
+                hostInfo,
+                new StreamsRebalanceData.EndpointPartitions(activeTopicPartitions, standbyTopicPartitions),
+                (existing, newPartitions) -> {
+                    List<TopicPartition> mergedActive = new ArrayList<>(existing.activePartitions());
+                    mergedActive.addAll(newPartitions.activePartitions());
+                    List<TopicPartition> mergedStandby = new ArrayList<>(existing.standbyPartitions());
+                    mergedStandby.addAll(newPartitions.standbyPartitions());
+                    return new StreamsRebalanceData.EndpointPartitions(mergedActive, mergedStandby);
+                }
+            );
         });
         return partitionsByHost;
     }
