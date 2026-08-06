@@ -91,6 +91,10 @@
     <suppress checks="ClassFanOutComplexity"
               files="(ConsumerCoordinator|KafkaConsumer|RequestResponse|Fetcher|FetchRequestManager|KafkaAdminClient|Message|KafkaProducer|NetworkClient|StreamsGroupHeartbeatRequestManager)Test.java"/>
 
+    <!-- KafkaAdminClient test split: shared base + per-domain test classes -->
+    <suppress checks="(ClassDataAbstractionCoupling|ClassFanOutComplexity|JavaNCSS)"
+              files="KafkaAdminClient(TestBase|TopicTest|ConsumerGroupTest|StreamsGroupTest|ShareGroupTest|ConfigTest|TransactionTest)\.java"/>
+
     <suppress checks="ClassFanOutComplexity"
               files="MockAdminClient.java"/>
 
