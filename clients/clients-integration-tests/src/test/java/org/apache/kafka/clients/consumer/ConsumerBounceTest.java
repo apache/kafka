@@ -724,17 +724,18 @@ public class ConsumerBounceTest {
 
         Semaphore assignSemaphore = new Semaphore(0);
         try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(ConsumerConfig.GROUP_ID_CONFIG, groupId))) {
-            consumer.subscribe(List.of(topic), new ConsumerRebalanceListener() {
+            consumer.setRebalanceListener(new RebalanceListener() {
                 @Override
-                public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                     assignSemaphore.release();
                 }
 
                 @Override
-                public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                     // Do nothing
                 }
             });
+            consumer.subscribe(List.of(topic));
 
             TestUtils.waitForCondition(() -> {
                 consumer.poll(Duration.ofMillis(100));
