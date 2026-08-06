@@ -65,6 +65,7 @@ import static org.apache.kafka.server.config.ServerLogConfigs.AUTO_CREATE_TOPICS
 import static org.apache.kafka.tools.ToolsTestUtils.captureStandardErr;
 import static org.apache.kafka.tools.ToolsTestUtils.captureStandardOut;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -295,7 +296,9 @@ public class ConfigCommandIntegrationTest {
         assertTrue(message.contains("streams.heartbeat.interval.ms=5000 sensitive=false synonyms={DEFAULT_CONFIG:group.streams.heartbeat.interval.ms=5000}"));
         assertTrue(message.contains("streams.num.standby.replicas=0 sensitive=false synonyms={DEFAULT_CONFIG:group.streams.num.standby.replicas=0}"));
         assertTrue(message.contains("streams.session.timeout.ms=45000 sensitive=false synonyms={DEFAULT_CONFIG:group.streams.session.timeout.ms=45000}"));
-        assertTrue(message.contains("streams.task.offset.interval.ms=60000 sensitive=false synonyms={DEFAULT_CONFIG:group.streams.task.offset.interval.ms=60000}"));
+        assertFalse(message.contains("streams.task.offset.interval.ms"));
+        assertFalse(message.contains("streams.acceptable.recovery.lag"));
+        assertFalse(message.contains("streams.num.warmup.replicas"));
     }
 
     @ClusterTest
@@ -411,7 +414,7 @@ public class ConfigCommandIntegrationTest {
             "--entity-name", "group",
             "--describe", "--all"));
         String message = captureStandardOut(run(command));
-        assertTrue(message.contains("streams.task.offset.interval.ms=60000"));
+        assertFalse(message.contains("streams.task.offset.interval.ms"));
 
         // Alter task offset interval
         command = Stream.concat(quorumArgs(), Stream.of(
@@ -447,7 +450,7 @@ public class ConfigCommandIntegrationTest {
             "--entity-name", "group",
             "--describe", "--all"));
         String message = captureStandardOut(run(command));
-        assertTrue(message.contains("streams.num.warmup.replicas=2"));
+        assertFalse(message.contains("streams.num.warmup.replicas"));
 
         // Alter num warmup replicas
         command = Stream.concat(quorumArgs(), Stream.of(
