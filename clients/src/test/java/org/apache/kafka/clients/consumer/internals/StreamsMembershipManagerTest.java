@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
+import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksAssignedCallbackCompletedEvent;
@@ -63,6 +65,7 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 import static org.apache.kafka.common.requests.ShareGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -72,6 +75,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -87,6 +91,7 @@ public class StreamsMembershipManagerTest {
 
     private static final String SUBTOPOLOGY_ID_0 = "subtopology-0";
     private static final String SUBTOPOLOGY_ID_1 = "subtopology-1";
+    private static final String UNKNOWN_SUBTOPOLOGY_ID = "subtopology-not-in-this-topology";
 
     private static final String TOPIC_0 = "topic-0";
     private static final String TOPIC_1 = "topic-1";
@@ -194,6 +199,83 @@ public class StreamsMembershipManagerTest {
             "Invalid response data, task collections must be all null or all non-null: " + response.data(),
             exception.getMessage()
         );
+    }
+
+    @Test
+    public void testActiveTaskOfUnknownSubtopologyInHeartbeatResponseFailsMember() {
+        testTasksOfUnknownSubtopologyInHeartbeatResponseFailMember(
+            List.of(taskIds(UNKNOWN_SUBTOPOLOGY_ID, List.of(PARTITION_0))),
+            List.of(),
+            List.of()
+        );
+    }
+
+    @Test
+    public void testStandbyTaskOfUnknownSubtopologyInHeartbeatResponseFailsMember() {
+        testTasksOfUnknownSubtopologyInHeartbeatResponseFailMember(
+            List.of(),
+            List.of(taskIds(UNKNOWN_SUBTOPOLOGY_ID, List.of(PARTITION_0))),
+            List.of()
+        );
+    }
+
+    @Test
+    public void testWarmupTaskOfUnknownSubtopologyInHeartbeatResponseFailsMember() {
+        testTasksOfUnknownSubtopologyInHeartbeatResponseFailMember(
+            List.of(),
+            List.of(),
+            List.of(taskIds(UNKNOWN_SUBTOPOLOGY_ID, List.of(PARTITION_0)))
+        );
+    }
+
+    @Test
+    public void testKnownTasksAlongsideUnknownSubtopologyInHeartbeatResponseFailMember() {
+        // The known part of the assignment is not applied either: a task of an unknown subtopology cannot be resolved
+        // to topic partitions, so there is no correct subset of the assignment to run.
+        testTasksOfUnknownSubtopologyInHeartbeatResponseFailMember(
+            List.of(
+                taskIds(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)),
+                taskIds(UNKNOWN_SUBTOPOLOGY_ID, List.of(PARTITION_0))
+            ),
+            List.of(),
+            List.of()
+        );
+    }
+
+    private void testTasksOfUnknownSubtopologyInHeartbeatResponseFailMember(
+        final List<StreamsGroupHeartbeatResponseData.TaskIds> activeTasks,
+        final List<StreamsGroupHeartbeatResponseData.TaskIds> standbyTasks,
+        final List<StreamsGroupHeartbeatResponseData.TaskIds> warmupTasks
+    ) {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
+        joining();
+
+        // Must not throw: the exception would be swallowed by the heartbeat response callback, leaving the member
+        // unable to ever reconcile again.
+        assertDoesNotThrow(() -> membershipManager.onHeartbeatSuccess(
+            makeHeartbeatResponse(activeTasks, standbyTasks, warmupTasks)));
+
+        verifyInStateFatal(membershipManager);
+        final ArgumentCaptor<BackgroundEvent> eventCaptor = ArgumentCaptor.forClass(BackgroundEvent.class);
+        verify(backgroundEventHandler, atLeastOnce()).add(eventCaptor.capture());
+        final ErrorEvent errorEvent = eventCaptor.getAllValues().stream()
+            .filter(event -> event instanceof ErrorEvent)
+            .map(event -> (ErrorEvent) event)
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("No ErrorEvent was passed to the background event handler"));
+        assertInstanceOf(KafkaException.class, errorEvent.error());
+        final String message = errorEvent.error().getMessage();
+        assertTrue(message.contains(UNKNOWN_SUBTOPOLOGY_ID), "The unknown subtopology should be named: " + message);
+        assertTrue(message.contains(SUBTOPOLOGY_ID_0), "The client's own subtopologies should be named: " + message);
+        assertTrue(message.contains(GROUP_ID), "The group should be named: " + message);
+
+        // No part of the assignment is applied: the member must not start the tasks it does understand, because the
+        // assignment as a whole cannot be reconciled.
+        assertTrue(
+            eventCaptor.getAllValues().stream().noneMatch(event -> event instanceof StreamsTasksAssignedEvent),
+            "No tasks should have been handed to the application: " + eventCaptor.getAllValues()
+        );
+        verify(subscriptionState, never()).assignFromSubscribedAwaitingCallback(any(), any());
     }
 
     @Test
@@ -463,6 +545,7 @@ public class StreamsMembershipManagerTest {
 
     @Test
     public void testReconcilingEmptyToSingleStandbyTask() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
         final Set<StreamsRebalanceData.TaskId> standbyTasks =
             Set.of(new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_0));
         joining();
@@ -485,6 +568,7 @@ public class StreamsMembershipManagerTest {
 
     @Test
     public void testReconcilingStandbyTaskToDifferentStandbyTask() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
         final Set<StreamsRebalanceData.TaskId> standbyTasksSetup = Set.of(
             new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_0)
         );
@@ -521,6 +605,7 @@ public class StreamsMembershipManagerTest {
 
     @Test
     public void testReconcilingSingleStandbyTaskToAdditionalStandbyTask() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
         final Set<StreamsRebalanceData.TaskId> standbyTasksSetup = Set.of(
             new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_0)
         );
@@ -558,6 +643,7 @@ public class StreamsMembershipManagerTest {
 
     @Test
     public void testReconcilingMultipleStandbyTaskToSingleStandbyTask() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
         final Set<StreamsRebalanceData.TaskId> standbyTasksSetup = Set.of(
             new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_0),
             new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_1)
@@ -630,6 +716,7 @@ public class StreamsMembershipManagerTest {
 
     @Test
     public void testReconcilingStandbyTaskToWarmupTask() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
         final Set<StreamsRebalanceData.TaskId> standbyTasksSetup = Set.of(
             new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_0)
         );
@@ -666,6 +753,7 @@ public class StreamsMembershipManagerTest {
 
     @Test
     public void testReconcilingEmptyToSingleWarmupTask() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
         final Set<StreamsRebalanceData.TaskId> warmupTasks =
             Set.of(new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_0));
         joining();
@@ -688,6 +776,7 @@ public class StreamsMembershipManagerTest {
 
     @Test
     public void testReconcilingWarmupTaskToDifferentWarmupTask() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
         final Set<StreamsRebalanceData.TaskId> warmupTasksSetup = Set.of(
             new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_0)
         );
@@ -724,6 +813,7 @@ public class StreamsMembershipManagerTest {
 
     @Test
     public void testReconcilingSingleWarmupTaskToAdditionalWarmupTask() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
         final Set<StreamsRebalanceData.TaskId> warmupTasksSetup = Set.of(
             new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_0)
         );
@@ -761,6 +851,7 @@ public class StreamsMembershipManagerTest {
 
     @Test
     public void testReconcilingMultipleWarmupTaskToSingleWarmupTask() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
         final Set<StreamsRebalanceData.TaskId> warmupTasksSetup = Set.of(
             new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_0),
             new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_1)
@@ -837,6 +928,7 @@ public class StreamsMembershipManagerTest {
 
     @Test
     public void testReconcilingWarmupTaskToStandbyTask() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
         final Set<StreamsRebalanceData.TaskId> warmupTasksSetup = Set.of(
             new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_0)
         );
@@ -2452,6 +2544,15 @@ public class StreamsMembershipManagerTest {
                 )
             )
         );
+    }
+
+    private static StreamsGroupHeartbeatResponseData.TaskIds taskIds(
+        final String subtopologyId,
+        final List<Integer> partitions
+    ) {
+        return new StreamsGroupHeartbeatResponseData.TaskIds()
+            .setSubtopologyId(subtopologyId)
+            .setPartitions(partitions);
     }
 
     private StreamsGroupHeartbeatResponse makeHeartbeatResponseWithActiveTasks(final String subtopologyId,
