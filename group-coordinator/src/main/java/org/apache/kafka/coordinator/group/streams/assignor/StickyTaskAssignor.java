@@ -36,6 +36,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Map;
+import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -212,7 +213,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         for (final Iterator<TaskId> it = activeTasks.iterator(); it.hasNext();) {
             final TaskId task = it.next();
             final ArrayList<Member> prevMembers = localState.standbyTaskToPrevMember.get(task);
-            final Member prevMember = findPrevMemberWithLeastLoad(localState, prevMembers, null);
+            final Member prevMember = findPrevMemberWithLeastLoad(localState, prevMembers, Optional.empty());
             if (prevMember != null) {
                 final ProcessState processState = localState.processIdToState.get(prevMember.processId);
                 if (hasUnfulfilledActiveTaskQuota(localState, processState, prevMember)) {
@@ -288,44 +289,44 @@ public class StickyTaskAssignor implements TaskAssignor {
     /**
      * Finds the previous member with the least load for a given task.
      *
-     * @param localState The state of the assignment in progress.
-     * @param members The list of previous members owning the task.
-     * @param taskId  The taskId, to check if the previous member already has the task. Can be null, if we assign it
-     *                for the first time (e.g., during active task assignment).
+     * @param localState
+     *        The state of the assignment in progress.
+     * @param members
+     *        The list of previous members owning the task.
+     * @param standbyTaskId
+     *        The taskId, to check if the previous member already has the task.
      *
      * @return Previous member with the least load that does not have the task, or null if no such member exists.
      */
     private static Member findPrevMemberWithLeastLoad(
         final LocalState localState,
         final ArrayList<Member> members,
-        final TaskId taskId
+        final Optional<TaskId> standbyTaskId
     ) {
         if (members == null || members.isEmpty()) {
             return null;
         }
 
-        Member candidate = members.get(0);
-        final ProcessState candidateProcessState = localState.processIdToState.get(candidate.processId);
-        double candidateProcessLoad = candidateProcessState.load();
-        double candidateMemberLoad = candidateProcessState.memberToTaskCounts().get(candidate.memberId);
-        for (int i = 1; i < members.size(); i++) {
-            final Member member = members.get(i);
+        Member candidate = null;
+        double candidateProcessLoad = Double.MAX_VALUE;
+        double candidateMemberLoad = Double.MAX_VALUE;
+        for (final Member member : members) {
             final ProcessState processState = localState.processIdToState.get(member.processId);
+            // A process that already owns a standby task (either as active or standby) cannot take it again,
+            if (standbyTaskId.isPresent() && processState.hasTask(standbyTaskId.get())) {
+                continue;
+            }
+
             final double newProcessLoad = processState.load();
-            if (newProcessLoad < candidateProcessLoad && (taskId == null || !processState.hasTask(taskId))) {
-                final double newMemberLoad = processState.memberToTaskCounts().get(member.memberId);
-                if (newMemberLoad < candidateMemberLoad) {
-                    candidateProcessLoad = newProcessLoad;
-                    candidateMemberLoad = newMemberLoad;
-                    candidate = member;
-                }
+            final double newMemberLoad = processState.memberToTaskCounts().get(member.memberId);
+            if (candidate == null || (newProcessLoad < candidateProcessLoad && newMemberLoad < candidateMemberLoad)) {
+                candidateProcessLoad = newProcessLoad;
+                candidateMemberLoad = newMemberLoad;
+                candidate = member;
             }
         }
 
-        if (taskId == null || !candidateProcessState.hasTask(taskId)) {
-            return candidate;
-        }
-        return null;
+        return candidate;
     }
 
     private static boolean hasUnfulfilledActiveTaskQuota(
@@ -367,7 +368,7 @@ public class StickyTaskAssignor implements TaskAssignor {
                 // prev standby tasks
                 final ArrayList<Member> prevStandbyMembers = localState.standbyTaskToPrevMember.get(task);
                 if (prevStandbyMembers != null && !prevStandbyMembers.isEmpty()) {
-                    final Member prevStandbyMember = findPrevMemberWithLeastLoad(localState, prevStandbyMembers, task);
+                    final Member prevStandbyMember = findPrevMemberWithLeastLoad(localState, prevStandbyMembers, Optional.of(task));
                     if (prevStandbyMember != null) {
                         final ProcessState prevStandbyMemberProcessState = localState.processIdToState.get(prevStandbyMember.processId);
                         if (hasUnfulfilledTaskQuota(localState, prevStandbyMemberProcessState, prevStandbyMember)) {
