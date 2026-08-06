@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.config;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 
 import java.util.Map;
@@ -23,6 +24,7 @@ import java.util.Map;
 /**
  * The result of a transformation from {@link ConfigTransformer}.
  */
+@InterfaceAudience.Public
 public class ConfigTransformerResult {
 
     private final Map<String, Long> ttls;

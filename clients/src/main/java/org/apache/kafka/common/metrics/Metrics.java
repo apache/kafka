@@ -18,6 +18,8 @@ package org.apache.kafka.common.metrics;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.common.metrics.internals.MetricsUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.KafkaThread;
@@ -67,6 +69,7 @@ import static java.util.Collections.emptyList;
  * sensor.record(messageSize);
  * </pre>
  */
+@InterfaceAudience.Public
 public final class Metrics implements Closeable {
 
     private final MetricConfig config;
@@ -90,6 +93,7 @@ public final class Metrics implements Closeable {
      * Create a metrics repository with no metric reporters and default configuration.
      * Expiration of Sensors is disabled.
      */
+    @SuppressKafkaInternalApiUsage("KIP-1265: ctor leaks internal Time for test injection — pending KIP review to promote Time or refactor")
     public Metrics(Time time) {
         this(new MetricConfig(), new ArrayList<>(0), time);
     }
@@ -98,6 +102,7 @@ public final class Metrics implements Closeable {
      * Create a metrics repository with no metric reporters and the given default configuration.
      * Expiration of Sensors is disabled.
      */
+    @SuppressKafkaInternalApiUsage("KIP-1265: ctor leaks internal Time for test injection — pending KIP review to promote Time or refactor")
     public Metrics(MetricConfig defaultConfig, Time time) {
         this(defaultConfig, new ArrayList<>(0), time);
     }
@@ -119,6 +124,7 @@ public final class Metrics implements Closeable {
      * @param reporters The metrics reporters
      * @param time The time instance to use with the metrics
      */
+    @SuppressKafkaInternalApiUsage("KIP-1265: ctor leaks internal Time for test injection — pending KIP review to promote Time or refactor")
     public Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time) {
         this(defaultConfig, reporters, time, false);
     }
@@ -131,6 +137,7 @@ public final class Metrics implements Closeable {
      * @param time The time instance to use with the metrics
      * @param metricsContext The metricsContext to initialize metrics reporter with
      */
+    @SuppressKafkaInternalApiUsage("KIP-1265: ctor leaks internal Time for test injection — pending KIP review to promote Time or refactor")
     public Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time, MetricsContext metricsContext) {
         this(defaultConfig, reporters, time, false, metricsContext);
     }
@@ -142,6 +149,7 @@ public final class Metrics implements Closeable {
      * @param time The time instance to use with the metrics
      * @param enableExpiration true if the metrics instance can garbage collect inactive sensors, false otherwise
      */
+    @SuppressKafkaInternalApiUsage("KIP-1265: ctor leaks internal Time for test injection — pending KIP review to promote Time or refactor")
     public Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time, boolean enableExpiration) {
         this(defaultConfig, reporters, time, enableExpiration, new KafkaMetricsContext(""));
     }
@@ -155,6 +163,7 @@ public final class Metrics implements Closeable {
      * @param enableExpiration true if the metrics instance can garbage collect inactive sensors, false otherwise
      * @param metricsContext The metricsContext to initialize metrics reporter with
      */
+    @SuppressKafkaInternalApiUsage("KIP-1265: ctor leaks internal Time for test injection — pending KIP review to promote Time or refactor")
     public Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time, boolean enableExpiration,
                    MetricsContext metricsContext) {
         this.config = defaultConfig;

@@ -49,7 +49,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
 import scala.jdk.OptionConverters.{RichOption, RichOptional}
 
-object KafkaConfig {
+object KafkaConfig extends Logging {
 
   def main(args: Array[String]): Unit = {
     val combined = new ConfigDef(configDef)
@@ -73,8 +73,15 @@ object KafkaConfig {
   def fromProps(props: Properties): KafkaConfig =
     fromProps(props, true)
 
-  def fromProps(props: Properties, doLog: Boolean): KafkaConfig =
+  def fromProps(props: Properties, doLog: Boolean): KafkaConfig = {
+    // Checked on the raw properties because populateSynonyms copies node.id into broker.id.
+    // Do not add a doLog guard: the broker startup path calls this with doLog = false.
+    if (props.containsKey(ServerConfigs.BROKER_ID_CONFIG)) {
+      warn(s"The '${ServerConfigs.BROKER_ID_CONFIG}' configuration is deprecated and will be removed in " +
+        s"Apache Kafka 5.0. Please use '${KRaftConfigs.NODE_ID_CONFIG}' instead.")
+    }
     new KafkaConfig(props, doLog)
+  }
 
   def fromProps(defaults: Properties, overrides: Properties): KafkaConfig =
     fromProps(defaults, overrides, true)
@@ -158,9 +165,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
 
   private val _shareCoordinatorConfig = new ShareCoordinatorConfig(this)
   def shareCoordinatorConfig: ShareCoordinatorConfig = _shareCoordinatorConfig
-
-  private val _quotaConfig = new QuotaConfig(this)
-  def quotaConfig: QuotaConfig = _quotaConfig
 
   /** ********* General Configuration ***********/
   val brokerSessionTimeoutMs: Int = getInt(KRaftConfigs.BROKER_SESSION_TIMEOUT_MS_CONFIG)
@@ -430,7 +434,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
 
   private def validateValues(): Unit = {
     if (nodeId != brokerId) {
-      throw new ConfigException(s"You must set `${KRaftConfigs.NODE_ID_CONFIG}` to the same value as `${ServerConfigs.BROKER_ID_CONFIG}`.")
+      throw new ConfigException(s"`${KRaftConfigs.NODE_ID_CONFIG}` and `${ServerConfigs.BROKER_ID_CONFIG}` must be set to the same value. " +
+        s"`${ServerConfigs.BROKER_ID_CONFIG}` is deprecated, please use `${KRaftConfigs.NODE_ID_CONFIG}` instead.")
     }
     require(logRollTimeMillis >= 1, "log.roll.ms must be greater than or equal to 1")
     require(logRollTimeJitterMillis >= 0, "log.roll.jitter.ms must be greater than or equal to 0")
@@ -628,6 +633,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     logProps.put(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, logMessageTimestampAfterMaxMs: java.lang.Long)
     logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, remoteLogManagerConfig.logLocalRetentionMs: java.lang.Long)
     logProps.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, remoteLogManagerConfig.logLocalRetentionBytes: java.lang.Long)
+    logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, remoteLogManagerConfig.logRemoteCopyLagMs: java.lang.Long)
+    logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, remoteLogManagerConfig.logRemoteCopyLagBytes: java.lang.Long)
     logProps
   }
 }

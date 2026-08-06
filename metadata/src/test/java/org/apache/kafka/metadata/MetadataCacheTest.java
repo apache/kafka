@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.metadata;
 
+import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData;
@@ -42,6 +44,7 @@ import org.apache.kafka.server.common.KRaftVersion;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -50,6 +53,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -1006,6 +1010,58 @@ public class MetadataCacheTest {
     }
 
     private record Broker(int id, List<Uuid> dirs) {
+    }
+
+    @Test
+    public void testToClusterIncludesFencedReplicasAsOffline() {
+        MetadataDelta delta = new MetadataDelta.Builder().build();
+        RegisterBrokerRecord broker0RegisterRecord = new RegisterBrokerRecord()
+            .setBrokerId(0)
+            .setFenced(false)
+            .setEndPoints(new BrokerEndpointCollection(List.of(
+                new BrokerEndpoint()
+                    .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+                    .setPort((short) 9092)
+                    .setName("PLAINTEXT")
+                    .setHost("broker-0")
+            )));
+        // Register broker 1 as fenced
+        RegisterBrokerRecord broker1RegisterRecord = new RegisterBrokerRecord()
+            .setBrokerId(1)
+            .setFenced(true)
+            .setEndPoints(new BrokerEndpointCollection(List.of(
+                new BrokerEndpoint()
+                    .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+                    .setPort((short) 9092)
+                    .setName("PLAINTEXT")
+                    .setHost("broker-1")
+            )));
+        delta.replay(broker0RegisterRecord);
+        delta.replay(broker1RegisterRecord);
+
+        String topicName = "foo";
+        Uuid topicId = Uuid.randomUuid();
+        int partitionId = 0;
+        int broker0 = broker0RegisterRecord.brokerId();
+        int broker1 = broker1RegisterRecord.brokerId();
+        delta.replay(new TopicRecord().setTopicId(topicId).setName(topicName));
+        // Broker 1 is not in the ISR, but it remains in the replica set.
+        // This used to trigger a NullPointerException when fenced brokers were
+        // omitted from the broker map used to build replica metadata.
+        delta.replay(new PartitionRecord()
+            .setTopicId(topicId)
+            .setPartitionId(partitionId)
+            .setReplicas(List.of(broker0, broker1))
+            .setLeader(broker0)
+            .setIsr(List.of(broker0)));
+
+        Cluster cluster = assertDoesNotThrow(() ->
+            MetadataCache.toCluster("cluster-id", delta.apply(MetadataProvenance.EMPTY)));
+        PartitionInfo partition = cluster.partition(new TopicPartition(topicName, partitionId));
+
+        assertEquals(List.of(broker0, broker1), Arrays.stream(partition.replicas()).map(Node::id).toList());
+        assertEquals(List.of(broker1), Arrays.stream(partition.offlineReplicas()).map(Node::id).toList());
+        assertTrue(cluster.nodeById(broker1).isFenced());
     }
 
     private record Partition(int id, List<Integer> replicas, List<Uuid> dirs) {

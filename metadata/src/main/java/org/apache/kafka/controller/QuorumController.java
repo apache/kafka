@@ -82,6 +82,7 @@ import org.apache.kafka.common.metadata.RemoveUserScramCredentialRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
+import org.apache.kafka.common.metadata.UnregisterControllerRecord;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
@@ -128,6 +129,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -1075,7 +1077,31 @@ public final class QuorumController implements Controller {
 
         @Override
         public void handleLoadBootstrap(SnapshotReader<ApiMessageAndVersion> reader) {
-            reader.close();
+            appendRaftEvent(String.format("handleLoadBootstrap[snapshotId=%s]", reader.snapshotId()), () -> {
+                try {
+                    String snapshotName = Snapshots.filenameFromSnapshotId(reader.snapshotId());
+                    if (isActiveController()) {
+                        throw fatalFaultHandler.handleFault("Asked to load bootstrap snapshot " + snapshotName +
+                                ", but we are the active controller at epoch " + curClaimEpoch);
+                    }
+                    List<ApiMessageAndVersion> records = new ArrayList<>();
+                    while (reader.hasNext()) {
+                        Batch<ApiMessageAndVersion> batch = reader.next();
+                        records.addAll(batch.records());
+                    }
+                    if (!records.isEmpty()) {
+                        log.debug("Loaded {} bootstrap records from {}", records.size(), snapshotName);
+                        bootstrapMetadata = BootstrapMetadata.fromRecords(records, "bootstrap");
+                    }
+                } catch (FaultHandlerException e) {
+                    throw e;
+                } catch (Throwable e) {
+                    throw fatalFaultHandler.handleFault("Error while loading bootstrap snapshot " +
+                            reader.snapshotId(), e);
+                } finally {
+                    reader.close();
+                }
+            });
         }
 
         @Override
@@ -1300,6 +1326,9 @@ public final class QuorumController implements Controller {
             case REGISTER_CONTROLLER_RECORD:
                 clusterControl.replay((RegisterControllerRecord) message);
                 break;
+            case UNREGISTER_CONTROLLER_RECORD:
+                clusterControl.replay((UnregisterControllerRecord) message);
+                break;
             case CLEAR_ELR_RECORD:
                 replicationControl.replay((ClearElrRecord) message);
                 break;
@@ -1460,7 +1489,7 @@ public final class QuorumController implements Controller {
     /**
      * The bootstrap metadata to use for initialization if needed.
      */
-    private final BootstrapMetadata bootstrapMetadata;
+    private BootstrapMetadata bootstrapMetadata;
 
     /**
      * The maximum number of records per batch to allow.
@@ -2129,12 +2158,27 @@ public final class QuorumController implements Controller {
     }
 
     @Override
+    public CompletableFuture<Void> unregisterController(
+        ControllerRequestContext context,
+        int controllerId
+    ) {
+        return appendWriteEvent("unregisterController", context.deadlineNs(),
+            () -> {
+                if (nodeId == controllerId) {
+                    throw new InvalidRequestException("Controller cannot unregister itself while it is active.");
+                }
+                return clusterControl.unregisterController(controllerId);
+            },
+            EnumSet.noneOf(ControllerOperationFlag.class));
+    }
+
+    @Override
     public CompletableFuture<List<AclCreateResult>> createAcls(
         ControllerRequestContext context,
         List<AclBinding> aclBindings
     ) {
         return appendWriteEvent("createAcls", context.deadlineNs(),
-            () -> aclControlManager.createAcls(aclBindings));
+            () -> aclControlManager.createAcls(aclBindings, featureControl.metadataVersionOrThrow()));
     }
 
     @Override

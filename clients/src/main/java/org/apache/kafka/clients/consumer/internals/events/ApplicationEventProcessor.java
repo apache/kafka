@@ -342,7 +342,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     private void process(final TopicSubscriptionChangeEvent event) {
         if (requestManagers.consumerHeartbeatRequestManager.isPresent()) {
             try {
-                if (subscriptions.subscribe(event.topics(), event.listener())) {
+                if (subscriptions.subscribe(event.topics())) {
                     this.metadataVersionSnapshot = metadata.requestUpdateForNewTopics();
                 }
                 // Join the group if not already part of it, or just send the new subscription to the broker on the next poll.
@@ -353,7 +353,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             }
         } else if (requestManagers.streamsGroupHeartbeatRequestManager.isPresent()) {
             try {
-                if (subscriptions.subscribe(event.topics(), event.listener())) {
+                if (subscriptions.subscribe(event.topics())) {
                     this.metadataVersionSnapshot = metadata.requestUpdateForNewTopics();
                 }
                 requestManagers.streamsGroupHeartbeatRequestManager.get().membershipManager().onSubscriptionUpdated();
@@ -377,7 +377,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      */
     private void process(final TopicPatternSubscriptionChangeEvent event) {
         try {
-            subscriptions.subscribe(event.pattern(), event.listener());
+            subscriptions.subscribe(event.pattern());
             metadata.requestUpdateForNewTopics();
             requestManagers.consumerHeartbeatRequestManager.ifPresent(hrm -> {
                 ConsumerMembershipManager membershipManager = hrm.membershipManager();
@@ -403,7 +403,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             return;
         }
         try {
-            subscriptions.subscribe(event.pattern(), event.listener());
+            subscriptions.subscribe(event.pattern());
             requestManagers.consumerMembershipManager.get().onSubscriptionUpdated();
             event.future().complete(null);
         } catch (Exception e) {
@@ -499,7 +499,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             future.whenComplete(complete(event.future()));
         } else if (requestManagers.streamsMembershipManager.isPresent()) {
             log.debug("Signal the StreamsMembershipManager to leave the streams group since the member is closing");
-            CompletableFuture<Void> future = requestManagers.streamsMembershipManager.get().leaveGroupOnClose();
+            CompletableFuture<Void> future = requestManagers.streamsMembershipManager.get().leaveGroupOnClose(event.membershipOperation());
             future.whenComplete(complete(event.future()));
         }
     }

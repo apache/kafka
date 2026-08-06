@@ -35,14 +35,14 @@ import org.apache.kafka.common.utils.internals.LogContext
 import org.apache.kafka.common.utils.internals.BufferSupplier
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.utils.internals.ConfigUtils
-import org.apache.kafka.config
 import org.apache.kafka.network.SocketServer
 import org.apache.kafka.raft.KafkaRaftClient
 import org.apache.kafka.server.{DynamicThreadPool, ProcessRole}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler}
-import org.apache.kafka.server.config.{DynamicConfig, DynamicProducerStateManagerConfig, ServerConfigs, ServerLogConfigs, DynamicBrokerConfig => JDynamicBrokerConfig}
+import org.apache.kafka.server.config.{BrokerReconfigurable => JBrokerReconfigurable, DynamicConfig, DynamicProducerStateManagerConfig, ServerConfigs, ServerLogConfigs, DynamicBrokerConfig => JDynamicBrokerConfig}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, MetricConfigs}
+import org.apache.kafka.server.quota.QuotaFactory
 import org.apache.kafka.server.telemetry.{ClientTelemetry, ClientTelemetryExporterProvider}
 import org.apache.kafka.server.util.LockUtils.{inReadLock, inWriteLock}
 import org.apache.kafka.snapshot.RecordsSnapshotReader
@@ -231,7 +231,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     reconfigurables.add(reconfigurable)
   }
 
-  def addBrokerReconfigurable(reconfigurable: config.BrokerReconfigurable): Unit = {
+  def addBrokerReconfigurable(reconfigurable: JBrokerReconfigurable): Unit = {
     verifyReconfigurableConfigs(reconfigurable.reconfigurableConfigs)
     brokerReconfigurables.add(new BrokerReconfigurable {
       override def reconfigurableConfigs: util.Set[String] = reconfigurable.reconfigurableConfigs
@@ -527,7 +527,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
 }
 
 /**
- * Implement [[config.BrokerReconfigurable]] instead.
+ * Implement [[JBrokerReconfigurable]] instead.
  */
 trait BrokerReconfigurable {
 
@@ -579,6 +579,28 @@ class DynamicLogConfig(logManager: LogManager, directoryEventHandler: DirectoryE
       }
     }
 
+    def validateLogRemoteCopyLagMs(): Unit = {
+      val logRetentionMs: Long = newConfig.logRetentionTimeMillis
+      val logLocalRetentionMs = newConfig.remoteLogManagerConfig.logLocalRetentionMs
+      val effectiveLocalRetentionMs = if (logLocalRetentionMs == -2L) logRetentionMs else logLocalRetentionMs
+      val logRemoteCopyLagMs = newConfig.remoteLogManagerConfig.logRemoteCopyLagMs
+      if (logRemoteCopyLagMs > 0L && effectiveLocalRetentionMs >= 0L && logRemoteCopyLagMs > effectiveLocalRetentionMs) {
+        throw new ConfigException(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_MS_PROP, logRemoteCopyLagMs,
+          s"Value must not exceed ${RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP} (effective value: $effectiveLocalRetentionMs)")
+      }
+    }
+
+    def validateLogRemoteCopyLagBytes(): Unit = {
+      val logRetentionBytes: Long = newConfig.logRetentionBytes
+      val logLocalRetentionBytes = newConfig.remoteLogManagerConfig.logLocalRetentionBytes
+      val effectiveLocalRetentionBytes = if (logLocalRetentionBytes == -2L) logRetentionBytes else logLocalRetentionBytes
+      val logRemoteCopyLagBytes = newConfig.remoteLogManagerConfig.logRemoteCopyLagBytes
+      if (logRemoteCopyLagBytes > 0L && effectiveLocalRetentionBytes >= 0L && logRemoteCopyLagBytes > effectiveLocalRetentionBytes) {
+        throw new ConfigException(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_BYTES_PROP, logRemoteCopyLagBytes,
+          s"Value must not exceed ${RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP} (effective value: $effectiveLocalRetentionBytes)")
+      }
+    }
+
     def validateCordonedLogDirs(): Unit = {
       val logDirs = newConfig.logDirs()
       val cordonedLogDirs = newConfig.cordonedLogDirs()
@@ -592,6 +614,8 @@ class DynamicLogConfig(logManager: LogManager, directoryEventHandler: DirectoryE
 
     validateLogLocalRetentionMs()
     validateLogLocalRetentionBytes()
+    validateLogRemoteCopyLagMs()
+    validateLogRemoteCopyLagBytes()
     validateCordonedLogDirs()
   }
 

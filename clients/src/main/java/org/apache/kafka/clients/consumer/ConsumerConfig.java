@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.ShareAcknowledgementMode;
 import org.apache.kafka.clients.consumer.internals.ShareAcquireMode;
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -36,6 +37,9 @@ import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Utils;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -57,7 +61,9 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 /**
  * The consumer configuration keys
  */
+@InterfaceAudience.Public
 public class ConsumerConfig extends AbstractConfig {
+    private static final Logger log = LoggerFactory.getLogger(ConsumerConfig.class);
     private static final ConfigDef CONFIG;
 
     // a list contains all the assignor names that only assign subscribed topics to consumer. Should be updated when new assignor added.
@@ -134,6 +140,11 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String CLIENT_DNS_LOOKUP_CONFIG = CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG;
 
     /**
+     * <code>bootstrap.resolve.timeout.ms</code>
+     */
+    public static final String BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG = CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG;
+
+    /**
      * <code>enable.auto.commit</code>
      */
     public static final String ENABLE_AUTO_COMMIT_CONFIG = "enable.auto.commit";
@@ -177,8 +188,22 @@ public class ConsumerConfig extends AbstractConfig {
             "Negative duration is not allowed.</li>" +
             "<li>none: throw exception to the consumer if no previous offset is found for the consumer's group</li>" +
             "<li>anything else: throw exception to the consumer.</li></ul>" +
-            "<p>Note that altering partition numbers while setting this config to latest may cause message delivery loss since " +
-            "producers could start to send messages to newly added partitions (i.e. no initial offsets exist yet) before consumers reset their offsets.";
+            "<p>Note that increasing a topic's partition count while this config is set to <code>latest</code> may cause silent " +
+            "message loss: producers may begin appending records to a newly created partition before the consumer discovers it, " +
+            "and <code>latest</code> resets the position to the log end offset, skipping any records produced during that discovery gap.</p>" +
+            "<p>To avoid this, prefer <code>by_duration:&lt;duration&gt;</code>. When a partition has no committed offset, " +
+            "<code>by_duration</code> determines the starting position by issuing a <code>ListOffsets</code> lookup for " +
+            "<code>now() - duration</code>. If the target timestamp is earlier than the partition's creation time, the lookup " +
+            "returns the partition's start offset, ensuring that records produced during the discovery window are still consumed. Size the duration to cover " +
+            "the worst-case partition-discovery latency for the group protocol in use:</p>" +
+            "<ul><li>With the <code>consumer</code> group protocol (KIP-848), newly assigned partitions are pushed on the next " +
+            "group heartbeat, so a value at least as large as <code>group.consumer.heartbeat.interval.ms</code> " +
+            "(server default 5000&nbsp;ms) is sufficient, for example <code>by_duration:PT5S</code>.</li>" +
+            "<li>With the <code>classic</code> group protocol, new partitions are discovered through periodic metadata refresh " +
+            "and a subsequent rebalance, so the duration must exceed <code>metadata.max.age.ms</code> (client default " +
+            "300000&nbsp;ms) plus the rebalance time, for example <code>by_duration:PT6M</code>.</li></ul>" +
+            "<p>Consumers with a valid committed offset are unaffected. The reset applies only to partitions whose offset is " +
+            "missing or out of range, so <code>by_duration</code> does not force existing consumers to replay historical data on restart.</p>";
 
     /**
      * <code>fetch.min.bytes</code>
@@ -426,6 +451,12 @@ public class ConsumerConfig extends AbstractConfig {
                                            ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
                                         Importance.MEDIUM,
                                         CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
+                                .define(BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG,
+                                        Type.LONG,
+                                        CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
+                                        atLeast(1L),
+                                        Importance.HIGH,
+                                        CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC)
                                 .define(GROUP_ID_CONFIG, Type.STRING, null, Importance.HIGH, GROUP_ID_DOC)
                                 .define(GROUP_INSTANCE_ID_CONFIG,
                                         Type.STRING,
@@ -707,10 +738,10 @@ public class ConsumerConfig extends AbstractConfig {
                                         Importance.MEDIUM,
                                         ConsumerConfig.SHARE_ACQUIRE_MODE_DOC)
                                 .define(CONFIG_PROVIDERS_CONFIG,
-                                        ConfigDef.Type.LIST,
+                                        Type.LIST,
                                         List.of(),
                                         ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                                        ConfigDef.Importance.LOW,
+                                        Importance.LOW,
                                         CONFIG_PROVIDERS_DOC);
     }
 
@@ -722,7 +753,24 @@ public class ConsumerConfig extends AbstractConfig {
         maybeOverrideClientId(refinedConfigs);
         maybeOverrideEnableAutoCommit(refinedConfigs);
         checkUnsupportedConfigsPostProcess();
+        warnIfConnectionsMaxIdleMsLowerThanMaxPollIntervalMs();
         return refinedConfigs;
+    }
+
+    private void warnIfConnectionsMaxIdleMsLowerThanMaxPollIntervalMs() {
+        String groupProtocol = getString(GROUP_PROTOCOL_CONFIG);
+        if (!GroupProtocol.CLASSIC.name().equalsIgnoreCase(groupProtocol)) {
+            return;
+        }
+        long connectionsMaxIdleMs = getLong(CONNECTIONS_MAX_IDLE_MS_CONFIG);
+        int maxPollIntervalMs = getInt(MAX_POLL_INTERVAL_MS_CONFIG);
+        if (connectionsMaxIdleMs >= 0 && connectionsMaxIdleMs < maxPollIntervalMs) {
+            log.warn("Configuration '{}' with value '{}' is lower than configuration '{}' with value '{}'. " +
+                    "This may cause the connection to the group coordinator to be closed during an ongoing rebalance, " +
+                    "which can prolong or disrupt group rejoin.",
+                CONNECTIONS_MAX_IDLE_MS_CONFIG, connectionsMaxIdleMs,
+                MAX_POLL_INTERVAL_MS_CONFIG, maxPollIntervalMs);
+        }
     }
 
     private void maybeOverrideClientId(Map<String, Object> configs) {

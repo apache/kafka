@@ -17,14 +17,13 @@
 
 package kafka.api
 
-import kafka.security.JaasTestUtils
-
 import java.util.Properties
 import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.ConnectionMode
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
+import org.apache.kafka.security.JaasTestUtils
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
 import java.util.Optional

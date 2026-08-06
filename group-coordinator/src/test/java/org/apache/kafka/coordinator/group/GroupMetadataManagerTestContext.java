@@ -60,6 +60,7 @@ import org.apache.kafka.coordinator.common.runtime.MockCoordinatorExecutor;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
@@ -114,7 +115,6 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroupBuilder;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
-import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -300,14 +300,17 @@ public class GroupMetadataManagerTestContext {
         CompletableFuture<JoinGroupResponseData> joinFuture;
         List<CoordinatorRecord> records;
         CompletableFuture<Void> appendFuture;
+        // Whether classicGroupJoin signalled that streams-topology cleanup is needed before conversion.
+        boolean needsTopologyCleanup;
 
         public JoinResult(
             CompletableFuture<JoinGroupResponseData> joinFuture,
-            CoordinatorResult<Void, CoordinatorRecord> coordinatorResult
+            CoordinatorResult<Boolean, CoordinatorRecord> coordinatorResult
         ) {
             this.joinFuture = joinFuture;
             this.records = coordinatorResult.records();
             this.appendFuture = coordinatorResult.appendFuture();
+            this.needsTopologyCleanup = coordinatorResult.response();
         }
     }
 
@@ -734,17 +737,28 @@ public class GroupMetadataManagerTestContext {
     }
 
     public CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
-        StreamsGroupHeartbeatRequestData request
+        StreamsGroupHeartbeatRequestData request,
+        String clientId,
+        InetAddress clientAddress
+    ) {
+        return streamsGroupHeartbeat(request, clientId, clientAddress, ApiKeys.STREAMS_GROUP_HEARTBEAT.latestVersion());
+    }
+
+    public CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
+        StreamsGroupHeartbeatRequestData request,
+        String clientId,
+        InetAddress clientAddress,
+        short version
     ) {
         RequestContext context = new RequestContext(
             new RequestHeader(
                 ApiKeys.STREAMS_GROUP_HEARTBEAT,
-                ApiKeys.STREAMS_GROUP_HEARTBEAT.latestVersion(),
-                "client",
+                version,
+                clientId,
                 0
             ),
             "1",
-            InetAddress.getLoopbackAddress(),
+            clientAddress,
             KafkaPrincipal.ANONYMOUS,
             ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
             SecurityProtocol.PLAINTEXT,
@@ -763,6 +777,19 @@ public class GroupMetadataManagerTestContext {
         return result;
     }
 
+    public CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
+        StreamsGroupHeartbeatRequestData request
+    ) {
+        return streamsGroupHeartbeat(request, "client", InetAddress.getLoopbackAddress());
+    }
+
+    public CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
+        StreamsGroupHeartbeatRequestData request,
+        short version
+    ) {
+        return streamsGroupHeartbeat(request, "client", InetAddress.getLoopbackAddress(), version);
+    }
+    
     public List<MockCoordinatorTimer.ExpiredTimeout<CoordinatorRecord>> sleep(long ms) {
         time.sleep(ms);
         List<MockCoordinatorTimer.ExpiredTimeout<CoordinatorRecord>> timeouts = timer.poll();
@@ -889,6 +916,15 @@ public class GroupMetadataManagerTestContext {
         boolean requireKnownMemberId,
         boolean supportSkippingAssignment
     ) {
+        return sendClassicGroupJoin(request, requireKnownMemberId, supportSkippingAssignment, true);
+    }
+
+    public JoinResult sendClassicGroupJoin(
+        JoinGroupRequestData request,
+        boolean requireKnownMemberId,
+        boolean supportSkippingAssignment,
+        boolean topologyCleanupHandled
+    ) {
         // requireKnownMemberId is true: version >= 4 (See JoinGroupRequest#requiresKnownMemberId())
         // supportSkippingAssignment is true: version >= 9 (See JoinGroupRequest#supportsSkippingAssignment())
         short joinGroupVersion = 3;
@@ -917,10 +953,11 @@ public class GroupMetadataManagerTestContext {
         );
 
         CompletableFuture<JoinGroupResponseData> responseFuture = new CompletableFuture<>();
-        CoordinatorResult<Void, CoordinatorRecord> coordinatorResult = groupMetadataManager.classicGroupJoin(
+        CoordinatorResult<Boolean, CoordinatorRecord> coordinatorResult = groupMetadataManager.classicGroupJoin(
             context,
             request,
-            responseFuture
+            responseFuture,
+            topologyCleanupHandled
         );
 
         if (coordinatorResult.replayRecords()) {
@@ -1374,7 +1411,7 @@ public class GroupMetadataManagerTestContext {
     }
 
     public List<StreamsGroupDescribeResponseData.DescribedGroup> sendStreamsGroupDescribe(List<String> groupIds) {
-        return groupMetadataManager.streamsGroupDescribe(groupIds, lastCommittedOffset);
+        return groupMetadataManager.streamsGroupDescribe(groupIds, lastCommittedOffset).describedGroups();
     }
 
     public List<DescribeGroupsResponseData.DescribedGroup> describeGroups(List<String> groupIds) {

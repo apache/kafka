@@ -31,6 +31,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KGroupedStream;
@@ -106,7 +107,7 @@ public class SuppressScenarioTest {
 
         final Topology topology = builder.build();
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(config).build()) {
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
             inputTopic.pipeInput("k1", "v1", 0L);
@@ -182,7 +183,7 @@ public class SuppressScenarioTest {
             .toStream()
             .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
         final Topology topology = builder.build();
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(config).build()) {
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
             inputTopic.pipeInput("k1", "v1", 0L);
@@ -252,7 +253,7 @@ public class SuppressScenarioTest {
             .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
         final Topology topology = builder.build();
         System.out.println(topology.describe());
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(config).build()) {
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
             inputTopic.pipeInput("k1", "v1", 0L);
@@ -316,7 +317,7 @@ public class SuppressScenarioTest {
             .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
         final Topology topology = builder.build();
         System.out.println(topology.describe());
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(config).build()) {
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
             inputTopic.pipeInput("k1", "v1", 0L);
@@ -376,7 +377,7 @@ public class SuppressScenarioTest {
             .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
         final Topology topology = builder.build();
         System.out.println(topology.describe());
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(config).build()) {
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
             inputTopic.pipeInput("k1", "v1", 0L);
@@ -427,7 +428,7 @@ public class SuppressScenarioTest {
             .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
         final Topology topology = builder.build();
         System.out.println(topology.describe());
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(config).build()) {
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
             inputTopic.pipeInput("k1", "v1", 0L);
@@ -483,7 +484,7 @@ public class SuppressScenarioTest {
                 .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
         final Topology topology = builder.build();
         System.out.println(topology.describe());
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(config).build()) {
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
             inputTopic.pipeInput("k1", "v1", 10L);
@@ -573,7 +574,7 @@ public class SuppressScenarioTest {
             .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
         final Topology topology = builder.build();
         System.out.println(topology.describe());
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(config).build()) {
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
             // first window
@@ -621,7 +622,7 @@ public class SuppressScenarioTest {
             .toStream()
             .to("output", Produced.with(Serdes.String(), Serdes.Long()));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), config)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(config).build()) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic("topic", STRING_SERIALIZER, STRING_SERIALIZER);
 
@@ -651,7 +652,7 @@ public class SuppressScenarioTest {
             .toStream()
             .to("output", Produced.with(Serdes.String(), Serdes.String()));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), config)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(config).build()) {
             final TestInputTopic<String, String> inputTopicRight =
                 driver.createInputTopic("right", STRING_SERIALIZER, STRING_SERIALIZER);
             final TestInputTopic<String, String> inputTopicLeft =
@@ -739,7 +740,7 @@ public class SuppressScenarioTest {
             .to("output", Produced.with(Serdes.String(), Serdes.String()));
 
         final Topology topology = builder.build();
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(config).build()) {
             final TestInputTopic<String, String> inputTopicRight =
                 driver.createInputTopic("right", STRING_SERIALIZER, STRING_SERIALIZER);
             final TestInputTopic<String, String> inputTopicLeft =

@@ -34,7 +34,6 @@
   <allow pkg="javax.net.ssl" />
   <allow pkg="javax.security" />
   <allow pkg="org.ietf.jgss" />
-  <allow pkg="net.jqwik.api" />
 
   <!-- no one depends on the server -->
   <disallow pkg="kafka" />
@@ -135,6 +134,7 @@
       </subpackage>
       <subpackage name="oauthbearer">
         <allow pkg="com.fasterxml.jackson.databind" />
+        <allow class="org.apache.logging.log4j.Level" />
         <allow pkg="org.jose4j" />
         <allow pkg="javax.crypto"/>
         <allow pkg="org.testcontainers" />
@@ -308,6 +308,7 @@
     <allow pkg="org.apache.kafka.test" />
     <allow pkg="org.apache.kafka.connect.runtime" />
     <allow pkg="org.apache.kafka.connect.runtime.isolation" />
+    <allow pkg="org.apache.kafka.connect.util" />
     <allow pkg="com.fasterxml.jackson" />
     <allow pkg="org.jose4j" />
     <allow pkg="net.sourceforge.argparse4j" />
@@ -422,6 +423,11 @@
       <allow class="org.apache.kafka.coordinator.transaction.TransactionLogConfig" />
       <allow pkg="org.apache.kafka.coordinator.group" />
       <allow pkg="org.apache.kafka.network" />
+      <allow pkg="org.apache.kafka.server.streams" />
+
+      <subpackage name="utils">
+        <allow pkg="org.rocksdb" />
+      </subpackage>
     </subpackage>
 
     <subpackage name="test">
@@ -474,7 +480,6 @@
     <allow pkg="org.apache.kafka.storage.log.metrics" />
     <allow pkg="org.apache.kafka.test"/>
     <allow pkg="com.fasterxml.jackson" />
-    <allow pkg="net.jqwik"/>
   </subpackage>
 
   <subpackage name="snapshot">

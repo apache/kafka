@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientRequest;
-import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.MockClient;
@@ -26,6 +24,7 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
+import org.apache.kafka.clients.admin.internals.InternalDescribeFeaturesResult;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
@@ -52,6 +51,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.DuplicateVoterException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
@@ -166,6 +166,7 @@ import org.apache.kafka.common.message.RemoveRaftVoterResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.UnregisterBrokerResponseData;
+import org.apache.kafka.common.message.UnregisterControllerResponseData;
 import org.apache.kafka.common.message.WriteTxnMarkersResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -173,6 +174,8 @@ import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
+import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.AddRaftVoterRequest;
 import org.apache.kafka.common.requests.AddRaftVoterResponse;
 import org.apache.kafka.common.requests.AlterClientQuotasResponse;
@@ -245,6 +248,7 @@ import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.ShareGroupDescribeResponse;
 import org.apache.kafka.common.requests.StreamsGroupDescribeResponse;
 import org.apache.kafka.common.requests.UnregisterBrokerResponse;
+import org.apache.kafka.common.requests.UnregisterControllerResponse;
 import org.apache.kafka.common.requests.UpdateFeaturesRequest;
 import org.apache.kafka.common.requests.UpdateFeaturesResponse;
 import org.apache.kafka.common.requests.WriteTxnMarkersRequest;
@@ -297,8 +301,11 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -318,6 +325,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -529,8 +537,7 @@ public class KafkaAdminClientTest {
     }
 
     private static Cluster mockBootstrapCluster() {
-        return Cluster.bootstrap(ClientUtils.parseAndValidateAddresses(
-                singletonList("localhost:8121"), ClientDnsLookup.USE_ALL_DNS_IPS));
+        return Cluster.bootstrap(singletonList(InetSocketAddress.createUnresolved("localhost", 8121)));
     }
 
     private static AdminClientUnitTestEnv mockClientEnv(String... configVals) {
@@ -912,21 +919,24 @@ public class KafkaAdminClientTest {
         // which prevents AdminClient from being able to send the initial metadata request
 
         Cluster cluster = Cluster.bootstrap(singletonList(new InetSocketAddress("localhost", 8121)));
-        Map<Node, Long> unreachableNodes = Collections.singletonMap(cluster.nodes().get(0), 200L);
+        Node bootstrapNode = cluster.nodes().get(0);
+        Map<Node, Long> unreachableNodes = Collections.singletonMap(bootstrapNode, 200L);
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM, cluster,
                 AdminClientUnitTestEnv.clientConfigs(AdminClientConfig.METADATA_RECOVERY_STRATEGY_CONFIG, metadataRecoveryStrategy.name), unreachableNodes)) {
             Cluster discoveredCluster = mockCluster(3, 0);
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-            env.kafkaClient().prepareResponse(body -> body instanceof MetadataRequest,
+            // Bind responses to specific destinations so MockClient delivery does not depend on
+            // the iteration order of AdminClient's callsToSend map (which is keyed by Node).
+            env.kafkaClient().prepareResponseFrom(body -> body instanceof MetadataRequest,
                     RequestTestUtils.metadataResponse(discoveredCluster.nodes(), discoveredCluster.clusterResource().clusterId(),
-                            1, Collections.emptyList()));
+                            1, Collections.emptyList()), bootstrapNode);
             if (metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP) {
-                env.kafkaClient().prepareResponse(body -> body instanceof MetadataRequest,
-                        RequestTestUtils.metadataResponse(discoveredCluster.nodes(),
-                                discoveredCluster.clusterResource().clusterId(), 1, Collections.emptyList()));
+                env.kafkaClient().prepareResponseFrom(body -> body instanceof MetadataRequest,
+                        RequestTestUtils.metadataResponse(discoveredCluster.nodes(), discoveredCluster.clusterResource().clusterId(),
+                                1, Collections.emptyList()), bootstrapNode);
             }
-            env.kafkaClient().prepareResponse(body -> body instanceof CreateTopicsRequest,
-                prepareCreateTopicsResponse("myTopic", Errors.NONE));
+            env.kafkaClient().prepareResponseFrom(body -> body instanceof CreateTopicsRequest,
+                prepareCreateTopicsResponse("myTopic", Errors.NONE), discoveredCluster.nodeById(1));
 
             KafkaFuture<Void> future = env.adminClient().createTopics(
                     singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
@@ -8365,6 +8375,113 @@ public class KafkaAdminClientTest {
         }
     }
 
+    /**
+     * Reproduces the scenario where the partition leader cache holds an entry pointing at a broker
+     * that has since left the cluster (for example after a broker is recycled with a new id). The
+     * cached leader sends the request straight to the fulfillment stage, but the admin client can
+     * never route it because the broker is no longer in the metadata. Without re-running the lookup,
+     * the call would sit unassigned until the request deadline expires and fail with
+     * "Timed out waiting for a node assignment". The admin client should instead re-resolve the
+     * leader and complete the request.
+     */
+    @Test
+    public void testListOffsetsRetriesLookupWhenCachedLeaderLeavesCluster() throws Exception {
+        Node node0 = new Node(0, "localhost", 8120);
+        Node node1 = new Node(1, "localhost", 8121);
+        final TopicPartition tp0 = new TopicPartition("foo", 0);
+
+        // Initially foo-0 is led by node1.
+        final Cluster initialCluster = new Cluster("mockClusterId", asList(node0, node1),
+            singletonList(new PartitionInfo("foo", 0, node1, new Node[]{node0, node1}, new Node[]{node0, node1})),
+            emptySet(), emptySet(), node0);
+        // After node1 leaves the cluster, foo-0 is led by node0.
+        final Cluster shrunkCluster = new Cluster("mockClusterId", singletonList(node0),
+            singletonList(new PartitionInfo("foo", 0, node0, new Node[]{node0}, new Node[]{node0})),
+            emptySet(), emptySet(), node0);
+
+        MockTime time = new MockTime();
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, initialCluster,
+                newStrMap(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "5000",
+                          AdminClientConfig.METADATA_MAX_AGE_CONFIG, "50"))) {
+            MockClient mockClient = env.kafkaClient();
+            mockClient.setNodeApiVersions(NodeApiVersions.create());
+
+            // First call: the lookup resolves foo-0 to node1 and caches it, then the offsets fetch
+            // succeeds on node1.
+            mockClient.prepareResponse(body -> body instanceof MetadataRequest,
+                prepareMetadataResponse(initialCluster, Errors.NONE));
+            mockClient.prepareResponseFrom(listOffsetsResponse(tp0, 100L), node1);
+            assertEquals(100L, env.adminClient().listOffsets(singletonMap(tp0, OffsetSpec.latest()))
+                .all().get().get(tp0).offset());
+
+            // Drop node1 from the admin client's metadata via the periodic broker-info refresh.
+            // Waiting for a second refresh guarantees the first one has been fully processed.
+            AtomicInteger refreshes = new AtomicInteger();
+            TestUtils.waitForCondition(() -> {
+                time.sleep(20);
+                if (respondToBrokerInfoRefresh(mockClient, shrunkCluster))
+                    refreshes.incrementAndGet();
+                return refreshes.get() >= 2;
+            }, "Timed out waiting for the broker-info metadata refresh to drop node1");
+
+            // Second call: the cache still points foo-0 at node1, which is gone. The admin client
+            // must re-resolve the leader (now node0) rather than getting stuck until the deadline.
+            ListOffsetsResult result = env.adminClient().listOffsets(singletonMap(tp0, OffsetSpec.latest()));
+            TestUtils.waitForCondition(() -> {
+                time.sleep(20);
+                // Keep node1 out of the metadata, re-resolve foo-0 to node0, and satisfy the fetch.
+                respondToBrokerInfoRefresh(mockClient, shrunkCluster);
+                respondToTopicMetadata(mockClient, "foo", shrunkCluster);
+                respondToListOffsets(mockClient, tp0, 200L, node0);
+                return result.all().isDone();
+            }, "Timed out waiting for listOffsets to recover after the cached leader left the cluster");
+
+            assertEquals(200L, result.all().get().get(tp0).offset());
+        }
+    }
+
+    private static ListOffsetsResponse listOffsetsResponse(TopicPartition tp, long offset) {
+        return new ListOffsetsResponse(new ListOffsetsResponseData().setTopics(singletonList(
+            ListOffsetsResponse.singletonListOffsetsTopicResponse(tp, Errors.NONE, -1L, offset, 5))));
+    }
+
+    /**
+     * Respond out of order to the first in-flight request matching {@code matcher} with
+     * {@code response}. Returns true if a matching request was found and answered.
+     */
+    private static boolean respondToInFlightRequest(MockClient mockClient,
+                                                    Predicate<ClientRequest> matcher,
+                                                    AbstractResponse response) {
+        for (ClientRequest request : mockClient.requests()) {
+            if (matcher.test(request)) {
+                mockClient.respondToRequest(request, response);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean respondToBrokerInfoRefresh(MockClient mockClient, Cluster cluster) {
+        return respondToInFlightRequest(mockClient, request -> {
+            AbstractRequest body = request.requestBuilder().build();
+            return body instanceof MetadataRequest && ((MetadataRequest) body).topics().isEmpty();
+        }, prepareMetadataResponse(cluster, Errors.NONE));
+    }
+
+    private static boolean respondToTopicMetadata(MockClient mockClient, String topic, Cluster cluster) {
+        return respondToInFlightRequest(mockClient, request -> {
+            AbstractRequest body = request.requestBuilder().build();
+            return body instanceof MetadataRequest && ((MetadataRequest) body).topics().contains(topic);
+        }, prepareMetadataResponse(cluster, Errors.NONE));
+    }
+
+    private static boolean respondToListOffsets(MockClient mockClient, TopicPartition tp, long offset, Node node) {
+        return respondToInFlightRequest(mockClient,
+            request -> request.requestBuilder().build() instanceof ListOffsetsRequest
+                && request.destination().equals(node.idString()),
+            listOffsetsResponse(tp, offset));
+    }
+
     @Test
     public void testListOffsetsRetriableErrors() throws Exception {
 
@@ -8913,10 +9030,10 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(
                 body -> body instanceof ApiVersionsRequest,
                 prepareApiVersionsResponseForDescribeFeatures(Errors.NONE));
-            final KafkaFuture<FeatureMetadata> future = env.adminClient().describeFeatures(
-                new DescribeFeaturesOptions().timeoutMs(10000)).featureMetadata();
-            final FeatureMetadata metadata = future.get();
-            assertEquals(defaultFeatureMetadata(), metadata);
+            final var result = (InternalDescribeFeaturesResult) env.adminClient().describeFeatures(
+                new DescribeFeaturesOptions().timeoutMs(10000));
+            assertEquals(defaultFeatureMetadata(), result.featureMetadata().get());
+            assertNotNull(result.nodeApiVersions().get().apiVersion(ApiKeys.API_VERSIONS));
         }
     }
 
@@ -8928,9 +9045,9 @@ public class KafkaAdminClientTest {
                 prepareApiVersionsResponseForDescribeFeatures(Errors.INVALID_REQUEST));
             final DescribeFeaturesOptions options = new DescribeFeaturesOptions();
             options.timeoutMs(10000);
-            final KafkaFuture<FeatureMetadata> future = env.adminClient().describeFeatures(options).featureMetadata();
-            final ExecutionException e = assertThrows(ExecutionException.class, future::get);
-            assertEquals(Errors.INVALID_REQUEST.exception().getClass(), e.getCause().getClass());
+            final var result = (InternalDescribeFeaturesResult) env.adminClient().describeFeatures(options);
+            TestUtils.assertFutureThrows(InvalidRequestException.class, result.featureMetadata());
+            TestUtils.assertFutureThrows(InvalidRequestException.class, result.nodeApiVersions());
         }
     }
 
@@ -8955,9 +9072,10 @@ public class KafkaAdminClientTest {
                 body -> body instanceof ApiVersionsRequest,
                 prepareApiVersionsResponseForDescribeFeatures(Errors.NONE),
                 env.cluster().nodeById(1));
-            final KafkaFuture<FeatureMetadata> future = env.adminClient().describeFeatures(
-                new DescribeFeaturesOptions().timeoutMs(1000).nodeId(0)).featureMetadata();
-            assertThrows(ExecutionException.class, future::get);
+            final var result = (InternalDescribeFeaturesResult) env.adminClient().describeFeatures(
+                new DescribeFeaturesOptions().timeoutMs(1000).nodeId(0));
+            TestUtils.assertFutureThrows(TimeoutException.class, result.featureMetadata());
+            TestUtils.assertFutureThrows(TimeoutException.class, result.nodeApiVersions());
         }
     }
 
@@ -9933,97 +10051,147 @@ public class KafkaAdminClientTest {
         }
     }
 
-    @Test
-    public void testUnregisterBrokerSuccess() throws InterruptedException, ExecutionException {
-        int nodeId = 1;
-        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
-            env.kafkaClient().setNodeApiVersions(
-                    NodeApiVersions.create(ApiKeys.UNREGISTER_BROKER.id, (short) 0, (short) 0));
-            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.NONE, 0));
-            UnregisterBrokerResult result = env.adminClient().unregisterBroker(nodeId);
-            // Validate response
-            assertNotNull(result.all());
-            result.all().get();
+    private static final int UNREGISTER_NODE_ID = 1;
+
+    private static final Function<Errors, AbstractResponse> BROKER_RESPONSE_FACTORY =
+        error -> new UnregisterBrokerResponse(new UnregisterBrokerResponseData()
+            .setErrorCode(error.code())
+            .setErrorMessage(error.message()));
+
+    private static final Function<Errors, AbstractResponse> CONTROLLER_RESPONSE_FACTORY =
+        error -> new UnregisterControllerResponse(new UnregisterControllerResponseData()
+            .setErrorCode(error.code())
+            .setErrorMessage(error.message()));
+
+    private static final Function<Admin, KafkaFuture<Void>> UNREGISTER_BROKER_CALL =
+        admin -> admin.unregisterBroker(UNREGISTER_NODE_ID).all();
+
+    private static final Function<Admin, KafkaFuture<Void>> UNREGISTER_CONTROLLER_CALL =
+        admin -> admin.unregisterController(UNREGISTER_NODE_ID).all();
+
+    private void runUnregisterScenario(
+        AdminClientUnitTestEnv env,
+        ApiKeys apiKey,
+        Function<Errors, AbstractResponse> responseFactory,
+        Function<Admin, KafkaFuture<Void>> adminCall,
+        List<Errors> responsesToPrepare,
+        Class<? extends Throwable> expectedException
+    ) throws ExecutionException, InterruptedException {
+        env.kafkaClient().setNodeApiVersions(
+            NodeApiVersions.create(apiKey.id, (short) 0, (short) 0));
+        for (Errors error : responsesToPrepare) {
+            env.kafkaClient().prepareResponse(responseFactory.apply(error));
+        }
+        KafkaFuture<Void> future = adminCall.apply(env.adminClient());
+        assertNotNull(future);
+        if (expectedException == null) {
+            future.get();
+        } else {
+            TestUtils.assertFutureThrows(expectedException, future);
         }
     }
 
     @Test
-    public void testUnregisterBrokerFailure() {
-        int nodeId = 1;
-        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
-            env.kafkaClient().setNodeApiVersions(
-                    NodeApiVersions.create(ApiKeys.UNREGISTER_BROKER.id, (short) 0, (short) 0));
-            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.UNKNOWN_SERVER_ERROR, 0));
-            UnregisterBrokerResult result = env.adminClient().unregisterBroker(nodeId);
-            // Validate response
-            assertNotNull(result.all());
-            TestUtils.assertFutureThrows(UnknownServerException.class, result.all());
+    public void testUnregisterBrokerSuccess() throws InterruptedException, ExecutionException {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            runUnregisterScenario(env, ApiKeys.UNREGISTER_BROKER, BROKER_RESPONSE_FACTORY,
+                UNREGISTER_BROKER_CALL, List.of(Errors.NONE), null);
+        }
+    }
+
+    @Test
+    public void testUnregisterBrokerFailure() throws ExecutionException, InterruptedException {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            runUnregisterScenario(env, ApiKeys.UNREGISTER_BROKER, BROKER_RESPONSE_FACTORY,
+                UNREGISTER_BROKER_CALL, List.of(Errors.UNKNOWN_SERVER_ERROR), UnknownServerException.class);
         }
     }
 
     @Test
     public void testUnregisterBrokerTimeoutAndSuccessRetry() throws ExecutionException, InterruptedException {
-        int nodeId = 1;
-        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
-            env.kafkaClient().setNodeApiVersions(
-                    NodeApiVersions.create(ApiKeys.UNREGISTER_BROKER.id, (short) 0, (short) 0));
-            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.REQUEST_TIMED_OUT, 0));
-            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.NONE, 0));
-
-            UnregisterBrokerResult result = env.adminClient().unregisterBroker(nodeId);
-
-            // Validate response
-            assertNotNull(result.all());
-            result.all().get();
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            runUnregisterScenario(env, ApiKeys.UNREGISTER_BROKER, BROKER_RESPONSE_FACTORY,
+                UNREGISTER_BROKER_CALL, List.of(Errors.REQUEST_TIMED_OUT, Errors.NONE), null);
         }
     }
 
     @Test
-    public void testUnregisterBrokerTimeoutAndFailureRetry() {
-        int nodeId = 1;
-        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
-            env.kafkaClient().setNodeApiVersions(
-                    NodeApiVersions.create(ApiKeys.UNREGISTER_BROKER.id, (short) 0, (short) 0));
-            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.REQUEST_TIMED_OUT, 0));
-            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.UNKNOWN_SERVER_ERROR, 0));
-
-            UnregisterBrokerResult result = env.adminClient().unregisterBroker(nodeId);
-
-            // Validate response
-            assertNotNull(result.all());
-            TestUtils.assertFutureThrows(UnknownServerException.class, result.all());
+    public void testUnregisterBrokerTimeoutAndFailureRetry() throws ExecutionException, InterruptedException {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            runUnregisterScenario(env, ApiKeys.UNREGISTER_BROKER, BROKER_RESPONSE_FACTORY,
+                UNREGISTER_BROKER_CALL, List.of(Errors.REQUEST_TIMED_OUT, Errors.UNKNOWN_SERVER_ERROR),
+                UnknownServerException.class);
         }
     }
 
     @Test
-    public void testUnregisterBrokerTimeoutMaxRetry() {
-        int nodeId = 1;
-        try (final AdminClientUnitTestEnv env = mockClientEnv(Time.SYSTEM, AdminClientConfig.RETRIES_CONFIG, "1")) {
-            env.kafkaClient().setNodeApiVersions(
-                    NodeApiVersions.create(ApiKeys.UNREGISTER_BROKER.id, (short) 0, (short) 0));
-            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.REQUEST_TIMED_OUT, 0));
-            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.REQUEST_TIMED_OUT, 0));
-
-            UnregisterBrokerResult result = env.adminClient().unregisterBroker(nodeId);
-
-            // Validate response
-            assertNotNull(result.all());
-            TestUtils.assertFutureThrows(TimeoutException.class, result.all());
+    public void testUnregisterBrokerTimeoutMaxRetry() throws ExecutionException, InterruptedException {
+        try (AdminClientUnitTestEnv env = mockClientEnv(Time.SYSTEM, AdminClientConfig.RETRIES_CONFIG, "1")) {
+            runUnregisterScenario(env, ApiKeys.UNREGISTER_BROKER, BROKER_RESPONSE_FACTORY,
+                UNREGISTER_BROKER_CALL, List.of(Errors.REQUEST_TIMED_OUT, Errors.REQUEST_TIMED_OUT),
+                TimeoutException.class);
         }
     }
 
     @Test
-    public void testUnregisterBrokerTimeoutMaxWait() {
-        int nodeId = 1;
-        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
-            env.kafkaClient().setNodeApiVersions(
-                    NodeApiVersions.create(ApiKeys.UNREGISTER_BROKER.id, (short) 0, (short) 0));
+    public void testUnregisterBrokerTimeoutMaxWait() throws ExecutionException, InterruptedException {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            runUnregisterScenario(env, ApiKeys.UNREGISTER_BROKER, BROKER_RESPONSE_FACTORY,
+                admin -> admin.unregisterBroker(UNREGISTER_NODE_ID,
+                    new UnregisterBrokerOptions().timeoutMs(10)).all(),
+                List.of(), TimeoutException.class);
+        }
+    }
 
-            UnregisterBrokerResult result = env.adminClient().unregisterBroker(nodeId, new UnregisterBrokerOptions().timeoutMs(10));
+    @Test
+    public void testUnregisterControllerSuccess() throws InterruptedException, ExecutionException {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            runUnregisterScenario(env, ApiKeys.UNREGISTER_CONTROLLER, CONTROLLER_RESPONSE_FACTORY,
+                UNREGISTER_CONTROLLER_CALL, List.of(Errors.NONE), null);
+        }
+    }
 
-            // Validate response
-            assertNotNull(result.all());
-            TestUtils.assertFutureThrows(TimeoutException.class, result.all());
+    @Test
+    public void testUnregisterControllerFailure() throws ExecutionException, InterruptedException {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            runUnregisterScenario(env, ApiKeys.UNREGISTER_CONTROLLER, CONTROLLER_RESPONSE_FACTORY,
+                UNREGISTER_CONTROLLER_CALL, List.of(Errors.UNKNOWN_SERVER_ERROR), UnknownServerException.class);
+        }
+    }
+
+    @Test
+    public void testUnregisterControllerTimeoutAndSuccessRetry() throws ExecutionException, InterruptedException {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            runUnregisterScenario(env, ApiKeys.UNREGISTER_CONTROLLER, CONTROLLER_RESPONSE_FACTORY,
+                UNREGISTER_CONTROLLER_CALL, List.of(Errors.REQUEST_TIMED_OUT, Errors.NONE), null);
+        }
+    }
+
+    @Test
+    public void testUnregisterControllerTimeoutAndFailureRetry() throws ExecutionException, InterruptedException {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            runUnregisterScenario(env, ApiKeys.UNREGISTER_CONTROLLER, CONTROLLER_RESPONSE_FACTORY,
+                UNREGISTER_CONTROLLER_CALL, List.of(Errors.REQUEST_TIMED_OUT, Errors.UNKNOWN_SERVER_ERROR),
+                UnknownServerException.class);
+        }
+    }
+
+    @Test
+    public void testUnregisterControllerTimeoutMaxRetry() throws ExecutionException, InterruptedException {
+        try (AdminClientUnitTestEnv env = mockClientEnv(Time.SYSTEM, AdminClientConfig.RETRIES_CONFIG, "1")) {
+            runUnregisterScenario(env, ApiKeys.UNREGISTER_CONTROLLER, CONTROLLER_RESPONSE_FACTORY,
+                UNREGISTER_CONTROLLER_CALL, List.of(Errors.REQUEST_TIMED_OUT, Errors.REQUEST_TIMED_OUT),
+                TimeoutException.class);
+        }
+    }
+
+    @Test
+    public void testUnregisterControllerTimeoutMaxWait() throws ExecutionException, InterruptedException {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            runUnregisterScenario(env, ApiKeys.UNREGISTER_CONTROLLER, CONTROLLER_RESPONSE_FACTORY,
+                admin -> admin.unregisterController(UNREGISTER_NODE_ID,
+                    new UnregisterControllerOptions().timeoutMs(10)).all(),
+                List.of(), TimeoutException.class);
         }
     }
 
@@ -10707,13 +10875,6 @@ public class KafkaAdminClientTest {
         assertEquals("Telemetry is not enabled. Set config `enable.metrics.push` to `true`.", exception.getMessage());
 
         admin.close();
-    }
-
-    private UnregisterBrokerResponse prepareUnregisterBrokerResponse(Errors error, int throttleTimeMs) {
-        return new UnregisterBrokerResponse(new UnregisterBrokerResponseData()
-                .setErrorCode(error.code())
-                .setErrorMessage(error.message())
-                .setThrottleTimeMs(throttleTimeMs));
     }
 
     private DescribeLogDirsResponse prepareDescribeLogDirsResponse(Errors error, String logDir) {
@@ -11765,6 +11926,36 @@ public class KafkaAdminClientTest {
             ListTopicsResult result = env.adminClient().listTopics(new ListTopicsOptions().timeoutMs(10000));
 
             TestUtils.assertFutureThrows(OutOfMemoryError.class, result.names());
+        }
+    }
+
+    @Test
+    public void testAdminBootstrapResolutionExceptionPropagated() throws Exception {
+        String invalidHost = "unresolvable.invalid:9092";
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, invalidHost);
+        configs.put(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "3000");
+
+        try (Admin admin = Admin.create(configs)) {
+            assertThrows(BootstrapResolutionException.class, () -> {
+                long startTime = System.currentTimeMillis();
+                long maxWaitTime = 15000;
+                while (System.currentTimeMillis() - startTime < maxWaitTime) {
+                    try {
+                        admin.listTopics().names().get();
+                    } catch (ExecutionException e) {
+                        if (e.getCause() instanceof BootstrapResolutionException) {
+                            throw (BootstrapResolutionException) e.getCause();
+                        }
+                    }
+                }
+                fail("Expected BootstrapResolutionException to be thrown within " + maxWaitTime + "ms");
+            });
+
+            // After the first failure, any further API call must also surface the bootstrap error.
+            ExecutionException e = assertThrows(ExecutionException.class,
+                () -> admin.listTopics().names().get());
+            assertInstanceOf(BootstrapResolutionException.class, e.getCause());
         }
     }
 }

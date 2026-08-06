@@ -34,7 +34,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Base64.Encoder;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -147,7 +146,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
             throw new IllegalArgumentException(
                     String.format("Must supply exactly 1 non-null JAAS mechanism configuration (size was %d)",
                             jaasConfigEntries.size()));
-        this.moduleOptions = Collections.unmodifiableMap((Map<String, String>) jaasConfigEntries.get(0).getOptions());
+        this.moduleOptions = Map.copyOf((Map<String, String>) jaasConfigEntries.get(0).getOptions());
         configured = true;
     }
 

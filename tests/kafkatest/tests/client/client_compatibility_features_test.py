@@ -29,7 +29,7 @@ from ducktape.tests.test import Test
 from kafkatest.version import DEV_BRANCH, \
     LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, LATEST_2_8, \
     LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, LATEST_3_6, LATEST_3_7, \
-    LATEST_3_8, LATEST_3_9, LATEST_4_0, LATEST_4_1, KafkaVersion
+    LATEST_3_8, LATEST_3_9, LATEST_4_0, LATEST_4_1, LATEST_4_2, LATEST_4_3, KafkaVersion
 
 def get_broker_features(broker_version):
     features = {}
@@ -127,6 +127,8 @@ class ClientCompatibilityFeaturesTest(Test):
     @parametrize(broker_version=str(LATEST_3_9), metadata_quorum=quorum.isolated_kraft)
     @parametrize(broker_version=str(LATEST_4_0), metadata_quorum=quorum.isolated_kraft)
     @parametrize(broker_version=str(LATEST_4_1), metadata_quorum=quorum.isolated_kraft)
+    @parametrize(broker_version=str(LATEST_4_2), metadata_quorum=quorum.isolated_kraft)
+    @parametrize(broker_version=str(LATEST_4_3), metadata_quorum=quorum.isolated_kraft)
     def run_compatibility_test(self, broker_version, metadata_quorum=quorum.zk):
         if self.zk:
             self.zk.start()

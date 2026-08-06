@@ -35,6 +35,7 @@ import org.apache.kafka.metadata.KRaftMetadataCache
 import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicTopicClusterQuotaPublisher, ScramPublisher}
 import org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION
 import org.apache.kafka.server.common.{FinalizedFeatures, ShareVersion}
+import org.apache.kafka.server.config.DynamicLogCleanerConfig
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.storage.internals.log.{UnifiedLog, LogManager => JLogManager}
 
@@ -104,7 +105,7 @@ class BrokerMetadataPublisher(
   /**
    * The share version being used in the broker metadata.
    */
-  private var finalizedShareVersion: Short = FinalizedFeatures.fromKRaftVersion(MINIMUM_VERSION).finalizedFeatures().getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort)
+  private var finalizedShareVersion: Short = FinalizedFeatures.fromMetadataVersion(MINIMUM_VERSION).finalizedFeatures().getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort)
 
   override def name(): String = "BrokerMetadataPublisher"
 
@@ -225,7 +226,7 @@ class BrokerMetadataPublisher(
 
       if (delta.featuresDelta != null) {
         try {
-          val newFinalizedFeatures = new FinalizedFeatures(newImage.features.metadataVersionOrThrow, newImage.features.finalizedVersions, newImage.provenance.lastContainedOffset)
+          val newFinalizedFeatures = FinalizedFeatures.of(newImage.features.metadataVersionOrThrow, newImage.features.finalizedVersions, newImage.provenance.lastContainedOffset)
           val newFinalizedShareVersion = newFinalizedFeatures.finalizedFeatures().getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort)
           // Share version feature has been toggled.
           if (newFinalizedShareVersion != finalizedShareVersion) {
@@ -341,7 +342,9 @@ class BrokerMetadataPublisher(
       // Make the LogCleaner available for reconfiguration. We can't do this prior to this
       // point because LogManager#startup creates the LogCleaner object, if
       // log.cleaner.enable is true. TODO: improve this (see KAFKA-13610)
-      Option(logManager.cleaner).foreach(config.dynamicConfig.addBrokerReconfigurable)
+      Option(logManager.cleaner).foreach(cleaner =>
+        config.dynamicConfig.addBrokerReconfigurable(new DynamicLogCleanerConfig(cleaner))
+      )
     } catch {
       case t: Throwable => fatalFaultHandler.handleFault("Error starting LogManager", t)
     }
