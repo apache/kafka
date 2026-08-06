@@ -18,8 +18,9 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.RebalanceConsumer;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -183,8 +184,8 @@ public class RegexSourceIntegrationTest {
                 public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
                     return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
                         @Override
-                        public void subscribe(final Pattern topics, final ConsumerRebalanceListener listener) {
-                            super.subscribe(topics, new TheConsumerRebalanceListener(assignedTopics, listener));
+                        public void setRebalanceListener(final RebalanceListener listener) {
+                            super.setRebalanceListener(new TheConsumerRebalanceListener(assignedTopics, listener));
                         }
                     };
 
@@ -282,8 +283,8 @@ public class RegexSourceIntegrationTest {
                 public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
                     return new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
                         @Override
-                        public void subscribe(final Pattern topics, final ConsumerRebalanceListener listener) {
-                            super.subscribe(topics, new TheConsumerRebalanceListener(assignedTopics, listener));
+                        public void setRebalanceListener(final RebalanceListener listener) {
+                            super.setRebalanceListener(new TheConsumerRebalanceListener(assignedTopics, listener));
                         }
                     };
                 }
@@ -341,8 +342,8 @@ public class RegexSourceIntegrationTest {
                 public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
                     return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
                         @Override
-                        public void subscribe(final Pattern topics, final ConsumerRebalanceListener listener) {
-                            super.subscribe(topics, new TheConsumerRebalanceListener(assignedTopics, listener));
+                        public void setRebalanceListener(final RebalanceListener listener) {
+                            super.setRebalanceListener(new TheConsumerRebalanceListener(assignedTopics, listener));
                         }
                     };
                 }
@@ -454,8 +455,8 @@ public class RegexSourceIntegrationTest {
                 public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
                     return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
                         @Override
-                        public void subscribe(final Pattern topics, final ConsumerRebalanceListener listener) {
-                            super.subscribe(topics, new TheConsumerRebalanceListener(leaderAssignment, listener));
+                        public void setRebalanceListener(final RebalanceListener listener) {
+                            super.setRebalanceListener(new TheConsumerRebalanceListener(leaderAssignment, listener));
                         }
                     };
 
@@ -466,8 +467,8 @@ public class RegexSourceIntegrationTest {
                 public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
                     return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
                         @Override
-                        public void subscribe(final Pattern topics, final ConsumerRebalanceListener listener) {
-                            super.subscribe(topics, new TheConsumerRebalanceListener(followerAssignment, listener));
+                        public void setRebalanceListener(final RebalanceListener listener) {
+                            super.setRebalanceListener(new TheConsumerRebalanceListener(followerAssignment, listener));
                         }
                     };
 
@@ -532,30 +533,30 @@ public class RegexSourceIntegrationTest {
         assertThat(expectError.get(), is(true));
     }
 
-    private static class TheConsumerRebalanceListener implements ConsumerRebalanceListener {
+    private static class TheConsumerRebalanceListener implements RebalanceListener {
         private final List<String> assignedTopics;
-        private final ConsumerRebalanceListener listener;
+        private final RebalanceListener listener;
 
-        TheConsumerRebalanceListener(final List<String> assignedTopics, final ConsumerRebalanceListener listener) {
+        TheConsumerRebalanceListener(final List<String> assignedTopics, final RebalanceListener listener) {
             this.assignedTopics = assignedTopics;
             this.listener = listener;
         }
 
         @Override
-        public void onPartitionsRevoked(final Collection<TopicPartition> partitions) {
+        public void onPartitionsRevoked(final Collection<TopicPartition> partitions, final RebalanceConsumer consumer) {
             for (final TopicPartition partition : partitions) {
                 assignedTopics.remove(partition.topic());
             }
-            listener.onPartitionsRevoked(partitions);
+            listener.onPartitionsRevoked(partitions, consumer);
         }
 
         @Override
-        public void onPartitionsAssigned(final Collection<TopicPartition> partitions) {
+        public void onPartitionsAssigned(final Collection<TopicPartition> partitions, final RebalanceConsumer consumer) {
             for (final TopicPartition partition : partitions) {
                 assignedTopics.add(partition.topic());
             }
             Collections.sort(assignedTopics);
-            listener.onPartitionsAssigned(partitions);
+            listener.onPartitionsAssigned(partitions, consumer);
         }
     }
 
