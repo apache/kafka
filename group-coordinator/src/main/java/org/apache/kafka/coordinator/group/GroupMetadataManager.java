@@ -9925,7 +9925,8 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Get the assignment configurations of the provided streams group, as they are passed to the assignor.
+     * Get the assignment configurations of the provided streams group, as they are passed to the assignor. Every
+     * configuration is included, at its default value when the group does not set it.
      */
     private Map<String, String> streamsGroupAssignmentConfigs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
