@@ -1507,12 +1507,13 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), groupResource)
 
     val consumer = createConsumer()
-    consumer.subscribe(Pattern.compile(topicPattern), new ConsumerRebalanceListener {
-      def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
+    consumer.setRebalanceListener(new RebalanceListener {
+      def onPartitionsAssigned(partitions: util.Collection[TopicPartition], rebalanceConsumer: RebalanceConsumer): Unit = {
         assignSemaphore.release()
       }
-      def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
+      def onPartitionsRevoked(partitions: util.Collection[TopicPartition], rebalanceConsumer: RebalanceConsumer): Unit = {
       }})
+    consumer.subscribe(Pattern.compile(topicPattern))
     TestUtils.waitUntilTrue(() => {
       consumer.poll(Duration.ofMillis(500))
       assignSemaphore.tryAcquire()
@@ -1565,12 +1566,13 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     // internal topics are not included, we should not be assigned any partitions from this topic
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)),  new ResourcePattern(TOPIC,
       GROUP_METADATA_TOPIC_NAME, LITERAL))
-    consumer.subscribe(Pattern.compile(GROUP_METADATA_TOPIC_NAME), new ConsumerRebalanceListener {
-      def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
+    consumer.setRebalanceListener(new RebalanceListener {
+      def onPartitionsAssigned(partitions: util.Collection[TopicPartition], rebalanceConsumer: RebalanceConsumer): Unit = {
         assignSemaphore.release()
       }
-      def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
+      def onPartitionsRevoked(partitions: util.Collection[TopicPartition], rebalanceConsumer: RebalanceConsumer): Unit = {
       }})
+    consumer.subscribe(Pattern.compile(GROUP_METADATA_TOPIC_NAME))
     TestUtils.waitUntilTrue(() => {
       consumer.poll(Duration.ofMillis(500))
       assignSemaphore.tryAcquire()
