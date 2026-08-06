@@ -606,131 +606,6 @@ You can now find and query your custom store:
     // Query the store
     String value = store.read("key");
 
-# Querying remote state stores for the entire app
-
-To query remote states for the entire app, you must expose the application's full state to other applications, including applications that are running on different machines.
-
-For example, you have a Kafka Streams application that processes user events in a multi-player video game, and you want to retrieve the latest status of each user directly and display it in a mobile app. Here are the required steps to make the full state of your application queryable:
-
-  1. Add an RPC layer to your application so that the instances of your application can be interacted with via the network (e.g., a REST API, Thrift, a custom protocol, and so on). The instances must respond to interactive queries. You can follow the reference examples provided to get started.
-  2. Expose the RPC endpoints of your application's instances via the `application.server` configuration setting of Kafka Streams. Because RPC endpoints must be unique within a network, each instance has its own value for this configuration setting. This makes an application instance discoverable by other instances.
-  3. In the RPC layer, discover remote application instances and their state stores and query locally available state stores to make the full state of your application queryable. The remote application instances can forward queries to other app instances if a particular instance lacks the local data to respond to a query. The locally available state stores can directly respond to queries.
-
-
-
-![](/43/images/streams-interactive-queries-api-02.png)
-
-Discover any running instances of the same application as well as the respective RPC endpoints they expose for interactive queries
-
-## Adding an RPC layer to your application
-
-There are many ways to add an RPC layer. The only requirements are that the RPC layer is embedded within the Kafka Streams application and that it exposes an endpoint that other application instances and applications can connect to.
-
-## Exposing the RPC endpoints of your application
-
-To enable remote state store discovery in a distributed Kafka Streams application, you must set the [configuration property](../config-streams#streams-developer-guide-required-configs) in the config properties. The `application.server` property defines a unique `host:port` pair that points to the RPC endpoint of the respective instance of a Kafka Streams application. The value of this configuration property will vary across the instances of your application. When this property is set, Kafka Streams will keep track of the RPC endpoint information for every instance of an application, its state stores, and assigned stream partitions through instances of [StreamsMetadata](/{version}/javadoc/org/apache/kafka/streams/state/StreamsMetadata.html).
-
-**Tip**
-
-Consider leveraging the exposed RPC endpoints of your application for further functionality, such as piggybacking additional inter-application communication that goes beyond interactive queries.
-
-This example shows how to configure and run a Kafka Streams application that supports the discovery of its state stores.
-    
-    
-    Properties props = new Properties();
-    // Set the unique RPC endpoint of this application instance through which it
-    // can be interactively queried.  In a real application, the value would most
-    // probably not be hardcoded but derived dynamically.
-    String rpcEndpoint = "host1:4460";
-    props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, rpcEndpoint);
-    // ... further settings may follow here ...
-    
-    StreamsBuilder builder = new StreamsBuilder();
-    
-    KStream<String, String> textLines = builder.stream(stringSerde, stringSerde, "word-count-input");
-    
-    final KGroupedStream<String, String> groupedByWord = textLines
-        .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\W+")))
-        .groupBy((key, word) -> word, Grouped.with(stringSerde, stringSerde));
-    
-    // This call to `count()` creates a state store named "word-count".
-    // The state store is discoverable and can be queried interactively.
-    groupedByWord.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>as("word-count"));
-    
-    // Start an instance of the topology
-    KafkaStreams streams = new KafkaStreams(builder, props);
-    streams.start();
-    
-    // Then, create and start the actual RPC service for remote access to this
-    // application instance's local state stores.
-    //
-    // This service should be started on the same host and port as defined above by
-    // the property `StreamsConfig.APPLICATION_SERVER_CONFIG`.  The example below is
-    // fictitious, but we provide end-to-end demo applications (such as KafkaMusicExample)
-    // that showcase how to implement such a service to get you started.
-    MyRPCService rpcService = ...;
-    rpcService.listenAt(rpcEndpoint);
-
-## Discovering and accessing application instances and their local state stores
-
-The following methods return [StreamsMetadata](/{version}/javadoc/org/apache/kafka/streams/state/StreamsMetadata.html) objects, which provide meta-information about application instances such as their RPC endpoint and locally available state stores.
-
-  * `KafkaStreams#allMetadata()`: find all instances of this application
-  * `KafkaStreams#allMetadataForStore(String storeName)`: find those applications instances that manage local instances of the state store "storeName"
-  * `KafkaStreams#metadataForKey(String storeName, K key, Serializer<K> keySerializer)`: using the default stream partitioning strategy, find the one application instance that holds the data for the given key in the given state store
-  * `KafkaStreams#metadataForKey(String storeName, K key, StreamPartitioner<K, ?> partitioner)`: using `partitioner`, find the one application instance that holds the data for the given key in the given state store
-
-
-
-Attention
-
-If `application.server` is not configured for an application instance, then the above methods will not find any [StreamsMetadata](/{version}/javadoc/org/apache/kafka/streams/state/StreamsMetadata.html) for it.
-
-For example, we can now find the `StreamsMetadata` for the state store named "word-count" that we defined in the code example shown in the previous section:
-    
-    
-    KafkaStreams streams = ...;
-    // Find all the locations of local instances of the state store named "word-count"
-    Collection<StreamsMetadata> wordCountHosts = streams.allMetadataForStore("word-count");
-    
-    // For illustrative purposes, we assume using an HTTP client to talk to remote app instances.
-    HttpClient http = ...;
-    
-    // Get the word count for word (aka key) 'alice': Approach 1
-    //
-    // We first find the one app instance that manages the count for 'alice' in its local state stores.
-    StreamsMetadata metadata = streams.metadataForKey("word-count", "alice", Serdes.String().serializer());
-    // Then, we query only that single app instance for the latest count of 'alice'.
-    // Note: The RPC URL shown below is fictitious and only serves to illustrate the idea.  Ultimately,
-    // the URL (or, in general, the method of communication) will depend on the RPC layer you opted to
-    // implement.  Again, we provide end-to-end demo applications (such as KafkaMusicExample) that showcase
-    // how to implement such an RPC layer.
-    Long result = http.getLong("http://" + metadata.host() + ":" + metadata.port() + "/word-count/alice");
-    
-    // Get the word count for word (aka key) 'alice': Approach 2
-    //
-    // Alternatively, we could also choose (say) a brute-force approach where we query every app instance
-    // until we find the one that happens to know about 'alice'.
-    Optional<Long> result = streams.allMetadataForStore("word-count")
-        .stream()
-        .map(streamsMetadata -> {
-            // Construct the (fictituous) full endpoint URL to query the current remote application instance
-            String url = "http://" + streamsMetadata.host() + ":" + streamsMetadata.port() + "/word-count/alice";
-            // Read and return the count for 'alice', if any.
-            return http.getLong(url);
-        })
-        .filter(s -> s != null)
-        .findFirst();
-
-At this point the full state of the application is interactively queryable:
-
-  * You can discover the running instances of the application and the state stores they manage locally.
-  * Through the RPC layer that was added to the application, you can communicate with these application instances over the network and query them for locally available state.
-  * The application instances are able to serve such queries because they can directly query their own local state stores and respond via the RPC layer.
-  * Collectively, this allows us to query the full state of the entire application.
-
-
-
 # Interactive Queries v2 (IQv2) {#interactive-queries-v2}
 
 The sections above describe the original interactive queries API (informally, "IQv1"), where you obtain a read-only store facade from [KafkaStreams#store(...)](/{version}/javadoc/org/apache/kafka/streams/KafkaStreams.html) and call methods such as `get(key)` or `range(from, to)` on it. Interactive Queries v2 (IQv2), introduced in [KIP-796](https://cwiki.apache.org/confluence/x/34xnCw), is an alternative, more flexible API for the same purpose: querying the local state of a running Kafka Streams application.
@@ -808,10 +683,17 @@ Kafka Streams ships with a set of query types covering the standard store types.
 | `WindowRangeQuery<K, V>` (session store) | `KeyValueIterator<Windowed<K>, V>` | `withKey(key)` |
 | `VersionedKeyQuery<K, V>` | `VersionedRecord<V>` | `withKey(key)`; `.asOf(instant)` |
 | `MultiVersionedKeyQuery<K, V>` | `VersionedRecordIterator<V>` | `withKey(key)`; `.fromTime(instant)`, `.toTime(instant)`, `.withAscendingTimestamps()` / `.withDescendingTimestamps()` |
+| `TimestampedKeyWithHeadersQuery<K, V>` | `ReadOnlyRecord<K, V>` | `withKey(key)`; `.skipCache()` |
+| `TimestampedRangeWithHeadersQuery<K, V>` | `ReadOnlyRecordIterator<K, V>` | `withRange(lower, upper)`, `withLowerBound(lower)`, `withUpperBound(upper)`, `withNoBounds()`; `.withAscendingKeys()` / `.withDescendingKeys()` |
+| `TimestampedWindowKeyWithHeadersQuery<K, V>` | `ReadOnlyRecordIterator<Windowed<K>, V>` | `withKeyAndWindowStartRange(key, timeFrom, timeTo)` |
+| `TimestampedWindowRangeWithHeadersQuery<K, V>` (window store) | `ReadOnlyRecordIterator<Windowed<K>, V>` | `withWindowStartRange(timeFrom, timeTo)` |
+| `TimestampedWindowRangeWithHeadersQuery<K, V>` (session store) | `ReadOnlyRecordIterator<Windowed<K>, V>` | `withKey(key)` |
 
 For range and scan queries (`RangeQuery`, `TimestampedRangeQuery`), passing no bounds performs a full scan, and result ordering is based on the serialized `byte[]` of the keys, not on the logical key order.
 
 The two `WindowRangeQuery` forms are store-specific: window stores accept only `withWindowStartRange`, and session stores only `withKey` — submitting the wrong form fails with `UNKNOWN_QUERY_TYPE`. `WindowRangeQuery.withKey` is how a session store is queried through IQv2.
+
+The `*WithHeaders` query types return records that carry their headers and require a store built with a headers-aware (`*WithHeaders`) supplier; against any other store they fail with `UNKNOWN_QUERY_TYPE`. See [Header-aware stores and interactive queries](#header-aware-stores-interactive-queries) for their result semantics, examples, and store-build requirements.
 
 Versioned key-value stores are queryable **only** through IQv2 — use `VersionedKeyQuery` for a single version (latest, or as of a timestamp) and `MultiVersionedKeyQuery` for a range of versions. The original `KafkaStreams#store(...)` API has no queryable store type for versioned stores.
 
@@ -939,6 +821,129 @@ Position position = result.getPosition(); // pass into a later query for monoton
 
   * Global stores are not yet supported by `query(...)`. Use [KafkaStreams#store(...)](/{version}/javadoc/org/apache/kafka/streams/KafkaStreams.html) to query global stores.
   * The IQv2 API is still evolving and may change in future releases.
+
+# Querying remote state stores for the entire app
+
+To query remote states for the entire app, you must expose the application's full state to other applications, including applications that are running on different machines.
+
+For example, you have a Kafka Streams application that processes user events in a multi-player video game, and you want to retrieve the latest status of each user directly and display it in a mobile app. Here are the required steps to make the full state of your application queryable:
+
+  1. Add an RPC layer to your application so that the instances of your application can be interacted with via the network (e.g., a REST API, Thrift, a custom protocol, and so on). The instances must respond to interactive queries. You can follow the reference examples provided to get started.
+  2. Expose the RPC endpoints of your application's instances via the `application.server` configuration setting of Kafka Streams. Because RPC endpoints must be unique within a network, each instance has its own value for this configuration setting. This makes an application instance discoverable by other instances.
+  3. In the RPC layer, discover remote application instances and their state stores and query locally available state stores to make the full state of your application queryable. The remote application instances can forward queries to other app instances if a particular instance lacks the local data to respond to a query. The locally available state stores can directly respond to queries.
+
+
+
+![](/43/images/streams-interactive-queries-api-02.png)
+
+Discover any running instances of the same application as well as the respective RPC endpoints they expose for interactive queries
+
+## Adding an RPC layer to your application
+
+There are many ways to add an RPC layer. The only requirements are that the RPC layer is embedded within the Kafka Streams application and that it exposes an endpoint that other application instances and applications can connect to.
+
+## Exposing the RPC endpoints of your application
+
+To enable remote state store discovery in a distributed Kafka Streams application, you must set the [configuration property](../config-streams#streams-developer-guide-required-configs) in the config properties. The `application.server` property defines a unique `host:port` pair that points to the RPC endpoint of the respective instance of a Kafka Streams application. The value of this configuration property will vary across the instances of your application. When this property is set, Kafka Streams will keep track of the RPC endpoint information for every instance of an application, its state stores, and assigned stream partitions through instances of [StreamsMetadata](/{version}/javadoc/org/apache/kafka/streams/state/StreamsMetadata.html).
+
+**Tip**
+
+Consider leveraging the exposed RPC endpoints of your application for further functionality, such as piggybacking additional inter-application communication that goes beyond interactive queries.
+
+This example shows how to configure and run a Kafka Streams application that supports the discovery of its state stores.
+    
+    
+    Properties props = new Properties();
+    // Set the unique RPC endpoint of this application instance through which it
+    // can be interactively queried.  In a real application, the value would most
+    // probably not be hardcoded but derived dynamically.
+    String rpcEndpoint = "host1:4460";
+    props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, rpcEndpoint);
+    // ... further settings may follow here ...
+    
+    StreamsBuilder builder = new StreamsBuilder();
+    
+    KStream<String, String> textLines = builder.stream(stringSerde, stringSerde, "word-count-input");
+    
+    final KGroupedStream<String, String> groupedByWord = textLines
+        .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\W+")))
+        .groupBy((key, word) -> word, Grouped.with(stringSerde, stringSerde));
+    
+    // This call to `count()` creates a state store named "word-count".
+    // The state store is discoverable and can be queried interactively.
+    groupedByWord.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>as("word-count"));
+    
+    // Start an instance of the topology
+    KafkaStreams streams = new KafkaStreams(builder, props);
+    streams.start();
+    
+    // Then, create and start the actual RPC service for remote access to this
+    // application instance's local state stores.
+    //
+    // This service should be started on the same host and port as defined above by
+    // the property `StreamsConfig.APPLICATION_SERVER_CONFIG`.  The example below is
+    // fictitious, but we provide end-to-end demo applications (such as KafkaMusicExample)
+    // that showcase how to implement such a service to get you started.
+    MyRPCService rpcService = ...;
+    rpcService.listenAt(rpcEndpoint);
+
+## Discovering and accessing application instances and their local state stores
+
+The following methods return [StreamsMetadata](/{version}/javadoc/org/apache/kafka/streams/state/StreamsMetadata.html) objects, which provide meta-information about application instances such as their RPC endpoint and locally available state stores.
+
+  * `KafkaStreams#allMetadata()`: find all instances of this application
+  * `KafkaStreams#allMetadataForStore(String storeName)`: find those applications instances that manage local instances of the state store "storeName"
+  * `KafkaStreams#metadataForKey(String storeName, K key, Serializer<K> keySerializer)`: using the default stream partitioning strategy, find the one application instance that holds the data for the given key in the given state store
+  * `KafkaStreams#metadataForKey(String storeName, K key, StreamPartitioner<K, ?> partitioner)`: using `partitioner`, find the one application instance that holds the data for the given key in the given state store
+
+
+
+Attention
+
+If `application.server` is not configured for an application instance, then the above methods will not find any [StreamsMetadata](/{version}/javadoc/org/apache/kafka/streams/state/StreamsMetadata.html) for it.
+
+For example, we can now find the `StreamsMetadata` for the state store named "word-count" that we defined in the code example shown in the previous section:
+    
+    
+    KafkaStreams streams = ...;
+    // Find all the locations of local instances of the state store named "word-count"
+    Collection<StreamsMetadata> wordCountHosts = streams.allMetadataForStore("word-count");
+    
+    // For illustrative purposes, we assume using an HTTP client to talk to remote app instances.
+    HttpClient http = ...;
+    
+    // Get the word count for word (aka key) 'alice': Approach 1
+    //
+    // We first find the one app instance that manages the count for 'alice' in its local state stores.
+    StreamsMetadata metadata = streams.metadataForKey("word-count", "alice", Serdes.String().serializer());
+    // Then, we query only that single app instance for the latest count of 'alice'.
+    // Note: The RPC URL shown below is fictitious and only serves to illustrate the idea.  Ultimately,
+    // the URL (or, in general, the method of communication) will depend on the RPC layer you opted to
+    // implement.  Again, we provide end-to-end demo applications (such as KafkaMusicExample) that showcase
+    // how to implement such an RPC layer.
+    Long result = http.getLong("http://" + metadata.host() + ":" + metadata.port() + "/word-count/alice");
+    
+    // Get the word count for word (aka key) 'alice': Approach 2
+    //
+    // Alternatively, we could also choose (say) a brute-force approach where we query every app instance
+    // until we find the one that happens to know about 'alice'.
+    Optional<Long> result = streams.allMetadataForStore("word-count")
+        .stream()
+        .map(streamsMetadata -> {
+            // Construct the (fictituous) full endpoint URL to query the current remote application instance
+            String url = "http://" + streamsMetadata.host() + ":" + streamsMetadata.port() + "/word-count/alice";
+            // Read and return the count for 'alice', if any.
+            return http.getLong(url);
+        })
+        .filter(s -> s != null)
+        .findFirst();
+
+At this point the full state of the application is interactively queryable:
+
+  * You can discover the running instances of the application and the state stores they manage locally.
+  * Through the RPC layer that was added to the application, you can communicate with these application instances over the network and query them for locally available state.
+  * The application instances are able to serve such queries because they can directly query their own local state stores and respond via the RPC layer.
+  * Collectively, this allows us to query the full state of the entire application.
 
 To see an end-to-end application with interactive queries, review the demo applications.
 
