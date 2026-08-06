@@ -9925,9 +9925,7 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Get the assignment configurations of the provided streams group. A configuration is only included once it is
-     * set to a non-default value, so that the configurations of a group that does not use it stay byte-identical to
-     * the ones a version without the configuration computes.
+     * Get the assignment configurations of the provided streams group, as they are passed to the assignor.
      */
     private Map<String, String> streamsGroupAssignmentConfigs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
@@ -9937,9 +9935,7 @@ public class GroupMetadataManager {
             .orElse(config.streamsGroupRackAwareAssignmentTags());
         Map<String, String> configs = new TreeMap<>();
         configs.put("num.standby.replicas", numStandbyReplicas.toString());
-        if (!rackAwareAssignmentTags.isEmpty()) {
-            configs.put("rack.aware.assignment.tags", String.join(",", rackAwareAssignmentTags));
-        }
+        configs.put("rack.aware.assignment.tags", String.join(",", rackAwareAssignmentTags));
         return configs;
     }
 
