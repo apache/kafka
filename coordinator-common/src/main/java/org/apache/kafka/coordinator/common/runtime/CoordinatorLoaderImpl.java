@@ -210,11 +210,6 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
                 buffer.clear();
             }
 
-            // readInto fills the buffer until it is full or the physical end of the file is
-            // reached, so it does not stop at the end of this slice. Bound the buffer to the slice
-            // to avoid copying whatever follows it in the segment file: for a preallocated segment
-            // that is the unwritten tail, which is then parsed as a corrupted batch.
-            buffer.limit(sizeInBytes);
             fileRecords.readInto(buffer, 0);
             return MemoryRecords.readableRecords(buffer);
         } else {

@@ -106,9 +106,12 @@ class TransactionStateManagerTest {
 
   @AfterEach
   def tearDown(): Unit = {
-    openedSegments.foreach(_.close())
-    openedSegments.clear()
-    transactionManager.shutdown()
+    try {
+      openedSegments.foreach(_.close())
+      openedSegments.clear()
+    } finally {
+      transactionManager.shutdown()
+    }
   }
 
   @Test
@@ -1274,10 +1277,11 @@ class TransactionStateManagerTest {
 
     val logMock: UnifiedLog = mock(classOf[UnifiedLog])
     val preallocatedSegment = FileRecords.open(TestUtils.tempFile(), false, 4096, true)
+    openedSegments += preallocatedSegment
     preallocatedSegment.append(firstSegmentRecords)
     val secondSegment = FileRecords.open(TestUtils.tempFile(), false, 0, false)
+    openedSegments += secondSegment
     secondSegment.append(secondSegmentRecords)
-    openedSegments ++= Seq(preallocatedSegment, secondSegment)
 
     // The loader resumes each read from the next offset of the last batch it replayed, so the
     // segment boundaries are derived the same way rather than from the record counts.
