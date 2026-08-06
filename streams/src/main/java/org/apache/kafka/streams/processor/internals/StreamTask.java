@@ -1333,21 +1333,19 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 if (e2eLatencySensor.shouldRecord() && e2eLatencySensor.hasMetrics()) {
                     final double maxLatency = endMs - accumulator.minTs;
                     final double minLatency = endMs - accumulator.maxTs;
-                    if (n == 1) {
-                        e2eLatencySensor.record(maxLatency, endMs);
-                    } else {
-                        e2eLatencySensor.record(maxLatency, endMs);
+                    e2eLatencySensor.record(maxLatency, endMs);
+                    if (n >= 2) {
                         e2eLatencySensor.record(minLatency, endMs);
-                        if (n >= 3) {
-                            final double interiorMeanTs = accumulator.baseTs
-                                + (double) (accumulator.sumOffset
-                                            - (accumulator.minTs - accumulator.baseTs)
-                                            - (accumulator.maxTs - accumulator.baseTs)) / (n - 2);
-                            // clamp against rounding so the filler can't move the sensor's max/min
-                            final double filler = Math.min(maxLatency, Math.max(minLatency, endMs - interiorMeanTs));
-                            for (long i = 0; i < n - 2; i++) {
-                                e2eLatencySensor.record(filler, endMs);
-                            }
+                    }
+                    if (n >= 3) {
+                        final double interiorMeanTs = accumulator.baseTs
+                            + (double) (accumulator.sumOffset
+                                        - (accumulator.minTs - accumulator.baseTs)
+                                        - (accumulator.maxTs - accumulator.baseTs)) / (n - 2);
+                        // clamp against rounding so the filler can't move the sensor's max/min
+                        final double filler = Math.min(maxLatency, Math.max(minLatency, endMs - interiorMeanTs));
+                        for (long i = 0; i < n - 2; i++) {
+                            e2eLatencySensor.record(filler, endMs);
                         }
                     }
                 }

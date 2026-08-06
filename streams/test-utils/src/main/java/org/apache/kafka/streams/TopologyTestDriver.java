@@ -603,8 +603,9 @@ public class TopologyTestDriver implements Closeable {
             while (task.hasRecordsQueued() && task.isProcessable(mockWallClockTime.milliseconds())) {
                 // Process the record ...
                 task.process(mockWallClockTime.milliseconds());
-                // flush terminal e2e latency for the record just processed, as TaskExecutor does;
-                // the clock is re-read afterwards so any wall-clock advance during processing counts
+                // flush terminal e2e latency for the record just processed, mirroring the end-of-batch
+                // flush in TaskExecutor; the mock clock only advances via advanceWallClockTime, so this
+                // second read returns the same value the record was processed with
                 task.maybeFlushTerminalE2ELatency(mockWallClockTime.milliseconds());
                 task.maybePunctuateStreamTime();
                 commit(task.prepareCommit(true));
