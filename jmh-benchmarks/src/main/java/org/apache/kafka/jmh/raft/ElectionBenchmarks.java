@@ -97,6 +97,20 @@ public class ElectionBenchmarks {
     }
 
     /**
+     * The local node times out and starts an election, then that election times out without a
+     * winner, and it falls back to Unattached for the next invocation.
+     */
+    @Benchmark
+    public void prospectiveToUnattachedOnTimeout(
+        UnattachedWithMultipleVoters state,
+        KRaftBenchmarkingCounters counters
+    ) throws Exception {
+        state.benchmark.unattachedToProspective();
+        state.benchmark.prospectiveToUnattached();
+        counters.recordInvocation(state.benchmark);
+    }
+
+    /**
      * Starting state: the local node is Prospective in a {@code voterCount}-node cluster, with its
      * pre-vote requests already on the send queue.
      */

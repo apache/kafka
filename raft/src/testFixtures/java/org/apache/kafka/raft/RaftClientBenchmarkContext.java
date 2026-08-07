@@ -405,4 +405,9 @@ public final class RaftClientBenchmarkContext {
         context.pollUntil(() -> context.client.quorum().isProspective());
     }
 
+    public void prospectiveToUnattached() throws Exception {
+        context.time.sleep(context.electionTimeoutMs() * 2L);
+        context.pollUntil(() -> context.client.quorum().isUnattached());
+    }
+
 }
