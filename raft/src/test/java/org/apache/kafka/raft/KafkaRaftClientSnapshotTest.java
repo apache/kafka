@@ -769,6 +769,51 @@ public final class KafkaRaftClientSnapshotTest {
 
     @ParameterizedTest
     @ValueSource(booleans = { false, true })
+    public void testFetchSnapshotRequestWithoutTopics(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
+        Set<Integer> voters = Set.of(localId, localId + 1);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withUnknownLeader(3)
+            .withKip853Rpc(withKip853Rpc)
+            .build();
+
+        context.unattachedToLeader();
+        context.deliverRequest(new FetchSnapshotRequestData());
+        context.poll();
+        context.assertSentFetchSnapshotResponse(Errors.INVALID_REQUEST);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { false, true })
+    public void testFetchSnapshotRequestWithoutPartitions(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
+        Set<Integer> voters = Set.of(localId, localId + 1);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withUnknownLeader(3)
+            .withKip853Rpc(withKip853Rpc)
+            .build();
+
+        context.unattachedToLeader();
+
+        // FetchSnapshot is invalid for a topic that doesn't contain any partition.
+        context.deliverRequest(
+            new FetchSnapshotRequestData()
+                .setTopics(
+                    List.of(
+                        new FetchSnapshotRequestData.TopicSnapshot()
+                            .setName(context.metadataPartition.topic())
+                    )
+                )
+        );
+
+        context.poll();
+        context.assertSentFetchSnapshotResponse(Errors.INVALID_REQUEST);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { false, true })
     public void testFetchSnapshotRequestAsLeader(boolean withKip853Rpc) throws Exception {
         int localId = randomReplicaId();
         Set<Integer> voters = Set.of(localId, localId + 1);
