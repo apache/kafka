@@ -172,6 +172,8 @@ public class DefaultStateUpdater implements StateUpdater {
             } catch (final Throwable anyOtherThrowable) {
                 handleFatalThrowable(anyOtherThrowable);
             } finally {
+                // report the tasks before the pending actions, so that a task is already reported as failed when the
+                // caller of a failed action looks for it
                 failRemainingTasks();
                 failPendingActions();
                 updaterMetrics.clear();

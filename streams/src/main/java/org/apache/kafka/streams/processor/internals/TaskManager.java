@@ -718,23 +718,22 @@ public class TaskManager {
 
     private StateUpdater.RemovedTaskResult waitForFuture(final TaskId taskId,
                                                          final CompletableFuture<StateUpdater.RemovedTaskResult> future) {
-        StateUpdater.RemovedTaskResult removedTaskResult;
         try {
             long minutesWaited = 0L;
             while (true) {
                 try {
-                    removedTaskResult = future.get(REMOVAL_LOG_INTERVAL_MINUTES, TimeUnit.MINUTES);
-                    break;
+                    final StateUpdater.RemovedTaskResult removedTaskResult =
+                        future.get(REMOVAL_LOG_INTERVAL_MINUTES, TimeUnit.MINUTES);
+                    if (removedTaskResult == null) {
+                        throw new IllegalStateException("Task " + taskId + " was not found in the state updater. "
+                            + BUG_ERROR_MESSAGE);
+                    }
+                    return removedTaskResult;
                 } catch (final java.util.concurrent.TimeoutException retryTimeout) {
                     minutesWaited += REMOVAL_LOG_INTERVAL_MINUTES;
                     log.warn("Waiting for the removal of task {} from the state updater for {} minute(s).", taskId, minutesWaited);
                 }
             }
-            if (removedTaskResult == null) {
-                throw new IllegalStateException("Task " + taskId + " was not found in the state updater. "
-                    + BUG_ERROR_MESSAGE);
-            }
-            return removedTaskResult;
         } catch (final ExecutionException executionException) {
             log.warn("An exception happened when removing task {} from the state updater. The task was added to the " +
                     "failed task in the state updater: ",
@@ -865,11 +864,11 @@ public class TaskManager {
 
     public boolean checkStateUpdater(final long now,
                                      final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
+        maybeThrowFatalExceptionFromStateUpdater();
         addTasksToStateUpdater();
         if (stateUpdater.hasExceptionsAndFailedTasks()) {
             handleExceptionsFromStateUpdater();
         }
-        maybeThrowFatalExceptionFromStateUpdater();
         if (stateUpdater.restoresActiveTasks()) {
             handleRestoredTasksFromStateUpdater(now, offsetResetter);
         }
