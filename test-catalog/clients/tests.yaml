@@ -1353,6 +1353,7 @@ org.apache.kafka.clients.consumer.internals.CommitRequestManagerTest:
 - testCommitSyncShouldSucceedWithTopicId
 - testCommitSyncShouldSucceedWithUnknownOffsetAndMetadata
 - testCommitSyncWithEmptyOffsets
+- testDuplicatedOffsetFetchFailsWithStaleEpochAndRetriesWithNewEpoch
 - testEnsureBackoffRetryOnOffsetCommitRequestTimeout
 - testEnsureCommitSensorRecordsMetric
 - testFetchOffsetsWithTopicIdsDoesNotFailOnUnsubscribedTopics
@@ -2654,6 +2655,7 @@ org.apache.kafka.clients.consumer.internals.StreamsGroupTopologyDescriptionReque
 - testTopologyDescriptionWhenPushFlagNotSet
 - testWireTopologyDescriptionNull
 org.apache.kafka.clients.consumer.internals.StreamsMembershipManagerTest:
+- testActiveTaskOfUnknownSubtopologyInHeartbeatResponseFailsMember
 - testActiveTasksAreNullInHeartbeatResponse
 - testAssignedPartitionCountMetricRegistered
 - testConsumerPollWhenNotJoining
@@ -2670,6 +2672,7 @@ org.apache.kafka.clients.consumer.internals.StreamsMembershipManagerTest:
 - testIsLeavingGroupReturnsFalseForDynamicMemberWithRemainInGroupOperation
 - testIsLeavingGroupReturnsTrueForStaticMemberWithRemainInGroupOperation
 - testJoining
+- testKnownTasksAlongsideUnknownSubtopologyInHeartbeatResponseFailMember
 - testLeaveGroupDuringReconciliationThenRejoin
 - testLeaveGroupEpochIsStaticMemberEpochForStaticMember
 - testLeaveGroupOnCloseWhenInGroupWithAssignment
@@ -2735,6 +2738,7 @@ org.apache.kafka.clients.consumer.internals.StreamsMembershipManagerTest:
 - testReconcilingWhenReconciliationAbortedAfterAssignmentDueToRejoin
 - testReconcilingWhenReconciliationAbortedBeforeAssignmentDueToNotInReconciling
 - testReconcilingWhenReconciliationAbortedBeforeAssignmentDueToRejoin
+- testStandbyTaskOfUnknownSubtopologyInHeartbeatResponseFailsMember
 - testStandbyTasksAreNullInHeartbeatResponse
 - testStaticMemberUsesExpectedLeaveEpochOnClose
 - testTransitionToFatalMarksPendingRevocationBeforeCallback
@@ -2747,6 +2751,7 @@ org.apache.kafka.clients.consumer.internals.StreamsMembershipManagerTest:
 - testTransitionToFatalWhenInUnsubscribe
 - testTransitionToStaleMarksPendingRevocationBeforeCallback
 - testUnexpectedErrorInHeartbeatResponse
+- testWarmupTaskOfUnknownSubtopologyInHeartbeatResponseFailsMember
 - testWarmupTasksAreNullInHeartbeatResponse
 org.apache.kafka.clients.consumer.internals.StreamsRebalanceDataTest:
 - assignmentShouldNotAcceptNulls
