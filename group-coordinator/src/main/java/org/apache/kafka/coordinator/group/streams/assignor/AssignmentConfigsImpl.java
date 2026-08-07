@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.streams.assignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.AssignmentConfigs;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -32,8 +33,33 @@ public record AssignmentConfigsImpl(
     List<String> rackAwareAssignmentTags
 ) implements AssignmentConfigs {
 
+    private static final String NUM_STANDBY_REPLICAS_CONFIG = "num.standby.replicas";
+    private static final String RACK_AWARE_ASSIGNMENT_TAGS_CONFIG = "rack.aware.assignment.tags";
+
+    /**
+     * The configs used for a group that has none of them set.
+     */
+    public static final AssignmentConfigsImpl DEFAULT = new AssignmentConfigsImpl(0, List.of());
+
     public AssignmentConfigsImpl {
         // The list is exposed to a custom assignor through the public AssignmentConfigs interface.
         rackAwareAssignmentTags = List.copyOf(Objects.requireNonNull(rackAwareAssignmentTags));
+    }
+
+    /**
+     * Converts the raw assignment configs computed for the group into the typed configs passed to the assignor.
+     */
+    public static AssignmentConfigsImpl fromMap(Map<String, String> configs) {
+        // Both configs can be absent: the rack-aware assignment tags are only set when any are configured, and the
+        // whole map is empty when it was replayed from a group metadata record written before the last assignment
+        // configs were persisted.
+        String numStandbyReplicas = configs.get(NUM_STANDBY_REPLICAS_CONFIG);
+        String rackAwareAssignmentTags = configs.get(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
+        return new AssignmentConfigsImpl(
+            numStandbyReplicas == null ? DEFAULT.numStandbyReplicas() : Integer.parseInt(numStandbyReplicas),
+            rackAwareAssignmentTags == null
+                ? DEFAULT.rackAwareAssignmentTags()
+                : List.of(rackAwareAssignmentTags.trim().split("\\s*,\\s*", -1))
+        );
     }
 }

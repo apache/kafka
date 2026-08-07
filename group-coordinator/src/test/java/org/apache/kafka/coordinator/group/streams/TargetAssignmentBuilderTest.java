@@ -480,7 +480,7 @@ public class TargetAssignmentBuilderTest {
             TopologyMetadata topologyMetadata = new TopologyMetadata(metadataImage, subtopologies);
 
             // Prepare the expected assignment spec.
-            GroupSpecImpl groupSpec = new GroupSpecImpl(memberMetadataMap, new AssignmentConfigsImpl(0, List.of()));
+            GroupSpecImpl groupSpec = new GroupSpecImpl(memberMetadataMap, AssignmentConfigsImpl.DEFAULT);
 
             // We use `any` here to always return an assignment but use `verify` later on
             // to ensure that the input was correct.

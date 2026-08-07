@@ -53,7 +53,7 @@ public class MockAssignorTest {
         TaskAssignorException ex = assertThrows(TaskAssignorException.class, () -> assignor.assign(
             new GroupSpecImpl(
                 Map.of(),
-                new AssignmentConfigsImpl(0, List.of())
+                AssignmentConfigsImpl.DEFAULT
             ),
             new TopologyDescriberImpl(5, List.of("test-subtopology"))
         ));
@@ -91,7 +91,7 @@ public class MockAssignorTest {
         TaskAssignorException ex = assertThrows(TaskAssignorException.class, () -> assignor.assign(
             new GroupSpecImpl(
                 Map.of("member1", memberMetadata1, "member2", memberMetadata2),
-                new AssignmentConfigsImpl(0, List.of())
+                AssignmentConfigsImpl.DEFAULT
             ),
             new TopologyDescriberImpl(5, List.of("test-subtopology"))
         ));
@@ -105,7 +105,7 @@ public class MockAssignorTest {
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(
                 Map.of(),
-                new AssignmentConfigsImpl(0, List.of())
+                AssignmentConfigsImpl.DEFAULT
             ),
             new TopologyDescriberImpl(5, List.of())
         );
@@ -132,7 +132,7 @@ public class MockAssignorTest {
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(
                 Map.of("test_member", memberMetadata),
-                new AssignmentConfigsImpl(0, List.of())
+                AssignmentConfigsImpl.DEFAULT
             ),
             new TopologyDescriberImpl(4, List.of("test-subtopology"))
         );
@@ -176,7 +176,7 @@ public class MockAssignorTest {
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(
                 mkMap(mkEntry("test_member1", memberMetadata1), mkEntry("test_member2", memberMetadata2)),
-                new AssignmentConfigsImpl(0, List.of())
+                AssignmentConfigsImpl.DEFAULT
             ),
             new TopologyDescriberImpl(4, List.of("test-subtopology1", "test-subtopology2"))
         );
@@ -234,7 +234,7 @@ public class MockAssignorTest {
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(
                 mkMap(mkEntry("test_member1", memberMetadata1), mkEntry("test_member2", memberMetadata2)),
-                new AssignmentConfigsImpl(0, List.of())
+                AssignmentConfigsImpl.DEFAULT
             ),
             new TopologyDescriberImpl(4, List.of("test-subtopology1", "test-subtopology2"))
         );
