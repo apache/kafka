@@ -661,6 +661,18 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         int newLeaderEpoch = updateLeaderEpoch ? partitionData.leaderEpoch() : currentState.leaderEpoch();
         long newStartOffset = Math.max(partitionData.startOffset(), currentState.startOffset());
 
+        // Based on the start offset value of the incoming request and the
+        // current state, the deliveryCompleteCount needs to be chosen carefully.
+        int deliveryCompleteCount = partitionData.deliveryCompleteCount();
+
+        if (partitionData.startOffset() == currentState.startOffset()) {
+            // Incoming request has start offset equal to the current state.
+            deliveryCompleteCount = Math.max(partitionData.deliveryCompleteCount(), currentState.deliveryCompleteCount());
+        } else if (partitionData.startOffset() < currentState.startOffset()) {
+            // Incoming request has start offset behind the current state.
+            deliveryCompleteCount = currentState.deliveryCompleteCount();
+        }
+
         if (snapshotUpdateCount.getOrDefault(key, 0) >= updatesPerSnapshotLimit) {
             // Since the number of update records for this share part key exceeds snapshotUpdateRecordsPerSnapshot
             // or state epoch has incremented, we should be creating a share snapshot record.
@@ -670,7 +682,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 new ShareGroupOffset.Builder()
                     .setSnapshotEpoch(currentState.snapshotEpoch() + 1)   // We must increment snapshot epoch as this is new snapshot.
                     .setStartOffset(newStartOffset)
-                    .setDeliveryCompleteCount(partitionData.deliveryCompleteCount())
+                    .setDeliveryCompleteCount(deliveryCompleteCount)
                     .setLeaderEpoch(newLeaderEpoch)
                     .setStateEpoch(currentState.stateEpoch())
                     .setStateBatches(mergeBatches(currentState.stateBatches(), partitionData, newStartOffset))
@@ -686,7 +698,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 new ShareGroupOffset.Builder()
                     .setSnapshotEpoch(currentState.snapshotEpoch()) // Use same snapshotEpoch as last share snapshot.
                     .setStartOffset(newStartOffset) // Prevents start offset from regressing.
-                    .setDeliveryCompleteCount(partitionData.deliveryCompleteCount())
+                    .setDeliveryCompleteCount(deliveryCompleteCount)
                     .setLeaderEpoch(newLeaderEpoch)
                     .setStateBatches(mergeBatches(List.of(), partitionData, newStartOffset))
                     .build());
