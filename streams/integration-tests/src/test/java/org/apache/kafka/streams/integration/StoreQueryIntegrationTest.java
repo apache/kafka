@@ -18,7 +18,6 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -101,34 +100,6 @@ public class StoreQueryIntegrationTest {
     private static final String INPUT_TOPIC_NAME = "input-topic";
     private static final String TABLE_NAME = "source-table";
 
-    private static final StreamPartitioner<Integer, Object> PARTITION_ZERO_PARTITIONER =
-        new StreamPartitioner<>() {
-            @SuppressWarnings("removal")
-            @Override
-            public Optional<Set<Integer>> partitions(
-                final String topic,
-                final Integer key,
-                final Object value,
-                final int numPartitions
-            ) {
-                throw new AssertionError(
-                    "Deprecated 4-argument partitions method was called instead of "
-                        + "5-argument method containing headers."
-                );
-            }
-
-            @Override
-            public Optional<Set<Integer>> partitions(
-                final String topic,
-                final Integer key,
-                final Object value,
-                final Headers headers,
-                final int numPartitions
-            ) {
-                return Optional.of(Collections.singleton(0));
-            }
-        };
-
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
     private String appId;
@@ -160,6 +131,7 @@ public class StoreQueryIntegrationTest {
         CLUSTER.stop();
     }
 
+    @SuppressWarnings("removal")
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldQueryOnlyActivePartitionStoresByDefault(final boolean withHeaders) throws Exception {
@@ -184,7 +156,7 @@ public class StoreQueryIntegrationTest {
         until(() -> {
 
             final KeyQueryMetadata keyQueryMetadata = kafkaStreams1
-                    .queryMetadataForKey(TABLE_NAME, key, PARTITION_ZERO_PARTITIONER);
+                    .queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> Optional.of(Collections.singleton(0)));
 
             final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = keyValueStore();
             final ReadOnlyKeyValueStore<Integer, Integer> store1 = getStore(TABLE_NAME, kafkaStreams1, queryableStoreType);
@@ -209,6 +181,7 @@ public class StoreQueryIntegrationTest {
         });
     }
 
+    @SuppressWarnings("removal")
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldQuerySpecificActivePartitionStores(final boolean withHeaders) throws Exception {
@@ -232,7 +205,7 @@ public class StoreQueryIntegrationTest {
         assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
         until(() -> {
             final KeyQueryMetadata keyQueryMetadata = kafkaStreams1
-                    .queryMetadataForKey(TABLE_NAME, key, PARTITION_ZERO_PARTITIONER);
+                    .queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> Optional.of(Collections.singleton(0)));
 
             //key belongs to this partition
             final int keyPartition = keyQueryMetadata.partition();
@@ -330,6 +303,7 @@ public class StoreQueryIntegrationTest {
         }, "store2 cannot find results for key");
     }
 
+    @SuppressWarnings("removal")
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldQuerySpecificStalePartitionStores(final boolean withHeaders) throws Exception {
@@ -351,7 +325,7 @@ public class StoreQueryIntegrationTest {
         // Assert that all messages in the first batch were processed in a timely manner
         assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
         final KeyQueryMetadata keyQueryMetadata = kafkaStreams1
-                .queryMetadataForKey(TABLE_NAME, key, PARTITION_ZERO_PARTITIONER);
+                .queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> Optional.of(Collections.singleton(0)));
 
         //key belongs to this partition
         final int keyPartition = keyQueryMetadata.partition();
@@ -597,29 +571,10 @@ public class StoreQueryIntegrationTest {
     @ValueSource(booleans = {false, true})
     public void shouldFailWithIllegalArgumentExceptionWhenIQPartitionerReturnsMultiplePartitions(final boolean withHeaders) throws Exception {
 
+        @SuppressWarnings("removal")
         class BroadcastingPartitioner implements StreamPartitioner<Integer, String> {
-            @SuppressWarnings("removal")
             @Override
-            public Optional<Set<Integer>> partitions(
-                final String topic,
-                final Integer key,
-                final String value,
-                final int numPartitions
-            ) {
-                throw new AssertionError(
-                    "Deprecated 4-argument partitions method was called instead of "
-                        + "5-argument method containing headers."
-                );
-            }
-
-            @Override
-            public Optional<Set<Integer>> partitions(
-                final String topic,
-                final Integer key,
-                final String value,
-                final Headers headers,
-                final int numPartitions
-            ) {
+            public Optional<Set<Integer>> partitions(final String topic, final Integer key, final String value, final int numPartitions) {
                 return Optional.of(IntStream.range(0, numPartitions).boxed().collect(Collectors.toSet()));
             }
         }

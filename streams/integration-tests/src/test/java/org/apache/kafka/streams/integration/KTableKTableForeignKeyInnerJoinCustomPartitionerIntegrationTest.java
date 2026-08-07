@@ -19,7 +19,6 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -99,83 +98,8 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
 
         @SuppressWarnings("removal")
         @Override
-        public Optional<Set<Integer>> partitions(
-            final String topic,
-            final String key,
-            final Void value,
-            final int numPartitions
-        ) {
-            throw new AssertionError(
-                "Deprecated 4-argument partitions method was called instead of "
-                    + "5-argument method containing headers."
-            );
-        }
-
-        @Override
-        public Optional<Set<Integer>> partitions(
-            final String topic,
-            final String key,
-            final Void value,
-            final Headers headers,
-            final int numPartitions
-        ) {
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final Void value, final int numPartitions) {
             return Optional.of(Set.of(0, 1, 2));
-        }
-    }
-
-    private static class TableAPartitioner<V> implements StreamPartitioner<String, V> {
-
-        @SuppressWarnings("removal")
-        @Override
-        public Optional<Set<Integer>> partitions(
-            final String topic,
-            final String key,
-            final V value,
-            final int numPartitions
-        ) {
-            throw new AssertionError(
-                "Deprecated 4-argument partitions method was called instead of "
-                    + "5-argument method containing headers."
-            );
-        }
-
-        @Override
-        public Optional<Set<Integer>> partitions(
-            final String topic,
-            final String key,
-            final V value,
-            final Headers headers,
-            final int numPartitions
-        ) {
-            return Optional.of(Collections.singleton(Math.abs(getKeyB(key).hashCode()) % numPartitions));
-        }
-    }
-
-    private static class TableBPartitioner<V> implements StreamPartitioner<String, V> {
-
-        @SuppressWarnings("removal")
-        @Override
-        public Optional<Set<Integer>> partitions(
-            final String topic,
-            final String key,
-            final V value,
-            final int numPartitions
-        ) {
-            throw new AssertionError(
-                "Deprecated 4-argument partitions method was called instead of "
-                    + "5-argument method containing headers."
-            );
-        }
-
-        @Override
-        public Optional<Set<Integer>> partitions(
-            final String topic,
-            final String key,
-            final V value,
-            final Headers headers,
-            final int numPartitions
-        ) {
-            return Optional.of(Collections.singleton(Math.abs(key.hashCode()) % numPartitions));
         }
     }
 
@@ -329,6 +253,7 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
         return streamsConfig;
     }
 
+    @SuppressWarnings("removal")
     private static KafkaStreams prepareTopology(final String queryableName, final Properties streamsConfig) {
 
         final UniqueTopicSerdeScope serdeScope = new UniqueTopicSerdeScope();
@@ -358,8 +283,8 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
         final ValueJoiner<String, String, String> joiner = (value1, value2) -> "value1=" + value1 + ",value2=" + value2;
 
         final TableJoined<String, String> tableJoined = TableJoined.with(
-            new TableAPartitioner<>(),
-            new TableBPartitioner<>()
+            (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(Math.abs(getKeyB(key).hashCode()) % numPartitions)),
+            (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(Math.abs(key.hashCode()) % numPartitions))
         );
 
         table1.join(table2, KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest::getKeyB, joiner, tableJoined, materialized)
@@ -371,6 +296,7 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
         return new KafkaStreams(builder.build(streamsConfig), streamsConfig);
     }
 
+    @SuppressWarnings("removal")
     private static KafkaStreams prepareTopologyWithNonSingletonPartitions(final String queryableName, final Properties streamsConfig) {
 
         final UniqueTopicSerdeScope serdeScope = new UniqueTopicSerdeScope();
@@ -401,7 +327,7 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
 
         final TableJoined<String, String> tableJoined = TableJoined.with(
                 new MultiPartitioner(),
-                new TableBPartitioner<>()
+                (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(Math.abs(key.hashCode()) % numPartitions))
         );
 
         table1.join(table2, KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest::getKeyB, joiner, tableJoined, materialized)
@@ -413,17 +339,19 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
         return new KafkaStreams(builder.build(streamsConfig), streamsConfig);
     }
 
+    @SuppressWarnings("removal")
     private static Repartitioned<String, String> repartitionA() {
         final Repartitioned<String, String> repartitioned = Repartitioned.as("a");
         return repartitioned.withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
-            .withStreamPartitioner(new TableAPartitioner<>())
+            .withStreamPartitioner((topic, key, value, numPartitions) -> Optional.of(Collections.singleton(Math.abs(getKeyB(key).hashCode()) % numPartitions)))
             .withNumberOfPartitions(4);
     }
 
+    @SuppressWarnings("removal")
     private static Repartitioned<String, String> repartitionB() {
         final Repartitioned<String, String> repartitioned = Repartitioned.as("b");
         return repartitioned.withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
-            .withStreamPartitioner(new TableBPartitioner<>())
+            .withStreamPartitioner((topic, key, value, numPartitions) -> Optional.of(Collections.singleton(Math.abs(key.hashCode()) % numPartitions)))
             .withNumberOfPartitions(4);
     }
 
