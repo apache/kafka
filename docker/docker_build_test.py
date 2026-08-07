@@ -51,7 +51,7 @@ def run_docker_tests(image, tag, kafka_url, image_type):
         execute(["mkdir", f"{temp_dir_path}/fixtures/kafka"])
         execute(["tar", "xfz", f"{temp_dir_path}/kafka.tgz", "-C", f"{temp_dir_path}/fixtures/kafka", "--strip-components", "1"])
         failure_count = run_tests(f"{image}:{tag}", image_type, temp_dir_path)
-    except:
+    except Exception:
         raise SystemError("Failed to run the tests")
     finally:
         shutil.rmtree(temp_dir_path)

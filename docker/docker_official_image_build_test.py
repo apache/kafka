@@ -55,7 +55,7 @@ def build_docker_official_image(image, tag, kafka_version, image_type):
     command = command.replace("$DOCKER_DIR", f"{temp_dir_path}/{image_type}")
     try:
         execute(command.split())
-    except:
+    except Exception:
         raise SystemError("Docker Image Build failed")
     finally:
         shutil.rmtree(temp_dir_path)

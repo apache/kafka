@@ -45,7 +45,7 @@ def build_push(image, kafka_url, image_type):
         create_builder()
         build_docker_image_runner(f"docker buildx build -f $DOCKER_FILE --build-arg kafka_url={kafka_url} --build-arg build_date={date.today()} --push \
               --platform linux/amd64,linux/arm64 --tag {image} $DOCKER_DIR", image_type)
-    except:
+    except Exception:
         raise SystemError("Docker image push failed")
     finally:
         remove_builder()

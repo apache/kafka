@@ -19,7 +19,7 @@ def file_exists(node, file):
     try:
         node.account.ssh("cat " + file, allow_fail=False)
         return True
-    except:
+    except Exception:
         return False
 
 def path_exists(node, path):
@@ -27,7 +27,7 @@ def path_exists(node, path):
     try:
         node.account.ssh("ls " + path, allow_fail=False)
         return True
-    except:
+    except Exception:
         return False
 
 def line_count(node, file):

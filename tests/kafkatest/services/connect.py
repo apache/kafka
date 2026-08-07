@@ -86,7 +86,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
         """Return process ids for Kafka Connect processes."""
         try:
             return [pid for pid in node.account.ssh_capture("cat " + self.PID_FILE, callback=int)]
-        except:
+        except Exception:
             return []
 
     def set_configs(self, config_template_func, connector_config_templates=None):

@@ -125,7 +125,7 @@ class StreamsRelationalSmokeTest(BaseStreamsTest):
 
         try:
             driver.node.account.ssh("! grep -q 'Smoke test complete' %s" % LOG_FILE, allow_fail=False)
-        except:
+        except Exception:
             self.logger.info("Streams completed smoke test processing before the scenario was complete." +
                              " Increase the produce duration in RelationalSmokeTest.main().")
 

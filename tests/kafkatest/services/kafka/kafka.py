@@ -1032,7 +1032,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         for pid in self.pids(node):
             try:
                 node.account.signal(pid, signal.SIGQUIT, allow_fail=True)
-            except:
+            except Exception:
                 self.logger.warn("Could not dump threads on node")
 
     def clean_node(self, node):
@@ -1684,7 +1684,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         try:
             return json.loads(cluster)['id'] if cluster else None
-        except:
+        except Exception:
             self.logger.debug("Data in /cluster/id znode could not be parsed. Data = %s" % cluster)
             raise
 
