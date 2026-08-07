@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.metadata.authorizer;
+package org.apache.kafka.server.authorizer.internals;
 
 import org.apache.commons.net.util.SubnetUtils;
 import org.apache.commons.net.util.SubnetUtils6;
