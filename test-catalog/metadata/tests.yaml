@@ -827,16 +827,6 @@ org.apache.kafka.metadata.VersionRangeTest:
 - testContains
 - testEquality
 - testToString
-org.apache.kafka.metadata.authorizer.CidrUtilsTest:
-- testIpv4MappedAddress
-- testIpv4MappedAddressWithSubnet
-- testIsInRangeNullOrNonCidr
-- testValidateHostnameWithPath
-- testValidateInvalidIpv4Cidr
-- testValidateInvalidIpv6Cidr
-- testValidateIpv4MappedIpv6Cidr
-- testValidateValidIpv4Cidr
-- testValidateValidIpv6Cidr
 org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizerTest:
 - testCreateAcls
 - testCreateAclsError
@@ -865,6 +855,7 @@ org.apache.kafka.metadata.authorizer.StandardAuthorizerTest:
 - testAllowEveryoneIfNoAclFoundConfigEnabled
 - testAuthorizationPriorToCompleteInitialLoad
 - testAuthorizationWithManyAcls
+- testAuthorizeByResourceTypeWithCidrHost
 - testAuthorizerMetrics
 - testCompleteInitialLoad
 - testCompleteInitialLoadWithException

@@ -5929,5 +5929,15 @@ org.apache.kafka.common.utils.internals.ThreadUtilsTest:
 - testThreadNameWithNumberNoDemon
 - testThreadNameWithoutNumberDemon
 - testThreadNameWithoutNumberNoDemon
+org.apache.kafka.server.authorizer.internals.CidrUtilsTest:
+- testIpv4MappedAddress
+- testIpv4MappedAddressWithSubnet
+- testIsInRangeNullOrNonCidr
+- testValidateHostnameWithPath
+- testValidateInvalidIpv4Cidr
+- testValidateInvalidIpv6Cidr
+- testValidateIpv4MappedIpv6Cidr
+- testValidateValidIpv4Cidr
+- testValidateValidIpv6Cidr
 org.apache.kafka.server.policy.AlterConfigPolicyTest:
 - testRequestMetadataEquals
