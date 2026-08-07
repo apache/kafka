@@ -200,96 +200,118 @@ public class StoreChangelogReader implements ChangelogReader {
 
     private static final long DEFAULT_OFFSET_UPDATE_MS = Duration.ofMinutes(5L).toMillis();
 
+    // Windows the probe reads back from each partition's end. Not 1: under EOS the last offset is
+    // usually a transaction control record, which is never delivered to a consumer, so probing
+    // there is a guaranteed empty poll. The first window answers the large majority; only the
+    // partitions it cannot answer for pay to widen.
+    private static final long[] PROBE_WINDOWS = {128L, 512L, 2048L};
+
+    // One empty poll proves nothing: poll() returns as soon as any fetch lands, so a partition can
+    // come back empty because another was served first.
+    private static final int PROBE_IDLE_POLLS = 3;
+
+    // Polls' worth of waiting owed to a window before it may be called empty. A poll returning
+    // immediately has not waited on a fetch, so a run of them is no evidence -- and widening on
+    // that basis discards the fetch that was about to answer.
+    private static final int PROBE_MIN_WAIT_POLLS = 5;
+
+    // Ceiling per window, so polls that return without waiting cannot spin the probe.
+    private static final int PROBE_MAX_POLLS = 30;
+
     private ChangelogReaderState state;
 
     private final Time time;
     private final Logger log;
-    /** Positions the backward probe tries per partition: 32, 64 ... 512 offsets back. */
-    private static final int PROBE_MAX_ATTEMPTS = 5;
-
-    /** Polls per position, so a fetch that has not landed is not mistaken for an empty offset. */
-    private static final int PROBE_POLLS_PER_POSITION = 3;
-
-    // not 1: under EOS the last offset is nearly always a transaction control record, which is
-    // never delivered to a consumer, so probing there is a guaranteed empty poll. Starting further
-    // back is free, since the probe takes the newest record of the returned batch
-    private static final long PROBE_INITIAL_BACK = 32L;
+    private final Duration pollTime;
+    private final long updateOffsetIntervalMs;
 
     /**
-     * Walk backwards from each partition's end offset until a data record materialises, so its
-     * timestamp can drive the retention-based seek.
+     * Read back from each partition's end and take the newest timestamp found, to drive the
+     * retention-based seek. A window that cannot answer is widened rather than abandoned;
+     * partitions the widest window still cannot answer for go to log start.
      */
     private void runBackwardProbe(final Set<TopicPartition> unresolved,
-                                  final Map<TopicPartition, Long> backByPartition,
                                   final Map<TopicPartition, Long> latestTimestamps,
                                   final Map<TopicPartition, Long> beginningOffsets,
                                   final Map<TopicPartition, Long> endOffsets) {
-        // every partition needs a position before the first poll: poll() updates fetch positions
-        // for the whole assignment and the restore consumer has auto.offset.reset=none
-        seekProbePositions(unresolved, backByPartition, beginningOffsets, endOffsets);
-
-        for (int position = 0; position < PROBE_MAX_ATTEMPTS && !unresolved.isEmpty(); position++) {
-            // poll repeatedly at the current positions rather than stepping back on the first
-            // empty result: one poll returns as soon as any fetch lands, so a partition can come
-            // back empty because another was served first or because its own fetch has not
-            // arrived, neither of which says anything about the offset -- and re-seeking on that
-            // basis cancels the fetch that was about to answer
-            for (int poll = 0; poll < PROBE_POLLS_PER_POSITION && !unresolved.isEmpty(); poll++) {
-                collectProbed(restoreConsumer.poll(pollTime), unresolved, latestTimestamps);
+        long previousBack = 0L;
+        for (final long back : PROBE_WINDOWS) {
+            if (unresolved.isEmpty()) {
+                return;
             }
-            stepProbeBack(unresolved, backByPartition, beginningOffsets, endOffsets);
+            seekProbePositions(unresolved, back, previousBack, beginningOffsets, endOffsets);
+            pollProbeWindow(unresolved, latestTimestamps);
+            previousBack = back;
         }
     }
 
-    /** Seeks each unresolved partition to its current step-back position. */
+    /** Seeks each unresolved partition back by {@code back} offsets from its end. */
     private void seekProbePositions(final Set<TopicPartition> unresolved,
-                                    final Map<TopicPartition, Long> backByPartition,
+                                    final long back,
+                                    final long previousBack,
                                     final Map<TopicPartition, Long> beginningOffsets,
                                     final Map<TopicPartition, Long> endOffsets) {
+        // poll() updates fetch positions for the whole assignment and the restore consumer has
+        // auto.offset.reset=none, so every partition needs a position before the first poll
         for (final TopicPartition partition : unresolved) {
             final long begin = beginningOffsets.getOrDefault(partition, 0L);
-            restoreConsumer.seek(partition,
-                Math.max(begin, endOffsets.get(partition) - backByPartition.get(partition)));
+            final long end = endOffsets.get(partition);
+            final long target = Math.max(begin, end - back);
+            // a partition whose narrower window already reached log start has nothing further to
+            // show; re-seeking it would only discard the fetch that is about to answer
+            if (previousBack > 0L && target == Math.max(begin, end - previousBack)) {
+                continue;
+            }
+            restoreConsumer.seek(partition, target);
         }
     }
 
-    /** Resolves any partition the poll returned records for, taking the newest record seen. */
+    /** Polls the current window until it stops answering and has been given its dues. */
+    private void pollProbeWindow(final Set<TopicPartition> unresolved,
+                                 final Map<TopicPartition, Long> latestTimestamps) {
+        // a poll returns at most max.poll.records across all partitions, so one window can take
+        // several polls to reach them all; stopping on a fixed count abandons partitions that were
+        // still being served, and widening on that basis discards their in-flight fetch
+        final long waitUntilNs = time.nanoseconds() + pollTime.toNanos() * PROBE_MIN_WAIT_POLLS;
+        int idlePolls = 0;
+        int polls = 0;
+        while (!unresolved.isEmpty() && polls < PROBE_MAX_POLLS
+            && (idlePolls < PROBE_IDLE_POLLS || time.nanoseconds() < waitUntilNs)) {
+            final int remaining = unresolved.size();
+            collectProbed(restoreConsumer.poll(pollTime), unresolved, latestTimestamps);
+            polls++;
+            idlePolls = unresolved.size() < remaining ? 0 : idlePolls + 1;
+        }
+    }
+
+    /**
+     * Resolves any partition the poll answered for, taking the newest timestamp in the window: it
+     * estimates observed stream time, and a timestamp the log holds cannot overshoot it.
+     */
     private void collectProbed(final ConsumerRecords<byte[], byte[]> probed,
                                final Set<TopicPartition> unresolved,
                                final Map<TopicPartition, Long> latestTimestamps) {
+        final Set<TopicPartition> resolved = new HashSet<>();
         final Iterator<TopicPartition> iterator = unresolved.iterator();
         while (iterator.hasNext()) {
             final TopicPartition partition = iterator.next();
             final List<ConsumerRecord<byte[], byte[]>> records = probed.records(partition);
-            if (!records.isEmpty()) {
-                latestTimestamps.put(partition, records.get(records.size() - 1).timestamp());
-                iterator.remove();
-            }
-        }
-    }
-
-    /** Doubles the step-back of each still-unresolved partition and re-seeks it. */
-    private void stepProbeBack(final Set<TopicPartition> unresolved,
-                               final Map<TopicPartition, Long> backByPartition,
-                               final Map<TopicPartition, Long> beginningOffsets,
-                               final Map<TopicPartition, Long> endOffsets) {
-        final Iterator<TopicPartition> iterator = unresolved.iterator();
-        while (iterator.hasNext()) {
-            final TopicPartition partition = iterator.next();
-            final long begin = beginningOffsets.getOrDefault(partition, 0L);
-            if (endOffsets.get(partition) - backByPartition.get(partition) <= begin) {
-                // probed the whole log; nothing more to find
-                iterator.remove();
+            if (records.isEmpty()) {
                 continue;
             }
-            final long back = backByPartition.get(partition) * 2L;
-            backByPartition.put(partition, back);
-            restoreConsumer.seek(partition, Math.max(begin, endOffsets.get(partition) - back));
+            long latest = Long.MIN_VALUE;
+            for (final ConsumerRecord<byte[], byte[]> record : records) {
+                latest = Math.max(latest, record.timestamp());
+            }
+            latestTimestamps.put(partition, latest);
+            resolved.add(partition);
+            iterator.remove();
+        }
+        if (!resolved.isEmpty()) {
+            // stop resolved partitions competing for the next poll's max.poll.records budget
+            restoreConsumer.pause(resolved);
         }
     }
-
-    private final Duration pollTime;
-    private final long updateOffsetIntervalMs;
 
     // 1) we keep adding partitions to restore consumer whenever new tasks are registered with the state manager;
     // 2) we do not unassign partitions when we switch between standbys and actives, we just pause / resume them;
@@ -1173,19 +1195,11 @@ public class StoreChangelogReader implements ChangelogReader {
                 }
                 windowedPartitionsRetention.keySet().removeAll(seekToBeginningPartitions);
 
-                // probe backwards from the head for the newest data record: a single probe at
-                // endOffset-1 is not enough, since under EOS that offset is usually a transaction
-                // control record, which is never returned to a consumer at any isolation level,
-                // and the optimisation would then silently degrade to seekToBeginning
+                // probe back from the head for the newest data record: under EOS endOffset-1 is
+                // usually a control record, and the optimisation would degrade to seekToBeginning
                 final Map<TopicPartition, Long> latestTimestamps = new HashMap<>();
                 final Set<TopicPartition> unresolved = new HashSet<>(windowedPartitionsRetention.keySet());
-                // each partition walks its own step-back ladder
-                final Map<TopicPartition, Long> backByPartition = new HashMap<>();
-                for (final TopicPartition partition : unresolved) {
-                    backByPartition.put(partition, PROBE_INITIAL_BACK);
-                }
-                runBackwardProbe(unresolved, backByPartition, latestTimestamps,
-                    beginningOffsets, endOffsets);
+                runBackwardProbe(unresolved, latestTimestamps, beginningOffsets, endOffsets);
 
                 seekByRetentionFromPolledRecords(latestTimestamps, windowedPartitionsRetention, seekToBeginningPartitions);
             } catch (final TimeoutException e) {
