@@ -23,6 +23,8 @@ import java.util.List;
 
 /**
  * The assignment configurations that the group coordinator passes to the task assignor.
+ *
+ * <p>This interface is not intended to be implemented by task assignors: new configurations may be added to it.
  */
 @InterfaceAudience.Public
 @InterfaceStability.Evolving

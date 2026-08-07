@@ -50,15 +50,17 @@ public record AssignmentConfigsImpl(
      * Converts the raw assignment configs computed for the group into the typed configs passed to the assignor.
      */
     public static AssignmentConfigsImpl fromMap(Map<String, String> configs) {
-        // Both configs can be absent: the rack-aware assignment tags are only set when any are configured, and the
-        // whole map is empty when it was replayed from a group metadata record written before the last assignment
+        // The map is empty when it was replayed from a group metadata record written before the last assignment
         // configs were persisted.
-        String numStandbyReplicas = configs.get(NUM_STANDBY_REPLICAS_CONFIG);
+        if (configs.isEmpty()) {
+            return DEFAULT;
+        }
+        // The rack-aware assignment tags are only set when any are configured.
         String rackAwareAssignmentTags = configs.get(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
         return new AssignmentConfigsImpl(
-            numStandbyReplicas == null ? DEFAULT.numStandbyReplicas() : Integer.parseInt(numStandbyReplicas),
+            Integer.parseInt(configs.get(NUM_STANDBY_REPLICAS_CONFIG)),
             rackAwareAssignmentTags == null
-                ? DEFAULT.rackAwareAssignmentTags()
+                ? List.of()
                 : List.of(rackAwareAssignmentTags.trim().split("\\s*,\\s*", -1))
         );
     }
