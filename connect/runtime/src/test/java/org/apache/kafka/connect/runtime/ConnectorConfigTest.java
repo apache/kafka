@@ -18,11 +18,17 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
+import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
+import org.apache.kafka.connect.runtime.isolation.MultiVersionTest;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.isolation.VersionedPluginBuilder;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.apache.kafka.connect.storage.SimpleHeaderConverter;
+import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -35,11 +41,13 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -368,6 +376,233 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("transforms.a.negate", "true");
         ConfigException e = assertThrows(ConfigException.class, () -> new ConnectorConfig(MOCK_PLUGINS, props));
         assertTrue(e.getMessage().contains("there is no config 'transforms.a.predicate' defining a predicate to be negated"));
+    }
+
+    @Test
+    public void testConverterDefaultsUseLatestVersionsWhenWorkerVersionsAreNotConfigured() throws ClassNotFoundException {
+        assertConverterDefaultsFromWorker(null, null, null);
+    }
+
+    @Test
+    public void testConverterDefaultsUseConfiguredWorkerVersions() throws ClassNotFoundException {
+        assertConverterDefaultsFromWorker("1.1.0", "2.3.0", "1.1.0");
+    }
+
+    @Test
+    public void testPluginVersionDefaultsFromCombinedConnectorArtifact() throws ClassNotFoundException {
+        Map<String, String> connectorProps = new HashMap<>();
+        connectorProps.put(ConnectorConfig.NAME_CONFIG, "test");
+        connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.SINK_CONNECTOR.className());
+        // The combined artifact packages a different version of each plugin used here: sink connector 0.1.0,
+        // converter 0.2.0, header converter 0.3.0, transformation 0.4.0, and predicate 0.5.0.
+        // Selecting its connector makes these co-located plugin versions the defaults.
+        connectorProps.put(ConnectorConfig.CONNECTOR_VERSION, MultiVersionTest.DEFAULT_COMBINED_ARTIFACT_VERSIONS.get(VersionedPluginBuilder.VersionedTestPlugin.SINK_CONNECTOR));
+        connectorProps.put(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.CONVERTER.className());
+        connectorProps.put(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.CONVERTER.className());
+        connectorProps.put(ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.HEADER_CONVERTER.className());
+        connectorProps.put(ConnectorConfig.TRANSFORMS_CONFIG, "t1");
+        connectorProps.put(ConnectorConfig.TRANSFORMS_CONFIG + ".t1.type", VersionedPluginBuilder.VersionedTestPlugin.TRANSFORMATION.className());
+        connectorProps.put(ConnectorConfig.PREDICATES_CONFIG, "p1");
+        connectorProps.put(ConnectorConfig.PREDICATES_CONFIG + ".p1.type", VersionedPluginBuilder.VersionedTestPlugin.PREDICATE.className());
+
+        WorkerConfig workerConfig = workerConverterConfig(null, null, null);
+        ConfigDef configDef = enrichedConfigDef(connectorProps, workerConfig);
+
+        assertConfigDefault(configDef, ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG,
+            MultiVersionTest.DEFAULT_COMBINED_ARTIFACT_VERSIONS.get(VersionedPluginBuilder.VersionedTestPlugin.CONVERTER));
+        assertConfigDefault(configDef, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG,
+            MultiVersionTest.DEFAULT_COMBINED_ARTIFACT_VERSIONS.get(VersionedPluginBuilder.VersionedTestPlugin.CONVERTER));
+        assertConfigDefault(configDef, ConnectorConfig.HEADER_CONVERTER_VERSION_CONFIG,
+            MultiVersionTest.DEFAULT_COMBINED_ARTIFACT_VERSIONS.get(VersionedPluginBuilder.VersionedTestPlugin.HEADER_CONVERTER));
+        assertConfigDefault(configDef, ConnectorConfig.TRANSFORMS_CONFIG + ".t1." + WorkerConfig.PLUGIN_VERSION_SUFFIX,
+            MultiVersionTest.DEFAULT_COMBINED_ARTIFACT_VERSIONS.get(VersionedPluginBuilder.VersionedTestPlugin.TRANSFORMATION));
+        assertConfigDefault(configDef, ConnectorConfig.PREDICATES_CONFIG + ".p1." + WorkerConfig.PLUGIN_VERSION_SUFFIX,
+            MultiVersionTest.DEFAULT_COMBINED_ARTIFACT_VERSIONS.get(VersionedPluginBuilder.VersionedTestPlugin.PREDICATE));
+    }
+
+    @Test
+    public void testConnectorConverterVersionsDefaultToLatestWhenNotInConnectorArtifact() throws ClassNotFoundException {
+        String connectorVersion = "1.1.0";
+        String workerConverterVersion = "2.3.0";
+        String latestVersion = MultiVersionTest.DEFAULT_ISOLATED_ARTIFACTS_LATEST_VERSION;
+
+        Map<String, String> connectorProps = new HashMap<>();
+        connectorProps.put(ConnectorConfig.NAME_CONFIG, "test");
+        connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.SINK_CONNECTOR.className());
+        connectorProps.put(ConnectorConfig.CONNECTOR_VERSION, connectorVersion);
+        connectorProps.put(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.CONVERTER.className());
+        connectorProps.put(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.CONVERTER.className());
+        connectorProps.put(ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.HEADER_CONVERTER.className());
+
+        // The isolated connector artifact contains no converters, so the connector-level converter
+        // defaults should use the latest installed versions instead of the worker versions.
+        WorkerConfig workerConfig = workerConverterConfig(
+            workerConverterVersion,
+            workerConverterVersion,
+            workerConverterVersion
+        );
+        ConfigDef configDef = enrichedConfigDef(connectorProps, workerConfig);
+
+        assertConfigDefault(configDef, ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG, latestVersion);
+        assertConfigDefault(configDef, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG, latestVersion);
+        assertConfigDefault(configDef, ConnectorConfig.HEADER_CONVERTER_VERSION_CONFIG, latestVersion);
+    }
+
+    @Test
+    public void testConnectorTransformationAndPredicateVersionsDefaultToLatest() throws ClassNotFoundException {
+        Map<String, String> connectorProps = new HashMap<>();
+        connectorProps.put(ConnectorConfig.NAME_CONFIG, "test");
+        connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.SINK_CONNECTOR.className());
+        connectorProps.put(ConnectorConfig.TRANSFORMS_CONFIG, "t1");
+        connectorProps.put(ConnectorConfig.TRANSFORMS_CONFIG + ".t1.type", VersionedPluginBuilder.VersionedTestPlugin.TRANSFORMATION.className());
+        connectorProps.put(ConnectorConfig.PREDICATES_CONFIG, "p1");
+        connectorProps.put(ConnectorConfig.PREDICATES_CONFIG + ".p1.type", VersionedPluginBuilder.VersionedTestPlugin.PREDICATE.className());
+        WorkerConfig workerConfig = workerConverterConfig(null, null, null);
+        ConfigDef configDef = enrichedConfigDef(connectorProps, workerConfig);
+
+        String latestVersion = MultiVersionTest.DEFAULT_ISOLATED_ARTIFACTS_LATEST_VERSION;
+        assertConfigDefault(configDef, ConnectorConfig.CONNECTOR_VERSION, latestVersion);
+        assertConfigDefault(configDef, ConnectorConfig.TRANSFORMS_CONFIG + ".t1." + WorkerConfig.PLUGIN_VERSION_SUFFIX, latestVersion);
+        assertConfigDefault(configDef, ConnectorConfig.PREDICATES_CONFIG + ".p1." + WorkerConfig.PLUGIN_VERSION_SUFFIX, latestVersion);
+    }
+
+    @Test
+    public void testEachTransformationAndPredicateAliasUsesRequestedVersion() {
+        String firstTransformationPrefix = ConnectorConfig.TRANSFORMS_CONFIG + ".t1.";
+        String secondTransformationPrefix = ConnectorConfig.TRANSFORMS_CONFIG + ".t2.";
+        String firstPredicatePrefix = ConnectorConfig.PREDICATES_CONFIG + ".p1.";
+        String secondPredicatePrefix = ConnectorConfig.PREDICATES_CONFIG + ".p2.";
+        String firstTransformationVersion = "1.1.0";
+        String secondTransformationVersion = "2.3.0";
+        String firstPredicateVersion = "4.3.0";
+        String secondPredicateVersion = "0.5.0";
+
+        Map<String, String> connectorProps = new HashMap<>();
+        connectorProps.put(ConnectorConfig.NAME_CONFIG, "test");
+        connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.SINK_CONNECTOR.className());
+        connectorProps.put(ConnectorConfig.TRANSFORMS_CONFIG, "t1,t2");
+        connectorProps.put(firstTransformationPrefix + "type", VersionedPluginBuilder.VersionedTestPlugin.TRANSFORMATION.className());
+        connectorProps.put(firstTransformationPrefix + WorkerConfig.PLUGIN_VERSION_SUFFIX, firstTransformationVersion);
+        connectorProps.put(secondTransformationPrefix + "type", VersionedPluginBuilder.VersionedTestPlugin.TRANSFORMATION.className());
+        connectorProps.put(secondTransformationPrefix + WorkerConfig.PLUGIN_VERSION_SUFFIX, secondTransformationVersion);
+        connectorProps.put(ConnectorConfig.PREDICATES_CONFIG, "p1,p2");
+        connectorProps.put(firstPredicatePrefix + "type", VersionedPluginBuilder.VersionedTestPlugin.PREDICATE.className());
+        connectorProps.put(firstPredicatePrefix + WorkerConfig.PLUGIN_VERSION_SUFFIX, firstPredicateVersion);
+        connectorProps.put(secondPredicatePrefix + "type", VersionedPluginBuilder.VersionedTestPlugin.PREDICATE.className());
+        connectorProps.put(secondPredicatePrefix + WorkerConfig.PLUGIN_VERSION_SUFFIX, secondPredicateVersion);
+
+        Plugins plugins = MultiVersionTest.MULTI_VERSION_PLUGINS;
+        ConfigDef configDef;
+        try (LoaderSwap ignored = plugins.withClassLoader(plugins.delegatingLoader())) {
+            configDef = ConnectorConfig.enrich(plugins, new ConfigDef(), connectorProps, true);
+        }
+
+        // Different defaults prove that each alias loaded the ConfigDef from its own requested plugin version.
+        assertConfigDefault(configDef, firstTransformationPrefix + VersionedPluginBuilder.VERSION_SPECIFIC_CONFIG,
+            firstTransformationVersion);
+        assertConfigDefault(configDef, secondTransformationPrefix + VersionedPluginBuilder.VERSION_SPECIFIC_CONFIG,
+            secondTransformationVersion);
+        assertConfigDefault(configDef, firstPredicatePrefix + VersionedPluginBuilder.VERSION_SPECIFIC_CONFIG,
+            firstPredicateVersion);
+        assertConfigDefault(configDef, secondPredicatePrefix + VersionedPluginBuilder.VERSION_SPECIFIC_CONFIG,
+            secondPredicateVersion);
+    }
+
+    @Test
+    public void testHeaderConverterDefaultsUseWorkerDefault() {
+        Map<String, String> connectorProps = Map.of(
+            ConnectorConfig.NAME_CONFIG, "test",
+            ConnectorConfig.CONNECTOR_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.SINK_CONNECTOR.className()
+        );
+        WorkerConfig workerConfig = new WorkerConfig(
+            WorkerConfig.baseConfigDef(),
+            Map.of(
+                WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092",
+                WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName(),
+                WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName()
+            )
+        );
+
+        ConfigDef configDef = enrichedConfigDef(connectorProps, workerConfig);
+
+        // Unlike the isolated versioned plugins, the built-in SimpleHeaderConverter reports the Kafka runtime version.
+        assertConfigDefault(configDef, ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG, SimpleHeaderConverter.class.getName());
+        assertConfigDefault(configDef, ConnectorConfig.HEADER_CONVERTER_VERSION_CONFIG, AppInfoParser.getVersion());
+    }
+
+    @Test
+    public void testKeyAndValueConverterDefaultsAreNullWhenClassesAreMissing() {
+        Map<String, String> connectorProps = Map.of(
+            ConnectorConfig.NAME_CONFIG, "test",
+            ConnectorConfig.CONNECTOR_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.SINK_CONNECTOR.className()
+        );
+        WorkerConfig workerConfig = mock(WorkerConfig.class);
+        doReturn(SimpleHeaderConverter.class).when(workerConfig).getClass(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG);
+
+        // Neither connector nor worker properties provide key or value converter classes,
+        // so their class and version defaults cannot be determined.
+        ConfigDef configDef = enrichedConfigDef(connectorProps, workerConfig);
+
+        assertConfigDefault(configDef, ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, null);
+        assertConfigDefault(configDef, ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG, null);
+        assertConfigDefault(configDef, ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, null);
+        assertConfigDefault(configDef, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG, null);
+    }
+
+    private void assertConverterDefaultsFromWorker(String keyConverterVersion, String valueConverterVersion, String headerConverterVersion) throws ClassNotFoundException {
+        WorkerConfig workerConfig = workerConverterConfig(keyConverterVersion, valueConverterVersion, headerConverterVersion);
+        Map<String, String> connectorProps = Map.of(
+            ConnectorConfig.NAME_CONFIG, "test",
+            ConnectorConfig.CONNECTOR_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.SINK_CONNECTOR.className()
+        );
+        ConfigDef configDef = enrichedConfigDef(connectorProps, workerConfig);
+        String latestVersion = MultiVersionTest.DEFAULT_ISOLATED_ARTIFACTS_LATEST_VERSION;
+
+        assertConfigDefault(configDef, ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.CONVERTER.className());
+        assertConfigDefault(configDef, ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG, keyConverterVersion == null ? latestVersion : keyConverterVersion);
+        assertConfigDefault(configDef, ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.CONVERTER.className());
+        assertConfigDefault(configDef, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG, valueConverterVersion == null ? latestVersion : valueConverterVersion);
+        assertConfigDefault(configDef, ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.HEADER_CONVERTER.className());
+        assertConfigDefault(configDef, ConnectorConfig.HEADER_CONVERTER_VERSION_CONFIG, headerConverterVersion == null ? latestVersion : headerConverterVersion);
+    }
+
+    private WorkerConfig workerConverterConfig(String keyConverterVersion, String valueConverterVersion, String headerConverterVersion) throws ClassNotFoundException {
+        Map<String, String> workerProps = new HashMap<>();
+        workerProps.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.CONVERTER.className());
+        workerProps.put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.CONVERTER.className());
+        workerProps.put(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.HEADER_CONVERTER.className());
+        if (keyConverterVersion != null) {
+            workerProps.put(WorkerConfig.KEY_CONVERTER_VERSION, keyConverterVersion);
+        }
+        if (valueConverterVersion != null) {
+            workerProps.put(WorkerConfig.VALUE_CONVERTER_VERSION, valueConverterVersion);
+        }
+        if (headerConverterVersion != null) {
+            workerProps.put(WorkerConfig.HEADER_CONVERTER_VERSION, headerConverterVersion);
+        }
+
+        WorkerConfig workerConfig = mock(WorkerConfig.class);
+        Class<?> headerConverterClass = MultiVersionTest.MULTI_VERSION_PLUGINS.pluginClass(VersionedPluginBuilder.VersionedTestPlugin.HEADER_CONVERTER.className());
+        when(workerConfig.originalsStrings()).thenReturn(workerProps);
+        doReturn(headerConverterClass).when(workerConfig).getClass(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG);
+        return workerConfig;
+    }
+
+    private ConfigDef enrichedConfigDef(Map<String, String> props, WorkerConfig workerConfig) {
+        Plugins plugins = MultiVersionTest.MULTI_VERSION_PLUGINS;
+        try (LoaderSwap ignored = plugins.withClassLoader(plugins.delegatingLoader())) {
+            return ConnectorConfig.enrich(plugins, ConnectorConfig.enrichedConfigDef(plugins, props, workerConfig), props, true);
+        }
+    }
+
+    private void assertConfigDefault(ConfigDef configDef, String key, String expectedDefault) {
+        ConfigDef.ConfigKey configKey = configDef.configKeys().get(key);
+        assertNotNull(configKey);
+        Object actualDefault = configKey.defaultValue;
+        if (configKey.type() == ConfigDef.Type.CLASS && actualDefault != null) {
+            actualDefault = assertInstanceOf(Class.class, actualDefault).getName();
+        }
+        assertEquals(expectedDefault, actualDefault);
     }
 
     public static class TestPredicate<R extends ConnectRecord<R>> implements Predicate<R>  {

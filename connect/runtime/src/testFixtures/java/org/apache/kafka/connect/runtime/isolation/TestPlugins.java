@@ -522,7 +522,9 @@ public class TestPlugins {
             for (Map.Entry<String, String> entry : replacements.entrySet()) {
                 content = content.replace(entry.getKey(), entry.getValue());
             }
-            File tmpFile = new File(System.getProperty("java.io.tmpdir") + File.separator + source.getName());
+            Path tmpDir = Files.createTempDirectory("test-plugin-source.");
+            tmpDir.toFile().deleteOnExit();
+            File tmpFile = tmpDir.resolve(source.getName()).toFile();
             Files.writeString(tmpFile.toPath(), content);
             tmpFile.deleteOnExit();
             return tmpFile;

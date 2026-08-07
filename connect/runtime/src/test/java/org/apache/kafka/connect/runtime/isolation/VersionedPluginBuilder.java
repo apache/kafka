@@ -26,6 +26,8 @@ import java.util.Map;
 
 public class VersionedPluginBuilder {
 
+    public static final String VERSION_SPECIFIC_CONFIG = "version-specific-config";
+
     private static final String VERSION_PLACEHOLDER = "PLACEHOLDER_FOR_VERSION";
 
     public enum VersionedTestPlugin {
