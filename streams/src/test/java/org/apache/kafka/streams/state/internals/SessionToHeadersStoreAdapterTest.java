@@ -37,6 +37,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.time.Instant;
+
 import static org.apache.kafka.streams.state.HeadersBytesStore.convertToHeaderFormat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -252,5 +254,32 @@ public class SessionToHeadersStoreAdapterTest {
     @Test
     public void shouldReturnNullFromRawAggregationValueForNull() {
         assertNull(Utils.rawAggregation(null));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldWrapFindSessionsByTimeRangeIterator() {
+        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = mock(KeyValueIterator.class);
+        when(innerStore.findSessions(10L, 20L)).thenReturn(innerIter);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> result = adapter.findSessions(10L, 20L);
+        assertInstanceOf(SessionToHeadersIteratorAdapter.class, result);
+    }
+
+    // Instant overloads delegate to the long-based overloads; verify conversion still happens.
+    @Test
+    public void shouldConvertFetchSessionViaInstantOverload() {
+        when(innerStore.fetchSession(KEY, 10L, 20L)).thenReturn(RAW_VALUE);
+        final byte[] result = adapter.fetchSession(KEY, Instant.ofEpochMilli(10L), Instant.ofEpochMilli(20L));
+        assertArrayEquals(VALUE_WITH_EMPTY_HEADERS, result);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldWrapFindSessionsViaInstantOverload() {
+        final KeyValueIterator<Windowed<Bytes>, byte[]> innerIter = mock(KeyValueIterator.class);
+        when(innerStore.findSessions(KEY, 10L, 20L)).thenReturn(innerIter);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> result =
+            adapter.findSessions(KEY, Instant.ofEpochMilli(10L), Instant.ofEpochMilli(20L));
+        assertInstanceOf(SessionToHeadersIteratorAdapter.class, result);
     }
 }

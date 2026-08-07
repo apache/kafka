@@ -31,9 +31,11 @@ import org.apache.kafka.streams.query.WindowKeyQuery;
 import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
+import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -48,11 +50,18 @@ import java.time.Instant;
 import java.util.Properties;
 
 import static java.time.Duration.ofMillis;
+import static org.apache.kafka.streams.state.HeadersBytesStore.convertToHeaderFormat;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.withSettings;
 
 public class TimestampedToHeadersWindowStoreAdapterTest {
 
@@ -318,5 +327,175 @@ public class TimestampedToHeadersWindowStoreAdapterTest {
             }
         }
         assertFalse(foundAdapterInfo, "Expected no execution info from adapter when not requested");
+    }
+
+    // Method-level behavioral coverage over a mocked inner store: reads convert/wrap, put strips
+    // headers. See TimestampedToHeadersWindowStoreAdapterCompletenessTest for the completeness guard.
+    private static final Bytes KEY = new Bytes("key".getBytes());
+    private static final Bytes KEY_TO = new Bytes("key-to".getBytes());
+    private static final byte[] RAW_VALUE = new byte[] {0, 0, 0, 0, 0, 0, 0, 42, 'v', 'a', 'l'};
+    private static final Instant T_FROM = Instant.ofEpochMilli(0L);
+    private static final Instant T_TO = Instant.ofEpochMilli(10L);
+
+    private WindowStore<Bytes, byte[]> mockInner;
+    private TimestampedToHeadersWindowStoreAdapter mockAdapter;
+
+    private void setUpMockAdapter() {
+        mockInner = mock(WindowStore.class, withSettings().extraInterfaces(TimestampedBytesStore.class));
+        when(mockInner.persistent()).thenReturn(true);
+        mockAdapter = new TimestampedToHeadersWindowStoreAdapter(mockInner);
+    }
+
+    @Test
+    public void shouldStripHeadersOnPut() {
+        setUpMockAdapter();
+        mockAdapter.put(KEY, convertToHeaderFormat(RAW_VALUE), 5L);
+        verify(mockInner).put(KEY, RAW_VALUE, 5L);
+    }
+
+    @Test
+    public void shouldConvertFetchByKeyAndTimestampToHeaderFormat() {
+        setUpMockAdapter();
+        when(mockInner.fetch(KEY, 5L)).thenReturn(RAW_VALUE);
+        assertArrayEquals(convertToHeaderFormat(RAW_VALUE), mockAdapter.fetch(KEY, 5L));
+    }
+
+    @Test
+    public void shouldReturnNullWhenFetchByKeyAndTimestampReturnsNull() {
+        setUpMockAdapter();
+        when(mockInner.fetch(KEY, 5L)).thenReturn(null);
+        assertNull(mockAdapter.fetch(KEY, 5L));
+    }
+
+    @Test
+    public void shouldWrapFetchByKeyAndTimeRangeIterator() {
+        setUpMockAdapter();
+        final WindowStoreIterator<byte[]> inner = mock(WindowStoreIterator.class);
+        when(mockInner.fetch(KEY, 0L, 10L)).thenReturn(inner);
+        assertInstanceOf(WindowStoreIterator.class, mockAdapter.fetch(KEY, 0L, 10L));
+    }
+
+    @Test
+    public void shouldWrapFetchByKeyAndInstantRangeIterator() {
+        setUpMockAdapter();
+        final WindowStoreIterator<byte[]> inner = mock(WindowStoreIterator.class);
+        when(mockInner.fetch(KEY, T_FROM, T_TO)).thenReturn(inner);
+        assertInstanceOf(WindowStoreIterator.class, mockAdapter.fetch(KEY, T_FROM, T_TO));
+    }
+
+    @Test
+    public void shouldWrapBackwardFetchByKeyAndTimeRangeIterator() {
+        setUpMockAdapter();
+        final WindowStoreIterator<byte[]> inner = mock(WindowStoreIterator.class);
+        when(mockInner.backwardFetch(KEY, 0L, 10L)).thenReturn(inner);
+        assertInstanceOf(WindowStoreIterator.class, mockAdapter.backwardFetch(KEY, 0L, 10L));
+    }
+
+    @Test
+    public void shouldWrapBackwardFetchByKeyAndInstantRangeIterator() {
+        setUpMockAdapter();
+        final WindowStoreIterator<byte[]> inner = mock(WindowStoreIterator.class);
+        when(mockInner.backwardFetch(KEY, T_FROM, T_TO)).thenReturn(inner);
+        assertInstanceOf(WindowStoreIterator.class, mockAdapter.backwardFetch(KEY, T_FROM, T_TO));
+    }
+
+    @Test
+    public void shouldWrapFetchByKeyRangeAndTimeRangeIterator() {
+        setUpMockAdapter();
+        final KeyValueIterator<Windowed<Bytes>, byte[]> inner = mock(KeyValueIterator.class);
+        when(mockInner.fetch(KEY, KEY_TO, 0L, 10L)).thenReturn(inner);
+        assertInstanceOf(TimestampedToHeadersIteratorAdapter.class, mockAdapter.fetch(KEY, KEY_TO, 0L, 10L));
+    }
+
+    @Test
+    public void shouldWrapFetchByKeyRangeAndInstantRangeIterator() {
+        setUpMockAdapter();
+        final KeyValueIterator<Windowed<Bytes>, byte[]> inner = mock(KeyValueIterator.class);
+        when(mockInner.fetch(KEY, KEY_TO, T_FROM, T_TO)).thenReturn(inner);
+        assertInstanceOf(TimestampedToHeadersIteratorAdapter.class, mockAdapter.fetch(KEY, KEY_TO, T_FROM, T_TO));
+    }
+
+    @Test
+    public void shouldWrapBackwardFetchByKeyRangeAndTimeRangeIterator() {
+        setUpMockAdapter();
+        final KeyValueIterator<Windowed<Bytes>, byte[]> inner = mock(KeyValueIterator.class);
+        when(mockInner.backwardFetch(KEY, KEY_TO, 0L, 10L)).thenReturn(inner);
+        assertInstanceOf(TimestampedToHeadersIteratorAdapter.class, mockAdapter.backwardFetch(KEY, KEY_TO, 0L, 10L));
+    }
+
+    @Test
+    public void shouldWrapBackwardFetchByKeyRangeAndInstantRangeIterator() {
+        setUpMockAdapter();
+        final KeyValueIterator<Windowed<Bytes>, byte[]> inner = mock(KeyValueIterator.class);
+        when(mockInner.backwardFetch(KEY, KEY_TO, T_FROM, T_TO)).thenReturn(inner);
+        assertInstanceOf(TimestampedToHeadersIteratorAdapter.class, mockAdapter.backwardFetch(KEY, KEY_TO, T_FROM, T_TO));
+    }
+
+    @Test
+    public void shouldWrapFetchAllByTimeRangeIterator() {
+        setUpMockAdapter();
+        final KeyValueIterator<Windowed<Bytes>, byte[]> inner = mock(KeyValueIterator.class);
+        when(mockInner.fetchAll(0L, 10L)).thenReturn(inner);
+        assertInstanceOf(TimestampedToHeadersIteratorAdapter.class, mockAdapter.fetchAll(0L, 10L));
+    }
+
+    @Test
+    public void shouldWrapFetchAllByInstantRangeIterator() {
+        setUpMockAdapter();
+        final KeyValueIterator<Windowed<Bytes>, byte[]> inner = mock(KeyValueIterator.class);
+        when(mockInner.fetchAll(T_FROM, T_TO)).thenReturn(inner);
+        assertInstanceOf(TimestampedToHeadersIteratorAdapter.class, mockAdapter.fetchAll(T_FROM, T_TO));
+    }
+
+    @Test
+    public void shouldWrapBackwardFetchAllByTimeRangeIterator() {
+        setUpMockAdapter();
+        final KeyValueIterator<Windowed<Bytes>, byte[]> inner = mock(KeyValueIterator.class);
+        when(mockInner.backwardFetchAll(0L, 10L)).thenReturn(inner);
+        assertInstanceOf(TimestampedToHeadersIteratorAdapter.class, mockAdapter.backwardFetchAll(0L, 10L));
+    }
+
+    @Test
+    public void shouldWrapBackwardFetchAllByInstantRangeIterator() {
+        setUpMockAdapter();
+        final KeyValueIterator<Windowed<Bytes>, byte[]> inner = mock(KeyValueIterator.class);
+        when(mockInner.backwardFetchAll(T_FROM, T_TO)).thenReturn(inner);
+        assertInstanceOf(TimestampedToHeadersIteratorAdapter.class, mockAdapter.backwardFetchAll(T_FROM, T_TO));
+    }
+
+    @Test
+    public void shouldWrapAllIterator() {
+        setUpMockAdapter();
+        final KeyValueIterator<Windowed<Bytes>, byte[]> inner = mock(KeyValueIterator.class);
+        when(mockInner.all()).thenReturn(inner);
+        assertInstanceOf(TimestampedToHeadersIteratorAdapter.class, mockAdapter.all());
+    }
+
+    @Test
+    public void shouldWrapBackwardAllIterator() {
+        setUpMockAdapter();
+        final KeyValueIterator<Windowed<Bytes>, byte[]> inner = mock(KeyValueIterator.class);
+        when(mockInner.backwardAll()).thenReturn(inner);
+        assertInstanceOf(TimestampedToHeadersIteratorAdapter.class, mockAdapter.backwardAll());
+    }
+
+    @Test
+    public void shouldDelegateName() {
+        setUpMockAdapter();
+        when(mockInner.name()).thenReturn("inner-store");
+        assertEquals("inner-store", mockAdapter.name());
+    }
+
+    @Test
+    public void shouldDelegateIsOpen() {
+        setUpMockAdapter();
+        when(mockInner.isOpen()).thenReturn(true);
+        assertTrue(mockAdapter.isOpen());
+    }
+
+    @Test
+    public void shouldReturnPersistentTrue() {
+        setUpMockAdapter();
+        assertTrue(mockAdapter.persistent());
     }
 }
