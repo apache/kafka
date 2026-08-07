@@ -19,7 +19,6 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.ClientsTestUtils;
 import org.apache.kafka.clients.ClientsTestUtils.TestConsumerReassignmentListener;
-import org.apache.kafka.clients.consumer.RebalanceConsumer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
