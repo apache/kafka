@@ -240,6 +240,14 @@ public final class RaftClientBenchmarkContext {
      * just before the measured region begins.
      */
     public void zeroCountersOnSetup() {
+        zeroCounters();
+        channel.drainSendQueue();
+    }
+
+    /**
+     * Re-baselines the work counters.
+     */
+    public void zeroCounters() {
         logFlushes.drainDelta();
         logReads.drainDelta();
         logTruncations.drainDelta();
@@ -247,6 +255,12 @@ public final class RaftClientBenchmarkContext {
         quorumStateWrites.drainDelta();
         quorumStateReads.drainDelta();
         rpcResponsesSent.drainDelta();
+    }
+
+    /**
+     * Discards any requests the client left on the send queue.
+     */
+    public void drainSentRequests() {
         channel.drainSendQueue();
     }
 
@@ -370,6 +384,25 @@ public final class RaftClientBenchmarkContext {
                 context.voteRequest(context.currentEpoch() + 1, candidate, 0, 0)),
             Optional.of(ApiKeys.VOTE)
         );
+    }
+
+    public void unattachedToProspective() throws Exception {
+        context.time.sleep(context.electionTimeoutMs() * 2L);
+        context.pollUntil(() -> context.client.quorum().isProspective());
+    }
+
+    public void prospectiveToCandidate() throws Exception {
+        context.expectAndGrantPreVotes(context.currentEpoch());
+    }
+
+    public void candidateToProspective() throws Exception {
+        context.time.sleep(context.electionTimeoutMs() * 2L);
+        context.pollUntil(() -> context.client.quorum().isProspective());
+    }
+
+    public void followerToProspective() throws Exception {
+        context.time.sleep(2L * context.fetchTimeoutMs);
+        context.pollUntil(() -> context.client.quorum().isProspective());
     }
 
 }
