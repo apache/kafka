@@ -718,6 +718,311 @@ class ShareCoordinatorShardTest {
         assertEquals(expectedFinalValue, shard.getShareStateMapValue(SHARE_PARTITION_KEY));
     }
 
+    /**
+     * This test validates that the delivery complete count advances correctly, in relation to
+     * start offset.
+     * case 1: incoming request start offset > current state
+     * <p>
+     * For example,
+     * req1: {
+     *  startOffset: 5,
+     *  stateEpoch: 5,
+     *  leaderEpoch: 3,
+     *  deliveryCompleteCount: 10
+     *  stateBatches: []
+     * }
+     * <p>
+     * req2: {
+     *  startOffset: 11,
+     *  stateEpoch: 5,
+     *  leaderEpoch: 3,
+     *  deliveryCompleteCount: 4
+     *  stateBatches: []
+     * }
+     * <p>
+     * Then, final state would be
+     * result: {
+     *  startOffset: 5,
+     *  stateEpoch: 5,
+     *  leaderEpoch: 3,
+     *  deliveryCompleteCount: 4    // req2 delivery count preferred as start offset advanced
+     *  stateBatches: []
+     * }
+     *
+     */
+    @Test
+    public void testWriteStateDiscardsDeliveryCompleteCountRegressionIncomingStartOffsetGreater() {
+        initSharePartition(shard, SHARE_PARTITION_KEY, 5);
+        writeAndReplayRecord(shard, 3);
+        int request1StartOffset = 5;
+        int request2StartOffset = 11;
+        int request2DeliveryCompleteCount = 4;
+
+        WriteShareGroupStateRequestData request1 = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(request1StartOffset)
+                    .setDeliveryCompleteCount(10)
+                    .setStateEpoch(5)
+                    .setLeaderEpoch(3)
+                    .setStateBatches(List.of())))));
+
+        WriteShareGroupStateRequestData request2 = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(request2StartOffset)    // higher start offset than req1
+                    .setDeliveryCompleteCount(request2DeliveryCompleteCount)
+                    .setStateEpoch(5)
+                    .setLeaderEpoch(3)
+                    .setStateBatches(List.of())))));
+
+        CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> result = shard.writeState(request1);
+        shard.replay(0L, 0L, (short) 0, result.records().get(0));
+
+        WriteShareGroupStateResponseData expectedData = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
+        List<CoordinatorRecord> expectedRecords = List.of(ShareCoordinatorRecordHelpers.newShareUpdateRecord(
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request1.topics().get(0).partitions().get(0), TIME.milliseconds())
+        ));
+
+        assertEquals(expectedData, result.response());
+        assertEquals(expectedRecords, result.records());
+
+        // Verify request2
+        CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> result2 = shard.writeState(request2);
+        shard.replay(0L, 0L, (short) 0, result2.records().get(0));
+
+        WriteShareGroupStateResponseData expectedData2 = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
+        List<CoordinatorRecord> expectedRecords2 = List.of(ShareCoordinatorRecordHelpers.newShareUpdateRecord(
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request2.topics().get(0).partitions().get(0), TIME.milliseconds()).builderSupplier()
+                .setStartOffset(request2StartOffset)
+                .setDeliveryCompleteCount(request2DeliveryCompleteCount)
+                .build()
+        ));
+
+        assertEquals(expectedData2, result2.response());
+        assertEquals(expectedRecords2, result2.records());
+
+        ShareGroupOffset expectedFinalValue = new ShareGroupOffset.Builder()
+            .setStartOffset(request2StartOffset)
+            .setStateEpoch(5)
+            .setLeaderEpoch(3)
+            .setDeliveryCompleteCount(request2DeliveryCompleteCount)
+            .setStateBatches(List.of())
+            .build();
+
+        assertEquals(expectedFinalValue, shard.getShareStateMapValue(SHARE_PARTITION_KEY));
+    }
+
+    /**
+     * This test validates that the delivery complete count advances correctly, in relation to
+     * start offset.
+     * case 1: incoming request start offset > current state
+     * <p>
+     * For example,
+     * req1: {
+     *  startOffset: 11,
+     *  stateEpoch: 5,
+     *  leaderEpoch: 3,
+     *  deliveryCompleteCount: 10
+     *  stateBatches: []
+     * }
+     * <p>
+     * req2: {
+     *  startOffset: 11,
+     *  stateEpoch: 5,
+     *  leaderEpoch: 3,
+     *  deliveryCompleteCount: 5
+     *  stateBatches: []
+     * }
+     * <p>
+     * Then, final state would be
+     * result: {
+     *  startOffset: 11,
+     *  stateEpoch: 5,
+     *  leaderEpoch: 3,
+     *  deliveryCompleteCount: 10    // req1 delivery count preferred as start offsets equal
+     *  stateBatches: []
+     * }
+     *
+     */
+    @Test
+    public void testWriteStateDiscardsDeliveryCompleteCountRegressionIncomingStartOffsetEqual() {
+        initSharePartition(shard, SHARE_PARTITION_KEY, 5);
+        writeAndReplayRecord(shard, 3);
+        int request1StartOffset = 11;
+        int request2StartOffset = 11;
+        int request1DeliveryCompleteCount = 10;
+        int request2DeliveryCompleteCount = 5;
+
+        WriteShareGroupStateRequestData request1 = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(request1StartOffset)
+                    .setDeliveryCompleteCount(request1DeliveryCompleteCount)
+                    .setStateEpoch(5)
+                    .setLeaderEpoch(3)
+                    .setStateBatches(List.of())))));
+
+        WriteShareGroupStateRequestData request2 = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(request2StartOffset)    // same start offset than req1
+                    .setDeliveryCompleteCount(request2DeliveryCompleteCount)
+                    .setStateEpoch(5)
+                    .setLeaderEpoch(3)
+                    .setStateBatches(List.of())))));
+
+        CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> result = shard.writeState(request1);
+        shard.replay(0L, 0L, (short) 0, result.records().get(0));
+
+        WriteShareGroupStateResponseData expectedData = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
+        List<CoordinatorRecord> expectedRecords = List.of(ShareCoordinatorRecordHelpers.newShareUpdateRecord(
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request1.topics().get(0).partitions().get(0), TIME.milliseconds())
+        ));
+
+        assertEquals(expectedData, result.response());
+        assertEquals(expectedRecords, result.records());
+
+        // Verify request2
+        CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> result2 = shard.writeState(request2);
+        shard.replay(0L, 0L, (short) 0, result2.records().get(0));
+
+        WriteShareGroupStateResponseData expectedData2 = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
+        List<CoordinatorRecord> expectedRecords2 = List.of(ShareCoordinatorRecordHelpers.newShareUpdateRecord(
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request2.topics().get(0).partitions().get(0), TIME.milliseconds()).builderSupplier()
+                .setStartOffset(request2StartOffset)
+                .setDeliveryCompleteCount(request1DeliveryCompleteCount)
+                .build()
+        ));
+
+        assertEquals(expectedData2, result2.response());
+        assertEquals(expectedRecords2, result2.records());
+
+        ShareGroupOffset expectedFinalValue = new ShareGroupOffset.Builder()
+            .setStartOffset(request2StartOffset)
+            .setStateEpoch(5)
+            .setLeaderEpoch(3)
+            .setDeliveryCompleteCount(request1DeliveryCompleteCount)
+            .setStateBatches(List.of())
+            .build();
+
+        assertEquals(expectedFinalValue, shard.getShareStateMapValue(SHARE_PARTITION_KEY));
+    }
+
+    /**
+     * This test validates that the delivery complete count advances correctly, in relation to
+     * start offset.
+     * case 1: incoming request start offset > current state
+     * <p>
+     * For example,
+     * req1: {
+     *  startOffset: 15,
+     *  stateEpoch: 5,
+     *  leaderEpoch: 3,
+     *  deliveryCompleteCount: 10
+     *  stateBatches: []
+     * }
+     * <p>
+     * req2: {
+     *  startOffset: 11,
+     *  stateEpoch: 5,
+     *  leaderEpoch: 3,
+     *  deliveryCompleteCount: 20
+     *  stateBatches: []
+     * }
+     * <p>
+     * Then, final state would be
+     * result: {
+     *  startOffset: 11,
+     *  stateEpoch: 5,
+     *  leaderEpoch: 3,
+     *  deliveryCompleteCount: 10    // req1 delivery count preferred as incoming start offset smaller
+     *  stateBatches: []
+     * }
+     *
+     */
+    @Test
+    public void testWriteStateDiscardsDeliveryCompleteCountRegressionIncomingStartOffsetSmaller() {
+        initSharePartition(shard, SHARE_PARTITION_KEY, 5);
+        writeAndReplayRecord(shard, 3);
+        int request1StartOffset = 15;
+        int request2StartOffset = 11;
+        int request1DeliveryCompleteCount = 10;
+        int request2DeliveryCompleteCount = 20;
+
+        WriteShareGroupStateRequestData request1 = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(request1StartOffset)
+                    .setDeliveryCompleteCount(request1DeliveryCompleteCount)
+                    .setStateEpoch(5)
+                    .setLeaderEpoch(3)
+                    .setStateBatches(List.of())))));
+
+        WriteShareGroupStateRequestData request2 = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(request2StartOffset)    // same start offset than req1
+                    .setDeliveryCompleteCount(request2DeliveryCompleteCount)
+                    .setStateEpoch(5)
+                    .setLeaderEpoch(3)
+                    .setStateBatches(List.of())))));
+
+        CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> result = shard.writeState(request1);
+        shard.replay(0L, 0L, (short) 0, result.records().get(0));
+
+        WriteShareGroupStateResponseData expectedData = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
+        List<CoordinatorRecord> expectedRecords = List.of(ShareCoordinatorRecordHelpers.newShareUpdateRecord(
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request1.topics().get(0).partitions().get(0), TIME.milliseconds())
+        ));
+
+        assertEquals(expectedData, result.response());
+        assertEquals(expectedRecords, result.records());
+
+        // Verify request2
+        CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> result2 = shard.writeState(request2);
+        shard.replay(0L, 0L, (short) 0, result2.records().get(0));
+
+        WriteShareGroupStateResponseData expectedData2 = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
+        List<CoordinatorRecord> expectedRecords2 = List.of(ShareCoordinatorRecordHelpers.newShareUpdateRecord(
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request2.topics().get(0).partitions().get(0), TIME.milliseconds()).builderSupplier()
+                .setStartOffset(request1StartOffset)
+                .setDeliveryCompleteCount(request1DeliveryCompleteCount)
+                .build()
+        ));
+
+        assertEquals(expectedData2, result2.response());
+        assertEquals(expectedRecords2, result2.records());
+
+        ShareGroupOffset expectedFinalValue = new ShareGroupOffset.Builder()
+            .setStartOffset(request1StartOffset)
+            .setStateEpoch(5)
+            .setLeaderEpoch(3)
+            .setDeliveryCompleteCount(request1DeliveryCompleteCount)
+            .setStateBatches(List.of())
+            .build();
+
+        assertEquals(expectedFinalValue, shard.getShareStateMapValue(SHARE_PARTITION_KEY));
+    }
+
     @Test
     public void testReadFailsOnUninitializedPartition() {
         ReadShareGroupStateRequestData request = new ReadShareGroupStateRequestData()
