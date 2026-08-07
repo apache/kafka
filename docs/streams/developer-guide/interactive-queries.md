@@ -340,7 +340,7 @@ Call `skipCache()` on the query to bypass the record cache and read directly fro
     
     
     TimestampedRangeWithHeadersQuery<String, Long> query =
-        TimestampedRangeWithHeadersQuery.<String, Long>withRange("a", "n");
+        TimestampedRangeWithHeadersQuery.withRange("a", "n");
     
     StateQueryRequest<ReadOnlyRecordIterator<String, Long>> request =
         StateQueryRequest.inStore("counts-store").withQuery(query);
@@ -390,6 +390,7 @@ Use `withLowerBound`, `withUpperBound`, or `withNoBounds` for open-ended or full
     StateQueryRequest<ReadOnlyRecordIterator<Windowed<String>, Long>> request =
         StateQueryRequest.inStore("counts-window-store").withQuery(byWindow);
     StateQueryResult<ReadOnlyRecordIterator<Windowed<String>, Long>> result = streams.query(request);
+    // Iterate result.getPartitionResults() and close each ReadOnlyRecordIterator, as in the range example.
 
 **Behavior notes**
 
