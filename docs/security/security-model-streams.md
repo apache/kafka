@@ -26,7 +26,7 @@ type: docs
 -->
 
 
-This page extends the [Apache Kafka security model](security-model) to Kafka Streams. From the cluster's perspective a Streams application is an ordinary Kafka client and inherits the broker's authentication, authorization, and transport-encryption model through the same `ssl.*` and `sasl.*` client configs.
+This page extends the [Apache Kafka security model](../security-model) to Kafka Streams. From the cluster's perspective a Streams application is an ordinary Kafka client and inherits the broker's authentication, authorization, and transport-encryption model through the same `ssl.*` and `sasl.*` client configs.
 
 ## Things You Need To Know
 
@@ -36,7 +36,7 @@ This page extends the [Apache Kafka security model](security-model) to Kafka Str
 
 ## Known Non-Findings
 
-In line with the [core model's classification](security-model), the following are not, on their own, security vulnerabilities:
+In line with the [core model's classification](../security-model), the following are not, on their own, security vulnerabilities:
 
 - **Application-level issues in a Streams topology.** Streams runs inside the user's application, so bugs in user-supplied processors, state handling, or topology code fall within the application's trust boundary, not the broker's.
 - **Local state being readable on the host.** State stores and changelogs on disk are protected by the host filesystem, not by Kafka; reading them requires local access that is outside the model.

@@ -40,6 +40,7 @@ import org.apache.kafka.server.common.DirectoryEventHandler
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, KafkaYammerMetrics, MetricConfigs}
+import org.apache.kafka.server.quota.QuotaFactory
 import org.apache.kafka.server.telemetry.{ClientTelemetry, ClientTelemetryContext, ClientTelemetryExporter, ClientTelemetryExporterProvider, ClientTelemetryPayload, ClientTelemetryReceiver}
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogManager, ProducerStateManagerConfig}
@@ -768,6 +769,32 @@ class DynamicBrokerConfigTest {
     verifyIncorrectLogLocalRetentionProps(-1, 1000L, 200, 100)
     // Check for incorrect case of logLocalRetentionBytes(-1 viz unlimited) > retentionBytes
     verifyIncorrectLogLocalRetentionProps(2000L, 1000L, -1, 100)
+  }
+
+  @Test
+  def testDynamicLogRemoteCopyLagConfig(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, port = 8181)
+    val config = KafkaConfig(props)
+    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]), mock(classOf[DirectoryEventHandler]))
+    config.dynamicConfig.initialize(None)
+    config.dynamicConfig.addBrokerReconfigurable(dynamicLogConfig)
+    assertEquals(RemoteLogManagerConfig.DEFAULT_LOG_REMOTE_COPY_LAG_MS, config.remoteLogManagerConfig.logRemoteCopyLagMs)
+    assertEquals(RemoteLogManagerConfig.DEFAULT_LOG_REMOTE_COPY_LAG_BYTES, config.remoteLogManagerConfig.logRemoteCopyLagBytes)
+
+    // update default config
+    val newProps = new Properties()
+    newProps.put(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_MS_PROP, "100")
+    newProps.put(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_BYTES_PROP, "200")
+    config.dynamicConfig.validate(newProps, perBrokerConfig = false)
+    config.dynamicConfig.updateDefaultConfig(newProps)
+    assertEquals(100L, config.remoteLogManagerConfig.logRemoteCopyLagMs())
+    assertEquals(200L, config.remoteLogManagerConfig.logRemoteCopyLagBytes())
+
+    // update per broker config
+    config.dynamicConfig.validate(newProps, perBrokerConfig = true)
+    newProps.put(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_BYTES_PROP, "300")
+    config.dynamicConfig.updateBrokerConfig(0, newProps)
+    assertEquals(300L, config.remoteLogManagerConfig.logRemoteCopyLagBytes())
   }
 
   @Test

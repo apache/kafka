@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.assignment;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.streams.StreamsConfig;
 
@@ -25,6 +26,7 @@ import java.util.OptionalInt;
 /**
  * Assignment related configs for the Kafka Streams {@link TaskAssignor}.
  */
+@InterfaceAudience.Public
 public class AssignmentConfigs {
     private final long acceptableRecoveryLag;
     private final int maxWarmupReplicas;
