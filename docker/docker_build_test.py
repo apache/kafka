@@ -43,6 +43,13 @@ import tempfile
 import os
 
 def run_docker_tests(image, tag, kafka_url, image_type, container_runtime="docker"):
+    compose_command = f"{container_runtime}-compose"
+    if shutil.which(compose_command) is None:
+        raise RuntimeError(
+            f"Required Compose command '{compose_command}' was not found. "
+            "Please install it and ensure it is available on PATH."
+        )
+
     temp_dir_path = tempfile.mkdtemp()
     try:
         current_dir = os.path.dirname(os.path.realpath(__file__))
@@ -81,7 +88,7 @@ if __name__ == '__main__':
         if args.kafka_url:
             build_docker_image_runner(f"{container_runtime} build -f $DOCKER_FILE -t {args.image}:{args.tag} --build-arg kafka_url={args.kafka_url} --build-arg build_date={date.today()} --no-cache $DOCKER_DIR", args.image_type)
         elif args.kafka_archive:
-            build_docker_image_runner(f"{container_runtime} build -f $DOCKER_FILE -t {args.image}:{args.tag} --build-arg kafka_url= --build-arg build_date={date.today()} --no-cache $DOCKER_DIR", args.image_type, args.kafka_archive)
+            build_docker_image_runner(f"{container_runtime} build -f $DOCKER_FILE -t {args.image}:{args.tag} --build-arg build_date={date.today()} --no-cache $DOCKER_DIR", args.image_type, args.kafka_archive)
 
     if args.test_only or not (args.build_only or args.test_only):
         run_docker_tests(args.image, args.tag, args.kafka_url, args.image_type, container_runtime)
