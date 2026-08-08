@@ -23108,7 +23108,7 @@ public class GroupMetadataManagerTest {
         assertEquals("zone", assignor.lastPassedAssignmentConfigs().get("rack.aware.assignment.tags"));
 
         // Clearing the tags is a change as well, even though the value is back at its default. The configuration
-        // stays in the map: it is written unconditionally, and only the comparison drops it.
+        // then drops out of the map entirely, which is what a broker that predates it records too.
         context.groupConfigManager.updateGroupConfig(groupId, new Properties());
         assignor.prepareGroupAssignment(
             Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
@@ -23119,8 +23119,8 @@ public class GroupMetadataManagerTest {
 
         assertEquals(12, result.response().data().memberEpoch());
         assertEquals(12, group.groupEpoch());
-        assertEquals("", group.lastAssignmentConfigs().get("rack.aware.assignment.tags"));
-        assertEquals("", assignor.lastPassedAssignmentConfigs().get("rack.aware.assignment.tags"));
+        assertFalse(group.lastAssignmentConfigs().containsKey("rack.aware.assignment.tags"));
+        assertFalse(assignor.lastPassedAssignmentConfigs().containsKey("rack.aware.assignment.tags"));
     }
 
     @Test
@@ -23187,23 +23187,6 @@ public class GroupMetadataManagerTest {
         );
         assertEquals(10, result.response().data().memberEpoch());
         assertEquals(10, group.groupEpoch());
-    }
-
-    private static StreamsGroupHeartbeatRequestData heartbeat(
-        String groupId,
-        String memberId,
-        int memberEpoch,
-        String subtopologyId
-    ) {
-        return new StreamsGroupHeartbeatRequestData()
-            .setGroupId(groupId)
-            .setMemberId(memberId)
-            .setMemberEpoch(memberEpoch)
-            .setActiveTasks(List.of(new StreamsGroupHeartbeatRequestData.TaskIds()
-                .setSubtopologyId(subtopologyId)
-                .setPartitions(List.of(0, 1, 2, 3, 4, 5))))
-            .setStandbyTasks(List.of())
-            .setWarmupTasks(List.of());
     }
 
     @Test
@@ -23869,10 +23852,7 @@ public class GroupMetadataManagerTest {
 
         // Verify that the new number of standby replicas is used
         assertEquals(
-            Map.of(
-                "num.standby.replicas", "2",
-                "rack.aware.assignment.tags", GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT
-            ),
+            Map.of("num.standby.replicas", "2"),
             assignor.lastPassedAssignmentConfigs()
         );
 
@@ -24260,10 +24240,7 @@ public class GroupMetadataManagerTest {
         // Verify that the number of standby replicas is evaluated to max,
         // and task offset interval is evaluated to min
         assertEquals(
-            Map.of(
-                "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT),
-                "rack.aware.assignment.tags", GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT
-            ),
+            Map.of("num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT)),
             assignor.lastPassedAssignmentConfigs());
         assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT,
             result.response().data().taskOffsetIntervalMs());
@@ -30531,5 +30508,22 @@ public class GroupMetadataManagerTest {
     ) {
         return responseTopics.stream()
             .collect(Collectors.toMap(DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic::topicId, Function.identity()));
+    }
+
+    private static StreamsGroupHeartbeatRequestData heartbeat(
+        String groupId,
+        String memberId,
+        int memberEpoch,
+        String subtopologyId
+    ) {
+        return new StreamsGroupHeartbeatRequestData()
+            .setGroupId(groupId)
+            .setMemberId(memberId)
+            .setMemberEpoch(memberEpoch)
+            .setActiveTasks(List.of(new StreamsGroupHeartbeatRequestData.TaskIds()
+                .setSubtopologyId(subtopologyId)
+                .setPartitions(List.of(0, 1, 2, 3, 4, 5))))
+            .setStandbyTasks(List.of())
+            .setWarmupTasks(List.of());
     }
 }

@@ -72,8 +72,7 @@ class StreamsGroupTestUtil {
      */
     static Map<String, String> getDefaultAssignmentConfigs() {
         return new TreeMap<>(Map.of(
-            "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT),
-            "rack.aware.assignment.tags", GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT
+            "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT)
         ));
     }
 

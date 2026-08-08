@@ -278,12 +278,9 @@ public class GroupMetadataManager {
 
     /**
      * The default value of every streams group assignment configuration, keyed by the name under which the
-     * configuration is passed to the assignor.
-     *
-     * <p>Used to drop default-valued configurations from both sides of the comparison that detects configuration
-     * changes (see {@link #withoutDefaults}). A configuration at its default value is thereby equivalent to an
-     * absent one, so adding a configuration does not read as a change for a group that does not set it, which
-     * would otherwise bump the group epoch of every such group on a broker upgrade.
+     * configuration is passed to the assignor. Consulted when recording a configuration
+     * (see {@link #putIfNotDefault}) and when comparing recorded ones (see {@link #withoutDefaults}), so that
+     * a configuration at its default value is equivalent to an absent one.
      *
      * <p>These are the static defaults of the configurations, not the broker-level defaults in effect: a
      * broker-level default that is changed away from the static default must still bump the group epoch.
@@ -9925,8 +9922,8 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Get the assignment configurations of the provided streams group, as they are passed to the assignor. Every
-     * configuration is included, at its default value when the group does not set it.
+     * Get the assignment configurations of the provided streams group, as they are passed to the assignor.
+     * Configurations at their default value are omitted, except for {@code num.standby.replicas}.
      */
     private Map<String, String> streamsGroupAssignmentConfigs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
@@ -9935,17 +9932,31 @@ public class GroupMetadataManager {
         final List<String> rackAwareAssignmentTags = groupConfig.flatMap(GroupConfig::streamsRackAwareAssignmentTags)
             .orElse(config.streamsGroupRackAwareAssignmentTags());
         Map<String, String> configs = new TreeMap<>();
+        // 4.2 and 4.3 record num.standby.replicas unconditionally, and the map recorded for a group that sets
+        // nothing must stay identical to theirs: during a rolling upgrade, a group whose coordinator moves to a
+        // not-yet-upgraded broker would otherwise read the difference as a change and bump the group epoch.
         configs.put("num.standby.replicas", numStandbyReplicas.toString());
-        configs.put("rack.aware.assignment.tags", String.join(",", rackAwareAssignmentTags));
+        // Configurations added after 4.3 are omitted at their default value instead, for the same reason: a
+        // broker that predates them computes the map without them.
+        putIfNotDefault(configs, "rack.aware.assignment.tags", String.join(",", rackAwareAssignmentTags));
         return configs;
     }
 
     /**
-     * Drop the assignment configurations that are at their default value, so that configurations written before a
-     * configuration was added compare equal to the ones written after.
+     * Record an assignment configuration, unless it is at its default value.
+     */
+    private static void putIfNotDefault(Map<String, String> configs, String key, String value) {
+        if (!value.equals(ASSIGNMENT_CONFIG_DEFAULTS.get(key))) {
+            configs.put(key, value);
+        }
+    }
+
+    /**
+     * Drop the assignment configurations that are at their default value, so that a map recorded by a version that
+     * wrote one out explicitly compares equal to one that omits it.
      */
     private static Map<String, String> withoutDefaults(Map<String, String> configs) {
-        Map<String, String> result = new TreeMap<>(configs);
+        Map<String, String> result = new HashMap<>(configs);
         result.entrySet().removeIf(entry -> entry.getValue().equals(ASSIGNMENT_CONFIG_DEFAULTS.get(entry.getKey())));
         return result;
     }
