@@ -26,6 +26,7 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -139,13 +140,9 @@ public class IQv2StoreIntegrationTest {
     private static final long WINDOW_START =
         (RECORD_TIME / WINDOW_SIZE.toMillis()) * WINDOW_SIZE.toMillis();
 
-    public static final EmbeddedKafkaCluster CLUSTER;
-    static {
-        final Properties brokerProps = new Properties();
-        // Each test application has one Streams group member, so waiting for more members only delays startup.
-        brokerProps.put(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0");
-        CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, brokerProps);
-    }
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS,
+            // Each test application has one Streams group member, so waiting for more members only delays startup.
+        Utils.mkProperties(Map.of(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0")));
     private static final Position POSITION_0 =
         Position.fromMap(mkMap(mkEntry(INPUT_TOPIC_NAME, mkMap(mkEntry(0, 5L)))));
 
