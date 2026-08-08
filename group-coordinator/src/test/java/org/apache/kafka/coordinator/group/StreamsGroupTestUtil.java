@@ -71,6 +71,7 @@ class StreamsGroupTestUtil {
      * This matches what streamsGroupAssignmentConfigs() would return.
      */
     static Map<String, String> getDefaultAssignmentConfigs() {
+        // Use the same default value as GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT
         return new TreeMap<>(Map.of(
             "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT)
         ));

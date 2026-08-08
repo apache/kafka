@@ -23033,8 +23033,9 @@ public class GroupMetadataManagerTest {
     @Test
     public void testStreamsGroupEpochBumpsOnlyWhenRackAwareAssignmentTagsLeaveOrReturnToTheirDefault() {
         // rack.aware.assignment.tags walks default -> zone -> default. Only the two real changes may bump the
-        // group epoch: the configuration turning up at its default value on an upgrade must not, or every group
-        // of an upgraded broker would rebalance once.
+        // group epoch, and the map recorded at either end of the walk must hold no tags at all: that is what a
+        // broker that predates the configuration records, and what it recomputes when a group's coordinator
+        // moves to it during a rolling upgrade.
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
         String subtopology1 = "subtopology1";
@@ -23080,7 +23081,7 @@ public class GroupMetadataManagerTest {
 
         StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
 
-        // The tags turning up at their default value are not a change: no epoch bump.
+        // The group sets no tags, so this broker computes the very map the older version recorded: no epoch bump.
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result =
             context.streamsGroupHeartbeat(heartbeat(groupId, memberId, 10, subtopology1));
 
@@ -23119,8 +23120,14 @@ public class GroupMetadataManagerTest {
 
         assertEquals(12, result.response().data().memberEpoch());
         assertEquals(12, group.groupEpoch());
-        assertFalse(group.lastAssignmentConfigs().containsKey("rack.aware.assignment.tags"));
-        assertFalse(assignor.lastPassedAssignmentConfigs().containsKey("rack.aware.assignment.tags"));
+        // Asserted in full, and not just for the absence of the tags: this is exactly the map 4.2 and 4.3 record
+        // for a group that sets nothing. A configuration recorded here at its default value is read as a change
+        // by a coordinator that predates it, and withoutDefaults cannot repair that - it only runs on this side
+        // of the upgrade.
+        Map<String, String> defaultConfigs =
+            Map.of("num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT));
+        assertEquals(defaultConfigs, group.lastAssignmentConfigs());
+        assertEquals(defaultConfigs, assignor.lastPassedAssignmentConfigs());
     }
 
     @Test
