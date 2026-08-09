@@ -52,7 +52,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -333,12 +332,7 @@ public class FileRecordsTest {
 
         FileRecords fileRecords = new FileRecords(tempFile(), channelMock, Integer.MAX_VALUE);
 
-        try {
-            fileRecords.truncateTo(43);
-            fail("Should throw KafkaException");
-        } catch (KafkaException e) {
-            // expected
-        }
+        assertThrows(KafkaException.class, () -> fileRecords.truncateTo(43));
 
         verify(channelMock, atLeastOnce()).size();
     }

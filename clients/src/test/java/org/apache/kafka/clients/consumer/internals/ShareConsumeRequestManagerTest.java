@@ -125,7 +125,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -1964,12 +1963,8 @@ public class ShareConsumeRequestManagerTest {
         assertEquals(1, sendFetches());
         client.prepareResponse(fullFetchResponse(tip0, records, emptyAcquiredRecords, Errors.TOPIC_AUTHORIZATION_FAILED));
         networkClientDelegate.poll(time.timer(0));
-        try {
-            collectFetch();
-            fail("collectFetch should have thrown a TopicAuthorizationException");
-        } catch (TopicAuthorizationException e) {
-            assertEquals(Set.of(topicName), e.unauthorizedTopics());
-        }
+        TopicAuthorizationException e = assertThrows(TopicAuthorizationException.class, () -> collectFetch());
+        assertEquals(Set.of(topicName), e.unauthorizedTopics());
     }
 
     @Test

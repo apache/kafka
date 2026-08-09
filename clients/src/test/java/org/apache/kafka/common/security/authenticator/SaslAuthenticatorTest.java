@@ -360,12 +360,7 @@ public class SaslAuthenticatorTest {
         server = createEchoServer(securityProtocol);
         createSelector(securityProtocol, saslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        try {
-            selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
-            fail("SASL/PLAIN channel created without password");
-        } catch (IOException e) {
-            // Expected exception
-        }
+        assertThrows(IOException.class, () -> selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE));
     }
 
     /**
@@ -1084,12 +1079,7 @@ public class SaslAuthenticatorTest {
 
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
         server = createEchoServer(securityProtocol);
-        try {
-            createSelector(securityProtocol, saslClientConfigs);
-            fail("SASL/PLAIN channel created without valid login module");
-        } catch (KafkaException e) {
-            // Expected exception
-        }
+        assertThrows(KafkaException.class, () -> createSelector(securityProtocol, saslClientConfigs));
     }
 
     /**
@@ -1253,13 +1243,7 @@ public class SaslAuthenticatorTest {
         saslServerConfigs.put(prefix + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG,
                 TestServerCallbackHandler.class);
         Class<?> loginCallback = TestLoginCallbackHandler.class;
-
-        try {
-            createEchoServer(securityProtocol);
-            fail("Should have failed to create server with default login handler");
-        } catch (KafkaException e) {
-            // Expected exception
-        }
+        assertThrows(KafkaException.class, () -> createEchoServer(securityProtocol));
 
         try {
             saslServerConfigs.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, loginCallback);
@@ -1374,12 +1358,7 @@ public class SaslAuthenticatorTest {
         String module1 = TestJaasConfig.jaasConfigProperty("PLAIN", "user1", "user1-secret").value();
         String module2 = TestJaasConfig.jaasConfigProperty("PLAIN", "user2", "user2-secret").value();
         saslClientConfigs.put(SaslConfigs.SASL_JAAS_CONFIG, new Password(module1 + " " + module2));
-        try {
-            createClientConnection(securityProtocol, "1");
-            fail("Connection created with multiple login modules in sasl.jaas.config");
-        } catch (IllegalArgumentException e) {
-            // Expected
-        }
+        assertThrows(IllegalArgumentException.class, () -> createClientConnection(securityProtocol, "1"));
     }
 
     /**

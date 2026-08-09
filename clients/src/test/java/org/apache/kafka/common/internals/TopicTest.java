@@ -27,8 +27,8 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class TopicTest {
 
@@ -49,12 +49,7 @@ public class TopicTest {
         String[] invalidTopicNames = {"", "foo bar", "..", "foo:bar", "foo=bar", ".", new String(longString)};
 
         for (String topicName : invalidTopicNames) {
-            try {
-                Topic.validate(topicName);
-                fail("No exception was thrown for topic with invalid name: " + topicName);
-            } catch (InvalidTopicException e) {
-                // Good
-            }
+            assertThrows(InvalidTopicException.class, () -> Topic.validate(topicName));
         }
     }
 

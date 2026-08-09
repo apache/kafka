@@ -727,10 +727,7 @@ public class KafkaProducerTest {
             });
 
             // Close producer should not complete until send succeeds
-            try {
-                future.get(100, TimeUnit.MILLISECONDS);
-                fail("Close completed without waiting for send");
-            } catch (java.util.concurrent.TimeoutException expected) { /* ignore */ }
+            assertThrows(java.util.concurrent.TimeoutException.class, () -> future.get(100, TimeUnit.MILLISECONDS));
 
             // Ensure send has started
             client.waitForRequests(1, 1000);

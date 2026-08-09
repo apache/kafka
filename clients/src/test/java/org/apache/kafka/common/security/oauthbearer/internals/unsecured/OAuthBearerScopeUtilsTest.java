@@ -22,8 +22,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class OAuthBearerScopeUtilsTest {
     @Test
@@ -44,12 +44,7 @@ public class OAuthBearerScopeUtilsTest {
     @Test
     public void invalidScope() {
         for (String invalidScope : new String[] {"\"foo", "\\foo"}) {
-            try {
-                OAuthBearerScopeUtils.parseScope(invalidScope);
-                fail("did not detect invalid scope: " + invalidScope);
-            } catch (OAuthBearerConfigException expected) {
-                // empty
-            }
+            assertThrows(OAuthBearerConfigException.class, () -> OAuthBearerScopeUtils.parseScope(invalidScope));
         }
     }
 }

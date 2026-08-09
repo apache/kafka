@@ -52,7 +52,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class TopicMetadataFetcherTest {
 
@@ -132,12 +131,8 @@ public class TopicMetadataFetcherTest {
         buildFetcher();
         assignFromUser(singleton(tp0));
         client.prepareResponse(newMetadataResponse(Errors.TOPIC_AUTHORIZATION_FAILED));
-        try {
-            topicMetadataFetcher.getAllTopicMetadata(time.timer(10L));
-            fail();
-        } catch (TopicAuthorizationException e) {
-            assertEquals(singleton(topicName), e.unauthorizedTopics());
-        }
+        TopicAuthorizationException e = assertThrows(TopicAuthorizationException.class, () -> topicMetadataFetcher.getAllTopicMetadata(time.timer(50L)));
+        assertEquals(singleton(topicName), e.unauthorizedTopics());
     }
 
     @Test

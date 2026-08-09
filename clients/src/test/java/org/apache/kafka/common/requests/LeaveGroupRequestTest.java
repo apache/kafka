@@ -33,7 +33,6 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class LeaveGroupRequestTest {
 
@@ -66,26 +65,28 @@ public class LeaveGroupRequestTest {
                                                        .setMembers(members);
 
         for (short version : ApiKeys.LEAVE_GROUP.allVersions()) {
-            try {
+            if (version <= 2) {
+                UnsupportedVersionException e = assertThrows(
+                        UnsupportedVersionException.class,
+                        () -> builder.build(version)
+                );
+                assertTrue(e.getMessage().contains("leave group request only supports single member instance"));
+            } else {
                 LeaveGroupRequest request = builder.build(version);
-                if (version <= 2) {
-                    fail("Older version " + version +
-                             " request data should not be created due to non-single members");
-                }
                 assertEquals(expectedData, request.data());
                 assertEquals(members, request.members());
 
                 LeaveGroupResponse expectedResponse = new LeaveGroupResponse(
-                    Collections.emptyList(),
-                    Errors.COORDINATOR_LOAD_IN_PROGRESS,
-                    throttleTimeMs,
-                    version
+                        Collections.emptyList(),
+                        Errors.COORDINATOR_LOAD_IN_PROGRESS,
+                        throttleTimeMs,
+                        version
                 );
 
-                assertEquals(expectedResponse, request.getErrorResponse(throttleTimeMs,
-                                                                        Errors.COORDINATOR_LOAD_IN_PROGRESS.exception()));
-            } catch (UnsupportedVersionException e) {
-                assertTrue(e.getMessage().contains("leave group request only supports single member instance"));
+                assertEquals(
+                        expectedResponse,
+                        request.getErrorResponse(throttleTimeMs, Errors.COORDINATOR_LOAD_IN_PROGRESS.exception())
+                );
             }
         }
 

@@ -40,7 +40,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class ProducerMetadataTest {
     private static final long METADATA_IDLE_MS = 60 * 1000;
@@ -143,20 +142,10 @@ public class ProducerMetadataTest {
         metadata.updateWithCurrentRequestVersion(responseWithCurrentTopics(), false, time);
         assertTrue(metadata.timeToNextUpdate(time) > 0, "No update needed.");
         // first try with a max wait time of 0 and ensure that this returns back without waiting forever
-        try {
-            metadata.awaitUpdate(metadata.requestUpdate(true), Time.SYSTEM.timer(0));
-            fail("Wait on metadata update was expected to timeout, but it didn't");
-        } catch (TimeoutException te) {
-            // expected
-        }
+        assertThrows(TimeoutException.class, () -> metadata.awaitUpdate(metadata.requestUpdate(true), Time.SYSTEM.timer(0)));
         // now try with a higher timeout value once
         final long twoSecondWait = 2000;
-        try {
-            metadata.awaitUpdate(metadata.requestUpdate(true), Time.SYSTEM.timer(twoSecondWait));
-            fail("Wait on metadata update was expected to timeout, but it didn't");
-        } catch (TimeoutException te) {
-            // expected
-        }
+        assertThrows(TimeoutException.class, () -> metadata.awaitUpdate(metadata.requestUpdate(true), Time.SYSTEM.timer(twoSecondWait)));
     }
 
     @Test
