@@ -172,7 +172,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             final String subtopologyId = entry.getKey();
             for (final Map.Entry<Integer, Long> partitionOffset : entry.getValue().entrySet()) {
                 final int partitionNo = partitionOffset.getKey();
-                if (isStandbyTask(memberAssignmentState, subtopologyId, partitionNo)) {
+                if (isCurrentlyAssignedStandbyTask(memberAssignmentState, subtopologyId, partitionNo)) {
                     continue;
                 }
                 standbyCandidates
@@ -204,9 +204,9 @@ public class StickyTaskAssignor implements TaskAssignor {
             .getOrDefault(partitionNo, 0L);
     }
 
-    private static boolean isStandbyTask(final MemberAssignmentState memberAssignmentState,
-                                         final String subtopologyId,
-                                         final int partitionNo) {
+    private static boolean isCurrentlyAssignedStandbyTask(final MemberAssignmentState memberAssignmentState,
+                                                          final String subtopologyId,
+                                                          final int partitionNo) {
         final Set<Integer> partitionNoSet = memberAssignmentState.standbyTasks().get(subtopologyId);
         return partitionNoSet != null && partitionNoSet.contains(partitionNo);
     }
