@@ -46,9 +46,6 @@ public class StickyTaskAssignor implements TaskAssignor {
     private static final String STICKY_ASSIGNOR_NAME = "sticky";
     private static final Logger log = LoggerFactory.getLogger(StickyTaskAssignor.class);
 
-    /** Offset sum for a task whose state the member does not hold, or does not report an offset for. */
-    private static final long UNKNOWN_OFFSET_SUM = -1L;
-
     /**
      * Standbys from the target assignment rank ahead of members only known to hold state through their reported
      * offsets; within each group, the most caught-up state comes first.
@@ -175,7 +172,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             final String subtopologyId = entry.getKey();
             for (final Map.Entry<Integer, Long> partitionOffset : entry.getValue().entrySet()) {
                 final int partitionNo = partitionOffset.getKey();
-                if (partitionOffset.getValue() < 0 || isStandbyTask(memberAssignmentState, subtopologyId, partitionNo)) {
+                if (isStandbyTask(memberAssignmentState, subtopologyId, partitionNo)) {
                     continue;
                 }
                 standbyCandidates
@@ -198,15 +195,13 @@ public class StickyTaskAssignor implements TaskAssignor {
         return standbyTaskToPrevMember;
     }
 
+    /** Falls back to {@code 0} when no offset is reported, the conservative bound implying maximum lag. */
     private static long reportedOffsetSum(final MemberAssignmentState memberAssignmentState,
                                           final String subtopologyId,
                                           final int partitionNo) {
-        final Map<Integer, Long> subtopologyOffsets = memberAssignmentState.taskOffsets().get(subtopologyId);
-        if (subtopologyOffsets == null) {
-            return UNKNOWN_OFFSET_SUM;
-        }
-        final Long offsetSum = subtopologyOffsets.get(partitionNo);
-        return offsetSum == null || offsetSum < 0 ? UNKNOWN_OFFSET_SUM : offsetSum;
+        return memberAssignmentState.taskOffsets()
+            .getOrDefault(subtopologyId, Map.of())
+            .getOrDefault(partitionNo, 0L);
     }
 
     private static boolean isStandbyTask(final MemberAssignmentState memberAssignmentState,

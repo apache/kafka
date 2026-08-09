@@ -1517,8 +1517,8 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldIgnoreNegativeReportedTaskOffsetSums() {
-        // Negative offset sums are sentinel/unknown values and must not grant stickiness over a valid report.
+    public void shouldRankNegativeReportedTaskOffsetSumsLast() {
+        // A negative offset sum reads as more lag than any valid report, so it must not grant stickiness over one.
         final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadataWithOffsets("process1",
             mkMap(mkEntry("test-subtopology", mkMap(mkEntry(0, -2L), mkEntry(1, 100L)))));
         final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadataWithOffsets("process2",
