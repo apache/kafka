@@ -1150,6 +1150,7 @@ org.apache.kafka.clients.consumer.internals.AbstractCoordinatorTest:
 - testLookupCoordinator
 - testMetrics
 - testNoGenerationWillNotTriggerProtocolNameCheck
+- testNoWakeupFromAsyncCoordinatorReadyOnRetriableError
 - testPollHeartbeatAwakesHeartbeatThread
 - testRejoinReason
 - testRetainMemberIdAfterJoinGroupDisconnect
