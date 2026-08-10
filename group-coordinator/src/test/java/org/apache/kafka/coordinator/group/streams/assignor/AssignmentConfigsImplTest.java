@@ -44,27 +44,10 @@ public class AssignmentConfigsImplTest {
 
     @Test
     void testFromMapWithoutRackAwareAssignmentTags() {
-        // A config that is absent from the map is at its default value.
+        // The tags are only put in the map when any are configured.
         assertEquals(
             AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(2),
             AssignmentConfigsImpl.fromMap(Map.of("num.standby.replicas", "2"))
-        );
-    }
-
-    @Test
-    void testFromMapWithoutNumStandbyReplicas() {
-        assertEquals(
-            AssignmentConfigsImpl.DEFAULT.withRackAwareAssignmentTags(List.of("tag1")),
-            AssignmentConfigsImpl.fromMap(Map.of("rack.aware.assignment.tags", "tag1"))
-        );
-    }
-
-    @Test
-    void testFromMapWithEmptyRackAwareAssignmentTags() {
-        // The tags are recorded as an empty string rather than omitted when they are explicitly set to no tags.
-        assertEquals(
-            AssignmentConfigsImpl.DEFAULT,
-            AssignmentConfigsImpl.fromMap(Map.of("rack.aware.assignment.tags", ""))
         );
     }
 

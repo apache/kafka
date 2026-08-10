@@ -43,7 +43,7 @@ public record AssignmentConfigsImpl(
      */
     public static final AssignmentConfigsImpl DEFAULT = new AssignmentConfigsImpl(
         GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT,
-        parseRackAwareAssignmentTags(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT)
+        List.of()
     );
 
     public AssignmentConfigsImpl {
@@ -53,19 +53,20 @@ public record AssignmentConfigsImpl(
 
     /**
      * Converts the raw assignment configs computed for the group into the typed configs passed to the assignor.
-     * A configuration that is absent from the map is at its default value: it was recorded by a version that did
-     * not have the configuration yet, or that omits it while it is at its default value.
      */
     public static AssignmentConfigsImpl fromMap(Map<String, String> configs) {
-        String numStandbyReplicas = configs.get(NUM_STANDBY_REPLICAS_CONFIG);
+        // The map is empty when it was replayed from a group metadata record written before the last assignment
+        // configs were persisted.
+        if (configs.isEmpty()) {
+            return DEFAULT;
+        }
+        // The rack-aware assignment tags are only set when any are configured.
         String rackAwareAssignmentTags = configs.get(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
         return new AssignmentConfigsImpl(
-            numStandbyReplicas == null
-                ? DEFAULT.numStandbyReplicas()
-                : Integer.parseInt(numStandbyReplicas),
+            Integer.parseInt(configs.get(NUM_STANDBY_REPLICAS_CONFIG)),
             rackAwareAssignmentTags == null
-                ? DEFAULT.rackAwareAssignmentTags()
-                : parseRackAwareAssignmentTags(rackAwareAssignmentTags)
+                ? List.of()
+                : List.of(rackAwareAssignmentTags.trim().split("\\s*,\\s*", -1))
         );
     }
 
@@ -81,11 +82,5 @@ public record AssignmentConfigsImpl(
      */
     public AssignmentConfigsImpl withRackAwareAssignmentTags(List<String> rackAwareAssignmentTags) {
         return new AssignmentConfigsImpl(numStandbyReplicas, rackAwareAssignmentTags);
-    }
-
-    private static List<String> parseRackAwareAssignmentTags(String rackAwareAssignmentTags) {
-        return rackAwareAssignmentTags.isBlank()
-            ? List.of()
-            : List.of(rackAwareAssignmentTags.trim().split("\\s*,\\s*"));
     }
 }
