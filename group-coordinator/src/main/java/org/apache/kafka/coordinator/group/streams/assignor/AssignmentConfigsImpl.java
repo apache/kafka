@@ -43,6 +43,7 @@ public record AssignmentConfigsImpl(
      */
     public static final AssignmentConfigsImpl DEFAULT = new AssignmentConfigsImpl(
         GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT,
+        // The parsed form of STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT, which ConfigDef spells as "".
         List.of()
     );
 
