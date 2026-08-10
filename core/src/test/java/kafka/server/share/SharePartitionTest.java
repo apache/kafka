@@ -1035,6 +1035,31 @@ public class SharePartitionTest {
     }
 
     @Test
+    public void testMaybeInitializeWithEqualButDistinctTopicIdResponse() {
+        // The response's topicId is a different Uuid instance than TOPIC_ID_PARTITION.topicId()
+        // but represents the same UUID value. Initialization should succeed since topicId is
+        // compared by value, not by reference.
+        Uuid equalButDistinctTopicId = new Uuid(
+            TOPIC_ID_PARTITION.topicId().getMostSignificantBits(),
+            TOPIC_ID_PARTITION.topicId().getLeastSignificantBits());
+        Persister persister = Mockito.mock(Persister.class);
+        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(equalButDistinctTopicId, List.of(
+                PartitionFactory.newPartitionAllData(0, 3, 5L, Errors.NONE.code(), Errors.NONE.message(),
+                    List.of(
+                        new PersisterStateBatch(5L, 10L, RecordState.AVAILABLE.id, (short) 2),
+                        new PersisterStateBatch(11L, 15L, RecordState.ARCHIVED.id, (short) 3)))))));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+
+        CompletableFuture<Void> result = sharePartition.maybeInitialize();
+        assertTrue(result.isDone());
+        assertFalse(result.isCompletedExceptionally());
+        assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
+    }
+
+    @Test
     public void testMaybeInitializeWithInvalidPartitionResponse() {
         Persister persister = Mockito.mock(Persister.class);
         ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
@@ -7721,6 +7746,29 @@ public class SharePartitionTest {
         writeResult = sharePartition.writeShareGroupState(anyList());
         assertTrue(writeResult.isCompletedExceptionally());
         assertFutureThrows(IllegalStateException.class, writeResult);
+    }
+
+    @Test
+    public void testWriteShareGroupStateWithEqualButDistinctTopicIdResponse() {
+        // The response's topicId is a different Uuid instance than TOPIC_ID_PARTITION.topicId()
+        // but represents the same UUID value. The write should succeed since topicId is
+        // compared by value, not by reference.
+        Uuid equalButDistinctTopicId = new Uuid(
+            TOPIC_ID_PARTITION.topicId().getMostSignificantBits(),
+            TOPIC_ID_PARTITION.topicId().getLeastSignificantBits());
+        Persister persister = Mockito.mock(Persister.class);
+        mockPersisterReadStateMethod(persister);
+        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
+                new TopicData<>(equalButDistinctTopicId, List.of(
+                        PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+
+        CompletableFuture<Void> result = sharePartition.writeShareGroupState(anyList());
+        assertNull(result.join());
+        assertFalse(result.isCompletedExceptionally());
     }
 
     @Test
