@@ -1787,9 +1787,6 @@ public class StreamsConfig extends AbstractConfig {
     private Map<String, Object> getCommonConsumerConfigs() {
         final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(CONSUMER_PREFIX, ConsumerConfig.configNames());
 
-        // The Streams-level group.protocol (classic|streams) shares its name with the consumer config but
-        // has different legal values, so strip any leaked/explicit value here. Streams controls this config
-        // and forces it to "classic" via enforceControlledConsumerConfigs in each consumer builder.
         clientProvidedProps.remove(GROUP_PROTOCOL_CONFIG);
 
         final Map<String, Object> consumerProps = new HashMap<>(DEFAULT_CONSUMER_CONFIGS);
