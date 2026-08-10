@@ -169,11 +169,6 @@ public class StreamsConfig extends AbstractConfig {
 
     private final boolean eosEnabled;
 
-    /**
-     * Completes the controlled-config warning for configs that Streams only controls when EOS is
-     * enabled. Without it such a rule looks arbitrary, because the same config is respected when EOS
-     * is disabled. Empty for configs Streams controls unconditionally.
-     */
     private final String eosControlledConfigReason;
     private static final long DEFAULT_COMMIT_INTERVAL_MS = 30000L;
     private static final long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
