@@ -147,10 +147,9 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
 
             if (fetchRequests.isEmpty()) {
                 // If no fetch requests were generated, wake up the FetchBuffer so the application thread doesn't
-                // needlessly wait for a wakeup that won't come: it can still collect data a node that may have
-                // buffered (preventing new fetch requests from being generated),
-                // and submit a new poll event to generate the next request. Only do so, though,
-                // when no response is still expected and a fetch request could actually be generated.
+                // needlessly wait for a wakeup that won't come: it can still collect data that a node may have
+                // buffered, and submit a new poll event to generate the next request.
+                // Only do so, though, when no response is still expected and a fetch request could actually be generated.
                 if (nodesWithPendingFetchRequests.isEmpty() && hasFetchablePartitions())
                     fetchBuffer.wakeup();
 
