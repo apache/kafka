@@ -745,23 +745,22 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         quorum.transitionToUnattached(epoch, leaderId);
         maybeFireLeaderChange();
         resetConnections();
+        completeLeaderPurgatoriesExceptionally();
     }
 
     private void transitionToResigned(List<ReplicaKey> preferredSuccessors) {
-        fetchPurgatory.completeAllExceptionally(
-            Errors.NOT_LEADER_OR_FOLLOWER.exception(
-                "Not handling request since this node is resigning"
-            )
-        );
         quorum.transitionToResigned(preferredSuccessors);
         resetConnections();
+        completeLeaderPurgatoriesExceptionally();
     }
 
     private void onBecomeFollower(long currentTimeMs) {
         kafkaRaftMetrics.maybeUpdateElectionLatency(currentTimeMs);
-
         resetConnections();
+        completeLeaderPurgatoriesExceptionally();
+    }
 
+    private void completeLeaderPurgatoriesExceptionally() {
         // After becoming a follower, we need to complete all pending fetches so that
         // they can be re-sent to the leader without waiting for their expirations
         fetchPurgatory.completeAllExceptionally(
@@ -3904,6 +3903,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     QuorumState quorum() {
         // It's okay to return null since this method is only called by tests
         return quorum;
+    }
+
+    // Visible only for test
+    int appendPurgatoryNumWaiting() {
+        return appendPurgatory.numWaiting();
     }
 
     private boolean isInitialized() {
