@@ -1044,6 +1044,67 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
   }
 
   @ClusterTest(
+    types = Array(Type.KRAFT),
+    serverProperties = Array(
+      // Registered on the broker only, so that the controller has never heard of this assignor.
+      // The class name has to be spelled out because annotation values must be compile-time constants.
+      new ClusterConfigProperty(
+        id = 0,
+        key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG,
+        value = "kafka.server.CustomStreamsTaskAssignor"
+      )
+    )
+  )
+  def testAlterStreamsAssignorNameGroupConfigIsValidatedOnTheBroker(): Unit = {
+    val admin = cluster.admin()
+    val groupId = "test-group"
+
+    try {
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
+      )
+
+      val groupConfigResource = new ConfigResource(ConfigResource.Type.GROUP, groupId)
+
+      // An assignor registered on the broker is accepted even though the controller does not have it,
+      // because the name is checked by the broker that receives the request.
+      val customAlterOp = new AlterConfigOp(
+        new ConfigEntry(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, CustomStreamsTaskAssignor.NAME),
+        AlterConfigOp.OpType.SET
+      )
+      admin.incrementalAlterConfigs(
+        Map(groupConfigResource -> List(customAlterOp).asJavaCollection).asJava
+      ).all().get()
+
+      TestUtils.waitUntilTrue(() => {
+        val describedConfigs = admin.describeConfigs(List(groupConfigResource).asJava).all().get()
+        describedConfigs.get(groupConfigResource).get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG).value() ==
+          CustomStreamsTaskAssignor.NAME
+      }, s"${GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG} was not updated to the expected value within the timeout period.")
+
+      // Conversely, the built-in assignor is rejected: it is not registered on this broker, even though
+      // it is the assignor that the controller itself has registered.
+      val stickyAlterOp = new AlterConfigOp(
+        new ConfigEntry(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "sticky"),
+        AlterConfigOp.OpType.SET
+      )
+      val executionException = assertThrows(classOf[ExecutionException], () =>
+        admin.incrementalAlterConfigs(
+          Map(groupConfigResource -> List(stickyAlterOp).asJavaCollection).asJava
+        ).all().get()
+      )
+      assertTrue(executionException.getCause.isInstanceOf[InvalidConfigurationException],
+        s"Expected InvalidConfigurationException but got ${executionException.getCause}")
+      assertTrue(executionException.getCause.getMessage.contains("'sticky' is not a registered task assignor"),
+        s"Unexpected error message: ${executionException.getCause.getMessage}")
+    } finally {
+      admin.close()
+    }
+  }
+
+  @ClusterTest(
     serverProperties = Array(
       // The class name has to be spelled out because annotation values must be compile-time constants.
       new ClusterConfigProperty(

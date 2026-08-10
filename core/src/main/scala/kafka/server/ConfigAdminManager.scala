@@ -33,6 +33,7 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.{Alte
 import org.apache.kafka.common.protocol.Errors.{INVALID_REQUEST, UNKNOWN_SERVER_ERROR}
 import org.apache.kafka.common.requests.ApiError
 import org.apache.kafka.common.resource.{Resource, ResourceType}
+import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.metadata.ConfigRepository
 import org.apache.kafka.server.config.AbstractKafkaConfig
 import org.apache.kafka.server.logger.RuntimeLoggerManager
@@ -63,15 +64,16 @@ import scala.jdk.CollectionConverters._
  *
  * Configuration processing is split into two parts.
  * - The first step, called "preprocessing," handles setting KIP-412 log levels, validating
- * BROKER configurations. We also filter out some other things here like UNKNOWN resource
- * types, etc.
+ * BROKER configurations, and validating the streams task assignor selected by a GROUP
+ * configuration. We also filter out some other things here like UNKNOWN resource types, etc.
  * - The second step is "persistence," and handles storing the configurations durably to our
  * metadata store.
  *
  * The active controller performs its own configuration validation step in
  * [[kafka.server.ControllerConfigurationValidator]]. This is mainly important for
- * TOPIC resources, since we already validated changes to BROKER resources on the
- * forwarding broker. The controller is also responsible for enforcing the configured
+ * TOPIC resources, since we already validated changes to BROKER resources, and the
+ * selected streams task assignor of GROUP resources, on the forwarding broker. The
+ * controller is also responsible for enforcing the configured
  * [[org.apache.kafka.server.policy.AlterConfigPolicy]].
  */
 class ConfigAdminManager(nodeId: Int,
@@ -143,7 +145,14 @@ class ConfigAdminManager(nodeId: Int,
                 validateResourceNameIsCurrentNodeId(resource.resourceName())
               }
               validateBrokerConfigChange(resource, configResource)
-            case TOPIC | CLIENT_METRICS | GROUP =>
+            case GROUP =>
+              resource.configs().forEach { config =>
+                if (config.name() == GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG &&
+                  config.configOperation() == OpType.SET.id()) {
+                  validateStreamsAssignorNameChange(config.value())
+                }
+              }
+            case TOPIC | CLIENT_METRICS =>
             // Nothing to do.
             case _ =>
               throw new InvalidRequestException(s"Unknown resource type ${resource.resourceType().toInt}")
@@ -198,6 +207,15 @@ class ConfigAdminManager(nodeId: Int,
       case e: Throwable => throw new InvalidRequestException(e.getMessage)
     }
  }
+
+  /**
+   * Validate a change to the task assignor selected by a streams group. This is done here rather
+   * than on the controller because the assignors are registered on the brokers, which are the
+   * nodes that run the group coordinator.
+   */
+  private def validateStreamsAssignorNameChange(assignorName: String): Unit = {
+    GroupConfig.validateAssignorName(assignorName, conf.groupCoordinatorConfig.streamsGroupAssignorNames())
+  }
 
   /**
    * Preprocess a legacy configuration operation on the broker.

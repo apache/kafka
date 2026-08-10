@@ -478,8 +478,27 @@ public final class GroupConfig extends AbstractConfig {
     }
 
     /**
+     * Check that the selected task assignor is one of the assignors registered on the broker.
+     * Validated separately from {@link #validate} because the registry of assignors only exists on
+     * brokers, which are the nodes that run the group coordinator.
+     *
+     * @param assignorName            The requested assignor name, as an unparsed config value.
+     * @param registeredAssignorNames The names of the assignors registered on the broker.
+     */
+    public static void validateAssignorName(String assignorName, List<String> registeredAssignorNames) {
+        // ConfigDef trims STRING values while parsing, so trim here too in order to accept the same
+        // values as the rest of the validation.
+        String trimmed = assignorName.trim();
+        if (!registeredAssignorNames.contains(trimmed)) {
+            throw new InvalidConfigurationException(STREAMS_ASSIGNOR_NAME_CONFIG + " '" + trimmed +
+                "' is not a registered task assignor. Registered assignors are: " + registeredAssignorNames + ".");
+        }
+    }
+
+    /**
      * Check that the given properties contain only valid group config names and that
-     * all values can be parsed and are valid.
+     * all values can be parsed and are valid. Does not cover
+     * {@link #STREAMS_ASSIGNOR_NAME_CONFIG}, see {@link #validateAssignorName}.
      *
      * @param newGroupConfig         The new unparsed group config overrides.
      * @param groupCoordinatorConfig The group coordinator config.
@@ -627,16 +646,6 @@ public final class GroupConfig extends AbstractConfig {
             STREAMS_NUM_WARMUP_REPLICAS_CONFIG,
             groupCoordinatorConfig.streamsGroupMaxWarmupReplicas()
         );
-
-        // The selected streams assignor must be one of the assignors registered on the broker.
-        if (parsed.containsKey(STREAMS_ASSIGNOR_NAME_CONFIG)) {
-            String assignorName = (String) parsed.get(STREAMS_ASSIGNOR_NAME_CONFIG);
-            List<String> registeredAssignors = groupCoordinatorConfig.streamsGroupAssignorNames();
-            if (!registeredAssignors.contains(assignorName)) {
-                throw new InvalidConfigurationException(STREAMS_ASSIGNOR_NAME_CONFIG + " '" + assignorName +
-                    "' is not a registered task assignor. Registered assignors are: " + registeredAssignors + ".");
-            }
-        }
 
         // Cross-field validations: session timeout must be greater than heartbeat interval.
         validateSessionExceedsHeartbeat(

@@ -22,7 +22,7 @@ import java.util.Collections
 
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
-import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, TOPIC, UNKNOWN}
+import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, GROUP, TOPIC, UNKNOWN}
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException}
@@ -40,6 +40,7 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.{Alte
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.Errors.{INVALID_REQUEST, NONE}
 import org.apache.kafka.common.requests.ApiError
+import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.metadata.MockConfigRepository
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{Assertions, Test}
@@ -48,8 +49,12 @@ import org.slf4j.LoggerFactory
 class ConfigAdminManagerTest {
   val logger = LoggerFactory.getLogger(classOf[ConfigAdminManagerTest])
 
-  def newConfigAdminManager(brokerId: Integer): ConfigAdminManager = {
+  def newConfigAdminManager(brokerId: Integer): ConfigAdminManager =
+    newConfigAdminManager(brokerId, Map.empty)
+
+  def newConfigAdminManager(brokerId: Integer, overrides: Map[String, String]): ConfigAdminManager = {
     val config = TestUtils.createBrokerConfig(nodeId = brokerId)
+    overrides.foreach { case (key, value) => config.setProperty(key, value) }
     new ConfigAdminManager(brokerId, new KafkaConfig(config), new MockConfigRepository())
   }
 
@@ -411,6 +416,60 @@ class ConfigAdminManagerTest {
       manager.preprocess(new AlterConfigsRequestData().
         setResources(new LAlterConfigsResourceCollection(util.Arrays.asList(
           unknown)))))
+  }
+
+  def groupIncremental(configName: String, value: String, opType: OpType): IAlterConfigsResource =
+    new IAlterConfigsResource().
+      setResourceName("group").
+      setResourceType(GROUP.id).
+      setConfigs(new IAlterableConfigCollection(
+        util.Arrays.asList(new IAlterableConfig().setName(configName).
+          setValue(value).
+          setConfigOperation(opType.id()))))
+
+  @Test
+  def testPreprocessIncrementalWithStreamsAssignorName(): Unit = {
+    // A built-in assignor and a custom one, registered by short name and by class name respectively.
+    val manager = newConfigAdminManager(1,
+      Map(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG ->
+        s"sticky,${classOf[CustomStreamsTaskAssignor].getName}"))
+
+    // Both are selectable by the name the assignor reports, and neither resource is preprocessed,
+    // so both requests are forwarded to the controller.
+    Seq("sticky", CustomStreamsTaskAssignor.NAME).foreach { name =>
+      val group = groupIncremental(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, name, OpType.SET)
+      assertEquals(Collections.emptyMap(),
+        manager.preprocess(new IncrementalAlterConfigsRequestData().
+          setResources(new IAlterConfigsResourceCollection(util.Arrays.asList(
+            group))),
+          (_, _) => true))
+    }
+
+    // A name that no registered assignor reports is rejected before the request is forwarded.
+    val unknown = groupIncremental(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "does-not-exist", OpType.SET)
+    assertEquals(Collections.singletonMap(unknown,
+      new ApiError(Errors.INVALID_CONFIG, "streams.assignor.name 'does-not-exist' is not a " +
+        "registered task assignor. Registered assignors are: [sticky, custom].")),
+      manager.preprocess(new IncrementalAlterConfigsRequestData().
+        setResources(new IAlterConfigsResourceCollection(util.Arrays.asList(
+          unknown))),
+        (_, _) => true))
+  }
+
+  @Test
+  def testPreprocessIncrementalWithUnregisteredBuiltinStreamsAssignorName(): Unit = {
+    // Only the custom assignor is registered. A built-in is not implicitly available, so it can no
+    // longer be selected either.
+    val manager = newConfigAdminManager(1,
+      Map(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG -> classOf[CustomStreamsTaskAssignor].getName))
+    val sticky = groupIncremental(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "sticky", OpType.SET)
+    assertEquals(Collections.singletonMap(sticky,
+      new ApiError(Errors.INVALID_CONFIG, "streams.assignor.name 'sticky' is not a " +
+        "registered task assignor. Registered assignors are: [custom].")),
+      manager.preprocess(new IncrementalAlterConfigsRequestData().
+        setResources(new IAlterConfigsResourceCollection(util.Arrays.asList(
+          sticky))),
+        (_, _) => true))
   }
 
   @Test

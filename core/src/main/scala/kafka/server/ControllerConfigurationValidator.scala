@@ -39,6 +39,9 @@ import scala.collection.mutable
  * the controller. Therefore, the validation here is just a kind of sanity check, which
  * should never fail under normal conditions.
  *
+ * The streams task assignor selected by a GROUP resource is intentionally not validated here, so
+ * that a controller does not need the assignors on its classpath. See ConfigAdminManager.
+ *
  * This validator does not handle changes to BROKER_LOGGER resources. Despite being bundled
  * in the same RPC, BROKER_LOGGER is not really a dynamic configuration in the same sense
  * as the others. It is not persisted to the metadata log.
