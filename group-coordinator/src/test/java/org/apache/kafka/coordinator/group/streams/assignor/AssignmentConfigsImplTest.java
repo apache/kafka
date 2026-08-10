@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.coordinator.group.streams.assignor;
 
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -28,6 +30,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class AssignmentConfigsImplTest {
 
     @Test
+    void testDefaultHoldsTheDefaultOfEveryConfig() {
+        assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT,
+            AssignmentConfigsImpl.DEFAULT.numStandbyReplicas());
+        assertEquals(List.of(), AssignmentConfigsImpl.DEFAULT.rackAwareAssignmentTags());
+    }
+
+    @Test
     void testFromEmptyMap() {
         // A group metadata record written before the last assignment configs were persisted replays as an empty map.
         assertEquals(AssignmentConfigsImpl.DEFAULT, AssignmentConfigsImpl.fromMap(Map.of()));
@@ -35,22 +44,49 @@ public class AssignmentConfigsImplTest {
 
     @Test
     void testFromMapWithoutRackAwareAssignmentTags() {
-        // The tags are only put in the map when any are configured.
+        // A config that is absent from the map is at its default value.
         assertEquals(
-            new AssignmentConfigsImpl(2, List.of()),
+            AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(2),
             AssignmentConfigsImpl.fromMap(Map.of("num.standby.replicas", "2"))
+        );
+    }
+
+    @Test
+    void testFromMapWithoutNumStandbyReplicas() {
+        assertEquals(
+            AssignmentConfigsImpl.DEFAULT.withRackAwareAssignmentTags(List.of("tag1")),
+            AssignmentConfigsImpl.fromMap(Map.of("rack.aware.assignment.tags", "tag1"))
+        );
+    }
+
+    @Test
+    void testFromMapWithEmptyRackAwareAssignmentTags() {
+        // The tags are recorded as an empty string rather than omitted when they are explicitly set to no tags.
+        assertEquals(
+            AssignmentConfigsImpl.DEFAULT,
+            AssignmentConfigsImpl.fromMap(Map.of("rack.aware.assignment.tags", ""))
         );
     }
 
     @Test
     void testFromMap() {
         assertEquals(
-            new AssignmentConfigsImpl(1, List.of("tag1", "tag2")),
+            AssignmentConfigsImpl.DEFAULT
+                .withNumStandbyReplicas(1)
+                .withRackAwareAssignmentTags(List.of("tag1", "tag2")),
             AssignmentConfigsImpl.fromMap(Map.of(
                 "num.standby.replicas", "1",
                 "rack.aware.assignment.tags", " tag1 , tag2 "
             ))
         );
+    }
+
+    @Test
+    void testWithersLeaveTheOtherConfigsUntouched() {
+        AssignmentConfigsImpl configs = new AssignmentConfigsImpl(1, List.of("tag1"));
+
+        assertEquals(new AssignmentConfigsImpl(2, List.of("tag1")), configs.withNumStandbyReplicas(2));
+        assertEquals(new AssignmentConfigsImpl(1, List.of("tag2")), configs.withRackAwareAssignmentTags(List.of("tag2")));
     }
 
     @Test

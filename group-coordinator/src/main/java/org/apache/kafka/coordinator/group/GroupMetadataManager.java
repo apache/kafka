@@ -262,6 +262,8 @@ import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecor
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroupMember.hasAssignedTasksChanged;
+import static org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl.NUM_STANDBY_REPLICAS_CONFIG;
+import static org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG;
 
 
 /**
@@ -9914,9 +9916,9 @@ public class GroupMetadataManager {
         final List<String> rackAwareAssignmentTags = groupConfig.flatMap(GroupConfig::streamsRackAwareAssignmentTags)
             .orElse(config.streamsGroupRackAwareAssignmentTags());
         Map<String, String> configs = new TreeMap<>();
-        configs.put("num.standby.replicas", numStandbyReplicas.toString());
+        configs.put(NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas.toString());
         if (!rackAwareAssignmentTags.isEmpty()) {
-            configs.put("rack.aware.assignment.tags", String.join(",", rackAwareAssignmentTags));
+            configs.put(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, String.join(",", rackAwareAssignmentTags));
         }
         return configs;
     }

@@ -108,7 +108,7 @@ public class StreamsStickyAssignorBenchmark {
         taskAssignor = new StickyTaskAssignor();
 
         Map<String, StreamsGroupMember> members = createMembers();
-        this.assignmentConfigs = new AssignmentConfigsImpl(standbyReplicas, List.of());
+        this.assignmentConfigs = AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(standbyReplicas);
         this.groupSpec = StreamsAssignorBenchmarkUtils.createGroupSpec(members, assignmentConfigs);
 
         if (assignmentType == AssignmentType.INCREMENTAL) {

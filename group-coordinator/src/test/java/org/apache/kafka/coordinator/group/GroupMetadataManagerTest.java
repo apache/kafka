@@ -23655,7 +23655,7 @@ public class GroupMetadataManagerTest {
                     .setWarmupTasks(List.of()));
         assertEquals(2, result.response().data().memberEpoch());
         assertEquals(
-            new AssignmentConfigsImpl(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT, List.of()),
+            AssignmentConfigsImpl.DEFAULT,
             assignor.lastPassedAssignmentConfigs()
         );
 
@@ -23694,7 +23694,7 @@ public class GroupMetadataManagerTest {
 
         // Verify that the new number of standby replicas is used
         assertEquals(
-            new AssignmentConfigsImpl(2, List.of()),
+            AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(2),
             assignor.lastPassedAssignmentConfigs()
         );
 
@@ -24042,7 +24042,7 @@ public class GroupMetadataManagerTest {
         context.assertSessionTimeout(groupId, memberId,
             GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_DEFAULT);
         assertEquals(
-            new AssignmentConfigsImpl(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT, List.of()),
+            AssignmentConfigsImpl.DEFAULT,
             assignor.lastPassedAssignmentConfigs());
         assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT,
             result.response().data().taskOffsetIntervalMs());
@@ -24082,7 +24082,7 @@ public class GroupMetadataManagerTest {
         // Verify that the number of standby replicas is evaluated to max,
         // and task offset interval is evaluated to min
         assertEquals(
-            new AssignmentConfigsImpl(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT, List.of()),
+            AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT),
             assignor.lastPassedAssignmentConfigs());
         assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT,
             result.response().data().taskOffsetIntervalMs());
