@@ -1405,135 +1405,35 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
-    public void shouldPreferPreviousActiveOwnerOverReportedTaskOffsets() {
-        // A live member owning the task in the current target assignment beats any reported on-disk offsets.
+    public void shouldRankCurrentOwnersAheadOfReportedTaskOffsetsAndMostCaughtUpFirst() {
+        // All previous-ownership signals compete at once. member3 reports the largest possible offset sums for
+        // tasks 0 and 1, but loses both: the current active owner keeps task 0 and the current standby is promoted
+        // to active for task 1. Among the two members only known through their offsets, task 2 goes to the more
+        // caught-up one, leaving task 3 for the other.
         final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1",
             mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of());
-        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadataWithOffsets("process2",
-            mkMap(mkEntry("test-subtopology", mkMap(mkEntry(0, 1_000_000L)))));
+        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2",
+            Map.of(), mkMap(mkEntry("test-subtopology", Set.of(0, 1))));
+        final MemberMetadataAndStateImpl memberMetadata3 = createMemberMetadataWithOffsets("process3",
+            mkMap(mkEntry("test-subtopology",
+                mkMap(mkEntry(0, 1_000_000L), mkEntry(1, 1_000_000L), mkEntry(2, 100L)))));
+        final MemberMetadataAndStateImpl memberMetadata4 = createMemberMetadataWithOffsets("process4",
+            mkMap(mkEntry("test-subtopology", mkMap(mkEntry(2, 50L)))));
         final Map<String, MemberMetadataAndStateImpl> members = mkMap(
             mkEntry("member1", memberMetadata1),
-            mkEntry("member2", memberMetadata2));
+            mkEntry("member2", memberMetadata2),
+            mkEntry("member3", memberMetadata3),
+            mkEntry("member4", memberMetadata4));
 
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(members, new HashMap<>()),
-            new TopologyDescriberImpl(2, true, List.of("test-subtopology"))
+            new TopologyDescriberImpl(4, true, List.of("test-subtopology"))
         );
 
         assertEquals(Set.of(0), getActiveTasks(result, "test-subtopology", "member1"));
         assertEquals(Set.of(1), getActiveTasks(result, "test-subtopology", "member2"));
-    }
-
-    @Test
-    public void shouldPreferPreviousStandbyOverReportedTaskOffsets() {
-        // A member that is standby in the current target assignment beats an offset-based candidate, even if the
-        // standby member also reports offsets for the task (which must not register it as a duplicate candidate).
-        final MemberMetadataAndStateImpl memberMetadata1 = new MemberMetadataAndStateImpl(
-            Optional.empty(),
-            Optional.empty(),
-            "process1",
-            Map.of(),
-            Map.of(),
-            mkMap(mkEntry("test-subtopology", Set.of(0))),
-            Map.of(),
-            mkMap(mkEntry("test-subtopology", mkMap(mkEntry(0, 500L)))),
-            Map.of());
-        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadataWithOffsets("process2",
-            mkMap(mkEntry("test-subtopology", mkMap(mkEntry(0, 1_000_000L)))));
-        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
-            mkEntry("member1", memberMetadata1),
-            mkEntry("member2", memberMetadata2));
-
-        final GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
-            new TopologyDescriberImpl(2, true, List.of("test-subtopology"))
-        );
-
-        assertEquals(Set.of(0), getActiveTasks(result, "test-subtopology", "member1"));
-        assertEquals(Set.of(1), getActiveTasks(result, "test-subtopology", "member2"));
-    }
-
-    @Test
-    public void shouldPreferPreviousStandbyWithHigherReportedTaskOffsetSum() {
-        // Several previous standbys of the same task: the one reporting the most caught-up state is promoted to
-        // active, rather than whichever one the member iteration order happened to visit first.
-        final Map<String, Set<Integer>> standbyForTask0 = mkMap(mkEntry("test-subtopology", Set.of(0)));
-        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadataWithStandbysAndOffsets("process1",
-            standbyForTask0, mkMap(mkEntry("test-subtopology", mkMap(mkEntry(0, 50L)))));
-        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadataWithStandbysAndOffsets("process2",
-            standbyForTask0, mkMap(mkEntry("test-subtopology", mkMap(mkEntry(0, 100L)))));
-        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
-            mkEntry("member1", memberMetadata1),
-            mkEntry("member2", memberMetadata2));
-
-        final GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
-            new TopologyDescriberImpl(2, true, List.of("test-subtopology"))
-        );
-
-        assertEquals(Set.of(0), getActiveTasks(result, "test-subtopology", "member2"));
-        assertEquals(Set.of(1), getActiveTasks(result, "test-subtopology", "member1"));
-    }
-
-    @Test
-    public void shouldPreferPreviousStandbyWithoutReportedOffsetsOverOffsetOnlyCandidate() {
-        // Upgrade case: a previous standby on an old client that does not report offsets yet must still outrank a
-        // member that is only known to hold state through its reported offsets.
-        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1",
-            Map.of(), mkMap(mkEntry("test-subtopology", Set.of(0))));
-        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadataWithOffsets("process2",
-            mkMap(mkEntry("test-subtopology", mkMap(mkEntry(0, 1_000_000L)))));
-        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
-            mkEntry("member1", memberMetadata1),
-            mkEntry("member2", memberMetadata2));
-
-        final GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
-            new TopologyDescriberImpl(2, true, List.of("test-subtopology"))
-        );
-
-        assertEquals(Set.of(0), getActiveTasks(result, "test-subtopology", "member1"));
-        assertEquals(Set.of(1), getActiveTasks(result, "test-subtopology", "member2"));
-    }
-
-    @Test
-    public void shouldPreferMemberReportingHigherTaskOffsetSum() {
-        // When several processes hold state for the same task, the most caught-up one wins.
-        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadataWithOffsets("process1",
-            mkMap(mkEntry("test-subtopology", mkMap(mkEntry(0, 50L)))));
-        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadataWithOffsets("process2",
-            mkMap(mkEntry("test-subtopology", mkMap(mkEntry(0, 100L)))));
-        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
-            mkEntry("member1", memberMetadata1),
-            mkEntry("member2", memberMetadata2));
-
-        final GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
-            new TopologyDescriberImpl(2, true, List.of("test-subtopology"))
-        );
-
-        assertEquals(Set.of(1), getActiveTasks(result, "test-subtopology", "member1"));
-        assertEquals(Set.of(0), getActiveTasks(result, "test-subtopology", "member2"));
-    }
-
-    @Test
-    public void shouldRankNegativeReportedTaskOffsetSumsLast() {
-        // A negative offset sum reads as more lag than any valid report, so it must not grant stickiness over one.
-        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadataWithOffsets("process1",
-            mkMap(mkEntry("test-subtopology", mkMap(mkEntry(0, -2L), mkEntry(1, 100L)))));
-        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadataWithOffsets("process2",
-            mkMap(mkEntry("test-subtopology", mkMap(mkEntry(0, 100L)))));
-        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
-            mkEntry("member1", memberMetadata1),
-            mkEntry("member2", memberMetadata2));
-
-        final GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, new HashMap<>()),
-            new TopologyDescriberImpl(2, true, List.of("test-subtopology"))
-        );
-
-        assertEquals(Set.of(1), getActiveTasks(result, "test-subtopology", "member1"));
-        assertEquals(Set.of(0), getActiveTasks(result, "test-subtopology", "member2"));
+        assertEquals(Set.of(2), getActiveTasks(result, "test-subtopology", "member3"));
+        assertEquals(Set.of(3), getActiveTasks(result, "test-subtopology", "member4"));
     }
 
     @Test
@@ -1710,23 +1610,6 @@ public class StickyTaskAssignorTest {
             Map.of(),
             Map.of(),
             Map.of(),
-            Map.of());
-    }
-
-    private MemberMetadataAndStateImpl createMemberMetadataWithStandbysAndOffsets(
-        final String processId,
-        final Map<String, Set<Integer>> prevStandbyTasks,
-        final Map<String, Map<Integer, Long>> taskOffsets
-    ) {
-        return new MemberMetadataAndStateImpl(
-            Optional.empty(),
-            Optional.empty(),
-            processId,
-            Map.of(),
-            Map.of(),
-            prevStandbyTasks,
-            Map.of(),
-            taskOffsets,
             Map.of());
     }
 
