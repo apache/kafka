@@ -60,13 +60,14 @@ public record AssignmentConfigsImpl(
         if (configs.isEmpty()) {
             return DEFAULT;
         }
-        // The rack-aware assignment tags are only set when any are configured.
+        // The rack-aware assignment tags are only set when any are configured, and are joined from values that
+        // ConfigDef has already validated to be non-empty and free of surrounding whitespace.
         String rackAwareAssignmentTags = configs.get(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
         return new AssignmentConfigsImpl(
             Integer.parseInt(configs.get(NUM_STANDBY_REPLICAS_CONFIG)),
             rackAwareAssignmentTags == null
                 ? List.of()
-                : List.of(rackAwareAssignmentTags.trim().split("\\s*,\\s*", -1))
+                : List.of(rackAwareAssignmentTags.split(","))
         );
     }
 

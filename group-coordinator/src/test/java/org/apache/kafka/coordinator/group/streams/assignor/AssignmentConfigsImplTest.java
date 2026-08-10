@@ -59,7 +59,7 @@ public class AssignmentConfigsImplTest {
                 .withRackAwareAssignmentTags(List.of("tag1", "tag2")),
             AssignmentConfigsImpl.fromMap(Map.of(
                 "num.standby.replicas", "1",
-                "rack.aware.assignment.tags", " tag1 , tag2 "
+                "rack.aware.assignment.tags", "tag1,tag2"
             ))
         );
     }
