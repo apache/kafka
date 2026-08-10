@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.common.runtime;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
@@ -5003,8 +5004,6 @@ public class CoordinatorRuntimeTest {
         assertEquals("response2", write2.get(5, TimeUnit.SECONDS));
 
         // Complete transaction #1. It will flush the current empty batch.
-        // The coordinator must not try to write an empty batch, otherwise the mock partition writer
-        // will throw an exception.
         // Use TV_1 since this test doesn't check epoch validation
         CompletableFuture<Void> complete1 = runtime.scheduleTransactionCompletion(
             "complete#1",
@@ -5016,12 +5015,12 @@ public class CoordinatorRuntimeTest {
             TransactionVersion.TV_1.featureLevel()
         );
 
-        // Verify that the completion is not committed yet.
-        assertFalse(complete1.isDone());
-
-        // Commit and verify that writes are completed.
-        writer.commit(TP);
-        assertNull(complete1.get(5, TimeUnit.SECONDS));
+        // Complete transaction #1 should fail.
+        // The coordinator must fail the empty batch *and* throw (see explanation in
+        // flushCurrentBatch), so the completion fails with a retriable error.
+        assertFutureThrows(CoordinatorNotAvailableException.class, complete1);
+        assertNull(ctx.currentBatch);
+        assertEquals(List.of(), writer.entries(TP));
     }
 
     @Test
