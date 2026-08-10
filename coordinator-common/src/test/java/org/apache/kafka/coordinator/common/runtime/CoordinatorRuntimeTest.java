@@ -5393,7 +5393,9 @@ public class CoordinatorRuntimeTest {
             records(batchTimestamp, compression, largeRecord)
         ), writer.entries(TP));
 
-        // KAFKA-20845: Only a single batch must have been created and flushed.
+        // KAFKA-20845: Only a single batch must have been created and flushed. When the write is
+        //              non-replaying and has made in-memory changes, both the in-memory changes and
+        //              the records must be attached to the same batch.
         assertEquals(1, ctx.batchEpoch);
 
         // Commit and verify that the write is completed.
