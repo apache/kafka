@@ -100,7 +100,7 @@ public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener
                 runningAssignment.warmupTasks().stream()
             ));
 
-        log.info("Processing new assignment {} from Streams Rebalance Protocol", assignment);
+        log.info("Processing new assignment {} from Streams Rebalance Protocol", runningAssignment);
 
         try {
             streamThread.setStreamsGroupReady(assignment.isGroupReady());
