@@ -5339,7 +5339,7 @@ public class CoordinatorRuntimeTest {
     }
 
     @Test
-    public void testLargeCompressibleRecordSucceeds() throws Exception {
+    public void testLargeCompressibleRecordDoesNotFlushEmptyBatch() throws Exception {
         MockTimer timer = new MockTimer();
         MockPartitionWriter writer = new MockPartitionWriter();
         Compression compression = Compression.gzip().build();
