@@ -2818,6 +2818,7 @@ public class GroupMetadataManagerTest {
             .setInstanceId(instanceId)
             .setState(MemberState.UNREVOKED_PARTITIONS)
             .setSubscribedTopicNames(List.of(topicName))
+            .setRebalanceTimeoutMs(5000)
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
@@ -2837,6 +2838,9 @@ public class GroupMetadataManagerTest {
                 .withAssignment(memberId, mkAssignment(mkTopicAssignment(topicId, 0)))
                 .withAssignmentEpoch(10))
             .build();
+
+        context.onLoaded();
+        context.assertRebalanceTimeout(groupId, memberId, 5000);
 
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result =
             context.consumerGroupHeartbeat(new ConsumerGroupHeartbeatRequestData()
@@ -2863,6 +2867,7 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember),
             result.records().get(0)
         );
+        context.assertNoRebalanceTimeout(groupId, memberId);
     }
 
     @Test
@@ -2878,6 +2883,7 @@ public class GroupMetadataManagerTest {
             .setInstanceId(instanceId)
             .setState(MemberState.UNREVOKED_PARTITIONS)
             .setSubscribedTopicNames(List.of(topicName))
+            .setRebalanceTimeoutMs(5000)
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
@@ -2909,6 +2915,9 @@ public class GroupMetadataManagerTest {
                 .withAssignmentEpoch(10))
             .build();
 
+        context.onLoaded();
+        context.assertRebalanceTimeout(groupId, memberId1, 5000);
+
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result =
             context.consumerGroupHeartbeat(new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
@@ -2934,6 +2943,7 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember),
             result.records().get(0)
         );
+        context.assertNoRebalanceTimeout(groupId, memberId1);
     }
 
 

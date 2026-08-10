@@ -4271,6 +4271,8 @@ public class GroupMetadataManager {
                 .withCurrentPartitionEpoch(group::currentPartitionEpoch)
                 .withOwnedTopicPartitions(List.of())
                 .build();
+
+            cancelGroupRebalanceTimeout(group.groupId(), reconciledMember.memberId());
         }
 
         // We will write a member epoch of -2 for this departing static member.
