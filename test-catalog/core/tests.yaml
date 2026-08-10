@@ -2736,6 +2736,7 @@ kafka.server.share.SharePartitionTest:
 - testMaybeInitializeWhenReadStateRpcReturnsZeroAvailableRecords
 - testMaybeInitializeWithEmptyStateBatches
 - testMaybeInitializeWithEmptyTopicsData
+- testMaybeInitializeWithEqualButDistinctTopicIdResponse
 - testMaybeInitializeWithErrorPartitionResponse
 - testMaybeInitializeWithInvalidOffsetInBatch
 - testMaybeInitializeWithInvalidPartitionResponse
@@ -2800,6 +2801,7 @@ kafka.server.share.SharePartitionTest:
 - testThrottleRecordsWhenPendingDeliveriesExist
 - testWriteShareGroupState
 - testWriteShareGroupStateFailure
+- testWriteShareGroupStateWithEqualButDistinctTopicIdResponse
 - testWriteShareGroupStateWithInvalidTopicsData
 - testWriteShareGroupStateWithNoOpStatePersister
 - testWriteShareGroupStateWithNullResponse
