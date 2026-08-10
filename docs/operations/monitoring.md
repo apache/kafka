@@ -4776,7 +4776,7 @@ kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)
 
 ### Processor Node Metrics
 
-The following metrics are only available on certain types of nodes, i.e., the process-* metrics are only available for source processor nodes, the `suppression-emit-*` metrics are only available for suppression operation nodes, `emit-final-*` metrics are only available for windowed aggregations nodes, and the `record-e2e-latency-*` metrics are only available for source processor nodes and terminal nodes (nodes without successor nodes). All the metrics have a recording level of `debug`, except for the `record-e2e-latency-*` metrics which have a recording level of `info`:   
+The following metrics are only available on certain types of nodes, i.e., the process-* metrics are only available for source processor nodes, the `suppression-emit-*` metrics are only available for suppression operation nodes, `emit-final-*` metrics are only available for windowed aggregations nodes, and the `record-e2e-latency-*` metrics are only available for source processor nodes and terminal nodes (nodes without successor nodes). At terminal nodes every record processed in the same batch is attributed a single completion time taken at the end of that batch, so these values are upper bounds on the true per-record latency, biased upwards by at most the duration of the batch; in particular `record-e2e-latency-min` is not a lower bound on any individual record. All the metrics have a recording level of `debug`, except for the `record-e2e-latency-*` metrics which have a recording level of `info`:   
 <table>  
 <tr>  
 <th>

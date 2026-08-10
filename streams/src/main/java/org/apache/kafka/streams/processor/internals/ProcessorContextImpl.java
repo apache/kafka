@@ -294,7 +294,7 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
         child.process(record);
 
         if (child.isTerminalNode()) {
-            streamTask.maybeRecordE2ELatency(record.timestamp(), currentSystemTimeMs(), child.name());
+            streamTask.maybeAddTerminalE2ELatency(record.timestamp(), child.name());
         }
     }
 
