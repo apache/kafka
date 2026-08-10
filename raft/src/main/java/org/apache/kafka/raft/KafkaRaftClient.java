@@ -760,16 +760,17 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         completeLeaderPurgatoriesExceptionally();
     }
 
+    /**
+     * Completes pending appends and fetches exceptionally on every leader-exit path (follower,
+     * resigned, unattached) so callers fail fast instead of waiting out their timeout. No-op when not leader.
+     */
     private void completeLeaderPurgatoriesExceptionally() {
-        // After becoming a follower, we need to complete all pending fetches so that
-        // they can be re-sent to the leader without waiting for their expirations
         fetchPurgatory.completeAllExceptionally(
             Errors.NOT_LEADER_OR_FOLLOWER.exception(
                 "Cannot process the fetch request because the node is no longer the leader"
             )
         );
 
-        // Clearing the append purgatory should complete all futures exceptionally since this node is no longer the leader
         appendPurgatory.completeAllExceptionally(
             Errors.NOT_LEADER_OR_FOLLOWER.exception(
                 "Failed to receive sufficient acknowledgments for this append before leader change"
