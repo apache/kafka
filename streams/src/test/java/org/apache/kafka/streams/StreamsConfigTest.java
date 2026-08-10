@@ -532,23 +532,25 @@ public class StreamsConfigTest {
         }
     }
 
-    @Test
-    public void shouldLogWarningAndIgnoreUserOverrideOfGroupId() {
+    @ParameterizedTest
+    @ValueSource(strings = {"example-application", "dummy", "dummyGroupId"})
+    public void shouldLogWarningAndUseApplicationIdAsGroupIdRegardlessOfRequestedGroupId(final String requestedGroupId) {
         props.put(consumerPrefix(ConsumerConfig.GROUP_ID_CONFIG), "user-group-id");
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
             appender.setClassLogger(StreamsConfig.class, Level.WARN);
 
             final StreamsConfig streamsConfig = new StreamsConfig(props);
-            final Map<String, Object> mainConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+            final Map<String, Object> mainConfigs =
+                streamsConfig.getMainConsumerConfigs(requestedGroupId, clientId, threadIdx);
 
             assertEquals(groupId, mainConfigs.get(ConsumerConfig.GROUP_ID_CONFIG),
                     "Streams should force group.id to the application id and ignore the user override");
-
-            final long warnCount = appender.getMessages().stream()
-                    .filter(msg -> msg.contains("Unexpected user-specified consumer config 'group.id' found"))
-                    .count();
-            assertEquals(1, warnCount, "Should log exactly one warning for the group.id override");
+            assertEquals(1, appender.getMessages().stream()
+                    .filter(msg -> msg.contains("Unexpected user-specified consumer config 'group.id' found")
+                            && msg.contains(groupId))
+                    .count(),
+                "Should log exactly one warning naming the application id as the value Streams will use");
         }
     }
 
@@ -820,6 +822,62 @@ public class StreamsConfigTest {
     }
 
     @Test
+    public void shouldResetToDefaultIfConsumerIsolationLevelIsOverriddenUnderClientPrefixIfEosV2Enabled() {
+        // Controlled configs are enforced on the assembled config map, so an override supplied under a
+        // per-client prefix is caught for every consumer, not just the ones using the generic prefix.
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
+        props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.ISOLATION_LEVEL_CONFIG), READ_UNCOMMITTED.toString());
+        props.put(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.ISOLATION_LEVEL_CONFIG), READ_UNCOMMITTED.toString());
+        props.put(StreamsConfig.globalConsumerPrefix(ConsumerConfig.ISOLATION_LEVEL_CONFIG), READ_UNCOMMITTED.toString());
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+
+            final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+            assertThat(
+                streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx).get(ConsumerConfig.ISOLATION_LEVEL_CONFIG),
+                equalTo(READ_COMMITTED.toString())
+            );
+            assertThat(
+                streamsConfig.getRestoreConsumerConfigs(clientId).get(ConsumerConfig.ISOLATION_LEVEL_CONFIG),
+                equalTo(READ_COMMITTED.toString())
+            );
+            assertThat(
+                streamsConfig.getGlobalConsumerConfigs(clientId).get(ConsumerConfig.ISOLATION_LEVEL_CONFIG),
+                equalTo(READ_COMMITTED.toString())
+            );
+
+            assertEquals(3, appender.getMessages().stream()
+                    .filter(msg -> msg.contains("Unexpected user-specified consumer config 'isolation.level' found")
+                            && msg.contains("Streams controls this config when 'processing.guarantee' is set to \""
+                                + EXACTLY_ONCE_V2 + "\""))
+                    .count(),
+                "Should log exactly one warning per consumer, explaining that EOS is the reason");
+        }
+    }
+
+    @Test
+    public void shouldNotLogWarningWhenUserSetsControlledConfigToSameValueWithDifferentType() {
+        // A Boolean false and the "false" that Streams sets are the same setting; warning that the
+        // user's value is being ignored and replaced by an identical one would only confuse them.
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG), false);
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+
+            final Map<String, Object> consumerConfigs =
+                new StreamsConfig(props).getMainConsumerConfigs(groupId, clientId, threadIdx);
+
+            assertEquals("false", consumerConfigs.get(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG));
+            assertEquals(0, appender.getMessages().stream()
+                    .filter(msg -> msg.contains("Unexpected user-specified"))
+                    .count(),
+                "Should not warn when the user-specified value only differs in type");
+        }
+    }
+
+    @Test
     public void shouldAllowSettingConsumerIsolationLevelIfEosDisabled() {
         props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, READ_UNCOMMITTED.toString());
         final StreamsConfig streamsConfig = new StreamsConfig(props);
@@ -898,6 +956,30 @@ public class StreamsConfigTest {
             assertEquals(1, messages.stream()
                     .filter(msg -> msg.contains("Unexpected user-specified producer config 'transactional.id' found"))
                     .count(), "Should warn once for the transactional.id override");
+            assertEquals(2, messages.stream()
+                    .filter(msg -> msg.contains("Streams controls this config when 'processing.guarantee' is set to \""
+                            + EXACTLY_ONCE_V2 + "\""))
+                    .count(), "Both warnings should explain that the processing guarantee is the reason");
+        }
+    }
+
+    @Test
+    public void shouldNotExplainProcessingGuaranteeForConfigControlledRegardlessOfEosIfEosV2Enabled() {
+        // enable.auto.commit is controlled whether or not EOS is enabled, so the warning must not
+        // attribute it to the processing guarantee even when EOS happens to be on.
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG), "true");
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+
+            new StreamsConfig(props).getMainConsumerConfigs(groupId, clientId, threadIdx);
+
+            assertEquals(1, appender.getMessages().stream()
+                    .filter(msg -> msg.contains("Unexpected user-specified consumer config 'enable.auto.commit' found")
+                            && !msg.contains("processing.guarantee"))
+                    .count(),
+                "The warning must not name the processing guarantee as the reason");
         }
     }
 

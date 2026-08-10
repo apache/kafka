@@ -168,12 +168,16 @@ public class StreamsConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
 
     private final boolean eosEnabled;
+
+    /**
+     * Completes the controlled-config warning for configs that Streams only controls when EOS is
+     * enabled. Without it such a rule looks arbitrary, because the same config is respected when EOS
+     * is disabled. Empty for configs Streams controls unconditionally.
+     */
+    private final String eosControlledConfigReason;
     private static final long DEFAULT_COMMIT_INTERVAL_MS = 30000L;
     private static final long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
     private static final int DEFAULT_TRANSACTION_TIMEOUT = 10000;
-    private static final String DEFAULT_MAX_POLL_RECORDS = "1000";
-    private static final String DEFAULT_AUTO_OFFSET_RESET = "earliest";
-    private static final String DEFAULT_LINGER_MS = "100";
 
     @Deprecated
     @SuppressWarnings("unused")
@@ -1370,20 +1374,18 @@ public class StreamsConfig extends AbstractConfig {
     // Configs for the underlying clients that Streams prefers different default values for.
     // These are only defaults: the user may still override them.
     private static final Map<String, Object> DEFAULT_CONSUMER_CONFIGS = Map.of(
-        ConsumerConfig.MAX_POLL_RECORDS_CONFIG, DEFAULT_MAX_POLL_RECORDS,
-        ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, DEFAULT_AUTO_OFFSET_RESET
+        ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1000",
+        ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest"
     );
 
-    private static final Map<String, Object> DEFAULT_PRODUCER_CONFIGS = Map.of(ProducerConfig.LINGER_MS_CONFIG, DEFAULT_LINGER_MS);
+    private static final Map<String, Object> DEFAULT_PRODUCER_CONFIGS = Map.of(ProducerConfig.LINGER_MS_CONFIG, "100");
 
-    private static final Map<String, Object> DEFAULT_PRODUCER_CONFIGS_EOS_ENABLED;
-    static {
-        final Map<String, Object> tempProducerDefaults = new HashMap<>(DEFAULT_PRODUCER_CONFIGS);
-        tempProducerDefaults.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
+    // Producer defaults that apply in addition to DEFAULT_PRODUCER_CONFIGS when EOS is enabled.
+    private static final Map<String, Object> DEFAULT_PRODUCER_CONFIGS_EOS_ONLY = Map.of(
+        ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE,
         // Reduce the transaction timeout for quicker pending offset expiration on broker side.
-        tempProducerDefaults.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, DEFAULT_TRANSACTION_TIMEOUT);
-        DEFAULT_PRODUCER_CONFIGS_EOS_ENABLED = Collections.unmodifiableMap(tempProducerDefaults);
-    }
+        ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, DEFAULT_TRANSACTION_TIMEOUT
+    );
 
     // Configs that Streams controls: a user-specified value is ignored (with a warning) and the
     // Streams value is enforced after the user props have been merged.
@@ -1393,14 +1395,12 @@ public class StreamsConfig extends AbstractConfig {
         ConsumerConfig.GROUP_PROTOCOL_CONFIG, "classic"
     );
 
-    private static final Map<String, Object> CONTROLLED_CONSUMER_CONFIGS_EOS_ENABLED;
-    static {
-        final Map<String, Object> tempControlledConfigs = new HashMap<>(CONTROLLED_CONSUMER_CONFIGS);
-        tempControlledConfigs.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, READ_COMMITTED.toString());
-        CONTROLLED_CONSUMER_CONFIGS_EOS_ENABLED = Collections.unmodifiableMap(tempControlledConfigs);
-    }
+    // Controlled configs that apply in addition to CONTROLLED_CONSUMER_CONFIGS when EOS is enabled.
+    private static final Map<String, Object> CONTROLLED_CONSUMER_CONFIGS_EOS_ONLY =
+        Map.of(ConsumerConfig.ISOLATION_LEVEL_CONFIG, READ_COMMITTED.toString());
 
-    private static final Map<String, Object> CONTROLLED_PRODUCER_CONFIGS_EOS_ENABLED =
+    // Streams controls no producer configs unless EOS is enabled.
+    private static final Map<String, Object> CONTROLLED_PRODUCER_CONFIGS_EOS_ONLY =
         Map.of(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
 
     private static final Map<String, Object> ADMIN_CLIENT_OVERRIDES =
@@ -1611,6 +1611,8 @@ public class StreamsConfig extends AbstractConfig {
                             final boolean doLog) {
         super(CONFIG, props, doLog);
         eosEnabled = StreamsConfigUtils.eosEnabled(this);
+        eosControlledConfigReason = " Streams controls this config when '" + PROCESSING_GUARANTEE_CONFIG
+            + "' is set to \"" + getString(PROCESSING_GUARANTEE_CONFIG) + "\".";
         if (eosEnabled) {
             verifyEOSTransactionTimeoutCompatibility();
         }
@@ -1809,7 +1811,7 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     private static final String CONTROLLED_CONFIG_OVERRIDE_MESSAGE =
-        "Unexpected user-specified {} config '{}' found. User setting ({}) will be ignored and the Streams default setting ({}) will be used.";
+        "Unexpected user-specified {} config '{}' found. User setting ({}) will be ignored and the Streams default setting ({}) will be used.{}";
 
     /**
      * Enforce a config that Streams controls: if the user set a different value, log a warning that it
@@ -1820,18 +1822,32 @@ public class StreamsConfig extends AbstractConfig {
                                            final String config,
                                            final Object streamsValue,
                                            final String clientType) {
-        if (props.containsKey(config) && !Objects.equals(props.get(config), streamsValue)) {
-            log.warn(CONTROLLED_CONFIG_OVERRIDE_MESSAGE, clientType, config, props.get(config), streamsValue);
+        overwriteControlledConfig(props, config, streamsValue, clientType, "");
+    }
+
+    /**
+     * As {@link #overwriteControlledConfig(Map, String, Object, String)}, but appends {@code reason} to
+     * the warning to explain why Streams controls the config.
+     */
+    private void overwriteControlledConfig(final Map<String, Object> props,
+                                           final String config,
+                                           final Object streamsValue,
+                                           final String clientType,
+                                           final String reason) {
+        if (props.containsKey(config) && !Objects.equals(String.valueOf(props.get(config)), String.valueOf(streamsValue))) {
+            log.warn(CONTROLLED_CONFIG_OVERRIDE_MESSAGE, clientType, config, props.get(config), streamsValue, reason);
         }
         props.put(config, streamsValue);
     }
 
     /** Enforce the consumer configs that Streams controls on an already-assembled consumer config map. */
     private void enforceControlledConsumerConfigs(final Map<String, Object> consumerProps) {
-        final Map<String, Object> controlledConfigs =
-            eosEnabled ? CONTROLLED_CONSUMER_CONFIGS_EOS_ENABLED : CONTROLLED_CONSUMER_CONFIGS;
-        controlledConfigs.forEach((config, streamsValue) ->
+        CONTROLLED_CONSUMER_CONFIGS.forEach((config, streamsValue) ->
             overwriteControlledConfig(consumerProps, config, streamsValue, "consumer"));
+        if (eosEnabled) {
+            CONTROLLED_CONSUMER_CONFIGS_EOS_ONLY.forEach((config, streamsValue) ->
+                overwriteControlledConfig(consumerProps, config, streamsValue, "consumer", eosControlledConfigReason));
+        }
     }
 
     /** Enforce the producer configs that Streams controls on an already-assembled producer config map. */
@@ -1839,14 +1855,15 @@ public class StreamsConfig extends AbstractConfig {
         if (!eosEnabled) {
             return;
         }
-        CONTROLLED_PRODUCER_CONFIGS_EOS_ENABLED.forEach((config, streamsValue) ->
-            overwriteControlledConfig(producerProps, config, streamsValue, "producer"));
+        CONTROLLED_PRODUCER_CONFIGS_EOS_ONLY.forEach((config, streamsValue) ->
+            overwriteControlledConfig(producerProps, config, streamsValue, "producer", eosControlledConfigReason));
 
         // Streams assigns a unique transactional.id per task later (see ActiveTaskCreator), so any
         // user-provided value is ignored. Warn and drop it rather than forcing a fixed value.
         if (producerProps.containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG)) {
             log.warn(CONTROLLED_CONFIG_OVERRIDE_MESSAGE, "producer", ProducerConfig.TRANSACTIONAL_ID_CONFIG,
-                producerProps.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG), "<application.id>-<generated suffix>");
+                producerProps.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG), "<application.id>-<generated suffix>",
+                eosControlledConfigReason);
             producerProps.remove(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
         }
 
@@ -1904,7 +1921,7 @@ public class StreamsConfig extends AbstractConfig {
         consumerProps.put(APPLICATION_ID_CONFIG, groupId);
 
         // add group id, client id with stream client id prefix, and group instance id
-        overwriteControlledConfig(consumerProps, ConsumerConfig.GROUP_ID_CONFIG, groupId, "consumer");
+        overwriteControlledConfig(consumerProps, ConsumerConfig.GROUP_ID_CONFIG, getString(APPLICATION_ID_CONFIG), "consumer");
         consumerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
         final String groupInstanceId = (String) consumerProps.get(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
         // Suffix each thread consumer with thread.id to enforce uniqueness of group.instance.id.
@@ -2037,7 +2054,10 @@ public class StreamsConfig extends AbstractConfig {
         final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(PRODUCER_PREFIX, ProducerConfig.configNames());
 
         // generate producer configs from original properties and overridden maps
-        final Map<String, Object> props = new HashMap<>(eosEnabled ? DEFAULT_PRODUCER_CONFIGS_EOS_ENABLED : DEFAULT_PRODUCER_CONFIGS);
+        final Map<String, Object> props = new HashMap<>(DEFAULT_PRODUCER_CONFIGS);
+        if (eosEnabled) {
+            props.putAll(DEFAULT_PRODUCER_CONFIGS_EOS_ONLY);
+        }
         props.putAll(getClientCustomProps());
         props.putAll(clientProvidedProps);
 
