@@ -36,8 +36,21 @@ import java.util.Map;
 import static org.apache.kafka.streams.state.TimestampedBytesStore.convertToTimestampedFormat;
 import static org.apache.kafka.streams.state.internals.ValueAndTimestampDeserializer.rawValue;
 
-public class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, byte[]> {
+public class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, byte[]>, WithRetentionPeriod {
     final WindowStore<Bytes, byte[]> store;
+
+    // the delegate is held in a field rather than as a WrappedStateStore, so an unwrap walk
+    // terminates here; without this the windowed restore optimisation resolves -1 and is skipped
+    @Override
+    public long retentionPeriod() {
+        StateStore current = store;
+        while (current instanceof WrappedStateStore) {
+            current = ((WrappedStateStore<?, ?, ?>) current).wrapped();
+        }
+        return current instanceof WithRetentionPeriod
+            ? ((WithRetentionPeriod) current).retentionPeriod()
+            : -1L;
+    }
 
     WindowToTimestampedWindowByteStoreAdapter(final WindowStore<Bytes, byte[]> store) {
         if (!store.persistent()) {
