@@ -143,6 +143,7 @@ public class DefaultTaskExecutorTest {
 
         verify(task, timeout(VERIFICATION_TIMEOUT).atLeast(2)).process(anyLong());
         verify(task, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).recordProcessBatchTime(anyLong());
+        verify(task, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).maybeFlushTerminalE2ELatency(anyLong());
     }
 
 
