@@ -320,6 +320,184 @@ public class FetchRequestManagerTest {
         assertFalse(blockedOnBuffer.isAlive(), "Empty fetch response did not wake the thread blocked on the fetch buffer");
     }
 
+    /**
+     * Starts a thread blocked on the fetch buffer, returning only once it is actually parked, so a later "still
+     * blocked?" assertion cannot pass just because the thread had not been scheduled yet.
+     */
+    private Thread startThreadBlockedOnBuffer() throws InterruptedException {
+        Thread blockedOnBuffer = new Thread(() -> fetcher.fetchBuffer.awaitWakeup(time.timer(30_000L)));
+        blockedOnBuffer.setDaemon(true);
+        blockedOnBuffer.start();
+        TestUtils.waitForCondition(() -> blockedOnBuffer.getState() == Thread.State.TIMED_WAITING,
+                "Thread never blocked on the fetch buffer");
+        return blockedOnBuffer;
+    }
+
+    /**
+     * Wakes and joins a thread from {@link #startThreadBlockedOnBuffer()}, so a test failing part-way does not leave
+     * it parked in a reused Gradle worker JVM.
+     */
+    private void releaseThreadBlockedOnBuffer(Thread blockedOnBuffer) throws InterruptedException {
+        fetcher.fetchBuffer.wakeup();
+        blockedOnBuffer.join(5_000);
+    }
+
+    private void assertBufferWoken(Thread blockedOnBuffer, String message) throws InterruptedException {
+        // On a successful run the thread has already been released, so this join returns promptly. The timeout only
+        // caps how long we wait before declaring the wakeup missing.
+        blockedOnBuffer.join(2_000);
+        assertFalse(blockedOnBuffer.isAlive(), message);
+    }
+
+    private void assertBufferNotWoken(Thread blockedOnBuffer, String message) throws InterruptedException {
+        // The buffer's wakeup flag is sticky, so a wakeup at any point would let the thread through. This brief join
+        // gives it the chance to be scheduled before concluding that it is still parked.
+        blockedOnBuffer.join(100);
+        assertTrue(blockedOnBuffer.isAlive(), message);
+    }
+
+    /**
+     * With a fetch request already in-flight the buffer must not be woken, since the pending response will wake it.
+     */
+    @Test
+    public void testBufferNotWokenWhileFetchRequestIsPending() throws InterruptedException {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        // A fetch request is now in flight to the leader of tp0; its response has not been delivered yet.
+        assertEquals(1, sendFetches());
+
+        // A consumer thread blocked waiting for data on the empty buffer.
+        Thread blockedOnBuffer = startThreadBlockedOnBuffer();
+
+        try {
+            // A second request to create fetches finds nothing to send, since tp0's leader already has one in flight.
+            assertEquals(0, sendFetches());
+            assertBufferNotWoken(blockedOnBuffer, "Fetch buffer was woken while a fetch request was still pending");
+
+            // Delivering the pending response does wake the thread, so suppressing the wakeup above does not strand it.
+            client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
+            networkClientDelegate.poll(time.timer(0));
+            assertBufferWoken(blockedOnBuffer, "Fetch response did not wake the thread blocked on the fetch buffer");
+        } finally {
+            releaseThreadBlockedOnBuffer(blockedOnBuffer);
+        }
+    }
+
+    /**
+     * With nothing fetchable and an in-flight request that cannot produce anything collectable, the wakeup comes
+     * from that request completing, and not before. The check is coarse: <em>any</em> in-flight request holds the
+     * wakeup back. That delays a wakeup but never loses one.
+     */
+    @Test
+    public void testBufferWokenWhenPendingFetchRequestCompletes() throws InterruptedException {
+        buildFetcher();
+
+        // Use multiple nodes so tp0 and tp1 have different leaders.
+        assignFromUser(Set.of(tp0, tp1), 2);
+        subscriptions.seek(tp0, 0);
+        subscriptions.seek(tp1, 0);
+
+        // Only tp1 is fetchable, so exactly one request goes out, to tp1's leader.
+        subscriptions.pause(tp0);
+        assertEquals(1, sendFetches());
+
+        // Now pause tp1 as well. Nothing is fetchable at all, so the next prepare() returns no requests for a reason
+        // unrelated to the in-flight request - and that request cannot produce anything collectable either, since
+        // its only partition is paused. It suppresses the wakeup regardless.
+        subscriptions.pause(tp1);
+
+        Thread blockedOnBuffer = startThreadBlockedOnBuffer();
+
+        try {
+            assertEquals(0, sendFetches());
+            assertBufferNotWoken(blockedOnBuffer,
+                    "Fetch buffer was woken while an unrelated fetch request was still pending");
+
+            // The delay is bounded by that outstanding request: once it completes, the thread is released. Use a
+            // disconnect so nothing is added to the buffer and the wakeup can only come from the request ending.
+            client.prepareResponse(fullFetchResponse(tidp1, nextRecords, Errors.NONE, 100L, 0), true);
+            networkClientDelegate.poll(time.timer(0));
+            assertBufferWoken(blockedOnBuffer,
+                    "Completion of the pending request did not wake the thread blocked on the fetch buffer");
+        } finally {
+            releaseThreadBlockedOnBuffer(blockedOnBuffer);
+        }
+    }
+
+    /**
+     * When no partition is fetchable the buffer must not be woken either, even with nothing in flight. There is
+     * nothing for the application thread to do on waking, so it would submit another poll event that again finds
+     * nothing to send, spinning both threads. Nothing that makes a partition fetchable again depends on that wakeup.
+     */
+    @Test
+    public void testBufferNotWokenWhenNoPartitionIsFetchable() throws InterruptedException {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+        // The only assigned partition is paused, so no fetch request can be generated - and nothing is in flight.
+        subscriptions.pause(tp0);
+
+        Thread blockedOnBuffer = startThreadBlockedOnBuffer();
+
+        try {
+            assertEquals(0, sendFetches());
+            assertBufferNotWoken(blockedOnBuffer, "Fetch buffer was woken when no fetch request could be generated");
+        } finally {
+            releaseThreadBlockedOnBuffer(blockedOnBuffer);
+        }
+    }
+
+    /**
+     * A fetch request that fails must wake a thread blocked on the fetch buffer, just as a successful one does.
+     * Otherwise that thread waits for a response that is no longer coming.
+     */
+    @Test
+    public void testFailedFetchResponseWakesUpBuffer() throws InterruptedException {
+        // The response body is irrelevant: it is discarded once the response is marked as disconnected.
+        assertRequestCompletionWakesUpBuffer(() -> client.prepareResponse(null, true));
+    }
+
+    /**
+     * A fetch session error is rejected by the session handler, so {@link AbstractFetch#handleFetchSuccess} returns
+     * before reaching any of its buffer-populating code. It must still wake a thread blocked on the buffer: the
+     * request is no longer pending, so nothing else will.
+     */
+    @Test
+    public void testFetchSessionErrorResponseWakesUpBuffer() throws InterruptedException {
+        assertRequestCompletionWakesUpBuffer(() -> client.prepareResponse(FetchResponse.of(
+                Errors.FETCH_SESSION_ID_NOT_FOUND, 0, INVALID_SESSION_ID, new LinkedHashMap<>(), List.of())));
+    }
+
+    /**
+     * Asserts that an in-flight fetch request wakes a thread blocked on the fetch buffer when it completes with the
+     * outcome staged by {@code prepareResponse}. None of those outcomes adds anything to the buffer, so the wakeup
+     * is only about letting the application thread generate the next fetch request, not about collecting data.
+     */
+    private void assertRequestCompletionWakesUpBuffer(Runnable prepareResponse) throws InterruptedException {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        assertEquals(1, sendFetches());
+
+        // A consumer thread blocked waiting for data on the empty buffer.
+        Thread blockedOnBuffer = startThreadBlockedOnBuffer();
+
+        try {
+            prepareResponse.run();
+            networkClientDelegate.poll(time.timer(0));
+            assertBufferWoken(blockedOnBuffer,
+                    "Completed fetch request did not wake the thread blocked on the fetch buffer");
+        } finally {
+            releaseThreadBlockedOnBuffer(blockedOnBuffer);
+        }
+    }
+
     @Test
     public void testInflightFetchOnPendingPartitions() {
         buildFetcher();

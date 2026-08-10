@@ -177,8 +177,6 @@ public abstract class AbstractFetch implements Closeable {
             final Set<TopicPartition> partitions = new HashSet<>(responseData.keySet());
             final FetchMetricsAggregator metricAggregator = new FetchMetricsAggregator(metricsManager, partitions);
 
-            boolean needsWakeup = true;
-
             Map<TopicPartition, Metadata.LeaderIdAndEpoch> partitionsWithUpdatedLeaderInfo = new HashMap<>();
             for (Map.Entry<TopicPartition, FetchResponseData.PartitionData> entry : responseData.entrySet()) {
                 TopicPartition partition = entry.getKey();
@@ -224,14 +222,9 @@ public abstract class AbstractFetch implements Closeable {
                         partitionData,
                         metricAggregator,
                         fetchOffset);
+                // Add data to the buffer, which wakes it so the application thread collects the data.
                 fetchBuffer.add(completedFetch);
-                needsWakeup = false;
             }
-
-            // "Wake" the fetch buffer on any response, even if it's empty, to allow the consumer to not block
-            // indefinitely waiting on the fetch buffer to get data.
-            if (needsWakeup)
-                fetchBuffer.wakeup();
 
             if (!partitionsWithUpdatedLeaderInfo.isEmpty()) {
                 List<Node> leaderNodes = new ArrayList<>();
@@ -298,6 +291,11 @@ public abstract class AbstractFetch implements Closeable {
     private void removePendingFetchRequest(Node fetchTarget, int sessionId) {
         log.debug("Removing pending request for fetch session: {} for node: {}", sessionId, fetchTarget);
         nodesWithPendingFetchRequests.remove(fetchTarget.id());
+
+        // Wake the buffer whenever a node stops having a request in flight, whatever the outcome was: data, an
+        // empty response, a fetch session error, or a failure. This is needed to notify waiters that the
+        // request finished and another one can be sent.
+        fetchBuffer.wakeup();
     }
 
     /**
@@ -350,6 +348,15 @@ public abstract class AbstractFetch implements Closeable {
         // Return all partitions that are in an otherwise fetchable state *and* for which we don't already have some
         // messages sitting in our buffer.
         return subscriptions.fetchablePartitions(isNotBuffered);
+    }
+
+    /**
+     * @return true if at least one partition is fetchable and has no buffered data, i.e. a fetch request could be
+     *         generated for it. False means none can be generated, whatever the state of the connections to the
+     *         brokers.
+     */
+    protected boolean hasFetchablePartitions() {
+        return !fetchablePartitions(fetchBuffer.bufferedPartitions()).isEmpty();
     }
 
     /**
