@@ -1338,7 +1338,7 @@ public class StickyTaskAssignorTest {
         members.put("member4", createMemberMetadata("process4"));
 
         final GroupAssignment result = assignor.assign(
-            new GroupSpecImpl(members, mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, "1"))),
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1)),
             new TopologyDescriberImpl(3, true, List.of("test-subtopology"))
         );
 
