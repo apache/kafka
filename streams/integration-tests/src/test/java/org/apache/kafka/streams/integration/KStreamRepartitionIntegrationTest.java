@@ -382,7 +382,6 @@ public class KStreamRepartitionIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("protocolAndOptimizationParameters")
-    @SuppressWarnings("removal")
     public void shouldUseStreamPartitionerForRepartitionOperation(final String topologyOptimization, final boolean useNewProtocol) throws Exception {
         final int partition = 1;
         final String repartitionName = "partitioner-test";
@@ -398,6 +397,7 @@ public class KStreamRepartitionIntegrationTest {
 
         final StreamsBuilder builder = new StreamsBuilder();
 
+        @SuppressWarnings("removal")
         final Repartitioned<Integer, String> repartitioned = Repartitioned
             .<Integer, String>as(repartitionName)
             .withStreamPartitioner((topic, key, value, numPartitions) -> {
