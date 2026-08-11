@@ -21,7 +21,7 @@ import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.MemoryRecords;
-import org.apache.kafka.raft.RaftClientTestContext.RaftProtocol;
+import org.apache.kafka.raft.SharedRaftClientContext.RaftProtocol;
 import org.apache.kafka.server.common.KRaftVersion;
 
 import org.junit.jupiter.params.ParameterizedTest;
@@ -35,7 +35,7 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.raft.KafkaRaftClientTest.randomReplicaId;
 import static org.apache.kafka.raft.KafkaRaftClientTest.replicaKey;
-import static org.apache.kafka.raft.RaftClientTestContext.RaftProtocol.KIP_996_PROTOCOL;
+import static org.apache.kafka.raft.SharedRaftClientContext.RaftProtocol.KIP_996_PROTOCOL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -53,7 +53,7 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey observer = replicaKey(localId + 3, true);
         int epoch = 2;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder(
             local.id(),
             local.directoryId().get()
         )
@@ -107,7 +107,7 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey votedCandidateKey = replicaKey(localId + 2, true);
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey, votedCandidateKey));
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder(
             localKey.id(),
             localKey.directoryId().get()
         )
@@ -154,7 +154,7 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey observer = replicaKey(localId + 2, true);
         int epoch = 2;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder(
             localKey.id(),
             localKey.directoryId().get()
         )
@@ -198,7 +198,7 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey replica2 = replicaKey(localId + 2, true);
         ReplicaKey observer = replicaKey(localId + 3, true);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder(
             localKey.id(),
             localKey.directoryId().get()
         )
@@ -244,7 +244,7 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey observer = replicaKey(localId + 3, true);
         int epoch = 2;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder(
             localKey.id(),
             localKey.directoryId().get()
         )
@@ -289,7 +289,7 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey observer = replicaKey(localId + 4, true);
         int epoch = 2;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder(
             localKey.id(),
             localKey.directoryId().get()
         )
@@ -335,7 +335,7 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey follower = replicaKey(localId + 2, true);
         int epoch = 2;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder(
             localKey.id(),
             localKey.directoryId().get()
         )
@@ -375,7 +375,7 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey otherNodeKey = replicaKey(localId + 1, true);
         int epoch = 2;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder(
             local.id(),
             local.directoryId().get()
         )
@@ -398,7 +398,7 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey localKey = replicaKey(localId, true);
         ReplicaKey otherNodeKey = replicaKey(localId + 1, true);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder(
             localKey.id(),
             localKey.directoryId().get()
         )
@@ -425,7 +425,7 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey localKey = replicaKey(localId, true);
         ReplicaKey otherNodeKey = replicaKey(localId + 1, true);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder(
             localKey.id(),
             localKey.directoryId().get()
         )
@@ -464,7 +464,7 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey localKey = replicaKey(localId, true);
         ReplicaKey otherNodeKey = replicaKey(localId + 1, true);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder(
             localKey.id(),
             localKey.directoryId().get()
         )
@@ -513,7 +513,7 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey localKey = replicaKey(localId, true);
         ReplicaKey otherNodeKey = replicaKey(localId + 1, true);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder(
             localKey.id(),
             localKey.directoryId().get()
         )
@@ -542,7 +542,7 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey localKey = replicaKey(localId, true);
         ReplicaKey otherNodeKey = replicaKey(localId + 1, true);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder(
             localKey.id(),
             localKey.directoryId().get()
         )
@@ -574,7 +574,7 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey otherNodeKey = replicaKey(localId + 1, true);
         int epoch = 5;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder(
             localKey.id(),
             localKey.directoryId().get()
         )
@@ -631,7 +631,7 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey replica2 = replicaKey(localId + 2, true);
         int epoch = 2;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder(
             local.id(),
             local.directoryId().get()
         )
@@ -679,7 +679,7 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey replica1 = replicaKey(localId + 1, true);
         ReplicaKey replica2 = replicaKey(localId + 2, true);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder(
             local.id(),
             local.directoryId().get()
         )
@@ -715,7 +715,7 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey voter3 = replicaKey(localId + 2, true);
         int epoch = 5;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder(
             local.id(),
             local.directoryId().get()
         )
@@ -768,7 +768,7 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey voter3Key = replicaKey(localId + 2, true);
         int epoch = 5;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder(
             local.id(),
             local.directoryId().get()
         )
@@ -853,7 +853,7 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey leader = replicaKey(localId + 1, true);
         int epoch = 5;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder(
             local.id(),
             local.directoryId().get()
         )
@@ -888,7 +888,7 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey otherNode = replicaKey(localId + 1, true);
         int epoch = 5;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder(
             local.id(),
             local.directoryId().get()
         )
@@ -941,7 +941,7 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey replica2 = replicaKey(localId + 2, true);
         int epoch = 5;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder(
             local.id(),
             local.directoryId().get()
         )
@@ -1019,7 +1019,7 @@ public class KafkaRaftClientPreVoteTest {
         int electedLeaderId = localId + 3;
         int epoch = 2;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder(
             local.id(),
             local.directoryId().get()
         )
@@ -1060,7 +1060,7 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey follower = replicaKey(local.id() + 2, true);
         int epoch = 5;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder(
             local.id(),
             local.directoryId().get()
         )
@@ -1102,7 +1102,7 @@ public class KafkaRaftClientPreVoteTest {
         ReplicaKey local = replicaKey(localId, true);
         ReplicaKey otherNode = replicaKey(localId + 1, true);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(
+        RaftClientTestContext context = new RaftClientContextBuilder(
             local.id(),
             local.directoryId().get()
         )
