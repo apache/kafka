@@ -651,6 +651,54 @@ public class MeteredKeyValueStoreTest {
         assertThat(oldestIteratorTimestampMetric.metricValue(), equalTo(0L));
     }
 
+    @Test
+    public void shouldTrackOldestOpenIteratorWhenTwoOpenedInSameMillisecond() {
+        setUp();
+        when(inner.all()).thenReturn(KeyValueIterators.emptyIterator());
+        init();
+
+        final KafkaMetric oldestIteratorTimestampMetric = metric("oldest-iterator-open-since-ms");
+        final KafkaMetric numOpenIteratorsMetric = metric("num-open-iterators");
+
+        final long openTimestamp = mockTime.milliseconds();
+        final KeyValueIterator<String, String> first = metered.all();
+        final KeyValueIterator<String, String> second = metered.all();
+
+        assertThat((Long) numOpenIteratorsMetric.metricValue(), equalTo(2L));
+        assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(openTimestamp));
+
+        first.close();
+
+        // the second iterator was opened in the same millisecond and is still open, so it must
+        // still be tracked as the oldest open iterator
+        assertThat((Long) numOpenIteratorsMetric.metricValue(), equalTo(1L));
+        assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(openTimestamp));
+
+        second.close();
+        assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(0L));
+    }
+
+    @Test
+    public void shouldTrackOldestOpenIteratorWhenYoungerIteratorInSameMillisecondIsClosedFirst() {
+        setUp();
+        when(inner.all()).thenReturn(KeyValueIterators.emptyIterator());
+        init();
+
+        final KafkaMetric oldestIteratorTimestampMetric = metric("oldest-iterator-open-since-ms");
+
+        final long openTimestamp = mockTime.milliseconds();
+        final KeyValueIterator<String, String> first = metered.all();
+        final KeyValueIterator<String, String> second = metered.all();
+
+        second.close();
+
+        // closing the younger iterator must not stop the older one, which is still open, from being tracked
+        assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(openTimestamp));
+
+        first.close();
+        assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(0L));
+    }
+
     @SuppressWarnings("unchecked")
     @Test
     public void shouldReadOnlyViewGetApplySerdesAndRecordGetMetric() {
