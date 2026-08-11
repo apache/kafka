@@ -435,12 +435,10 @@ public class MockLog implements RaftLog {
         }
     }
 
-    /**
-     * Returns the index of the first batch whose last offset is at least {@code offset}, or
-     * {@code batches.size()} if none qualifies. Batches are stored in offset order, so this is a
-     * binary search that lets {@link #read} jump straight to the relevant batch instead of scanning
-     * the log from the start; without it, per-read cost grows with the log length.
-     */
+    // Returns the index of the first batch whose last offset is at least offset, or batches.size()
+    // if none qualifies. Batches are stored in offset order, so this binary search lets read() jump
+    // straight to the relevant batch instead of scanning from the start; without it, per-read cost
+    // grows with the log length.
     private int firstBatchEndingAtOrAfter(long offset) {
         int lo = 0;
         int hi = batches.size();
@@ -522,8 +520,9 @@ public class MockLog implements RaftLog {
     @Override
     public void initializeLeaderEpoch(int epoch) {
         long startOffset = endOffset().offset();
-        // Sorted by both fields, so the entries to discard form a suffix: pop from the tail rather
-        // than scanning the whole list.
+        // epochStartOffsets is non-decreasing in both epoch and startOffset, so the entries removed
+        // here (those with epoch or startOffset >= the new epoch's) are a suffix of the list: pop
+        // them from the tail rather than scanning the whole list.
         for (int i = epochStartOffsets.size() - 1; i >= 0; i--) {
             EpochStartOffset epochStartOffset = epochStartOffsets.get(i);
             if (epochStartOffset.startOffset >= startOffset || epochStartOffset.epoch >= epoch) {

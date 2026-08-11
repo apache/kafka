@@ -16,33 +16,28 @@
  */
 package org.apache.kafka.raft;
 
-import java.util.function.LongSupplier;
-
 /**
  * Tracks a cumulative, monotonically increasing counter (e.g. the work counters on the raft
- * mocks) as a drainable delta against a baseline. The baseline is snapshotted at construction, and
- * {@link #drainDelta()} returns the increase since construction or the previous drain, consuming
- * it so nothing is counted twice. Draining with the result ignored therefore re-baselines the
- * counter, e.g. to exclude setup work from the next measurement.
+ * mocks) as a drainable delta against a baseline. The baseline is set at construction, and
+ * {@link #drainDelta(long)} returns the increase of the supplied reading since construction or the
+ * previous drain, consuming it so nothing is counted twice. Draining with the result ignored
+ * therefore re-baselines the counter, e.g. to exclude setup work from the next measurement.
  */
 final class DrainableCounter {
-    private final LongSupplier source;
     private long baseline;
 
-    DrainableCounter(LongSupplier source) {
-        this.source = source;
-        this.baseline = source.getAsLong();
+    DrainableCounter(long initial) {
+        this.baseline = initial;
     }
 
-    long drainDelta() {
-        long current = source.getAsLong();
-        if (current < baseline) {
+    long drainDelta(long value) {
+        if (value < baseline) {
             throw new IllegalStateException(
-                "Counter source is not monotonically increasing: read " + current
+                "Counter is not monotonically increasing: read " + value
                     + " after " + baseline);
         }
-        long delta = current - baseline;
-        baseline = current;
+        long delta = value - baseline;
+        baseline = value;
         return delta;
     }
 }

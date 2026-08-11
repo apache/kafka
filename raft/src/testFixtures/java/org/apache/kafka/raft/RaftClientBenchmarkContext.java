@@ -83,13 +83,13 @@ public final class RaftClientBenchmarkContext {
         this.localKey = localKey;
         this.startingVoters = List.copyOf(startingVoters);
         this.startingObservers = List.copyOf(startingObservers);
-        this.logFlushes = new DrainableCounter(log::flushCount);
-        this.logReads = new DrainableCounter(log::readCount);
-        this.logTruncations = new DrainableCounter(log::truncationCount);
-        this.rpcRequestsSent = new DrainableCounter(channel::requestsSent);
-        this.quorumStateWrites = new DrainableCounter(context::quorumStateWriteCount);
-        this.quorumStateReads = new DrainableCounter(context::quorumStateReadCount);
-        this.rpcResponsesSent = new DrainableCounter(() -> rpcResponsesSentTotal);
+        this.logFlushes = new DrainableCounter(log.flushCount());
+        this.logReads = new DrainableCounter(log.readCount());
+        this.logTruncations = new DrainableCounter(log.truncationCount());
+        this.rpcRequestsSent = new DrainableCounter(channel.requestsSent());
+        this.quorumStateWrites = new DrainableCounter(context.quorumStateWriteCount());
+        this.quorumStateReads = new DrainableCounter(context.quorumStateReadCount());
+        this.rpcResponsesSent = new DrainableCounter(rpcResponsesSentTotal);
     }
 
     /**
@@ -145,10 +145,6 @@ public final class RaftClientBenchmarkContext {
         return new RaftClientBenchmarkContext(context, local, voterKeys, observerKeys);
     }
 
-    /**
-     * {@code count} replica keys with consecutive ids starting at {@code startId}, each with a
-     * random directory id.
-     */
     private static List<ReplicaKey> replicaKeys(int startId, int count) {
         return IntStream.range(0, count)
             .mapToObj(i -> ReplicaKey.of(startId + i, Uuid.randomUuid()))
@@ -159,10 +155,6 @@ public final class RaftClientBenchmarkContext {
         return ThreadLocalRandom.current().nextInt(1025);
     }
 
-    /**
-     * A {@link RaftClientTestContext.Builder} for {@code local} in a cluster whose voter set is
-     * {@code voterKeys}, pre-configured with the settings shared by every raft benchmark.
-     */
     private static RaftClientTestContext.Builder benchmarkContextBuilder(
         ReplicaKey local,
         List<ReplicaKey> voterKeys,
@@ -210,26 +202,26 @@ public final class RaftClientBenchmarkContext {
      * just before the measured region begins.
      */
     public void zeroCountersOnSetup() {
-        logFlushes.drainDelta();
-        logReads.drainDelta();
-        logTruncations.drainDelta();
-        rpcRequestsSent.drainDelta();
-        quorumStateWrites.drainDelta();
-        quorumStateReads.drainDelta();
-        rpcResponsesSent.drainDelta();
+        logFlushes.drainDelta(log.flushCount());
+        logReads.drainDelta(log.readCount());
+        logTruncations.drainDelta(log.truncationCount());
+        rpcRequestsSent.drainDelta(channel.requestsSent());
+        quorumStateWrites.drainDelta(context.quorumStateWriteCount());
+        quorumStateReads.drainDelta(context.quorumStateReadCount());
+        rpcResponsesSent.drainDelta(rpcResponsesSentTotal);
         channel.drainSendQueue();
     }
 
     public long getLogFlushesDelta() {
-        return logFlushes.drainDelta();
+        return logFlushes.drainDelta(log.flushCount());
     }
 
     public long getLogReadsDelta() {
-        return logReads.drainDelta();
+        return logReads.drainDelta(log.readCount());
     }
 
     public long getLogTruncationsDelta() {
-        return logTruncations.drainDelta();
+        return logTruncations.drainDelta(log.truncationCount());
     }
 
     /**
@@ -237,7 +229,7 @@ public final class RaftClientBenchmarkContext {
      * channel's cumulative counter, so it is unaffected by a test driver draining the send queue.
      */
     public long getRpcRequestsSentDelta() {
-        return rpcRequestsSent.drainDelta();
+        return rpcRequestsSent.drainDelta(channel.requestsSent());
     }
 
     /**
@@ -255,11 +247,11 @@ public final class RaftClientBenchmarkContext {
     }
 
     public long getQuorumStateWritesDelta() {
-        return quorumStateWrites.drainDelta();
+        return quorumStateWrites.drainDelta(context.quorumStateWriteCount());
     }
 
     public long getQuorumStateReadsDelta() {
-        return quorumStateReads.drainDelta();
+        return quorumStateReads.drainDelta(context.quorumStateReadCount());
     }
 
     /**
@@ -298,7 +290,7 @@ public final class RaftClientBenchmarkContext {
      * last drain.
      */
     public long getRpcResponsesSentDelta() {
-        return rpcResponsesSent.drainDelta();
+        return rpcResponsesSent.drainDelta(rpcResponsesSentTotal);
     }
 
     /**

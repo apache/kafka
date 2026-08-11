@@ -18,8 +18,6 @@ package org.apache.kafka.raft;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.concurrent.atomic.AtomicLong;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -27,74 +25,57 @@ public final class DrainableCounterTest {
 
     @Test
     public void testDrainDeltaReturnsIncreaseSinceLastDrain() {
-        AtomicLong source = new AtomicLong();
-        DrainableCounter counter = new DrainableCounter(source::get);
+        DrainableCounter counter = new DrainableCounter(0);
 
-        source.addAndGet(3);
-        assertEquals(3, counter.drainDelta());
-
-        source.addAndGet(2);
-        assertEquals(2, counter.drainDelta());
+        assertEquals(3, counter.drainDelta(3));
+        assertEquals(2, counter.drainDelta(5));
     }
 
     @Test
-    public void testDrainDeltaIsZeroWhenSourceUnchanged() {
-        AtomicLong source = new AtomicLong(7);
-        DrainableCounter counter = new DrainableCounter(source::get);
+    public void testDrainDeltaIsZeroWhenReadingUnchanged() {
+        DrainableCounter counter = new DrainableCounter(7);
 
-        assertEquals(0, counter.drainDelta());
-        assertEquals(0, counter.drainDelta());
+        assertEquals(0, counter.drainDelta(7));
+        assertEquals(0, counter.drainDelta(7));
     }
 
     @Test
     public void testDrainDeltaAdvancesTheBaseline() {
-        AtomicLong source = new AtomicLong();
-        DrainableCounter counter = new DrainableCounter(source::get);
+        DrainableCounter counter = new DrainableCounter(0);
 
-        source.addAndGet(6);
-        assertEquals(6, counter.drainDelta());
-        // The previous drainDelta() advanced the baseline, so the same increase is not counted
-        // twice.
-        assertEquals(0, counter.drainDelta());
+        assertEquals(6, counter.drainDelta(6));
+        // The previous drain advanced the baseline, so the same reading is not counted twice.
+        assertEquals(0, counter.drainDelta(6));
     }
 
     @Test
-    public void testBaselineIsSnapshottedAtConstruction() {
-        AtomicLong source = new AtomicLong(9);
-        DrainableCounter counter = new DrainableCounter(source::get);
+    public void testBaselineIsSetAtConstruction() {
+        DrainableCounter counter = new DrainableCounter(9);
 
-        // The constructor snapshots the current value, so the first drain only reflects increases
-        // since construction, not the source's prior history.
-        assertEquals(0, counter.drainDelta());
-
-        source.addAndGet(3);
-        assertEquals(3, counter.drainDelta());
+        // The constructor sets the baseline, so the first drain only reflects increases since
+        // construction, not the reading's prior history.
+        assertEquals(0, counter.drainDelta(9));
+        assertEquals(3, counter.drainDelta(12));
     }
 
     @Test
     public void testIgnoredDrainDeltaExcludesPriorIncreasesFromTheNextDrain() {
-        AtomicLong source = new AtomicLong();
-        DrainableCounter counter = new DrainableCounter(source::get);
+        DrainableCounter counter = new DrainableCounter(0);
 
-        source.addAndGet(3);
-        assertEquals(3, counter.drainDelta());
+        assertEquals(3, counter.drainDelta(3));
 
         // Draining with the result ignored re-baselines the counter, e.g. to exclude work done
         // while setting up a benchmark from the measured region.
-        source.addAndGet(5);
-        counter.drainDelta();
-        assertEquals(0, counter.drainDelta());
+        counter.drainDelta(8);
+        assertEquals(0, counter.drainDelta(8));
 
-        source.addAndGet(4);
-        assertEquals(4, counter.drainDelta());
+        assertEquals(4, counter.drainDelta(12));
     }
 
     @Test
-    public void testDrainDeltaThrowsWhenSourceDecreases() {
-        AtomicLong source = new AtomicLong(10);
-        DrainableCounter counter = new DrainableCounter(source::get);
+    public void testDrainDeltaThrowsWhenReadingDecreases() {
+        DrainableCounter counter = new DrainableCounter(10);
 
-        source.set(4);
-        assertThrows(IllegalStateException.class, counter::drainDelta);
+        assertThrows(IllegalStateException.class, () -> counter.drainDelta(4));
     }
 }
