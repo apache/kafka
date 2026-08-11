@@ -16,7 +16,6 @@ package kafka.api
 
 import kafka.api.GroupedUserPrincipalBuilder._
 import kafka.api.GroupedUserQuotaCallback._
-import kafka.security.{JaasModule, JaasTestUtils}
 import kafka.server._
 import kafka.utils.{Logging, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
@@ -29,6 +28,7 @@ import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.{Cluster, Reconfigurable}
 import org.apache.kafka.metadata.storage.Formatter
+import org.apache.kafka.security.{JaasModule, JaasTestUtils}
 import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs}
 import org.apache.kafka.server.quota._
 import org.junit.jupiter.api.Assertions._

@@ -257,6 +257,7 @@ public class StateDirectory implements AutoCloseable {
                         eosEnabled,
                         logContext,
                         this,
+                        time,
                         subTopology.storeToChangelogTopic(),
                         inputPartitions
                     );
@@ -324,7 +325,7 @@ public class StateDirectory implements AutoCloseable {
         taskOffsetSums.remove(taskId);
     }
 
-    private long sumOfChangelogOffsets(final TaskId taskId, final Map<TopicPartition, Long> changelogOffsets) {
+    static long sumOfChangelogOffsets(final TaskId taskId, final Map<TopicPartition, Long> changelogOffsets) {
         long offsetSum = 0L;
         for (final Map.Entry<TopicPartition, Long> changelogEntry : changelogOffsets.entrySet()) {
             final long offset = changelogEntry.getValue();
@@ -475,7 +476,7 @@ public class StateDirectory implements AutoCloseable {
     /**
      * Get or create the directory for the global stores.
      * @return directory for the global stores
-     * @throws ProcessorStateException if the global store directory does not exists and could not be created
+     * @throws ProcessorStateException if the global store directory does not exist and could not be created
      */
     public File globalStateDir() {
         final File dir = new File(stateDir, "global");

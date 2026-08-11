@@ -41,7 +41,7 @@ A **Streams group** is a broker‑coordinated group type for Kafka Streams that 
     * Group state, group epoch, target assignment epoch (with `--state`, `--verbose` for additional details).
     * Per‑member info such as epochs, current vs target assignments, and whether a member still uses the classic protocol (with `--members` and `--verbose`).
     * Input‑topic offsets and lag (with `--offsets`), to understand how far behind processing is.
-    * The processing topology, as recorded by the broker's topology description plugin (with `--topology`), in a format that mirrors `Topology#describe()`.
+    * The processing topology, as recorded by the broker's [topology description plugin](/{version}/streams/developer-guide/topology-description-plugin/) (with `--topology`), in a format that mirrors `Topology#describe()`. Requires brokers running Apache Kafka 4.4 or newer with `group.streams.topology.description.plugin.class` configured.
   * **Reset input‑topic offsets** for a Streams group to control reprocessing boundaries using precise specifiers (earliest, latest, to‑offset, to‑datetime, by‑duration, shift‑by, from‑file). Requires `--dry-run` or `--execute` and inactive instances.
   * **Delete offsets** for input topics to force re‑consumption on next start.
   * **Delete a Streams group** to clean up broker‑side Streams metadata (offsets, topology, assignments). Internal topics can be deleted by specifying selected topics with `--delete-internal-topic`, or all internal topics with `--delete-all-internal-topics`.
@@ -89,6 +89,27 @@ Inspecting group's state, members, and lag
     kafka-streams-groups.sh --bootstrap-server localhost:9092 \
       --describe --group my-streams-app --topology
     
+
+### Describing the processing topology {#describe-topology}
+
+The `--topology` option prints the processing topology of the group, as recorded by the broker's [topology description plugin](/{version}/streams/developer-guide/topology-description-plugin/), in a format that mirrors `Topology#describe()`:
+
+    
+    Topologies:
+       Sub-topology: 0
+        Source: KSTREAM-SOURCE-0000000000 (topics: [streams-plaintext-input])
+          --> KSTREAM-FLATMAPVALUES-0000000001
+        Processor: KSTREAM-FLATMAPVALUES-0000000001 (stores: [])
+          --> KSTREAM-AGGREGATE-0000000002
+          <-- KSTREAM-SOURCE-0000000000
+        ...
+
+This requires brokers running Apache Kafka 4.4 or newer with the broker configuration `group.streams.topology.description.plugin.class` set; against older brokers the command fails with `UnsupportedVersionException`. If no topology description is available, the tool prints one of the following messages and exits with a non-zero exit code:
+
+  * `No topology description is stored for streams group '<id>'.` — No description is recorded, for example because no topology description plugin is configured on the broker or the application has not pushed a description yet.
+  * `The broker failed to fetch the topology description for streams group '<id>'. See the broker logs for details.` — The broker's plugin failed to read the stored description.
+
+See the [Topology Description Plugin](/{version}/streams/developer-guide/topology-description-plugin/) documentation for how the feature works and how to troubleshoot it.
 
 ## Reset input-topic offsets (preview, then apply) {#reset-offsets}
 

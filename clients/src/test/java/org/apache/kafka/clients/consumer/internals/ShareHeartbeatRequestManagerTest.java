@@ -62,6 +62,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -154,6 +155,24 @@ public class ShareHeartbeatRequestManagerTest
                 heartbeatState,
                 heartbeatRequestState,
                 backgroundEventHandler);
+    }
+
+    /**
+     * ShareConsumerImpl runs on the same ConsumerNetworkThread as the AsyncKafkaConsumer, thus we also test to ensure
+     * we don't enter a CPU spin state. Refer to KAFKA-20253
+     */
+    @Test
+    public void testMaximumTimeToWaitWhenHeartbeatShouldBeSkippedDoesNotSpin() {
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
+        when(membershipManager.state()).thenReturn(MemberState.FATAL);
+        when(membershipManager.shouldSkipHeartbeat()).thenReturn(true);
+        when(heartbeatRequestState.timeToNextHeartbeatMs(anyLong())).thenReturn(0L);
+
+        long result = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
+
+        assertTrue(result > 0,
+            "maximumTimeToWait must be > 0 while heartbeats are skipped to avoid a busy-spin; got " + result);
+        assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, result);
     }
 
     @Test
@@ -346,7 +365,7 @@ public class ShareHeartbeatRequestManagerTest
         // Mock a response from the group coordinator, that supplies the member ID and a new epoch
         when(membershipManager.state()).thenReturn(MemberState.STABLE);
         when(subscriptions.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptions.rebalanceListener()).thenReturn(Optional.empty());
+        when(subscriptions.hasRebalanceListener()).thenReturn(false);
         mockStableMemberData();
         data = heartbeatState.buildRequestData();
         assertEquals(DEFAULT_GROUP_ID, data.groupId());
