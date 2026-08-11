@@ -1556,7 +1556,7 @@ The total number of groups found eligible for plugin-state deletion by the clean
 <tr>  
 <td>
 
-Classic Group Count
+Classic Group Count (deprecated)
 </td>  
 <td>
 
@@ -1564,12 +1564,12 @@ kafka.server:type=GroupMetadataManager,name=NumGroups
 </td>  
 <td>
 
-Total number of Classic Groups
+Total number of Classic Groups. Deprecated: use group-count with protocol=classic instead
 </td> </tr>  
 <tr>  
 <td>
 
-Classic Group Count, per State
+Classic Group Count, per State (deprecated)
 </td>  
 <td>
 
@@ -1577,7 +1577,20 @@ kafka.server:type=GroupMetadataManager,name=NumGroups[PreparingRebalance,Complet
 </td>  
 <td>
 
-The number of Classic Groups in each state: PreparingRebalance, CompletingRebalance, Empty, Stable, Dead
+The number of Classic Groups in each state: PreparingRebalance, CompletingRebalance, Empty, Stable, Dead. Deprecated: use classic-group-count instead
+</td> </tr>  
+<tr>  
+<td>
+
+Classic Group Count, per state
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=classic-group-count,state=[empty|preparing_rebalance|completing_rebalance|stable|dead]
+</td>  
+<td>
+
+Total number of Classic Groups in each state: Empty, PreparingRebalance, CompletingRebalance, Stable, Dead
 </td> </tr>  
 <tr>  
 <td>
@@ -1608,7 +1621,7 @@ The total number of classic group completed rebalances
 <tr>  
 <td>
 
-Group Offset Count
+Group Offset Count (deprecated)
 </td>  
 <td>
 
@@ -1616,7 +1629,20 @@ kafka.server:type=GroupMetadataManager,name=NumOffsets
 </td>  
 <td>
 
-Total number of committed offsets for Classic and Consumer Groups
+Total number of committed offsets for Classic and Consumer Groups. Deprecated: use offset-count instead
+</td> </tr>  
+<tr>  
+<td>
+
+Group Offset Count
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=offset-count
+</td>  
+<td>
+
+The number of offsets currently retained for Classic, Consumer and Streams Groups
 </td> </tr>  
 <tr>  
 <td>
