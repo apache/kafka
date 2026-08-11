@@ -685,8 +685,8 @@ public class StoreChangelogReader implements ChangelogReader {
                 changelogMetadata.bufferedRecords.clear();
             }
 
-            final Long currentOffset = storeMetadata.offset();
-            recordRestorationProgress(task, changelogMetadata, numRecords, offsetBeforeRestore, currentOffset);
+            final long currentOffset = storeMetadata.offset();
+            recordRestorationProgress(task, changelogMetadata, numRecords, offsetBeforeRestore, currentOffset + 1);
 
             log.trace("Restored {} records from changelog {} to store {}, end offset is {}, current offset is {}",
                 numRecords, partition, storeName, recordEndOffset(changelogMetadata.restoreEndOffset), currentOffset);
@@ -717,7 +717,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
             // account for any offset slots past the last restored record (e.g. trailing transaction
             // markers) so the remaining-records metric reaches exactly zero on completion
-            recordRestorationProgress(task, changelogMetadata, 0, storeMetadata.offset(), changelogMetadata.restoreEndOffset - 1);
+            recordRestorationProgress(task, changelogMetadata, 0, storeMetadata.offset(), changelogMetadata.restoreEndOffset);
 
             changelogMetadata.transitTo(ChangelogState.COMPLETED);
             pauseChangelogsFromRestoreConsumer(Collections.singleton(partition));
@@ -742,17 +742,17 @@ public class StoreChangelogReader implements ChangelogReader {
     /**
      * Record restoration progress: restore-total/restore-rate advance by the records restored
      * ({@code numRecords}), while the remaining-records metric is decremented by the offset slots
-     * between {@code previousOffset} (or {@code restoreStartOffset} if null) and {@code restoredToOffset}.
+     * between {@code lastRestoredOffset} (or {@code restoreStartOffset} if null) and {@code restoredToOffset}.
      * Measuring the latter in offset slots accounts for offsets the restore consumer never returns
      * (transaction markers, compacted records) so it reaches exactly zero on completion.
      */
     private void recordRestorationProgress(final Task task,
                                            final ChangelogMetadata changelogMetadata,
                                            final long numRecords,
-                                           final Long previousOffset,
+                                           final Long lastRestoredOffset, // this is not a "position" so we need to correct it below
                                            final long restoredToOffset) {
-        final long restoredFrom = previousOffset == null ? changelogMetadata.restoreStartOffset - 1 : previousOffset;
-        final long numOffsets = Math.max(restoredToOffset - restoredFrom, 0L);
+        final long restoredFromOffset = lastRestoredOffset == null ? changelogMetadata.restoreStartOffset : lastRestoredOffset + 1;
+        final long numOffsets = Math.max(restoredToOffset - restoredFromOffset, 0L);
         task.recordRestoration(time, numRecords, numOffsets, false);
     }
 
