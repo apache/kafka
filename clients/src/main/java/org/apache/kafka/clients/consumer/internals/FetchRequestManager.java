@@ -128,8 +128,8 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
      * Creates the {@link PollResult poll result} that contains a list of zero or more
      * {@link FetchRequest.Builder fetch requests}.
      *
-     * @param fetchRequestPreparer {@link FetchRequestPreparer} to generate a {@link Map} of {@link Node nodes}
-     *                             to their {@link FetchSessionHandler.FetchRequestData}
+     * @param fetchRequestPreparer {@link FetchRequestPreparer} to generate a {@link FetchRequestPreparationResult}
+     *                             mapping {@link Node nodes} to their {@link FetchSessionHandler.FetchRequestData}
      * @param successHandler       {@link ResponseHandler Handler for successful responses}
      * @param errorHandler         {@link ResponseHandler Handler for failure responses}
      * @return {@link PollResult}
@@ -143,10 +143,11 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
         }
 
         try {
-            Map<Node, FetchSessionHandler.FetchRequestData> fetchRequests = fetchRequestPreparer.prepare();
+            FetchRequestPreparationResult result = fetchRequestPreparer.prepare();
+            Map<Node, FetchSessionHandler.FetchRequestData> fetchRequests = result.requests();
 
             if (fetchRequests.isEmpty()) {
-                if (emptyResultShouldWakeBuffer()) {
+                if (result.canWakeBufferIfNoFetchRequestsToSend()) {
                     // If there's nothing to fetch because every fetchable partition already has buffered data,
                     // wake up the FetchBuffer so it doesn't needlessly wait for a wakeup that won't come until
                     // the data in the fetch buffer is consumed.
@@ -189,6 +190,6 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
     @FunctionalInterface
     protected interface FetchRequestPreparer {
 
-        Map<Node, FetchSessionHandler.FetchRequestData> prepare();
+        FetchRequestPreparationResult prepare();
     }
 }
