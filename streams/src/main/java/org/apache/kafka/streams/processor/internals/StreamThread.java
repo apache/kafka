@@ -1243,6 +1243,10 @@ public class StreamThread extends Thread implements ProcessingThread {
             // regardless of streamsGroupReady, as these may throw exceptions that need to be handled.
             handleStreamsRebalanceData();
 
+            // The group coordinator places tasks based on the offsets we report to it, so publish them on every
+            // iteration -- including the ones that return early below, where a task may well still be restoring.
+            taskManager.maybeUpdateTaskOffsetSumSnapshot();
+
             if (!streamsGroupReady) {
                 return;
             }
@@ -1268,7 +1272,6 @@ public class StreamThread extends Thread implements ProcessingThread {
         if (isStartingRunningOrPartitionAssigned()) {
 
             taskManager.updateLags();
-            taskManager.maybeUpdateTaskOffsetSumSnapshot();
 
             /*
              * Within an iteration, after processing up to N (N initialized as 1 upon start up) records for each applicable tasks, check the current time:
@@ -1398,6 +1401,10 @@ public class StreamThread extends Thread implements ProcessingThread {
             // regardless of streamsGroupReady, as these may throw exceptions that need to be handled.
             handleStreamsRebalanceData();
 
+            // The group coordinator places tasks based on the offsets we report to it, so publish them on every
+            // iteration -- including the ones that return early below, where a task may well still be restoring.
+            taskManager.maybeUpdateTaskOffsetSumSnapshot();
+
             if (!streamsGroupReady) {
                 return;
             }
@@ -1416,7 +1423,6 @@ public class StreamThread extends Thread implements ProcessingThread {
         if (isRunning()) {
 
             taskManager.updateLags();
-            taskManager.maybeUpdateTaskOffsetSumSnapshot();
 
             checkStateUpdater();
 
