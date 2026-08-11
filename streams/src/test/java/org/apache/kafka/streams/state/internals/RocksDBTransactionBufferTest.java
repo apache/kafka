@@ -414,6 +414,18 @@ public class RocksDBTransactionBufferTest {
         assertEquals("v3", str(db.get(cfHandle, key("x").get())));
     }
 
+    @Test
+    public void shouldNotLeakRolledBackWriteIntoLaterCommitOfDifferentKey() throws RocksDBException {
+        buffer.stage(key("x"), val("vx"));
+        buffer.rollback();
+
+        buffer.stage(key("y"), val("vy"));
+        buffer.commit();
+
+        assertNull(db.get(cfHandle, key("x").get()));
+        assertEquals("vy", str(db.get(cfHandle, key("y").get())));
+    }
+
     // --- CF-aware overload tests ---
 
     @Test
