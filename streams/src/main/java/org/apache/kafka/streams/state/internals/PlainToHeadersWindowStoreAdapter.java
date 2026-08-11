@@ -76,13 +76,7 @@ public class PlainToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte
      */
     @Override
     public long retentionPeriod() {
-        StateStore current = store;
-        while (current instanceof WrappedStateStore) {
-            current = ((WrappedStateStore<?, ?, ?>) current).wrapped();
-        }
-        return current instanceof WithRetentionPeriod
-            ? ((WithRetentionPeriod) current).retentionPeriod()
-            : -1L;
+        return WithRetentionPeriod.resolveRetentionPeriod(store);
     }
 
     @Override

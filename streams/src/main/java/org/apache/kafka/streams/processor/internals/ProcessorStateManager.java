@@ -38,7 +38,6 @@ import org.apache.kafka.streams.state.internals.LegacyCheckpointingStateStore;
 import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 import org.apache.kafka.streams.state.internals.WithRetentionPeriod;
-import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 import org.slf4j.Logger;
 
@@ -136,22 +135,11 @@ public class ProcessorStateManager implements StateManager {
             this.commitCallback = commitCallback;
             this.recordConverter = recordConverter;
             this.offset = null;
-            this.retentionPeriod = extractRetentionPeriod(stateStore);
+            this.retentionPeriod = WithRetentionPeriod.resolveRetentionPeriod(stateStore);
         }
 
         private void setOffset(final Long offset) {
             this.offset = offset;
-        }
-
-        private static long extractRetentionPeriod(final StateStore stateStore) {
-            StateStore current = stateStore;
-            while (current instanceof WrappedStateStore) {
-                current = ((WrappedStateStore<?, ?, ?>) current).wrapped();
-            }
-            if (current instanceof WithRetentionPeriod) {
-                return ((WithRetentionPeriod) current).retentionPeriod();
-            }
-            return -1L;
         }
 
         // the offset is exposed to the changelog reader to determine if restoration is completed

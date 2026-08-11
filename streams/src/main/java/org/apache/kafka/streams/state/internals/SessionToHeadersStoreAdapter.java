@@ -60,13 +60,7 @@ public class SessionToHeadersStoreAdapter implements SessionStore<Bytes, byte[]>
     // terminates here; without this the windowed restore optimisation resolves -1 and is skipped
     @Override
     public long retentionPeriod() {
-        StateStore current = store;
-        while (current instanceof WrappedStateStore) {
-            current = ((WrappedStateStore<?, ?, ?>) current).wrapped();
-        }
-        return current instanceof WithRetentionPeriod
-            ? ((WithRetentionPeriod) current).retentionPeriod()
-            : -1L;
+        return WithRetentionPeriod.resolveRetentionPeriod(store);
     }
 
     SessionToHeadersStoreAdapter(final SessionStore<Bytes, byte[]> store) {

@@ -16,6 +16,23 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.processor.StateStore;
+
 public interface WithRetentionPeriod {
     long retentionPeriod();
+
+    /**
+     * Resolve the retention of {@code store} by unwrapping to the innermost layer, or -1 if no
+     * layer reports one. Adapters that hold their delegate in a field rather than as a
+     * {@link WrappedStateStore} end the walk, so they resolve their own delegate through here.
+     */
+    static long resolveRetentionPeriod(final StateStore store) {
+        StateStore current = store;
+        while (current instanceof WrappedStateStore) {
+            current = ((WrappedStateStore<?, ?, ?>) current).wrapped();
+        }
+        return current instanceof WithRetentionPeriod
+            ? ((WithRetentionPeriod) current).retentionPeriod()
+            : -1L;
+    }
 }

@@ -67,13 +67,7 @@ public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes
      */
     @Override
     public long retentionPeriod() {
-        StateStore current = store;
-        while (current instanceof WrappedStateStore) {
-            current = ((WrappedStateStore<?, ?, ?>) current).wrapped();
-        }
-        return current instanceof WithRetentionPeriod
-            ? ((WithRetentionPeriod) current).retentionPeriod()
-            : -1L;
+        return WithRetentionPeriod.resolveRetentionPeriod(store);
     }
 
     public TimestampedToHeadersWindowStoreAdapter(final WindowStore<Bytes, byte[]> store) {
