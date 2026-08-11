@@ -25,7 +25,6 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
@@ -86,7 +85,7 @@ public class SlidingWindowedKStreamImplTest {
             .toStream()
             .process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
         }
         assertThat(
@@ -129,7 +128,7 @@ public class SlidingWindowedKStreamImplTest {
             .toStream()
             .process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
         }
         assertThat(
@@ -175,7 +174,7 @@ public class SlidingWindowedKStreamImplTest {
             .toStream()
             .process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
         }
         assertThat(
@@ -217,7 +216,7 @@ public class SlidingWindowedKStreamImplTest {
                 .withKeySerde(Serdes.String())
                 .withValueSerde(Serdes.Long()));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
             {
                 final WindowStore<String, Long> windowStore = driver.getWindowStore("count-store");
@@ -259,7 +258,7 @@ public class SlidingWindowedKStreamImplTest {
                 .withKeySerde(Serdes.String())
                 .withValueSerde(Serdes.String()));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
             {
                 final WindowStore<String, String> windowStore = driver.getWindowStore("reduced");
@@ -302,7 +301,7 @@ public class SlidingWindowedKStreamImplTest {
                 .withKeySerde(Serdes.String())
                 .withValueSerde(Serdes.String()));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
             {
                 final WindowStore<String, String> windowStore = driver.getWindowStore("aggregated");
@@ -439,7 +438,7 @@ public class SlidingWindowedKStreamImplTest {
                 .withValueSerde(Serdes.String())
                 .withCachingDisabled());
 
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
 

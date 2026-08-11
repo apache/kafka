@@ -23,7 +23,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.processor.api.ContextualFixedKeyProcessor;
@@ -71,7 +70,7 @@ public class KStreamProcessorApiTest {
                 .to("output", Produced.with(Serdes.String(), Serdes.String()));
 
         final List<KeyValue<String, String>> words = Arrays.asList(KeyValue.pair("a", "foo"), KeyValue.pair("b", "bar"), KeyValue.pair("c", "baz"));
-        try (TopologyTestDriver testDriver = new TopologyTestDriverBuilder(builder.build()).build()) {
+        try (TopologyTestDriver testDriver = new TopologyTestDriver(builder.build())) {
             final TestInputTopic<String, String>
                     testDriverInputTopic =
                     testDriver.createInputTopic("input", Serdes.String().serializer(), Serdes.String().serializer());

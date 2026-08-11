@@ -27,7 +27,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -87,7 +86,7 @@ public class PapiDslIntegrationTest {
             }, "table-store")
             .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
 
-        try (final TopologyTestDriver testDriver = new TopologyTestDriverBuilder(builder.build()).build()) {
+        try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build())) {
             final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic("input-topic", new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic("output-topic", new StringDeserializer(), new StringDeserializer());
 
@@ -181,7 +180,7 @@ public class PapiDslIntegrationTest {
             }, "table-store")
             .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
 
-        try (final TopologyTestDriver testDriver = new TopologyTestDriverBuilder(builder.build()).build()) {
+        try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build())) {
             final TestInputTopic<String, String> leftInputTopic = testDriver.createInputTopic("left-input-topic", new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> rightInputTopic = testDriver.createInputTopic("right-input-topic", new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic("output-topic", new StringDeserializer(), new StringDeserializer());
@@ -264,7 +263,7 @@ public class PapiDslIntegrationTest {
             }, "table-store")
             .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
 
-        try (final TopologyTestDriver testDriver = new TopologyTestDriverBuilder(builder.build()).build()) {
+        try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build())) {
             final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic("input-topic", new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic("output-topic", new StringDeserializer(), new StringDeserializer());
 
@@ -358,7 +357,7 @@ public class PapiDslIntegrationTest {
             }, "table-store")
             .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
 
-        try (final TopologyTestDriver testDriver = new TopologyTestDriverBuilder(builder.build()).build()) {
+        try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build())) {
             final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic("input-topic", new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic("output-topic", new StringDeserializer(), new StringDeserializer());
 
@@ -521,7 +520,7 @@ public class PapiDslIntegrationTest {
         final Properties props = new Properties();
         props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
 
-        try (final TopologyTestDriver testDriver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
+        try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic("input-topic", new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic("output-topic", new StringDeserializer(), new StringDeserializer());
 
@@ -553,7 +552,7 @@ public class PapiDslIntegrationTest {
             }, "table-store")
             .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
 
-        try (final TopologyTestDriver testDriver = new TopologyTestDriverBuilder(builder.build()).build()) {
+        try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build())) {
             final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic("input-topic", new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic("output-topic", new StringDeserializer(), new StringDeserializer());
 
@@ -594,7 +593,7 @@ public class PapiDslIntegrationTest {
             }, "table-store")
             .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
 
-        try (final TopologyTestDriver testDriver = new TopologyTestDriverBuilder(builder.build()).build()) {
+        try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build())) {
             final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic("input-topic", new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic("output-topic", new StringDeserializer(), new StringDeserializer());
 
@@ -634,7 +633,7 @@ public class PapiDslIntegrationTest {
             }, "table-store")
             .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
 
-        try (final TopologyTestDriver testDriver = new TopologyTestDriverBuilder(builder.build()).build()) {
+        try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build())) {
             final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic("input-topic", new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic("output-topic", new StringDeserializer(), new StringDeserializer());
 
@@ -667,7 +666,7 @@ public class PapiDslIntegrationTest {
             }, "table-store")
             .to("output-topic", Produced.with(Serdes.String(), Serdes.Long()));
 
-        try (final TopologyTestDriver testDriver = new TopologyTestDriverBuilder(builder.build()).build()) {
+        try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build())) {
             final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic("input-topic", new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, Long> outputTopic = testDriver.createOutputTopic("output-topic", new StringDeserializer(), new LongDeserializer());
 
@@ -710,7 +709,7 @@ public class PapiDslIntegrationTest {
             .to("output-topic", Produced.with(WindowedSerdes.timeWindowedSerdeFrom(String.class, Duration.ofHours(1L).toMillis()), Serdes.String()));
 
         // Verify topology can be built and run with window headers store supplier
-        try (final TopologyTestDriver testDriver = new TopologyTestDriverBuilder(builder.build()).build()) {
+        try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build())) {
             final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic("input-topic", new StringSerializer(), new StringSerializer());
             final TestOutputTopic<Windowed<String>, String> outputTopic = testDriver.createOutputTopic("output-topic", new TimeWindowedDeserializer<>(new StringDeserializer(), Duration.ofHours(1L).toMillis()), new StringDeserializer());
 
@@ -753,7 +752,7 @@ public class PapiDslIntegrationTest {
             }, "table-store")
             .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
 
-        try (final TopologyTestDriver testDriver = new TopologyTestDriverBuilder(builder.build()).build()) {
+        try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build())) {
             final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic("input-topic", new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic("output-topic", new StringDeserializer(), new StringDeserializer());
 
@@ -794,7 +793,7 @@ public class PapiDslIntegrationTest {
             }, "table-store")
             .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
 
-        try (final TopologyTestDriver testDriver = new TopologyTestDriverBuilder(builder.build()).build()) {
+        try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build())) {
             final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic("input-topic", new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic("output-topic", new StringDeserializer(), new StringDeserializer());
 

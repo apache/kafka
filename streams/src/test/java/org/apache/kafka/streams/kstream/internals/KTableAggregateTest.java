@@ -35,7 +35,6 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KTable;
@@ -109,9 +108,8 @@ public class KTableAggregateTest {
         table2.toStream().process(supplier);
 
         try (
-            final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build())
-                .withConfig(CONFIG)
-                .withInitialWallClockTime(Instant.ofEpochMilli(0L)).build()) {
+            final TopologyTestDriver driver = new TopologyTestDriver(
+                builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
@@ -170,9 +168,8 @@ public class KTableAggregateTest {
         table2.toStream().process(supplier);
 
         try (
-            final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build())
-                .withConfig(CONFIG)
-                .withInitialWallClockTime(Instant.ofEpochMilli(0L)).build()) {
+            final TopologyTestDriver driver = new TopologyTestDriver(
+                builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
@@ -230,9 +227,8 @@ public class KTableAggregateTest {
         table2.toStream().process(supplier);
 
         try (
-            final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build())
-                .withConfig(CONFIG)
-                .withInitialWallClockTime(Instant.ofEpochMilli(0L)).build()) {
+            final TopologyTestDriver driver = new TopologyTestDriver(
+                builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
@@ -260,9 +256,8 @@ public class KTableAggregateTest {
                                         final String input,
                                         final MockApiProcessorSupplier<String, Object, Void, Void> supplier) {
         try (
-            final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build())
-                .withConfig(CONFIG)
-                .withInitialWallClockTime(Instant.ofEpochMilli(0L)).build()) {
+            final TopologyTestDriver driver = new TopologyTestDriver(
+                builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
@@ -332,9 +327,8 @@ public class KTableAggregateTest {
             .process(supplier);
 
         try (
-            final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build())
-                .withConfig(CONFIG)
-                .withInitialWallClockTime(Instant.ofEpochMilli(0L)).build()) {
+            final TopologyTestDriver driver = new TopologyTestDriver(
+                builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
@@ -381,9 +375,8 @@ public class KTableAggregateTest {
             .process(supplier);
 
         try (
-            final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build())
-                .withConfig(CONFIG)
-                .withInitialWallClockTime(Instant.ofEpochMilli(0L)).build()) {
+            final TopologyTestDriver driver = new TopologyTestDriver(
+                builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
@@ -420,9 +413,7 @@ public class KTableAggregateTest {
                 .toStream()
                 .to(output);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build())
-                .withConfig(config)
-                .withInitialWallClockTime(Instant.ofEpochMilli(0L)).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), config, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestOutputTopic<String, Long> outputTopic =
@@ -507,9 +498,7 @@ public class KTableAggregateTest {
                 .toStream()
                 .to(output);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build())
-                .withConfig(CONFIG)
-                .withInitialWallClockTime(Instant.ofEpochMilli(0L)).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<NoEqualsImpl, NoEqualsImpl> inputTopic =
                     driver.createInputTopic(input, noEqualsImplSerde.serializer(), noEqualsImplSerde.serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestOutputTopic<NoEqualsImpl, Long> outputTopic =

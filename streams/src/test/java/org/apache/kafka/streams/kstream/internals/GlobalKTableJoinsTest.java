@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
@@ -90,7 +89,7 @@ public class GlobalKTableJoinsTest {
                             final MockApiProcessorSupplier<String, String, Void, Void> supplier) {
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> globalInputTopic = driver.createInputTopic(globalTopic, new StringSerializer(), new StringSerializer());
             // write some data to the global table
             globalInputTopic.pipeInput("a", "A", 1L);

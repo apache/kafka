@@ -28,7 +28,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.CogroupedKStream;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -903,7 +902,7 @@ public class CogroupedKStreamImplTest {
 
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> testInputTopic =
                 driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> testOutputTopic =
@@ -935,7 +934,7 @@ public class CogroupedKStreamImplTest {
 
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> testOutputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
             testInputTopic.pipeInput("k1", "A", 0);
@@ -969,7 +968,7 @@ public class CogroupedKStreamImplTest {
 
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> testInputTopic =
                 driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> testInputTopic2 =
@@ -1019,7 +1018,7 @@ public class CogroupedKStreamImplTest {
 
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> testInputTopic =
                 driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> testInputTopic2 =
@@ -1074,7 +1073,7 @@ public class CogroupedKStreamImplTest {
 
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> testInputTopic =
                 driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> testInputTopic2 =
@@ -1130,7 +1129,7 @@ public class CogroupedKStreamImplTest {
 
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, Integer> testInputTopic2 = driver.createInputTopic("two", new StringSerializer(), new IntegerSerializer());
             final TestOutputTopic<String, Integer> testOutputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new IntegerDeserializer());
@@ -1183,7 +1182,7 @@ public class CogroupedKStreamImplTest {
 
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> testInputTopic =
                 driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> testInputTopic2 =
@@ -1232,7 +1231,7 @@ public class CogroupedKStreamImplTest {
 
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> testInputTopic =
                 driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> testInputTopic2 =
@@ -1288,7 +1287,7 @@ public class CogroupedKStreamImplTest {
         final KTable<String, String> joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER, Materialized.with(Serdes.String(), Serdes.String()));
         joined.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> testInputTopic =
                 driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> testInputTopic2 =

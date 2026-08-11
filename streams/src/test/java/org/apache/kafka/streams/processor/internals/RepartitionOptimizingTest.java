@@ -32,7 +32,6 @@ import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -192,7 +191,7 @@ public class RepartitionOptimizingTest {
         streamsConfiguration.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, optimizationConfig);
         final Topology topology = builder.build(streamsConfiguration);
 
-        topologyTestDriver = new TopologyTestDriverBuilder(topology).withConfig(streamsConfiguration).build();
+        topologyTestDriver = new TopologyTestDriver(topology, streamsConfiguration);
 
         final TestInputTopic<String, String> inputTopicA = topologyTestDriver.createInputTopic(INPUT_TOPIC, stringSerializer, stringSerializer);
         final TestOutputTopic<String, Long> countOutputTopic = topologyTestDriver.createOutputTopic(COUNT_TOPIC, stringDeserializer, new LongDeserializer());
@@ -246,7 +245,7 @@ public class RepartitionOptimizingTest {
 
         final Topology topology = builder.build(streamsConfiguration);
 
-        topologyTestDriver = new TopologyTestDriverBuilder(topology).withConfig(streamsConfiguration).build();
+        topologyTestDriver = new TopologyTestDriver(topology, streamsConfiguration);
 
         final TestInputTopic<String, String> inputTopic = topologyTestDriver.createInputTopic(INPUT_TOPIC, stringSerializer, stringSerializer);
         final TestOutputTopic<String, Integer> outputTopic = topologyTestDriver.createOutputTopic(AGGREGATION_TOPIC, stringDeserializer, new IntegerDeserializer());

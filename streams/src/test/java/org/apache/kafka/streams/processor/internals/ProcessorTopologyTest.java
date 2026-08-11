@@ -33,7 +33,6 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
@@ -280,7 +279,7 @@ public class ProcessorTopologyTest {
     @Test
     public void testDrivingSimpleTopology() {
         final int partition = 10;
-        driver = new TopologyTestDriverBuilder(createSimpleTopology(partition)).withConfig(props).build();
+        driver = new TopologyTestDriver(createSimpleTopology(partition), props);
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER, Instant.ofEpochMilli(0L), Duration.ZERO);
         final TestOutputTopic<String, String> outputTopic1 =
                 driver.createOutputTopic(OUTPUT_TOPIC_1, new StringDeserializer(), new StringDeserializer());
@@ -304,7 +303,7 @@ public class ProcessorTopologyTest {
 
     @Test
     public void testDrivingSimpleTopologyWithDroppingPartitioner() {
-        driver = new TopologyTestDriverBuilder(createSimpleTopologyWithDroppingPartitioner()).withConfig(props).build();
+        driver = new TopologyTestDriver(createSimpleTopologyWithDroppingPartitioner(), props);
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER, Instant.ofEpochMilli(0L), Duration.ZERO);
         final TestOutputTopic<String, String> outputTopic1 =
                 driver.createOutputTopic(OUTPUT_TOPIC_1, new StringDeserializer(), new StringDeserializer());
@@ -316,7 +315,7 @@ public class ProcessorTopologyTest {
     @Test
     public void testDrivingStatefulTopology() {
         final String storeName = "entries";
-        driver = new TopologyTestDriverBuilder(createStatefulTopology(storeName)).withConfig(props).build();
+        driver = new TopologyTestDriver(createStatefulTopology(storeName), props);
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
                 driver.createOutputTopic(OUTPUT_TOPIC_1, new IntegerDeserializer(), new StringDeserializer());
@@ -336,7 +335,7 @@ public class ProcessorTopologyTest {
 
     @Test
     public void testDrivingConnectedStateStoreTopology() {
-        driver = new TopologyTestDriverBuilder(createConnectedStateStoreTopology("connectedStore")).withConfig(props).build();
+        driver = new TopologyTestDriver(createConnectedStateStoreTopology("connectedStore"), props);
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
             driver.createOutputTopic(OUTPUT_TOPIC_1, new IntegerDeserializer(), new StringDeserializer());
@@ -366,7 +365,7 @@ public class ProcessorTopologyTest {
             .addProcessor("processor2", defineWithStores(() -> new StatefulProcessor(storeName), Collections.singleton(storeBuilder)), "source2")
             .addSink("counts", OUTPUT_TOPIC_1, "processor1", "processor2");
 
-        driver = new TopologyTestDriverBuilder(topology).withConfig(props).build();
+        driver = new TopologyTestDriver(topology, props);
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
@@ -396,7 +395,7 @@ public class ProcessorTopologyTest {
             .addProcessor("processor1", defineWithStores(() -> new StatefulProcessor(DEFAULT_STORE_NAME), Collections.singleton(storeBuilder)), "source1")
             .addSink("counts", OUTPUT_TOPIC_1, "processor1");
 
-        driver = new TopologyTestDriverBuilder(topology).withConfig(props).build();
+        driver = new TopologyTestDriver(topology, props);
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
@@ -431,7 +430,7 @@ public class ProcessorTopologyTest {
             .addProcessor("processor1", defineWithStores(() -> new StatefulProcessor(DEFAULT_STORE_NAME), Collections.singleton(storeBuilder)), "source1")
             .addSink("counts", OUTPUT_TOPIC_1, "processor1");
 
-        driver = new TopologyTestDriverBuilder(topology).withConfig(props).build();
+        driver = new TopologyTestDriver(topology, props);
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
@@ -466,7 +465,7 @@ public class ProcessorTopologyTest {
             .addProcessor("processor1", defineWithStores(() -> new StatefulProcessor(DEFAULT_STORE_NAME), Collections.singleton(storeBuilder)), "source1")
             .addSink("counts", OUTPUT_TOPIC_1, "processor1");
 
-        driver = new TopologyTestDriverBuilder(topology).withConfig(props).build();
+        driver = new TopologyTestDriver(topology, props);
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
@@ -501,7 +500,7 @@ public class ProcessorTopologyTest {
             .addProcessor("processor1", defineWithStores(() -> new StatefulProcessor(DEFAULT_STORE_NAME), Collections.singleton(storeBuilder)), "source1")
             .addSink("counts", OUTPUT_TOPIC_1, "processor1");
 
-        driver = new TopologyTestDriverBuilder(topology).withConfig(props).build();
+        driver = new TopologyTestDriver(topology, props);
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
@@ -536,7 +535,7 @@ public class ProcessorTopologyTest {
             .addProcessor("processor1", defineWithStores(() -> new StatefulProcessor(DEFAULT_STORE_NAME), Collections.singleton(storeBuilder)), "source1")
             .addSink("counts", OUTPUT_TOPIC_1, "processor1");
 
-        driver = new TopologyTestDriverBuilder(topology).withConfig(props).build();
+        driver = new TopologyTestDriver(topology, props);
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
@@ -571,7 +570,7 @@ public class ProcessorTopologyTest {
             .addProcessor("processor1", defineWithStores(() -> new StatefulProcessor(DEFAULT_STORE_NAME), Collections.singleton(storeBuilder)), "source1")
             .addSink("counts", OUTPUT_TOPIC_1, "processor1");
 
-        driver = new TopologyTestDriverBuilder(topology).withConfig(props).build();
+        driver = new TopologyTestDriver(topology, props);
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
@@ -606,7 +605,7 @@ public class ProcessorTopologyTest {
             .addProcessor("processor1", defineWithStores(() -> new StatefulProcessor(DEFAULT_STORE_NAME), Collections.singleton(storeBuilder)), "source1")
             .addSink("counts", OUTPUT_TOPIC_1, "processor1");
 
-        driver = new TopologyTestDriverBuilder(topology).withConfig(props).build();
+        driver = new TopologyTestDriver(topology, props);
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
@@ -641,7 +640,7 @@ public class ProcessorTopologyTest {
             .addProcessor("processor1", defineWithStores(() -> new StatefulProcessor(DEFAULT_STORE_NAME), Collections.singleton(storeBuilder)), "source1")
             .addSink("counts", OUTPUT_TOPIC_1, "processor1");
 
-        driver = new TopologyTestDriverBuilder(topology).withConfig(props).build();
+        driver = new TopologyTestDriver(topology, props);
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
@@ -676,7 +675,7 @@ public class ProcessorTopologyTest {
             .addProcessor("processor1", defineWithStores(() -> new StatefulProcessor(DEFAULT_STORE_NAME), Collections.singleton(storeBuilder)), "source1")
             .addSink("counts", OUTPUT_TOPIC_1, "processor1");
 
-        driver = new TopologyTestDriverBuilder(topology).withConfig(props).build();
+        driver = new TopologyTestDriver(topology, props);
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
@@ -711,7 +710,7 @@ public class ProcessorTopologyTest {
             .addProcessor("processor1", defineWithStores(() -> new StatefulProcessor(DEFAULT_STORE_NAME), Collections.singleton(storeBuilder)), "source1")
             .addSink("counts", OUTPUT_TOPIC_1, "processor1");
 
-        driver = new TopologyTestDriverBuilder(topology).withConfig(props).build();
+        driver = new TopologyTestDriver(topology, props);
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
@@ -746,7 +745,7 @@ public class ProcessorTopologyTest {
             .addProcessor("processor1", defineWithStores(() -> new StatefulProcessor(DEFAULT_STORE_NAME), Collections.singleton(storeBuilder)), "source1")
             .addSink("counts", OUTPUT_TOPIC_1, "processor1");
 
-        driver = new TopologyTestDriverBuilder(topology).withConfig(props).build();
+        driver = new TopologyTestDriver(topology, props);
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
@@ -781,7 +780,7 @@ public class ProcessorTopologyTest {
             .addProcessor("processor1", defineWithStores(() -> new StatefulProcessor(DEFAULT_STORE_NAME), Collections.singleton(storeBuilder)), "source1")
             .addSink("counts", OUTPUT_TOPIC_1, "processor1");
 
-        driver = new TopologyTestDriverBuilder(topology).withConfig(props).build();
+        driver = new TopologyTestDriver(topology, props);
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
@@ -808,7 +807,7 @@ public class ProcessorTopologyTest {
     @Test
     public void testDrivingSimpleMultiSourceTopology() {
         final int partition = 10;
-        driver = new TopologyTestDriverBuilder(createSimpleMultiSourceTopology(partition)).withConfig(props).build();
+        driver = new TopologyTestDriver(createSimpleMultiSourceTopology(partition), props);
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER, Instant.ofEpochMilli(0L), Duration.ZERO);
         final TestOutputTopic<String, String> outputTopic1 =
                 driver.createOutputTopic(OUTPUT_TOPIC_1, new StringDeserializer(), new StringDeserializer());
@@ -827,7 +826,7 @@ public class ProcessorTopologyTest {
 
     @Test
     public void testDrivingForwardToSourceTopology() {
-        driver = new TopologyTestDriverBuilder(createForwardToSourceTopology()).withConfig(props).build();
+        driver = new TopologyTestDriver(createForwardToSourceTopology(), props);
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER, Instant.ofEpochMilli(0L), Duration.ZERO);
         inputTopic.pipeInput("key1", "value1");
         inputTopic.pipeInput("key2", "value2");
@@ -841,7 +840,7 @@ public class ProcessorTopologyTest {
 
     @Test
     public void testDrivingInternalRepartitioningTopology() {
-        driver = new TopologyTestDriverBuilder(createInternalRepartitioningTopology()).withConfig(props).build();
+        driver = new TopologyTestDriver(createInternalRepartitioningTopology(), props);
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER, Instant.ofEpochMilli(0L), Duration.ZERO);
         inputTopic.pipeInput("key1", "value1");
         inputTopic.pipeInput("key2", "value2");
@@ -854,7 +853,7 @@ public class ProcessorTopologyTest {
 
     @Test
     public void testDrivingInternalRepartitioningForwardingTimestampTopology() {
-        driver = new TopologyTestDriverBuilder(createInternalRepartitioningWithValueTimestampTopology()).withConfig(props).build();
+        driver = new TopologyTestDriver(createInternalRepartitioningWithValueTimestampTopology(), props);
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         inputTopic.pipeInput("key1", "value1@1000");
         inputTopic.pipeInput("key2", "value2@2000");
@@ -877,7 +876,7 @@ public class ProcessorTopologyTest {
                 Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(DEFAULT_STORE_NAME), Serdes.String(), Serdes.String());
         topology.addSource("source1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1);
         topology.addProcessor("processor1", defineWithStores(() -> new StatefulProcessorWithInitialization(DEFAULT_STORE_NAME, initialKey, initialValue), Collections.singleton(storeBuilder)), "source1");
-        driver = new TopologyTestDriverBuilder(topology).withConfig(props).build();
+        driver = new TopologyTestDriver(topology, props);
         final KeyValueStore<String, String> store = driver.getKeyValueStore(DEFAULT_STORE_NAME);
         final List<KeyValue<String, String>> results = prefixScanResults(store, DEFAULT_PREFIX);
         assertEquals(1, results.size());
@@ -932,7 +931,7 @@ public class ProcessorTopologyTest {
     @Test
     public void shouldConsiderTimeStamps() {
         final int partition = 10;
-        driver = new TopologyTestDriverBuilder(createSimpleTopology(partition)).withConfig(props).build();
+        driver = new TopologyTestDriver(createSimpleTopology(partition), props);
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         inputTopic.pipeInput("key1", "value1", 10L);
         inputTopic.pipeInput("key2", "value2", 20L);
@@ -947,7 +946,7 @@ public class ProcessorTopologyTest {
     @Test
     public void shouldConsiderModifiedTimeStamps() {
         final int partition = 10;
-        driver = new TopologyTestDriverBuilder(createTimestampTopology(partition)).withConfig(props).build();
+        driver = new TopologyTestDriver(createTimestampTopology(partition), props);
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         inputTopic.pipeInput("key1", "value1", 10L);
         inputTopic.pipeInput("key2", "value2", 20L);
@@ -962,7 +961,7 @@ public class ProcessorTopologyTest {
     @Test
     public void shouldConsiderModifiedTimeStampsForMultipleProcessors() {
         final int partition = 10;
-        driver = new TopologyTestDriverBuilder(createMultiProcessorTimestampTopology(partition)).withConfig(props).build();
+        driver = new TopologyTestDriver(createMultiProcessorTimestampTopology(partition), props);
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<String, String> outputTopic1 =
                 driver.createOutputTopic(OUTPUT_TOPIC_1, new StringDeserializer(), new StringDeserializer());
@@ -993,7 +992,7 @@ public class ProcessorTopologyTest {
     @Test
     public void shouldConsiderHeaders() {
         final int partition = 10;
-        driver = new TopologyTestDriverBuilder(createSimpleTopology(partition)).withConfig(props).build();
+        driver = new TopologyTestDriver(createSimpleTopology(partition), props);
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         inputTopic.pipeInput(new TestRecord<>("key1", "value1", HEADERS, 10L));
         inputTopic.pipeInput(new TestRecord<>("key2", "value2", HEADERS, 20L));
@@ -1006,7 +1005,7 @@ public class ProcessorTopologyTest {
 
     @Test
     public void shouldAddHeaders() {
-        driver = new TopologyTestDriverBuilder(createAddHeaderTopology()).withConfig(props).build();
+        driver = new TopologyTestDriver(createAddHeaderTopology(), props);
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         inputTopic.pipeInput("key1", "value1", 10L);
         inputTopic.pipeInput("key2", "value2", 20L);

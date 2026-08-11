@@ -32,7 +32,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KTable;
@@ -170,7 +169,7 @@ public class SuppressHeadersScenarioTest {
     @Test
     public void nonWindowedEvictionTriggeredByDifferentKey() {
         scenario = "non-windowed / eviction triggered by a DIFFERENT key";
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(nonWindowedTopology()).withConfig(config).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(nonWindowedTopology(), config)) {
             final TestInputTopic<String, String> input =
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
 
@@ -193,7 +192,7 @@ public class SuppressHeadersScenarioTest {
     public void nonWindowedEvictionTriggeredBySameKey() {
         scenario = "non-windowed / SAME key, row updated then evicted (headers format)";
         config.setProperty(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(nonWindowedTopology()).withConfig(config).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(nonWindowedTopology(), config)) {
             final TestInputTopic<String, String> input =
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
 
@@ -226,7 +225,7 @@ public class SuppressHeadersScenarioTest {
         // value from the earlier record. INV-1 therefore needs two origins recoverable from one row;
         // see the class javadoc on why that requires the HEADERS format.
         config.setProperty(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(nonWindowedTopology()).withConfig(config).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(nonWindowedTopology(), config)) {
             final TestInputTopic<String, String> input =
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
 
@@ -249,7 +248,7 @@ public class SuppressHeadersScenarioTest {
     @Test
     public void windowedEvictionTriggeredBySameKeyDifferentWindow() {
         scenario = "windowed (untilWindowCloses) / SAME key but a DIFFERENT window";
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(windowedTopology(false)).withConfig(config).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(windowedTopology(false), config)) {
             final TestInputTopic<String, String> input =
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
 
@@ -272,7 +271,7 @@ public class SuppressHeadersScenarioTest {
     public void windowedEvictionTriggeredBySameKeySameWindow() {
         scenario = "windowed (untilTimeLimit) / SAME key and SAME window (headers format)";
         config.setProperty(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(windowedTopology(true)).withConfig(config).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(windowedTopology(true), config)) {
             final TestInputTopic<String, String> input =
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
 
@@ -304,7 +303,7 @@ public class SuppressHeadersScenarioTest {
         // Same-row overwrite as above (kA's aggregate is updated to null), so this too needs the
         // HEADERS format for INV-1 to be satisfiable at all.
         config.setProperty(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(windowedTopology(false)).withConfig(config).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(windowedTopology(false), config)) {
             final TestInputTopic<String, String> input =
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
 

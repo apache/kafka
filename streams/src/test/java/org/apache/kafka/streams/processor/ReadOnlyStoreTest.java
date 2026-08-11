@@ -26,7 +26,6 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -97,7 +96,7 @@ public class ReadOnlyStoreTest {
         topology.connectProcessorAndStateStores("processor", "readOnlyStore");
         topology.addSink("sink", "outputTopic", new IntegerSerializer(), new StringSerializer(), "processor");
 
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology)) {
             final TestInputTopic<Integer, String> readOnlyStoreTopic =
                 driver.createInputTopic("storeTopic", new IntegerSerializer(), new StringSerializer());
             final TestInputTopic<Integer, String> input =

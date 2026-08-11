@@ -25,7 +25,6 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -59,7 +58,7 @@ public class WordCountDemoTest {
         final StreamsBuilder builder = new StreamsBuilder();
         //Create Actual Stream Processing pipeline
         WordCountDemo.createWordCountStream(builder);
-        testDriver = new TopologyTestDriverBuilder(builder.build()).withConfig(WordCountDemo.streamsConfig(null)).build();
+        testDriver = new TopologyTestDriver(builder.build(), WordCountDemo.streamsConfig(null));
         inputTopic = testDriver.createInputTopic(WordCountDemo.INPUT_TOPIC, new StringSerializer(), new StringSerializer());
         outputTopic = testDriver.createOutputTopic(WordCountDemo.OUTPUT_TOPIC, new StringDeserializer(), new LongDeserializer());
     }
