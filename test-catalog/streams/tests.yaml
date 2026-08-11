@@ -2802,7 +2802,10 @@ org.apache.kafka.streams.processor.internals.StreamTaskTest:
 - shouldCommitOnCloseRestoringIfNoProgress
 - shouldCommitWhileUpdateSnapshotWithTheConsumedOffsetsForSuspendedRunningTask
 - shouldFailOnCommitIfTaskIsClosed
+- shouldFlushPendingTerminalE2ELatencyOnTaskFlush
 - shouldFlushStateManagerAndRecordCollector
+- shouldIncludeProcessingDelayInTerminalNodeE2ELatency
+- shouldIncludePunctuatorDelayInTerminalNodeE2ELatency
 - shouldInitTaskTimeoutAndEventuallyThrow
 - shouldLogNotReadyWhenStaleAfterThreshold
 - shouldMaybeReturnOffsetsForRepartitionTopicsForPurging
@@ -2831,6 +2834,8 @@ org.apache.kafka.streams.processor.internals.StreamTaskTest:
 - shouldReadCommittedOffsetAndRethrowTimeoutWhenCompleteRestoration
 - shouldReadCommittedStreamTimeAndMergeProcessorMetadataOnInitialize
 - shouldReadCommittedStreamTimeAndProcessorMetadataOnInitialize
+- shouldReconstructTerminalE2ELatencyForBatchOfTwoRecords
+- shouldReconstructTerminalE2ELatencyForBatchWithSkewedTimestamps
 - shouldRecordBufferedRecords
 - shouldRecordE2ELatencyOnSourceNodeAndTerminalNodes
 - shouldRecordProcessRatio
@@ -2925,6 +2930,7 @@ org.apache.kafka.streams.processor.internals.StreamThreadTest:
 - shouldProcessWhenPartitionAssigned
 - shouldProcessWhenRunning
 - shouldProcessWhenStarting
+- shouldPublishTaskOffsetSumSnapshotOnEveryIteration
 - shouldPunctuateActiveTask
 - shouldPunctuateWithTimestampPreservedInProcessorContext
 - shouldPurgeAfterPurgeInterval
@@ -3167,6 +3173,8 @@ org.apache.kafka.streams.processor.internals.TaskExecutionMetadataTest:
 - testNamedTopologiesCanBePausedIndependently
 - testNamedTopologiesCanBeStartedPaused
 org.apache.kafka.streams.processor.internals.TaskExecutorTest:
+- shouldFlushTerminalE2ELatencyAgainstTheBatchEndTime
+- shouldFlushTerminalE2ELatencyWhenProcessingThrows
 - testCommitWithOpenTransactionButNoOffsetsEOSV2
 - testPunctuateWithPause
 org.apache.kafka.streams.processor.internals.TaskManagerTest:
