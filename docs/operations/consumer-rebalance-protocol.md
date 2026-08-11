@@ -65,7 +65,7 @@ The following table shows the mapping from client-side assignors to the new serv
 
 Since Apache Kafka 4.0, the Consumer fully supports the new Consumer rebalance protocol. However, the protocol is not enabled by default. The `group.protocol` configuration must be set to `consumer` to enable it. When enabled, the new consumer protocol is used alongside an improved threading model.
 
-The `subscribe(SubscriptionPattern)` and `subscribe(SubscriptionPattern, ConsumerRebalanceListener)` methods have been added to subscribe to a regular expression with the new Consumer rebalance protocol. With these methods, the regular expression uses the RE2J format and is now evaluated on the server side.
+The `subscribe(SubscriptionPattern)` method has been added to subscribe to a regular expression with the new Consumer rebalance protocol. With this method, the regular expression uses the RE2J format and is now evaluated on the server side. To be notified of assignment changes, register a `RebalanceListener` with `setRebalanceListener(RebalanceListener)`. The `subscribe(SubscriptionPattern, ConsumerRebalanceListener)` variant is deprecated since 4.4 and will be removed in a future major release.
 
 New metrics have been added to the Consumer when using the new rebalance protocol, mainly providing visibility over the improved threading model. See [New Consumer Metrics](https://cwiki.apache.org/confluence/x/lQ_TEg).
 
