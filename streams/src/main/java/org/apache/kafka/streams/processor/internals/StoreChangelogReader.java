@@ -224,7 +224,23 @@ public class StoreChangelogReader implements ChangelogReader {
     // Ceiling per window, so polls that return without waiting cannot spin the probe.
     private static final int PROBE_MAX_POLLS = 30;
 
+    // How long a partition whose probe fell back is left alone. A task corrupted, wiped and
+    // re-registered in a loop would otherwise probe on every iteration; this bounds it to one probe
+    // per partition per interval. Only a probe that failed arms it, so a probe that was working is
+    // never suppressed -- suppressing that would sustain the very loop this guards against.
+    private static final Duration PROBE_RETRY_BACKOFF = Duration.ofSeconds(60);
+
+    // Without a bound the offset lookups inherit default.api.timeout.ms, which is minutes, and the
+    // probe is an optimisation that must not hold the restore thread that long. Generous, because
+    // expiry sends every windowed partition in the batch to log start: the bound is here to cap a
+    // stall, not to react to a slow broker.
+    private static final Duration OFFSET_LOOKUP_TIMEOUT = Duration.ofSeconds(60);
+
     private ChangelogReaderState state;
+
+    // deliberately outlives unregister: a changelog that is corrupted and re-registered in a loop
+    // must not forget that probing it has just failed
+    private final Map<TopicPartition, Long> probeFailedAtMs = new HashMap<>();
 
     private final Time time;
     private final Logger log;
@@ -1142,7 +1158,7 @@ public class StoreChangelogReader implements ChangelogReader {
                     partition, currentOffset, recordEndOffset(endOffset));
             } else {
                 final long retentionPeriod = storeMetadata.retentionPeriod();
-                if (retentionPeriod > 0 && retentionPeriod != Long.MAX_VALUE) {
+                if (retentionPeriod > 0 && retentionPeriod != Long.MAX_VALUE && probeIsDue(partition)) {
                     newWindowedPartitionsRetention.put(partition, retentionPeriod);
                 } else {
                     final StateStore store = storeMetadata.store();
@@ -1219,9 +1235,9 @@ public class StoreChangelogReader implements ChangelogReader {
                 restoreConsumer.resume(windowedPartitionsRetention.keySet());
 
                 final Map<TopicPartition, Long> endOffsets =
-                    restoreConsumer.endOffsets(windowedPartitionsRetention.keySet());
+                    restoreConsumer.endOffsets(windowedPartitionsRetention.keySet(), OFFSET_LOOKUP_TIMEOUT);
                 final Map<TopicPartition, Long> beginningOffsets =
-                    restoreConsumer.beginningOffsets(windowedPartitionsRetention.keySet());
+                    restoreConsumer.beginningOffsets(windowedPartitionsRetention.keySet(), OFFSET_LOOKUP_TIMEOUT);
 
                 for (final TopicPartition partition : windowedPartitionsRetention.keySet()) {
                     final Long endOffset = endOffsets.get(partition);
@@ -1288,7 +1304,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
         if (!seekTimestamps.isEmpty()) {
             final Map<TopicPartition, OffsetAndTimestamp> offsetsByTimestamp =
-                restoreConsumer.offsetsForTimes(seekTimestamps);
+                restoreConsumer.offsetsForTimes(seekTimestamps, OFFSET_LOOKUP_TIMEOUT);
             offsetsByTimestamp.forEach((partition, offsetAndTimestamp) -> {
                 if (offsetAndTimestamp != null) {
                     restoreConsumer.seek(partition, offsetAndTimestamp.offset());
@@ -1297,6 +1313,20 @@ public class StoreChangelogReader implements ChangelogReader {
                 }
             });
         }
+
+        for (final TopicPartition partition : windowedPartitionsRetention.keySet()) {
+            if (seekToBeginningPartitions.contains(partition)) {
+                probeFailedAtMs.put(partition, time.milliseconds());
+            } else {
+                probeFailedAtMs.remove(partition);
+            }
+        }
+    }
+
+    /** A partition whose probe just fell back is left alone until the backoff expires. */
+    private boolean probeIsDue(final TopicPartition partition) {
+        final Long failedAt = probeFailedAtMs.get(partition);
+        return failedAt == null || time.milliseconds() - failedAt >= PROBE_RETRY_BACKOFF.toMillis();
     }
 
     @Override

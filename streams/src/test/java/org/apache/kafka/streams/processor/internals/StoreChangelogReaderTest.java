@@ -1610,7 +1610,7 @@ public class StoreChangelogReaderTest {
             final StateStore store = mock(StateStore.class);
             when(meta.changelogPartition()).thenReturn(tps[i]);
             when(meta.store()).thenReturn(store);
-            when(meta.offset()).thenReturn(null);          // no checkpoint
+            when(meta.offset()).thenReturn(null, 0L);   // no checkpoint, then a value once restoring          // no checkpoint
             when(meta.retentionPeriod()).thenReturn(shortRetentionMs);
             when(store.name()).thenReturn(storeName);
             when(manager.storeMetadata(tps[i])).thenReturn(meta);
@@ -1623,12 +1623,7 @@ public class StoreChangelogReaderTest {
         for (int i = 0; i < numPartitions; i++) {
             probeTasks.put(new TaskId(0, i), mock(Task.class));
         }
-        try {
-            probeReader.restore(probeTasks);
-        } catch (final StreamsException e) {
-            // the seek under test is already made by now; the mocked state manager never advances
-            // storeMetadata.offset(), so applying batches NPEs afterwards
-        }
+        probeReader.restore(probeTasks);
 
         assertEquals(Collections.emptySet(), seekedToBeginning,
             "every partition has a 3s retention against a 100k-record log, so the optimisation "
@@ -1704,7 +1699,7 @@ public class StoreChangelogReaderTest {
             final StateStore store = mock(StateStore.class);
             when(meta.changelogPartition()).thenReturn(tps[i]);
             when(meta.store()).thenReturn(store);
-            when(meta.offset()).thenReturn(null);
+            when(meta.offset()).thenReturn(null, 0L);   // no checkpoint, then a value once restoring
             when(meta.retentionPeriod()).thenReturn(shortRetentionMs);
             when(store.name()).thenReturn(storeName);
             when(manager.storeMetadata(tps[i])).thenReturn(meta);
@@ -1717,11 +1712,7 @@ public class StoreChangelogReaderTest {
         for (int i = 0; i < numPartitions; i++) {
             probeTasks.put(new TaskId(0, i), mock(Task.class));
         }
-        try {
-            probeReader.restore(probeTasks);
-        } catch (final StreamsException e) {
-            // see the test above
-        }
+        probeReader.restore(probeTasks);
 
         assertEquals(Collections.emptySet(), seekedToBeginning,
             "every partition answered the probe, just not all in the same poll; these were "
@@ -1797,7 +1788,7 @@ public class StoreChangelogReaderTest {
             final StateStore store = mock(StateStore.class);
             when(meta.changelogPartition()).thenReturn(tps[i]);
             when(meta.store()).thenReturn(store);
-            when(meta.offset()).thenReturn(null);
+            when(meta.offset()).thenReturn(null, 0L);   // no checkpoint, then a value once restoring
             when(meta.retentionPeriod()).thenReturn(shortRetentionMs);
             when(store.name()).thenReturn(storeName);
             when(manager.storeMetadata(tps[i])).thenReturn(meta);
@@ -1810,11 +1801,7 @@ public class StoreChangelogReaderTest {
         for (int i = 0; i < numPartitions; i++) {
             probeTasks.put(new TaskId(0, i), mock(Task.class));
         }
-        try {
-            probeReader.restore(probeTasks);
-        } catch (final StreamsException e) {
-            // see the tests above
-        }
+        probeReader.restore(probeTasks);
 
         assertEquals(Collections.emptySet(), seekedToBeginning,
             "no time passed while those polls came back empty, so none of them waited on a fetch; "
@@ -1896,7 +1883,7 @@ public class StoreChangelogReaderTest {
             final StateStore store = mock(StateStore.class);
             when(meta.changelogPartition()).thenReturn(tps[i]);
             when(meta.store()).thenReturn(store);
-            when(meta.offset()).thenReturn(null);
+            when(meta.offset()).thenReturn(null, 0L);   // no checkpoint, then a value once restoring
             when(meta.retentionPeriod()).thenReturn(shortRetentionMs);
             when(store.name()).thenReturn(storeName);
             when(manager.storeMetadata(tps[i])).thenReturn(meta);
@@ -1909,15 +1896,130 @@ public class StoreChangelogReaderTest {
         for (int i = 0; i < numPartitions; i++) {
             probeTasks.put(new TaskId(0, i), mock(Task.class));
         }
-        try {
-            probeReader.restore(probeTasks);
-        } catch (final StreamsException e) {
-            // see the tests above
-        }
+        probeReader.restore(probeTasks);
 
         assertEquals(Collections.emptySet(), seekedToBeginning,
             "the consumer was not ready to answer for 1.2s, which is inside the window the probe "
                 + "owes before it may conclude anything; these were abandoned early");
+    }
+
+    /**
+     * A task corrupted, wiped and re-registered with no offset would otherwise pay a full probe on
+     * every iteration. A probe that fell back is left alone until the backoff expires, which bounds
+     * a loop to one probe per interval without suppressing a probe that was working.
+     */
+    @Test
+    public void shouldBackOffProbingAPartitionWhoseProbeJustFailed() {
+        final long retentionMs = Duration.ofSeconds(3).toMillis();
+        final long endOffset = 1_000L;
+        final int[] probeRounds = {0};
+
+        final MockConsumer<byte[], byte[]> probeConsumer =
+            new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+                @Override
+                public synchronized Map<TopicPartition, Long> beginningOffsets(final Collection<TopicPartition> partitions) {
+                    probeRounds[0]++;      // only the probe looks these up
+                    return super.beginningOffsets(partitions);
+                }
+            };
+        probeConsumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
+        probeConsumer.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        // no records are ever scheduled, so no window can answer and every probe falls back
+
+        final StoreChangelogReader probeReader = new StoreChangelogReader(
+            time, config, logContext, adminClient, probeConsumer, callback, standbyListener);
+
+        final TaskId probeTaskId = new TaskId(0, 0);
+        final Map<TaskId, Task> probeTasks = Collections.singletonMap(probeTaskId, mock(Task.class));
+
+        for (int round = 0; round < 5; round++) {
+            registerRestoreAndRevoke(probeReader, probeTaskId, probeTasks, retentionMs);
+        }
+        assertEquals(1, probeRounds[0],
+            "the probe fell back, so re-registering in a loop should not probe again");
+
+        time.sleep(Duration.ofSeconds(60).toMillis());     // PROBE_RETRY_BACKOFF
+        registerRestoreAndRevoke(probeReader, probeTaskId, probeTasks, retentionMs);
+        assertEquals(2, probeRounds[0],
+            "once the backoff expires the partition is probed again, so a transient failure does "
+                + "not disable the optimisation for good");
+    }
+
+    private void registerRestoreAndRevoke(final StoreChangelogReader probeReader,
+                                          final TaskId probeTaskId,
+                                          final Map<TaskId, Task> probeTasks,
+                                          final long retentionMs) {
+        final StateStoreMetadata meta = mock(StateStoreMetadata.class);
+        final ProcessorStateManager manager = mock(ProcessorStateManager.class);
+        final StateStore store = mock(StateStore.class);
+        when(meta.changelogPartition()).thenReturn(tp);
+        when(meta.store()).thenReturn(store);
+        when(meta.offset()).thenReturn(null, 0L);
+        when(meta.retentionPeriod()).thenReturn(retentionMs);
+        when(store.name()).thenReturn(storeName);
+        when(manager.storeMetadata(tp)).thenReturn(meta);
+        when(manager.taskType()).thenReturn(ACTIVE);
+        when(manager.taskId()).thenReturn(probeTaskId);
+
+        probeReader.register(tp, manager);
+        probeReader.restore(probeTasks);
+        probeReader.unregister(Collections.singleton(tp));
+    }
+
+    /**
+     * Only a probe that fell back arms the backoff. Suppressing a probe that was working would send
+     * the next restore to log start, which is what gets a partition lapped and corrupted in the
+     * first place -- the guard would sustain the loop it exists to bound.
+     */
+    @Test
+    public void shouldNotBackOffAfterAProbeThatSucceeded() {
+        final long retentionMs = Duration.ofSeconds(3).toMillis();
+        final long endOffset = 1_000L;
+        final int[] probeRounds = {0};
+
+        final MockConsumer<byte[], byte[]> probeConsumer =
+            new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+                @Override
+                public synchronized Map<TopicPartition, Long> beginningOffsets(final Collection<TopicPartition> partitions) {
+                    probeRounds[0]++;
+                    return super.beginningOffsets(partitions);
+                }
+
+                @Override
+                public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(
+                        final Map<TopicPartition, Long> timestampsToSearch) {
+                    final Map<TopicPartition, OffsetAndTimestamp> result = new HashMap<>();
+                    timestampsToSearch.forEach((k, v) -> result.put(k, new OffsetAndTimestamp(1L, v)));
+                    return result;
+                }
+            };
+        probeConsumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
+        probeConsumer.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+
+        for (int round = 0; round < 40; round++) {
+            probeConsumer.schedulePollTask(() -> {
+                if (probeConsumer.assignment().contains(tp)) {
+                    probeConsumer.addRecord(new ConsumerRecord<>(
+                        tp.topic(), tp.partition(), endOffset - 1, 10_000_000L, TimestampType.CREATE_TIME,
+                        0, 0, new byte[0], new byte[0], new RecordHeaders(), Optional.empty()));
+                }
+            });
+        }
+
+        final StoreChangelogReader probeReader = new StoreChangelogReader(
+            time, config, logContext, adminClient, probeConsumer, callback, standbyListener);
+
+        final TaskId probeTaskId = new TaskId(0, 0);
+        final Map<TaskId, Task> probeTasks = Collections.singletonMap(probeTaskId, mock(Task.class));
+
+        // back to back, with no time passing at all
+        registerRestoreAndRevoke(probeReader, probeTaskId, probeTasks, retentionMs);
+        registerRestoreAndRevoke(probeReader, probeTaskId, probeTasks, retentionMs);
+
+        assertEquals(2, probeRounds[0],
+            "the probe answered, so nothing should be held back on the next registration");
     }
 
     /**
@@ -1971,7 +2073,7 @@ public class StoreChangelogReaderTest {
         final StateStore store = mock(StateStore.class);
         when(meta.changelogPartition()).thenReturn(tp);
         when(meta.store()).thenReturn(store);
-        when(meta.offset()).thenReturn(null);
+        when(meta.offset()).thenReturn(null, 0L);   // no checkpoint, then a value once restoring
         when(meta.retentionPeriod()).thenReturn(retentionMs);
         when(store.name()).thenReturn(storeName);
         when(manager.storeMetadata(tp)).thenReturn(meta);
@@ -1979,11 +2081,7 @@ public class StoreChangelogReaderTest {
         when(manager.taskId()).thenReturn(probeTaskId);
         probeReader.register(tp, manager);
 
-        try {
-            probeReader.restore(Collections.singletonMap(probeTaskId, mock(Task.class)));
-        } catch (final StreamsException e) {
-            // see the tests above
-        }
+        probeReader.restore(Collections.singletonMap(probeTaskId, mock(Task.class)));
 
         assertEquals(newest - retentionMs, requested.get(tp).longValue(),
             "the seek must be derived from the newest timestamp in the window (" + newest
