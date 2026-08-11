@@ -410,9 +410,9 @@ public class RecordAccumulator {
     }
 
     /**
-     * What is left of {@code deadlineMs} to wait for memory, never negative. An acquire given this rather than
-     * the raw {@code max.block.ms} has the time already spent retrying counted against its wait. Reads the
-     * clock, not a cached {@code nowMs}, which retries that acquired nothing never refresh.
+     * What is left of {@code deadlineMs} to wait for memory. An acquire given this rather than the raw
+     * {@code max.block.ms} has the time already spent retrying counted against its wait. Reads the clock, not a
+     * cached {@code nowMs}, which retries that acquired nothing never refresh.
      * <p>
      * Only {@link ChunkedRecordAccumulator#append} uses it so far; {@link #append} still passes the raw value.
      */

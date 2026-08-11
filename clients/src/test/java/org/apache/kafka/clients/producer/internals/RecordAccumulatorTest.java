@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.NodeApiVersions;
+import org.apache.kafka.clients.producer.BufferExhaustedException;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
@@ -28,6 +29,8 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -84,6 +87,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -1554,6 +1558,59 @@ public class RecordAccumulatorTest {
         Map<Integer, List<ProducerBatch>> batches = accum.drain(metadataCache,
             Set.of(node2), 999999 /* maxSize */, time.milliseconds());
         assertTrue(batches.get(node2.id()).isEmpty());
+    }
+
+    /**
+     * The retry policy that bounds an append loop, on its own and without the interleavings needed to reach
+     * each branch through append: the first pass and one pass past the deadline are free, passes inside the
+     * deadline are always free, and giving up reports the cause of the pass that gave up.
+     */
+    @Test
+    public void testRetryPolicy() {
+        RecordAccumulator accum = createTestRecordAccumulator(1024, 10 * 1024, Compression.NONE, 0);
+        try {
+            RecordAccumulator.AppendAttemptState firstAttempt = RecordAccumulator.AppendAttemptState.FIRST_ATTEMPT;
+            RecordAccumulator.AppendAttemptState retrying = RecordAccumulator.AppendAttemptState.RETRYING;
+            RecordAccumulator.AppendAttemptState expired = RecordAccumulator.AppendAttemptState.RETRIES_EXPIRED;
+            long spent = time.milliseconds();            // a deadline that has already passed
+            long open = time.milliseconds() + 1000;      // and one that has not
+
+            // The first pass may always run, whether or not there is time left.
+            assertEquals(retrying, accum.throwIfNoMoreRetriesAllowed(firstAttempt, spent, false, topic));
+            assertEquals(retrying, accum.throwIfNoMoreRetriesAllowed(firstAttempt, open, false, topic));
+
+            // Inside the deadline a retry is free and stays a retry, so the free pass is still in hand.
+            assertEquals(retrying, accum.throwIfNoMoreRetriesAllowed(retrying, open, false, topic));
+
+            // Past the deadline, exactly one more pass.
+            assertEquals(expired, accum.throwIfNoMoreRetriesAllowed(retrying, spent, false, topic));
+
+            // And then it gives up, reporting the cause the last pass hit.
+            TimeoutException timeout = assertThrows(TimeoutException.class,
+                    () -> accum.throwIfNoMoreRetriesAllowed(expired, spent, false, topic));
+            assertEquals(TimeoutException.class, timeout.getClass(), timeout.getMessage());
+            assertTrue(timeout.getMessage().contains("kept restarting"), timeout.getMessage());
+
+            KafkaMetric exhausted = metrics.metric(metrics.metricName("buffer-exhausted-total", "producer-metrics"));
+            assertEquals(0.0, (double) exhausted.metricValue(), "a timeout is not a buffer-exhausted drop");
+
+            // A pass the pool refused is the only one reported as exhaustion, and it is the incremental
+            // strategy's extension acquire that reaches this; pinned here because the policy decides it.
+            BufferExhaustedException denied = assertThrows(BufferExhaustedException.class,
+                    () -> accum.throwIfNoMoreRetriesAllowed(expired, spent, true, topic));
+            assertTrue(denied.getMessage().contains("Failed to allocate memory for a record"), denied.getMessage());
+            assertEquals(1.0, (double) exhausted.metricValue(),
+                    "giving up on a pass the pool refused must count the dropped record");
+        } finally {
+            accum.close();
+        }
+    }
+
+    @Test
+    public void testAppendDeadline() {
+        assertEquals(Long.MAX_VALUE, RecordAccumulator.appendDeadlineMs(1000L, Long.MAX_VALUE));
+        assertEquals(1500L, RecordAccumulator.appendDeadlineMs(1000L, 500L));
+        assertEquals(1000L, RecordAccumulator.appendDeadlineMs(1000L, 0L));
     }
 
     private int prepareSplitBatches(RecordAccumulator accum, long seed, int recordSize, int numRecords)
