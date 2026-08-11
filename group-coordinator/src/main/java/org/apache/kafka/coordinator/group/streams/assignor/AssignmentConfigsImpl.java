@@ -43,8 +43,7 @@ public record AssignmentConfigsImpl(
      */
     public static final AssignmentConfigsImpl DEFAULT = new AssignmentConfigsImpl(
         GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT,
-        // The parsed form of STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT, which ConfigDef spells as "".
-        List.of()
+        parseRackAwareAssignmentTags(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT)
     );
 
     public AssignmentConfigsImpl {
@@ -61,15 +60,22 @@ public record AssignmentConfigsImpl(
         if (configs.isEmpty()) {
             return DEFAULT;
         }
-        // The rack-aware assignment tags are only set when any are configured, and are joined from values that
-        // ConfigDef has already validated to be non-empty and free of surrounding whitespace.
-        String rackAwareAssignmentTags = configs.get(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
+        // The rack-aware assignment tags are only recorded when any are configured, so an absent value means the
+        // configuration is at its default.
+        String rackAwareAssignmentTags = configs.getOrDefault(
+            RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT);
         return new AssignmentConfigsImpl(
             Integer.parseInt(configs.get(NUM_STANDBY_REPLICAS_CONFIG)),
-            rackAwareAssignmentTags == null
-                ? List.of()
-                : List.of(rackAwareAssignmentTags.split(","))
+            parseRackAwareAssignmentTags(rackAwareAssignmentTags)
         );
+    }
+
+    /**
+     * Parses a recorded rack-aware assignment tags value, the way {@link org.apache.kafka.common.config.ConfigDef}
+     * parses a {@code LIST} configuration: an empty value is an empty list, not a list holding an empty string.
+     */
+    private static List<String> parseRackAwareAssignmentTags(String rackAwareAssignmentTags) {
+        return rackAwareAssignmentTags.isEmpty() ? List.of() : List.of(rackAwareAssignmentTags.split(","));
     }
 
     /**

@@ -23,6 +23,7 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TopologyDescriber;
+import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 
 import java.util.Map;
 import java.util.Map.Entry;
@@ -32,7 +33,7 @@ public class MockTaskAssignor implements TaskAssignor {
 
     private final String name;
     private GroupAssignment preparedGroupAssignment = null;
-    private AssignmentConfigs assignmentConfigs = null;
+    private AssignmentConfigs assignmentConfigs = AssignmentConfigsImpl.DEFAULT;
 
     public MockTaskAssignor(String name) {
         this.name = name;
