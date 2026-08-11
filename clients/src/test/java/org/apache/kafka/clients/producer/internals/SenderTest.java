@@ -26,6 +26,7 @@ import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NodeApiVersions;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.InvalidRecordException;
@@ -98,6 +99,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InOrder;
 
 import java.nio.ByteBuffer;
@@ -119,7 +121,10 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Stream;
 
+import static org.apache.kafka.clients.producer.ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL;
+import static org.apache.kafka.clients.producer.ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL;
 import static org.apache.kafka.clients.producer.internals.ProducerTestUtils.runUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -546,16 +551,16 @@ public class SenderTest {
         }
     }
 
-    @Test
-    public void testNodeLatencyStats() throws Exception {
+    @ParameterizedTest
+    @MethodSource("allocationStrategies")
+    public void testNodeLatencyStats(String allocationStrategy) throws Exception {
         try (Metrics m = new Metrics()) {
             // Create a new record accumulator with non-0 partitionAvailabilityTimeoutMs
             // otherwise it wouldn't update the stats.
             RecordAccumulator.PartitionerConfig config = new RecordAccumulator.PartitionerConfig(false, 42, false, "");
             long totalSize = 1024 * 1024;
-            accumulator = new RecordAccumulator(logContext, batchSize, Compression.NONE, 0, 0L, 0L,
-                DELIVERY_TIMEOUT_MS, config, m, "producer-metrics", time, null,
-                new BufferPool(totalSize, batchSize, m, time, "producer-internal-metrics"));
+            accumulator = createAccumulator(allocationStrategy, config, 0L, 0L, m, "producer-metrics",
+                createBufferPool(allocationStrategy, totalSize, m, "producer-internal-metrics"));
 
             SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
             apiVersions.update("0", NodeApiVersions.create(ApiKeys.PRODUCE.id, ApiKeys.PRODUCE.oldestVersion(), ApiKeys.PRODUCE.latestVersion()));
@@ -3308,21 +3313,19 @@ public class SenderTest {
         }
     }
 
-    @Test
-    public void testProducerBatchRetriesWhenPartitionLeaderChanges() throws Exception {
+    @ParameterizedTest
+    @MethodSource("allocationStrategies")
+    public void testProducerBatchRetriesWhenPartitionLeaderChanges(String allocationStrategy) throws Exception {
         Metrics m = new Metrics();
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
         try {
             // SETUP
             String metricGrpName = "producer-metrics-test-stats-1";
             long totalSize = 1024 * 1024;
-            BufferPool pool = new BufferPool(totalSize, batchSize, metrics, time,
-                metricGrpName);
+            BufferPool pool = createBufferPool(allocationStrategy, totalSize, metrics, metricGrpName);
             long retryBackoffMaxMs = 100L;
-            // lingerMs is 0 to send batch as soon as any records are available on it.
-            this.accumulator = new RecordAccumulator(logContext, batchSize,
-                Compression.NONE, 0, 10L, retryBackoffMaxMs,
-                DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, null, pool);
+            this.accumulator = createAccumulator(allocationStrategy, new RecordAccumulator.PartitionerConfig(),
+                10L, retryBackoffMaxMs, metrics, metricGrpName, pool);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false,
                 MAX_REQUEST_SIZE, ACKS_ALL,
                 10, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null);
@@ -3421,8 +3424,9 @@ public class SenderTest {
      * Test the scenario that FetchResponse returns NOT_LEADER_OR_FOLLOWER, indicating change in leadership, but it
      * does not contain new leader info(defined in KIP-951).
      */
-    @Test
-    public void testWhenProduceResponseReturnsWithALeaderShipChangeErrorButNoNewLeaderInformation()
+    @ParameterizedTest
+    @MethodSource("allocationStrategies")
+    public void testWhenProduceResponseReturnsWithALeaderShipChangeErrorButNoNewLeaderInformation(String allocationStrategy)
         throws InterruptedException {
         // Setup 3 partitions, tp0 & tp1 return with NOT_LEADER_OR_FOLLOWER, tp2 doesn't return an error.
         Metrics m = new Metrics();
@@ -3431,13 +3435,10 @@ public class SenderTest {
             // SETUP
             String metricGrpName = "producer-metrics-test-stats-1";
             long totalSize = 1024 * 1024;
-            BufferPool pool = new BufferPool(totalSize, batchSize, metrics, time,
-                metricGrpName);
+            BufferPool pool = createBufferPool(allocationStrategy, totalSize, metrics, metricGrpName);
             long retryBackoffMaxMs = 100L;
-            // lingerMs is 0 to send batch as soon as any records are available on it.
-            this.accumulator = new RecordAccumulator(logContext, batchSize,
-                Compression.NONE, 0, 10L, retryBackoffMaxMs,
-                DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, null, pool);
+            this.accumulator = createAccumulator(allocationStrategy, new RecordAccumulator.PartitionerConfig(),
+                10L, retryBackoffMaxMs, metrics, metricGrpName, pool);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false,
                 MAX_REQUEST_SIZE, ACKS_ALL,
                 10, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null);
@@ -3501,8 +3502,9 @@ public class SenderTest {
      * Test the scenario that FetchResponse returns NOT_LEADER_OR_FOLLOWER, indicating change in leadership, along with
      * new leader info(defined in KIP-951).
      */
-    @Test
-    public void testWhenProduceResponseReturnsWithALeaderShipChangeErrorAndNewLeaderInformation()
+    @ParameterizedTest
+    @MethodSource("allocationStrategies")
+    public void testWhenProduceResponseReturnsWithALeaderShipChangeErrorAndNewLeaderInformation(String allocationStrategy)
         throws InterruptedException {
         // Setup 3 partitions, tp0 & tp1 return with NOT_LEADER_OR_FOLLOWER, tp2 doesn't return an error.
         Metrics m = new Metrics();
@@ -3511,13 +3513,10 @@ public class SenderTest {
             // SETUP
             String metricGrpName = "producer-metrics-test-stats-1";
             long totalSize = 1024 * 1024;
-            BufferPool pool = new BufferPool(totalSize, batchSize, metrics, time,
-                metricGrpName);
+            BufferPool pool = createBufferPool(allocationStrategy, totalSize, metrics, metricGrpName);
             long retryBackoffMaxMs = 100L;
-            // lingerMs is 0 to send batch as soon as any records are available on it.
-            this.accumulator = new RecordAccumulator(logContext, batchSize,
-                Compression.NONE, 0, 10L, retryBackoffMaxMs,
-                DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, null, pool);
+            this.accumulator = createAccumulator(allocationStrategy, new RecordAccumulator.PartitionerConfig(),
+                10L, retryBackoffMaxMs, metrics, metricGrpName, pool);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false,
                 MAX_REQUEST_SIZE, ACKS_ALL,
                 10, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null);
@@ -3816,6 +3815,26 @@ public class SenderTest {
 
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs) {
         return produceResponse(tp, offset, error, throttleTimeMs, -1L, null);
+    }
+
+    private static Stream<String> allocationStrategies() {
+        return Stream.of(BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL, BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL);
+    }
+
+    private BufferPool createBufferPool(String allocationStrategy, long totalSize, Metrics metrics, String metricGrpName) {
+        return allocationStrategy.equals(ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL)
+            ? new BufferPool(totalSize, 128, metrics, time, metricGrpName, BufferPool.AllocationMode.INCREMENTAL)
+            : new BufferPool(totalSize, batchSize, metrics, time, metricGrpName);
+    }
+
+    private RecordAccumulator createAccumulator(String allocationStrategy, RecordAccumulator.PartitionerConfig partitionerConfig,
+                                                long retryBackoffMs, long retryBackoffMaxMs, Metrics metrics,
+                                                String metricGrpName, BufferPool pool) {
+        return allocationStrategy.equals(ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL)
+            ? new ChunkedRecordAccumulator(logContext, batchSize, Compression.NONE, 0, retryBackoffMs, retryBackoffMaxMs,
+                DELIVERY_TIMEOUT_MS, partitionerConfig, metrics, metricGrpName, time, null, pool)
+            : new RecordAccumulator(logContext, batchSize, Compression.NONE, 0, retryBackoffMs, retryBackoffMaxMs,
+                DELIVERY_TIMEOUT_MS, partitionerConfig, metrics, metricGrpName, time, null, pool);
     }
 
     private TransactionManager createTransactionManager() {
