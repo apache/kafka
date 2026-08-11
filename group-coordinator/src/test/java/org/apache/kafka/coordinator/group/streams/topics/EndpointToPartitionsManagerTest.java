@@ -114,6 +114,36 @@ class EndpointToPartitionsManagerTest {
     }
 
     @Test
+    void testEndpointToPartitionsWithStandbyAndWarmupTasksInSameSubtopology() {
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(Uuid.randomUuid(), "Topic-A", 3)
+            .addTopic(Uuid.randomUuid(), "Topic-B", 3)
+            .build();
+
+        when(streamsGroupMember.assignedTasks()).thenReturn(
+            new TasksTupleWithEpochs(
+                mkTasksPerSubtopologyWithCommonEpoch(0, mkEntry("0", Set.of(0, 1, 2))),
+                mkTasksPerSubtopology(mkEntry("1", Set.of(0))),
+                mkTasksPerSubtopology(mkEntry("1", Set.of(1, 2)))
+            )
+        );
+        when(streamsGroup.configuredTopology()).thenReturn(Optional.of(configuredTopology));
+        SortedMap<String, ConfiguredSubtopology> configuredSubtopologyMap = new TreeMap<>();
+        configuredSubtopologyMap.put("0", configuredSubtopologyOne);
+        configuredSubtopologyMap.put("1", configuredSubtopologyTwo);
+        when(configuredTopology.subtopologies()).thenReturn(Optional.of(configuredSubtopologyMap));
+
+        StreamsGroupHeartbeatResponseData.EndpointToPartitions result =
+                EndpointToPartitionsManager.endpointToPartitions(streamsGroupMember, responseEndpoint, streamsGroup, new KRaftCoordinatorMetadataImage(metadataImage));
+
+        assertEquals(responseEndpoint, result.userEndpoint());
+        assertTopicPartitionsAssigned(result.activePartitions(), "Topic-A");
+        // The standby task and the warm-up tasks of subtopology 1 are merged into a single standby entry.
+        assertEquals(1, result.standbyPartitions().size());
+        assertTopicPartitionsAssigned(result.standbyPartitions(), "Topic-B");
+    }
+
+    @Test
     void testEndpointToPartitionsExcludesPartitionsMissingFromSmallerSourceTopic() {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(Uuid.randomUuid(), "Topic-A", 5)
