@@ -1902,6 +1902,7 @@ org.apache.kafka.streams.processor.internals.DefaultStreamPartitionerTest:
 - shouldReturnEmptyOptionalWhenSerializedKeyIsNull
 - shouldThrowUnsupportedOperationExceptionForDeprecatedMethod
 org.apache.kafka.streams.processor.internals.DefaultStreamsRebalanceListenerTest:
+- shouldDropStandbyAndWarmupForTaskThatIsAlsoAssignedAsActive
 - testOnAllTasksLost
 - testOnAllTasksLostRecordsMetrics
 - testOnAllTasksLostRecordsMetricsEvenWithException
