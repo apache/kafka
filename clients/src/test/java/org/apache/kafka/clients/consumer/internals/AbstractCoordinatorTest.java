@@ -324,6 +324,21 @@ public class AbstractCoordinatorTest {
     }
 
     @Test
+    public void testNoWakeupFromAsyncCoordinatorReadyOnRetriableError() {
+        setupCoordinator();
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.COORDINATOR_NOT_AVAILABLE));
+        consumerClient.wakeup();
+        // The async variation should not throw WakeupException
+        coordinator.ensureCoordinatorReadyAsync();
+
+        consumerClient.wakeup();
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.COORDINATOR_NOT_AVAILABLE));
+        assertThrows(WakeupException.class, () ->
+            coordinator.ensureCoordinatorReady(mockTime.timer(0))
+        );
+    }
+
+    @Test
     public void testTimeoutAndRetryJoinGroupIfNeeded() throws Exception {
         setupCoordinator();
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));

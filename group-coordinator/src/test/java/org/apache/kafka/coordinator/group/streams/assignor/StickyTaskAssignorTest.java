@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -1305,6 +1306,58 @@ public class StickyTaskAssignorTest {
         assertTrue(member1TotalTasks <= 2, "Member1 should have <= 2 total tasks (quota), but has " + member1TotalTasks);
     }
 
+
+    @Test
+    public void shouldAssignStandbyToPreviousStandbyThatDoesNotHoldTheActiveTask() {
+        // starting assignment [active] [standby]:
+        //   member1/process1: [] [2]
+        //   member2/process2: [0] [2]
+        //   member3/process3: [1] []
+        //   member4/process4: [] []
+        //
+        // active 0,1 stay on their previous owner (stickiness)
+        // active 2 must go to member1/process1 as it has previous standby (standby->active promotion)
+        // -> it should not go to member2/process2 due to load balancing of active tasks
+        // standby 2 should stay on member2/process2 -> no reason to move it (load of member2 stays within capacity)
+        // standby 0,1: one *must* go to member4/process4 due to load balancing
+        // -> the other one can go anywhere but member2/process2 due to load balancing
+        //
+        // expected new assignment [active] [standby]
+        // ("expected" here means, based on the concrete implementation -- if this test fails with a different but
+        //  still correct result -- as laid out above --, we should just update the test)
+        //   member1/process1: [2] []
+        //   member2/process2: [0] [2]
+        //   member3/process3: [1] [0]
+        //   member4/process4: [] [1]
+        final Map<String, MemberMetadataAndStateImpl> members = new LinkedHashMap<>();
+        members.put("member1", createMemberMetadata("process1",
+            Map.of(), mkMap(mkEntry("test-subtopology", Set.of(2)))));
+        members.put("member2", createMemberMetadata("process2",
+            mkMap(mkEntry("test-subtopology", Set.of(0))), mkMap(mkEntry("test-subtopology", Set.of(2)))));
+        members.put("member3", createMemberMetadata("process3",
+            mkMap(mkEntry("test-subtopology", Set.of(1))), Map.of()));
+        members.put("member4", createMemberMetadata("process4"));
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, "1"))),
+            new TopologyDescriberImpl(3, true, List.of("test-subtopology"))
+        );
+
+        assertEquals(Set.of(2), getActiveTasks(result, "test-subtopology", "member1"));
+        // if this is not empty, but only hold standby 0 or 1, still correct
+        assertEquals(List.of(), getAllStandbyTaskIds(result, "member1"));
+
+        assertEquals(Set.of(0), getActiveTasks(result, "test-subtopology", "member2"));
+        assertEquals(List.of(2), getAllStandbyTaskIds(result, "member2"));
+
+        assertEquals(Set.of(1), getActiveTasks(result, "test-subtopology", "member3"));
+        // if this is empty, or hold standby 1 instead, still correct
+        assertEquals(List.of(0), getAllStandbyTaskIds(result, "member3"));
+
+        assertEquals(Set.of(), getActiveTasks(result, "test-subtopology", "member4"));
+        // if this hold standby 0, or both standby 0 and 1, still correct
+        assertEquals(List.of(1), getAllStandbyTaskIds(result, "member4"));
+    }
 
     private int getAllActiveTaskCount(GroupAssignment result, String... memberIds) {
         int size = 0;
