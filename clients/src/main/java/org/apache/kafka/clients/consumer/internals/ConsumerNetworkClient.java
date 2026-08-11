@@ -158,12 +158,26 @@ public class ConsumerNetworkClient implements Closeable {
     /**
      * Block waiting on the metadata refresh with a timeout.
      *
+     * @param timer Timer bounding how long this method can block
      * @return true if update succeeded, false otherwise.
+     * @throws WakeupException if {@link #wakeup()} is called from another thread
      */
     public boolean awaitMetadataUpdate(Timer timer) {
+        return awaitMetadataUpdate(timer, false);
+    }
+
+    /**
+     * Block waiting on the metadata refresh with a timeout.
+     *
+     * @param timer Timer bounding how long this method can block
+     * @param disableWakeup true if we should not check for wakeups, false otherwise
+     * @return true if update succeeded, false otherwise.
+     * @throws WakeupException if {@link #wakeup()} is called from another thread and `disableWakeup` is false
+     */
+    public boolean awaitMetadataUpdate(Timer timer, boolean disableWakeup) {
         int version = this.metadata.requestUpdate(false);
         do {
-            poll(timer);
+            poll(timer, null, disableWakeup);
         } while (this.metadata.updateVersion() == version && timer.notExpired());
         return this.metadata.updateVersion() > version;
     }
@@ -171,6 +185,8 @@ public class ConsumerNetworkClient implements Closeable {
     /**
      * Ensure our metadata is fresh (if an update is expected, this will block
      * until it has completed).
+     *
+     * @throws WakeupException if {@link #wakeup()} is called from another thread
      */
     boolean ensureFreshMetadata(Timer timer) {
         if (this.metadata.updateRequested() || this.metadata.timeToNextUpdate(timer.currentTimeMs()) == 0) {
@@ -248,6 +264,7 @@ public class ConsumerNetworkClient implements Closeable {
      * Poll for any network IO.
      * @param timer Timer bounding how long this method can block
      * @param pollCondition Nullable blocking condition
+     * @throws WakeupException if {@link #wakeup()} is called from another thread
      */
     public void poll(Timer timer, PollCondition pollCondition) {
         poll(timer, pollCondition, false);
@@ -258,6 +275,7 @@ public class ConsumerNetworkClient implements Closeable {
      * @param timer Timer bounding how long this method can block
      * @param pollCondition Nullable blocking condition
      * @param disableWakeup If TRUE disable triggering wake-ups
+     * @throws WakeupException if {@link #wakeup()} is called from another thread and `disableWakeup` is false
      */
     public void poll(Timer timer, PollCondition pollCondition, boolean disableWakeup) {
         // there may be handlers which need to be invoked if we woke up the previous call to poll
@@ -349,6 +367,7 @@ public class ConsumerNetworkClient implements Closeable {
      * @param node The node to await requests from
      * @param timer Timer bounding how long this method can block
      * @return true If all requests finished, false if the timeout expired first
+     * @throws WakeupException if {@link #wakeup()} is called from another thread
      */
     public boolean awaitPendingRequests(Node node, Timer timer) {
         while (hasPendingRequests(node) && timer.notExpired()) {

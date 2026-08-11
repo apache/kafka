@@ -700,6 +700,40 @@ class DynamicBrokerConfigTest {
   }
 
   @Test
+  def testMetricReportersAreConfiguredWithBothIdConfigs(): Unit = {
+    val nodeId = 0
+    val reporterName = classOf[TestConfigCapturingReporter].getName
+    // createBrokerConfig only sets node.id, so broker.id is only visible through the synonym mechanism
+    val origProps = TestUtils.createBrokerConfig(nodeId)
+    origProps.put(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, reporterName)
+
+    val config = KafkaConfig(origProps)
+    config.dynamicConfig.initialize(None)
+    val m = new DynamicMetricsReporters(nodeId, config, mock(classOf[Metrics]), "clusterId")
+    config.dynamicConfig.addReconfigurable(m)
+
+    def updateReporters(reporterNames: String): Unit = {
+      val props = new Properties()
+      props.put(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, reporterNames)
+      config.dynamicConfig.updateDefaultConfig(props)
+    }
+
+    def assertBothIdsArePassedAsStrings(): Unit = {
+      val configs = m.currentReporters(reporterName).asInstanceOf[TestConfigCapturingReporter].configs
+      assertEquals(nodeId.toString, configs.get(KRaftConfigs.NODE_ID_CONFIG))
+      assertEquals(nodeId.toString, configs.get(ServerConfigs.BROKER_ID_CONFIG))
+    }
+
+    assertBothIdsArePassedAsStrings()
+
+    // a dynamic update recreates the reporter with the parsed config values, where the ids are integers
+    updateReporters("")
+    assertTrue(m.currentReporters.isEmpty)
+    updateReporters(reporterName)
+    assertBothIdsArePassedAsStrings()
+  }
+
+  @Test
   def testDynamicLogLocalRetentionMsConfig(): Unit = {
     val props = TestUtils.createBrokerConfig(0, port = 8181)
     props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "2592000000")
@@ -1334,6 +1368,16 @@ class TestDynamicThreadPool extends BrokerReconfigurable {
     assertEquals(10, newConfig.numIoThreads)
     assertEquals(100, newConfig.backgroundThreads)
   }
+}
+
+class TestConfigCapturingReporter extends MetricsReporter {
+  var configs: util.Map[String, _] = _
+
+  override def configure(configs: util.Map[String, _]): Unit = this.configs = configs
+  override def init(metrics: util.List[KafkaMetric]): Unit = {}
+  override def metricChange(metric: KafkaMetric): Unit = {}
+  override def metricRemoval(metric: KafkaMetric): Unit = {}
+  override def close(): Unit = {}
 }
 
 class TestExporterOnly extends MetricsReporter with ClientTelemetryExporterProvider {

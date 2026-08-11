@@ -1323,7 +1323,7 @@ public class FetcherTest {
     public void testFetchDuringEagerRebalance() {
         buildFetcher();
 
-        subscriptions.subscribe(singleton(topicName), Optional.empty());
+        subscriptions.subscribe(singleton(topicName));
         subscriptions.assignFromSubscribed(singleton(tp0));
         subscriptions.seek(tp0, 0);
 
@@ -1347,7 +1347,7 @@ public class FetcherTest {
     public void testFetchDuringCooperativeRebalance() {
         buildFetcher();
 
-        subscriptions.subscribe(singleton(topicName), Optional.empty());
+        subscriptions.subscribe(singleton(topicName));
         subscriptions.assignFromSubscribed(singleton(tp0));
         subscriptions.seek(tp0, 0);
 

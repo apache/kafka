@@ -36,7 +36,7 @@ import org.apache.kafka.common.utils.internals.BufferSupplier
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.utils.internals.ConfigUtils
 import org.apache.kafka.network.SocketServer
-import org.apache.kafka.raft.KafkaRaftClient
+import org.apache.kafka.raft.{KRaftConfigs, KafkaRaftClient}
 import org.apache.kafka.server.{DynamicThreadPool, ProcessRole}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler}
 import org.apache.kafka.server.config.{BrokerReconfigurable => JBrokerReconfigurable, DynamicConfig, DynamicProducerStateManagerConfig, ServerConfigs, ServerLogConfigs, DynamicBrokerConfig => JDynamicBrokerConfig}
@@ -741,7 +741,11 @@ class DynamicMetricsReporters(brokerId: Int, config: KafkaConfig, metrics: Metri
 
 class DynamicMetricReporterState(brokerId: Int, config: KafkaConfig, metrics: Metrics, clusterId: String) {
   private[server] val dynamicConfig = config.dynamicConfig
-  private val propsOverride = Map[String, AnyRef](ServerConfigs.BROKER_ID_CONFIG -> brokerId.toString)
+  // broker.id will no longer be passed from 5.0 (KIP-1232).
+  private val propsOverride = Map[String, AnyRef](
+    ServerConfigs.BROKER_ID_CONFIG -> brokerId.toString,
+    KRaftConfigs.NODE_ID_CONFIG -> brokerId.toString
+  )
   private[server] val currentReporters = mutable.Map[String, MetricsReporter]()
   createReporters(config, clusterId, metricsReporterClasses(dynamicConfig.currentKafkaConfig.values()).asJava,
     Collections.emptyMap[String, Object])
