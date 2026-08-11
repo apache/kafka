@@ -1382,6 +1382,28 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
+    public void shouldNotStageRestoredRecordsInTransactionBuffer() {
+        rocksDBStore.close();
+        final InternalMockProcessorContext<?, ?> eosContext = getTransactionalEOSProcessorContext(dir);
+        rocksDBStore = getRocksDBStore();
+        rocksDBStore.init(eosContext, rocksDBStore);
+
+        // An empty RocksDB WriteBatch already reports a fixed header size, so the baseline is non-zero.
+        final long emptyBufferBytes = rocksDBStore.approximateNumUncommittedBytes();
+
+        final List<KeyValue<byte[], byte[]>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>("k1".getBytes(UTF_8), "v1".getBytes(UTF_8)));
+        entries.add(new KeyValue<>("k2".getBytes(UTF_8), "v2".getBytes(UTF_8)));
+        eosContext.restore(rocksDBStore.name(), entries);
+
+        assertEquals(emptyBufferBytes, rocksDBStore.approximateNumUncommittedBytes());
+        assertEquals("v1", stringDeserializer.deserialize(null, rocksDBStore.get(new Bytes("k1".getBytes(UTF_8)))));
+
+        rocksDBStore.put(new Bytes("k3".getBytes(UTF_8)), "v3".getBytes(UTF_8));
+        assertTrue(rocksDBStore.approximateNumUncommittedBytes() > emptyBufferBytes);
+    }
+
+    @Test
     public void readOnlyRangeAndAllShouldRespectIsolationLevel() {
         rocksDBStore.close();
         final InternalMockProcessorContext<?, ?> eosContext = getTransactionalEOSProcessorContext(dir);
