@@ -124,6 +124,8 @@ public class TaskExecutor {
         } finally {
             now = time.milliseconds();
             task.recordProcessBatchTime(now - then);
+            // record terminal e2e latency for the batch against this single end-of-batch time
+            task.maybeFlushTerminalE2ELatency(now);
         }
         return processed;
     }
