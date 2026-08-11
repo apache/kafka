@@ -133,9 +133,8 @@ import java.util.Collection;
  * }
  * </pre>
  *
- * @deprecated Since 4.4. Use {@link RebalanceListener} and register it via
- *             {@link Consumer#setRebalanceListener(RebalanceListener)} instead. This interface will be removed in a
- *             future major release.
+ * @deprecated Since 4.4, to be removed in Kafka 5.0. Use {@link RebalanceListener} and register it via
+ *             {@link Consumer#setRebalanceListener(RebalanceListener)} instead.
  * @see RebalanceListener
  * @see RebalanceConsumer
  */
