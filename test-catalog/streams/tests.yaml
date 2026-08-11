@@ -2741,6 +2741,7 @@ org.apache.kafka.streams.processor.internals.StoreChangelogReaderTest:
 - logicalChangelogEndOffsetsShouldReturnNullWhenBothSourcesUnknown
 - shouldCallRecordRestoreTimeAtTheEndOfRestore
 - shouldCheckCompletionIfPositionLargerThanEndOffset
+- shouldDecrementRemainingRecordsToZeroWithOffsetGaps
 - shouldInitializeChangelogAndCheckForCompletion
 - shouldNotCallRecordRestoreTimeIfRestoreDoesNotComplete
 - shouldNotRegisterSameStoreMultipleTimes
@@ -5637,6 +5638,7 @@ org.apache.kafka.streams.state.internals.PlainToHeadersWindowStoreAdapterTest:
 - shouldHandleWindowKeyQuerySuccessfully
 - shouldHandleWindowRangeQuerySuccessfully
 - shouldNotCollectExecutionInfoWhenNotRequested
+- shouldReportRetentionPeriodOfUnderlyingStore
 org.apache.kafka.streams.state.internals.PlainToHeadersWindowStoreIteratorAdapterTest:
 - shouldDelegateClose
 - shouldDelegatePeekNextKey
@@ -6928,6 +6930,7 @@ org.apache.kafka.streams.state.internals.SessionToHeadersStoreAdapterTest:
 - shouldFetchSessionAndStripHeaders
 - shouldPutNullValue
 - shouldPutWithEmptyHeaders
+- shouldReportRetentionPeriodOfUnderlyingStore
 - shouldReturnNullForNullFetchSession
 - shouldReturnNullFromRawAggregationValueForNull
 - shouldReturnPersistentTrue
@@ -7336,8 +7339,10 @@ org.apache.kafka.streams.state.internals.TimestampedToHeadersWindowStoreAdapterT
 - shouldHandleWindowKeyQuerySuccessfully
 - shouldHandleWindowRangeQuerySuccessfully
 - shouldNotCollectExecutionInfoWhenNotRequested
+- shouldReportRetentionPeriodOfUnderlyingStore
 org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilderTest:
 - shouldDisableCachingWithRetainDuplicates
+- shouldExposeRetentionPeriodThroughTimestampedAdapter
 - shouldHaveCachingAndChangeLoggingWhenBothEnabled
 - shouldHaveCachingStoreWhenEnabled
 - shouldHaveChangeLoggingStoreByDefault
@@ -7486,6 +7491,12 @@ org.apache.kafka.streams.state.internals.WindowStoreBuilderTest:
 - shouldThrowNullPointerIfTimeIsNull
 org.apache.kafka.streams.state.internals.WindowStoreFetchTest:
 - testStoreConfig
+org.apache.kafka.streams.state.internals.WithRetentionPeriodTest:
+- shouldNotConsultOuterLayersThatReportRetention
+- shouldResolveRetentionThroughWrappedStores
+- shouldReturnMinusOneWhenNoWrappedStoreReportsRetention
+- shouldReturnMinusOneWhenStoreDoesNotReportRetention
+- shouldReturnRetentionOfStoreThatReportsItDirectly
 org.apache.kafka.streams.state.internals.WrappingStoreProviderTest:
 - shouldDefaultToReadUncommittedWhenIsolationLevelNotSpecified
 - shouldFindKeyValueStores
