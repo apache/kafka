@@ -119,11 +119,6 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         SessionSchemaWithoutIndex
     }
     
-    /** Overridden by subclasses to exercise the transactional (staged-write) code path. */
-    boolean transactional() {
-        return false;
-    }
-
     @BeforeEach
     public void before() {
         if (getBaseSchema() instanceof TimeFirstSessionKeySchema) {
@@ -158,26 +153,13 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         bytesStore = getBytesStore();
 
         stateDir = TestUtils.tempDirectory();
-        if (transactional()) {
-            final Properties streamsProps = StreamsTestUtils.getStreamsConfig();
-            streamsProps.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
-            context = new InternalMockProcessorContext<>(
-                stateDir,
-                Serdes.String(),
-                Serdes.Long(),
-                new MockRecordCollector(),
-                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
-                new StreamsConfig(streamsProps)
-            );
-        } else {
-            context = new InternalMockProcessorContext<>(
-                stateDir,
-                Serdes.String(),
-                Serdes.Long(),
-                new MockRecordCollector(),
-                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
-            );
-        }
+        context = new InternalMockProcessorContext<>(
+            stateDir,
+            Serdes.String(),
+            Serdes.Long(),
+            new MockRecordCollector(),
+            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
+        );
         bytesStore.init(context, bytesStore);
     }
 
@@ -1216,9 +1198,6 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
         bytesStore.put(serializeKey(new Windowed<>(key, windows[3])), serializeValue(100L));
-        if (transactional()) {
-            bytesStore.commit(Collections.emptyMap());
-        }
         bytesStore.close();
 
         final String firstSegmentName = segments.segmentName(0);
@@ -1255,9 +1234,6 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
         bytesStore.put(serializeKey(new Windowed<>(key, windows[3])), serializeValue(100L));
-        if (transactional()) {
-            bytesStore.commit(Collections.emptyMap());
-        }
         bytesStore.close();
 
         final String firstSegmentName = segments.segmentName(0);
