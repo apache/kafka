@@ -409,7 +409,7 @@ public class KStreamRepartitionIntegrationTest {
                 @SuppressWarnings({"removal"})
                 @Override
                 public Optional<Set<Integer>> partitions(final String topic, final Integer key, final String value, final int numPartitions) {
-                    return Optional.empty();
+                    throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
                 }
 
                 @Override
