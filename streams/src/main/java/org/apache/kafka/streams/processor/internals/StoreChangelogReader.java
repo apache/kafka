@@ -1088,9 +1088,10 @@ public class StoreChangelogReader implements ChangelogReader {
                 }
                 windowedPartitionsRetention.keySet().removeAll(seekToBeginningPartitions);
 
-                final ConsumerRecords<byte[], byte[]> polledRecords = restoreConsumer.poll(pollTime);
+                final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> polledRecordsByPartition =
+                    pollWindowedPartitions(windowedPartitionsRetention.keySet(), endOffsets);
 
-                seekByRetentionFromPolledRecords(polledRecords, windowedPartitionsRetention, seekToBeginningPartitions);
+                seekByRetentionFromPolledRecords(polledRecordsByPartition, windowedPartitionsRetention, seekToBeginningPartitions);
             } catch (final TimeoutException e) {
                 log.debug("Could not seek by timestamp for changelog partitions {}, falling back to seek-to-beginning",
                     windowedPartitionsRetention.keySet(), e);
@@ -1116,14 +1117,48 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
-    private void seekByRetentionFromPolledRecords(final ConsumerRecords<byte[], byte[]> polledRecords,
+    private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> pollWindowedPartitions(
+        final Set<TopicPartition> windowedPartitions,
+        final Map<TopicPartition, Long> endOffsets) {
+        final ConsumerRecords<byte[], byte[]> polledRecords = restoreConsumer.poll(pollTime);
+        final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> polledRecordsByPartition = new HashMap<>();
+        final Set<TopicPartition> partitionsToRetry = new HashSet<>();
+
+        for (final TopicPartition partition : windowedPartitions) {
+            final List<ConsumerRecord<byte[], byte[]>> records = polledRecords.records(partition);
+            if (!records.isEmpty()) {
+                polledRecordsByPartition.put(partition, records);
+            } else {
+                final Long endOffset = endOffsets.get(partition);
+                if (endOffset != null && endOffset > 1) {
+                    // The record at endOffset - 1 may be a transaction control record, which is not
+                    // returned by the consumer. Retry at the preceding offset before giving up.
+                    restoreConsumer.seek(partition, endOffset - 2);
+                    partitionsToRetry.add(partition);
+                } else {
+                    polledRecordsByPartition.put(partition, Collections.emptyList());
+                }
+            }
+        }
+
+        if (!partitionsToRetry.isEmpty()) {
+            final ConsumerRecords<byte[], byte[]> retriedRecords = restoreConsumer.poll(pollTime);
+            for (final TopicPartition partition : partitionsToRetry) {
+                polledRecordsByPartition.put(partition, retriedRecords.records(partition));
+            }
+        }
+
+        return polledRecordsByPartition;
+    }
+
+    private void seekByRetentionFromPolledRecords(final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> polledRecords,
                                                    final Map<TopicPartition, Long> windowedPartitionsRetention,
                                                    final Set<TopicPartition> seekToBeginningPartitions) {
         final Map<TopicPartition, Long> seekTimestamps = new HashMap<>();
         for (final Map.Entry<TopicPartition, Long> entry : windowedPartitionsRetention.entrySet()) {
             final TopicPartition partition = entry.getKey();
             final long retentionPeriod = entry.getValue();
-            final List<ConsumerRecord<byte[], byte[]>> records = polledRecords.records(partition);
+            final List<ConsumerRecord<byte[], byte[]>> records = polledRecords.getOrDefault(partition, Collections.emptyList());
             if (!records.isEmpty()) {
                 final long latestTimestamp = records.get(0).timestamp();
                 final long seekTimestamp = latestTimestamp - retentionPeriod;

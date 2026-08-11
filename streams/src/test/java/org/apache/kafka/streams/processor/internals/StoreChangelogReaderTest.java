@@ -54,6 +54,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -1462,8 +1463,9 @@ public class StoreChangelogReaderTest {
         }
     }
 
-    @Test
-    public void shouldSeekByTimestampForWindowedStoreWithoutCheckpoint() {
+    @ParameterizedTest(name = "latest visible record offset {0}")
+    @ValueSource(longs = {98L, 99L})
+    public void shouldSeekByTimestampForWindowedStoreWithoutCheckpoint(final long latestRecordOffset) {
         final long retentionMs = Duration.ofHours(2).toMillis();
         final long offsetForTimestamp = 42L;
         final long latestRecordTimestamp = 10_000_000L;
@@ -1496,9 +1498,12 @@ public class StoreChangelogReaderTest {
         timestampConsumer.updateEndOffsets(Collections.singletonMap(tp, endOffset));
         adminClient.updateEndOffsets(Collections.singletonMap(tp, endOffset));
 
-        // schedule adding the record during poll, after the partition is assigned
+        // Offset 98 models the latest visible record when endOffset - 1 is a transaction control record,
+        // which the consumer filters out. Offset 99 covers the normal case where the latest record is
+        // visible at endOffset - 1.
+        // Schedule adding the record during poll, after the partition is assigned.
         timestampConsumer.schedulePollTask(() -> timestampConsumer.addRecord(new ConsumerRecord<>(
-            tp.topic(), tp.partition(), endOffset - 1,
+            tp.topic(), tp.partition(), latestRecordOffset,
             latestRecordTimestamp, TimestampType.CREATE_TIME,
             0, 0, new byte[0], new byte[0],
             new RecordHeaders(), Optional.empty())));
