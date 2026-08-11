@@ -19,6 +19,7 @@ package org.apache.kafka.metadata;
 
 import org.apache.kafka.clients.admin.ScramMechanism;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
+import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.util.MockRandom;
 
@@ -28,6 +29,7 @@ import org.junit.jupiter.api.Timeout;
 import java.util.List;
 import java.util.Random;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
@@ -144,6 +146,61 @@ public class ScramCredentialDataTest {
         // Test equals method for same instance
         assertEquals(data, data);
         assertEquals(data.hashCode(), data.hashCode());
+    }
+
+    @Test
+    public void testConstructorDefensivelyCopiesArrays() {
+        byte[] salt = {1, 2, 3};
+        byte[] storedKey = {4, 5, 6};
+        byte[] serverKey = {7, 8, 9};
+        ScramCredentialData data = new ScramCredentialData(salt, storedKey, serverKey, 4096);
+        int hashCode = data.hashCode();
+
+        salt[0] = 10;
+        storedKey[0] = 11;
+        serverKey[0] = 12;
+
+        assertArrayEquals(new byte[] {1, 2, 3}, data.salt());
+        assertArrayEquals(new byte[] {4, 5, 6}, data.storedKey());
+        assertArrayEquals(new byte[] {7, 8, 9}, data.serverKey());
+        assertEquals(hashCode, data.hashCode());
+    }
+
+    @Test
+    public void testAccessorsReturnCopies() {
+        ScramCredentialData data = new ScramCredentialData(
+            new byte[] {1, 2, 3}, new byte[] {4, 5, 6}, new byte[] {7, 8, 9}, 4096);
+        int hashCode = data.hashCode();
+
+        data.salt()[0] = 10;
+        data.storedKey()[0] = 11;
+        data.serverKey()[0] = 12;
+
+        assertArrayEquals(new byte[] {1, 2, 3}, data.salt());
+        assertArrayEquals(new byte[] {4, 5, 6}, data.storedKey());
+        assertArrayEquals(new byte[] {7, 8, 9}, data.serverKey());
+        assertEquals(hashCode, data.hashCode());
+    }
+
+    @Test
+    public void testConversionsDoNotExposeArrays() {
+        ScramCredentialData data = new ScramCredentialData(
+            new byte[] {1, 2, 3}, new byte[] {4, 5, 6}, new byte[] {7, 8, 9}, 4096);
+        UserScramCredentialRecord record = data.toRecord("alice", ScramMechanism.SCRAM_SHA_256);
+        ScramCredential credential = data.toCredential();
+        int hashCode = data.hashCode();
+
+        record.salt()[0] = 10;
+        record.storedKey()[0] = 11;
+        record.serverKey()[0] = 12;
+        credential.salt()[0] = 13;
+        credential.storedKey()[0] = 14;
+        credential.serverKey()[0] = 15;
+
+        assertArrayEquals(new byte[] {1, 2, 3}, data.salt());
+        assertArrayEquals(new byte[] {4, 5, 6}, data.storedKey());
+        assertArrayEquals(new byte[] {7, 8, 9}, data.serverKey());
+        assertEquals(hashCode, data.hashCode());
     }
 
     private void testRoundTrip(ScramCredentialData scramCredentialData) {

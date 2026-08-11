@@ -46,7 +46,10 @@ public record ScramImage(Map<ScramMechanism, Map<String, ScramCredentialData>> m
     public static final ScramImage EMPTY = new ScramImage(Map.of());
 
     public ScramImage {
-        mechanisms = Collections.unmodifiableMap(mechanisms);
+        Map<ScramMechanism, Map<String, ScramCredentialData>> copiedMechanisms = new HashMap<>();
+        mechanisms.forEach((mechanism, credentials) ->
+            copiedMechanisms.put(mechanism, Collections.unmodifiableMap(new HashMap<>(credentials))));
+        mechanisms = Collections.unmodifiableMap(copiedMechanisms);
     }
 
     public void write(ImageWriter writer, ImageWriterOptions options) {
