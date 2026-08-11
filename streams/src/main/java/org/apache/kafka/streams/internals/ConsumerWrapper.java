@@ -72,6 +72,7 @@ public abstract class ConsumerWrapper implements Consumer<byte[], byte[]> {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public void subscribe(final Collection<String> topics, final ConsumerRebalanceListener callback) {
         delegate.subscribe(topics, callback);
     }
@@ -86,6 +87,7 @@ public abstract class ConsumerWrapper implements Consumer<byte[], byte[]> {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public void subscribe(final Pattern pattern, final ConsumerRebalanceListener callback) {
         delegate.subscribe(pattern, callback);
     }
@@ -96,6 +98,7 @@ public abstract class ConsumerWrapper implements Consumer<byte[], byte[]> {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public void subscribe(final SubscriptionPattern pattern, final ConsumerRebalanceListener callback) {
         delegate.subscribe(pattern, callback);
     }

@@ -29,11 +29,11 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -658,13 +658,12 @@ public class EmbeddedKafkaCluster {
         return createConsumerAndSubscribeTo(consumerProps, null, topics);
     }
 
-    public KafkaConsumer<byte[], byte[]> createConsumerAndSubscribeTo(Map<String, Object> consumerProps, ConsumerRebalanceListener rebalanceListener, String... topics) {
+    public KafkaConsumer<byte[], byte[]> createConsumerAndSubscribeTo(Map<String, Object> consumerProps, RebalanceListener rebalanceListener, String... topics) {
         KafkaConsumer<byte[], byte[]> consumer = createConsumer(consumerProps);
         if (rebalanceListener != null) {
-            consumer.subscribe(List.of(topics), rebalanceListener);
-        } else {
-            consumer.subscribe(List.of(topics));
+            consumer.setRebalanceListener(rebalanceListener);
         }
+        consumer.subscribe(List.of(topics));
         return consumer;
     }
 

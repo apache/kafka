@@ -22,12 +22,12 @@ import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
@@ -353,7 +353,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private final Optional<String> groupInstanceID;
 
     private final ChangelogReader changelogReader;
-    private final ConsumerRebalanceListener rebalanceListener;
+    private final RebalanceListener rebalanceListener;
     private final Optional<DefaultStreamsRebalanceListener> defaultStreamsRebalanceListener;
     private final Consumer<byte[], byte[]> mainConsumer;
     private final Consumer<byte[], byte[]> restoreConsumer;
@@ -1186,7 +1186,8 @@ public class StreamThread extends Thread implements ProcessingThread {
                 throw new IllegalArgumentException("Pattern subscription is not yet supported with the Streams rebalance " +
                     "protocol");
             }
-            mainConsumer.subscribe(topologyMetadata.sourceTopicPattern(), rebalanceListener);
+            mainConsumer.setRebalanceListener(rebalanceListener);
+            mainConsumer.subscribe(topologyMetadata.sourceTopicPattern());
         } else {
             if (streamsRebalanceData.isPresent()) {
                 if (mainConsumer instanceof ConsumerWrapper) {
@@ -1201,7 +1202,8 @@ public class StreamThread extends Thread implements ProcessingThread {
                     );
                 }
             } else {
-                mainConsumer.subscribe(topologyMetadata.allFullSourceTopicNames(), rebalanceListener);
+                mainConsumer.setRebalanceListener(rebalanceListener);
+                mainConsumer.subscribe(topologyMetadata.allFullSourceTopicNames());
             }
         }
     }
@@ -2175,7 +2177,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         return numIterations;
     }
 
-    ConsumerRebalanceListener rebalanceListener() {
+    RebalanceListener rebalanceListener() {
         return rebalanceListener;
     }
 

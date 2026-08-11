@@ -163,6 +163,7 @@ public class DelegatingRebalanceConsumerTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testUnsupportedConsumerOperationsNeverInvokedOnDelegate() {
         when(delegate.assignment()).thenReturn(Set.of(TP0));
         when(delegate.position(TP0)).thenReturn(42L);

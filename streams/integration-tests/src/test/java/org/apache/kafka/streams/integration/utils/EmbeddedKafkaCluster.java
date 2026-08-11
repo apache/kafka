@@ -24,10 +24,10 @@ import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.ListTopicsOptions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -401,13 +401,12 @@ public class EmbeddedKafkaCluster {
         return createConsumerAndSubscribeTo(consumerProps, null, topics);
     }
 
-    public KafkaConsumer<byte[], byte[]> createConsumerAndSubscribeTo(final Map<String, Object> consumerProps, final ConsumerRebalanceListener rebalanceListener, final String... topics) {
+    public KafkaConsumer<byte[], byte[]> createConsumerAndSubscribeTo(final Map<String, Object> consumerProps, final RebalanceListener rebalanceListener, final String... topics) {
         final KafkaConsumer<byte[], byte[]> consumer = createConsumer(consumerProps);
         if (rebalanceListener != null) {
-            consumer.subscribe(Arrays.asList(topics), rebalanceListener);
-        } else {
-            consumer.subscribe(Arrays.asList(topics));
+            consumer.setRebalanceListener(rebalanceListener);
         }
+        consumer.subscribe(Arrays.asList(topics));
         return consumer;
     }
 

@@ -711,6 +711,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *                               configured at-least one partition assignment strategy
      */
     @Override
+    @SuppressWarnings("removal")
     public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
         delegate.subscribe(topics, listener);
     }
@@ -767,6 +768,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *                               configured at-least one partition assignment strategy
      */
     @Override
+    @SuppressWarnings("removal")
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
         delegate.subscribe(pattern, listener);
     }
@@ -822,6 +824,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *                                  previously (without a subsequent call to {@link #unsubscribe()}).
      */
     @Override
+    @SuppressWarnings("removal")
     public void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener listener) {
         delegate.subscribe(pattern, listener);
     }

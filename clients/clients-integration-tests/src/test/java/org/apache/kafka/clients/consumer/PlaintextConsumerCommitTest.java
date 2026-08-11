@@ -334,14 +334,14 @@ public class PlaintextConsumerCommitTest {
                 producer.send(new ProducerRecord<>(tp.topic(), tp.partition(), ("key " + i).getBytes(), ("value " + i).getBytes()));
             }
 
-            var rebalanceListener = new ConsumerRebalanceListener() {
+            var rebalanceListener = new RebalanceListener() {
                 @Override
-                public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                     // keep partitions paused in this test so that we can verify the commits based on specific seeks
                     consumer.pause(partitions);
                 }
                 @Override
-                public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                     // No-op
                 }
             };
@@ -448,26 +448,28 @@ public class PlaintextConsumerCommitTest {
         try (var consumer = createConsumer(groupProtocol, true)) {
             sendRecords(cluster, tp, 1000);
 
-            var rebalanceListener = new ConsumerRebalanceListener() {
+            var rebalanceListener = new RebalanceListener() {
                 @Override
-                public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                     // keep partitions paused in this test so that we can verify the commits based on specific seeks
                     consumer.pause(partitions);
                 }
 
                 @Override
-                public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
 
                 }
             };
 
-            consumer.subscribe(List.of(topic), rebalanceListener);
+            consumer.setRebalanceListener(rebalanceListener);
+            consumer.subscribe(List.of(topic));
             awaitAssignment(consumer, Set.of(tp, tp1));
 
             consumer.seek(tp, 300);
             consumer.seek(tp1, 500);
             // change subscription to trigger rebalance
-            consumer.subscribe(List.of(topic, topic2), rebalanceListener);
+            consumer.setRebalanceListener(rebalanceListener);
+            consumer.subscribe(List.of(topic, topic2));
 
             var newAssignment = Set.of(tp, tp1, new TopicPartition(topic2, 0), new TopicPartition(topic2, 1));
             awaitAssignment(consumer, newAssignment);
@@ -719,9 +721,10 @@ public class PlaintextConsumerCommitTest {
         Consumer<byte[], byte[]> consumer,
         List<String> topicsToSubscribe,
         Set<TopicPartition> expectedAssignment,
-        ConsumerRebalanceListener rebalanceListener
+        RebalanceListener rebalanceListener
     ) throws InterruptedException {
-        consumer.subscribe(topicsToSubscribe, rebalanceListener);
+        consumer.setRebalanceListener(rebalanceListener);
+        consumer.subscribe(topicsToSubscribe);
         awaitAssignment(consumer, expectedAssignment);
     }
 }

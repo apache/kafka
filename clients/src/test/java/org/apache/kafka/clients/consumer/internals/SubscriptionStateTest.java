@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.RebalanceConsumer;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState.LogTruncation;
 import org.apache.kafka.common.IsolationLevel;
@@ -66,7 +67,6 @@ public class SubscriptionStateTest {
     private final TopicPartition tp0 = new TopicPartition(topic, 0);
     private final TopicPartition tp1 = new TopicPartition(topic, 1);
     private final TopicPartition t1p0 = new TopicPartition(topic1, 0);
-    private final MockRebalanceListener rebalanceListener = new MockRebalanceListener();
     private final Metadata.LeaderAndEpoch leaderAndEpoch = Metadata.LeaderAndEpoch.noLeaderOrEpoch();
     private final Collection<TopicPartition> partitions = List.of(tp0, tp1);
 
@@ -107,7 +107,7 @@ public class SubscriptionStateTest {
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
 
-        state.subscribe(Set.of(topic1), Optional.of(rebalanceListener));
+        state.subscribe(Set.of(topic1));
         // assigned partitions should remain unchanged
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
@@ -118,7 +118,7 @@ public class SubscriptionStateTest {
         assertEquals(Set.of(t1p0), state.assignedPartitions());
         assertEquals(1, state.numAssignedPartitions());
 
-        state.subscribe(Set.of(topic), Optional.of(rebalanceListener));
+        state.subscribe(Set.of(topic));
         // assigned partitions should remain unchanged
         assertEquals(Set.of(t1p0), state.assignedPartitions());
         assertEquals(1, state.numAssignedPartitions());
@@ -137,7 +137,7 @@ public class SubscriptionStateTest {
 
     @Test
     public void testIsFetchableOnAutoAssignment() {
-        state.subscribe(Set.of(topic), Optional.of(rebalanceListener));
+        state.subscribe(Set.of(topic));
         state.assignFromSubscribed(Set.of(tp0, tp1));
         assertAssignedPartitionIsFetchable();
     }
@@ -159,7 +159,7 @@ public class SubscriptionStateTest {
 
     @Test
     public void testIsFetchableConsidersExplicitTopicSubscription() {
-        state.subscribe(Set.of(topic1), Optional.of(rebalanceListener));
+        state.subscribe(Set.of(topic1));
         state.assignFromSubscribed(Set.of(t1p0));
         state.seek(t1p0, 1);
 
@@ -167,7 +167,7 @@ public class SubscriptionStateTest {
         assertTrue(state.isFetchable(t1p0));
 
         // Change subscription. Assigned partitions should remain unchanged but not fetchable.
-        state.subscribe(Set.of(topic), Optional.of(rebalanceListener));
+        state.subscribe(Set.of(topic));
         assertEquals(Set.of(t1p0), state.assignedPartitions());
         assertFalse(state.isFetchable(t1p0), "Assigned partitions not in the subscription should not be fetchable");
 
@@ -179,7 +179,7 @@ public class SubscriptionStateTest {
 
     @Test
     public void testGroupSubscribe() {
-        state.subscribe(Set.of(topic1), Optional.of(rebalanceListener));
+        state.subscribe(Set.of(topic1));
         assertEquals(Set.of(topic1), state.metadataTopics());
 
         assertFalse(state.groupSubscribe(Set.of(topic1)));
@@ -192,7 +192,7 @@ public class SubscriptionStateTest {
         assertFalse(state.groupSubscribe(Set.of(topic1)));
         assertEquals(Set.of(topic1), state.metadataTopics());
 
-        state.subscribe(Set.of("anotherTopic"), Optional.of(rebalanceListener));
+        state.subscribe(Set.of("anotherTopic"));
         assertEquals(Set.of(topic1, "anotherTopic"), state.metadataTopics());
 
         assertFalse(state.groupSubscribe(Set.of("anotherTopic")));
@@ -201,7 +201,7 @@ public class SubscriptionStateTest {
 
     @Test
     public void partitionAssignmentChangeOnPatternSubscription() {
-        state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener));
+        state.subscribe(Pattern.compile(".*"));
         // assigned partitions should remain unchanged
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
@@ -227,7 +227,7 @@ public class SubscriptionStateTest {
         assertEquals(1, state.numAssignedPartitions());
         assertEquals(Set.of(topic), state.subscription());
 
-        state.subscribe(Pattern.compile(".*t"), Optional.of(rebalanceListener));
+        state.subscribe(Pattern.compile(".*t"));
         // assigned partitions should remain unchanged
         assertEquals(Set.of(t1p0), state.assignedPartitions());
         assertEquals(1, state.numAssignedPartitions());
@@ -264,7 +264,7 @@ public class SubscriptionStateTest {
         assertEquals(Set.of(), state.assignedPartitions());
 
         Set<TopicPartition> autoAssignment = Set.of(t1p0);
-        state.subscribe(Set.of(topic1), Optional.of(rebalanceListener));
+        state.subscribe(Set.of(topic1));
         assertTrue(state.checkAssignmentMatchedSubscription(autoAssignment));
         state.assignFromSubscribed(autoAssignment);
         assertEquals(3, state.assignmentId());
@@ -289,7 +289,7 @@ public class SubscriptionStateTest {
 
     @Test
     public void topicSubscription() {
-        state.subscribe(Set.of(topic), Optional.of(rebalanceListener));
+        state.subscribe(Set.of(topic));
         assertEquals(1, state.subscription().size());
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
@@ -342,7 +342,7 @@ public class SubscriptionStateTest {
     @Test
     public void testAssignedPartitionsAwaitingCallbackKeepPositionDefinedInCallback() {
         // New partition assigned. Should not be fetchable or initializing positions.
-        state.subscribe(Set.of(topic), Optional.of(rebalanceListener));
+        state.subscribe(Set.of(topic));
         state.assignFromSubscribedAwaitingCallback(Set.of(tp0), Set.of(tp0));
         assertAssignmentAppliedAwaitingCallback(tp0);
         assertEquals(Set.of(tp0.topic()), state.subscription());
@@ -362,7 +362,7 @@ public class SubscriptionStateTest {
     @Test
     public void testAssignedPartitionsAwaitingCallbackInitializePositionsWhenCallbackCompletes() {
         // New partition assigned. Should not be fetchable or initializing positions.
-        state.subscribe(Set.of(topic), Optional.of(rebalanceListener));
+        state.subscribe(Set.of(topic));
         state.assignFromSubscribedAwaitingCallback(Set.of(tp0), Set.of(tp0));
         assertAssignmentAppliedAwaitingCallback(tp0);
         assertEquals(Set.of(tp0.topic()), state.subscription());
@@ -380,7 +380,7 @@ public class SubscriptionStateTest {
     @Test
     public void testAssignedPartitionsAwaitingCallbackDoesNotAffectPreviouslyOwnedPartitions() {
         // First partition assigned and callback completes.
-        state.subscribe(Set.of(topic), Optional.of(rebalanceListener));
+        state.subscribe(Set.of(topic));
         state.assignFromSubscribedAwaitingCallback(Set.of(tp0), Set.of(tp0));
         assertAssignmentAppliedAwaitingCallback(tp0);
         assertEquals(Set.of(tp0.topic()), state.subscription());
@@ -414,7 +414,7 @@ public class SubscriptionStateTest {
 
     @Test
     public void invalidPositionUpdate() {
-        state.subscribe(Set.of(topic), Optional.of(rebalanceListener));
+        state.subscribe(Set.of(topic));
         assertTrue(state.checkAssignmentMatchedSubscription(Set.of(tp0)));
         state.assignFromSubscribed(Set.of(tp0));
 
@@ -424,13 +424,13 @@ public class SubscriptionStateTest {
 
     @Test
     public void cantAssignPartitionForUnsubscribedTopics() {
-        state.subscribe(Set.of(topic), Optional.of(rebalanceListener));
+        state.subscribe(Set.of(topic));
         assertFalse(state.checkAssignmentMatchedSubscription(List.of(t1p0)));
     }
 
     @Test
     public void cantAssignPartitionForUnmatchedPattern() {
-        state.subscribe(Pattern.compile(".*t"), Optional.of(rebalanceListener));
+        state.subscribe(Pattern.compile(".*t"));
         state.subscribeFromPattern(Set.of(topic));
         assertFalse(state.checkAssignmentMatchedSubscription(List.of(t1p0)));
     }
@@ -443,31 +443,31 @@ public class SubscriptionStateTest {
 
     @Test
     public void cantSubscribeTopicAndPattern() {
-        state.subscribe(Set.of(topic), Optional.of(rebalanceListener));
-        assertThrows(IllegalStateException.class, () -> state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener)));
+        state.subscribe(Set.of(topic));
+        assertThrows(IllegalStateException.class, () -> state.subscribe(Pattern.compile(".*")));
     }
 
     @Test
     public void cantSubscribePartitionAndPattern() {
         state.assignFromUser(Set.of(tp0));
-        assertThrows(IllegalStateException.class, () -> state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener)));
+        assertThrows(IllegalStateException.class, () -> state.subscribe(Pattern.compile(".*")));
     }
 
     @Test
     public void cantSubscribePatternAndTopic() {
-        state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener));
-        assertThrows(IllegalStateException.class, () -> state.subscribe(Set.of(topic), Optional.of(rebalanceListener)));
+        state.subscribe(Pattern.compile(".*"));
+        assertThrows(IllegalStateException.class, () -> state.subscribe(Set.of(topic)));
     }
 
     @Test
     public void cantSubscribePatternAndPartition() {
-        state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener));
+        state.subscribe(Pattern.compile(".*"));
         assertThrows(IllegalStateException.class, () -> state.assignFromUser(Set.of(tp0)));
     }
 
     @Test
     public void patternSubscription() {
-        state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener));
+        state.subscribe(Pattern.compile(".*"));
         state.subscribeFromPattern(Set.of(topic, topic1));
         assertEquals(2, state.subscription().size(), "Expected subscribed topics count is incorrect");
     }
@@ -475,7 +475,7 @@ public class SubscriptionStateTest {
     @Test
     public void testSubscribeToRe2JPattern() {
         String pattern = "t.*";
-        state.subscribe(new SubscriptionPattern(pattern), Optional.of(rebalanceListener));
+        state.subscribe(new SubscriptionPattern(pattern));
         assertTrue(state.toString().contains("type=AUTO_PATTERN_RE2J"));
         assertTrue(state.toString().contains("subscribedPattern=" + pattern));
         assertTrue(state.assignedTopicIds().isEmpty());
@@ -487,7 +487,7 @@ public class SubscriptionStateTest {
         Uuid assignedUuid = Uuid.randomUuid();
         assertFalse(state.isAssignedFromRe2j(assignedUuid));
 
-        state.subscribe(new SubscriptionPattern("foo.*"), Optional.empty());
+        state.subscribe(new SubscriptionPattern("foo.*"));
         assertTrue(state.hasRe2JPatternSubscription());
         assertFalse(state.isAssignedFromRe2j(assignedUuid));
 
@@ -502,7 +502,7 @@ public class SubscriptionStateTest {
 
     @Test
     public void testAssignedPartitionsWithTopicIdsForRe2Pattern() {
-        state.subscribe(new SubscriptionPattern("t.*"), Optional.of(rebalanceListener));
+        state.subscribe(new SubscriptionPattern("t.*"));
         assertTrue(state.assignedTopicIds().isEmpty());
 
         TopicIdPartitionSet reconciledAssignmentFromRegex = new TopicIdPartitionSet();
@@ -523,7 +523,7 @@ public class SubscriptionStateTest {
 
     @Test
     public void testAssignedTopicIdsPreservedWhenReconciliationCompletes() {
-        state.subscribe(new SubscriptionPattern("t.*"), Optional.of(rebalanceListener));
+        state.subscribe(new SubscriptionPattern("t.*"));
         assertTrue(state.assignedTopicIds().isEmpty());
 
         // First assignment received from coordinator
@@ -551,20 +551,19 @@ public class SubscriptionStateTest {
 
     @Test
     public void testMixedPatternSubscriptionNotAllowed() {
-        state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener));
-        assertThrows(IllegalStateException.class, () -> state.subscribe(new SubscriptionPattern("t.*"),
-            Optional.of(rebalanceListener)));
+        state.subscribe(Pattern.compile(".*"));
+        assertThrows(IllegalStateException.class, () -> state.subscribe(new SubscriptionPattern("t.*")));
 
         state.unsubscribe();
 
-        state.subscribe(new SubscriptionPattern("t.*"), Optional.of(rebalanceListener));
-        assertThrows(IllegalStateException.class, () -> state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener)));
+        state.subscribe(new SubscriptionPattern("t.*"));
+        assertThrows(IllegalStateException.class, () -> state.subscribe(Pattern.compile(".*")));
     }
 
     @Test
     public void testSubscriptionPattern() {
         SubscriptionPattern pattern = new SubscriptionPattern("t.*");
-        state.subscribe(pattern, Optional.of(rebalanceListener));
+        state.subscribe(pattern);
         assertTrue(state.hasRe2JPatternSubscription());
         assertEquals(pattern, state.subscriptionPattern());
         assertTrue(state.hasAutoAssignedPartitions());
@@ -579,13 +578,13 @@ public class SubscriptionStateTest {
     public void unsubscribeUserAssignment() {
         state.assignFromUser(Set.of(tp0, tp1));
         state.unsubscribe();
-        state.subscribe(Set.of(topic), Optional.of(rebalanceListener));
+        state.subscribe(Set.of(topic));
         assertEquals(Set.of(topic), state.subscription());
     }
 
     @Test
     public void unsubscribeUserSubscribe() {
-        state.subscribe(Set.of(topic), Optional.of(rebalanceListener));
+        state.subscribe(Set.of(topic));
         state.unsubscribe();
         state.assignFromUser(Set.of(tp0));
         assertEquals(Set.of(tp0), state.assignedPartitions());
@@ -594,7 +593,7 @@ public class SubscriptionStateTest {
 
     @Test
     public void unsubscription() {
-        state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener));
+        state.subscribe(Pattern.compile(".*"));
         state.subscribeFromPattern(Set.of(topic, topic1));
         assertTrue(state.checkAssignmentMatchedSubscription(Set.of(tp1)));
         state.assignFromSubscribed(Set.of(tp1));
@@ -993,11 +992,9 @@ public class SubscriptionStateTest {
     @Test
     public void testOnPartitionsAssignedCreatesViewAndDelegates() {
         List<RebalanceConsumer> captured = new ArrayList<>();
-        ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
+        RebalanceListener userListener = new RebalanceListener() {
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {}
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
                 captured.add(rc);
@@ -1015,11 +1012,9 @@ public class SubscriptionStateTest {
     @Test
     public void testOnPartitionsRevokedCreatesViewAndDelegates() {
         List<RebalanceConsumer> captured = new ArrayList<>();
-        ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
+        RebalanceListener userListener = new RebalanceListener() {
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {}
             @Override
             public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
                 captured.add(rc);
@@ -1037,11 +1032,11 @@ public class SubscriptionStateTest {
     @Test
     public void testOnPartitionsLostCreatesViewAndDelegates() {
         List<RebalanceConsumer> captured = new ArrayList<>();
-        ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
+        RebalanceListener userListener = new RebalanceListener() {
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {}
             @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {}
             @Override
             public void onPartitionsLost(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
                 captured.add(rc);
@@ -1059,11 +1054,9 @@ public class SubscriptionStateTest {
     @Test
     public void testViewIsClosedAfterAssignedCallback() {
         List<RebalanceConsumer> captured = new ArrayList<>();
-        ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
+        RebalanceListener userListener = new RebalanceListener() {
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {}
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
                 captured.add(rc);
@@ -1080,11 +1073,9 @@ public class SubscriptionStateTest {
     @Test
     public void testViewIsClosedAfterRevokedCallback() {
         List<RebalanceConsumer> captured = new ArrayList<>();
-        ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
+        RebalanceListener userListener = new RebalanceListener() {
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {}
             @Override
             public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
                 captured.add(rc);
@@ -1101,11 +1092,11 @@ public class SubscriptionStateTest {
     @Test
     public void testViewIsClosedAfterLostCallback() {
         List<RebalanceConsumer> captured = new ArrayList<>();
-        ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
+        RebalanceListener userListener = new RebalanceListener() {
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {}
             @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {}
             @Override
             public void onPartitionsLost(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
                 captured.add(rc);
@@ -1122,11 +1113,9 @@ public class SubscriptionStateTest {
     @Test
     public void testViewIsClosedEvenWhenCallbackThrows() {
         List<RebalanceConsumer> captured = new ArrayList<>();
-        ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
+        RebalanceListener userListener = new RebalanceListener() {
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {}
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
                 captured.add(rc);
@@ -1146,11 +1135,9 @@ public class SubscriptionStateTest {
     @Test
     public void testEachCallbackGetsFreshView() {
         List<RebalanceConsumer> captured = new ArrayList<>();
-        ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
+        RebalanceListener userListener = new RebalanceListener() {
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {}
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
                 captured.add(rc);
@@ -1167,6 +1154,7 @@ public class SubscriptionStateTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testExceptionFromCallbackPropagates() {
         RuntimeException expected = new RuntimeException("boom");
         ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
@@ -1185,6 +1173,7 @@ public class SubscriptionStateTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testDefaultDelegationFromTwoArgToOneArg() {
         List<String> calls = new ArrayList<>();
         ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
@@ -1206,26 +1195,6 @@ public class SubscriptionStateTest {
         state.onPartitionsRevoked(partitions);
 
         assertEquals(List.of("assigned-1arg", "revoked-1arg", "revoked-1arg"), calls);
-    }
-
-    private static class MockRebalanceListener implements ConsumerRebalanceListener {
-        Collection<TopicPartition> revoked;
-        public Collection<TopicPartition> assigned;
-        int revokedCount = 0;
-        int assignedCount = 0;
-
-        @Override
-        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-            this.assigned = partitions;
-            assignedCount++;
-        }
-
-        @Override
-        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-            this.revoked = partitions;
-            revokedCount++;
-        }
-
     }
 
     @Test
