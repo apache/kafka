@@ -22,9 +22,9 @@ public interface WithRetentionPeriod {
     long retentionPeriod();
 
     /**
-     * Resolve the retention of {@code store} by unwrapping to the innermost layer, or -1 if no
-     * layer reports one. Adapters that hold their delegate in a field rather than as a
-     * {@link WrappedStateStore} end the walk, so they resolve their own delegate through here.
+     * Unwrap to the innermost store and return its retention, or -1 if it does not report one.
+     * Stores that hold their delegate in a field rather than as a {@link WrappedStateStore} end the
+     * walk, so they resolve their own delegate through here.
      */
     static long resolveRetentionPeriod(final StateStore store) {
         StateStore current = store;
