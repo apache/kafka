@@ -319,4 +319,12 @@ public class TimestampedToHeadersWindowStoreAdapterTest {
         }
         assertFalse(foundAdapterInfo, "Expected no execution info from adapter when not requested");
     }
+
+    @Test
+    public void shouldReportRetentionPeriodOfUnderlyingStore() {
+        // typed as StateStore so this compiles, and fails, when the adapter does not expose it
+        final StateStore store = adapter;
+        assertInstanceOf(WithRetentionPeriod.class, store);
+        assertEquals(RETENTION_PERIOD, ((WithRetentionPeriod) store).retentionPeriod());
+    }
 }
