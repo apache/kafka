@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.RebalanceConsumer;
@@ -191,6 +192,36 @@ public class SubscriptionState {
             this.subscriptionType = type;
         else if (this.subscriptionType != type)
             throw new IllegalStateException(SUBSCRIPTION_EXCEPTION_MESSAGE);
+    }
+
+    /**
+     * deprecated Visible for testing only. Will be removed in a follow-on cleanup PR.
+     *            Use {@link #subscribe(Set)} and {@link #setRebalanceListener} instead.
+     */
+    public synchronized boolean subscribe(Set<String> topics, Optional<ConsumerRebalanceListener> listener) {
+        listener.ifPresent(l -> this.listenerContext.set(new ListenerContext(l)));
+        setSubscriptionType(SubscriptionType.AUTO_TOPICS);
+        return changeSubscription(topics);
+    }
+
+    /**
+     * deprecated Visible for testing only. Will be removed in a follow-on cleanup PR.
+     *            Use {@link #subscribe(Pattern)} and {@link #setRebalanceListener} instead.
+     */
+    public synchronized void subscribe(Pattern pattern, Optional<ConsumerRebalanceListener> listener) {
+        listener.ifPresent(l -> this.listenerContext.set(new ListenerContext(l)));
+        setSubscriptionType(SubscriptionType.AUTO_PATTERN);
+        this.subscribedPattern = pattern;
+    }
+
+    /**
+     * deprecated Visible for testing only. Will be removed in a follow-on cleanup PR.
+     *            Use {@link #subscribe(SubscriptionPattern)} and {@link #setRebalanceListener} instead.
+     */
+    public synchronized void subscribe(SubscriptionPattern pattern, Optional<ConsumerRebalanceListener> listener) {
+        listener.ifPresent(l -> this.listenerContext.set(new ListenerContext(l)));
+        setSubscriptionType(SubscriptionType.AUTO_PATTERN_RE2J);
+        this.subscribedRe2JPattern = pattern;
     }
 
     public synchronized boolean subscribe(Set<String> topics) {

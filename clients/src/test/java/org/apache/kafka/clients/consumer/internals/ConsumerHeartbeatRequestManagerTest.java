@@ -233,7 +233,7 @@ public class ConsumerHeartbeatRequestManagerTest
         String topic = "topic1";
         Set<String> set = Collections.singleton(topic);
         when(subscriptions.subscription()).thenReturn(set);
-        subscriptions.subscribe(set);
+        subscriptions.subscribe(set, Optional.empty());
 
         // Create a ConsumerHeartbeatRequest and verify the payload
         mockJoiningMemberData(DEFAULT_GROUP_INSTANCE_ID);
@@ -612,7 +612,7 @@ public class ConsumerHeartbeatRequestManagerTest
 
         // Join the group and subscribe to a topic, but the response has not yet been received
         String topic = "topic1";
-        subscriptions.subscribe(Collections.singleton(topic));
+        subscriptions.subscribe(Collections.singleton(topic), Optional.empty());
         when(subscriptions.subscription()).thenReturn(Collections.singleton(topic));
         mockRejoiningMemberData();
         data = heartbeatState.buildRequestData();
@@ -781,7 +781,7 @@ public class ConsumerHeartbeatRequestManagerTest
         // complete reconciliation
         createHeartbeatStateAndRequestManager();
         when(subscriptions.subscription()).thenReturn(topics);
-        subscriptions.subscribe(topics);
+        subscriptions.subscribe(topics, Optional.empty());
         mockReconcilingMemberData(testAssignment);
         
         // send heartbeat1 to ack assignment tp0
