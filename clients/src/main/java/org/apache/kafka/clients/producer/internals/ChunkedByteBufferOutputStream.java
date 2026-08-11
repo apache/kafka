@@ -169,7 +169,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
      * Appends pre-allocated chunks to this stream. Ownership of {@code newChunks} transfers to
      * the stream; they will be returned to the pool via {@link #deallocate()}.
      */
-    public void addBuffers(List<ByteBuffer> newChunks) {
+    void addBuffers(List<ByteBuffer> newChunks) {
         ensureNotDeallocated();
         ensureWritable();
         validateChunkCapacities(newChunks, chunkSize);
@@ -321,7 +321,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
      *
      * @throws IllegalStateException if the attached chunks have less free space than required
      */
-    public void throwIfInsufficientRemaining(int requiredBytes) {
+    void throwIfInsufficientRemaining(int requiredBytes) {
         ensureNotDeallocated();
         // A single write can be split across several chunks, so the required bytes needn't be
         // contiguous: only the total free space matters. Advancing here would waste the tail of the
@@ -335,7 +335,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     /**
      * Returns all pool-allocated chunks to the buffer pool. Called at batch completion.
      */
-    public void deallocate(BufferPool pool) {
+    void deallocate(BufferPool pool) {
         if (pool != null) {
             for (ByteBuffer chunk : chunks) {
                 pool.deallocate(chunk);
@@ -347,7 +347,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
         flattenedBuffer = null;
     }
 
-    public void deallocate() {
+    void deallocate() {
         deallocate(pool);
     }
 }
