@@ -321,6 +321,53 @@ public class FetchRequestManagerTest {
         assertFalse(blockedOnBuffer.isAlive(), "Empty fetch response did not wake the thread blocked on the fetch buffer");
     }
 
+    /**
+     * A fetch request that fails outright (e.g. disconnect) must wake a thread blocked on the fetch buffer, just as
+     * a successful response does: otherwise that thread would wait for a response that is no longer coming.
+     */
+    @Test
+    public void testFailedFetchResponseWakesUpBuffer() throws InterruptedException {
+        // The response body is irrelevant: it is discarded once the response is marked as disconnected.
+        assertRequestCompletionWakesUpBuffer(() -> client.prepareResponse(
+                fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0), true));
+    }
+
+    /**
+     * A fetch session error is rejected by the session handler, so {@link AbstractFetch#handleFetchSuccess} returns
+     * before adding anything to the buffer. It must still wake a thread blocked on the buffer: the request is no
+     * longer pending, so nothing else will.
+     */
+    @Test
+    public void testFetchSessionErrorResponseWakesUpBuffer() throws InterruptedException {
+        assertRequestCompletionWakesUpBuffer(() -> client.prepareResponse(FetchResponse.of(
+                Errors.FETCH_SESSION_ID_NOT_FOUND, 0, INVALID_SESSION_ID, new LinkedHashMap<>(), List.of())));
+    }
+
+    /**
+     * Asserts that an in-flight fetch request wakes a thread blocked on the fetch buffer when it completes with the
+     * outcome staged by {@code prepareResponse}. Neither outcome adds anything to the buffer, so the wakeup is only
+     * about letting the application thread generate the next fetch request, not about collecting data.
+     */
+    private void assertRequestCompletionWakesUpBuffer(Runnable prepareResponse) throws InterruptedException {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        assertEquals(1, sendFetches());
+
+        // A consumer thread blocked waiting for data on the empty buffer.
+        Thread blockedOnBuffer = new Thread(() -> fetcher.fetchBuffer.awaitWakeup(time.timer(3_600_000L)));
+        blockedOnBuffer.setDaemon(true);
+        blockedOnBuffer.start();
+
+        prepareResponse.run();
+        networkClientDelegate.poll(time.timer(0));
+
+        blockedOnBuffer.join(2_000);
+        assertFalse(blockedOnBuffer.isAlive(), "Completed fetch request did not wake the thread blocked on the fetch buffer");
+    }
+
     @Test
     public void testNoFetchablePartitionsDoesNotWakeUpBuffer() throws InterruptedException {
         buildFetcher();
