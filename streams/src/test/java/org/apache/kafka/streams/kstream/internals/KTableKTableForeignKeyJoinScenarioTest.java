@@ -30,7 +30,6 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -228,7 +227,7 @@ public class KTableKTableForeignKeyJoinScenarioTest {
 
 
         final Topology topology = builder.build(streamsConfig);
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(streamsConfig).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<Integer, String> leftInput = driver.createInputTopic(LEFT_TABLE, new IntegerSerializer(), new StringSerializer());
             final TestInputTopic<Integer, String> rightInput = driver.createInputTopic(RIGHT_TABLE, new IntegerSerializer(), new StringSerializer());
             leftInput.pipeInput(2, "lhsValue1|1");
@@ -386,7 +385,7 @@ public class KTableKTableForeignKeyJoinScenarioTest {
         config.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         StreamsTestUtils.maybeSetDslStoreFormatHeaders(config, withHeaders);
-        return new TopologyTestDriverBuilder(builder.build()).withConfig(config).build();
+        return new TopologyTestDriver(builder.build(), config);
     }
 
     private void validateTopologyCanProcessData(final StreamsBuilder builder, final boolean withHeaders) {
@@ -395,7 +394,7 @@ public class KTableKTableForeignKeyJoinScenarioTest {
         config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
         config.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
         StreamsTestUtils.maybeSetDslStoreFormatHeaders(config, withHeaders);
-        try (final TopologyTestDriver topologyTestDriver = new TopologyTestDriverBuilder(builder.build()).withConfig(config).build()) {
+        try (final TopologyTestDriver topologyTestDriver = new TopologyTestDriver(builder.build(), config)) {
             final TestInputTopic<Integer, String> aTopic = topologyTestDriver.createInputTopic("A", new IntegerSerializer(), new StringSerializer());
             final TestInputTopic<Integer, String> bTopic = topologyTestDriver.createInputTopic("B", new IntegerSerializer(), new StringSerializer());
             final TestOutputTopic<Integer, String> output = topologyTestDriver.createOutputTopic("output", new IntegerDeserializer(), new StringDeserializer());

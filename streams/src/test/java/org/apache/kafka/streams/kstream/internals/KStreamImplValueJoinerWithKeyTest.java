@@ -25,7 +25,6 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.JoinWindows;
@@ -208,7 +207,7 @@ public class KStreamImplValueJoinerWithKeyTest {
                                  final List<KeyValue<String, String>> expectedResults,
                                  final boolean isTableJoin,
                                  final String rightTopic) {
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
             final TestInputTopic<String, Integer> rightInputTopic =
                     driver.createInputTopic(rightTopic, new StringSerializer(), new IntegerSerializer());

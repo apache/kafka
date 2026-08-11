@@ -30,7 +30,6 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
@@ -137,7 +136,7 @@ public class RepartitionWithMergeOptimizingTest {
 
         final Topology topology = builder.build(streamsConfiguration);
 
-        topologyTestDriver = new TopologyTestDriverBuilder(topology).withConfig(streamsConfiguration).build();
+        topologyTestDriver = new TopologyTestDriver(topology, streamsConfiguration);
 
         final TestInputTopic<String, String> inputTopicA = topologyTestDriver.createInputTopic(INPUT_A_TOPIC, stringSerializer, stringSerializer);
         final TestInputTopic<String, String> inputTopicB = topologyTestDriver.createInputTopic(INPUT_B_TOPIC, stringSerializer, stringSerializer);
