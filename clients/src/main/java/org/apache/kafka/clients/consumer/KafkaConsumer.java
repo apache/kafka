@@ -699,9 +699,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * It is guaranteed, however, that the partitions revoked/assigned through this interface are from topics
      * subscribed in this call. See {@link ConsumerRebalanceListener} for more details.
      *
-     * <p>deprecated Use {@link #subscribe(Collection)} to subscribe and
-     *             {@link Consumer#setRebalanceListener(RebalanceListener)} to register a rebalance listener
-     *             separately.
      * @param topics The list of topics to subscribe to
      * @param listener Non-null listener instance to get notifications on partition assignment/revocation for the
      *                 subscribed topics
@@ -709,7 +706,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws IllegalStateException If {@code subscribe()} is called previously with pattern, or assign is called
      *                               previously (without a subsequent call to {@link #unsubscribe()}), or if not
      *                               configured at-least one partition assignment strategy
+     * @deprecated Since 4.4, to be removed in Kafka 5.0. Use {@link #subscribe(Collection)} with
+     *             {@link Consumer#setRebalanceListener(RebalanceListener)}.
      */
+    @Deprecated(since = "4.4", forRemoval = true)
     @Override
     @SuppressWarnings("removal")
     public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
@@ -766,7 +766,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws IllegalStateException If {@code subscribe()} is called previously with topics, or assign is called
      *                               previously (without a subsequent call to {@link #unsubscribe()}), or if not
      *                               configured at-least one partition assignment strategy
+     * @deprecated Since 4.4, to be removed in Kafka 5.0. Use {@link #subscribe(Pattern)} with
+     *             {@link Consumer#setRebalanceListener(RebalanceListener)}.
      */
+    @Deprecated(since = "4.4", forRemoval = true)
     @Override
     @SuppressWarnings("removal")
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
@@ -813,16 +816,16 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * when there is a change to the topics matching the provided pattern and when consumer group membership changes.
      * Group rebalances only take place during an active call to {@link #poll(Duration)}.
      *
-     * <p>deprecated Use {@link #subscribe(SubscriptionPattern)} to subscribe and
-     *             {@link Consumer#setRebalanceListener(RebalanceListener)} to register a rebalance listener
-     *             separately.
      * @param pattern  Pattern to subscribe to, that must be compatible with Google RE2/J.
      * @param listener Non-null listener instance to get notifications on partition assignment/revocation for the
      *                 subscribed topics.
      * @throws IllegalArgumentException If pattern is null or empty, or if the listener is null.
      * @throws IllegalStateException    If {@code subscribe()} is called previously with topics, or assign is called
      *                                  previously (without a subsequent call to {@link #unsubscribe()}).
+     * @deprecated Since 4.4, to be removed in Kafka 5.0. Use {@link #subscribe(SubscriptionPattern)} with
+     *             {@link Consumer#setRebalanceListener(RebalanceListener)}.
      */
+    @Deprecated(since = "4.4", forRemoval = true)
     @Override
     @SuppressWarnings("removal")
     public void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener listener) {
