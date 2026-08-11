@@ -536,12 +536,13 @@ public class StandbyTaskTest {
         assertThat(totalMetric.metricValue(), equalTo(0.0));
         assertThat(rateMetric.metricValue(), equalTo(0.0));
 
-        task.recordRestoration(time, 25L, false);
+        // standby tasks have no remaining-records metric, so the offset-slot argument is ignored
+        task.recordRestoration(time, 25L, 30L, false);
 
         assertThat(totalMetric.metricValue(), equalTo(25.0));
         assertThat(rateMetric.metricValue(), not(0.0));
 
-        task.recordRestoration(time, 50L, false);
+        task.recordRestoration(time, 50L, 55L, false);
 
         assertThat(totalMetric.metricValue(), equalTo(75.0));
         assertThat(rateMetric.metricValue(), not(0.0));

@@ -5098,7 +5098,7 @@ public class TaskManagerTest {
         }
 
         @Override
-        public void recordRestoration(final Time time, final long numRecords, final boolean initRemaining) {
+        public void recordRestoration(final Time time, final long numRecords, final long numOffsets, final boolean initRemaining) {
             // do nothing
         }
 

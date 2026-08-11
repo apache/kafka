@@ -227,7 +227,11 @@ public interface Task {
 
     void clearTaskTimeout();
 
-    void recordRestoration(final Time time, final long numRecords, final boolean initRemaining);
+    /**
+     * {@code numRecords} feeds restore-total/restore-rate; {@code numOffsets} feeds the offset-based
+     * remaining-records metric (or initialises it when {@code initRemaining} is true).
+     */
+    void recordRestoration(final Time time, final long numRecords, final long numOffsets, final boolean initRemaining);
 
     // task status inquiry
 

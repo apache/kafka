@@ -51,6 +51,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -89,6 +90,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -665,6 +667,75 @@ public class StoreChangelogReaderTest {
     }
 
     @Test
+    public void shouldDecrementRemainingRecordsToZeroWithOffsetGaps() {
+        // end offset is 10 but the changelog holds only 8 data records (offsets 0..7); offsets 8 and 9
+        // are transaction markers the restore consumer never returns, so remaining-records is initialized
+        // to 10 offset slots and must still decrement to exactly zero once restoration completes
+        setupActiveStateManager();
+        setupStoreMetadata();
+        setupStore();
+        final TaskId taskId = new TaskId(0, 0);
+
+        // null while preparing (seek-to-beginning, so startOffset == 0) and before the first batch;
+        // once a batch is applied it reflects the last restored record's offset (7)
+        when(storeMetadata.offset()).thenReturn(null).thenReturn(null).thenReturn(7L);
+        when(activeStateManager.taskId()).thenReturn(taskId);
+
+        consumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));
+
+        final Task mockTask = mock(Task.class);
+
+        changelogReader.register(tp, activeStateManager);
+
+        // first restore initializes the changelog and records the initial remaining (= 10 slots)
+        changelogReader.restore(Collections.singletonMap(taskId, mockTask));
+        assertEquals(0L, consumer.position(tp));
+        assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
+
+        for (int offset = 0; offset < 8; offset++) {
+            consumer.addRecord(new ConsumerRecord<>(topicName, 0, offset, "key".getBytes(), "value".getBytes()));
+        }
+
+        // second restore applies the 8 data records
+        changelogReader.restore(Collections.singletonMap(taskId, mockTask));
+        assertEquals(8L, changelogReader.changelogMetadata(tp).totalRestored());
+        assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
+
+        // skip the trailing transaction-marker offsets (8, 9) so the consumer reaches the end
+        consumer.seek(tp, 10L);
+
+        // third restore observes position >= endOffset and completes restoration
+        changelogReader.restore(Collections.singletonMap(taskId, mockTask));
+        assertEquals(StoreChangelogReader.ChangelogState.COMPLETED, changelogReader.changelogMetadata(tp).state());
+        assertEquals(8L, changelogReader.changelogMetadata(tp).totalRestored());
+
+        // remaining-records is driven by numOffsets (init sets it, later calls decrement it); restore-total
+        // is driven by numRecords, a distinct quantity when the changelog has offset gaps
+        final ArgumentCaptor<Long> numRecordsCaptor = ArgumentCaptor.forClass(Long.class);
+        final ArgumentCaptor<Long> numOffsetsCaptor = ArgumentCaptor.forClass(Long.class);
+        final ArgumentCaptor<Boolean> initCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(mockTask, atLeastOnce())
+            .recordRestoration(any(), numRecordsCaptor.capture(), numOffsetsCaptor.capture(), initCaptor.capture());
+
+        long initialRemaining = 0L;
+        long decrementedRemaining = 0L;
+        long totalRecords = 0L;
+        for (int i = 0; i < initCaptor.getAllValues().size(); i++) {
+            if (initCaptor.getAllValues().get(i)) {
+                initialRemaining += numOffsetsCaptor.getAllValues().get(i);
+            } else {
+                decrementedRemaining += numOffsetsCaptor.getAllValues().get(i);
+                totalRecords += numRecordsCaptor.getAllValues().get(i);
+            }
+        }
+
+        assertEquals(10L, initialRemaining, "remaining-records metric should be initialized from the offset range");
+        assertEquals(initialRemaining, decrementedRemaining, "remaining-records metric should decrement to exactly zero");
+        assertEquals(8L, totalRecords, "restore-total should count the records actually restored");
+    }
+
+    @Test
     public void shouldRequestPositionAndHandleTimeoutException() {
         setupActiveStateManager();
         setupStoreMetadata();
@@ -701,7 +772,7 @@ public class StoreChangelogReaderTest {
         assertEquals(10L, (long) changelogReader.changelogMetadata(tp).endOffset());
         Mockito.verify(mockTask).clearTaskTimeout();
         Mockito.verify(mockTask).maybeInitTaskTimeoutOrThrow(anyLong(), any());
-        Mockito.verify(mockTask).recordRestoration(any(), anyLong(), anyBoolean());
+        Mockito.verify(mockTask).recordRestoration(any(), anyLong(), anyLong(), anyBoolean());
 
         clearException.set(true);
         Mockito.reset(mockTask);
@@ -799,7 +870,7 @@ public class StoreChangelogReaderTest {
         assertEquals(10L, (long) changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(6L, consumer.position(tp));
         Mockito.verify(mockTask).clearTaskTimeout();
-        Mockito.verify(mockTask).recordRestoration(any(), anyLong(), anyBoolean());
+        Mockito.verify(mockTask).recordRestoration(any(), anyLong(), anyLong(), anyBoolean());
     }
 
     @Test
@@ -894,7 +965,7 @@ public class StoreChangelogReaderTest {
         assertEquals(6L, consumer.position(tp));
         if (type == ACTIVE) {
             Mockito.verify(mockTask, times(2)).clearTaskTimeout();
-            Mockito.verify(mockTask).recordRestoration(any(), anyLong(), anyBoolean());
+            Mockito.verify(mockTask).recordRestoration(any(), anyLong(), anyLong(), anyBoolean());
         }
     }
 
