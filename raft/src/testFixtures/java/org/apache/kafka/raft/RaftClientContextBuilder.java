@@ -332,7 +332,7 @@ public final class RaftClientContextBuilder {
             fetchMaxBytes
         );
 
-        applyOverrides(context);
+        context.electionTimeoutMs = electionTimeoutMs;
         context.requestTimeoutMs = requestTimeoutMs;
         context.appendLingerMs = appendLingerMs;
         return context;
@@ -430,10 +430,6 @@ public final class RaftClientContextBuilder {
             .limit(bootstrapServers.map(List::size).orElse(0))
             .boxed()
             .collect(Collectors.toSet());
-    }
-
-    private void applyOverrides(SharedRaftClientContext context) {
-        context.electionTimeoutMs = electionTimeoutMs;
     }
 
 }

@@ -1480,8 +1480,7 @@ public class RaftClientTestContext extends SharedRaftClientContext {
             // was not received early on the leader.
             assertTrue(
                 leaderAndEpoch.epoch() >= currentLeaderAndEpoch.epoch(),
-                // Lazy message
-                () -> String.format("new epoch (%d) not >= than old epoch (%d)", leaderAndEpoch.epoch(), currentLeaderAndEpoch.epoch())
+                String.format("new epoch (%d) not >= than old epoch (%d)", leaderAndEpoch.epoch(), currentLeaderAndEpoch.epoch())
             );
             assertNotEquals(currentLeaderAndEpoch, leaderAndEpoch);
             this.currentLeaderAndEpoch = leaderAndEpoch;

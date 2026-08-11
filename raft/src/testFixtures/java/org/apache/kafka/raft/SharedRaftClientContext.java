@@ -242,7 +242,7 @@ public abstract class SharedRaftClientContext {
         pollUntil(channel::hasSentRequests);
     }
 
-    // RaftClientTestContext overrides this to also assert the collected requests are pre-votes.
+    // Overridden to also assert the collected requests are pre-votes.
     List<RaftRequest.Outbound> collectPreVoteRequests(
         int epoch,
         int lastEpoch,
@@ -251,7 +251,7 @@ public abstract class SharedRaftClientContext {
         return collectVoteRequestMessages();
     }
 
-    // RaftClientTestContext overrides this to also assert the collected requests are (standard) votes.
+    // Overridden to also assert the collected requests are (standard) votes.
     List<RaftRequest.Outbound> collectVoteRequests(
         int epoch,
         int lastEpoch,
@@ -347,7 +347,7 @@ public abstract class SharedRaftClientContext {
         return res;
     }
 
-    // RaftClientTestContext overrides this to also assert each collected request.
+    // Overridden to also assert each collected request.
     List<RaftRequest.Outbound> collectBeginEpochRequests(int epoch) {
         return new ArrayList<>(channel.drainSentRequests(Optional.of(ApiKeys.BEGIN_QUORUM_EPOCH)));
     }
@@ -570,7 +570,7 @@ public abstract class SharedRaftClientContext {
         }
     }
 
-    // RaftClientTestContext overrides this to also assert the local node is the leader.
+    // Overridden to also assert the local node is the leader.
     public void advanceLocalLeaderHighWatermarkToLogEndOffset() throws InterruptedException {
         long localLogEndOffset = log.endOffset().offset();
 
@@ -588,7 +588,7 @@ public abstract class SharedRaftClientContext {
 
             pollUntilResponse();
             // Drain the leader's fetch response so the next follower's poll sees a fresh one.
-            // RaftClientTestContext's override additionally asserts the response.
+            // The override additionally asserts the response.
             drainSentResponses(ApiKeys.FETCH);
         }
 
