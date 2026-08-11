@@ -1100,21 +1100,23 @@ public class StreamTaskTest {
         assertThat(rateMetric.metricValue(), equalTo(0.0));
         assertThat(remainMetric.metricValue(), equalTo(0.0));
 
-        task.recordRestoration(time, 100L, true);
+        // remaining-records is initialized from the offset range
+        task.recordRestoration(time, 0L, 100L, true);
 
         assertThat(remainMetric.metricValue(), equalTo(100.0));
 
-        task.recordRestoration(time, 25L, false);
+        // restore-total counts records; remaining-records is decremented by offset slots (which may differ)
+        task.recordRestoration(time, 25L, 30L, false);
 
         assertThat(totalMetric.metricValue(), equalTo(25.0));
         assertThat(rateMetric.metricValue(), not(0.0));
-        assertThat(remainMetric.metricValue(), equalTo(75.0));
+        assertThat(remainMetric.metricValue(), equalTo(70.0));
 
-        task.recordRestoration(time, 50L, false);
+        task.recordRestoration(time, 50L, 55L, false);
 
         assertThat(totalMetric.metricValue(), equalTo(75.0));
         assertThat(rateMetric.metricValue(), not(0.0));
-        assertThat(remainMetric.metricValue(), equalTo(25.0));
+        assertThat(remainMetric.metricValue(), equalTo(15.0));
     }
 
     @Test
