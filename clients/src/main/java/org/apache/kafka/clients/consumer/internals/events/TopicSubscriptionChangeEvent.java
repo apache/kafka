@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -25,8 +28,8 @@ import java.util.Set;
  */
 public class TopicSubscriptionChangeEvent extends SubscriptionChangeEvent {
     private final Set<String> topics;
-    public TopicSubscriptionChangeEvent(final Set<String> topics, final long deadlineMs) {
-        super(Type.TOPIC_SUBSCRIPTION_CHANGE, deadlineMs);
+    public TopicSubscriptionChangeEvent(final Set<String> topics, final Optional<ConsumerRebalanceListener> listener, final long deadlineMs) {
+        super(Type.TOPIC_SUBSCRIPTION_CHANGE, listener, deadlineMs);
         this.topics = topics;
     }
 

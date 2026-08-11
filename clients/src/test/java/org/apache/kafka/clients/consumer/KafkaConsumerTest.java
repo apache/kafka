@@ -3858,8 +3858,7 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         MockRebalanceListener countingRebalanceListener = new MockRebalanceListener();
         initMetadata(client, Map.of(topic, 1, topic2, 1, topic3, 1));
 
-        consumer.setRebalanceListener(countingRebalanceListener);
-        consumer.subscribe(Arrays.asList(topic, topic2));
+        consumer.subscribe(Arrays.asList(topic, topic2), countingRebalanceListener);
         Node node = metadata.fetch().nodes().get(0);
         prepareRebalance(client, node, assignor, Arrays.asList(tp0, t2p0), null);
 

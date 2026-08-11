@@ -19,10 +19,8 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
-import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.RebalanceConsumer;
 import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState.LogTruncation;
 import org.apache.kafka.common.IsolationLevel;
@@ -34,10 +32,8 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -51,12 +47,9 @@ import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UND
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
 
 public class SubscriptionStateTest {
 
@@ -68,14 +61,6 @@ public class SubscriptionStateTest {
     private final TopicPartition t1p0 = new TopicPartition(topic1, 0);
     private final MockRebalanceListener rebalanceListener = new MockRebalanceListener();
     private final Metadata.LeaderAndEpoch leaderAndEpoch = Metadata.LeaderAndEpoch.noLeaderOrEpoch();
-    private final Collection<TopicPartition> partitions = List.of(tp0, tp1);
-
-    private Consumer<?, ?> consumer;
-
-    @BeforeEach
-    public void setup() {
-        consumer = mock(Consumer.class);
-    }
 
     @Test
     public void partitionAssignment() {
@@ -988,224 +973,6 @@ public class SubscriptionStateTest {
         assertEquals(Optional.empty(), truncation.divergentOffsetOpt);
         assertEquals(initialPosition, truncation.fetchPosition);
         assertTrue(state.awaitingValidation(tp0));
-    }
-
-    @Test
-    public void testOnPartitionsAssignedCreatesViewAndDelegates() {
-        List<RebalanceConsumer> captured = new ArrayList<>();
-        ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
-                captured.add(rc);
-            }
-        };
-
-        state = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
-        state.setRebalanceListener(userListener, consumer);
-        state.onPartitionsAssigned(partitions);
-
-        assertEquals(1, captured.size());
-        assertNotNull(captured.get(0));
-    }
-
-    @Test
-    public void testOnPartitionsRevokedCreatesViewAndDelegates() {
-        List<RebalanceConsumer> captured = new ArrayList<>();
-        ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
-                captured.add(rc);
-            }
-        };
-
-        state = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
-        state.setRebalanceListener(userListener, consumer);
-        state.onPartitionsRevoked(partitions);
-
-        assertEquals(1, captured.size());
-        assertNotNull(captured.get(0));
-    }
-
-    @Test
-    public void testOnPartitionsLostCreatesViewAndDelegates() {
-        List<RebalanceConsumer> captured = new ArrayList<>();
-        ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsLost(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
-                captured.add(rc);
-            }
-        };
-
-        state = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
-        state.setRebalanceListener(userListener, consumer);
-        state.onPartitionsLost(partitions);
-
-        assertEquals(1, captured.size());
-        assertNotNull(captured.get(0));
-    }
-
-    @Test
-    public void testViewIsClosedAfterAssignedCallback() {
-        List<RebalanceConsumer> captured = new ArrayList<>();
-        ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
-                captured.add(rc);
-            }
-        };
-
-        state = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
-        state.setRebalanceListener(userListener, consumer);
-        state.onPartitionsAssigned(partitions);
-
-        assertThrows(IllegalStateException.class, () -> captured.get(0).assignment());
-    }
-
-    @Test
-    public void testViewIsClosedAfterRevokedCallback() {
-        List<RebalanceConsumer> captured = new ArrayList<>();
-        ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
-                captured.add(rc);
-            }
-        };
-
-        state = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
-        state.setRebalanceListener(userListener, consumer);
-        state.onPartitionsRevoked(partitions);
-
-        assertThrows(IllegalStateException.class, () -> captured.get(0).commitSync());
-    }
-
-    @Test
-    public void testViewIsClosedAfterLostCallback() {
-        List<RebalanceConsumer> captured = new ArrayList<>();
-        ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsLost(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
-                captured.add(rc);
-            }
-        };
-
-        state = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
-        state.setRebalanceListener(userListener, consumer);
-        state.onPartitionsLost(partitions);
-
-        assertThrows(IllegalStateException.class, () -> captured.get(0).paused());
-    }
-
-    @Test
-    public void testViewIsClosedEvenWhenCallbackThrows() {
-        List<RebalanceConsumer> captured = new ArrayList<>();
-        ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
-                captured.add(rc);
-                throw new RuntimeException("callback failed");
-            }
-        };
-
-        state = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
-        state.setRebalanceListener(userListener, consumer);
-
-        assertThrows(RuntimeException.class, () -> state.onPartitionsAssigned(partitions), () -> "callback failed");
-
-        assertEquals(1, captured.size());
-        assertThrows(IllegalStateException.class, () -> captured.get(0).assignment());
-    }
-
-    @Test
-    public void testEachCallbackGetsFreshView() {
-        List<RebalanceConsumer> captured = new ArrayList<>();
-        ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
-                captured.add(rc);
-            }
-        };
-
-        state = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
-        state.setRebalanceListener(userListener, consumer);
-        state.onPartitionsAssigned(partitions);
-        state.onPartitionsAssigned(partitions);
-
-        assertEquals(2, captured.size());
-        assertNotSame(captured.get(0), captured.get(1));
-    }
-
-    @Test
-    public void testExceptionFromCallbackPropagates() {
-        RuntimeException expected = new RuntimeException("boom");
-        ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                throw expected;
-            }
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
-        };
-
-        state = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
-        state.setRebalanceListener(userListener, consumer);
-        RuntimeException thrown = assertThrows(RuntimeException.class, () -> state.onPartitionsAssigned(partitions));
-        assertEquals(expected, thrown);
-    }
-
-    @Test
-    public void testDefaultDelegationFromTwoArgToOneArg() {
-        List<String> calls = new ArrayList<>();
-        ConsumerRebalanceListener userListener = new ConsumerRebalanceListener() {
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                calls.add("assigned-1arg");
-            }
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-                calls.add("revoked-1arg");
-            }
-        };
-
-        state = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
-        state.setRebalanceListener(userListener, consumer);
-
-        state.onPartitionsAssigned(partitions);
-        state.onPartitionsRevoked(partitions);
-        state.onPartitionsRevoked(partitions);
-
-        assertEquals(List.of("assigned-1arg", "revoked-1arg", "revoked-1arg"), calls);
     }
 
     private static class MockRebalanceListener implements ConsumerRebalanceListener {

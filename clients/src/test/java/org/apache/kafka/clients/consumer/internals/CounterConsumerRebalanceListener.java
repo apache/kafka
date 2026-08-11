@@ -17,15 +17,14 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.RebalanceConsumer;
-import org.apache.kafka.clients.consumer.RebalanceListener;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collection;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class CounterConsumerRebalanceListener implements RebalanceListener {
+public class CounterConsumerRebalanceListener implements ConsumerRebalanceListener {
 
     private final AtomicInteger revokedCounter = new AtomicInteger();
     private final AtomicInteger assignedCounter = new AtomicInteger();
@@ -48,7 +47,7 @@ public class CounterConsumerRebalanceListener implements RebalanceListener {
     }
 
     @Override
-    public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
+    public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
         try {
             if (revokedError.isPresent())
                 throw revokedError.get();
@@ -58,7 +57,7 @@ public class CounterConsumerRebalanceListener implements RebalanceListener {
     }
 
     @Override
-    public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
+    public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
         try {
             if (assignedError.isPresent())
                 throw assignedError.get();
@@ -68,7 +67,7 @@ public class CounterConsumerRebalanceListener implements RebalanceListener {
     }
 
     @Override
-    public void onPartitionsLost(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
+    public void onPartitionsLost(Collection<TopicPartition> partitions) {
         try {
             if (lostError.isPresent())
                 throw lostError.get();

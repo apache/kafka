@@ -365,7 +365,7 @@ public class ShareHeartbeatRequestManagerTest
         // Mock a response from the group coordinator, that supplies the member ID and a new epoch
         when(membershipManager.state()).thenReturn(MemberState.STABLE);
         when(subscriptions.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptions.hasRebalanceListener()).thenReturn(false);
+        when(subscriptions.rebalanceListener()).thenReturn(Optional.empty());
         mockStableMemberData();
         data = heartbeatState.buildRequestData();
         assertEquals(DEFAULT_GROUP_ID, data.groupId());

@@ -75,7 +75,7 @@ public class MockShareConsumer<K, V> implements ShareConsumer<K, V> {
     @Override
     public synchronized void subscribe(Collection<String> topics) {
         ensureNotClosed();
-        subscriptions.subscribe(new HashSet<>(topics));
+        subscriptions.subscribe(new HashSet<>(topics), Optional.empty());
     }
 
     @Override

@@ -35,7 +35,6 @@ import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
-import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.metrics.KafkaConsumerMetrics;
 import org.apache.kafka.common.Cluster;
@@ -438,6 +437,15 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     @Override
+    public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
+        if (listener == null)
+            throw new IllegalArgumentException("RebalanceListener cannot be null");
+
+        subscribeInternal(topics, Optional.of(listener));
+    }
+
+
+    @Override
     public void registerMetricForSubscription(KafkaMetric metric) {
         if (!metrics().containsKey(metric.metricName())) {
             clientTelemetryReporter.ifPresent(reporter -> reporter.metricChange(metric));
@@ -456,16 +464,8 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     @Override
-    public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
-        if (listener == null)
-            throw new IllegalArgumentException("RebalanceListener cannot be null");
-
-        subscribeInternal(topics, listener);
-    }
-
-    @Override
     public void subscribe(Collection<String> topics) {
-        subscribeInternal(topics, null);
+        subscribeInternal(topics, Optional.empty());
     }
 
     /**
@@ -481,14 +481,14 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      *
      * <p>
      * @param topics The list of topics to subscribe to
-     * @param listener listener instance to get notifications on partition assignment/revocation
-     *                 for the subscribed topics; null argument is ignored
+     * @param listener {@link Optional} listener instance to get notifications on partition assignment/revocation
+     *                 for the subscribed topics
      * @throws IllegalArgumentException If topics is null or contains null or empty elements
      * @throws IllegalStateException If {@code subscribe()} is called previously with pattern, or assign is called
      *                               previously (without a subsequent call to {@link #unsubscribe()}), or if not
      *                               configured at-least one partition assignment strategy
      */
-    private void subscribeInternal(Collection<String> topics, ConsumerRebalanceListener listener) {
+    private void subscribeInternal(Collection<String> topics, Optional<ConsumerRebalanceListener> listener) {
         acquireAndEnsureOpen();
         try {
             throwIfGroupIdNotDefined();
@@ -505,9 +505,6 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
                 throwIfNoAssignorsConfigured();
 
-                if (listener != null)
-                    subscriptions.setRebalanceListener(listener, this);
-
                 // Clear the buffered data which are not a part of newly assigned topics
                 final Set<TopicPartition> currentTopicPartitions = new HashSet<>();
 
@@ -519,7 +516,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 fetcher.clearBufferedDataForUnassignedPartitions(currentTopicPartitions);
 
                 log.info("Subscribed to topic(s): {}", String.join(", ", topics));
-                if (this.subscriptions.subscribe(new HashSet<>(topics)))
+                if (this.subscriptions.subscribe(new HashSet<>(topics), listener))
                     metadata.requestUpdateForNewTopics();
             }
         } finally {
@@ -532,12 +529,12 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
 
-        subscribeInternal(pattern, listener);
+        subscribeInternal(pattern, Optional.of(listener));
     }
 
     @Override
     public void subscribe(Pattern pattern) {
-        subscribeInternal(pattern, null);
+        subscribeInternal(pattern, Optional.empty());
     }
 
     @Override
@@ -567,14 +564,14 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * Group rebalances only take place during an active call to {@link #poll(Duration)}.
      *
      * @param pattern Pattern to subscribe to
-     * @param listener listener instance to get notifications on partition assignment/revocation
-     *                 for the subscribed topics. null argument is ignored
-     * @throws IllegalArgumentException If pattern is null
+     * @param listener {@link Optional} listener instance to get notifications on partition assignment/revocation
+     *                 for the subscribed topics
+     * @throws IllegalArgumentException If pattern or listener is null
      * @throws IllegalStateException If {@code subscribe()} is called previously with topics, or assign is called
      *                               previously (without a subsequent call to {@link #unsubscribe()}), or if not
      *                               configured at-least one partition assignment strategy
      */
-    private void subscribeInternal(Pattern pattern, ConsumerRebalanceListener listener) {
+    private void subscribeInternal(Pattern pattern, Optional<ConsumerRebalanceListener> listener) {
         throwIfGroupIdNotDefined();
         if (pattern == null || pattern.toString().isEmpty())
             throw new IllegalArgumentException("Topic pattern to subscribe to cannot be " + (pattern == null ?
@@ -584,11 +581,9 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         try {
             throwIfNoAssignorsConfigured();
             log.info("Subscribed to pattern: '{}'", pattern);
-            if (listener != null)
-                subscriptions.setRebalanceListener(listener, this);
-            subscriptions.subscribe(pattern);
-            coordinator.updatePatternSubscription(metadata.fetch());
-            metadata.requestUpdateForNewTopics();
+            this.subscriptions.subscribe(pattern, listener);
+            this.coordinator.updatePatternSubscription(metadata.fetch());
+            this.metadata.requestUpdateForNewTopics();
         } finally {
             release();
         }
@@ -604,16 +599,6 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
             this.subscriptions.unsubscribe();
             log.info("Unsubscribed all topics or patterns and assigned partitions");
-        } finally {
-            release();
-        }
-    }
-
-    @Override
-    public void setRebalanceListener(RebalanceListener callback) {
-        acquireAndEnsureOpen();
-        try {
-            subscriptions.setRebalanceListener(callback, this);
         } finally {
             release();
         }
