@@ -255,6 +255,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         final S segment = segments.getOrCreateSegmentIfLive(segmentId, internalProcessorContext, observedStreamTime);
         if (segment == null) {
             expiredRecordSensor.record();
+            LOG.warn("Skipping record for expired segment.");
         } else {
             synchronized (position) {
                 // Transactional puts stage their position too, so READ_COMMITTED never sees a position ahead of the data.

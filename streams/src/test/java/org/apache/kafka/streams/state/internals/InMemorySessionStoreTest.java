@@ -323,7 +323,6 @@ public class InMemorySessionStoreTest extends AbstractSessionBytesStoreTest {
         return store;
     }
 
-
     @Test
     public void shouldMeasureExpiredRecordsDroppedDuringRestoreAsRecords() {
         // The restore path reports every record skipped for an expired segment in a single sensor
