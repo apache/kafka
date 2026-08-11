@@ -303,7 +303,7 @@ public class KafkaConsumerTest {
         assertEquals(2.0d, getMetric(metrics, "assigned-partitions").metricValue());
 
         subscription.unsubscribe();
-        subscription.subscribe(Set.of(topic), Optional.empty());
+        subscription.subscribe(Set.of(topic));
         subscription.assignFromSubscribed(Set.of(tp0));
         assertEquals(1.0d, getMetric(metrics, "assigned-partitions").metricValue());
     }
