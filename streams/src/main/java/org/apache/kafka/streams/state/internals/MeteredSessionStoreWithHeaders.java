@@ -510,24 +510,13 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
     }
 
     private class MeteredSessionStoreWithHeadersIterator
-        implements KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>>, MeteredIterator {
+        extends AbstractMeteredIterator<Windowed<Bytes>>
+        implements KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> {
 
-        private final KeyValueIterator<Windowed<Bytes>, byte[]> iter;
-        private final long startNs;
-        private final long startTimestampMs;
         private KeyValue<Windowed<K>, AggregationWithHeaders<AGG>> cachedNext;
 
         private MeteredSessionStoreWithHeadersIterator(final KeyValueIterator<Windowed<Bytes>, byte[]> iter) {
-            this.iter = iter;
-            this.startNs = time.nanoseconds();
-            this.startTimestampMs = time.milliseconds();
-            numOpenIterators.increment();
-            openIterators.add(this);
-        }
-
-        @Override
-        public long startTimestamp() {
-            return startTimestampMs;
+            super(iter, fetchSensor, iteratorDurationSensor, time, numOpenIterators, openIterators);
         }
 
         @Override
@@ -553,19 +542,6 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
         }
 
         @Override
-        public void close() {
-            try {
-                iter.close();
-            } finally {
-                final long duration = time.nanoseconds() - startNs;
-                fetchSensor.record(duration);
-                iteratorDurationSensor.record(duration);
-                numOpenIterators.decrement();
-                openIterators.remove(this);
-            }
-        }
-
-        @Override
         public Windowed<K> peekNextKey() {
             if (cachedNext == null) {
                 cachedNext = next();
@@ -585,30 +561,13 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
      * non-negative when the window is constructed, so this iterator's {@code next()} can never throw.
      */
     private class MeteredSessionWithHeadersReadOnlyRecordIterator
-        implements ReadOnlyRecordIterator<Windowed<K>, AGG>, MeteredIterator {
-
-        private final KeyValueIterator<Windowed<Bytes>, byte[]> iter;
-        private final long startNs;
-        private final long startTimestampMs;
+        extends AbstractMeteredIterator<Windowed<Bytes>>
+        implements ReadOnlyRecordIterator<Windowed<K>, AGG> {
 
         private MeteredSessionWithHeadersReadOnlyRecordIterator(
             final KeyValueIterator<Windowed<Bytes>, byte[]> iter
         ) {
-            this.iter = iter;
-            this.startNs = time.nanoseconds();
-            this.startTimestampMs = time.milliseconds();
-            numOpenIterators.increment();
-            openIterators.add(this);
-        }
-
-        @Override
-        public long startTimestamp() {
-            return startTimestampMs;
-        }
-
-        @Override
-        public boolean hasNext() {
-            return iter.hasNext();
+            super(iter, fetchSensor, iteratorDurationSensor, time, numOpenIterators, openIterators);
         }
 
         @Override
@@ -625,19 +584,6 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
                 headers);
             ((RecordHeaders) record.headers()).setReadOnly();
             return record;
-        }
-
-        @Override
-        public void close() {
-            try {
-                iter.close();
-            } finally {
-                final long duration = time.nanoseconds() - startNs;
-                fetchSensor.record(duration);
-                iteratorDurationSensor.record(duration);
-                numOpenIterators.decrement();
-                openIterators.remove(this);
-            }
         }
     }
 }

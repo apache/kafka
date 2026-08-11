@@ -227,16 +227,19 @@ public final class LocalTieredStorage implements RemoteStorageManager {
         this.storageListeners.add(listener);
     }
 
-    private Integer nodeId(final Map<String, ?> configs) {
+    private int nodeId(final Map<String, ?> configs) {
         final Integer nodeId = (Integer) configs.get(NODE_ID);
         if (nodeId != null) {
             return nodeId;
         }
         final Integer brokerId = (Integer) configs.get(BROKER_ID);
-        if (brokerId != null) {
-            logger.warn("The '{}' config is deprecated and will no longer be read in Apache Kafka 5.0. Please use '{}' instead.",
-                    BROKER_ID, NODE_ID);
+        if (brokerId == null) {
+            throw new InvalidConfigurationException(format(
+                    "Both %s and %s configs are missing. Please configure %s to use the LocalTieredStorage manager.",
+                    NODE_ID, BROKER_ID, NODE_ID));
         }
+        logger.warn("The '{}' config is deprecated and will no longer be read in Apache Kafka 5.0. Please use '{}' instead.",
+                BROKER_ID, NODE_ID);
         return brokerId;
     }
 
@@ -252,15 +255,8 @@ public final class LocalTieredStorage implements RemoteStorageManager {
         final String shouldDeleteOnClose = (String) configs.get(DELETE_ON_CLOSE_CONFIG);
         final String transfererClass = (String) configs.get(TRANSFERER_CLASS_CONFIG);
         final String isDeleteEnabled = (String) configs.get(ENABLE_DELETE_API_CONFIG);
-        final Integer nodeIdInt = nodeId(configs);
 
-        if (nodeIdInt == null) {
-            throw new InvalidConfigurationException(format(
-                    "Both %s and %s configs are missing. Please configure %s to use the LocalTieredStorage manager.",
-                    NODE_ID, BROKER_ID, NODE_ID));
-        }
-
-        brokerId = nodeIdInt;
+        brokerId = nodeId(configs);
         logger = new LogContext(format("[LocalTieredStorage Id=%d] ", brokerId)).logger(this.getClass());
 
         if (shouldDeleteOnClose != null) {

@@ -303,7 +303,7 @@ public class KafkaConsumerTest {
         assertEquals(2.0d, getMetric(metrics, "assigned-partitions").metricValue());
 
         subscription.unsubscribe();
-        subscription.subscribe(Set.of(topic), Optional.empty());
+        subscription.subscribe(Set.of(topic));
         subscription.assignFromSubscribed(Set.of(tp0));
         assertEquals(1.0d, getMetric(metrics, "assigned-partitions").metricValue());
     }
@@ -3858,7 +3858,8 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         MockRebalanceListener countingRebalanceListener = new MockRebalanceListener();
         initMetadata(client, Map.of(topic, 1, topic2, 1, topic3, 1));
 
-        consumer.subscribe(Arrays.asList(topic, topic2), countingRebalanceListener);
+        consumer.setRebalanceListener(countingRebalanceListener);
+        consumer.subscribe(Arrays.asList(topic, topic2));
         Node node = metadata.fetch().nodes().get(0);
         prepareRebalance(client, node, assignor, Arrays.asList(tp0, t2p0), null);
 
