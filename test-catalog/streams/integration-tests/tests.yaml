@@ -139,6 +139,19 @@ org.apache.kafka.streams.integration.IQv2HeadersStoreIntegrationTest:
 org.apache.kafka.streams.integration.IQv2IntegrationTest:
 - CLASSIC
 - STREAMS
+org.apache.kafka.streams.integration.IQv2IsolationLevelIntegrationTest:
+- IN_MEMORY_KV_POINT
+- IN_MEMORY_KV_RANGE
+- IN_MEMORY_SESSION
+- IN_MEMORY_WINDOW_POINT
+- IN_MEMORY_WINDOW_RANGE
+- PERSISTENT_KV_POINT
+- PERSISTENT_KV_RANGE
+- PERSISTENT_SESSION
+- PERSISTENT_VERSIONED_MULTI
+- PERSISTENT_VERSIONED_POINT
+- PERSISTENT_WINDOW_POINT
+- PERSISTENT_WINDOW_RANGE
 org.apache.kafka.streams.integration.IQv2StoreIntegrationTest:
 - verifyStore
 org.apache.kafka.streams.integration.IQv2VersionedStoreIntegrationTest:
