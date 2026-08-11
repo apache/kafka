@@ -18,7 +18,9 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataSnapshot;
+import org.apache.kafka.clients.producer.BufferExhaustedException;
 import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -27,6 +29,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
@@ -69,6 +72,22 @@ import java.util.function.Supplier;
  * this behavior is explicitly disabled.
  */
 public class RecordAccumulator {
+
+    /**
+     * Track progress of an append's retry loop, advanced by
+     * {@link #throwIfNoMoreRetriesAllowed}.
+     */
+    protected enum AppendAttemptState {
+        /** No pass has run yet. The first one is always allowed, so the deadline is not enforced in this state. */
+        FIRST_ATTEMPT,
+        /** At least one pass has run; the append stays in this state while there is time left under the deadline. */
+        RETRYING,
+        /**
+         * The deadline passed while retrying. The pass that moved into this state did run even after the
+         * deadline passed (and it may have appended). Once in this state no more passes will be allowed.
+         */
+        RETRIES_EXPIRED
+    }
 
     protected final LogContext logContext;
     protected final Logger log;
@@ -380,6 +399,70 @@ public class RecordAccumulator {
         boolean enableSwitch = allBatchesFull(dq);
         topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, appendResult.appendedBytes, cluster, enableSwitch);
         return appendResult;
+    }
+
+    /**
+     * Adds {@code maxTimeToBlock} to {@code nowMs}, capped at {@link Long#MAX_VALUE} so that a large
+     * {@code max.block.ms} cannot overflow into a deadline in the past.
+     */
+    protected static long appendDeadlineMs(long nowMs, long maxTimeToBlock) {
+        return maxTimeToBlock > Long.MAX_VALUE - nowMs ? Long.MAX_VALUE : nowMs + maxTimeToBlock;
+    }
+
+    /**
+     * What is left of {@code deadlineMs} to wait for memory, never negative. An acquire given this rather than
+     * the raw {@code max.block.ms} has the time already spent retrying counted against its wait. Reads the
+     * clock, not a cached {@code nowMs}, which retries that acquired nothing never refresh.
+     * <p>
+     * Only {@link ChunkedRecordAccumulator#append} uses it so far; {@link #append} still passes the raw value.
+     */
+    protected long remainingTimeToBlockMs(long deadlineMs) {
+        return Math.max(0L, deadlineMs - time.milliseconds());
+    }
+
+    /**
+     * Decide whether an append pass may run, and throw if it may not because no time is left.
+     * <ul>
+     * <li>the first pass is always allowed — the deadline is not even read, so an append that completes in one
+     *     pass never depends on the clock;</li>
+     * <li>retries are allowed while there is time left before {@code deadlineMs};</li>
+     * <li>after the deadline, one more retry is allowed, since it may need no memory at all and
+     *     {@code max.block.ms} of 0 is already past its deadline when the append starts. The pass after that
+     *     throws, which is the only thing that stops the loop repeating.</li>
+     * </ul>
+     * These allow a pass, never waiting time: past the deadline a blocking acquire is given
+     * {@link #remainingTimeToBlockMs}, which is 0 by then, and the extension acquire never waits at all. So
+     * retries that wait for memory are bounded by that wait, and this bounds the ones that wait for nothing —
+     * restarts because the partition moved, or the batch the pass read was replaced or filled under it.
+     *
+     * @param deniedMemory whether the pool refused the pass that just ended; it only decides how giving up is
+     *                     reported. Only the incremental extension acquire can be refused and still let its
+     *                     pass finish, and it suppresses the pool's own buffer-exhausted metric so the drop is
+     *                     counted here — exactly once either way. The full path should pass {@code false}:
+     *                     {@link BufferPool#allocate} records that metric itself and its refusal ends the append.
+     * @return the state to pass to the next call, when this pass may run
+     * @throws BufferExhaustedException if the pass that gave up was denied memory
+     * @throws TimeoutException if it gave up for any other reason
+     */
+    protected AppendAttemptState throwIfNoMoreRetriesAllowed(AppendAttemptState attemptState, long deadlineMs,
+                                                            boolean deniedMemory, String topic) {
+        // The common case is a single pass, so it costs no clock read.
+        if (attemptState == AppendAttemptState.FIRST_ATTEMPT)
+            return AppendAttemptState.RETRYING;
+        if (time.milliseconds() < deadlineMs)
+            return attemptState;
+        if (attemptState == AppendAttemptState.RETRYING)
+            return AppendAttemptState.RETRIES_EXPIRED;
+        if (deniedMemory) {
+            free.recordBufferExhausted();
+            throw new BufferExhaustedException("Failed to allocate memory for a record of topic " + topic
+                    + " within " + ProducerConfig.MAX_BLOCK_MS_CONFIG + ". Total memory: "
+                    + free.totalMemory() + " bytes. Available memory: "
+                    + free.availableMemory() + " bytes.");
+        }
+        throw new TimeoutException("Failed to append a record to topic " + topic + " within "
+                + ProducerConfig.MAX_BLOCK_MS_CONFIG + ". The append kept restarting because concurrent "
+                + "appends changed the state it read.");
     }
 
     /**

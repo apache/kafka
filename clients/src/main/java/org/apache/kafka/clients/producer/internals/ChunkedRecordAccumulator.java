@@ -18,7 +18,6 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.producer.BufferExhaustedException;
 import org.apache.kafka.clients.producer.Callback;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -124,20 +123,21 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
         NewBatchBuffer newBatch = null;
         List<ByteBuffer> extensionChunks = null;
 
-        // Bounds how long this append waits for memory, so it stays within maxTimeToBlock, even across retries.
-        // E.g., this loop may release the chunks it acquired (when a concurrent appender created a batch to extend instead)
-        // and block again on a later iteration, so the blocking acquire is given whatever is left of the deadline.
-        long deadlineMs = maxTimeToBlock > Long.MAX_VALUE - nowMs ? Long.MAX_VALUE : nowMs + maxTimeToBlock;
-
-        // Cleared once this append has attempted an extension, so any later pass through it is a retry: the acquire
-        // failed, or succeeded without getting the record appended (not enough capacity by then, or no longer the batch it
-        // was sized against). Neither blocks, so a retried extension never times out on its own and is checked against the
-        // deadline via this flag. The first attempt always runs, even with max.block.ms 0.
-        boolean firstExtension = true;
+        // This append's share of max.block.ms, as an absolute deadline. Blocking allocations bound themselves against it.
+        // Retries that never block are bounded by it through throwIfNoMoreRetriesAllowed: they are allowed while
+        // time is left. All retries bounded consistently (retry failed extension, retry on partition change).
+        long deadlineMs = appendDeadlineMs(nowMs, maxTimeToBlock);
+        AppendAttemptState attemptState = AppendAttemptState.FIRST_ATTEMPT;
+        // Whether the non-blocking extension was denied memory on the pass that just ended (only
+        // memory exhaustion case a pass can survive because it's non-blocking, all others throw).
+        // Cleared once the next pass has read it, so it can only ever describe the pass immediately before.
+        boolean nonBlockingAllocationDeniedMemory = false;
 
         if (headers == null) headers = Record.EMPTY_HEADERS;
         try {
             while (true) {
+                attemptState = throwIfNoMoreRetriesAllowed(attemptState, deadlineMs, nonBlockingAllocationDeniedMemory, topic);
+                nonBlockingAllocationDeniedMemory = false;
                 final BuiltInPartitioner.StickyPartitionInfo partitionInfo;
                 final int effectivePartition;
                 if (partition == RecordMetadata.UNKNOWN_PARTITION) {
@@ -172,16 +172,13 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                 }
 
                 if (appendResult.needsBufferExtension()) {
-                    // The tryAppend above has re-confirmed the record still needs chunks, so bound the retry here.
-                    if (!firstExtension)
-                        throwIfExtensionBudgetExceeded(deadlineMs, maxTimeToBlock, topic, effectivePartition);
-                    firstExtension = false;
                     extensionChunks = allocateExtensionChunks(appendResult.extensionBytesNeeded, batchToExtend, dq,
                             topic, effectivePartition);
                     if (extensionChunks == null) {
-                        // Pool exhausted, nothing is held here. allocateExtensionChunks has already
-                        // decided whether to close the open batch; retry either way, bounded by the
-                        // deadline check above.
+                        // Pool exhausted, so no chunks are held. allocateExtensionChunks has already
+                        // decided whether to close the open batch; retry either way, bounded by
+                        // throwIfNoMoreRetriesAllowed, which will report exhausted memory as the cause.
+                        nonBlockingAllocationDeniedMemory = true;
                         continue;
                     }
                     nowMs = time.milliseconds();
@@ -193,9 +190,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     // TODO: review when compression is supported.
                     int newBatchSize = AbstractRecords.estimateSizeInBytesUpperBound(
                             RecordBatch.CURRENT_MAGIC_VALUE, compression.type(), key, value, headers);
-                    // Get remaining time off the clock (not nowMs): retries that acquire nothing do not update nowMs,
-                    // so measuring from it would hand back the time those iterations already spent.
-                    long remainingTimeToBlock = Math.max(0L, deadlineMs - time.milliseconds());
+                    long remainingTimeToBlock = remainingTimeToBlockMs(deadlineMs);
                     log.trace("Allocating {} byte chunked buffer ({} byte chunks) for topic {} partition {} with remaining timeout {}ms",
                             newBatchSize, chunkedFree.poolableSize(), topic, effectivePartition, remainingTimeToBlock);
                     List<ByteBuffer> initialChunks;
@@ -284,20 +279,6 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
             deallocateExtensionChunks(extensionChunks);
             appendsInProgress.decrementAndGet();
         }
-    }
-
-    /**
-     * Throw once this append's share of {@code max.block.ms} has run out, counting the record as dropped in
-     * the buffer-exhausted metrics. A no-op if there is time left.
-     */
-    private void throwIfExtensionBudgetExceeded(long deadlineMs, long maxTimeToBlock, String topic, int partition) {
-        if (time.milliseconds() < deadlineMs)
-            return;
-        chunkedFree.recordBufferExhausted();
-        throw new BufferExhaustedException("Failed to extend the open batch for topic " + topic + " partition "
-                + partition + " within the remaining " + ProducerConfig.MAX_BLOCK_MS_CONFIG + " of "
-                + maxTimeToBlock + " ms. Total memory: " + chunkedFree.totalMemory()
-                + " bytes. Available memory: " + chunkedFree.availableMemory() + " bytes.");
     }
 
     /**
