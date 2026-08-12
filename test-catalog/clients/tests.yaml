@@ -3235,11 +3235,11 @@ org.apache.kafka.clients.producer.internals.ChunkedByteBufferOutputStreamTest:
 - testAddBuffersRejectsWrongSizeChunks
 - testConstructorRejectsInvalidChunks
 - testDeallocateReturnsAllChunks
-- testEnsureRemainingDoesNotWasteCurrentChunk
 - testOperationsRejectedAfterDeallocate
 - testPositionWalksAcrossChunks
 - testRemainingSumsFreeBytesAcrossChunks
 - testSingleChunkWriteRoundtrip
+- testThrowIfInsufficientRemainingDoesNotWasteCurrentChunk
 - testUnusedChunksReleasedOnCloseNotOnBuffer
 - testWriteAcrossMultipleChunks
 - testWritesDisallowedAfterClose
@@ -5800,13 +5800,6 @@ org.apache.kafka.common.utils.internals.AppInfoParserTest:
 - testUnregisterAppInfoUnregistersMetrics
 org.apache.kafka.common.utils.internals.ByteBufferInputStreamTest:
 - testReadUnsignedIntFromInputStream
-org.apache.kafka.common.utils.internals.ByteBufferOutputStreamTest:
-- testExpandByteBufferOnPositionIncrease
-- testExpandByteBufferOnWrite
-- testExpandDirectByteBufferOnPositionIncrease
-- testExpandDirectByteBufferOnWrite
-- testWriteByteBuffer
-- testWriteDirectByteBuffer
 org.apache.kafka.common.utils.internals.ByteBufferUnmapperTest:
 - testUnmap
 org.apache.kafka.common.utils.internals.ByteUtilsTest:
@@ -5925,6 +5918,13 @@ org.apache.kafka.common.utils.internals.ShellTest:
 - testEchoHello
 - testHeadDevZero
 - testRunProgramWithErrorReturn
+org.apache.kafka.common.utils.internals.SingleByteBufferOutputStreamTest:
+- testExpandByteBufferOnPositionIncrease
+- testExpandByteBufferOnWrite
+- testExpandDirectByteBufferOnPositionIncrease
+- testExpandDirectByteBufferOnWrite
+- testWriteByteBuffer
+- testWriteDirectByteBuffer
 org.apache.kafka.common.utils.internals.ThreadUtilsTest:
 - testThreadNameWithNumberDemon
 - testThreadNameWithNumberNoDemon
