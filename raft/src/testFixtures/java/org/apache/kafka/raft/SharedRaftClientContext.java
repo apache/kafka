@@ -20,14 +20,22 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.AddRaftVoterRequestData;
+import org.apache.kafka.common.message.AddRaftVoterResponseData;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.DescribeQuorumRequestData;
+import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
+import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
+import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchSnapshotRequestData;
+import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.message.RemoveRaftVoterRequestData;
+import org.apache.kafka.common.message.RemoveRaftVoterResponseData;
 import org.apache.kafka.common.message.UpdateRaftVoterRequestData;
+import org.apache.kafka.common.message.UpdateRaftVoterResponseData;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -499,6 +507,32 @@ public abstract class SharedRaftClientContext {
             return raftProtocol.updateVoterRpcVersion();
         } else {
             throw new IllegalArgumentException(String.format("Request %s is not a raft request", request));
+        }
+    }
+
+    short raftResponseVersion(ApiMessage response) {
+        if (response instanceof FetchResponseData) {
+            return raftProtocol.fetchRpcVersion();
+        } else if (response instanceof FetchSnapshotResponseData) {
+            return raftProtocol.fetchSnapshotRpcVersion();
+        } else if (response instanceof VoteResponseData) {
+            return raftProtocol.voteRpcVersion();
+        } else if (response instanceof BeginQuorumEpochResponseData) {
+            return raftProtocol.beginQuorumEpochRpcVersion();
+        } else if (response instanceof EndQuorumEpochResponseData) {
+            return raftProtocol.endQuorumEpochRpcVersion();
+        } else if (response instanceof DescribeQuorumResponseData) {
+            return raftProtocol.describeQuorumRpcVersion();
+        } else if (response instanceof AddRaftVoterResponseData) {
+            return raftProtocol.addVoterRpcVersion();
+        } else if (response instanceof RemoveRaftVoterResponseData) {
+            return raftProtocol.removeVoterRpcVersion();
+        } else if (response instanceof UpdateRaftVoterResponseData) {
+            return raftProtocol.updateVoterRpcVersion();
+        } else if (response instanceof ApiVersionsResponseData) {
+            return 4;
+        } else {
+            throw new IllegalArgumentException(String.format("Request %s is not a raft response", response));
         }
     }
 

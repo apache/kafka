@@ -23,7 +23,6 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.AddRaftVoterRequestData;
 import org.apache.kafka.common.message.AddRaftVoterResponseData;
-import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
@@ -223,6 +222,12 @@ public class RaftClientTestContext extends SharedRaftClientContext {
     void expectAndGrantVotes(int epoch) throws Exception {
         super.expectAndGrantVotes(epoch);
         assertElectedLeader(epoch, localIdOrThrow());
+    }
+
+    @Override
+    void expectAndGrantPreVotes(int epoch) throws Exception {
+        super.expectAndGrantPreVotes(epoch);
+        assertVotedCandidate(epoch + 1, ReplicaKey.of(localIdOrThrow(), localDirectoryId));
     }
 
     public void assertElectedLeaderAndVotedKey(int epoch, int leaderId, ReplicaKey candidateKey) {
@@ -1397,32 +1402,6 @@ public class RaftClientTestContext extends SharedRaftClientContext {
         message.read(reader, version);
 
         return message;
-    }
-
-    private short raftResponseVersion(ApiMessage response) {
-        if (response instanceof FetchResponseData) {
-            return raftProtocol.fetchRpcVersion();
-        } else if (response instanceof FetchSnapshotResponseData) {
-            return raftProtocol.fetchSnapshotRpcVersion();
-        } else if (response instanceof VoteResponseData) {
-            return raftProtocol.voteRpcVersion();
-        } else if (response instanceof BeginQuorumEpochResponseData) {
-            return raftProtocol.beginQuorumEpochRpcVersion();
-        } else if (response instanceof EndQuorumEpochResponseData) {
-            return raftProtocol.endQuorumEpochRpcVersion();
-        } else if (response instanceof DescribeQuorumResponseData) {
-            return raftProtocol.describeQuorumRpcVersion();
-        } else if (response instanceof AddRaftVoterResponseData) {
-            return raftProtocol.addVoterRpcVersion();
-        } else if (response instanceof RemoveRaftVoterResponseData) {
-            return raftProtocol.removeVoterRpcVersion();
-        } else if (response instanceof UpdateRaftVoterResponseData) {
-            return raftProtocol.updateVoterRpcVersion();
-        } else if (response instanceof ApiVersionsResponseData) {
-            return 4;
-        } else {
-            throw new IllegalArgumentException(String.format("Request %s is not a raft response", response));
-        }
     }
 
     static class MockListener implements RaftClient.Listener<String> {
