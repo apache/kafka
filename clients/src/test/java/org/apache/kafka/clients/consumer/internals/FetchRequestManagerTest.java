@@ -421,6 +421,32 @@ public class FetchRequestManagerTest {
     }
 
     @Test
+    public void testMaximumTimeToWaitBoundedWhenPartitionsSkippedDueToInflight() {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        // A fetch request is sent successfully; maximumTimeToWait remains unbounded.
+        assertEquals(1, sendFetches());
+        assertEquals(Long.MAX_VALUE, fetcher.maximumTimeToWait(time.milliseconds()));
+
+        // The in-flight request blocks the node, so the next prepare() skips the partition.
+        // maximumTimeToWait should now be bounded to retryBackoffMs.
+        assertEquals(0, sendFetches());
+        assertEquals(retryBackoffMs, fetcher.maximumTimeToWait(time.milliseconds()));
+
+        // Complete the in-flight request and consume the buffered data.
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
+        networkClientDelegate.poll(time.timer(0));
+        fetchRecords();
+
+        // A new fetch request can now be sent; maximumTimeToWait reverts to unbounded.
+        assertEquals(1, sendFetches());
+        assertEquals(Long.MAX_VALUE, fetcher.maximumTimeToWait(time.milliseconds()));
+    }
+
+    @Test
     public void testInflightFetchOnPendingPartitions() {
         buildFetcher();
 
