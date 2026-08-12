@@ -1773,6 +1773,16 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         assertNull(rocksDBStore.get(k1));
     }
 
+    @Test
+    public void putAllShouldThrowOnClosedStore() {
+        rocksDBStore.init(context, rocksDBStore);
+        rocksDBStore.close();
+
+        assertThrows(InvalidStateStoreException.class, () -> rocksDBStore.putAll(List.of(
+            KeyValue.pair(new Bytes(stringSerializer.serialize(null, "k1")),
+                stringSerializer.serialize(null, "v1")))));
+    }
+
     private List<String> keysOf(final KeyValueIterator<Bytes, byte[]> it) {
         final List<String> keys = new ArrayList<>();
         while (it.hasNext()) {
