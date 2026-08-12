@@ -392,6 +392,35 @@ public class FetchRequestManagerTest {
     }
 
     @Test
+    public void testMaximumTimeToWaitUnboundedWhenFetchSent() {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        assertEquals(1, sendFetches());
+        assertEquals(Long.MAX_VALUE, fetcher.maximumTimeToWait(time.milliseconds()));
+    }
+
+    @Test
+    public void testMaximumTimeToWaitUnboundedWhenEmptyResultIsSafeToWake() {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        // Fetch data for tp0, but leave it buffered (unconsumed) so the next prepare() finds every fetchable
+        // partition already buffered.
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
+        assertEquals(1, sendFetches());
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+
+        assertEquals(0, sendFetches());
+        assertEquals(Long.MAX_VALUE, fetcher.maximumTimeToWait(time.milliseconds()));
+    }
+
+    @Test
     public void testInflightFetchOnPendingPartitions() {
         buildFetcher();
 
@@ -4251,7 +4280,8 @@ public class FetchRequestManagerTest {
                 metricsManager,
                 networkClientDelegate,
                 fetchCollector,
-                apiVersions));
+                apiVersions,
+                retryBackoffMs));
         ConsumerNetworkClient consumerNetworkClient = new ConsumerNetworkClient(
                 logContext,
                 client,
@@ -4313,8 +4343,9 @@ public class FetchRequestManagerTest {
                                            FetchMetricsManager metricsManager,
                                            NetworkClientDelegate networkClientDelegate,
                                            FetchCollector<K, V> fetchCollector,
-                                           ApiVersions apiVersions) {
-            super(logContext, time, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, networkClientDelegate, apiVersions);
+                                           ApiVersions apiVersions,
+                                           long retryBackoffMs) {
+            super(logContext, time, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, networkClientDelegate, apiVersions, retryBackoffMs);
             this.fetchCollector = fetchCollector;
         }
 

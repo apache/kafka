@@ -44,7 +44,14 @@ import java.util.stream.Collectors;
 public class FetchRequestManager extends AbstractFetch implements RequestManager {
 
     private final NetworkClientDelegate networkClientDelegate;
+    private final long retryBackoffMs;
     private CompletableFuture<Void> pendingFetchRequestFuture;
+
+    // Whether the most recent prepare() produced no requests only because all fetchable-but-unbuffered
+    // partitions were skipped (backoff, in-flight request, etc.). This state can only change after an
+    // external event occurs. Read by maximumTimeToWait() to cap the application thread's wait at
+    // retryBackoffMs, since nothing else will wake it to retry sooner.
+    private boolean shouldBoundMaximumTimeToWait;
 
     FetchRequestManager(final LogContext logContext,
                         final Time time,
@@ -54,9 +61,11 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
                         final FetchBuffer fetchBuffer,
                         final FetchMetricsManager metricsManager,
                         final NetworkClientDelegate networkClientDelegate,
-                        final ApiVersions apiVersions) {
+                        final ApiVersions apiVersions,
+                        final long retryBackoffMs) {
         super(logContext, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, time, apiVersions);
         this.networkClientDelegate = networkClientDelegate;
+        this.retryBackoffMs = retryBackoffMs;
     }
 
     @Override
@@ -67,6 +76,19 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
     @Override
     protected void maybeThrowAuthFailure(Node node) {
         networkClientDelegate.maybeThrowAuthFailure(node);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * If the most recent attempt to prepare fetch requests found nothing to send solely because every candidate 
+     * partition was skipped for a reason that only changes over time (reconnect backoff, an in-flight request, etc.), 
+     * nothing else will wake the application thread. In that case, its wait is bounded by {@code retryBackoffMs} to 
+     * ensure it wakes up and re-evaluates fetch eligibility periodically.
+     */
+    @Override
+    public long maximumTimeToWait(long currentTimeMs) {
+        return shouldBoundMaximumTimeToWait ? retryBackoffMs : Long.MAX_VALUE;
     }
 
     /**
@@ -152,11 +174,17 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
                     // wake up the FetchBuffer so it doesn't needlessly wait for a wakeup that won't come until
                     // the data in the fetch buffer is consumed.
                     fetchBuffer.wakeup();
+                    shouldBoundMaximumTimeToWait = false;
+                } else {
+                    // Nothing was sent, and nothing else will prompt a wakeup, so bound the wait instead of
+                    // leaving the application thread blocked until an unrelated event happens to wake it.
+                    shouldBoundMaximumTimeToWait = true;
                 }
                 pendingFetchRequestFuture.complete(null);
                 return PollResult.EMPTY;
             }
 
+            shouldBoundMaximumTimeToWait = false;
             List<UnsentRequest> requests = fetchRequests.entrySet().stream().map(entry -> {
                 final Node fetchTarget = entry.getKey();
                 final FetchSessionHandler.FetchRequestData data = entry.getValue();
