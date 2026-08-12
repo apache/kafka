@@ -78,6 +78,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -287,6 +288,20 @@ public class TaskManagerTest {
 
         verify(schedulingTaskManager).lockTasks(Set.of(taskId00, taskId01));
         verify(schedulingTaskManager).unlockTasks(Set.of(taskId00, taskId01));
+    }
+
+    @Test
+    public void shouldFailStreamThreadIfStateUpdaterDied() {
+        final RuntimeException fatalException = new RuntimeException("KABOOM!");
+        when(stateUpdater.fatalException()).thenReturn(Optional.of(fatalException));
+
+        final StreamsException thrown = assertThrows(
+            StreamsException.class,
+            () -> taskManager.checkStateUpdater(time.milliseconds(), noOpResetter)
+        );
+
+        assertEquals("The state updater died and cannot update tasks anymore.", thrown.getMessage());
+        assertEquals(fatalException, thrown.getCause());
     }
 
     @Test
@@ -3448,9 +3463,8 @@ public class TaskManagerTest {
         verify(stateUpdater).shutdown(Duration.ofMinutes(1L));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
-    public void shouldCloseTasksIfStateUpdaterTimesOutOnRemove() throws Exception {
+    public void shouldCloseTasksIfStateUpdaterFailsRemoval() {
         final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RUNNING)
             .withInputPartitions(taskId00Partitions)
@@ -3461,13 +3475,39 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, false);
 
         when(stateUpdater.tasks()).thenReturn(singleton(task00));
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = mock(CompletableFuture.class);
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
         when(stateUpdater.remove(eq(taskId00), eq(SuspendReason.MIGRATED))).thenReturn(future);
-        when(future.get(anyLong(), any())).thenThrow(new java.util.concurrent.TimeoutException());
+        future.completeExceptionally(new StreamsException("The state updater thread died."));
 
         taskManager.shutdown(true);
 
         verify(task00).closeDirty();
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldKeepWaitingForRemovalIfStateUpdaterDoesNotCompleteItWithinLogInterval() throws Exception {
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId00Partitions)
+            .build();
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, false);
+
+        when(stateUpdater.tasks()).thenReturn(singleton(task00)).thenReturn(emptySet());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = mock(CompletableFuture.class);
+        when(future.get(anyLong(), any()))
+            .thenThrow(new java.util.concurrent.TimeoutException())
+            .thenReturn(new StateUpdater.RemovedTaskResult(task00));
+        when(stateUpdater.remove(eq(taskId00), eq(SuspendReason.MIGRATED))).thenReturn(future);
+
+        taskManager.shutdown(true);
+
+        verify(future, times(2)).get(anyLong(), any());
+        verify(tasks).addTask(task00);
+        verify(task00, never()).closeDirty();
     }
 
     @Test
