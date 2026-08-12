@@ -1838,7 +1838,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
     @EnumSource(OwnedTaskRole.class)
     public void testBuildingHeartbeatAllOwnedTaskListsSentWhenOnlyOneRoleChanges(final OwnedTaskRole changingRole) {
         // The broker reads the owned-task lists as a report of what the member holds only when all three of them are
-        // non-null; if any is null it cannot tell that a task was released, and the member effectively fails tp
+        // non-null; if any is null it cannot tell that a task was released, and the member effectively fails to
         // acknowledges the revocation. So a change confined to a single role has to resend the other two lists as well,
         // even though they did not change.
         final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState =
