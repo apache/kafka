@@ -262,6 +262,8 @@ import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecor
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroupMember.hasAssignedTasksChanged;
+import static org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl.NUM_STANDBY_REPLICAS_CONFIG;
+import static org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG;
 
 
 /**
@@ -286,8 +288,8 @@ public class GroupMetadataManager {
      * broker-level default that is changed away from the static default must still bump the group epoch.
      */
     private static final Map<String, String> ASSIGNMENT_CONFIG_DEFAULTS = Map.of(
-        "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT),
-        "rack.aware.assignment.tags", GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT
+        NUM_STANDBY_REPLICAS_CONFIG, String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT),
+        RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT
     );
 
     private static class UpdateSubscriptionMetadataResult {
@@ -2414,7 +2416,7 @@ public class GroupMetadataManager {
                 )
         ));
 
-        String rackAwareTagsValue = currentAssignmentConfigs.getOrDefault("rack.aware.assignment.tags", "").trim();
+        String rackAwareTagsValue = currentAssignmentConfigs.getOrDefault(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "").trim();
         // The MISSING_CLIENT_TAGS status (code 6) requires version 1 of the RPC: version 0 clients
         // throw on unknown status codes, so it must not be sent to them.
         if (requestApiVersion >= 1 && !rackAwareTagsValue.isEmpty()) {
@@ -9935,10 +9937,10 @@ public class GroupMetadataManager {
         // 4.2 and 4.3 record num.standby.replicas unconditionally, and the map recorded for a group that sets
         // nothing must stay identical to theirs: during a rolling upgrade, a group whose coordinator moves to a
         // not-yet-upgraded broker would otherwise read the difference as a change and bump the group epoch.
-        configs.put("num.standby.replicas", numStandbyReplicas.toString());
+        configs.put(NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas.toString());
         // Configurations added after 4.3 are omitted at their default value instead, for the same reason: a
         // broker that predates them computes the map without them.
-        putIfNotDefault(configs, "rack.aware.assignment.tags", String.join(",", rackAwareAssignmentTags));
+        putIfNotDefault(configs, RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, String.join(",", rackAwareAssignmentTags));
         return configs;
     }
 

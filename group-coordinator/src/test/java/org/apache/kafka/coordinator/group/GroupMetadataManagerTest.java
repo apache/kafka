@@ -154,6 +154,7 @@ import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.TaskRole;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
+import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
@@ -23106,7 +23107,7 @@ public class GroupMetadataManagerTest {
         assertEquals(11, result.response().data().memberEpoch());
         assertEquals(11, group.groupEpoch());
         assertEquals("zone", group.lastAssignmentConfigs().get("rack.aware.assignment.tags"));
-        assertEquals("zone", assignor.lastPassedAssignmentConfigs().get("rack.aware.assignment.tags"));
+        assertEquals(List.of("zone"), assignor.lastPassedAssignmentConfigs().rackAwareAssignmentTags());
 
         // Clearing the tags is a change as well, even though the value is back at its default. The configuration
         // then drops out of the map entirely, which is what a broker that predates it records too.
@@ -23127,7 +23128,7 @@ public class GroupMetadataManagerTest {
         Map<String, String> defaultConfigs =
             Map.of("num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT));
         assertEquals(defaultConfigs, group.lastAssignmentConfigs());
-        assertEquals(defaultConfigs, assignor.lastPassedAssignmentConfigs());
+        assertEquals(AssignmentConfigsImpl.DEFAULT, assignor.lastPassedAssignmentConfigs());
     }
 
     @Test
@@ -23820,7 +23821,7 @@ public class GroupMetadataManagerTest {
                     .setWarmupTasks(List.of()));
         assertEquals(2, result.response().data().memberEpoch());
         assertEquals(
-            getDefaultAssignmentConfigs(),
+            AssignmentConfigsImpl.DEFAULT,
             assignor.lastPassedAssignmentConfigs()
         );
 
@@ -23859,7 +23860,7 @@ public class GroupMetadataManagerTest {
 
         // Verify that the new number of standby replicas is used
         assertEquals(
-            Map.of("num.standby.replicas", "2"),
+            AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(2),
             assignor.lastPassedAssignmentConfigs()
         );
 
@@ -24207,7 +24208,7 @@ public class GroupMetadataManagerTest {
         context.assertSessionTimeout(groupId, memberId,
             GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_DEFAULT);
         assertEquals(
-            getDefaultAssignmentConfigs(),
+            AssignmentConfigsImpl.DEFAULT,
             assignor.lastPassedAssignmentConfigs());
         assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT,
             result.response().data().taskOffsetIntervalMs());
@@ -24247,7 +24248,7 @@ public class GroupMetadataManagerTest {
         // Verify that the number of standby replicas is evaluated to max,
         // and task offset interval is evaluated to min
         assertEquals(
-            Map.of("num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT)),
+            AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT),
             assignor.lastPassedAssignmentConfigs());
         assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT,
             result.response().data().taskOffsetIntervalMs());
