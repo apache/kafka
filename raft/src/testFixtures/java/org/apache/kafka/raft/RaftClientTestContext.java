@@ -16,12 +16,14 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.AddRaftVoterRequestData;
 import org.apache.kafka.common.message.AddRaftVoterResponseData;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
@@ -42,7 +44,11 @@ import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.DataOutputStreamWritable;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.record.internal.ControlRecordUtils;
 import org.apache.kafka.common.record.internal.MemoryRecords;
@@ -59,6 +65,8 @@ import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.SnapshotReader;
 
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -1361,6 +1369,60 @@ public class RaftClientTestContext extends SharedRaftClientContext {
         }
 
         pollUntil(() -> OptionalLong.of(localLogEndOffset).equals(client.highWatermark()));
+    }
+
+    @Override
+    RaftRequest.Inbound inboundRequest(ApiMessage request, short version) {
+        return super.inboundRequest(roundTripApiMessage(request, version), version);
+    }
+
+    @Override
+    void deliverResponse(int correlationId, Node source, ApiMessage response) {
+        ApiMessage versionedResponse = roundTripApiMessage(response, raftResponseVersion(response));
+        super.deliverResponse(correlationId, source, versionedResponse);
+    }
+
+    // Round-trips a message through serialization to mimic the network, exercising the client's
+    // request/response encoding on every delivery.
+    private ApiMessage roundTripApiMessage(ApiMessage message, short version) {
+        ObjectSerializationCache cache =  new ObjectSerializationCache();
+        ByteArrayOutputStream  buffer = new ByteArrayOutputStream(message.size(cache, version));
+
+        // Encode the message to a byte array with the given version
+        DataOutputStreamWritable writer = new DataOutputStreamWritable(new DataOutputStream(buffer));
+        message.write(writer, cache, version);
+
+        // Decode the message from the byte array
+        ByteBufferAccessor reader = new ByteBufferAccessor(ByteBuffer.wrap(buffer.toByteArray()));
+        message.read(reader, version);
+
+        return message;
+    }
+
+    private short raftResponseVersion(ApiMessage response) {
+        if (response instanceof FetchResponseData) {
+            return raftProtocol.fetchRpcVersion();
+        } else if (response instanceof FetchSnapshotResponseData) {
+            return raftProtocol.fetchSnapshotRpcVersion();
+        } else if (response instanceof VoteResponseData) {
+            return raftProtocol.voteRpcVersion();
+        } else if (response instanceof BeginQuorumEpochResponseData) {
+            return raftProtocol.beginQuorumEpochRpcVersion();
+        } else if (response instanceof EndQuorumEpochResponseData) {
+            return raftProtocol.endQuorumEpochRpcVersion();
+        } else if (response instanceof DescribeQuorumResponseData) {
+            return raftProtocol.describeQuorumRpcVersion();
+        } else if (response instanceof AddRaftVoterResponseData) {
+            return raftProtocol.addVoterRpcVersion();
+        } else if (response instanceof RemoveRaftVoterResponseData) {
+            return raftProtocol.removeVoterRpcVersion();
+        } else if (response instanceof UpdateRaftVoterResponseData) {
+            return raftProtocol.updateVoterRpcVersion();
+        } else if (response instanceof ApiVersionsResponseData) {
+            return 4;
+        } else {
+            throw new IllegalArgumentException(String.format("Request %s is not a raft response", response));
+        }
     }
 
     static class MockListener implements RaftClient.Listener<String> {

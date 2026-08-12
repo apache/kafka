@@ -20,37 +20,23 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.AddRaftVoterRequestData;
-import org.apache.kafka.common.message.AddRaftVoterResponseData;
-import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.DescribeQuorumRequestData;
-import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
-import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
-import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchSnapshotRequestData;
-import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.message.RemoveRaftVoterRequestData;
-import org.apache.kafka.common.message.RemoveRaftVoterResponseData;
 import org.apache.kafka.common.message.UpdateRaftVoterRequestData;
-import org.apache.kafka.common.message.UpdateRaftVoterResponseData;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.protocol.DataOutputStreamWritable;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.test.TestCondition;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -242,7 +228,6 @@ public abstract class SharedRaftClientContext {
         pollUntil(channel::hasSentRequests);
     }
 
-    // Overridden to also assert the collected requests are pre-votes.
     List<RaftRequest.Outbound> collectPreVoteRequests(
         int epoch,
         int lastEpoch,
@@ -251,7 +236,6 @@ public abstract class SharedRaftClientContext {
         return collectVoteRequestMessages();
     }
 
-    // Overridden to also assert the collected requests are (standard) votes.
     List<RaftRequest.Outbound> collectVoteRequests(
         int epoch,
         int lastEpoch,
@@ -270,28 +254,6 @@ public abstract class SharedRaftClientContext {
         return voteRequests;
     }
 
-    // Round-trips a message through serialization to mimic the network, exercising the client's
-    // request/response encoding on every delivery. The benchmark context overrides this to skip the
-    // round trip so it is not measured as the client's own work.
-    ApiMessage maybeRoundTrip(ApiMessage message, short version) {
-        return roundTripApiMessage(message, version);
-    }
-
-    private ApiMessage roundTripApiMessage(ApiMessage message, short version) {
-        ObjectSerializationCache cache =  new ObjectSerializationCache();
-        ByteArrayOutputStream  buffer = new ByteArrayOutputStream(message.size(cache, version));
-
-        // Encode the message to a byte array with the given version
-        DataOutputStreamWritable writer = new DataOutputStreamWritable(new DataOutputStream(buffer));
-        message.write(writer, cache, version);
-
-        // Decode the message from the byte array
-        ByteBufferAccessor reader = new ByteBufferAccessor(ByteBuffer.wrap(buffer.toByteArray()));
-        message.read(reader, version);
-
-        return message;
-    }
-
     public void deliverRequest(ApiMessage request) {
         short version = raftRequestVersion(request);
         deliverRequest(request, version);
@@ -305,13 +267,12 @@ public abstract class SharedRaftClientContext {
         return inboundRequest(request, raftRequestVersion(request));
     }
 
-    private RaftRequest.Inbound inboundRequest(ApiMessage request, short version) {
-        ApiMessage versionedRequest = maybeRoundTrip(request, version);
+    RaftRequest.Inbound inboundRequest(ApiMessage request, short version) {
         return new RaftRequest.Inbound(
             channel.listenerName(),
             channel.newCorrelationId(),
             version,
-            versionedRequest,
+            request,
             time.milliseconds()
         );
     }
@@ -327,9 +288,7 @@ public abstract class SharedRaftClientContext {
     }
 
     void deliverResponse(int correlationId, Node source, ApiMessage response) {
-        short version = raftResponseVersion(response);
-        ApiMessage versionedResponse = maybeRoundTrip(response, version);
-        channel.mockReceive(new RaftResponse.Inbound(correlationId, versionedResponse, source));
+        channel.mockReceive(new RaftResponse.Inbound(correlationId, response, source));
     }
 
     List<RaftResponse.Outbound> drainSentResponses(
@@ -347,7 +306,6 @@ public abstract class SharedRaftClientContext {
         return res;
     }
 
-    // Overridden to also assert each collected request.
     List<RaftRequest.Outbound> collectBeginEpochRequests(int epoch) {
         return new ArrayList<>(channel.drainSentRequests(Optional.of(ApiKeys.BEGIN_QUORUM_EPOCH)));
     }
@@ -544,33 +502,6 @@ public abstract class SharedRaftClientContext {
         }
     }
 
-    private short raftResponseVersion(ApiMessage response) {
-        if (response instanceof FetchResponseData) {
-            return raftProtocol.fetchRpcVersion();
-        } else if (response instanceof FetchSnapshotResponseData) {
-            return raftProtocol.fetchSnapshotRpcVersion();
-        } else if (response instanceof VoteResponseData) {
-            return raftProtocol.voteRpcVersion();
-        } else if (response instanceof BeginQuorumEpochResponseData) {
-            return raftProtocol.beginQuorumEpochRpcVersion();
-        } else if (response instanceof EndQuorumEpochResponseData) {
-            return raftProtocol.endQuorumEpochRpcVersion();
-        } else if (response instanceof DescribeQuorumResponseData) {
-            return raftProtocol.describeQuorumRpcVersion();
-        } else if (response instanceof AddRaftVoterResponseData) {
-            return raftProtocol.addVoterRpcVersion();
-        } else if (response instanceof RemoveRaftVoterResponseData) {
-            return raftProtocol.removeVoterRpcVersion();
-        } else if (response instanceof UpdateRaftVoterResponseData) {
-            return raftProtocol.updateVoterRpcVersion();
-        } else if (response instanceof ApiVersionsResponseData) {
-            return 4;
-        } else {
-            throw new IllegalArgumentException(String.format("Request %s is not a raft response", response));
-        }
-    }
-
-    // Overridden to also assert the local node is the leader.
     public void advanceLocalLeaderHighWatermarkToLogEndOffset() throws InterruptedException {
         long localLogEndOffset = log.endOffset().offset();
 
@@ -587,8 +518,6 @@ public abstract class SharedRaftClientContext {
             );
 
             pollUntilResponse();
-            // Drain the leader's fetch response so the next follower's poll sees a fresh one.
-            // The override additionally asserts the response.
             drainSentResponses(ApiKeys.FETCH);
         }
 
