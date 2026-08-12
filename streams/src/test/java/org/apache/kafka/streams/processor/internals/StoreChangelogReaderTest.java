@@ -1968,6 +1968,43 @@ public class StoreChangelogReaderTest {
     }
 
     /**
+     * A probe can also fail by the offset lookup timing out, which leaves through a catch rather
+     * than the normal path. That has to arm the backoff too, or a task looping on a slow broker
+     * re-probes on every iteration.
+     */
+    @Test
+    public void shouldBackOffWhenTheProbeFailsByTimeout() {
+        final long retentionMs = Duration.ofSeconds(3).toMillis();
+        final long endOffset = 1_000L;
+        final int[] lookups = {0};
+
+        final MockConsumer<byte[], byte[]> probeConsumer =
+            new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
+                @Override
+                public synchronized Map<TopicPartition, Long> endOffsets(final Collection<TopicPartition> partitions) {
+                    lookups[0]++;
+                    throw new TimeoutException("timed out looking up end offsets");
+                }
+            };
+        probeConsumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
+        probeConsumer.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+
+        final StoreChangelogReader probeReader = new StoreChangelogReader(
+            time, config, logContext, adminClient, probeConsumer, callback, standbyListener);
+
+        final TaskId probeTaskId = new TaskId(0, 0);
+        final Map<TaskId, Task> probeTasks = Collections.singletonMap(probeTaskId, mock(Task.class));
+
+        for (int round = 0; round < 4; round++) {
+            registerRestoreAndRevoke(probeReader, probeTaskId, probeTasks, retentionMs);
+        }
+
+        assertEquals(1, lookups[0],
+            "the probe failed by timeout, so re-registering in a loop should not probe again");
+    }
+
+    /**
      * Only a probe that fell back arms the backoff. Suppressing a probe that was working would send
      * the next restore to log start, which is what gets a partition lapped and corrupted in the
      * first place -- the guard would sustain the loop it exists to bound.
