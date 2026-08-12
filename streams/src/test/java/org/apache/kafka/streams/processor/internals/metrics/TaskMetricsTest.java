@@ -240,21 +240,12 @@ public class TaskMetricsTest {
         try (final MockedStatic<StreamsMetricsImpl> streamsMetricsStaticMock = mockStatic(StreamsMetricsImpl.class)) {
             final Sensor sensor = TaskMetrics.droppedRecordsSensor(THREAD_ID, TASK_ID, streamsMetrics);
             streamsMetricsStaticMock.verify(
-                () -> StreamsMetricsImpl.addInvocationRateToSensor(
+                () -> StreamsMetricsImpl.addRateOfSumAndSumMetricsToSensor(
                     expectedSensor,
                     TASK_LEVEL_GROUP,
                     tagMap,
                     operation,
-                    rateDescription
-                )
-            );
-            streamsMetricsStaticMock.verify(
-                () -> StreamsMetricsImpl.addSumMetricToSensor(
-                    expectedSensor,
-                    TASK_LEVEL_GROUP,
-                    tagMap,
-                    operation,
-                    true,
+                    rateDescription,
                     totalDescription
                 )
             );
