@@ -512,10 +512,14 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     @Override
     public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
+        // Validate up front so a null key rejects the whole batch. An accessor may apply the entries
+        // one at a time, and failing part-way through would otherwise leave the batch half-applied.
+        for (final KeyValue<Bytes, byte[]> entry : entries) {
+            Objects.requireNonNull(entry.key, "key cannot be null");
+        }
         synchronized (position) {
-            try (final WriteBatch batch = new WriteBatch()) {
-                cfAccessor.prepareBatch(entries, batch);
-                write(batch);
+            try {
+                dbAccessor.putAll(cfAccessor, entries);
                 dbAccessor.updatePosition(position, context);
             } catch (final RocksDBException e) {
                 throw new ProcessorStateException("Error while batch writing to store " + name, e);
@@ -1074,6 +1078,18 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         void reset();
         void close();
 
+        /**
+         * Applies a batch of writes through {@code cfAccessor}, which owns the column-family layout.
+         * The default applies the entries one at a time; accessors that can write them as a single
+         * batch — or that must stage them instead of writing them — override this.
+         */
+        default void putAll(final ColumnFamilyAccessor cfAccessor,
+                            final List<KeyValue<Bytes, byte[]>> entries) throws RocksDBException {
+            for (final KeyValue<Bytes, byte[]> entry : entries) {
+                cfAccessor.put(this, entry.key.get(), entry.value);
+            }
+        }
+
         default DBAccessor readOnly(final IsolationLevel isolationLevel) {
             Objects.requireNonNull(isolationLevel, "isolationLevel cannot be null");
             return this;
@@ -1167,6 +1183,16 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
 
         @Override
+        public void putAll(final ColumnFamilyAccessor cfAccessor,
+                           final List<KeyValue<Bytes, byte[]>> entries) throws RocksDBException {
+            // A single atomic batch write, so a crash part-way through leaves nothing behind.
+            try (final WriteBatch batch = new WriteBatch()) {
+                cfAccessor.prepareBatch(entries, batch);
+                db.write(wOptions, batch);
+            }
+        }
+
+        @Override
         public long approximateNumEntries(final ColumnFamilyHandle columnFamily) throws RocksDBException {
             return db.getLongProperty(columnFamily, "rocksdb.estimate-num-keys");
         }
@@ -1249,6 +1275,23 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         @Override
         public void deleteRange(final ColumnFamilyHandle columnFamily, final byte[] from, final byte[] to) throws RocksDBException {
             buffer.stageDeleteRange(columnFamily, Bytes.wrap(from), Bytes.wrap(to));
+        }
+
+        @Override
+        public void putAll(final ColumnFamilyAccessor cfAccessor,
+                           final List<KeyValue<Bytes, byte[]>> entries) {
+            // Batch writes must be staged like single-key puts, or they would land in the store
+            // uncommitted: visible at READ_COMMITTED, surviving a rollback, and uncounted by
+            // approximateNumUncommittedBytes(). Staging the batch under one write-lock acquisition
+            // also keeps it invisible to a concurrent IQ reader until it is complete, matching the
+            // atomicity of the direct accessor's single db.write(batch); the buffer's own WriteBatch
+            // then applies it atomically on commit. Reusing cfAccessor.put() keeps the column-family
+            // layout — including the dual-CF upgrade path — identical to a single-key put.
+            buffer.stageAll(() -> {
+                for (final KeyValue<Bytes, byte[]> entry : entries) {
+                    cfAccessor.put(this, entry.key.get(), entry.value);
+                }
+            });
         }
 
         @Override
