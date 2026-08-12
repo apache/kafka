@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class AssignmentConfigsImplTest {
 
     @Test
-    void testDefaultHoldsTheDefaultOfEveryConfig() {
+    void testDefault() {
         assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT,
             AssignmentConfigsImpl.DEFAULT.numStandbyReplicas());
         assertEquals(List.of(), AssignmentConfigsImpl.DEFAULT.rackAwareAssignmentTags());
@@ -65,7 +65,7 @@ public class AssignmentConfigsImplTest {
     }
 
     @Test
-    void testWithersLeaveTheOtherConfigsUntouched() {
+    void testWithers() {
         AssignmentConfigsImpl configs = new AssignmentConfigsImpl(1, List.of("tag1"));
 
         assertEquals(new AssignmentConfigsImpl(2, List.of("tag1")), configs.withNumStandbyReplicas(2));
