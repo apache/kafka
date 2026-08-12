@@ -21,6 +21,7 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignmentM
 import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignmentState;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 
@@ -37,8 +38,9 @@ public record GroupSpecImpl(
 ) implements GroupSpec {
 
     public GroupSpecImpl {
-        Objects.requireNonNull(members);
-        Objects.requireNonNull(configs);
+        // Both maps are exposed to a custom assignor through the public GroupSpec interface.
+        members = Collections.unmodifiableMap(Objects.requireNonNull(members));
+        configs = Collections.unmodifiableMap(Objects.requireNonNull(configs));
     }
 
     @Override
