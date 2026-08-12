@@ -104,9 +104,7 @@ public class StickyTaskAssignor implements TaskAssignor {
 
     private static LocalState initialize(final GroupSpec groupSpec, final TopologyDescriber topologyDescriber) {
         final LocalState localState = new LocalState();
-        localState.numStandbyReplicas =
-            groupSpec.configs().isEmpty() ? 0
-                : Integer.parseInt(groupSpec.configs().get("num.standby.replicas"));
+        localState.numStandbyReplicas = groupSpec.configs().numStandbyReplicas();
 
         // Helpers for computing active tasks per member, and tasks per member
         localState.totalActiveTasks = 0;
