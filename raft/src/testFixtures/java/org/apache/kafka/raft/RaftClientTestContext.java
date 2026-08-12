@@ -63,7 +63,6 @@ import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.SnapshotReader;
 
-
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.net.InetSocketAddress;
