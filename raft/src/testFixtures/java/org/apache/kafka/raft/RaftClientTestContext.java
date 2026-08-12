@@ -92,7 +92,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class RaftClientTestContext extends SharedRaftClientContext {
+public final class RaftClientTestContext extends SharedRaftClientContext {
     public final RecordSerde<String> serde = RaftClientContextBuilder.SERDE;
     final int electionBackoffMaxMs = RaftClientContextBuilder.ELECTION_BACKOFF_MAX_MS;
     final int fetchMaxWaitMs = RaftClientContextBuilder.FETCH_MAX_WAIT_MS;
