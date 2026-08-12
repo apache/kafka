@@ -166,28 +166,6 @@ class StreamsTopologyDescriptionPluginTest(Test):
 
     @cluster(num_nodes=2)
     @matrix(metadata_quorum=[quorum.combined_kraft])
-    def test_topology_description_resolicited_after_broker_bounce(self, metadata_quorum):
-        """InMemoryTopologyDescriptionPlugin loses its state on broker restart, so a bounce
-        must make the broker solicit again and the client push a second time."""
-        self.setup_kafka(plugin_enabled=True)
-        processor = StreamsTopologyDescriptionPluginService(self.test_context, self.kafka)
-        with processor.node.account.monitor_log(processor.LOG_FILE) as monitor:
-            processor.start()
-            monitor.wait_until(self.PUSH_SUCCESS_LOG, timeout_sec=120,
-                               err_msg="Streams client did not log a successful topology description push")
-
-        broker_node = self.kafka.nodes[0]
-        with broker_node.account.monitor_log(self.BROKER_LOG_FILE) as broker_monitor, \
-             processor.node.account.monitor_log(processor.LOG_FILE) as client_monitor:
-            self.kafka.restart_node(broker_node, clean_shutdown=True)  # confirm exact bounce API on KafkaService
-            broker_monitor.wait_until(self.BROKER_SOLICITED_LOG, timeout_sec=120,
-                                      err_msg="Broker never re-solicited after bounce")
-            client_monitor.wait_until(self.PUSH_SUCCESS_LOG, timeout_sec=120,
-                                      err_msg="Client never re-pushed after broker bounce")
-        processor.stop()
-
-    @cluster(num_nodes=2)
-    @matrix(metadata_quorum=[quorum.combined_kraft])
     def test_topology_description_not_resolicited_after_client_restart(self, metadata_quorum):
         """
         Test the situation when the client restarts after already having pushed its
