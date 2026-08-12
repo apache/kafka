@@ -23,6 +23,7 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Objects;
@@ -195,6 +196,9 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
         if (headerCount == -1) { // keep for backward compatibility
             headers = new RecordHeaders();
         } else {
+            if (headerCount < 0 || headerCount > buffer.remaining() / 4) {
+                throw new BufferUnderflowException();
+            }
             final Header[] headerArr = new Header[headerCount];
             for (int i = 0; i < headerCount; i++) {
                 final byte[] keyBytes = requireNonNull(getNullableSizePrefixedArray(buffer));

@@ -21,6 +21,9 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.BufferUnderflowException;
+import java.nio.ByteBuffer;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -109,5 +112,40 @@ public class ProcessorRecordContextTest {
         );
 
         assertEquals(MIN_SIZE + 10L, context.residentMemorySizeEstimate());
+    }
+
+    @Test
+    public void shouldRejectHeaderCountLargerThanRemainingBuffer() {
+        final Headers headers = new RecordHeaders();
+        headers.add("header-key", "header-value".getBytes());
+        final ProcessorRecordContext context = new ProcessorRecordContext(
+                42L, 73L, 0, "topic", headers);
+
+        final byte[] serialized = context.serialize();
+        final ByteBuffer buffer = ByteBuffer.wrap(serialized);
+
+        // Locate headerCount's position within the real serialized bytes
+        // timestamp(8) + offset(8) + topicLen(4) + "topic"(5) + partition(4)
+        final int headerCountOffset = 8 + 8 + 4 + "topic".getBytes().length + 4;
+        final int bytesAfterHeaderCount = serialized.length - (headerCountOffset + 4);
+        final int maxPlausibleHeaderCount = bytesAfterHeaderCount / 4;
+
+        // Overwrite the real headerCount with a little more that it could support
+        buffer.putInt(headerCountOffset, maxPlausibleHeaderCount + 1);
+
+        assertThrows(BufferUnderflowException.class, () -> ProcessorRecordContext.deserialize(buffer));
+    }
+
+    @Test
+    public void shouldDeserializeValidHeaderCountWithoutRejecting() {
+        final Headers headers = new RecordHeaders();
+        headers.add("header-key", "header-value".getBytes());
+        final ProcessorRecordContext context = new ProcessorRecordContext(
+                42L, 73L, 0, "topic", headers);
+
+        final ProcessorRecordContext roundTripped =
+                ProcessorRecordContext.deserialize(ByteBuffer.wrap(context.serialize()));
+
+        assertEquals(context, roundTripped);
     }
 }
