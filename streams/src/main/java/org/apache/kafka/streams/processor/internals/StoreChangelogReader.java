@@ -217,9 +217,10 @@ public class StoreChangelogReader implements ChangelogReader {
     private static final int PROBE_IDLE_POLLS = 3;
 
     // Polls' worth of waiting owed to a window before it may be called empty. A poll returning
-    // immediately has not waited on a fetch, so a run of them is no evidence -- and widening on
-    // that basis discards the fetch that was about to answer.
-    private static final int PROBE_MIN_WAIT_POLLS = 5;
+    // immediately has not waited on a fetch, so a run of them is no evidence. It also has to cover
+    // widening: a re-seek discards the fetch already in flight, and its replacement waits behind
+    // that one, since the consumer keeps only one fetch in flight per broker.
+    private static final int PROBE_MIN_WAIT_POLLS = 10;
 
     // Ceiling per window, so polls that return without waiting cannot spin the probe.
     private static final int PROBE_MAX_POLLS = 30;
