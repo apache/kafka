@@ -18,20 +18,26 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.raft.RaftClientTestContext.RaftProtocol;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.raft.SharedRaftClientContext.RaftProtocol;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
 import org.apache.kafka.server.common.KRaftVersion;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-public final class RaftClientBenchmarkContext {
+/**
+ * A {@link SharedRaftClientContext} specialized for the JMH raft benchmarks. It registers a no-op
+ * listener and does not round-trip messages through serialization, and it tracks the mock work counters the benchmarks report. It is
+ * constructed through {@link RaftClientContextBuilder#buildBenchmark}.
+ */
+public final class RaftClientBenchmarkContext extends SharedRaftClientContext {
     // Standardized JMH iteration counts, shared by all raft benchmarks so every benchmark of a
     // given mode is configured identically.
 
@@ -45,12 +51,8 @@ public final class RaftClientBenchmarkContext {
     public static final RaftProtocol DEFAULT_RAFT_PROTOCOL =
         Arrays.stream(RaftProtocol.values()).max(Comparator.naturalOrder()).orElseThrow();
 
-    private final RaftClientTestContext context;
-    private final MockLog log;
-    private final MockNetworkChannel channel;
-
     private final ReplicaKey localKey;
-    private final List<ReplicaKey> startingVoters;
+    private final List<ReplicaKey> benchmarkVoters;
     private final List<ReplicaKey> startingObservers;
 
     // Each tracks one cumulative mock counter as a drainable delta against a baseline. The baseline
@@ -64,58 +66,66 @@ public final class RaftClientBenchmarkContext {
     private final DrainableCounter quorumStateReads;
 
     // Responses have no cumulative mock counter. deliverAndAwaitResponse() counts them here instead
-    // of appending to RaftClientTestContext.sentResponses, so the collection stays bounded when
+    // of appending to SharedRaftClientContext.sentResponses, so the collection stays bounded when
     // per-invocation draining is deferred to an iteration teardown.
     private final DrainableCounter rpcResponsesSent;
     private long rpcResponsesSentTotal;
     private RaftResponse.Outbound lastResponse;
     private Throwable lastResponseException;
 
-    private RaftClientBenchmarkContext(
-        RaftClientTestContext context,
+    @SuppressWarnings("ParameterNumber")
+    RaftClientBenchmarkContext(
+        String clusterId,
+        OptionalInt localId,
+        Uuid localDirectoryId,
+        KRaftVersion kraftVersion,
+        KafkaRaftClient<String> client,
+        MockLog log,
+        MockNetworkChannel channel,
+        MockTime time,
+        MockQuorumStateStore quorumStateStore,
+        VoterSet voterSet,
+        RaftProtocol raftProtocol,
+        int fetchMaxBytes,
         ReplicaKey localKey,
-        List<ReplicaKey> startingVoters,
-        List<ReplicaKey> startingObservers
+        List<ReplicaKey> benchmarkVoters,
+        List<ReplicaKey> benchmarkObservers
     ) {
-        this.context = context;
-        this.log = context.log;
-        this.channel = context.channel;
+        super(clusterId, localId, localDirectoryId, kraftVersion, client, log, channel, time,
+            quorumStateStore, voterSet, raftProtocol, fetchMaxBytes);
         this.localKey = localKey;
-        this.startingVoters = List.copyOf(startingVoters);
-        this.startingObservers = List.copyOf(startingObservers);
+        this.benchmarkVoters = List.copyOf(benchmarkVoters);
+        this.startingObservers = List.copyOf(benchmarkObservers);
         this.logFlushes = new DrainableCounter(log.flushCount());
         this.logReads = new DrainableCounter(log.readCount());
         this.logTruncations = new DrainableCounter(log.truncationCount());
         this.rpcRequestsSent = new DrainableCounter(channel.requestsSent());
-        this.quorumStateWrites = new DrainableCounter(context.quorumStateWriteCount());
-        this.quorumStateReads = new DrainableCounter(context.quorumStateReadCount());
+        this.quorumStateWrites = new DrainableCounter(quorumStateWriteCount());
+        this.quorumStateReads = new DrainableCounter(quorumStateReadCount());
         this.rpcResponsesSent = new DrainableCounter(rpcResponsesSentTotal);
     }
 
     /**
      * Builds the local node as a voter in the Unattached state (a voter with no leader yet) in a
      * {@code voterCount}-node cluster. The local node is a voter because only a voter can drive the
-     * measured operation {@link RaftClientTestContext#unattachedToLeader()} (on
-     * {@link #testContext()}) — an Unattached &rarr; Leader election, a path observers cannot
-     * take. A single-voter cluster is rejected because such a node elects itself at
-     * initialization, before any measured poll.
+     * measured operation {@link SharedRaftClientContext#unattachedToLeader()} — an Unattached &rarr;
+     * Leader election, a path observers cannot take. A single-voter cluster is rejected because such
+     * a node elects itself at initialization, before any measured poll.
      */
     public static RaftClientBenchmarkContext unattachedVoter(
         int voterCount,
         KRaftVersion kraftVersion,
         RaftProtocol raftProtocol
-    ) throws IOException {
+    ) {
         if (voterCount < 2) {
             throw new IllegalArgumentException(
                 "voterCount must be at least 2; a single voter self-elects at init");
         }
         List<ReplicaKey> voterKeys = replicaKeys(randomReplicaId(), voterCount);
         ReplicaKey local = voterKeys.get(0);
-        RaftClientTestContext context =
-            benchmarkContextBuilder(local, voterKeys, kraftVersion, raftProtocol)
-                .withUnknownLeader(0)
-                .build();
-        return new RaftClientBenchmarkContext(context, local, voterKeys, List.of());
+        return benchmarkContextBuilder(local, voterKeys, kraftVersion, raftProtocol)
+            .withUnknownLeader(0)
+            .buildBenchmark(local, voterKeys, List.of());
     }
 
     /**
@@ -136,13 +146,13 @@ public final class RaftClientBenchmarkContext {
         ReplicaKey local = voterKeys.get(0);
 
         List<ReplicaKey> observerKeys = replicaKeys(local.id() + voterCount, observerCount);
-        RaftClientTestContext context =
+        RaftClientBenchmarkContext context =
             benchmarkContextBuilder(local, voterKeys, kraftVersion, raftProtocol)
                 .withUnknownLeader(0)
-                .build();
+                .buildBenchmark(local, voterKeys, observerKeys);
         context.unattachedToLeader();
 
-        return new RaftClientBenchmarkContext(context, local, voterKeys, observerKeys);
+        return context;
     }
 
     private static List<ReplicaKey> replicaKeys(int startId, int count) {
@@ -155,7 +165,7 @@ public final class RaftClientBenchmarkContext {
         return ThreadLocalRandom.current().nextInt(1025);
     }
 
-    private static RaftClientTestContext.Builder benchmarkContextBuilder(
+    private static RaftClientContextBuilder benchmarkContextBuilder(
         ReplicaKey local,
         List<ReplicaKey> voterKeys,
         KRaftVersion kraftVersion,
@@ -163,15 +173,18 @@ public final class RaftClientBenchmarkContext {
     ) {
         VoterSet voters = VoterSetTestUtil.voterSet(voterKeys.stream());
 
-        return new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+        return new RaftClientContextBuilder(local.id(), local.directoryId().get())
             .withStartingVoters(voters, kraftVersion)
             .withRaftProtocol(raftProtocol)
-            .withBenchmarking(true)
             .withMemoryPool(new BatchMemoryPool(5, KafkaRaftClient.MAX_BATCH_SIZE_BYTES));
     }
 
-    public RaftClientTestContext testContext() {
-        return context;
+    /**
+     * This context, viewed as the {@link SharedRaftClientContext} whose transition helpers the
+     * benchmarks drive as their measured operation.
+     */
+    public SharedRaftClientContext testContext() {
+        return this;
     }
 
     /**
@@ -186,7 +199,7 @@ public final class RaftClientBenchmarkContext {
      * single-voter cluster whose only voter is the local node).
      */
     public List<ReplicaKey> remoteVoters() {
-        return startingVoters.stream()
+        return benchmarkVoters.stream()
             .filter(voter -> !voter.equals(localKey))
             .collect(Collectors.toList());
     }
@@ -206,8 +219,8 @@ public final class RaftClientBenchmarkContext {
         logReads.drainDelta(log.readCount());
         logTruncations.drainDelta(log.truncationCount());
         rpcRequestsSent.drainDelta(channel.requestsSent());
-        quorumStateWrites.drainDelta(context.quorumStateWriteCount());
-        quorumStateReads.drainDelta(context.quorumStateReadCount());
+        quorumStateWrites.drainDelta(quorumStateWriteCount());
+        quorumStateReads.drainDelta(quorumStateReadCount());
         rpcResponsesSent.drainDelta(rpcResponsesSentTotal);
         channel.drainSendQueue();
     }
@@ -247,11 +260,11 @@ public final class RaftClientBenchmarkContext {
     }
 
     public long getQuorumStateWritesDelta() {
-        return quorumStateWrites.drainDelta(context.quorumStateWriteCount());
+        return quorumStateWrites.drainDelta(quorumStateWriteCount());
     }
 
     public long getQuorumStateReadsDelta() {
-        return quorumStateReads.drainDelta(context.quorumStateReadCount());
+        return quorumStateReads.drainDelta(quorumStateReadCount());
     }
 
     /**
@@ -263,7 +276,7 @@ public final class RaftClientBenchmarkContext {
         Optional<ApiKeys> expectedResponse
     ) throws InterruptedException {
         long before = rpcResponsesSentTotal;
-        context.client.handle(inbound).whenComplete((response, exception) -> {
+        client.handle(inbound).whenComplete((response, exception) -> {
             if (exception != null) {
                 lastResponseException = exception;
             } else {
@@ -271,7 +284,7 @@ public final class RaftClientBenchmarkContext {
                 lastResponse = response;
             }
         });
-        context.pollUntil(() -> rpcResponsesSentTotal > before || lastResponseException != null);
+        pollUntil(() -> rpcResponsesSentTotal > before || lastResponseException != null);
         if (lastResponseException != null) {
             Throwable failure = lastResponseException;
             lastResponseException = null;
@@ -299,19 +312,18 @@ public final class RaftClientBenchmarkContext {
      * when it took the epoch.
      */
     public void commitEpoch() throws InterruptedException {
-        int epoch = context.currentEpoch();
+        int epoch = currentEpoch();
         long logEndOffset = log.endOffset().offset();
         for (ReplicaKey voter : remoteVoters()) {
             deliverAndAwaitResponse(
-                context.inboundRequest(
-                    context.fetchRequest(epoch, voter, logEndOffset, epoch, 0)),
+                inboundRequest(fetchRequest(epoch, voter, logEndOffset, epoch, 0)),
                 Optional.of(ApiKeys.FETCH)
             );
         }
-        if (context.client.highWatermark().orElse(-1) < logEndOffset) {
+        if (client.highWatermark().orElse(-1) < logEndOffset) {
             throw new IllegalStateException(
                 "expected the high watermark to reach the log end offset " + logEndOffset
-                    + ", but it is " + context.client.highWatermark());
+                    + ", but it is " + client.highWatermark());
         }
     }
 
@@ -321,13 +333,13 @@ public final class RaftClientBenchmarkContext {
      * is safe and works from any attached role, not just leader.
      */
     public void toUnattachedWithHigherEpoch() throws InterruptedException {
-        if (context.client.quorum().isUnattached()) {
+        if (client.quorum().isUnattached()) {
             throw new IllegalStateException(
                 "toUnattachedWithHigherEpoch() expects an attached node, but it is already Unattached");
         }
         ReplicaKey candidate = remoteVoters().get(0);
         deliverAndAwaitResponse(
-            context.inboundRequest(context.voteRequest(context.currentEpoch() + 1, candidate, 0, 0)),
+            inboundRequest(voteRequest(currentEpoch() + 1, candidate, 0, 0)),
             Optional.of(ApiKeys.VOTE)
         );
     }

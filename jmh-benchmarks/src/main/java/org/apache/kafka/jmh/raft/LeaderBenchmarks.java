@@ -19,8 +19,8 @@ package org.apache.kafka.jmh.raft;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.raft.RaftClientBenchmarkContext;
-import org.apache.kafka.raft.RaftClientTestContext;
 import org.apache.kafka.raft.RaftRequest;
+import org.apache.kafka.raft.SharedRaftClientContext;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -61,7 +61,7 @@ public class LeaderBenchmarks {
         NO_WAIT_FETCH_AT_HWM(Optional.of(ApiKeys.FETCH)) {
             @Override
             public ApiMessage build(RaftClientBenchmarkContext benchmark) {
-                RaftClientTestContext context = benchmark.testContext();
+                SharedRaftClientContext context = benchmark.testContext();
                 return context.fetchRequest(
                     context.currentEpoch(),
                     benchmark.remoteVoters().get(0),
@@ -77,7 +77,7 @@ public class LeaderBenchmarks {
         FETCH_FROM_LAGGING_FOLLOWER(Optional.of(ApiKeys.FETCH)) {
             @Override
             public ApiMessage build(RaftClientBenchmarkContext benchmark) {
-                RaftClientTestContext context = benchmark.testContext();
+                SharedRaftClientContext context = benchmark.testContext();
                 return context.fetchRequest(
                     context.currentEpoch(),
                     benchmark.remoteVoters().get(0),
@@ -129,7 +129,7 @@ public class LeaderBenchmarks {
                 0,
                 RaftClientBenchmarkContext.DEFAULT_KRAFT_VERSION,
                 RaftClientBenchmarkContext.DEFAULT_RAFT_PROTOCOL);
-            RaftClientTestContext context = benchmark.testContext();
+            SharedRaftClientContext context = benchmark.testContext();
             context.client.prepareAppend(context.currentEpoch(), List.of("a", "b", "c", "d", "e"));
             context.client.schedulePreparedAppend();
             context.poll();
