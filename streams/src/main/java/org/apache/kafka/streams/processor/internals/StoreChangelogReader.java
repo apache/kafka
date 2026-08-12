@@ -1238,11 +1238,12 @@ public class StoreChangelogReader implements ChangelogReader {
                                  final Map<TopicPartition, Long> latestTimestamps) {
         // a poll returns at most max.poll.records across all partitions, so one window can take
         // several polls to reach them all; a fixed count abandons partitions still being served
-        final long waitUntilNs = time.nanoseconds() + pollTime.toNanos() * PROBE_MIN_WAIT_POLLS;
+        final long startNs = time.nanoseconds();
+        final long minWaitNs = pollTime.toNanos() * PROBE_MIN_WAIT_POLLS;
         int idlePolls = 0;
         int polls = 0;
         while (!unresolved.isEmpty() && polls < PROBE_MAX_POLLS
-            && (idlePolls < PROBE_IDLE_POLLS || time.nanoseconds() < waitUntilNs)) {
+            && (idlePolls < PROBE_IDLE_POLLS || time.nanoseconds() - startNs < minWaitNs)) {
             final int remaining = unresolved.size();
             collectProbed(restoreConsumer.poll(pollTime), unresolved, latestTimestamps);
             polls++;
