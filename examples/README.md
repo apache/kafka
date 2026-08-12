@@ -9,7 +9,7 @@ Start a local single-broker Kafka cluster with a plain listener configured on po
 This demo uses automatic offset commits.
 
 - Run `examples/bin/java-producer-consumer-demo.sh 10000` to asynchronously send 10k records to `my-topic` and consume them.
-- Run `examples/bin/java-producer-consumer-demo.sh 10000 sync` to send and consume the records synchronously.
+- Run `examples/bin/java-producer-consumer-demo.sh 10000 sync` to synchronously send 10k records to `my-topic` and consume them.
 
 ## Consumer-aware rebalance listener demo
 
