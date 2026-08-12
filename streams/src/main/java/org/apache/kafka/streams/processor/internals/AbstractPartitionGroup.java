@@ -90,6 +90,10 @@ abstract class AbstractPartitionGroup {
 
     abstract int numBuffered(TopicPartition tp);
 
+    abstract long totalBytesBuffered();
+
+    abstract Set<TopicPartition> getNonEmptyTopicPartitions();
+
     abstract void clear();
 
     abstract void updateLags();

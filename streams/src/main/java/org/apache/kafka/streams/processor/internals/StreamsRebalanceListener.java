@@ -100,6 +100,7 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
                 log.info("partition revocation took {} ms.", time.milliseconds() - start);
             }
         }
+        streamThread.removePartitionsFromBufferOverflowTracking(partitions);
     }
 
     @Override
@@ -119,5 +120,6 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
         } finally {
             log.info("partitions lost took {} ms.", time.milliseconds() - start);
         }
+        streamThread.removePartitionsFromBufferOverflowTracking(partitions);
     }
 }

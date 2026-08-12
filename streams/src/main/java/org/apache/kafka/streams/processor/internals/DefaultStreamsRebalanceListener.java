@@ -86,6 +86,7 @@ public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener
         if (streamThread.state() != StreamThread.State.PENDING_SHUTDOWN) {
             streamThread.setState(StreamThread.State.PARTITIONS_REVOKED);
         }
+        streamThread.removePartitionsFromBufferOverflowTracking(partitionsToRevoke);
     }
 
     @Override

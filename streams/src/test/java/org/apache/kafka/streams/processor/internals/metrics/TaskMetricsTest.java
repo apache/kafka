@@ -138,6 +138,29 @@ public class TaskMetricsTest {
         }
     }
 
+    @Test
+    public void shouldGetInputBufferBytesTotalSensor() {
+        final String operation = "input-buffer-bytes-total";
+        when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG))
+                .thenReturn(expectedSensor);
+        final String totalBytesDescription = "The total size in bytes of this task's input buffer.";
+        when(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).thenReturn(tagMap);
+
+        try (final MockedStatic<StreamsMetricsImpl> streamsMetricsStaticMock = mockStatic(StreamsMetricsImpl.class)) {
+            final Sensor sensor = TaskMetrics.totalInputBufferBytesSensor(THREAD_ID, TASK_ID, streamsMetrics);
+            streamsMetricsStaticMock.verify(
+                    () -> StreamsMetricsImpl.addValueMetricToSensor(
+                            expectedSensor,
+                            TASK_LEVEL_GROUP,
+                            tagMap,
+                            operation,
+                            totalBytesDescription
+                    )
+            );
+            assertThat(sensor, is(expectedSensor));
+        }
+    }
+
 
     @Test
     public void shouldGetPunctuateSensor() {

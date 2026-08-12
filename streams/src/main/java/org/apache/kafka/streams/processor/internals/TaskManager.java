@@ -1861,6 +1861,22 @@ public class TaskManager {
         }
     }
 
+    public long getInputBufferSizeInBytes() {
+        long total = 0L;
+        for (final StreamTask t : tasks.activeInitializedTasks()) {
+            total += t.totalBytesBuffered();
+        }
+        return total;
+    }
+
+    public Set<TopicPartition> nonEmptyPartitions() {
+        final Set<TopicPartition> result = new HashSet<>();
+        for (final StreamTask t : tasks.activeInitializedTasks()) {
+            result.addAll(t.getNonEmptyTopicPartitions());
+        }
+        return result;
+    }
+
     /**
      * Fetches up-to-date lag information from the consumer.
      */

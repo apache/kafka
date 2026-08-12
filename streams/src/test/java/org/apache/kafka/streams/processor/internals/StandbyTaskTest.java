@@ -117,6 +117,7 @@ public class StandbyTaskTest {
     private StateDirectory stateDirectory;
     private StandbyTask task;
 
+    @SuppressWarnings("deprecation")
     private StreamsConfig createConfig(final File baseDir) throws IOException {
         return new StreamsConfig(mkProperties(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, applicationId),

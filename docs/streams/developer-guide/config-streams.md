@@ -390,11 +390,28 @@ Low
 </td>  
 <td>
 
-The maximum number of records to buffer per partition.
+The maximum number of records to buffer per partition. **Deprecated** since [KIP-770](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=186878390); use `input.buffer.max.bytes` instead.
 </td>  
 <td>
 
 `1000`
+</td> </tr>  
+<tr>  
+<td>
+
+input.buffer.max.bytes
+</td>  
+<td>
+
+Medium
+</td>  
+<td>
+
+Maximum total bytes of consumer-fetched records buffered across all stream threads on a single Kafka Streams instance. The total is split evenly across threads (`input.buffer.max.bytes / num.stream.threads`); when a thread's tasks collectively exceed their slice, the main consumer pauses every non-empty input partition on that thread until buffered bytes drop back below the cap. Replaces the deprecated `buffered.records.per.partition`.
+</td>  
+<td>
+
+`536870912`
 </td> </tr>  
 <tr>  
 <td>

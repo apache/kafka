@@ -82,6 +82,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final boolean eosEnabled;
     private final boolean transactionalStateStoresEnabled;
 
+    // -1 means the legacy per-partition pause is off; StreamThread's bytes guard owns it instead.
+    static final int UNDEFINED_MAX_BUFFERED_SIZE = -1;
+
     private final int maxBufferedSize;
     private final AbstractPartitionGroup partitionGroup;
     private final RecordCollector recordCollector;
@@ -204,6 +207,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         final Sensor enforcedProcessingSensor;
         enforcedProcessingSensor = TaskMetrics.enforcedProcessingSensor(threadId, taskId, streamsMetrics);
+        final Sensor totalInputBufferBytesSensor = TaskMetrics.totalInputBufferBytesSensor(threadId, taskId, streamsMetrics);
         final long maxTaskIdleMs = config.maxTaskIdleMs;
         if (processingThreadsEnabled) {
             partitionGroup = new SynchronizedPartitionGroup(new PartitionGroup(
@@ -212,6 +216,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 mainConsumer::currentLag,
                 TaskMetrics.recordLatenessSensor(threadId, taskId, streamsMetrics),
                 enforcedProcessingSensor,
+                totalInputBufferBytesSensor,
                 maxTaskIdleMs
             ));
         } else {
@@ -221,6 +226,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 mainConsumer::currentLag,
                 TaskMetrics.recordLatenessSensor(threadId, taskId, streamsMetrics),
                 enforcedProcessingSensor,
+                totalInputBufferBytesSensor,
                 maxTaskIdleMs
             );
         }
@@ -812,9 +818,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             log.trace("Task processed record: topic={}, partition={}, offset={}",
                 record.topic(), record.partition(), record.offset());
 
-            // after processing this record, if its partition queue's buffered size has been
-            // decreased to the threshold, we can then resume the consumption on this partition
-            if (recordInfo.queue().size() <= maxBufferedSize) {
+            // Only the legacy count-mode resumes here; in bytes-mode StreamThread owns pause/resume,
+            // so resuming per-task would undo its thread-wide pause and cause churn.
+            // headRecordIsCorrupted() catches a queue whose only remaining records are corrupted —
+            // size() never drops below the legacy threshold, so without this we'd stay paused forever.
+            if (maxBufferedSize != UNDEFINED_MAX_BUFFERED_SIZE
+                    && (recordInfo.queue().isEmpty()
+                        || recordInfo.queue().size() <= maxBufferedSize
+                        || recordInfo.queue().headRecordIsCorrupted())) {
                 log.trace("Resume consumption for partition {}: buffered size {} is under the threshold {}",
                         partition, recordInfo.queue().size(), maxBufferedSize);
                 partitionsToResume.add(partition);
@@ -1158,9 +1169,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             log.trace("Added records into the buffered queue of partition {}, new queue size is {}", partition, newQueueSize);
         }
 
-        // if after adding these records, its partition queue's buffered size has been
-        // increased beyond the threshold, we can then pause the consumption for this partition
-        if (newQueueSize > maxBufferedSize) {
+        // legacy per-partition pause; the bytes guard in StreamThread takes over when -1.
+        if (maxBufferedSize != UNDEFINED_MAX_BUFFERED_SIZE && newQueueSize > maxBufferedSize) {
             mainConsumer.pause(singleton(partition));
         }
     }
@@ -1542,6 +1552,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     long streamTime() {
         return partitionGroup.streamTime();
+    }
+
+    @Override
+    public long totalBytesBuffered() {
+        return partitionGroup.totalBytesBuffered();
+    }
+
+    @Override
+    public Set<TopicPartition> getNonEmptyTopicPartitions() {
+        return partitionGroup.getNonEmptyTopicPartitions();
     }
 
     private class RecordQueueCreator {
