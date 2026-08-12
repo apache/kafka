@@ -1305,7 +1305,6 @@ public class StickyTaskAssignorTest {
         assertTrue(member1TotalTasks <= 2, "Member1 should have <= 2 total tasks (quota), but has " + member1TotalTasks);
     }
 
-
     @Test
     public void shouldAssignStandbyToPreviousStandbyThatDoesNotHoldTheActiveTask() {
         // starting assignment [active] [standby]:
@@ -1319,7 +1318,8 @@ public class StickyTaskAssignorTest {
         // -> it should not go to member2/process2 due to load balancing of active tasks
         // standby 2 should stay on member2/process2 -> no reason to move it (load of member2 stays within capacity)
         // standby 0,1: one *must* go to member4/process4 due to load balancing
-        // -> the other one can go anywhere but member2/process2 due to load balancing
+        // -> standby 0 can go anywhere but member2/process2 due to load balancing
+        // -> standby 1 can not go to member3, so only member 1 is left for this case, due to load balancing
         //
         // expected new assignment [active] [standby]
         // ("expected" here means, based on the concrete implementation -- if this test fails with a different but
@@ -1342,21 +1342,150 @@ public class StickyTaskAssignorTest {
             new TopologyDescriberImpl(3, true, List.of("test-subtopology"))
         );
 
-        assertEquals(Set.of(2), getActiveTasks(result, "test-subtopology", "member1"));
-        // if this is not empty, but only hold standby 0 or 1, still correct
-        assertEquals(List.of(), getAllStandbyTaskIds(result, "member1"));
+        @SuppressWarnings("unchecked")
+        final HashMap<String, List<Integer>>[] resultInvariants = new HashMap[3];
+        resultInvariants[0] = new HashMap<>();
+        resultInvariants[0].put("member1", List.of()); // may be empty
+        resultInvariants[0].put("member2", List.of(2)); // standby-2 should always be on member2
+        resultInvariants[0].put("member3", List.of(0)); // can never hold standby-1
+        resultInvariants[0].put("member4", List.of(1));
 
+        resultInvariants[1] = new HashMap<>();
+        resultInvariants[1].put("member1", List.of(1));
+        resultInvariants[1].put("member2", List.of(2)); // standby-2 should always be on member2
+        resultInvariants[1].put("member3", List.of()); // may be empty
+        resultInvariants[1].put("member4", List.of(0)); // should either hold 0 or 1
+
+        resultInvariants[2] = new HashMap<>();
+        resultInvariants[2].put("member1", List.of(0));
+        resultInvariants[2].put("member2", List.of(2)); // standby-2 should always be on member2
+        resultInvariants[2].put("member3", List.of()); // may be empty
+        resultInvariants[2].put("member4", List.of(1)); // should either hold 0 or 1
+
+        assertEquals(Set.of(2), getActiveTasks(result, "test-subtopology", "member1"));
         assertEquals(Set.of(0), getActiveTasks(result, "test-subtopology", "member2"));
+        assertEquals(Set.of(1), getActiveTasks(result, "test-subtopology", "member3"));
+        assertEquals(Set.of(), getActiveTasks(result, "test-subtopology", "member4"));
+
+        // verify standbys
+
+        // member2 must always host standby-2
         assertEquals(List.of(2), getAllStandbyTaskIds(result, "member2"));
 
-        assertEquals(Set.of(1), getActiveTasks(result, "test-subtopology", "member3"));
-        // if this is empty, or hold standby 1 instead, still correct
-        assertEquals(List.of(0), getAllStandbyTaskIds(result, "member3"));
-
-        assertEquals(Set.of(), getActiveTasks(result, "test-subtopology", "member4"));
-        // if this hold standby 0, or both standby 0 and 1, still correct
-        assertEquals(List.of(1), getAllStandbyTaskIds(result, "member4"));
+        if (getAllStandbyTaskIds(result, "member1").equals(resultInvariants[0].get("member1"))) {
+            assertEquals(resultInvariants[0].get("member3"), getAllStandbyTaskIds(result, "member3"));
+            assertEquals(resultInvariants[0].get("member4"), getAllStandbyTaskIds(result, "member4"));
+        } else if (getAllStandbyTaskIds(result, "member1").equals(resultInvariants[1].get("member1"))) {
+            assertEquals(resultInvariants[1].get("member3"), getAllStandbyTaskIds(result, "member3"));
+            assertEquals(resultInvariants[1].get("member4"), getAllStandbyTaskIds(result, "member4"));
+        } else {
+            assertEquals(resultInvariants[2].get("member1"), getAllStandbyTaskIds(result, "member1"));
+            assertEquals(resultInvariants[2].get("member3"), getAllStandbyTaskIds(result, "member3"));
+            assertEquals(resultInvariants[2].get("member4"), getAllStandbyTaskIds(result, "member4"));
+        }
     }
+
+    @Test
+    public void shouldAssignTasksToMembersReportingTaskOffsetsOnColdStart() {
+        // Cold start (KAFKA-20719): all members have fresh member IDs and empty target assignments, but report
+        // cumulative offsets for the tasks whose state they hold on local disk.
+        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadataWithOffsets("process1",
+            mkMap(mkEntry("test-subtopology", mkMap(mkEntry(0, 100L), mkEntry(1, 100L)))));
+        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadataWithOffsets("process2",
+            mkMap(mkEntry("test-subtopology", mkMap(mkEntry(2, 100L), mkEntry(3, 100L)))));
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("member1", memberMetadata1),
+            mkEntry("member2", memberMetadata2));
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
+            new TopologyDescriberImpl(4, true, List.of("test-subtopology"))
+        );
+
+        assertEquals(Sets.newSet(0, 1), getActiveTasks(result, "test-subtopology", "member1"));
+        assertEquals(Sets.newSet(2, 3), getActiveTasks(result, "test-subtopology", "member2"));
+    }
+
+    @Test
+    public void shouldAssignTasksToProcessesReportingTaskOffsetsOnColdStartWithMultipleMembersPerProcess() {
+        // Members of the same process share the state directory and report the same offsets; tasks should stay
+        // on the process holding the state, spread across its members.
+        final Map<String, Map<Integer, Long>> process1Offsets = mkMap(
+            mkEntry("test-subtopology", mkMap(mkEntry(0, 100L), mkEntry(1, 100L))));
+        final Map<String, Map<Integer, Long>> process2Offsets = mkMap(
+            mkEntry("test-subtopology", mkMap(mkEntry(2, 100L), mkEntry(3, 100L))));
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("member1_1", createMemberMetadataWithOffsets("process1", process1Offsets)),
+            mkEntry("member1_2", createMemberMetadataWithOffsets("process1", process1Offsets)),
+            mkEntry("member2_1", createMemberMetadataWithOffsets("process2", process2Offsets)),
+            mkEntry("member2_2", createMemberMetadataWithOffsets("process2", process2Offsets)));
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
+            new TopologyDescriberImpl(4, true, List.of("test-subtopology"))
+        );
+
+        assertEquals(mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1))),
+            mergeAllActiveTasks(result, "member1_1", "member1_2"));
+        assertEquals(mkMap(mkEntry("test-subtopology", Sets.newSet(2, 3))),
+            mergeAllActiveTasks(result, "member2_1", "member2_2"));
+    }
+
+    @Test
+    public void shouldRankCurrentOwnersAheadOfReportedTaskOffsetsAndMostCaughtUpFirst() {
+        // All previous-ownership signals compete at once. member3 reports the largest possible offset sums for
+        // tasks 0 and 1, but loses both: the current active owner keeps task 0 and the current standby is promoted
+        // to active for task 1. Among the two members only known through their offsets, task 2 goes to the more
+        // caught-up one, leaving task 3 for the other.
+        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadata("process1",
+            mkMap(mkEntry("test-subtopology", Set.of(0))), Map.of());
+        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadata("process2",
+            Map.of(), mkMap(mkEntry("test-subtopology", Set.of(0, 1))));
+        final MemberMetadataAndStateImpl memberMetadata3 = createMemberMetadataWithOffsets("process3",
+            mkMap(mkEntry("test-subtopology",
+                mkMap(mkEntry(0, 1_000_000L), mkEntry(1, 1_000_000L), mkEntry(2, 100L)))));
+        final MemberMetadataAndStateImpl memberMetadata4 = createMemberMetadataWithOffsets("process4",
+            mkMap(mkEntry("test-subtopology", mkMap(mkEntry(2, 50L)))));
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("member1", memberMetadata1),
+            mkEntry("member2", memberMetadata2),
+            mkEntry("member3", memberMetadata3),
+            mkEntry("member4", memberMetadata4));
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT),
+            new TopologyDescriberImpl(4, true, List.of("test-subtopology"))
+        );
+
+        assertEquals(Set.of(0), getActiveTasks(result, "test-subtopology", "member1"));
+        assertEquals(Set.of(1), getActiveTasks(result, "test-subtopology", "member2"));
+        assertEquals(Set.of(2), getActiveTasks(result, "test-subtopology", "member3"));
+        assertEquals(Set.of(3), getActiveTasks(result, "test-subtopology", "member4"));
+    }
+
+    @Test
+    public void shouldAssignStandbysAwayFromProcessHoldingStateOnColdStart() {
+        // On cold start with standbys enabled, actives follow the reported state and standbys land on the
+        // other process (a standby may not be co-located with its active).
+        final MemberMetadataAndStateImpl memberMetadata1 = createMemberMetadataWithOffsets("process1",
+            mkMap(mkEntry("test-subtopology", mkMap(mkEntry(0, 100L)))));
+        final MemberMetadataAndStateImpl memberMetadata2 = createMemberMetadataWithOffsets("process2",
+            mkMap(mkEntry("test-subtopology", mkMap(mkEntry(1, 100L)))));
+        final Map<String, MemberMetadataAndStateImpl> members = mkMap(
+            mkEntry("member1", memberMetadata1),
+            mkEntry("member2", memberMetadata2));
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(1)),
+            new TopologyDescriberImpl(2, true, List.of("test-subtopology"))
+        );
+
+        assertEquals(Set.of(0), getActiveTasks(result, "test-subtopology", "member1"));
+        assertEquals(Set.of(1), getActiveTasks(result, "test-subtopology", "member2"));
+        assertEquals(Set.of(1), getStandbyTasks(result, "test-subtopology", "member1"));
+        assertEquals(Set.of(0), getStandbyTasks(result, "test-subtopology", "member2"));
+    }
+
 
     private int getAllActiveTaskCount(GroupAssignment result, String... memberIds) {
         int size = 0;
@@ -1381,6 +1510,19 @@ public class StickyTaskAssignorTest {
             assertNotNull(testMember.activeTasks());
             if (testMember.activeTasks().get(topologyId) != null) {
                 res.addAll(testMember.activeTasks().get(topologyId));
+            }
+        }
+        return res;
+    }
+
+    private Set<Integer> getStandbyTasks(GroupAssignment result, final String topologyId, String... memberIds) {
+        Set<Integer> res = new HashSet<>();
+        for (String memberId : memberIds) {
+            final MemberAssignment testMember = result.members().get(memberId);
+            assertNotNull(testMember);
+            assertNotNull(testMember.standbyTasks());
+            if (testMember.standbyTasks().get(topologyId) != null) {
+                res.addAll(testMember.standbyTasks().get(topologyId));
             }
         }
         return res;
@@ -1495,6 +1637,22 @@ public class StickyTaskAssignorTest {
             Map.of(),
             Map.of(),
             Map.of(),
+            Map.of());
+    }
+
+    private MemberMetadataAndStateImpl createMemberMetadataWithOffsets(
+        final String processId,
+        final Map<String, Map<Integer, Long>> taskOffsets
+    ) {
+        return new MemberMetadataAndStateImpl(
+            Optional.empty(),
+            Optional.empty(),
+            processId,
+            Map.of(),
+            Map.of(),
+            Map.of(),
+            Map.of(),
+            taskOffsets,
             Map.of());
     }
 

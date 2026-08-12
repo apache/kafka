@@ -140,6 +140,10 @@ public class TopologyMetadata {
         return processingMode;
     }
 
+    public boolean streamsProtocolEnabled() {
+        return StreamsConfigUtils.streamsProtocolEnabled(config);
+    }
+
     public long topologyVersion() {
         return version.topologyVersion.get();
     }
