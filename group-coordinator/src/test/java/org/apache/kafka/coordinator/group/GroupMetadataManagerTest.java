@@ -23123,8 +23123,8 @@ public class GroupMetadataManagerTest {
         assertEquals(12, group.groupEpoch());
         // Asserted in full, and not just for the absence of the tags: this is exactly the map 4.2 and 4.3 record
         // for a group that sets nothing. A configuration recorded here at its default value is read as a change
-        // by a coordinator that predates it, and withoutDefaults cannot repair that - it only runs on this side
-        // of the upgrade.
+        // by a coordinator that predates it, and fromMap cannot repair that - it only runs on this side of the
+        // upgrade.
         Map<String, String> defaultConfigs =
             Map.of("num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT));
         assertEquals(defaultConfigs, group.lastAssignmentConfigs());
@@ -23133,8 +23133,8 @@ public class GroupMetadataManagerTest {
 
     @Test
     public void testStreamsGroupEpochDoesNotIncreaseWhenEveryAssignmentConfigIsAtItsDefault() {
-        // Guards ASSIGNMENT_CONFIG_DEFAULTS against a configuration being added to streamsGroupAssignmentConfigs
-        // without its default being registered there. A group that sets nothing must compare equal to the empty
+        // Guards the parsing in AssignmentConfigsImpl.fromMap: a configuration absent from the recorded map must
+        // be filled in with its static default. A group that sets nothing must compare equal to the empty
         // configurations a version recording none of them wrote, or upgrading the broker rebalances every group.
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
@@ -23190,8 +23190,8 @@ public class GroupMetadataManagerTest {
         assertTrue(
             result.records().stream().noneMatch(record -> record.key() instanceof StreamsGroupMetadataKey),
             "Expected no StreamsGroupMetadata record, and therefore no group epoch bump. An assignment "
-                + "configuration that is passed to the assignor at its default value, but whose default is not "
-                + "registered in ASSIGNMENT_CONFIG_DEFAULTS, reads as a change here."
+                + "configuration that is absent from the recorded map, but not filled in with its static "
+                + "default by AssignmentConfigsImpl.fromMap, reads as a change here."
         );
         assertEquals(10, result.response().data().memberEpoch());
         assertEquals(10, group.groupEpoch());

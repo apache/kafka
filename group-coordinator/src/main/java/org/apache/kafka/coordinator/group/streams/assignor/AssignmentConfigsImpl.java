@@ -22,6 +22,7 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.AssignmentConfigs
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 
 /**
  * The assignment configurations for a streams group.
@@ -68,6 +69,23 @@ public record AssignmentConfigsImpl(
             Integer.parseInt(configs.get(NUM_STANDBY_REPLICAS_CONFIG)),
             parseRackAwareAssignmentTags(rackAwareAssignmentTags)
         );
+    }
+
+    /**
+     * Converts these configs into the map recorded for the group, which {@link #fromMap} reads back.
+     */
+    public Map<String, String> toMap() {
+        Map<String, String> configs = new TreeMap<>();
+        // 4.2 and 4.3 record num.standby.replicas unconditionally, and the map recorded for a group that sets
+        // nothing must stay identical to theirs: during a rolling upgrade, a group whose coordinator moves to a
+        // not-yet-upgraded broker would otherwise read the difference as a change and bump the group epoch.
+        configs.put(NUM_STANDBY_REPLICAS_CONFIG, String.valueOf(numStandbyReplicas));
+        // Configurations added after 4.3 are omitted at their default value instead, for the same reason: a
+        // broker that predates them computes the map without them.
+        if (!rackAwareAssignmentTags.equals(DEFAULT.rackAwareAssignmentTags())) {
+            configs.put(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, String.join(",", rackAwareAssignmentTags));
+        }
+        return configs;
     }
 
     /**

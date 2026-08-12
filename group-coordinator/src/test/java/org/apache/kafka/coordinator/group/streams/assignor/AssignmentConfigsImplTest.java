@@ -65,6 +65,38 @@ public class AssignmentConfigsImplTest {
     }
 
     @Test
+    void testToMap() {
+        assertEquals(
+            Map.of(
+                "num.standby.replicas", "1",
+                "rack.aware.assignment.tags", "tag1,tag2"
+            ),
+            new AssignmentConfigsImpl(1, List.of("tag1", "tag2")).toMap()
+        );
+    }
+
+    @Test
+    void testToMapOfDefaultsMatchesWhatOlderVersionsRecord() {
+        // num.standby.replicas is written unconditionally and everything else is omitted at its default, so a
+        // group that sets nothing records exactly the map 4.2 and 4.3 wrote. Asserted in full: a configuration
+        // recorded at its default value is read as a change by a coordinator that predates it.
+        assertEquals(
+            Map.of("num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT)),
+            AssignmentConfigsImpl.DEFAULT.toMap()
+        );
+    }
+
+    @Test
+    void testRoundTrip() {
+        // Guards a configuration being added to the record without being written out by toMap and parsed back
+        // by fromMap: a value that does not survive the round trip reads as a change on every comparison
+        // against the recorded map, bumping the group epoch on every heartbeat.
+        AssignmentConfigsImpl configs = new AssignmentConfigsImpl(2, List.of("tag1", "tag2"));
+        assertEquals(configs, AssignmentConfigsImpl.fromMap(configs.toMap()));
+        assertEquals(AssignmentConfigsImpl.DEFAULT, AssignmentConfigsImpl.fromMap(AssignmentConfigsImpl.DEFAULT.toMap()));
+    }
+
+    @Test
     void testWithers() {
         AssignmentConfigsImpl configs = new AssignmentConfigsImpl(1, List.of("tag1"));
 

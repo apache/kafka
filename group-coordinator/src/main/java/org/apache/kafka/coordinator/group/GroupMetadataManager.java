@@ -92,6 +92,7 @@ import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
+import org.apache.kafka.coordinator.group.api.streams.assignor.AssignmentConfigs;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.assignor.SimpleAssignor;
@@ -163,6 +164,7 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsTopology;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
+import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
@@ -185,7 +187,6 @@ import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -198,7 +199,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.SortedMap;
-import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
@@ -262,8 +262,6 @@ import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecor
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroupMember.hasAssignedTasksChanged;
-import static org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl.NUM_STANDBY_REPLICAS_CONFIG;
-import static org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG;
 
 
 /**
@@ -277,20 +275,6 @@ import static org.apache.kafka.coordinator.group.streams.assignor.AssignmentConf
  */
 public class GroupMetadataManager {
     private static final int METADATA_REFRESH_INTERVAL_MS = Integer.MAX_VALUE;
-
-    /**
-     * The default value of every streams group assignment configuration, keyed by the name under which the
-     * configuration is passed to the assignor. Consulted when recording a configuration
-     * (see {@link #putIfNotDefault}) and when comparing recorded ones (see {@link #withoutDefaults}), so that
-     * a configuration at its default value is equivalent to an absent one.
-     *
-     * <p>These are the static defaults of the configurations, not the broker-level defaults in effect: a
-     * broker-level default that is changed away from the static default must still bump the group epoch.
-     */
-    private static final Map<String, String> ASSIGNMENT_CONFIG_DEFAULTS = Map.of(
-        NUM_STANDBY_REPLICAS_CONFIG, String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT),
-        RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT
-    );
 
     private static class UpdateSubscriptionMetadataResult {
         private final int groupEpoch;
@@ -2243,13 +2227,12 @@ public class GroupMetadataManager {
             assignmentUpdate = AssignmentUpdate.RECOMPUTE;
         }
 
-        // Check if assignment configurations have changed. Both sides are compared without their default-valued
-        // configurations, so that a configuration that an older version wrote out explicitly at its default value
+        // Check if assignment configurations have changed. The recorded configurations are compared in their
+        // parsed form, so that a configuration that an older version wrote out explicitly at its default value
         // does not read as a change.
-        Map<String, String> currentAssignmentConfigs = streamsGroupAssignmentConfigs(groupId);
-        Map<String, String> storedAssignmentConfigs = group.lastAssignmentConfigs();
+        AssignmentConfigsImpl currentAssignmentConfigs = streamsGroupAssignmentConfigs(groupId);
         if (assignmentUpdate == AssignmentUpdate.NONE
-                && !withoutDefaults(currentAssignmentConfigs).equals(withoutDefaults(storedAssignmentConfigs))) {
+                && !currentAssignmentConfigs.equals(AssignmentConfigsImpl.fromMap(group.lastAssignmentConfigs()))) {
             log.info("[GroupId {}][MemberId {}] Assignment configurations changed to {}. Triggering rebalance.",
                 groupId, memberId, currentAssignmentConfigs);
             assignmentUpdate = AssignmentUpdate.RECOMPUTE;
@@ -2274,7 +2257,7 @@ public class GroupMetadataManager {
                 groupEpoch,
                 metadataHash,
                 validatedTopologyEpoch,
-                currentAssignmentConfigs,
+                currentAssignmentConfigs.toMap(),
                 group.storedDescriptionTopologyEpoch(),
                 group.failedDescriptionTopologyEpoch()
             ));
@@ -2416,11 +2399,10 @@ public class GroupMetadataManager {
                 )
         ));
 
-        String rackAwareTagsValue = currentAssignmentConfigs.getOrDefault(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "").trim();
+        List<String> requiredTags = currentAssignmentConfigs.rackAwareAssignmentTags();
         // The MISSING_CLIENT_TAGS status (code 6) requires version 1 of the RPC: version 0 clients
         // throw on unknown status codes, so it must not be sent to them.
-        if (requestApiVersion >= 1 && !rackAwareTagsValue.isEmpty()) {
-            List<String> requiredTags = Arrays.asList(rackAwareTagsValue.split("\\s*,\\s*", -1));
+        if (requestApiVersion >= 1 && !requiredTags.isEmpty()) {
             Set<String> memberTagKeys = updatedMember.clientTags().keySet();
             List<String> missingTags = requiredTags.stream()
                 .filter(tag -> !memberTagKeys.contains(tag))
@@ -4431,7 +4413,7 @@ public class GroupMetadataManager {
         CoordinatorMetadataImage metadataImage,
         List<CoordinatorRecord> records,
         Optional<List<Status>> returnedStatus,
-        Map<String, String> assignmentConfigs,
+        AssignmentConfigs assignmentConfigs,
         boolean refineOnly
     ) {
         boolean initialDelayActive = timer.isScheduled(streamsInitialRebalanceKey(group.groupId()));
@@ -4660,7 +4642,9 @@ public class GroupMetadataManager {
                 metadataImage,
                 records,
                 Optional.empty(),
-                group.lastAssignmentConfigs(),
+                // May replay empty from a record written before the configs were persisted; fromMap then falls
+                // back to the defaults.
+                AssignmentConfigsImpl.fromMap(group.lastAssignmentConfigs()),
                 false
             );
 
@@ -9925,42 +9909,15 @@ public class GroupMetadataManager {
 
     /**
      * Get the assignment configurations of the provided streams group, as they are passed to the assignor.
-     * Configurations at their default value are omitted, except for {@code num.standby.replicas}.
      */
-    private Map<String, String> streamsGroupAssignmentConfigs(String groupId) {
+    private AssignmentConfigsImpl streamsGroupAssignmentConfigs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
-        final Integer numStandbyReplicas = groupConfig.flatMap(GroupConfig::streamsNumStandbyReplicas)
-            .orElse(config.streamsGroupNumStandbyReplicas());
-        final List<String> rackAwareAssignmentTags = groupConfig.flatMap(GroupConfig::streamsRackAwareAssignmentTags)
-            .orElse(config.streamsGroupRackAwareAssignmentTags());
-        Map<String, String> configs = new TreeMap<>();
-        // 4.2 and 4.3 record num.standby.replicas unconditionally, and the map recorded for a group that sets
-        // nothing must stay identical to theirs: during a rolling upgrade, a group whose coordinator moves to a
-        // not-yet-upgraded broker would otherwise read the difference as a change and bump the group epoch.
-        configs.put(NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas.toString());
-        // Configurations added after 4.3 are omitted at their default value instead, for the same reason: a
-        // broker that predates them computes the map without them.
-        putIfNotDefault(configs, RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, String.join(",", rackAwareAssignmentTags));
-        return configs;
-    }
-
-    /**
-     * Record an assignment configuration, unless it is at its default value.
-     */
-    private static void putIfNotDefault(Map<String, String> configs, String key, String value) {
-        if (!value.equals(ASSIGNMENT_CONFIG_DEFAULTS.get(key))) {
-            configs.put(key, value);
-        }
-    }
-
-    /**
-     * Drop the assignment configurations that are at their default value, so that a map recorded by a version that
-     * wrote one out explicitly compares equal to one that omits it.
-     */
-    private static Map<String, String> withoutDefaults(Map<String, String> configs) {
-        Map<String, String> result = new HashMap<>(configs);
-        result.entrySet().removeIf(entry -> entry.getValue().equals(ASSIGNMENT_CONFIG_DEFAULTS.get(entry.getKey())));
-        return result;
+        return new AssignmentConfigsImpl(
+            groupConfig.flatMap(GroupConfig::streamsNumStandbyReplicas)
+                .orElse(config.streamsGroupNumStandbyReplicas()),
+            groupConfig.flatMap(GroupConfig::streamsRackAwareAssignmentTags)
+                .orElse(config.streamsGroupRackAwareAssignmentTags())
+        );
     }
 
     private static boolean hasUserEndpointChanged(StreamsGroupMember maybeOldMember, StreamsGroupMember updatedMember) {
