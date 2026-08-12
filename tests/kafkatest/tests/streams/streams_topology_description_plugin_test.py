@@ -21,6 +21,7 @@ from kafkatest.services.streams import (
     INMEMORY_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS,
     StreamsTopologyDescriptionPluginService,
 )
+from kafkatest.version import LATEST_4_2, LATEST_4_3, DEV_BRANCH, KafkaVersion
 
 
 class StreamsTopologyDescriptionPluginTest(Test):
@@ -42,7 +43,7 @@ class StreamsTopologyDescriptionPluginTest(Test):
             self.SINK_TOPIC: {"partitions": 1, "replication-factor": 1},
         }
 
-    def setup_kafka(self, plugin_enabled):
+    def setup_kafka(self, plugin_enabled, broker_version=str(DEV_BRANCH)):
         server_prop_overrides = [
             ["group.streams.min.session.timeout.ms", "10000"],
             ["group.streams.session.timeout.ms", "10000"],
@@ -58,6 +59,7 @@ class StreamsTopologyDescriptionPluginTest(Test):
             use_streams_groups=True,
             server_prop_overrides=server_prop_overrides,
         )
+        self.kafka.set_version(KafkaVersion(broker_version))
         self.kafka.start()
         self.kafka.run_features_command("upgrade", "streams.version", 1)
 
@@ -160,4 +162,43 @@ class StreamsTopologyDescriptionPluginTest(Test):
             allow_fail=False)
         assert int(next(pushed).strip()) == 0, \
             "Client logged a successful push despite no plugin being configured on the broker"
+        processor.stop()
+
+    @cluster(num_nodes=2)
+    @matrix(broker_version=[str(LATEST_4_2), str(LATEST_4_3)],
+            metadata_quorum=[quorum.combined_kraft])
+    def test_no_push_solicited_by_old_broker(self, broker_version, metadata_quorum):
+        """
+        Test a 4.4 client against a 4.2/4.3 broker. The broker solicits a topology description push
+        by setting topologyDescriptionRequired on the heartbeat response, but that field only exists
+        in response version 1 (KIP-1331), so a 4.2/4.3 broker can never ask. Such a broker also does
+        not know the plugin config and only warns about it, which this configures deliberately: even
+        with the config present, the older broker must not cause the newer client to push.
+        """
+        self.setup_kafka(plugin_enabled=True, broker_version=broker_version)
+
+        processor = StreamsTopologyDescriptionPluginService(self.test_context, self.kafka)
+        with processor.node.account.monitor_log(processor.LOG_FILE) as monitor:
+            processor.start()
+            monitor.wait_until(self.STREAMS_RUNNING_LOG,
+                               timeout_sec=120,
+                               err_msg="Never saw 'REBALANCING -> RUNNING' message " + str(processor.node.account))
+
+        requested = processor.node.account.ssh_capture(
+            "grep -c '%s' %s || true" % (self.PUSH_REQUESTED_LOG, processor.LOG_FILE),
+            allow_fail=False)
+        assert int(next(requested).strip()) == 0, \
+            "Client saw a topology push solicitation from a %s broker, which cannot send one" % broker_version
+
+        sent = processor.node.account.ssh_capture(
+            "grep -c '%s' %s || true" % (self.PUSH_SENDING_LOG, processor.LOG_FILE),
+            allow_fail=False)
+        assert int(next(sent).strip()) == 0, \
+            "Client sent a topology description to a %s broker, which cannot store one" % broker_version
+
+        pushed = processor.node.account.ssh_capture(
+            "grep -c '%s' %s || true" % (self.PUSH_SUCCESS_LOG, processor.LOG_FILE),
+            allow_fail=False)
+        assert int(next(pushed).strip()) == 0, \
+            "Client logged a successful push against a %s broker" % broker_version
         processor.stop()
