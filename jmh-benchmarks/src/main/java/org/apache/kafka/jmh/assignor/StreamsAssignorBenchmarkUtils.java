@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.jmh.assignor;
 
+import org.apache.kafka.coordinator.group.api.streams.assignor.AssignmentConfigs;
 import org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
@@ -45,7 +46,7 @@ public class StreamsAssignorBenchmarkUtils {
      */
     public static GroupSpec createGroupSpec(
         Map<String, StreamsGroupMember> members,
-        Map<String, String> assignmentConfigs,
+        AssignmentConfigs assignmentConfigs,
         Map<String, Map<String, Map<Integer, Long>>> taskOffsets
     ) {
         Map<String, MemberMetadataAndStateImpl> memberSpecs = new HashMap<>();
