@@ -56,6 +56,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
@@ -79,6 +80,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 
 public class DefaultStateUpdater implements StateUpdater {
 
+    private static final String NOT_RUNNING_ERROR_MESSAGE = "The state updater is not running.";
     private static final String BUG_ERROR_MESSAGE = "This indicates a bug. " +
         "Please report at https://issues.apache.org/jira/projects/KAFKA/issues or to the dev-mailing list (https://kafka.apache.org/contact).";
 
@@ -167,19 +169,30 @@ public class DefaultStateUpdater implements StateUpdater {
                 while (isRunning.get()) {
                     runOnce();
                 }
-            } catch (final RuntimeException anyOtherException) {
-                handleRuntimeException(anyOtherException);
+            } catch (final Throwable anyOtherThrowable) {
+                handleFatalThrowable(anyOtherThrowable);
             } finally {
-                clearInputQueue();
-                clearUpdatingAndPausedTasks();
+                // report the tasks before the pending actions, so that a task is already reported as failed when the
+                // caller of a failed action looks for it
+                failRemainingTasks();
+                failPendingActions();
                 updaterMetrics.clear();
                 log.info("State updater thread stopped");
             }
         }
 
-        private void clearInputQueue() {
+        // Once this thread stopped, nobody will ever perform the actions that are still in the input queue. Hence, we
+        // report them as failed instead of silently dropping them, so that the stream thread does not wait for a
+        // result that will never come and does not lose track of the tasks in the input queue.
+        private void failPendingActions() {
             tasksAndActionsLock.lock();
             try {
+                // The flag is published under the lock that guards the input queue. This ensures that an action that is
+                // added concurrently is either failed here or immediately failed by add() or remove().
+                threadStopped.set(true);
+                for (final TaskAndAction taskAndAction : tasksAndActions) {
+                    failAction(taskAndAction);
+                }
                 tasksAndActions.clear();
             } finally {
                 tasksAndActionsLock.unlock();
@@ -223,7 +236,8 @@ public class DefaultStateUpdater implements StateUpdater {
         private void performActionsOnTasks() {
             tasksAndActionsLock.lock();
             try {
-                for (final TaskAndAction taskAndAction : tasksAndActions()) {
+                while (!tasksAndActions.isEmpty()) {
+                    final TaskAndAction taskAndAction = tasksAndActions.peek();
                     final Action action = taskAndAction.action();
                     switch (action) {
                         case ADD:
@@ -235,6 +249,7 @@ public class DefaultStateUpdater implements StateUpdater {
                         default:
                             throw new IllegalStateException("Unknown action type " + action);
                     }
+                    tasksAndActions.poll();
                 }
             } finally {
                 tasksAndActionsLock.unlock();
@@ -338,9 +353,18 @@ public class DefaultStateUpdater implements StateUpdater {
         }
 
 
-        private void handleRuntimeException(final RuntimeException runtimeException) {
-            log.error("An unexpected error occurred within the state updater thread: {}", String.valueOf(runtimeException));
-            addToExceptionsAndFailedTasksThenClearUpdatingAndPausedTasks(runtimeException);
+        // Any throwable that escapes the update loop stops this thread. Even for a throwable that is not recoverable,
+        // like an error, we report the tasks of this thread as failed, so that the stream thread notices that this
+        // thread is gone instead of silently losing its tasks.
+        private void handleFatalThrowable(final Throwable throwable) {
+            log.error("An unexpected error occurred within the state updater thread.", throwable);
+            final RuntimeException exception = throwable instanceof RuntimeException
+                ? (RuntimeException) throwable
+                : new StreamsException("The state updater thread failed with a fatal error.", throwable);
+            // publish the exception before reporting the tasks as failed, so that the stream thread never sees a task
+            // that failed because this thread died without also seeing why this thread died
+            fatalException.set(exception);
+            addToExceptionsAndFailedTasksThenClearUpdatingAndPausedTasks(exception);
             isRunning.set(false);
         }
 
@@ -511,16 +535,34 @@ public class DefaultStateUpdater implements StateUpdater {
                 !isTopologyResumed.get();
         }
 
-        private void clearUpdatingAndPausedTasks() {
-            updatingTasks.clear();
-            pausedTasks.clear();
+        // Once this thread stopped, it cannot update or hand over any of the tasks it still owns. Hence, we report all
+        // of them as failed instead of silently dropping them, so that the stream thread closes them
+        private void failRemainingTasks() {
+            if (!updatingTasks.isEmpty() || !pausedTasks.isEmpty()) {
+                addToExceptionsAndFailedTasksThenClearUpdatingAndPausedTasks(
+                    new StreamsException(NOT_RUNNING_ERROR_MESSAGE)
+                );
+            }
+            restoredActiveTasksLock.lock();
+            try {
+                exceptionsAndFailedTasksLock.lock();
+                try {
+                    for (final StreamTask restoredTask : restoredActiveTasks) {
+                        log.warn("Restored task {} was not handed over to the stream thread before the state updater "
+                            + "stopped. The task is reported as failed.", restoredTask.id());
+                        exceptionsAndFailedTasks.add(new ExceptionAndTask(
+                            new StreamsException(NOT_RUNNING_ERROR_MESSAGE, restoredTask.id()),
+                            restoredTask
+                        ));
+                    }
+                } finally {
+                    exceptionsAndFailedTasksLock.unlock();
+                }
+                restoredActiveTasks.clear();
+            } finally {
+                restoredActiveTasksLock.unlock();
+            }
             changelogReader.clear();
-        }
-
-        private List<TaskAndAction> tasksAndActions() {
-            final List<TaskAndAction> tasksAndActionsToProcess = new ArrayList<>(tasksAndActions);
-            tasksAndActions.clear();
-            return tasksAndActionsToProcess;
         }
 
         private void addTask(final Task task) {
@@ -580,9 +622,6 @@ public class DefaultStateUpdater implements StateUpdater {
             } catch (final StreamsException streamsException) {
                 handleStreamsExceptionWithTask(streamsException, taskId);
                 future.completeExceptionally(streamsException);
-            } catch (final RuntimeException runtimeException) {
-                handleRuntimeException(runtimeException);
-                future.completeExceptionally(runtimeException);
             }
         }
 
@@ -876,6 +915,9 @@ public class DefaultStateUpdater implements StateUpdater {
 
     private StateUpdaterThread stateUpdaterThread = null;
 
+    private final AtomicBoolean threadStopped = new AtomicBoolean(false);
+    private final AtomicReference<RuntimeException> fatalException = new AtomicReference<>();
+
     public DefaultStateUpdater(final String name,
                                final StreamsMetricsImpl metrics,
                                final StreamsConfig config,
@@ -900,6 +942,10 @@ public class DefaultStateUpdater implements StateUpdater {
         if (stateUpdaterThread == null) {
             if (!restoredActiveTasks.isEmpty() || !exceptionsAndFailedTasks.isEmpty()) {
                 throw new IllegalStateException("State updater started with non-empty output queues. "
+                    + BUG_ERROR_MESSAGE);
+            }
+            if (threadStopped.get()) {
+                throw new IllegalStateException("State updater cannot be started again after it was shut down. "
                     + BUG_ERROR_MESSAGE);
             }
             stateUpdaterThread = new StateUpdaterThread(name, metrics, changelogReader);
@@ -944,13 +990,7 @@ public class DefaultStateUpdater implements StateUpdater {
     public void add(final Task task) {
         verifyStateFor(task);
 
-        tasksAndActionsLock.lock();
-        try {
-            tasksAndActions.add(TaskAndAction.createAddTask(task));
-            tasksAndActionsCondition.signalAll();
-        } finally {
-            tasksAndActionsLock.unlock();
-        }
+        submit(TaskAndAction.createAddTask(task));
     }
 
     private void verifyStateFor(final Task task) {
@@ -966,14 +1006,44 @@ public class DefaultStateUpdater implements StateUpdater {
     public CompletableFuture<RemovedTaskResult> remove(final TaskId taskId,
                                                        final StandbyUpdateListener.SuspendReason suspendReason) {
         final CompletableFuture<RemovedTaskResult> future = new CompletableFuture<>();
+        submit(TaskAndAction.createRemoveTask(taskId, future, suspendReason));
+        return future;
+    }
+
+    private void submit(final TaskAndAction taskAndAction) {
         tasksAndActionsLock.lock();
         try {
-            tasksAndActions.add(TaskAndAction.createRemoveTask(taskId, future, suspendReason));
-            tasksAndActionsCondition.signalAll();
+            if (threadStopped.get()) {
+                // The state updater thread will never pick up this action, so we fail it right away instead of
+                // letting the caller wait for a result that will never come.
+                failAction(taskAndAction);
+            } else {
+                tasksAndActions.add(taskAndAction);
+                tasksAndActionsCondition.signalAll();
+            }
         } finally {
             tasksAndActionsLock.unlock();
         }
-        return future;
+    }
+
+    private void failAction(final TaskAndAction taskAndAction) {
+        final StreamsException exception = new StreamsException(NOT_RUNNING_ERROR_MESSAGE);
+        if (taskAndAction.action() == Action.REMOVE) {
+            log.warn("Task {} cannot be removed because the state updater thread is not running.",
+                taskAndAction.taskId());
+            taskAndAction.futureForRemove().completeExceptionally(exception);
+        } else {
+            final Task task = taskAndAction.task();
+            log.warn("Task {} cannot be updated because the state updater thread is not running. The task is "
+                + "reported as failed.", task.id());
+            final ExceptionAndTask exceptionAndTask = new ExceptionAndTask(exception, task);
+            exceptionsAndFailedTasksLock.lock();
+            try {
+                exceptionsAndFailedTasks.add(exceptionAndTask);
+            } finally {
+                exceptionsAndFailedTasksLock.unlock();
+            }
+        }
     }
 
     @Override
@@ -1041,6 +1111,11 @@ public class DefaultStateUpdater implements StateUpdater {
         } finally {
             exceptionsAndFailedTasksLock.unlock();
         }
+    }
+
+    @Override
+    public Optional<RuntimeException> fatalException() {
+        return Optional.ofNullable(fatalException.get());
     }
 
     public Set<StandbyTask> updatingStandbyTasks() {
