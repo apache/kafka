@@ -2075,48 +2075,80 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task);
         verifyUpdatingTasks(task);
 
+        // pauseTask() moves the task from the updating tasks to the paused tasks
+        shouldNotListTheSameTaskTwiceWhileMovingIt(
+            "updatingTasks",
+            () -> when(topologyMetadata.isPaused(null)).thenReturn(true)
+        );
+    }
+
+    @Test
+    public void shouldNotListTheSameTaskTwiceWhileResumingAStandbyTask() throws Exception {
+        final StandbyTask task = standbyTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
+        when(topologyMetadata.isPaused(null)).thenReturn(true);
+        stateUpdater.start();
+        stateUpdater.add(task);
+        verifyPausedTasks(task);
+
+        // resumeTask() moves the task from the paused tasks to the updating tasks
+        shouldNotListTheSameTaskTwiceWhileMovingIt(
+            "pausedTasks",
+            () -> {
+                when(topologyMetadata.isPaused(null)).thenReturn(false);
+                stateUpdater.signalResume();
+            }
+        );
+    }
+
+    private void shouldNotListTheSameTaskTwiceWhileMovingIt(final String mapToFreeze,
+                                                            final Runnable triggerMove) throws Exception {
         final CountDownLatch removeInitiatedLatch = new CountDownLatch(1);
         final CountDownLatch removeCompletedLatch = new CountDownLatch(1);
-        // Replacing the updatingTasks map in the state updater to be able to synchronize the calls so that they happen in the right order
-        replaceUpdatingTasksMap(removeInitiatedLatch, removeCompletedLatch);
+        // Replacing the map in the state updater to be able to synchronize the calls so that they happen in the right order
+        replaceTasksMap(mapToFreeze, removeInitiatedLatch, removeCompletedLatch);
 
-        when(topologyMetadata.isPaused(null)).thenReturn(true);
-        assertTrue(
-                removeInitiatedLatch.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS),
-                "State updater thread never reached the pauseTask() put->remove window!"
-        );
-
-        // Calling tasks() concurrently to avoid a deadlock
         final AtomicReference<List<TaskId>> taskIds = new AtomicReference<>();
+        // Calling tasks() concurrently to avoid a deadlock
         final Thread reader = new Thread(
                 () -> taskIds.set(stateUpdater.tasks().stream().map(Task::id).collect(Collectors.toList()))
         );
-        reader.start();
-        waitForCondition(
+        try {
+            triggerMove.run();
+            assertTrue(
+                removeInitiatedLatch.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS),
+                "State updater thread never reached the put->remove window of " + mapToFreeze + "!"
+            );
+
+            reader.start();
+            waitForCondition(
                 () -> !reader.isAlive() || reader.getState() == Thread.State.WAITING,
                 VERIFICATION_TIMEOUT,
                 "Reader thread neither completed nor got blocked on the state updater lock!"
-        );
+            );
+        } finally {
+            removeCompletedLatch.countDown();
+        }
 
-        removeCompletedLatch.countDown();
-        reader.join();
+        reader.join(VERIFICATION_TIMEOUT);
+        assertFalse(reader.isAlive(), "Reader thread did not finish within " + VERIFICATION_TIMEOUT + " ms!");
 
         assertEquals(
                 taskIds.get().size(),
                 taskIds.get().stream().distinct().count(),
-                "tasks() returned duplicate task IDs while a pause was in flight: " + taskIds.get()
+                "tasks() returned duplicate task IDs while the task was moved between the maps: " + taskIds.get()
         );
     }
 
-    private void replaceUpdatingTasksMap(final CountDownLatch removeInitiatedLatch,
-                                         final CountDownLatch removeCompletedLatch) throws Exception {
+    private void replaceTasksMap(final String fieldName,
+                                 final CountDownLatch removeInitiatedLatch,
+                                 final CountDownLatch removeCompletedLatch) throws Exception {
         final Object stateUpdaterThread = TestUtils.fieldValue(stateUpdater, DefaultStateUpdater.class, "stateUpdaterThread");
-        final Map<TaskId, Task> updatingTasks =
-                TestUtils.fieldValue(stateUpdaterThread, stateUpdaterThread.getClass(), "updatingTasks");
+        final Map<TaskId, Task> tasks =
+                TestUtils.fieldValue(stateUpdaterThread, stateUpdaterThread.getClass(), fieldName);
         TestUtils.setFieldValue(
                 stateUpdaterThread,
-                "updatingTasks",
-                new SynchronizedTestMap(updatingTasks, removeInitiatedLatch, removeCompletedLatch)
+                fieldName,
+                new SynchronizedTestMap(tasks, removeInitiatedLatch, removeCompletedLatch)
         );
     }
 
@@ -2136,12 +2168,13 @@ class DefaultStateUpdaterTest {
 
         @Override
         public Task remove(final Object key) {
-            // Freeze the first removal (the one from pauseTask()), holding the task in both maps until the test releases us.
+            // Freeze the first removal (the one that moves the task between the maps), holding the task in both
+            // maps until the test releases us. Time out instead of blocking forever if the test never does.
             if (!frozen) {
                 frozen = true;
                 removeInitiatedLatch.countDown();
                 try {
-                    removeCompletedLatch.await();
+                    assertTrue(removeCompletedLatch.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
                 } catch (final InterruptedException e) {
                     throw new RuntimeException(e);
                 }
