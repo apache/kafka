@@ -128,7 +128,7 @@ class ConnectStandaloneFileTest(Test):
     def validate_output(self, value):
         try:
             output_hash = list(self.sink.node.account.ssh_capture("sha512sum " + self.OUTPUT_FILE))[0].strip().split()[0]
-            return output_hash == hashlib.md5(value.encode('utf-8')).hexdigest()
+            return output_hash == hashlib.sha512(value.encode('utf-8')).hexdigest()
         except RemoteCommandError:
             return False
 
