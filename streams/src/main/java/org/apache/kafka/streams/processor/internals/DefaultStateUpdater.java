@@ -1170,7 +1170,7 @@ public class DefaultStateUpdater implements StateUpdater {
         } finally {
             restoredActiveTasksLock.unlock();
         }
-        result.addAll(drainExceptionsAndFailedTasks().stream().map(ExceptionAndTask::task).collect(Collectors.toList()));
+        drainExceptionsAndFailedTasks().forEach(exceptionAndTask -> result.add(exceptionAndTask.task()));
         return result;
     }
 

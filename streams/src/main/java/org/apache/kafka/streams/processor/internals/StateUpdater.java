@@ -199,6 +199,14 @@ public interface StateUpdater {
      *
      * The returned tasks are removed from the state updater.
      *
+     * In contrast to {@link StateUpdater#tasks()}, the returned tasks are the tasks themselves and not read-only
+     * copies, so that the caller can close them.
+     *
+     * This method is intended for the shutdown of the state updater and must only be called once the state updater
+     * does not update tasks anymore. It drains the failed tasks, so calling it while the state updater is running
+     * would hide tasks that {@link StateUpdater#drainExceptionsAndFailedTasks()} has to hand over to the stream
+     * thread.
+     *
      * @return the tasks that wait in the queues of the state updater
      */
     Set<Task> drainQueuedTasks();
@@ -222,6 +230,7 @@ public interface StateUpdater {
      * <ul>
      *   <li>{@link StateUpdater#drainRestoredActiveTasks(Duration)}</li>
      *   <li>{@link StateUpdater#drainExceptionsAndFailedTasks()}</li>
+     *   <li>{@link StateUpdater#drainQueuedTasks()}</li>
      *   <li>{@link StateUpdater#remove(org.apache.kafka.streams.processor.TaskId)}</li>
      * </ul>
      *
@@ -248,6 +257,7 @@ public interface StateUpdater {
      * <ul>
      *   <li>{@link StateUpdater#drainRestoredActiveTasks(Duration)}</li>
      *   <li>{@link StateUpdater#drainExceptionsAndFailedTasks()}</li>
+     *   <li>{@link StateUpdater#drainQueuedTasks()}</li>
      *   <li>{@link StateUpdater#remove(org.apache.kafka.streams.processor.TaskId)}</li>
      * </ul>
      *

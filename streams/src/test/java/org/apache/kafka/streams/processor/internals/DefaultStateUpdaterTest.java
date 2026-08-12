@@ -1872,17 +1872,22 @@ class DefaultStateUpdaterTest {
             }
         });
         shutdownThread.start();
-        assertTrue(stoppingThreadInWindow.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
+        try {
+            assertTrue(stoppingThreadInWindow.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
 
-        // threadStopped is not published yet, so this task goes into the input queue that nobody polls anymore
-        stateUpdater.add(taskAddedWhileStopping);
-        // verify that the window was really hit, i.e. that the task is queued and not already reported as failed,
-        // because after threadStopped is published add() fails the task immediately and the queue stays empty
-        assertTrue(stateUpdater.tasks().stream().anyMatch(task -> task.id().equals(taskAddedWhileStopping.id())));
-        assertTrue(stateUpdater.exceptionsAndFailedTasks().stream()
-            .noneMatch(exceptionAndTask -> exceptionAndTask.task().id().equals(taskAddedWhileStopping.id())));
+            // threadStopped is not published yet, so this task goes into the input queue that nobody polls anymore
+            stateUpdater.add(taskAddedWhileStopping);
+            // verify that the window was really hit, i.e. that the task is queued and not already reported as failed,
+            // because after threadStopped is published add() fails the task immediately and the queue stays empty
+            assertTrue(stateUpdater.tasks().stream().anyMatch(task -> task.id().equals(taskAddedWhileStopping.id())));
+            assertTrue(stateUpdater.exceptionsAndFailedTasks().stream()
+                .noneMatch(exceptionAndTask -> exceptionAndTask.task().id().equals(taskAddedWhileStopping.id())));
+        } finally {
+            // release the parked thread even if an assertion failed, so that the failure is not masked by the
+            // shutdown and the tearDown each waiting a minute for a thread that never leaves clear()
+            releaseStoppingThread.countDown();
+        }
 
-        releaseStoppingThread.countDown();
         shutdownThread.join();
         assertNull(shutdownException.get());
 
