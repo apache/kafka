@@ -16,23 +16,15 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.processor.StateStore;
+/**
+ * Runs the full {@link AbstractWindowBytesStoreTest} suite against the persistent RocksDB window
+ * store with transactional state stores enabled, so the staged-write/merge path is held to the
+ * same behavioural contract as the non-transactional store.
+ */
+public class RocksDBTransactionalWindowStoreTest extends RocksDBWindowStoreTest {
 
-public interface WithRetentionPeriod {
-    long retentionPeriod();
-
-    /**
-     * Unwrap to the innermost store and return its retention, or -1 if it does not report one.
-     * Stores that hold their delegate in a field rather than as a {@link WrappedStateStore} end the
-     * walk, so they resolve their own delegate through here.
-     */
-    static long resolveRetentionPeriod(final StateStore store) {
-        StateStore current = store;
-        while (current instanceof WrappedStateStore) {
-            current = ((WrappedStateStore<?, ?, ?>) current).wrapped();
-        }
-        return current instanceof WithRetentionPeriod
-            ? ((WithRetentionPeriod) current).retentionPeriod()
-            : -1L;
+    @Override
+    boolean transactional() {
+        return true;
     }
 }

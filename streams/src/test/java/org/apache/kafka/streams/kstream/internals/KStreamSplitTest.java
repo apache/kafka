@@ -26,7 +26,6 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Branched;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
@@ -81,7 +80,7 @@ public class KStreamSplitTest {
     private void withDriver(final Consumer<TopologyTestDriver> test) {
         final int[] expectedKeys = new int[]{-1, 0, 1, 2, 3, 4, 5, 6, 7};
         final Topology topology = builder.build();
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(props).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
             final TestInputTopic<Integer, String> inputTopic = driver.createInputTopic(topicName, new IntegerSerializer(), new StringSerializer());
             for (final int expectedKey : expectedKeys) {
                 inputTopic.pipeInput(expectedKey, "V" + expectedKey);

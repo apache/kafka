@@ -24,7 +24,6 @@ import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.GlobalKTable;
@@ -106,7 +105,7 @@ public class KStreamGlobalKTableLeftJoinTest {
         stream.leftJoin(table, keyMapper, MockValueJoiner.TOSTRING_JOINER).process(supplier);
 
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
-        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build();
+        driver = new TopologyTestDriver(builder.build(), props);
 
         processor = supplier.theCapturedProcessor();
 
@@ -159,7 +158,7 @@ public class KStreamGlobalKTableLeftJoinTest {
             return tokens.length > 1 ? tokens[1] : null;
         };
         stream.leftJoin(table, keyMapper, joiner).process(supplier);
-        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String())).build();
+        driver = new TopologyTestDriver(builder.build(), StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String()));
         processor = supplier.theCapturedProcessor();
         inputStreamTopic = driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ofMillis(1L));
         inputTableTopic = driver.createInputTopic(globalTableTopic, new StringSerializer(), new StringSerializer());
@@ -179,7 +178,7 @@ public class KStreamGlobalKTableLeftJoinTest {
             return tokens.length > 1 ? tokens[1] : null;
         };
         stream.leftJoin(table, keyMapper, joiner).process(supplier);
-        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String())).build();
+        driver = new TopologyTestDriver(builder.build(), StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String()));
         processor = supplier.theCapturedProcessor();
         inputStreamTopic = driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ofMillis(1L));
         inputTableTopic = driver.createInputTopic(globalTableTopic, new StringSerializer(), new StringSerializer());

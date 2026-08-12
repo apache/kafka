@@ -159,7 +159,7 @@ public class StreamsBuilderTest {
                 }
             }
         );
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build())) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic("topic", new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput("hey", "there");
@@ -346,7 +346,7 @@ public class StreamsBuilderTest {
         final MockApiProcessorSupplier<String, String, Void, Void> processorSupplier = new MockApiProcessorSupplier<>();
         source.process(processorSupplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic("topic-source", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             inputTopic.pipeInput("A", "aa");
@@ -368,7 +368,7 @@ public class StreamsBuilderTest {
         final MockApiProcessorSupplier<String, String, Void, Void> throughProcessorSupplier = new MockApiProcessorSupplier<>();
         through.process(throughProcessorSupplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic("topic-source", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             inputTopic.pipeInput("A", "aa");
@@ -390,7 +390,7 @@ public class StreamsBuilderTest {
         final MockApiProcessorSupplier<String, String, Void, Void> processorSupplier = new MockApiProcessorSupplier<>();
         merged.process(processorSupplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic1 =
                 driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<String, String> inputTopic2 =
@@ -630,7 +630,7 @@ public class StreamsBuilderTest {
             .withValueSerde(Serdes.String()))
                .toStream().foreach(action);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Long, String> inputTopic =
                 driver.createInputTopic(topic, new LongSerializer(), new StringSerializer());
             inputTopic.pipeInput(1L, "value1");
@@ -651,7 +651,7 @@ public class StreamsBuilderTest {
             .withKeySerde(Serdes.Long())
             .withValueSerde(Serdes.String()));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Long, String> inputTopic =
                 driver.createInputTopic(topic, new LongSerializer(), new StringSerializer());
             inputTopic.pipeInput(1L, "value1");

@@ -76,7 +76,7 @@ public class TestTopicsTest {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
         properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
-        testDriver = new TopologyTestDriverBuilder(builder.build()).withConfig(properties).build();
+        testDriver = new TopologyTestDriver(builder.build(), properties);
     }
 
     @AfterEach

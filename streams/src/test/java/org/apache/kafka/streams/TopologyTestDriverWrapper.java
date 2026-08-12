@@ -33,7 +33,7 @@ public class TopologyTestDriverWrapper extends TopologyTestDriver {
 
     public TopologyTestDriverWrapper(final Topology topology,
                                      final Properties config) {
-        super(topology.internalTopologyBuilder, config, System.currentTimeMillis());
+        super(topology, config);
     }
 
     /**

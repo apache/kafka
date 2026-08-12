@@ -29,7 +29,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.errors.ErrorHandlerContext;
 import org.apache.kafka.streams.errors.LogAndContinueProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailProcessingExceptionHandler;
@@ -342,7 +341,7 @@ public class ProcessorNodeTest {
         config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
 
-        try (final TopologyTestDriver testDriver = new TopologyTestDriverBuilder(topology).withConfig(config).build()) {
+        try (final TopologyTestDriver testDriver = new TopologyTestDriver(topology, config)) {
             final TestInputTopic<String, String> topic = testDriver.createInputTopic("streams-plaintext-input", new StringSerializer(), new StringSerializer());
 
             final StreamsException se = assertThrows(StreamsException.class, () -> topic.pipeInput(KEY, VALUE));
@@ -361,7 +360,7 @@ public class ProcessorNodeTest {
             .flatMapValues(value -> Collections.singletonList(""));
         final Topology topology = builder.build();
 
-        final StreamsException se = assertThrows(StreamsException.class, () -> new TopologyTestDriverBuilder(topology).build());
+        final StreamsException se = assertThrows(StreamsException.class, () -> new TopologyTestDriver(topology));
         assertTrue(se.getMessage().contains("Failed to initialize key serdes for source node"));
         assertTrue(se.getCause().getMessage().contains("Please specify a key serde or set one through StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG"));
     }

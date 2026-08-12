@@ -27,7 +27,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
@@ -169,7 +168,7 @@ public class WindowStoreFetchTest {
 
         final Topology topology = builder.build();
 
-        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).build()) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology)) {
             //get input topic and stateStore
             final TestInputTopic<String, String> input = driver
                     .createInputTopic("input", new StringSerializer(), new StringSerializer());
