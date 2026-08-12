@@ -131,13 +131,13 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
         // Whether the non-blocking extension was denied memory on the pass that just ended (only
         // memory exhaustion case a pass can survive because it's non-blocking, all others throw).
         // Cleared once the next pass has read it, so it can only ever describe the pass immediately before.
-        boolean nonBlockingAllocationDeniedMemory = false;
+        boolean nonBlockingMemoryAllocationDenied = false;
 
         if (headers == null) headers = Record.EMPTY_HEADERS;
         try {
             while (true) {
-                attemptState = throwIfNoMoreRetriesAllowed(attemptState, deadlineMs, nonBlockingAllocationDeniedMemory, topic);
-                nonBlockingAllocationDeniedMemory = false;
+                attemptState = throwIfNoMoreRetriesAllowed(attemptState, deadlineMs, nonBlockingMemoryAllocationDenied, topic);
+                nonBlockingMemoryAllocationDenied = false;
                 final BuiltInPartitioner.StickyPartitionInfo partitionInfo;
                 final int effectivePartition;
                 if (partition == RecordMetadata.UNKNOWN_PARTITION) {
@@ -178,7 +178,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                         // Pool exhausted, so no chunks are held. allocateExtensionChunks has already
                         // decided whether to close the open batch; retry either way, bounded by
                         // throwIfNoMoreRetriesAllowed, which will report exhausted memory as the cause.
-                        nonBlockingAllocationDeniedMemory = true;
+                        nonBlockingMemoryAllocationDenied = true;
                         continue;
                     }
                     nowMs = time.milliseconds();

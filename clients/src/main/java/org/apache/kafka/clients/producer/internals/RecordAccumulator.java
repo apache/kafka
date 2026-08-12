@@ -433,7 +433,7 @@ public class RecordAccumulator {
      * These allow a pass, never waiting time: past the deadline a blocking acquire is given
      * {@link #remainingTimeToBlockMs}, which is 0 by then, and the extension acquire never waits at all. So
      * retries that wait for memory are bounded by that wait, and this bounds the ones that wait for nothing —
-     * restarts because the partition moved, or the batch the pass read was replaced or filled under it.
+     * retries because the partition moved, or the batch the pass read was replaced or filled under it.
      *
      * @param deniedMemory whether the pool refused the pass that just ended; it only decides how giving up is
      *                     reported. Only the incremental extension acquire can be refused and still let its
@@ -461,7 +461,7 @@ public class RecordAccumulator {
                     + free.availableMemory() + " bytes.");
         }
         throw new TimeoutException("Failed to append a record to topic " + topic + " within "
-                + ProducerConfig.MAX_BLOCK_MS_CONFIG + ". The append kept restarting because concurrent "
+                + ProducerConfig.MAX_BLOCK_MS_CONFIG + ". The append kept retrying because concurrent "
                 + "appends changed the state it read.");
     }
 

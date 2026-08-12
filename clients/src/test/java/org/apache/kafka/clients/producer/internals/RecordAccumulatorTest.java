@@ -1589,7 +1589,7 @@ public class RecordAccumulatorTest {
             TimeoutException timeout = assertThrows(TimeoutException.class,
                     () -> accum.throwIfNoMoreRetriesAllowed(expired, spent, false, topic));
             assertEquals(TimeoutException.class, timeout.getClass(), timeout.getMessage());
-            assertTrue(timeout.getMessage().contains("kept restarting"), timeout.getMessage());
+            assertTrue(timeout.getMessage().contains("kept retrying"), timeout.getMessage());
 
             KafkaMetric exhausted = metrics.metric(metrics.metricName("buffer-exhausted-total", "producer-metrics"));
             assertEquals(0.0, (double) exhausted.metricValue(), "a timeout is not a buffer-exhausted drop");

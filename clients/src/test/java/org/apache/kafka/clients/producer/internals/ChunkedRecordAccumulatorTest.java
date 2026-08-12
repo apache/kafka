@@ -624,18 +624,18 @@ public class ChunkedRecordAccumulatorTest {
 
     /**
      * Accumulator whose {@code partitionChanged} reports that the sticky partition moved, so the append
-     * restarts its pass having asked the pool for nothing. It stands in for a concurrent appender crossing the
+     * retries its pass having asked the pool for nothing. It stands in for a concurrent appender crossing the
      * switch threshold; only the append under test is affected, since {@code partitionInfo} is null for the
      * appends that name their partition (as the concurrent ones the pool overrides inject all do).
      *
-     * @param activeWhile when to report the move, so the restart lands on the pass the test needs — it is
+     * @param activeWhile when to report the move, so the retry lands on the pass the test needs — it is
      *                    re-evaluated on every call, and reports nothing until it first holds
-     * @param restarts    counts the restarts: gates the cap, and is what callers assert on
-     * @param maxRestarts caps the restarts, so a bound that regressed fails an assertion rather than spinning
+     * @param retries    counts the retries: gates the cap, and is what callers assert on
+     * @param maxRetries caps the retries, so a bound that regressed fails an assertion rather than spinning
      */
     private ChunkedRecordAccumulator accumulatorWithPartitionChange(BufferPool pool,
                                                                     BooleanSupplier activeWhile,
-                                                                    AtomicInteger restarts, int maxRestarts) {
+                                                                    AtomicInteger retries, int maxRetries) {
         return new ChunkedRecordAccumulator(logContext, 8192, Compression.NONE,
                 /* lingerMs */ 0, /* retryBackoffMs */ 0L, /* retryBackoffMaxMs */ 0L,
                 /* deliveryTimeoutMs */ 3200, metrics, "producer-metrics", time,
@@ -644,8 +644,8 @@ public class ChunkedRecordAccumulatorTest {
             protected boolean partitionChanged(String topic, TopicInfo topicInfo,
                                                BuiltInPartitioner.StickyPartitionInfo partitionInfo,
                                                Deque<ProducerBatch> deque, long nowMs, Cluster cluster) {
-                if (partitionInfo != null && activeWhile.getAsBoolean() && restarts.get() < maxRestarts) {
-                    restarts.incrementAndGet();
+                if (partitionInfo != null && activeWhile.getAsBoolean() && retries.get() < maxRetries) {
+                    retries.incrementAndGet();
                     return true;
                 }
                 return super.partitionChanged(topic, topicInfo, partitionInfo, deque, nowMs, cluster);
@@ -676,7 +676,7 @@ public class ChunkedRecordAccumulatorTest {
                     maxBlockTimeMs, time.milliseconds(), cluster);
 
             // Needs an extension it never gets, on a batch that keeps being replaced: the first attempt and
-            // the one retry after the deadline passed both restart, and the pass after that has nothing left.
+            // the one retry after the deadline passed both retry, and the pass after that has nothing left.
             // The pass that gave up was denied memory, so the failure keeps the type, the metric and the
             // diagnosis of an exhausted pool rather than reporting a bare timeout.
             BufferExhaustedException e = assertThrows(BufferExhaustedException.class,
@@ -1107,7 +1107,7 @@ public class ChunkedRecordAccumulatorTest {
                 if (partitionInfo != null && forcedSwitches.get() < 5) {
                     forcedSwitches.incrementAndGet();
                     // A concurrent appender to the sticky partition crossing the switch threshold, so the
-                    // check below always sees a partition that moved and the caller always restarts.
+                    // check below always sees a partition that moved and the caller always retries.
                     topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, batchSize, cluster, true);
                     // Leave no time, so the append gets its first pass, one retry after the deadline, no more.
                     time.sleep(maxBlockTimeMs + 1);
@@ -1121,7 +1121,7 @@ public class ChunkedRecordAccumulatorTest {
                             Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), cluster));
             // BufferExhaustedException extends TimeoutException, so assertThrows above would accept it too.
             assertEquals(TimeoutException.class, e.getClass(), e.getMessage());
-            assertTrue(e.getMessage().contains("kept restarting"), e.getMessage());
+            assertTrue(e.getMessage().contains("kept retrying"), e.getMessage());
             assertEquals(2, forcedSwitches.get(),
                     "the append is allowed its first pass and one retry after the deadline, then gives up");
         } finally {
@@ -1176,7 +1176,7 @@ public class ChunkedRecordAccumulatorTest {
         int chunkSize = 256;
         long totalMemory = 16L * chunkSize;
         AtomicBoolean streamAllocated = new AtomicBoolean();
-        AtomicInteger restarts = new AtomicInteger();
+        AtomicInteger retries = new AtomicInteger();
 
         BufferPool pool = new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
             @Override
@@ -1189,18 +1189,18 @@ public class ChunkedRecordAccumulatorTest {
                 return chunks;
             }
         };
-        // Two restarts, both after the stream exists: one so it is carried into the next pass without being
+        // Two retries, both after the stream exists: one so it is carried into the next pass without being
         // attached, and one on that pass, so the pass after it is the one that gives up.
-        ChunkedRecordAccumulator accum = accumulatorWithPartitionChange(pool, streamAllocated::get, restarts,
-                /* maxRestarts */ 2);
+        ChunkedRecordAccumulator accum = accumulatorWithPartitionChange(pool, streamAllocated::get, retries,
+                /* maxRetries */ 2);
         try {
             TimeoutException e = assertThrows(TimeoutException.class,
                     () -> accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, key, new byte[100],
                             Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), cluster));
             // BufferExhaustedException extends TimeoutException, so assertThrows above would accept it too.
             assertEquals(TimeoutException.class, e.getClass(), e.getMessage());
-            assertEquals(2, restarts.get(),
-                    "the stream must have been held across a restart and the pass that followed it");
+            assertEquals(2, retries.get(),
+                    "the stream must have been held across a retry and the pass that followed it");
             assertEquals(totalMemory, pool.availableMemory(),
                     "the chunks reserved for a batch that was never created must go back to the pool");
         } finally {
@@ -1210,7 +1210,7 @@ public class ChunkedRecordAccumulatorTest {
 
     /**
      * A refusal must not outlive the pass it happened on. Here the extension acquire is refused, and the pass
-     * after it restarts because the sticky partition moved — asking the pool for nothing at all. That is the
+     * after it retries because the sticky partition moved — asking the pool for nothing at all. That is the
      * pass that runs out of time, so the failure must be a plain timeout: reporting an exhausted pool would
      * pin the blame on a refusal that happened a pass earlier, and count a buffer-exhausted drop for a record
      * the pool was never asked about.
@@ -1218,13 +1218,13 @@ public class ChunkedRecordAccumulatorTest {
     @Test
     public void testPartitionChangeTimeoutAfterExtensionFail() throws Exception {
         AtomicInteger refusals = new AtomicInteger();
-        AtomicInteger restarts = new AtomicInteger();
+        AtomicInteger retries = new AtomicInteger();
         AtomicReference<ChunkedRecordAccumulator> accumRef = new AtomicReference<>();
 
         BufferPool pool = poolRefusingExtensionAfterBatchReplaced(256, accumRef, refusals, /* maxRefusals */ 1);
-        // Exactly one restart, on the pass right after the refusal.
-        ChunkedRecordAccumulator accum = accumulatorWithPartitionChange(pool, () -> refusals.get() > 0, restarts,
-                /* maxRestarts */ 1);
+        // Exactly one retry, on the pass right after the refusal.
+        ChunkedRecordAccumulator accum = accumulatorWithPartitionChange(pool, () -> refusals.get() > 0, retries,
+                /* maxRetries */ 1);
         accumRef.set(accum);
         try {
             KafkaMetric exhausted = metrics.metric(metrics.metricName("buffer-exhausted-total", "producer-metrics"));
@@ -1236,10 +1236,10 @@ public class ChunkedRecordAccumulatorTest {
                             Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), cluster));
 
             assertEquals(1, refusals.get(), "the extension acquire must have been refused once");
-            assertEquals(1, restarts.get(), "the interleaving under test was never reached");
+            assertEquals(1, retries.get(), "the interleaving under test was never reached");
             // BufferExhaustedException extends TimeoutException, so assertThrows above would accept it too.
             assertEquals(TimeoutException.class, e.getClass(), e.getMessage());
-            assertTrue(e.getMessage().contains("kept restarting"), e.getMessage());
+            assertTrue(e.getMessage().contains("kept retrying"), e.getMessage());
             assertEquals(0.0, (double) exhausted.metricValue(),
                     "the pass that gave up never asked the pool, so no drop may be attributed to it");
         } finally {
