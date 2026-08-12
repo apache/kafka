@@ -26,6 +26,7 @@ import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -207,7 +208,7 @@ public class ClientTelemetryUtils {
     }
 
     public static ByteBuffer compress(MetricsData metrics, CompressionType compressionType) throws IOException {
-        try (ByteBufferOutputStream compressedOut = new ByteBufferOutputStream(512)) {
+        try (ByteBufferOutputStream compressedOut = new SingleByteBufferOutputStream(512)) {
             Compression compression = Compression.of(compressionType).build();
             try (OutputStream out = compression.wrapForOutput(compressedOut, RecordBatch.CURRENT_MAGIC_VALUE)) {
                 metrics.writeTo(out);
@@ -243,7 +244,7 @@ public class ClientTelemetryUtils {
     public static ByteBuffer decompress(ByteBuffer metrics, CompressionType compressionType, int maxDecompressedBytes) {
         Compression compression = Compression.of(compressionType).build();
         try (InputStream in = compression.wrapForInput(metrics, RecordBatch.CURRENT_MAGIC_VALUE, BufferSupplier.create());
-            ByteBufferOutputStream out = new ByteBufferOutputStream(512)) {
+            ByteBufferOutputStream out = new SingleByteBufferOutputStream(512)) {
             byte[] bytes = new byte[Math.min(metrics.limit() * 2, DECOMPRESS_READ_BUFFER_BYTES)];
             int nRead;
             int totalRead = 0;
