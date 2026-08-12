@@ -27,6 +27,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.FixedPartitionPartitioner;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
@@ -1078,14 +1079,14 @@ public class ProcessorTopologyTest {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
             .addProcessor("processor", ForwardingProcessor::new, "source")
-            .addSink("sink", OUTPUT_TOPIC_1, new FixedPartitionPartitioner(partition), "processor");
+            .addSink("sink", OUTPUT_TOPIC_1, new FixedPartitionPartitioner<>(partition), "processor");
     }
 
     private Topology createTimestampTopology(final int partition) {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
             .addProcessor("processor", TimestampProcessor::new, "source")
-            .addSink("sink", OUTPUT_TOPIC_1, new FixedPartitionPartitioner(partition), "processor");
+            .addSink("sink", OUTPUT_TOPIC_1, new FixedPartitionPartitioner<>(partition), "processor");
     }
 
     private Topology createMultiProcessorTimestampTopology(final int partition) {
@@ -1094,8 +1095,8 @@ public class ProcessorTopologyTest {
             .addProcessor("processor", () -> new FanOutTimestampProcessor("child1", "child2"), "source")
             .addProcessor("child1", ForwardingProcessor::new, "processor")
             .addProcessor("child2", TimestampProcessor::new, "processor")
-            .addSink("sink1", OUTPUT_TOPIC_1, new FixedPartitionPartitioner(partition), "child1")
-            .addSink("sink2", OUTPUT_TOPIC_2, new FixedPartitionPartitioner(partition), "child2");
+            .addSink("sink1", OUTPUT_TOPIC_1, new FixedPartitionPartitioner<>(partition), "child1")
+            .addSink("sink2", OUTPUT_TOPIC_2, new FixedPartitionPartitioner<>(partition), "child2");
     }
 
     static class DroppingPartitioner implements StreamPartitioner<String, String> {
@@ -1178,10 +1179,10 @@ public class ProcessorTopologyTest {
     private Topology createSimpleMultiSourceTopology(final int partition) {
         return topology.addSource("source-1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
                 .addProcessor("processor-1", ForwardingProcessor::new, "source-1")
-                .addSink("sink-1", OUTPUT_TOPIC_1, new FixedPartitionPartitioner(partition), "processor-1")
+                .addSink("sink-1", OUTPUT_TOPIC_1, new FixedPartitionPartitioner<>(partition), "processor-1")
                 .addSource("source-2", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_2)
                 .addProcessor("processor-2", ForwardingProcessor::new, "source-2")
-                .addSink("sink-2", OUTPUT_TOPIC_2, new FixedPartitionPartitioner(partition), "processor-2");
+                .addSink("sink-2", OUTPUT_TOPIC_2, new FixedPartitionPartitioner<>(partition), "processor-2");
     }
 
     private Topology createAddHeaderTopology() {
@@ -1364,25 +1365,6 @@ public class ProcessorTopologyTest {
             }
 
             return DEFAULT_TIMESTAMP;
-        }
-    }
-    
-    private static class FixedPartitionPartitioner implements StreamPartitioner<Integer, Object> {
-        private final int partition;
-
-        FixedPartitionPartitioner(final int partition) {
-            this.partition = partition;
-        }
-
-        @SuppressWarnings("removal")
-        @Override
-        public Optional<Set<Integer>> partitions(final String topic, final Integer key, final Object value, final int numPartitions) {
-            throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
-        }
-
-        @Override
-        public Optional<Set<Integer>> partitions(final String topic, final Integer key, final Object value, final Headers headers, final int numPartitions) {
-            return Optional.of(Collections.singleton(partition));
         }
     }
 }
