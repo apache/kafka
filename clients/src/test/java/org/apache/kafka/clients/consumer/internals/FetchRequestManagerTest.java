@@ -1361,7 +1361,7 @@ public class FetchRequestManagerTest {
     public void testFetchDuringEagerRebalance() {
         buildFetcher();
 
-        subscriptions.subscribe(singleton(topicName));
+        subscriptions.subscribe(singleton(topicName), Optional.empty());
         subscriptions.assignFromSubscribed(singleton(tp0));
         subscriptions.seek(tp0, 0);
 
@@ -1385,7 +1385,7 @@ public class FetchRequestManagerTest {
     public void testFetchDuringCooperativeRebalance() {
         buildFetcher();
 
-        subscriptions.subscribe(singleton(topicName));
+        subscriptions.subscribe(singleton(topicName), Optional.empty());
         subscriptions.assignFromSubscribed(singleton(tp0));
         subscriptions.seek(tp0, 0);
 

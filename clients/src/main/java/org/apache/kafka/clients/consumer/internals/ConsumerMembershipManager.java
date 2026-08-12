@@ -320,7 +320,8 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     private CompletableFuture<Void> invokeOnPartitionsRevokedCallback(Set<TopicPartition> partitionsRevoked) {
         // This should not trigger the callback if partitionsRevoked is empty, to keep the
         // current behaviour.
-        if (!partitionsRevoked.isEmpty() && subscriptions.hasRebalanceListener()) {
+        Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
+        if (!partitionsRevoked.isEmpty() && listener.isPresent()) {
             return enqueueConsumerRebalanceListenerCallback(ON_PARTITIONS_REVOKED, partitionsRevoked);
         } else {
             return CompletableFuture.completedFuture(null);
@@ -330,7 +331,8 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     private CompletableFuture<Void> invokeOnPartitionsLostCallback(Set<TopicPartition> partitionsLost) {
         // This should not trigger the callback if partitionsLost is empty, to keep the current
         // behaviour.
-        if (!partitionsLost.isEmpty() && subscriptions.hasRebalanceListener()) {
+        Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
+        if (!partitionsLost.isEmpty() && listener.isPresent()) {
             return enqueueConsumerRebalanceListenerCallback(ON_PARTITIONS_LOST, partitionsLost);
         } else {
             return CompletableFuture.completedFuture(null);

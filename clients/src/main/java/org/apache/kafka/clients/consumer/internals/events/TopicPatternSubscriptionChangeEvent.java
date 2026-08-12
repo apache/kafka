@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+
+import java.util.Optional;
 import java.util.regex.Pattern;
 
 /**
@@ -26,8 +29,8 @@ import java.util.regex.Pattern;
 public class TopicPatternSubscriptionChangeEvent extends SubscriptionChangeEvent {
     private final Pattern pattern;
 
-    public TopicPatternSubscriptionChangeEvent(final Pattern pattern, final long deadlineMs) {
-        super(Type.TOPIC_PATTERN_SUBSCRIPTION_CHANGE, deadlineMs);
+    public TopicPatternSubscriptionChangeEvent(final Pattern pattern, final Optional<ConsumerRebalanceListener> listener, final long deadlineMs) {
+        super(Type.TOPIC_PATTERN_SUBSCRIPTION_CHANGE, listener, deadlineMs);
         this.pattern = pattern;
     }
 

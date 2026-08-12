@@ -29,6 +29,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -87,7 +88,7 @@ class ConsumerRebalanceMetricsManagerTest extends AbstractConsumerMetricsManager
         assertEquals(0.0d, metrics.metric(metricsManager.assignedPartitionsCount).metricValue());
 
         // Check for automatically assigned partitions
-        subscriptionState.subscribe(Set.of("topic"));
+        subscriptionState.subscribe(Set.of("topic"), Optional.empty());
         subscriptionState.assignFromSubscribed(Set.of(new TopicPartition("topic", 0)));
         assertEquals(1.0d, metrics.metric(metricsManager.assignedPartitionsCount).metricValue());
     }
