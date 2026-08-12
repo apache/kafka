@@ -406,7 +406,7 @@ public class KStreamRepartitionIntegrationTest {
         final Repartitioned<Integer, String> repartitioned = Repartitioned
             .<Integer, String>as(repartitionName)
             .withStreamPartitioner(new StreamPartitioner<>() {
-                @SuppressWarnings({"removal"})
+                @SuppressWarnings("removal")
                 @Override
                 public Optional<Set<Integer>> partitions(final String topic, final Integer key, final String value, final int numPartitions) {
                     throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
