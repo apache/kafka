@@ -189,7 +189,7 @@ public class CachingKeyValueStore
                 final LRUCacheEntry lruCacheEntry = internalContext.cache().get(cacheName, key);
                 if (lruCacheEntry != null) {
                     final byte[] rawValue;
-                    if (cacheType == CacheType.TIMESTAMPED_KEY_VALUE_STORE && !WrappedStateStore.isTimestamped(wrapped()) && !StoreQueryUtils.isAdapter(wrapped())) {
+                    if (cacheType == CacheType.TIMESTAMPED_KEY_VALUE_STORE && !WrappedStateStore.isTimestamped(wrapped())) {
                         rawValue = ValueAndTimestampDeserializer.rawValue(lruCacheEntry.value());
                     } else {
                         rawValue = lruCacheEntry.value();

@@ -86,6 +86,11 @@ public class TimestampedKeyValueStoreBuilder<K, V>
         return new ChangeLoggingTimestampedKeyValueBytesStore(inner);
     }
 
+    /**
+     * Unlike persistent stores, in-memory stores have no pre-existing data in the old plain format,
+     * so the wrapped store holds the {@code <timestamp,value>} format natively and no byte-array
+     * translation is needed; this marker only advertises the format to the restore and IQ code paths.
+     */
     private static final class InMemoryTimestampedKeyValueStoreMarker
         extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, Bytes, byte[]>
         implements KeyValueStore<Bytes, byte[]>, TimestampedBytesStore {

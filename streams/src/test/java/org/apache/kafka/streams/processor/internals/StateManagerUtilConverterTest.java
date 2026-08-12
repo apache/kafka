@@ -16,31 +16,48 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.HeadersBytesStore;
+import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemorySessionStore;
 import org.apache.kafka.streams.state.internals.InMemoryWindowStore;
-import org.apache.kafka.streams.state.internals.KeyValueToTimestampedKeyValueByteStoreAdapter;
 import org.apache.kafka.streams.state.internals.MeteredSessionStoreWithHeaders;
-import org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStore;
 import org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStoreWithHeaders;
-import org.apache.kafka.streams.state.internals.MeteredTimestampedWindowStore;
 import org.apache.kafka.streams.state.internals.MeteredTimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.internals.PlainToHeadersStoreAdapter;
 import org.apache.kafka.streams.state.internals.PlainToHeadersWindowStoreAdapter;
 import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.apache.kafka.streams.state.internals.SessionToHeadersStoreAdapter;
+import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedToHeadersStoreAdapter;
 import org.apache.kafka.streams.state.internals.TimestampedToHeadersWindowStoreAdapter;
-import org.apache.kafka.streams.state.internals.WindowToTimestampedWindowByteStoreAdapter;
+import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
+import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.StreamsTestUtils;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.List;
+import java.util.Optional;
 
 import static org.apache.kafka.streams.state.internals.RecordConverters.identity;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToHeadersValue;
@@ -55,31 +72,97 @@ import static org.mockito.Mockito.withSettings;
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class StateManagerUtilConverterTest {
 
+    private static final long TIMESTAMP = 42L;
+
     @Test
     public void shouldReturnIdentityConverterForPlainToTimestampedPersistentKeyValueStore() {
-        // persistent plain kv -> ts kv
-        final WrappedStateStore<?, ?, ?> mockWrapper = mock(WrappedStateStore.class);
-        final StateStore mockAdapter = mock(KeyValueToTimestampedKeyValueByteStoreAdapter.class);
+        // persistent plain kv -> ts kv (via KeyValueToTimestampedKeyValueByteStoreAdapter):
+        // restore bypasses the adapter and writes into the plain inner store directly
+        final TimestampedKeyValueStore<String, String> store =
+            timestampedKeyValueStore(Stores.persistentKeyValueStore("store"));
 
-        doReturn(mockAdapter).when(mockWrapper).wrapped();
-
-        final RecordConverter converter = StateManagerUtil.converterForStore(mockWrapper);
-
-        assertEquals(identity(), converter);
+        assertEquals(identity(), StateManagerUtil.converterForStore(store));
     }
 
     @Test
-    @SuppressWarnings("unchecked")
-    public void shouldReturnIdentityConverterForPlainToTimestampedInMemoryKeyValueStore() {
-        // in memory kv -> ts kv (using InMemoryTimestampedKeyValueStoreMarker)
-        final StateStore mockInnerStore = mock(InMemoryKeyValueStore.class);
-        final WrappedStateStore<?, ?, ?> mockMarker = mock(MeteredTimestampedKeyValueStore.class);
+    public void shouldReturnTimestampedConverterForPlainToTimestampedInMemoryKeyValueStore() {
+        // in memory kv -> ts kv (via InMemoryTimestampedKeyValueStoreMarker):
+        // the inner store holds the timestamped format natively
+        final TimestampedKeyValueStore<String, String> store =
+            timestampedKeyValueStore(Stores.inMemoryKeyValueStore("store"));
 
-        doReturn(mockInnerStore).when(mockMarker).wrapped();
+        assertEquals(rawValueToTimestampedValue(), StateManagerUtil.converterForStore(store));
+    }
 
-        final RecordConverter converter = StateManagerUtil.converterForStore(mockMarker);
+    @Test
+    public void shouldReturnTimestampedConverterForPersistentTimestampedKeyValueStore() {
+        final TimestampedKeyValueStore<String, String> store =
+            timestampedKeyValueStore(Stores.persistentTimestampedKeyValueStore("store"));
 
-        assertEquals(identity(), converter);
+        assertEquals(rawValueToTimestampedValue(), StateManagerUtil.converterForStore(store));
+    }
+
+    @Test
+    public void shouldReturnIdentityConverterForPlainToTimestampedPersistentWindowStore() {
+        // persistent plain window -> ts window (via WindowToTimestampedWindowByteStoreAdapter)
+        final StateStore store = timestampedWindowStore(
+            Stores.persistentWindowStore("store", Duration.ofMillis(1000), Duration.ofMillis(100), false));
+
+        assertEquals(identity(), StateManagerUtil.converterForStore(store));
+    }
+
+    @Test
+    public void shouldReturnTimestampedConverterForPlainToTimestampedInMemoryWindowStore() {
+        // in memory window -> ts window (via InMemoryTimestampedWindowStoreMarker):
+        // the inner store holds the timestamped format natively
+        final StateStore store = timestampedWindowStore(
+            Stores.inMemoryWindowStore("store", Duration.ofMillis(1000), Duration.ofMillis(100), false));
+
+        assertEquals(rawValueToTimestampedValue(), StateManagerUtil.converterForStore(store));
+    }
+
+    @Test
+    public void shouldReturnTimestampedConverterForPersistentTimestampedWindowStore() {
+        final StateStore store = timestampedWindowStore(
+            Stores.persistentTimestampedWindowStore("store", Duration.ofMillis(1000), Duration.ofMillis(100), false));
+
+        assertEquals(rawValueToTimestampedValue(), StateManagerUtil.converterForStore(store));
+    }
+
+    @Test
+    public void shouldRestorePlainPersistentTimestampedKeyValueStoreInPlainFormat() {
+        // regression test for KAFKA-16141: restore bypasses the adapter, so restored records
+        // must not get a timestamp prepended even though the adapter advertises the timestamped format
+        final TimestampedKeyValueStore<String, String> store =
+            timestampedKeyValueStore(Stores.persistentKeyValueStore("store"));
+
+        final ValueAndTimestamp<String> restored = restoreAndGet(store);
+
+        // the plain inner store cannot retain the record timestamp; reads surface the dummy `-1`
+        assertEquals("value", restored.value());
+        assertEquals(-1L, restored.timestamp());
+    }
+
+    @Test
+    public void shouldRestoreInMemoryTimestampedKeyValueStoreInTimestampedFormat() {
+        final TimestampedKeyValueStore<String, String> store =
+            timestampedKeyValueStore(Stores.inMemoryKeyValueStore("store"));
+
+        final ValueAndTimestamp<String> restored = restoreAndGet(store);
+
+        assertEquals("value", restored.value());
+        assertEquals(TIMESTAMP, restored.timestamp());
+    }
+
+    @Test
+    public void shouldRestorePersistentTimestampedKeyValueStoreInTimestampedFormat() {
+        final TimestampedKeyValueStore<String, String> store =
+            timestampedKeyValueStore(Stores.persistentTimestampedKeyValueStore("store"));
+
+        final ValueAndTimestamp<String> restored = restoreAndGet(store);
+
+        assertEquals("value", restored.value());
+        assertEquals(TIMESTAMP, restored.timestamp());
     }
 
     @Test
@@ -121,33 +204,6 @@ public class StateManagerUtilConverterTest {
         final RecordConverter converter = StateManagerUtil.converterForStore(mockWrapper);
 
         assertEquals(rawValueToTimestampedValue(), converter);
-    }
-
-    @Test
-    public void shouldReturnIdentityConverterForPlainToTimestampedPersistentWindowStore() {
-        // persistent plain window -> ts window
-        final WrappedStateStore<?, ?, ?> mockWrapper = mock(WrappedStateStore.class);
-        final StateStore mockAdapter = mock(WindowToTimestampedWindowByteStoreAdapter.class);
-
-        doReturn(mockAdapter).when(mockWrapper).wrapped();
-
-        final RecordConverter converter = StateManagerUtil.converterForStore(mockWrapper);
-
-        assertEquals(identity(), converter);
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
-    public void shouldReturnIdentityConverterForPlainToTimestampedInMemoryWindowStore() {
-        // in memory window -> ts window (using InMemoryTimestampedWindowStoreMarker)
-        final StateStore mockInnerStore = mock(InMemoryKeyValueStore.class);
-        final WrappedStateStore<?, ?, ?> mockMarker = mock(MeteredTimestampedWindowStore.class);
-
-        doReturn(mockInnerStore).when(mockMarker).wrapped();
-
-        final RecordConverter converter = StateManagerUtil.converterForStore(mockMarker);
-
-        assertEquals(identity(), converter);
     }
 
     @Test
@@ -216,6 +272,53 @@ public class StateManagerUtilConverterTest {
         final RecordConverter converter = StateManagerUtil.converterForStore(mockMarker);
 
         assertEquals(rawValueToSessionHeadersValue(), converter);
+    }
+
+    private static TimestampedKeyValueStore<String, String> timestampedKeyValueStore(final KeyValueBytesStoreSupplier supplier) {
+        return new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), Time.SYSTEM).build();
+    }
+
+    private static StateStore timestampedWindowStore(final WindowBytesStoreSupplier supplier) {
+        return new TimestampedWindowStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), Time.SYSTEM).build();
+    }
+
+    /**
+     * Feeds a changelog-format record (plain value, timestamp in the record timestamp field) through
+     * the converter and the store's registered restore callback, mirroring the restore code path,
+     * and reads the restored value back through the store.
+     */
+    private static ValueAndTimestamp<String> restoreAndGet(final TimestampedKeyValueStore<String, String> store) {
+        final InternalMockProcessorContext<?, ?> context = new InternalMockProcessorContext<>(
+            TestUtils.tempDirectory(),
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig())
+        );
+        store.init(context, store);
+        try {
+            final byte[] key = "key".getBytes(StandardCharsets.UTF_8);
+            final byte[] plainValue = "value".getBytes(StandardCharsets.UTF_8);
+            final ConsumerRecord<byte[], byte[]> changelogRecord = new ConsumerRecord<>(
+                "changelog",
+                0,
+                0L,
+                TIMESTAMP,
+                TimestampType.CREATE_TIME,
+                key.length,
+                plainValue.length,
+                key,
+                plainValue,
+                new RecordHeaders(),
+                Optional.empty()
+            );
+
+            final RecordConverter converter = StateManagerUtil.converterForStore(store);
+            context.restoreWithHeaders(store.name(), List.of(converter.convert(changelogRecord)));
+
+            return store.get("key");
+        } finally {
+            store.close();
+        }
     }
 
 }

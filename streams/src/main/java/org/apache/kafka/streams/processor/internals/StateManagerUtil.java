@@ -27,6 +27,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.internals.KeyValueToTimestampedKeyValueByteStoreAdapter;
 import org.apache.kafka.streams.state.internals.PlainToHeadersStoreAdapter;
 import org.apache.kafka.streams.state.internals.PlainToHeadersWindowStoreAdapter;
 import org.apache.kafka.streams.state.internals.RecordConverter;
@@ -59,26 +60,17 @@ final class StateManagerUtil {
     private StateManagerUtil() {}
 
     static RecordConverter converterForStore(final StateStore store) {
-        // First check if the top-level store implements HeadersBytesStore or TimestampedBytesStore
-        if (isHeadersAware(store)) {
-            if (store instanceof SessionStore) {
-                return rawValueToSessionHeadersValue();
-            }
-            return rawValueToHeadersValue();
-        } else if (isTimestamped(store) && !isVersioned(store)) {
-            // should not prepend timestamp when restoring records for versioned store, as
-            // timestamp is used separately during put() process for restore of versioned stores
-            return rawValueToTimestampedValue();
-        }
-
-        // If top-level check didn't find the type, unwrap to find adapters
-        // This handles persistent stores that use adapters
+        // Restore bypasses adapters and writes directly into the inner store, so the converter must
+        // match the inner store's binary format, not the format the adapter advertises to the outer
+        // store chain. Thus, check for adapters first.
         StateStore current = store;
         while (current != null) {
             if (current instanceof TimestampedToHeadersStoreAdapter || current instanceof TimestampedToHeadersWindowStoreAdapter) {
                 // Adapter wraps a timestamped store, so restore in timestamped format
                 return rawValueToTimestampedValue();
-            } else if (current instanceof PlainToHeadersStoreAdapter || current instanceof PlainToHeadersWindowStoreAdapter) {
+            } else if (current instanceof PlainToHeadersStoreAdapter
+                || current instanceof PlainToHeadersWindowStoreAdapter
+                || current instanceof KeyValueToTimestampedKeyValueByteStoreAdapter) {
                 // Adapter wraps a plain store, so restore in plain format
                 return identity();
             }
@@ -90,6 +82,18 @@ final class StateManagerUtil {
 
             // Unwrap one more level
             current = ((WrappedStateStore<?, ?, ?>) current).wrapped();
+        }
+
+        // No adapter found: the inner store's binary format is whatever the store chain advertises
+        if (isHeadersAware(store)) {
+            if (store instanceof SessionStore) {
+                return rawValueToSessionHeadersValue();
+            }
+            return rawValueToHeadersValue();
+        } else if (isTimestamped(store) && !isVersioned(store)) {
+            // should not prepend timestamp when restoring records for versioned store, as
+            // timestamp is used separately during put() process for restore of versioned stores
+            return rawValueToTimestampedValue();
         }
 
         // Default to identity if no special handling needed
