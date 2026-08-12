@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
@@ -146,6 +147,7 @@ import static org.apache.kafka.common.security.oauthbearer.internals.secured.Con
  * </p>
  */
 
+@InterfaceAudience.Public
 public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHandler {
 
     private static final Logger log = LoggerFactory.getLogger(OAuthBearerLoginCallbackHandler.class);

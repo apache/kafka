@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.state.HostInfo;
 
 import java.util.Collections;
@@ -29,6 +30,7 @@ import java.util.Set;
  * e.g: Relating with lags for that store partition.
  * NOTE: This is a point in time view. It may change as rebalances happen.
  */
+@InterfaceAudience.Public
 public class KeyQueryMetadata {
     /**
      * Sentinel to indicate that the KeyQueryMetadata is currently unavailable. This can occur during rebalance

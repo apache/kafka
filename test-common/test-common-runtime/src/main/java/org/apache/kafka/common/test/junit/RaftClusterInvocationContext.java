@@ -199,6 +199,12 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                     props.putAll(clusterTestKit.sslManager().createClientSslConfig());
                     props.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "");
                 }
+            } else if (config().brokerSecurityProtocol() == SecurityProtocol.SSL) {
+                props.putIfAbsent(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SSL.name);
+                if (clusterTestKit.sslManager() != null) {
+                    props.putAll(clusterTestKit.sslManager().createClientSslConfig());
+                    props.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "");
+                }
             }
             return props;
         }
@@ -263,6 +269,11 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         @Override
         public void startBroker(int brokerId) {
             findBrokerOrThrow(brokerId).startup();
+        }
+
+        @Override
+        public void restartBroker(int brokerId, Map<String, Object> propOverrides) {
+            clusterTestKit.restartBroker(brokerId, propOverrides);
         }
 
         @Override

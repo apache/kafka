@@ -26,6 +26,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.TopologyTestDriverWrapper;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -61,7 +62,7 @@ public class KTableMapValuesTest {
     private void doTestKTable(final StreamsBuilder builder,
                               final String topic1,
                               final MockApiProcessorSupplier<String, Integer, Void, Void> supplier) {
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic1 =
                     driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             inputTopic1.pipeInput("A", "1", 5L);
@@ -225,7 +226,7 @@ public class KTableMapValuesTest {
         final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final Topology topology = builder.build().addProcessor("proc", supplier, table2.name);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic1 =
                     driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockApiProcessor<String, Integer, Void, Void> proc = supplier.theCapturedProcessor();
@@ -304,7 +305,7 @@ public class KTableMapValuesTest {
         final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         builder.build().addProcessor("proc", supplier, table2.name);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> inputTopic1 =
                 driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockApiProcessor<String, Integer, Void, Void> proc = supplier.theCapturedProcessor();
