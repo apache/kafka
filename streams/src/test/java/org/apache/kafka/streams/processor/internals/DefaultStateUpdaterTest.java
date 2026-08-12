@@ -51,8 +51,11 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -1806,27 +1809,88 @@ class DefaultStateUpdaterTest {
     public void shouldDrainQueuedTasks() throws Exception {
         final StreamTask restoredTask = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StreamTask failedTask = statefulTask(TASK_1_0, Set.of(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
-        final StreamTask taskInInputQueue = statefulTask(TASK_1_1, Set.of(TOPIC_PARTITION_C_0)).inState(State.RESTORING).build();
         final StreamsException streamsException = new StreamsException("Something happened", failedTask.id());
         when(changelogReader.completedChangelogs()).thenReturn(Set.of(TOPIC_PARTITION_A_0));
         doThrow(streamsException).when(changelogReader).restore(mkMap(mkEntry(TASK_1_0, failedTask)));
         stateUpdater.start();
+        // the restored task waits in the queue of restored tasks, the failed task in the queue of failed tasks
         stateUpdater.add(restoredTask);
         verifyRestoredActiveTasks(restoredTask);
         stateUpdater.add(failedTask);
         verifyExceptionsAndFailedTasks(new ExceptionAndTask(streamsException, failedTask));
-        // a state updater that was shut down does not pick up tasks from its input queue anymore
-        stateUpdater.shutdown(Duration.ofMinutes(1));
-        stateUpdater.add(taskInInputQueue);
         assertEquals(
-            Set.of(restoredTask.id(), failedTask.id(), taskInInputQueue.id()),
+            Set.of(restoredTask.id(), failedTask.id()),
             stateUpdater.tasks().stream().map(Task::id).collect(Collectors.toSet())
         );
 
         final Set<Task> drainedTasks = stateUpdater.drainQueuedTasks();
 
         // in contrast to tasks(), the tasks themselves are returned, so that the caller can close them
-        assertEquals(Set.of(restoredTask, failedTask, taskInInputQueue), drainedTasks);
+        assertEquals(Set.of(restoredTask, failedTask), drainedTasks);
+        assertTrue(stateUpdater.tasks().isEmpty());
+    }
+
+    @Test
+    public void shouldDrainQueuedTaskThatWasNotPickedUpFromTheInputQueue() {
+        final StreamTask taskInInputQueue = statefulTask(TASK_1_1, Set.of(TOPIC_PARTITION_C_0)).inState(State.RESTORING).build();
+        // the state updater thread was never started, so nothing ever picks this task up from the input queue
+        stateUpdater.add(taskInInputQueue);
+        assertEquals(
+            Set.of(taskInInputQueue.id()),
+            stateUpdater.tasks().stream().map(Task::id).collect(Collectors.toSet())
+        );
+
+        final Set<Task> drainedTasks = stateUpdater.drainQueuedTasks();
+
+        assertEquals(Set.of(taskInInputQueue), drainedTasks);
+        assertTrue(stateUpdater.tasks().isEmpty());
+    }
+
+    @Test
+    public void shouldFailTaskAddedWhileStateUpdaterThreadIsStopping() throws Exception {
+        final StreamTask taskBeingUpdated = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask taskAddedWhileStopping = statefulTask(TASK_1_1, Set.of(TOPIC_PARTITION_C_0)).inState(State.RESTORING).build();
+        // clear() is the last call of failRemainingTasks(), so blocking it parks the stopping thread in the window
+        // between shutdown() setting isRunning to false and failPendingActions() publishing threadStopped
+        final CountDownLatch stoppingThreadInWindow = new CountDownLatch(1);
+        final CountDownLatch releaseStoppingThread = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            stoppingThreadInWindow.countDown();
+            releaseStoppingThread.await();
+            return null;
+        }).when(changelogReader).clear();
+        stateUpdater.start();
+        stateUpdater.add(taskBeingUpdated);
+        verifyUpdatingTasks(taskBeingUpdated);
+
+        final AtomicReference<RuntimeException> shutdownException = new AtomicReference<>();
+        final Thread shutdownThread = new Thread(() -> {
+            try {
+                stateUpdater.shutdown(Duration.ofMinutes(1));
+            } catch (final RuntimeException shutdownFailed) {
+                shutdownException.set(shutdownFailed);
+            }
+        });
+        shutdownThread.start();
+        assertTrue(stoppingThreadInWindow.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
+
+        // threadStopped is not published yet, so this task goes into the input queue that nobody polls anymore
+        stateUpdater.add(taskAddedWhileStopping);
+        // verify that the window was really hit, i.e. that the task is queued and not already reported as failed,
+        // because after threadStopped is published add() fails the task immediately and the queue stays empty
+        assertTrue(stateUpdater.tasks().stream().anyMatch(task -> task.id().equals(taskAddedWhileStopping.id())));
+        assertTrue(stateUpdater.exceptionsAndFailedTasks().stream()
+            .noneMatch(exceptionAndTask -> exceptionAndTask.task().id().equals(taskAddedWhileStopping.id())));
+
+        releaseStoppingThread.countDown();
+        shutdownThread.join();
+        assertNull(shutdownException.get());
+
+        // the task did not stay behind in the input queue, the stopping thread reported it as failed instead
+        final Set<Task> failedTasks = stateUpdater.drainExceptionsAndFailedTasks().stream()
+            .map(ExceptionAndTask::task)
+            .collect(Collectors.toSet());
+        assertEquals(Set.of(taskBeingUpdated, taskAddedWhileStopping), failedTasks);
         assertTrue(stateUpdater.tasks().isEmpty());
     }
 
