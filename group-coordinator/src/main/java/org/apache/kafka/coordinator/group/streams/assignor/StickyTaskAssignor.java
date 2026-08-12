@@ -133,8 +133,8 @@ public class StickyTaskAssignor implements TaskAssignor {
             final String processId = groupSpec.memberMetadata(memberId).processId();
             final Member member = new Member(processId, memberId);
 
-            localState.processIdToState.putIfAbsent(processId, new ProcessState(processId));
-            localState.processIdToState.get(processId).addMember(memberId);
+            localState.processIdToState.computeIfAbsent(processId, ProcessState::new)
+                .addMember(memberId);
 
             // prev active tasks
             for (final Map.Entry<String, Set<Integer>> entry : memberAssignmentState.activeTasks().entrySet()) {

@@ -1319,7 +1319,8 @@ public class StickyTaskAssignorTest {
         // -> it should not go to member2/process2 due to load balancing of active tasks
         // standby 2 should stay on member2/process2 -> no reason to move it (load of member2 stays within capacity)
         // standby 0,1: one *must* go to member4/process4 due to load balancing
-        // -> the other one can go anywhere but member2/process2 due to load balancing
+        // -> standby 0 can go anywhere but member2/process2 due to load balancing
+        // -> standby 1 can not go to member3, so only member 1 is left for this case, due to load balancing
         //
         // expected new assignment [active] [standby]
         // ("expected" here means, based on the concrete implementation -- if this test fails with a different but
@@ -1342,20 +1343,47 @@ public class StickyTaskAssignorTest {
             new TopologyDescriberImpl(3, true, List.of("test-subtopology"))
         );
 
-        assertEquals(Set.of(2), getActiveTasks(result, "test-subtopology", "member1"));
-        // if this is not empty, but only hold standby 0 or 1, still correct
-        assertEquals(List.of(), getAllStandbyTaskIds(result, "member1"));
+        @SuppressWarnings("unchecked")
+        final HashMap<String, List<Integer>>[] resultInvariants = new HashMap[3];
+        resultInvariants[0] = new HashMap<>();
+        resultInvariants[0].put("member1", List.of()); // may be empty
+        resultInvariants[0].put("member2", List.of(2)); // standby-2 should always be on member2
+        resultInvariants[0].put("member3", List.of(0)); // can never hold standby-1
+        resultInvariants[0].put("member4", List.of(1));
 
+        resultInvariants[1] = new HashMap<>();
+        resultInvariants[1].put("member1", List.of(1));
+        resultInvariants[1].put("member2", List.of(2)); // standby-2 should always be on member2
+        resultInvariants[1].put("member3", List.of()); // may be empty
+        resultInvariants[1].put("member4", List.of(0)); // should either hold 0 or 1
+
+        resultInvariants[2] = new HashMap<>();
+        resultInvariants[2].put("member1", List.of(0));
+        resultInvariants[2].put("member2", List.of(2)); // standby-2 should always be on member2
+        resultInvariants[2].put("member3", List.of()); // may be empty
+        resultInvariants[2].put("member4", List.of(1)); // should either hold 0 or 1
+
+        assertEquals(Set.of(2), getActiveTasks(result, "test-subtopology", "member1"));
         assertEquals(Set.of(0), getActiveTasks(result, "test-subtopology", "member2"));
+        assertEquals(Set.of(1), getActiveTasks(result, "test-subtopology", "member3"));
+        assertEquals(Set.of(), getActiveTasks(result, "test-subtopology", "member4"));
+
+        // verify standbys
+
+        // member2 must always host standby-2
         assertEquals(List.of(2), getAllStandbyTaskIds(result, "member2"));
 
-        assertEquals(Set.of(1), getActiveTasks(result, "test-subtopology", "member3"));
-        // if this is empty, or hold standby 1 instead, still correct
-        assertEquals(List.of(0), getAllStandbyTaskIds(result, "member3"));
-
-        assertEquals(Set.of(), getActiveTasks(result, "test-subtopology", "member4"));
-        // if this hold standby 0, or both standby 0 and 1, still correct
-        assertEquals(List.of(1), getAllStandbyTaskIds(result, "member4"));
+        if (getAllStandbyTaskIds(result, "member1").equals(resultInvariants[0].get("member1"))) {
+            assertEquals(resultInvariants[0].get("member3"), getAllStandbyTaskIds(result, "member3"));
+            assertEquals(resultInvariants[0].get("member4"), getAllStandbyTaskIds(result, "member4"));
+        } else if (getAllStandbyTaskIds(result, "member1").equals(resultInvariants[1].get("member1"))) {
+            assertEquals(resultInvariants[1].get("member3"), getAllStandbyTaskIds(result, "member3"));
+            assertEquals(resultInvariants[1].get("member4"), getAllStandbyTaskIds(result, "member4"));
+        } else {
+            assertEquals(resultInvariants[2].get("member1"), getAllStandbyTaskIds(result, "member1"));
+            assertEquals(resultInvariants[2].get("member3"), getAllStandbyTaskIds(result, "member3"));
+            assertEquals(resultInvariants[2].get("member4"), getAllStandbyTaskIds(result, "member4"));
+        }
     }
 
     @Test
