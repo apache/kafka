@@ -159,8 +159,8 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
             if (windowEndTimestamp <= observedStreamTime - retentionPeriod) {
                 // The provided context is not required to implement InternalProcessorContext,
                 // If it doesn't, we can't record this metric (in fact, we wouldn't have even initialized it).
-                if (expiredRecordSensor != null && context != null) {
-                    expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
+                if (expiredRecordSensor != null) {
+                    expiredRecordSensor.record();
                 }
                 LOG.warn("Skipping record for expired segment.");
             } else {

@@ -70,7 +70,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -884,9 +883,7 @@ public abstract class AbstractSessionBytesStoreTest {
             new StreamsConfig(streamsConfig),
             recordCollector
         );
-        final Time time = Time.SYSTEM;
         context.setTime(1L);
-        context.setSystemTimeMs(time.milliseconds());
         sessionStore.init(context, sessionStore);
 
         // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired
@@ -921,7 +918,16 @@ public abstract class AbstractSessionBytesStoreTest {
             )
         ));
         assertEquals(1.0, dropTotal.metricValue());
-        assertNotEquals(0.0, dropRate.metricValue());
+        // exactly one record was dropped, over the rate's default un-elapsed sampling window of
+        // (metrics.num.samples - 1) * metrics.sample.window.ms == 30s. The delta is generous because the
+        // window also grows by however long the store work takes between recording and reading the
+        // metric; it still separates one dropped record from none (0.0) and from two (0.06666).
+        assertEquals(
+            1.0 / 30.0,
+            ((Number) dropRate.metricValue()).doubleValue(),
+            0.005d,
+            "dropped-records-rate should reflect the single dropped record over the ~30s sampling window"
+        );
 
         sessionStore.close();
     }

@@ -131,7 +131,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
         synchronized (position) {
             if (timestamp < observedStreamTime - gracePeriod) {
-                expiredRecordSensor.record(1.0d, internalProcessorContext.currentSystemTimeMs());
+                expiredRecordSensor.record();
                 LOG.warn("Skipping record for expired put.");
                 StoreQueryUtils.updatePosition(position, internalProcessorContext);
                 return PUT_RETURN_CODE_NOT_PUT;
@@ -159,7 +159,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
         synchronized (position) {
             if (timestamp < observedStreamTime - gracePeriod) {
-                expiredRecordSensor.record(1.0d, internalProcessorContext.currentSystemTimeMs());
+                expiredRecordSensor.record();
                 LOG.warn("Skipping record for expired delete.");
                 return null;
             }

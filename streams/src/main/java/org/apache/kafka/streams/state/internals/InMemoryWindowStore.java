@@ -155,7 +155,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
         synchronized (position) {
             if (windowStartTimestamp <= observedStreamTime - retentionPeriod) {
-                expiredRecordSensor.record(1.0d, internalProcessorContext.currentSystemTimeMs());
+                expiredRecordSensor.record();
                 LOG.warn("Skipping record for expired segment.");
             } else {
                 if (value != null) {

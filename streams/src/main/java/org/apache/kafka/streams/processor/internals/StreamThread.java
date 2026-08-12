@@ -2148,7 +2148,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         if (runOnceLatencyWindow > 0.0) {
             final double latencyWindow =
                 windowedSum.measure(metricsConfig, now);
-            ratioSensor.record(latencyWindow / runOnceLatencyWindow);
+            ratioSensor.record(latencyWindow / runOnceLatencyWindow, now);
         } else {
             ratioSensor.record(0.0, now);
         }

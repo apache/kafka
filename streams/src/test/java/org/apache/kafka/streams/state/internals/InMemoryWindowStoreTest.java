@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -51,6 +53,7 @@ import java.io.File;
 import java.time.Instant;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 import static java.time.Duration.ofMillis;
@@ -158,6 +161,42 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
             assertEquals(windowedPair(3, "three", 2 * WINDOW_SIZE), iterator.next());
             assertFalse(iterator.hasNext());
         }
+    }
+
+    @Test
+    public void shouldMeasureExpiredRecordsDroppedDuringRestoreAsRecords() {
+        final StateSerdes<Integer, String> serdes = new StateSerdes<>("", Serdes.Integer(), Serdes.String());
+
+        final List<KeyValue<byte[], byte[]>> batch = new LinkedList<>();
+        // advances observed stream time far enough that every record after it falls outside retention
+        batch.add(new KeyValue<>(
+            toStoreKeyBinary(0, 4 * RETENTION_PERIOD, 0, new RecordHeaders(), serdes).get(),
+            serdes.rawValue("on-time")));
+        for (int key = 1; key <= 3; key++) {
+            batch.add(new KeyValue<>(
+                toStoreKeyBinary(key, 0L, 0, new RecordHeaders(), serdes).get(),
+                serdes.rawValue("expired")));
+        }
+
+        context.restore(STORE_NAME, batch);
+
+        final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
+        final String threadId = Thread.currentThread().getName();
+        final Map<String, String> tags = mkMap(mkEntry("thread-id", threadId), mkEntry("task-id", "0_0"));
+
+        final Metric dropTotal = metrics.get(
+            new MetricName("dropped-records-total", "stream-task-metrics", "", tags));
+        final Metric dropRate = metrics.get(
+            new MetricName("dropped-records-rate", "stream-task-metrics", "", tags));
+
+        assertEquals(3.0, dropTotal.metricValue());
+        assertEquals(
+            3.0 / 30.0,
+            ((Number) dropRate.metricValue()).doubleValue(),
+            0.005d,
+            "dropped-records-rate must reflect the 3 records dropped, not the single sensor recording; "
+                + "counting recordings would give 1/30 == 0.03333 (KAFKA-20877)"
+        );
     }
 
     @Test

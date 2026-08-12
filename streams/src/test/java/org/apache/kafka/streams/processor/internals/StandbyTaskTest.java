@@ -75,7 +75,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.isA;
-import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -465,12 +464,26 @@ public class StandbyTaskTest {
         task.recordRestoration(time, 25L, 30L, false);
 
         assertThat(totalMetric.metricValue(), equalTo(25.0));
-        assertThat(rateMetric.metricValue(), not(0.0));
+        // the rate measures updated records per second, not update batches per second; with no time
+        // elapsed the rate window is (metrics.num.samples - 1) * metrics.sample.window.ms == 30s
+        assertEquals(
+            25.0 / 30.0,
+            ((Number) rateMetric.metricValue()).doubleValue(),
+            0.0001d,
+            "update-rate must measure updated records per second, not update batches per second; "
+                + "counting batches would give 1/30 == 0.03333 (KAFKA-20877)"
+        );
 
         task.recordRestoration(time, 50L, 55L, false);
 
         assertThat(totalMetric.metricValue(), equalTo(75.0));
-        assertThat(rateMetric.metricValue(), not(0.0));
+        assertEquals(
+            75.0 / 30.0,
+            ((Number) rateMetric.metricValue()).doubleValue(),
+            0.0001d,
+            "update-rate must measure updated records per second, not update batches per second; "
+                + "counting batches would give 2/30 == 0.06666 (KAFKA-20877)"
+        );
     }
 
     private KafkaMetric getMetric(final String operation,

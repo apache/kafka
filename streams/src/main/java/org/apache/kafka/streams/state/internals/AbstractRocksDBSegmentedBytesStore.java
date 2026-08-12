@@ -250,7 +250,8 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         final long segmentId = segments.segmentId(timestamp);
         final S segment = segments.getOrCreateSegmentIfLive(segmentId, internalProcessorContext, observedStreamTime);
         if (segment == null) {
-            expiredRecordSensor.record(1.0d, internalProcessorContext.currentSystemTimeMs());
+            expiredRecordSensor.record();
+            LOG.warn("Skipping record for expired segment.");
         } else {
             synchronized (position) {
                 StoreQueryUtils.updatePosition(position, internalProcessorContext);
