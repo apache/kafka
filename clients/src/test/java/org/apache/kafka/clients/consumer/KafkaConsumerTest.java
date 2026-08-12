@@ -3058,7 +3058,6 @@ public class KafkaConsumerTest {
             consumer.poll(Duration.ofMillis(0));
         }
 
-        // Since the AsyncConsumer uses a background thread, add this barrier here
         TestUtils.waitForCondition(
             () -> requestGenerated(client, ApiKeys.LIST_OFFSETS),
             "No LIST_OFFSETS request sent within allotted timeout"

@@ -197,7 +197,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
             boolean requireTimestamps,
             boolean oneShot) {
         if (timestampsToSearch.isEmpty()) {
-            return CompletableFuture.completedFuture(Collections.emptyMap());
+            return CompletableFuture.completedFuture(Map.of());
         }
         metadata.addTransientTopics(OffsetFetcherUtils.topicsForPartitions(timestampsToSearch.keySet()));
         ListOffsetsRequestState listOffsetsRequestState = new ListOffsetsRequestState(
@@ -250,7 +250,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
             if (subscriptionState.partitionEndOffset(topicPartition, isolationLevel) == null &&
                 offsetFetcherUtils.maybeSetPartitionEndOffsetRequest(topicPartition)) {
 
-                Map<TopicPartition, Long> timestampToSearch = Collections.singletonMap(
+                Map<TopicPartition, Long> timestampToSearch = Map.of(
                     topicPartition,
                     ListOffsetsRequest.LATEST_TIMESTAMP
                 );
