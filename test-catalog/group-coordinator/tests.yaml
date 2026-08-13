@@ -397,6 +397,8 @@ org.apache.kafka.coordinator.group.GroupCoordinatorShardTest:
 - testStreamsGroupHeartbeat
 - testValidateStreamsGroupMemberDelegates
 org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
+- testAlterShareGroupOffsetsBumpsGroupEpoch
+- testAlterShareGroupOffsetsErroneousCallDoesNotBumpGroupEpoch
 - testCanComputeNextTargetAssignment
 - testCanComputeNextTargetAssignmentWithNoPreviousAssignmentTimestamp
 - testCanComputeNextTargetAssignmentWithZeroAssignmentIntervalMs

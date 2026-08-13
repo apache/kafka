@@ -928,8 +928,6 @@ org.apache.kafka.metadata.storage.FormatterTest:
 - testFormatWithScram
 - testFormatWithScramFailsOnUnsupportedReleaseVersions
 - testFormatWithStaticQuorumFailsWithNewerKraftVersion
-- testFormatWithUnstableReleaseVersion
-- testFormatWithUnstableReleaseVersionFailsWithoutEnableUnstable
 - testFormatterFailsOnAlreadyFormatted
 - testFormatterFailsOnUnwritableDirectory
 - testFormattingCreatesLogDirId
