@@ -140,11 +140,6 @@ public class SnapshotEmitterTest {
         }
 
         @Override
-        public Optional<VoterSet> latestCommittedVoterSet() {
-            return Optional.empty();
-        }
-
-        @Override
         public void upgradeKRaftVersion(int epoch, KRaftVersion version, boolean validateOnly) {
             // nothing to do
         }

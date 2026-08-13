@@ -87,9 +87,6 @@ public final class QuorumFeatures {
         return nodeId;
     }
 
-    /**
-     * Returns the IDs of the nodes which are currently part of the voter set.
-     */
     public Set<Integer> voterIds() {
         return votersSupplier.get();
     }
@@ -98,9 +95,6 @@ public final class QuorumFeatures {
         return localSupportedFeatures.getOrDefault(name, DISABLED);
     }
 
-    /**
-     * Returns true if the given node ID is currently part of the voter set.
-     */
     public boolean isVoterId(int nodeId) {
         return voterIds().contains(nodeId);
     }
@@ -114,10 +108,6 @@ public final class QuorumFeatures {
             localSupportedFeature(featureName));
     }
 
-    /*
-     * The set of voters is not part of the identity of this object because it can change at any
-     * time when the cluster supports dynamic quorums.
-     */
     @Override
     public int hashCode() {
         return Objects.hash(nodeId, localSupportedFeatures);

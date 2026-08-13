@@ -37,7 +37,7 @@ import org.apache.kafka.common.{ClusterResource, Endpoint, Uuid}
 import org.apache.kafka.controller.metrics.{ControllerMetadataMetricsPublisher, QuorumControllerMetrics}
 import org.apache.kafka.controller.{Controller, QuorumController, QuorumFeatures, RaftClientVotersSupplier}
 import org.apache.kafka.image.publisher.{ControllerRegistrationsPublisher, KRaftMetadataCachePublisher, MetadataPublisher}
-import org.apache.kafka.metadata.{KafkaConfigSchema, KRaftMetadataCache, ListenerInfo}
+import org.apache.kafka.metadata.{KRaftMetadataCache, KafkaConfigSchema, ListenerInfo}
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicTopicClusterQuotaPublisher, FeaturesPublisher, ScramPublisher}
@@ -215,8 +215,6 @@ class ControllerServer(
         "controller quorum voters future",
         sharedServer.controllerQuorumVotersFuture,
         startupDeadline, time)
-      // The voter set is not static when the cluster supports dynamic quorums, so the raft client
-      // is the source of truth for which nodes are voters.
       val quorumFeatures = new QuorumFeatures(config.nodeId,
         QuorumFeatures.defaultSupportedFeatureMap(config.unstableFeatureVersionsEnabled),
         new RaftClientVotersSupplier(raftManager.client))

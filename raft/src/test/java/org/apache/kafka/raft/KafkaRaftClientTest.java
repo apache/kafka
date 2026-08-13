@@ -116,8 +116,6 @@ class KafkaRaftClientTest {
 
         assertEquals(KRaftVersion.KRAFT_VERSION_0, context.client.kraftVersion());
         assertEquals(voters, context.client.latestVoterSet().voterIds());
-        // The static voter set is not written to the log so it is never committed
-        assertEquals(Optional.empty(), context.client.latestCommittedVoterSet());
     }
 
     @ParameterizedTest

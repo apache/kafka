@@ -161,26 +161,6 @@ public final class KRaftControlRecordStateMachine {
     }
 
     /**
-     * Returns the last voter set that is known to be committed.
-     *
-     * Only voter sets that were read from the log or the snapshot are considered, so this returns
-     * {@code Optional.empty()} when the log doesn't contain any {@code VotersRecord} at or before
-     * the high watermark.
-     *
-     * Note that the high watermark is not validated against the offsets known to this state
-     * machine. This is safe because every known voter set was read at an offset smaller than the
-     * log end offset, which is always greater than or equal to the high watermark.
-     *
-     * @param highWatermark the high watermark (exclusive)
-     * @return the last committed voter set if one exists, otherwise {@code Optional.empty()}
-     */
-    public Optional<VoterSet> lastCommittedVoterSet(long highWatermark) {
-        synchronized (voterSetHistory) {
-            return voterSetHistory.valueAtOrBefore(highWatermark - 1);
-        }
-    }
-
-    /**
      * Returns the offset of the last voter set.
      */
     public OptionalLong lastVoterSetOffset() {

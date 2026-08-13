@@ -20,12 +20,10 @@ package org.apache.kafka.controller;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.raft.VoterSetTestUtil;
-import org.apache.kafka.server.common.KRaftVersion;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.IntStream;
 
@@ -37,33 +35,25 @@ public class RaftClientVotersSupplierTest {
     }
 
     @Test
-    public void testStaticVoterSet() {
+    public void testVoterIds() {
         RaftClient<?> raftClient = Mockito.mock(RaftClient.class);
-        Mockito.when(raftClient.kraftVersion()).thenReturn(KRaftVersion.KRAFT_VERSION_0);
         Mockito.when(raftClient.latestVoterSet()).thenReturn(voterSet(0, 1, 2));
 
         assertEquals(Set.of(0, 1, 2), new RaftClientVotersSupplier(raftClient).get());
-        // The committed voter set is not relevant when the voter set can't change
-        Mockito.verify(raftClient, Mockito.never()).latestCommittedVoterSet();
     }
 
     @Test
-    public void testDynamicVoterSetUsesLatestAndLatestCommittedVoterSets() {
+    public void testVoterIdsAreReadOnEveryCall() {
         RaftClient<?> raftClient = Mockito.mock(RaftClient.class);
-        Mockito.when(raftClient.kraftVersion()).thenReturn(KRaftVersion.KRAFT_VERSION_1);
+        Mockito.when(raftClient.latestVoterSet()).thenReturn(voterSet(0, 1, 2));
+        RaftClientVotersSupplier votersSupplier = new RaftClientVotersSupplier(raftClient);
+
+        assertEquals(Set.of(0, 1, 2), votersSupplier.get());
+
+        // The voter set changes when the cluster supports dynamic quorums, and the latest voter set
+        // is used even if the VotersRecord which removed 2 and added 3 has not been committed yet.
         Mockito.when(raftClient.latestVoterSet()).thenReturn(voterSet(0, 1, 3));
-        Mockito.when(raftClient.latestCommittedVoterSet()).thenReturn(Optional.of(voterSet(0, 1, 2)));
 
-        assertEquals(Set.of(0, 1, 2, 3), new RaftClientVotersSupplier(raftClient).get());
-    }
-
-    @Test
-    public void testDynamicVoterSetWithoutCommittedVoterSet() {
-        RaftClient<?> raftClient = Mockito.mock(RaftClient.class);
-        Mockito.when(raftClient.kraftVersion()).thenReturn(KRaftVersion.KRAFT_VERSION_1);
-        Mockito.when(raftClient.latestVoterSet()).thenReturn(voterSet(0, 1, 2));
-        Mockito.when(raftClient.latestCommittedVoterSet()).thenReturn(Optional.empty());
-
-        assertEquals(Set.of(0, 1, 2), new RaftClientVotersSupplier(raftClient).get());
+        assertEquals(Set.of(0, 1, 3), votersSupplier.get());
     }
 }

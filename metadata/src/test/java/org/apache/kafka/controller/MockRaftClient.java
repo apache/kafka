@@ -428,11 +428,6 @@ public final class MockRaftClient implements RaftClient<ApiMessageAndVersion>, A
     private volatile VoterSet latestVoterSet = VoterSet.empty();
 
     /**
-     * The latest committed voter set used by this raft client.
-     */
-    private volatile Optional<VoterSet> latestCommittedVoterSet = Optional.empty();
-
-    /**
      * Whether this raft client has been shut down.
      */
     private boolean shutdown = false;
@@ -817,17 +812,8 @@ public final class MockRaftClient implements RaftClient<ApiMessageAndVersion>, A
         return latestVoterSet;
     }
 
-    @Override
-    public Optional<VoterSet> latestCommittedVoterSet() {
-        return latestCommittedVoterSet;
-    }
-
     public void setLatestVoterSet(VoterSet voterSet) {
         this.latestVoterSet = voterSet;
-    }
-
-    public void setLatestCommittedVoterSet(Optional<VoterSet> voterSet) {
-        this.latestCommittedVoterSet = voterSet;
     }
 
     @Override

@@ -19,19 +19,21 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.raft.RaftClient;
 
-import java.util.HashSet;
 import java.util.Set;
 import java.util.function.Supplier;
 
 /**
- * Supplies the IDs of the nodes which are part of the voter set according to the raft client.
+ * Checks if the provided node id is a voter according to the raft client.
  *
- * When the kraft.version is 0, the voter set comes from the {@code controller.quorum.voters}
- * configuration and it never changes, so the latest voter set describes the quorum completely.
+ * When the kraft.version == 0, the voter set comes from the {@code controller.quorum.voters}
+ * configuration and never changes.
  *
- * When the kraft.version is 1, the voter set comes from the {@code VotersRecord}s in the metadata
- * log. The latest voter set may not have been committed yet, and the latest committed voter set may
- * get replaced by an uncommitted one, so a node is considered a voter if it is in either of them.
+ * When the kraft.version > 0, the voter set comes from the {@code VotersRecord}s in the metadata
+ * log. The latest voter set may not have been committed yet, but if it is present, we should base
+ * voter set membership based only on that. This is because any records whose writing is conditioned
+ * on voter set membership, such as feature upgrades or unregistrations, will be written at a later
+ * offset than the uncommitted voter set. Committing these records assumes the voter set record
+ * also is committed.
  */
 public final class RaftClientVotersSupplier implements Supplier<Set<Integer>> {
     private final RaftClient<?> raftClient;
@@ -42,10 +44,6 @@ public final class RaftClientVotersSupplier implements Supplier<Set<Integer>> {
 
     @Override
     public Set<Integer> get() {
-        Set<Integer> voterIds = new HashSet<>(raftClient.latestVoterSet().voterIds());
-        if (raftClient.kraftVersion().isReconfigSupported()) {
-            raftClient.latestCommittedVoterSet().ifPresent(voters -> voterIds.addAll(voters.voterIds()));
-        }
-        return voterIds;
+        return Set.copyOf(raftClient.latestVoterSet().voterIds());
     }
 }

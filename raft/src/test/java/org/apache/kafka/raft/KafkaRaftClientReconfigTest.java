@@ -392,10 +392,6 @@ public class KafkaRaftClientReconfigTest {
         prepareLeaderToReceiveAddVoter(context, epoch, local, follower, newVoter);
 
         assertEquals(Set.of(local.id(), follower.id()), context.client.latestVoterSet().voterIds());
-        assertEquals(
-            Optional.of(Set.of(local.id(), follower.id())),
-            context.client.latestCommittedVoterSet().map(VoterSet::voterIds)
-        );
 
         // Attempt to add the new voter to the quorum
         context.deliverRequest(context.addVoterRequest(Integer.MAX_VALUE, newVoter, newListeners));
@@ -407,14 +403,10 @@ public class KafkaRaftClientReconfigTest {
         // Append new VotersRecord to log
         context.poll();
 
-        // The new voter is in the latest voter set but that voter set is not committed yet
+        // The new voter is in the latest voter set even though that voter set is not committed yet
         assertEquals(
             Set.of(local.id(), follower.id(), newVoter.id()),
             context.client.latestVoterSet().voterIds()
-        );
-        assertEquals(
-            Optional.of(Set.of(local.id(), follower.id())),
-            context.client.latestCommittedVoterSet().map(VoterSet::voterIds)
         );
 
         commitNewVoterSetForAddVoter(context, local, follower, newVoter, epoch);
@@ -426,10 +418,6 @@ public class KafkaRaftClientReconfigTest {
         assertEquals(
             Set.of(local.id(), follower.id(), newVoter.id()),
             context.client.latestVoterSet().voterIds()
-        );
-        assertEquals(
-            Optional.of(Set.of(local.id(), follower.id(), newVoter.id())),
-            context.client.latestCommittedVoterSet().map(VoterSet::voterIds)
         );
     }
 
