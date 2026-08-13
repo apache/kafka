@@ -23082,7 +23082,7 @@ public class GroupMetadataManagerTest {
 
         // The group sets no tags, so this broker computes the very map the older version recorded: no epoch bump.
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result =
-            context.streamsGroupHeartbeat(heartbeat(groupId, memberId, 10, subtopology1));
+            context.streamsGroupHeartbeat(heartbeat(groupId, memberId, 10, subtopology1, List.of(0, 1, 2, 3, 4, 5)));
 
         assertEquals(10, result.response().data().memberEpoch());
         assertTrue(
@@ -23100,7 +23100,7 @@ public class GroupMetadataManagerTest {
                 TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)))
         );
 
-        result = context.streamsGroupHeartbeat(heartbeat(groupId, memberId, 10, subtopology1));
+        result = context.streamsGroupHeartbeat(heartbeat(groupId, memberId, 10, subtopology1, List.of(0, 1, 2, 3, 4, 5)));
 
         assertEquals(11, result.response().data().memberEpoch());
         assertEquals(11, group.groupEpoch());
@@ -23114,7 +23114,7 @@ public class GroupMetadataManagerTest {
                 TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)))
         );
 
-        result = context.streamsGroupHeartbeat(heartbeat(groupId, memberId, 11, subtopology1));
+        result = context.streamsGroupHeartbeat(heartbeat(groupId, memberId, 11, subtopology1, List.of(0, 1, 2, 3, 4, 5)));
 
         assertEquals(12, result.response().data().memberEpoch());
         assertEquals(12, group.groupEpoch());
@@ -23176,7 +23176,7 @@ public class GroupMetadataManagerTest {
         );
 
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result =
-            context.streamsGroupHeartbeat(heartbeat(groupId, memberId, 10, subtopology1));
+            context.streamsGroupHeartbeat(heartbeat(groupId, memberId, 10, subtopology1, List.of(0, 1, 2, 3, 4, 5)));
 
         assertTrue(
             result.records().stream().noneMatch(record -> record.key() instanceof StreamsGroupMetadataKey),
@@ -30512,7 +30512,8 @@ public class GroupMetadataManagerTest {
         String groupId,
         String memberId,
         int memberEpoch,
-        String subtopologyId
+        String subtopologyId,
+        List<Integer> ownedActivePartitions
     ) {
         return new StreamsGroupHeartbeatRequestData()
             .setGroupId(groupId)
@@ -30520,7 +30521,7 @@ public class GroupMetadataManagerTest {
             .setMemberEpoch(memberEpoch)
             .setActiveTasks(List.of(new StreamsGroupHeartbeatRequestData.TaskIds()
                 .setSubtopologyId(subtopologyId)
-                .setPartitions(List.of(0, 1, 2, 3, 4, 5))))
+                .setPartitions(ownedActivePartitions)))
             .setStandbyTasks(List.of())
             .setWarmupTasks(List.of());
     }
