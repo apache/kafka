@@ -2277,7 +2277,7 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     protected boolean isStreamsProtocolEnabled() {
-        return getString(GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.STREAMS.name());
+        return StreamsConfigUtils.streamsProtocolEnabled(this);
     }
 
     /**

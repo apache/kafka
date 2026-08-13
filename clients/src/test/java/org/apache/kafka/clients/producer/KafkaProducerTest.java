@@ -17,6 +17,8 @@
 package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.ClientDnsLookup;
+import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.LeastLoadedNode;
@@ -44,6 +46,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
@@ -563,8 +566,10 @@ public class KafkaProducerTest {
     public void testConstructorFailureCloseResource() {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.CLIENT_ID_CONFIG, "testConstructorClose");
-        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "some.invalid.hostname.foo.bar.local:9999");
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
+        // Use invalid interceptor class to cause constructor failure after metrics initialization
+        props.setProperty(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, "non.existent.Interceptor");
 
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
         final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
@@ -1090,6 +1095,9 @@ public class KafkaProducerTest {
         long nowMs = Time.SYSTEM.milliseconds();
         String topic = "topic";
         ProducerMetadata metadata = newMetadata(0, 0, 90000);
+        // Bootstrap the metadata to mark it as configured (required for lazy bootstrapping)
+        metadata.bootstrap(ClientUtils.parseAndValidateAddresses(
+            Collections.singletonList("localhost:9999"), ClientDnsLookup.USE_ALL_DNS_IPS));
         metadata.add(topic, nowMs);
 
         MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap(topic, 1));
@@ -2071,7 +2079,7 @@ public class KafkaProducerTest {
         properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 
-        var time = new MockTime(1);
+        var time = new MockTime();
         var metadata = newMetadata(0, 0, Long.MAX_VALUE);
         var client = new MockClient(time, metadata);
         // Seed the metadata cache with a known topic id so the producer can
@@ -2146,7 +2154,7 @@ public class KafkaProducerTest {
         properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 
-        var time = new MockTime(1);
+        var time = new MockTime();
         var metadata = newMetadata(0, 0, Long.MAX_VALUE);
         var client = new MockClient(time, metadata);
         // The initial metadata snapshot contains the topic so the producer can
@@ -2935,7 +2943,7 @@ public class KafkaProducerTest {
             RecordAccumulator.AppendCallbacks callbacks =
                 (RecordAccumulator.AppendCallbacks) invocation.getArguments()[6];
             callbacks.setPartition(initialSelectedPartition.partition());
-            return new RecordAccumulator.RecordAppendResult(
+            return RecordAccumulator.RecordAppendResult.appended(
                 futureRecordMetadata,
                 false,
                 false,
@@ -3396,6 +3404,62 @@ public class KafkaProducerTest {
 
         public static void resetCounters() {
             CLOSE_COUNT.set(0);
+        }
+    }
+
+    @Test
+    public void testProducerBootstrapResolutionExceptionPropagated() {
+        String invalidHost = "unresolvable.invalid:9092";
+        Map<String, Object> configs = Map.of(
+            ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+            ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, invalidHost,
+            CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "3000"
+        );
+
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(configs)) {
+            assertThrows(BootstrapResolutionException.class, () -> {
+                long startTime = System.currentTimeMillis();
+                long maxWaitTime = 15000;
+                while (System.currentTimeMillis() - startTime < maxWaitTime) {
+                    producer.partitionsFor("test-topic");
+                }
+                fail("Expected BootstrapResolutionException to be thrown within " + maxWaitTime + "ms");
+            });
+
+            // After the first failure, any further API call must also throw. This guards against
+            // accidentally clearing the bootstrap error from the metadata layer.
+            assertThrows(BootstrapResolutionException.class, () -> producer.partitionsFor("test-topic"));
+        }
+    }
+
+    @Test
+    public void testProducerSendOffsetsToTransactionBootstrapResolutionExceptionPropagated() {
+        // sendOffsetsToTransaction became metadata-aware in KIP-1319, so it can also block on
+        // bootstrap and must surface BootstrapResolutionException.
+        String invalidHost = "unresolvable.invalid:9092";
+        Map<String, Object> configs = Map.of(
+            ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+            ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, invalidHost,
+            CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "3000",
+            ProducerConfig.TRANSACTIONAL_ID_CONFIG, "test-tx-id"
+        );
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = Map.of(
+            new TopicPartition("test-topic", 0),
+            new OffsetAndMetadata(0L)
+        );
+        ConsumerGroupMetadata groupMetadata = mock(ConsumerGroupMetadata.class);
+        when(groupMetadata.groupId()).thenReturn("test-group");
+
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(configs)) {
+            assertThrows(BootstrapResolutionException.class,
+                () -> producer.sendOffsetsToTransaction(offsets, groupMetadata));
+
+            // After the first failure, any further API call must also throw.
+            assertThrows(BootstrapResolutionException.class,
+                () -> producer.sendOffsetsToTransaction(offsets, groupMetadata));
         }
     }
 }

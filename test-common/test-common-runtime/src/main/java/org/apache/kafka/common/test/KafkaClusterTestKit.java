@@ -662,6 +662,50 @@ public class KafkaClusterTestKit implements AutoCloseable {
     }
 
     /**
+     * Shuts down the given broker (if it isn't already) and starts it back up with a possibly
+     * modified static configuration. This allows tests to change read-only configs, such as
+     * {@code log.dirs}, which can only be applied when the broker process (re)starts.
+     * <p>
+     * The broker keeps its identity (node ID, cluster metadata, bound ports): a new
+     * {@link SharedServer}/{@link BrokerServer} pair is created from the previous broker's
+     * {@link MetaPropertiesEnsemble} and socket factory, but with a {@link KafkaConfig} derived
+     * from the previous one with {@code propOverrides} applied on top.
+     *
+     * @param nodeId         The ID of the broker to restart.
+     * @param propOverrides  Configs to override in the broker's static configuration.
+     */
+    public void restartBroker(int nodeId, Map<String, Object> propOverrides) {
+        BrokerServer broker = brokers.get(nodeId);
+        if (broker == null) {
+            throw new IllegalArgumentException("Unknown broker ID " + nodeId);
+        }
+        if (!broker.isShutdown()) {
+            broker.shutdown();
+        }
+        broker.awaitShutdown();
+
+        Map<String, Object> props = new HashMap<>(broker.config().originals());
+        props.putAll(propOverrides);
+        KafkaConfig newConfig = new KafkaConfig(props, false);
+
+        SharedServer sharedServer = new SharedServer(
+            newConfig,
+            broker.sharedServer().metaPropsEnsemble(),
+            Time.SYSTEM,
+            new Metrics(),
+            CompletableFuture.completedFuture(
+                QuorumConfig.parseVoterConnections(newConfig.quorumConfig().voters())),
+            QuorumConfig.parseBootstrapServers(newConfig.quorumConfig().bootstrapServers()),
+            faultHandlerFactory,
+            socketFactoryManager.getOrCreateSocketFactory(nodeId)
+        );
+        broker = new BrokerServer(sharedServer);
+        brokers.put(nodeId, broker);
+
+        broker.startup();
+    }
+
+    /**
      * Wait for a controller to mark all the brokers as ready (registered and unfenced).
      * And also wait for the metadata cache up-to-date in each broker server.
      */

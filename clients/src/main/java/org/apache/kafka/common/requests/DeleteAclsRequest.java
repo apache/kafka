@@ -20,7 +20,7 @@ import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.message.DeleteAclsRequestData;
 import org.apache.kafka.common.message.DeleteAclsRequestData.DeleteAclsFilter;
 import org.apache.kafka.common.message.DeleteAclsResponseData;
@@ -76,9 +76,9 @@ public class DeleteAclsRequest extends AbstractRequest {
                 // to LITERAL. Note that the wildcard `*` is considered `LITERAL` for compatibility reasons.
                 if (patternType == PatternType.ANY)
                     filter.setPatternTypeFilter(PatternType.LITERAL.code());
-                else if (patternType != PatternType.LITERAL)
-                    throw new UnsupportedVersionException("Version 0 does not support pattern type " +
-                            patternType + " (only LITERAL and ANY are supported)");
+                else if (patternType != PatternType.LITERAL) {
+                    throw new UnsupportedProtocolFieldException(patternType.name(), apiKey().name(), version(), 1);
+                }
             }
         }
 

@@ -275,6 +275,11 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         @Override
+        public void restartBroker(int brokerId, Map<String, Object> propOverrides) {
+            clusterTestKit.restartBroker(brokerId, propOverrides);
+        }
+
+        @Override
         public void restartBrokersWithSwappedClientListenerPorts(int brokerId1, int brokerId2) {
             try {
                 clusterTestKit.restartBrokersWithSwappedClientListenerPorts(brokerId1, brokerId2);

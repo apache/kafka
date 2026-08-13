@@ -135,7 +135,10 @@ public enum MetadataVersion {
     IBP_4_4_IV0(31, "4.4", "IV0", false),
 
     // Add support for CIDR-based ACL host patterns (KIP-1276).
-    IBP_4_4_IV1(32, "4.4", "IV1", true);
+    IBP_4_4_IV1(32, "4.4", "IV1", true),
+
+    // Add support for controller unregistration (KIP-1312).
+    IBP_4_4_IV2(33, "4.4", "IV2", true);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
@@ -252,6 +255,10 @@ public enum MetadataVersion {
 
     public boolean isControllerRegistrationSupported() {
         return this.isAtLeast(MetadataVersion.IBP_3_7_IV0);
+    }
+
+    public boolean isControllerUnregistrationSupported() {
+        return this.isAtLeast(MetadataVersion.IBP_4_4_IV2);
     }
 
     public short partitionChangeRecordVersion() {
