@@ -16,34 +16,25 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.streams.kstream.internals.KTableKTableForeignKeyJoinScenarioTest;
-import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.CombinedKeySchemaTest;
-import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.ResponseJoinProcessorSupplierTest;
-import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionResponseWrapperSerdeTest;
-import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapperSerdeTest;
-
 import org.junit.platform.suite.api.SelectClasses;
 import org.junit.platform.suite.api.Suite;
 
 /**
- * This suite runs all the tests related to the KTable-KTable foreign key join feature.
+ * This suite runs the integration tests related to the KTable-KTable foreign key join feature.
  *
- * It can be used from an IDE to selectively just run these tests when developing code related to KTable-KTable
- * foreign key join.
+ * It can be used from an IDE to selectively just run these integration tests when developing code
+ * related to KTable-KTable foreign key join. The unit tests for this feature live in the
+ * {@code streams} module; see
+ * {@code org.apache.kafka.streams.kstream.internals.foreignkeyjoin.ForeignKeyJoinSuite}.
  *
- * If desired, it can also be added to a Gradle build task, although this isn't strictly necessary, since all
- * these tests are already included in the `:streams:test` task.
+ * If desired, it can also be added to a Gradle build task, although this isn't strictly necessary,
+ * since all these tests are already included in the {@code :streams:integration-tests:test} task.
  */
 @Suite
 @SelectClasses({
     KTableKTableForeignKeyInnerJoinMultiIntegrationTest.class,
     KTableKTableForeignKeyJoinIntegrationTest.class,
     KTableKTableForeignKeyJoinMaterializationIntegrationTest.class,
-    KTableKTableForeignKeyJoinScenarioTest.class,
-    CombinedKeySchemaTest.class,
-    SubscriptionWrapperSerdeTest.class,
-    SubscriptionResponseWrapperSerdeTest.class,
-    ResponseJoinProcessorSupplierTest.class
 })
 public class ForeignKeyJoinSuite {
 }

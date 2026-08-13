@@ -49,6 +49,10 @@ import java.util.List;
       threadSafe = true)
 public class KafkaInternalApiCheckerMojo extends AbstractMojo {
 
+    /** Public no-arg constructor invoked by Maven when instantiating the Mojo. */
+    public KafkaInternalApiCheckerMojo() {
+    }
+
     /**
      * The Maven project.
      */
@@ -199,27 +203,61 @@ public class KafkaInternalApiCheckerMojo extends AbstractMojo {
         return kafkaJars;
     }
 
-    // Getters and setters for testing
+    // Setters used by tests to construct the Mojo without going through the Maven container.
+
+    /**
+     * Sets the Maven project the Mojo runs against (test-only injection).
+     *
+     * @param project the Maven project to scan
+     */
     public void setProject(MavenProject project) {
         this.project = project;
     }
 
+    /**
+     * Enables or disables the checker for one invocation.
+     *
+     * @param enabled {@code true} to run the checker, {@code false} to skip
+     */
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
     }
 
+    /**
+     * Sets whether reported violations fail the Maven build.
+     *
+     * @param failOnViolation {@code true} to fail the build on any violation
+     */
     public void setFailOnViolation(boolean failOnViolation) {
         this.failOnViolation = failOnViolation;
     }
 
+    /**
+     * Sets whether the checker fails when no {@code org.apache.kafka:*} dependency is present.
+     *
+     * @param failOnNoKafkaDependency {@code true} to fail (rather than warn) when the project has
+     *                                no Kafka artifact on its classpath
+     */
     public void setFailOnNoKafkaDependency(boolean failOnNoKafkaDependency) {
         this.failOnNoKafkaDependency = failOnNoKafkaDependency;
     }
 
+    /**
+     * Overrides the classes/jars scanned. Each entry may be a class directory, an individual
+     * {@code .class} file, or a {@code .jar} archive.
+     *
+     * @param classesDirectories roots to scan; if {@code null} or empty, defaults to the project's
+     *                           main compiled output
+     */
     public void setClassesDirectories(List<File> classesDirectories) {
         this.classesDirectories = classesDirectories;
     }
 
+    /**
+     * Sets the file path where the text report is written.
+     *
+     * @param reportFile destination file for the human-readable report
+     */
     public void setReportFile(File reportFile) {
         this.reportFile = reportFile;
     }

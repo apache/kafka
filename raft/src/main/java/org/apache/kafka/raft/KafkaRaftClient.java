@@ -498,7 +498,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         partitionState = new KRaftControlRecordStateMachine(
             staticVoters,
             log,
-            serde,
             MAX_BATCH_SIZE_BYTES,
             logContext,
             kafkaRaftMetrics,

@@ -71,7 +71,7 @@
               files="(Utils|Topic|Lz4BlockOutputStream|JoinGroupRequest).java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="(AbstractFetch|ClientTelemetryReporter|ConsumerCoordinator|CommitRequestManager|FetchCollector|OffsetFetcherUtils|KafkaProducer|Sender|ConfigDef|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslFactory|SslTransportLayer|SaslClientAuthenticator|SaslClientCallbackHandler|SaslServerAuthenticator|AbstractCoordinator|TransactionManager|AbstractStickyAssignor|DefaultSslEngineFactory|Authorizer|RecordAccumulator|MemoryRecords|FetchSessionHandler|MockAdminClient).java"/>
+              files="(AbstractFetch|BufferPool|ClientTelemetryReporter|ConsumerCoordinator|CommitRequestManager|FetchCollector|OffsetFetcherUtils|KafkaProducer|Sender|ConfigDef|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslFactory|SslTransportLayer|SaslClientAuthenticator|SaslClientCallbackHandler|SaslServerAuthenticator|AbstractCoordinator|TransactionManager|AbstractStickyAssignor|DefaultSslEngineFactory|Authorizer|RecordAccumulator|MemoryRecords|FetchSessionHandler|MockAdminClient).java"/>
 
     <suppress checks="JavaNCSS"
               files="(AbstractRequest|AbstractResponse|KerberosLogin|WorkerSinkTaskTest|TransactionManagerTest|SenderTest|KafkaAdminClient|ConsumerCoordinatorTest|KafkaAdminClientTest|KafkaProducerTest).java"/>
@@ -89,7 +89,11 @@
               files="(Sender|Fetcher|FetchRequestManager|OffsetFetcher|KafkaConsumer|Metrics|RequestResponse|TransactionManager|KafkaAdminClient|Message|KafkaProducer)Test.java"/>
 
     <suppress checks="ClassFanOutComplexity"
-              files="(ConsumerCoordinator|KafkaConsumer|RequestResponse|Fetcher|FetchRequestManager|KafkaAdminClient|Message|KafkaProducer|NetworkClient)Test.java"/>
+              files="(ConsumerCoordinator|KafkaConsumer|RequestResponse|Fetcher|FetchRequestManager|KafkaAdminClient|Message|KafkaProducer|NetworkClient|StreamsGroupHeartbeatRequestManager)Test.java"/>
+
+    <!-- KafkaAdminClient test split: shared base + per-domain test classes -->
+    <suppress checks="(ClassDataAbstractionCoupling|ClassFanOutComplexity|JavaNCSS)"
+              files="KafkaAdminClient(TestBase|TopicTest|ConsumerGroupTest|StreamsGroupTest|ShareGroupTest|ConfigTest|TransactionTest)\.java"/>
 
     <suppress checks="ClassFanOutComplexity"
               files="MockAdminClient.java"/>
@@ -98,7 +102,7 @@
               files="(OffsetFetcher|RequestResponse)Test.java"/>
 
     <suppress checks="JavaNCSS"
-              files="RequestResponseTest.java|FetcherTest.java|FetchRequestManagerTest.java|KafkaAdminClientTest.java|ConsumerMembershipManagerTest.java"/>
+              files="RequestResponseTest.java|FetcherTest.java|FetchRequestManagerTest.java|KafkaAdminClientTest.java|ConsumerMembershipManagerTest.java|ShareConsumeRequestManagerTest.java"/>
 
     <suppress checks="NPathComplexity"
               files="MemoryRecordsTest|MetricsTest|RequestResponseTest|TestSslUtils"/>
@@ -155,7 +159,7 @@
 
     <!-- Raft -->
     <suppress checks="NPathComplexity"
-              files="(DynamicVoter|RecordsIterator).java"/>
+              files="DynamicVoter.java"/>
 
     <suppress checks="JavaNCSS"
               files="(KafkaRaftClientTest).java"/>
@@ -244,6 +248,8 @@
               files="(ProduceBenchSpec|ConsumeBenchSpec|SustainedConnectionSpec).java"/>
     <suppress id="dontUseSystemExit"
               files="(VerifiableConsumer|VerifiableProducer|VerifiableShareConsumer).java"/>
+    <suppress checks="MethodLength"
+              files="ProducerPerformance\.java"/>
 
     <!-- Shell -->
     <suppress checks="CyclomaticComplexity"

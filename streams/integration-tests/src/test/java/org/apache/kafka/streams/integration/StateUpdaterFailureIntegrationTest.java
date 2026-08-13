@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KafkaStreams;
@@ -24,6 +25,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
+import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -35,16 +37,22 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StateUpdaterFailureIntegrationTest {
@@ -56,7 +64,6 @@ public class StateUpdaterFailureIntegrationTest {
     private final EmbeddedKafkaCluster cluster = new EmbeddedKafkaCluster(NUM_BROKERS);
 
     private Properties streamsConfiguration;
-    private final MockTime mockTime = cluster.time;
     private KafkaStreams streams;
 
     @BeforeEach
@@ -85,20 +92,34 @@ public class StateUpdaterFailureIntegrationTest {
         }
     }
 
+    private static Stream<Arguments> failuresOfTasksInTheStateUpdater() {
+        return Stream.of(
+            Arguments.of(Named.of("exception", (Runnable) () -> {
+                throw new ProcessorStateException("restore end");
+            })),
+            Arguments.of(Named.of("error", (Runnable) () -> {
+                throw new Error("restore end");
+            }))
+        );
+    }
+
     /**
      * The conditions that we need to meet:
      * <p><ul>
      * <li>We have an unhandled task in {@link org.apache.kafka.streams.processor.internals.DefaultStateUpdater}</li>
      * <li>StreamThread is not running, so {@link org.apache.kafka.streams.processor.internals.TaskManager#handleExceptionsFromStateUpdater} is not called anymore</li>
-     * <li>The task throws exception in {@link org.apache.kafka.streams.processor.internals.Task#maybeCheckpoint()} while being processed by {@code DefaultStateUpdater}</li>
-     * <li>{@link org.apache.kafka.streams.processor.internals.TaskManager#shutdownStateUpdater} tries to clean up all tasks that are left in the {@code DefaultStateUpdater}</li>
+     * <li>The task fails while being processed by {@code DefaultStateUpdater}, either with an exception that the {@code DefaultStateUpdater} handles or with an error that it does not handle and that stops its thread</li>
+     * <li>{@link org.apache.kafka.streams.processor.internals.TaskManager#shutdownStateUpdater} tries to clean up all tasks that are left in the {@code DefaultStateUpdater} and waits for the removals of those tasks</li>
      * </ul><p>
      * If all conditions are met, {@code TaskManager} needs to be able to handle the failed task from the {@code DefaultStateUpdater} correctly and not hang.
      */
-    @Test
-    public void correctlyHandleFlushErrorsDuringRebalance() throws Exception {
+    @ParameterizedTest
+    @MethodSource("failuresOfTasksInTheStateUpdater")
+    public void correctlyHandleFailuresDuringRebalance(final Runnable failure) throws Exception {
         final AtomicInteger numberOfStoreInits = new AtomicInteger();
+        final AtomicInteger numberOfStoreCloses = new AtomicInteger();
         final CountDownLatch pendingShutdownLatch = new CountDownLatch(1);
+        final AtomicBoolean failureInjected = new AtomicBoolean(false);
 
         final StoreBuilder<KeyValueStore<Object, Object>> storeBuilder = new AbstractStoreBuilder<>("testStateStore", Serdes.Integer(), Serdes.ByteArray(), new MockTime()) {
 
@@ -113,17 +134,9 @@ public class StateUpdaterFailureIntegrationTest {
                     }
 
                     @Override
-                    public void flush() {
-                        // we want to throw the ProcessorStateException here only when the rebalance finished(we reassigned the 3 tasks from the removed thread to the existing thread)
-                        // we use waitForCondition to wait until the current state is PENDING_SHUTDOWN to make sure the Stream Thread will not handle the exception and we can get to in TaskManager#shutdownStateUpdater
-                        if (numberOfStoreInits.get() == 9) {
-                            try {
-                                pendingShutdownLatch.await();
-                            } catch (final InterruptedException e) {
-                                throw new RuntimeException(e);
-                            }
-                            throw new ProcessorStateException("flush");
-                        }
+                    public void close() {
+                        super.close();
+                        numberOfStoreCloses.incrementAndGet();
                     }
                 };
             }
@@ -134,7 +147,42 @@ public class StateUpdaterFailureIntegrationTest {
         topology.addProcessor("my-processor", new MockApiProcessorSupplier<>(), "ingest");
         topology.addStateStore(storeBuilder, "my-processor");
 
+        final StateRestoreListener stateRestoreListener = new StateRestoreListener() {
+
+            @Override
+            public void onRestoreStart(final TopicPartition topicPartition,
+                                       final String storeName,
+                                       final long startingOffset,
+                                       final long endingOffset) {
+            }
+
+            @Override
+            public void onBatchRestored(final TopicPartition topicPartition,
+                                        final String storeName,
+                                        final long batchEndOffset,
+                                        final long numRestored) {
+            }
+
+            @Override
+            public void onRestoreEnd(final TopicPartition topicPartition,
+                                     final String storeName,
+                                     final long totalRestored) {
+                // we want to fail here only when the rebalance finished(we reassigned the 3 tasks from the removed thread to the existing thread)
+                // we wait until the current state is PENDING_SHUTDOWN to make sure the Stream Thread will not handle the failure and we can get to in TaskManager#shutdownStateUpdater
+                if (numberOfStoreInits.get() == 9) {
+                    try {
+                        pendingShutdownLatch.await();
+                    } catch (final InterruptedException interruptedException) {
+                        throw new RuntimeException(interruptedException);
+                    }
+                    failureInjected.set(true);
+                    failure.run();
+                }
+            }
+        };
+
         streams = new KafkaStreams(topology, streamsConfiguration);
+        streams.setGlobalStateRestoreListener(stateRestoreListener);
         streams.setStateListener((newState, oldState) -> {
             if (newState == KafkaStreams.State.PENDING_SHUTDOWN) {
                 pendingShutdownLatch.countDown();
@@ -150,5 +198,9 @@ public class StateUpdaterFailureIntegrationTest {
         TestUtils.waitForCondition(() -> numberOfStoreInits.get() == 9, "Streams never reinitialized the store enough times");
 
         assertTrue(streams.close(Duration.ofSeconds(60)));
+
+        assertEquals(numberOfStoreInits.get(), numberOfStoreCloses.get(), "Not all state stores were closed");
+        // Verifying that the failure was actually injected to avoid situations when the test passes only because nothing was injected.
+        assertTrue(failureInjected.get(), "The failure was never injected into the state updater");
     }
 }
