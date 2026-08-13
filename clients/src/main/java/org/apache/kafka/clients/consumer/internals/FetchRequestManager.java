@@ -77,14 +77,10 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
     /**
      * {@inheritDoc}
      *
-     * Computed live from current state rather than cached from the last {@code prepare()} call, since that call
-     * happens before the network I/O step in {@link ConsumerNetworkThread#runOnce()} while this is read after it,
-     * and state (e.g. an in-flight request completing) can change in between.
-     *
-     * <p>If a request is in flight for any node, its completion will wake the application thread whatever the
-     * outcome, so no separate bound is needed. Otherwise, if some fetchable partition still isn't buffered, it was
-     * skipped for a reason that only changes over time (reconnect backoff, leader not yet known, etc.), and nothing
-     * else will wake the application thread, so its wait is bounded by {@code retryBackoffMs} instead.
+     * If any request is in flight, its completion will wake the application thread regardless of the outcome, so
+     * no separate bound is needed. Otherwise, if any fetchable partition is still not buffered, it was skipped for a
+     * transient reason, such as reconnect backoff or an unknown leader. Since nothing else will wake the application
+     * thread in that case, its wait is bounded by {@code retryBackoffMs}.
      */
     @Override
     public long maximumTimeToWait(long currentTimeMs) {
