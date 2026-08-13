@@ -16,13 +16,12 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.RebalanceConsumer;
-import org.apache.kafka.clients.consumer.RebalanceListener;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collection;
 
-public class MockRebalanceListener implements RebalanceListener {
+public class MockRebalanceListener implements ConsumerRebalanceListener {
     public Collection<TopicPartition> lost;
     public Collection<TopicPartition> revoked;
     public Collection<TopicPartition> assigned;
@@ -31,19 +30,19 @@ public class MockRebalanceListener implements RebalanceListener {
     public int assignedCount = 0;
 
     @Override
-    public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
+    public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
         this.assigned = partitions;
         assignedCount++;
     }
 
     @Override
-    public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
+    public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
         this.revoked = partitions;
         revokedCount++;
     }
 
     @Override
-    public void onPartitionsLost(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
+    public void onPartitionsLost(Collection<TopicPartition> partitions) {
         this.lost = partitions;
         lostCount++;
     }

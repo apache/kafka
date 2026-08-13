@@ -299,13 +299,13 @@ public final class GroupConfig extends AbstractConfig {
             GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT,
             MEDIUM,
             GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DOC)
-        .define(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG,
+        .defineInternal(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG,
             INT,
             GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT,
             atLeast(1),
             MEDIUM,
             GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DOC)
-        .define(STREAMS_NUM_WARMUP_REPLICAS_CONFIG,
+        .defineInternal(STREAMS_NUM_WARMUP_REPLICAS_CONFIG,
             INT,
             GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_DEFAULT,
             atLeast(0),
@@ -317,7 +317,7 @@ public final class GroupConfig extends AbstractConfig {
             ConfigDef.ValidList.anyNonDuplicateValues(true, false),
             LOW,
             GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DOC)
-        .define(STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG,
+        .defineInternal(STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG,
             LONG,
             GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DEFAULT,
             atLeast(0),

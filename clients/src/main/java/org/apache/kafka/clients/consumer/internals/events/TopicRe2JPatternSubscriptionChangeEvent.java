@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.SubscriptionPattern;
+
+import java.util.Optional;
 
 /**
  * Application event indicating triggered by a call to the subscribe API
@@ -27,8 +30,10 @@ import org.apache.kafka.clients.consumer.SubscriptionPattern;
 public class TopicRe2JPatternSubscriptionChangeEvent extends SubscriptionChangeEvent {
     private final SubscriptionPattern pattern;
 
-    public TopicRe2JPatternSubscriptionChangeEvent(final SubscriptionPattern pattern, final long deadlineMs) {
-        super(Type.TOPIC_RE2J_PATTERN_SUBSCRIPTION_CHANGE, deadlineMs);
+    public TopicRe2JPatternSubscriptionChangeEvent(final SubscriptionPattern pattern,
+                                                   final Optional<ConsumerRebalanceListener> listener,
+                                                   final long deadlineMs) {
+        super(Type.TOPIC_RE2J_PATTERN_SUBSCRIPTION_CHANGE, listener, deadlineMs);
         this.pattern = pattern;
     }
 

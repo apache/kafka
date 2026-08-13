@@ -17,13 +17,12 @@
 package kafka.examples;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
-import org.apache.kafka.clients.consumer.RebalanceConsumer;
-import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
@@ -45,7 +44,7 @@ import static java.util.Collections.singleton;
  * A simple consumer thread that subscribes to a topic, fetches new records and prints them.
  * The thread does not stop until all records are completed or an exception is raised.
  */
-public class Consumer extends Thread implements RebalanceListener {
+public class Consumer extends Thread implements ConsumerRebalanceListener {
     private final String bootstrapServers;
     private final String topic;
     private final String groupId;
@@ -79,10 +78,9 @@ public class Consumer extends Thread implements RebalanceListener {
     public void run() {
         // the consumer instance is NOT thread safe
         try (KafkaConsumer<Integer, String> consumer = createKafkaConsumer()) {
-            // this class implements the rebalance listener that we register here to be notified of such events
-            consumer.setRebalanceListener(this);
             // subscribes to a list of topics to get dynamically assigned partitions
-            consumer.subscribe(singleton(topic));
+            // this class implements the rebalance listener that we pass here to be notified of such events
+            consumer.subscribe(singleton(topic), this);
             Utils.printOut("Subscribed to %s", topic);
             while (!closed && remainingRecords > 0) {
                 try {
@@ -151,19 +149,19 @@ public class Consumer extends Thread implements RebalanceListener {
     }
 
     @Override
-    public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
+    public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
         Utils.printOut("Revoked partitions: %s", partitions);
-        // the consumer passed here can be used to commit pending offsets when using manual commit and EOS is disabled
+        // this can be used to commit pending offsets when using manual commit and EOS is disabled
     }
 
     @Override
-    public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
+    public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
         Utils.printOut("Assigned partitions: %s", partitions);
-        // the consumer passed here can be used to seek to offsets read from an external store, or for other initialization
+        // this can be used to read the offsets from an external store or some other initialization
     }
 
     @Override
-    public void onPartitionsLost(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
+    public void onPartitionsLost(Collection<TopicPartition> partitions) {
         Utils.printOut("Lost partitions: %s", partitions);
         // this is called when partitions are reassigned before we had a chance to revoke them gracefully
         // we can't commit pending offsets because these partitions are probably owned by other consumers already

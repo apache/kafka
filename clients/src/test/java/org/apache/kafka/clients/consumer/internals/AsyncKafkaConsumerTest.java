@@ -1830,8 +1830,7 @@ public class AsyncKafkaConsumerTest {
         );
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
         completeTopicSubscriptionChangeEventSuccessfully();
-        consumer.setRebalanceListener(consumerRebalanceListener);
-        consumer.subscribe(Collections.singletonList("topic"));
+        consumer.subscribe(Collections.singletonList("topic"), consumerRebalanceListener);
         SortedSet<TopicPartition> partitions = Collections.emptySortedSet();
 
         for (ConsumerRebalanceListenerMethodName methodName : methodNames) {
@@ -1876,7 +1875,7 @@ public class AsyncKafkaConsumerTest {
             // Tests if we get an event for an assignment, that we invoke our listener.
             Arguments.of(Collections.singletonList(ON_PARTITIONS_ASSIGNED), empty, empty, empty, 0, 1, 0, empty),
 
-            // Tests if we get an event for an assignment, that we invoke our listener.
+            // Tests that we invoke our listener even if it encounters an exception.
             Arguments.of(Collections.singletonList(ON_PARTITIONS_LOST), empty, empty, empty, 0, 0, 1, empty),
 
             // Tests that we invoke our listener even if it encounters an exception.
@@ -2653,7 +2652,7 @@ public class AsyncKafkaConsumerTest {
     private void completeTopicSubscriptionChangeEventSuccessfully() {
         doAnswer(invocation -> {
             TopicSubscriptionChangeEvent event = invocation.getArgument(0);
-            consumer.subscriptions().subscribe(event.topics());
+            consumer.subscriptions().subscribe(event.topics(), event.listener());
             event.future().complete(null);
             return null;
         }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(TopicSubscriptionChangeEvent.class));
@@ -2671,7 +2670,7 @@ public class AsyncKafkaConsumerTest {
     private void completeTopicPatternSubscriptionChangeEventSuccessfully() {
         doAnswer(invocation -> {
             TopicPatternSubscriptionChangeEvent event = invocation.getArgument(0);
-            consumer.subscriptions().subscribe(event.pattern());
+            consumer.subscriptions().subscribe(event.pattern(), event.listener());
             event.future().complete(null);
             return null;
         }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(TopicPatternSubscriptionChangeEvent.class));
@@ -2680,7 +2679,7 @@ public class AsyncKafkaConsumerTest {
     private void completeTopicRe2JPatternSubscriptionChangeEventSuccessfully() {
         doAnswer(invocation -> {
             TopicRe2JPatternSubscriptionChangeEvent event = invocation.getArgument(0);
-            consumer.subscriptions().subscribe(event.pattern());
+            consumer.subscriptions().subscribe(event.pattern(), event.listener());
             event.future().complete(null);
             return null;
         }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(TopicRe2JPatternSubscriptionChangeEvent.class));
@@ -2789,9 +2788,8 @@ public class AsyncKafkaConsumerTest {
 
         consumer = newConsumer(requiredConsumerConfigAndGroupId("consumerGroup"));
         completeTopicSubscriptionChangeEventSuccessfully();
-        consumer.setRebalanceListener(new CounterConsumerRebalanceListener(
-                Optional.empty(), Optional.empty(), Optional.empty()));
-        consumer.subscribe(singletonList("topic"));
+        consumer.subscribe(singletonList("topic"), new CounterConsumerRebalanceListener(
+            Optional.empty(), Optional.empty(), Optional.empty()));
 
         // Make ApplyAssignmentEvent fail
         when(applicationEventHandler.addAndGet(any(ApplyAssignmentEvent.class)))

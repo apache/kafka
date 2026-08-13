@@ -1288,10 +1288,7 @@ public class ShareMembershipManagerTest {
 
     private void testFenceIsNoOp(ShareMembershipManager membershipManager) {
         assertNotEquals(0, membershipManager.memberEpoch());
-        verify(subscriptionState, never()).hasRebalanceListener();
-        verify(subscriptionState, never()).onPartitionsAssigned(anyCollection());
-        verify(subscriptionState, never()).onPartitionsRevoked(anyCollection());
-        verify(subscriptionState, never()).onPartitionsLost(anyCollection());
+        verify(subscriptionState, never()).rebalanceListener();
     }
 
     private void assertStaleMemberLeavesGroupAndClearsAssignment(ShareMembershipManager membershipManager) {
@@ -1523,7 +1520,7 @@ public class ShareMembershipManagerTest {
         ShareMembershipManager membershipManager = createMembershipManagerJoiningGroup();
         ShareGroupHeartbeatResponse heartbeatResponse = createShareGroupHeartbeatResponse(new Assignment(), membershipManager.memberId());
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.hasRebalanceListener()).thenReturn(false);
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty());
         membershipManager.onHeartbeatSuccess(heartbeatResponse);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         membershipManager.poll(time.milliseconds());
