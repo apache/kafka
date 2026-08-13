@@ -124,6 +124,24 @@ public class OffsetsRequestManagerTest {
     }
 
     @Test
+    public void testMaximumTimeToWaitUnboundedWhenNoAssignedPartitions() {
+        when(subscriptionState.hasAllFetchPositions()).thenReturn(true);
+        assertEquals(Long.MAX_VALUE, requestManager.maximumTimeToWait(time.milliseconds()));
+    }
+
+    @Test
+    public void testMaximumTimeToWaitBoundedWhenAssignedPartitionHasInvalidPosition() {
+        when(subscriptionState.hasAllFetchPositions()).thenReturn(false);
+        assertEquals(RETRY_BACKOFF_MS, requestManager.maximumTimeToWait(time.milliseconds()));
+    }
+
+    @Test
+    public void testMaximumTimeToWaitUnboundedWhenAllAssignedPartitionsHaveValidPositions() {
+        when(subscriptionState.hasAllFetchPositions()).thenReturn(true);
+        assertEquals(Long.MAX_VALUE, requestManager.maximumTimeToWait(time.milliseconds()));
+    }
+
+    @Test
     public void testListOffsetsRequest_Success() throws ExecutionException, InterruptedException {
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);

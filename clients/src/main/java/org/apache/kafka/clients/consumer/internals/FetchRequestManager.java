@@ -24,7 +24,6 @@ import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollRes
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest;
 import org.apache.kafka.clients.consumer.internals.events.CreateFetchRequestsEvent;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
@@ -32,7 +31,6 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
@@ -46,7 +44,6 @@ import java.util.stream.Collectors;
 public class FetchRequestManager extends AbstractFetch implements RequestManager {
 
     private final NetworkClientDelegate networkClientDelegate;
-    private final long retryBackoffMs;
     private CompletableFuture<Void> pendingFetchRequestFuture;
 
     FetchRequestManager(final LogContext logContext,
@@ -57,11 +54,9 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
                         final FetchBuffer fetchBuffer,
                         final FetchMetricsManager metricsManager,
                         final NetworkClientDelegate networkClientDelegate,
-                        final ApiVersions apiVersions,
-                        final long retryBackoffMs) {
+                        final ApiVersions apiVersions) {
         super(logContext, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, time, apiVersions);
         this.networkClientDelegate = networkClientDelegate;
-        this.retryBackoffMs = retryBackoffMs;
     }
 
     @Override
@@ -72,25 +67,6 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
     @Override
     protected void maybeThrowAuthFailure(Node node) {
         networkClientDelegate.maybeThrowAuthFailure(node);
-    }
-
-    /**
-     * {@inheritDoc}
-     *
-     * If any request is in flight, its completion will wake the application thread regardless of the outcome, so
-     * no separate bound is needed. Otherwise, if any fetchable partition is still not buffered, it was skipped for a
-     * transient reason, such as reconnect backoff or an unknown leader. Since nothing else will wake the application
-     * thread in that case, its wait is bounded by {@code retryBackoffMs}.
-     */
-    @Override
-    public long maximumTimeToWait(long currentTimeMs) {
-        if (!nodesWithPendingFetchRequests.isEmpty()) {
-            return Long.MAX_VALUE;
-        }
-
-        Set<TopicPartition> buffered = fetchBuffer.bufferedPartitions();
-        boolean hasUnbufferedFetchablePartition = !subscriptions.fetchablePartitions(tp -> !buffered.contains(tp)).isEmpty();
-        return hasUnbufferedFetchablePartition ? retryBackoffMs : Long.MAX_VALUE;
     }
 
     /**

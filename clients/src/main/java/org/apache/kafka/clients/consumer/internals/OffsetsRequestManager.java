@@ -93,6 +93,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     private final NetworkClientDelegate networkClientDelegate;
     private final CommitRequestManager commitRequestManager;
     private final long defaultApiTimeoutMs;
+    private final long retryBackoffMs;
 
     /**
      * Exception that occurred while updating positions after the triggering event had already
@@ -136,6 +137,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         this.requestsToSend = new ArrayList<>();
         this.subscriptionState = subscriptionState;
         this.time = time;
+        this.retryBackoffMs = retryBackoffMs;
         this.requestTimeoutMs = requestTimeoutMs;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.apiVersions = apiVersions;
@@ -171,6 +173,19 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         List<NetworkClientDelegate.UnsentRequest> unsentRequests = new ArrayList<>(requestsToSend);
         requestsToSend.clear();
         return new NetworkClientDelegate.PollResult(unsentRequests);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * While the background thread is concurrently resolving positions (validating positions, fetching committed
+     * offsets, looking up partition offsets, or backing off after a failure), assigned partitions without a valid
+     * position will not otherwise cause the application thread to wake up. During this time, the wait is bounded
+     * by {@code retryBackoffMs} so progress does not depend on an unrelated wakeup event.
+     */
+    @Override
+    public long maximumTimeToWait(long currentTimeMs) {
+        return subscriptionState.hasAllFetchPositions() ? Long.MAX_VALUE : retryBackoffMs;
     }
 
     /**

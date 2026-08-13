@@ -321,10 +321,6 @@ public class FetchRequestManagerTest {
         assertFalse(blockedOnBuffer.isAlive(), "Empty fetch response did not wake the thread blocked on the fetch buffer");
     }
 
-    /**
-     * A fetch request that fails outright (e.g. disconnect) must wake a thread blocked on the fetch buffer, just as
-     * a successful response does: otherwise that thread would wait for a response that is no longer coming.
-     */
     @Test
     public void testFailedFetchResponseWakesUpBuffer() throws InterruptedException {
         // The response body is irrelevant: it is discarded once the response is marked as disconnected.
@@ -332,22 +328,12 @@ public class FetchRequestManagerTest {
                 fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0), true));
     }
 
-    /**
-     * A fetch session error is rejected by the session handler, so {@link AbstractFetch#handleFetchSuccess} returns
-     * before adding anything to the buffer. It must still wake a thread blocked on the buffer: the request is no
-     * longer pending, so nothing else will.
-     */
     @Test
     public void testFetchSessionErrorResponseWakesUpBuffer() throws InterruptedException {
         assertRequestCompletionWakesUpBuffer(() -> client.prepareResponse(FetchResponse.of(
                 Errors.FETCH_SESSION_ID_NOT_FOUND, 0, INVALID_SESSION_ID, new LinkedHashMap<>(), List.of())));
     }
 
-    /**
-     * Asserts that an in-flight fetch request wakes a thread blocked on the fetch buffer when it completes with the
-     * outcome staged by {@code prepareResponse}. Neither outcome adds anything to the buffer, so the wakeup is only
-     * about letting the application thread generate the next fetch request, not about collecting data.
-     */
     private void assertRequestCompletionWakesUpBuffer(Runnable prepareResponse) throws InterruptedException {
         buildFetcher();
 
@@ -389,79 +375,6 @@ public class FetchRequestManagerTest {
         fetcher.fetchBuffer.wakeup();
         blockedOnBuffer.join(2_000);
         assertFalse(blockedOnBuffer.isAlive());
-    }
-
-    @Test
-    public void testMaximumTimeToWaitUnboundedWhenFetchSent() {
-        buildFetcher();
-
-        assignFromUser(singleton(tp0));
-        subscriptions.seek(tp0, 0);
-
-        assertEquals(1, sendFetches());
-        assertEquals(Long.MAX_VALUE, fetcher.maximumTimeToWait(time.milliseconds()));
-    }
-
-    @Test
-    public void testMaximumTimeToWaitUnboundedWhenEmptyResultIsSafeToWake() {
-        buildFetcher();
-
-        assignFromUser(singleton(tp0));
-        subscriptions.seek(tp0, 0);
-
-        // Fetch data for tp0, but leave it buffered (unconsumed) so the next prepare() finds every fetchable
-        // partition already buffered.
-        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
-        assertEquals(1, sendFetches());
-        networkClientDelegate.poll(time.timer(0));
-        assertTrue(fetcher.hasCompletedFetches());
-
-        assertEquals(0, sendFetches());
-        assertEquals(Long.MAX_VALUE, fetcher.maximumTimeToWait(time.milliseconds()));
-    }
-
-    @Test
-    public void testMaximumTimeToWaitUnboundedWhenPartitionsSkippedDueToInflight() {
-        buildFetcher();
-
-        assignFromUser(singleton(tp0));
-        subscriptions.seek(tp0, 0);
-
-        // A fetch request is sent successfully; maximumTimeToWait remains unbounded.
-        assertEquals(1, sendFetches());
-        assertEquals(Long.MAX_VALUE, fetcher.maximumTimeToWait(time.milliseconds()));
-
-        // The in-flight request blocks the node, so the next prepare() skips the partition. maximumTimeToWait
-        // stays unbounded: the in-flight request's completion will wake the buffer regardless.
-        assertEquals(0, sendFetches());
-        assertEquals(Long.MAX_VALUE, fetcher.maximumTimeToWait(time.milliseconds()));
-
-        // Complete the in-flight request and consume the buffered data.
-        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
-        networkClientDelegate.poll(time.timer(0));
-        fetchRecords();
-
-        // A new fetch request can now be sent; maximumTimeToWait remains unbounded.
-        assertEquals(1, sendFetches());
-        assertEquals(Long.MAX_VALUE, fetcher.maximumTimeToWait(time.milliseconds()));
-    }
-
-    @Test
-    public void testMaximumTimeToWaitBoundedWhenPartitionsSkippedDueToBackoff() {
-        buildFetcher();
-
-        assignFromUser(singleton(tp0));
-        subscriptions.seek(tp0, 0);
-        Node node = metadata.fetch().leaderFor(tp0);
-
-        client.backoff(node, 500);
-        assertEquals(0, sendFetches());
-        assertEquals(retryBackoffMs, fetcher.maximumTimeToWait(time.milliseconds()));
-
-        // Once the backoff clears, a fetch request can be sent and maximumTimeToWait reverts to unbounded.
-        time.sleep(500);
-        assertEquals(1, sendFetches());
-        assertEquals(Long.MAX_VALUE, fetcher.maximumTimeToWait(time.milliseconds()));
     }
 
     @Test
@@ -4324,8 +4237,7 @@ public class FetchRequestManagerTest {
                 metricsManager,
                 networkClientDelegate,
                 fetchCollector,
-                apiVersions,
-                retryBackoffMs));
+                apiVersions));
         ConsumerNetworkClient consumerNetworkClient = new ConsumerNetworkClient(
                 logContext,
                 client,
@@ -4387,9 +4299,8 @@ public class FetchRequestManagerTest {
                                            FetchMetricsManager metricsManager,
                                            NetworkClientDelegate networkClientDelegate,
                                            FetchCollector<K, V> fetchCollector,
-                                           ApiVersions apiVersions,
-                                           long retryBackoffMs) {
-            super(logContext, time, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, networkClientDelegate, apiVersions, retryBackoffMs);
+                                           ApiVersions apiVersions) {
+            super(logContext, time, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, networkClientDelegate, apiVersions);
             this.fetchCollector = fetchCollector;
         }
 

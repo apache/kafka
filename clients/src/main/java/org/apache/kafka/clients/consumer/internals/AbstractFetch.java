@@ -435,11 +435,11 @@ public abstract class AbstractFetch implements Closeable {
             // If every currently fetchable partition already has buffered data, there is no need to issue
             // additional fetch requests. This is a safe point to wake the buffer immediately because progress
             // can be made by consuming the buffered data. If no partitions are fetchable at all (for example,
-            // no assignment yet, invalid positions, paused, or pending revocation/callback), the state will
-            // not change until some external event occurs, so an immediate wakeup would only busy-loop the
-            // caller rather than allowing the normal backoff to apply.
-            boolean canWakeBufferIfNoFetchRequestsToSend = !subscriptions.fetchablePartitions(tp -> true).isEmpty();
-            return new FetchRequestPreparationResult(Collections.emptyMap(), canWakeBufferIfNoFetchRequestsToSend);
+            // no assignment yet, invalid positions, or paused), the state will not change until some external
+            // event occurs, so an immediate wakeup would only busy-loop the caller rather than allowing it
+            // to remain parked until bounded by other mechanisms (such as heartbeat interval or poll timeout).
+            boolean canWakeBufferIfNoFetchRequestsToSend = subscriptions.hasFetchablePartitions(tp -> true);
+            return new FetchRequestPreparationResult(Map.of(), canWakeBufferIfNoFetchRequestsToSend);
         }
 
         Set<Integer> bufferedNodes = bufferedNodes(buffered, currentTimeMs);
@@ -488,12 +488,14 @@ public abstract class AbstractFetch implements Closeable {
             }
         }
 
-        // If every fetchable-but-unbuffered partition was skipped (for example, due to reconnect backoff,
-        // an in-flight request, or its node already hosting buffered partitions), the state will only
-        // change over time. An immediate wakeup would therefore just busy-loop the caller instead of
-        // respecting its normal backoff. This case is only relevant when fetchable partitions exist but
-        // the resulting request map is empty; otherwise the caller ignores this flag.
-        return new FetchRequestPreparationResult(convert(fetchable), false);
+        // If some fetchable-but-unbuffered partitions were skipped but at least one request was built,
+        // the in-flight request's completion will wake the buffer. If no request was built, all candidates
+        // were skipped due to reconnect backoff, existing in-flight requests, or already-buffered nodes.
+        // In that case, wake the buffer so the application thread is not left waiting for a wakeup that no
+        // pending request can deliver.
+        Map<Node, FetchSessionHandler.FetchRequestData> requests = convert(fetchable);
+        boolean canWake = requests.isEmpty();
+        return new FetchRequestPreparationResult(requests, canWake);
     }
 
     /**

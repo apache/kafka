@@ -259,7 +259,6 @@ public class AsyncKafkaConsumerTest {
         ConsumerInterceptors<String, String> interceptors,
         ConsumerRebalanceListenerInvoker rebalanceListenerInvoker,
         SubscriptionState subscriptions) {
-        long retryBackoffMs = 100L;
         int requestTimeoutMs = 30000;
         int defaultApiTimeoutMs = 1000;
         return new AsyncKafkaConsumer<>(
@@ -279,7 +278,7 @@ public class AsyncKafkaConsumerTest {
             metrics,
             subscriptions,
             metadata,
-            retryBackoffMs,
+            100L,
             requestTimeoutMs,
             defaultApiTimeoutMs,
             "group-id",
@@ -2130,7 +2129,7 @@ public class AsyncKafkaConsumerTest {
 
         final TopicPartition tp = new TopicPartition("topic1", 0);
 
-        // Manual assignment with valid position so pollForFetches() does not shrink pollTimeout to retryBackoffMs.
+        // Manual assignment with a valid position, so nothing here overrides the mocked maximumTimeToWait() below.
         subscriptions.assignFromUser(singleton(tp));
         subscriptions.seek(tp, 0);
 
