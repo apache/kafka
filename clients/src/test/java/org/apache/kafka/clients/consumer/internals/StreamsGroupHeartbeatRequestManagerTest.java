@@ -64,6 +64,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -948,6 +949,92 @@ class StreamsGroupHeartbeatRequestManagerTest {
             nonJoiningRequestDataWithChanges.standbyTasks()
         );
         assertEquals(List.of(), nonJoiningRequestDataWithChanges.warmupTasks());
+    }
+
+    private enum OwnedTaskRole { ACTIVE, STANDBY, WARMUP }
+
+    @ParameterizedTest
+    @EnumSource(OwnedTaskRole.class)
+    public void testBuildingHeartbeatAllOwnedTaskListsSentWhenOnlyOneRoleChanges(final OwnedTaskRole changingRole) {
+        // The broker reads the owned-task lists as a report of what the member holds only when all three of them are
+        // non-null; if any is null it cannot tell that a task was released, and the member effectively fails to
+        // acknowledges the revocation. So a change confined to a single role has to resend the other two lists as well,
+        // even though they did not change.
+        final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState =
+            new StreamsGroupHeartbeatRequestManager.HeartbeatState(
+                streamsRebalanceData,
+                membershipManager,
+                1234
+            );
+        when(membershipManager.state()).thenReturn(MemberState.JOINING);
+        heartbeatState.buildRequestData();
+        when(membershipManager.state()).thenReturn(MemberState.STABLE);
+
+        final Set<StreamsRebalanceData.TaskId> otherActiveTasks =
+            Set.of(new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 0));
+        final Set<StreamsRebalanceData.TaskId> otherStandbyTasks =
+            Set.of(new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 1));
+        final Set<StreamsRebalanceData.TaskId> otherWarmupTasks =
+            Set.of(new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_2, 2));
+        final Set<StreamsRebalanceData.TaskId> changingTask =
+            Set.of(new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_2, 3));
+
+        final Function<Set<StreamsRebalanceData.TaskId>, StreamsRebalanceData.Assignment> assignmentWhereRoleHolds =
+            tasksOfChangingRole -> {
+                switch (changingRole) {
+                    case ACTIVE:
+                        return new StreamsRebalanceData.Assignment(
+                            tasksOfChangingRole, otherStandbyTasks, otherWarmupTasks, true);
+                    case STANDBY:
+                        return new StreamsRebalanceData.Assignment(
+                            otherActiveTasks, tasksOfChangingRole, otherWarmupTasks, true);
+                    default:
+                        return new StreamsRebalanceData.Assignment(
+                            otherActiveTasks, otherStandbyTasks, tasksOfChangingRole, true);
+                }
+            };
+        final StreamsRebalanceData.Assignment withoutTheTask = assignmentWhereRoleHolds.apply(Set.of());
+        final StreamsRebalanceData.Assignment withTheTask = assignmentWhereRoleHolds.apply(changingTask);
+
+        streamsRebalanceData.setReconciledAssignment(withoutTheTask);
+        heartbeatState.buildRequestData();
+        assertNull(heartbeatState.buildRequestData().activeTasks());
+
+        // The role gains a task; the other two roles are untouched.
+        streamsRebalanceData.setReconciledAssignment(withTheTask);
+        assertOwnedTasksFullyReported(withTheTask, heartbeatState.buildRequestData());
+        assertNull(heartbeatState.buildRequestData().activeTasks());
+
+        // The role loses it again; the other two roles are untouched. Its own list has to go out as an empty list
+        // rather than null, since that is what tells the broker the task was released.
+        streamsRebalanceData.setReconciledAssignment(withoutTheTask);
+        assertOwnedTasksFullyReported(withoutTheTask, heartbeatState.buildRequestData());
+    }
+
+    private static void assertOwnedTasksFullyReported(
+        final StreamsRebalanceData.Assignment expected,
+        final StreamsGroupHeartbeatRequestData actual
+    ) {
+        assertNotNull(actual.activeTasks(), "active tasks were not reported");
+        assertNotNull(actual.standbyTasks(), "standby tasks were not reported");
+        assertNotNull(actual.warmupTasks(), "warm-up tasks were not reported");
+        assertTaskIdsEquals(toTaskIds(expected.activeTasks()), actual.activeTasks());
+        assertTaskIdsEquals(toTaskIds(expected.standbyTasks()), actual.standbyTasks());
+        assertTaskIdsEquals(toTaskIds(expected.warmupTasks()), actual.warmupTasks());
+    }
+
+    private static List<StreamsGroupHeartbeatRequestData.TaskIds> toTaskIds(
+        final Set<StreamsRebalanceData.TaskId> tasks
+    ) {
+        return tasks.stream()
+            .collect(Collectors.groupingBy(
+                StreamsRebalanceData.TaskId::subtopologyId,
+                Collectors.mapping(StreamsRebalanceData.TaskId::partitionId, Collectors.toList())))
+            .entrySet().stream()
+            .map(entry -> new StreamsGroupHeartbeatRequestData.TaskIds()
+                .setSubtopologyId(entry.getKey())
+                .setPartitions(entry.getValue()))
+            .collect(Collectors.toList());
     }
 
     @ParameterizedTest
