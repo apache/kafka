@@ -35,25 +35,14 @@ public class RaftClientVotersSupplierTest {
     }
 
     @Test
-    public void testVoterIds() {
+    public void testVoterSupplier() {
         RaftClient<?> raftClient = Mockito.mock(RaftClient.class);
-        Mockito.when(raftClient.latestVoterSet()).thenReturn(voterSet(0, 1, 2));
-
-        assertEquals(Set.of(0, 1, 2), new RaftClientVotersSupplier(raftClient).get());
-    }
-
-    @Test
-    public void testVoterIdsAreReadOnEveryCall() {
-        RaftClient<?> raftClient = Mockito.mock(RaftClient.class);
-        Mockito.when(raftClient.latestVoterSet()).thenReturn(voterSet(0, 1, 2));
         RaftClientVotersSupplier votersSupplier = new RaftClientVotersSupplier(raftClient);
 
+        Mockito.when(raftClient.latestVoterSet()).thenReturn(voterSet(0, 1, 2));
         assertEquals(Set.of(0, 1, 2), votersSupplier.get());
 
-        // The voter set changes when the cluster supports dynamic quorums, and the latest voter set
-        // is used even if the VotersRecord which removed 2 and added 3 has not been committed yet.
-        Mockito.when(raftClient.latestVoterSet()).thenReturn(voterSet(0, 1, 3));
-
-        assertEquals(Set.of(0, 1, 3), votersSupplier.get());
+        Mockito.when(raftClient.latestVoterSet()).thenReturn(voterSet(0, 1));
+        assertEquals(Set.of(0, 1), votersSupplier.get());
     }
 }

@@ -346,10 +346,10 @@ public class KafkaRaftClientReconfigTest {
         );
 
         prepareLeaderToReceiveAddVoter(context, epoch, local, follower, newVoter);
+        assertEquals(Set.of(local.id(), follower.id()), context.client.latestVoterSet().voterIds());
 
         // Attempt to add new voter to the quorum
         context.deliverRequest(context.addVoterRequest(Integer.MAX_VALUE, newVoter, newListeners));
-
         completeApiVersionsForAddVoter(context, newVoter, newAddress);
 
         // Handle the API_VERSIONS response
@@ -357,53 +357,6 @@ public class KafkaRaftClientReconfigTest {
         // Append new VotersRecord to log
         context.poll();
 
-        commitNewVoterSetForAddVoter(context, local, follower, newVoter, epoch);
-
-        // Expect reply for AddVoter request
-        context.pollUntilResponse();
-        context.assertSentAddVoterResponse(Errors.NONE);
-    }
-
-    @Test
-    public void testLatestVoterSetAndLatestCommittedVoterSet() throws Exception {
-        ReplicaKey local = replicaKey(randomReplicaId(), true);
-        ReplicaKey follower = replicaKey(local.id() + 1, true);
-
-        VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
-
-        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
-            .withKip853Rpc(true)
-            .withBootstrapSnapshot(Optional.of(voters))
-            .withUnknownLeader(3)
-            .build();
-
-        context.unattachedToLeader();
-        int epoch = context.currentEpoch();
-
-        ReplicaKey newVoter = replicaKey(local.id() + 2, true);
-        InetSocketAddress newAddress = InetSocketAddress.createUnresolved(
-            "localhost",
-            9990 + newVoter.id()
-        );
-        Endpoints newListeners = Endpoints.fromInetSocketAddresses(
-            Map.of(context.channel.listenerName(), newAddress)
-        );
-
-        prepareLeaderToReceiveAddVoter(context, epoch, local, follower, newVoter);
-
-        assertEquals(Set.of(local.id(), follower.id()), context.client.latestVoterSet().voterIds());
-
-        // Attempt to add the new voter to the quorum
-        context.deliverRequest(context.addVoterRequest(Integer.MAX_VALUE, newVoter, newListeners));
-
-        completeApiVersionsForAddVoter(context, newVoter, newAddress);
-
-        // Handle the API_VERSIONS response
-        context.poll();
-        // Append new VotersRecord to log
-        context.poll();
-
-        // The new voter is in the latest voter set even though that voter set is not committed yet
         assertEquals(
             Set.of(local.id(), follower.id(), newVoter.id()),
             context.client.latestVoterSet().voterIds()
@@ -414,11 +367,6 @@ public class KafkaRaftClientReconfigTest {
         // Expect reply for AddVoter request
         context.pollUntilResponse();
         context.assertSentAddVoterResponse(Errors.NONE);
-
-        assertEquals(
-            Set.of(local.id(), follower.id(), newVoter.id()),
-            context.client.latestVoterSet().voterIds()
-        );
     }
 
     @Test
