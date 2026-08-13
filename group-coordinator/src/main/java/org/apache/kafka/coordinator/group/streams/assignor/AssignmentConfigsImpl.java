@@ -62,7 +62,8 @@ public record AssignmentConfigsImpl(
             return DEFAULT;
         }
         // The rack-aware assignment tags are only recorded when any are configured, so an absent value means the
-        // configuration is at its default.
+        // configuration is at its default. Configs added after 4.3 may be absent from older records, so they must
+        // be read like this, with getOrDefault against their static default -- never with a bare get.
         String rackAwareAssignmentTags = configs.getOrDefault(
             RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT);
         return new AssignmentConfigsImpl(
@@ -74,6 +75,9 @@ public record AssignmentConfigsImpl(
     /**
      * Converts these configs into the map recorded for the group, which {@link #fromMap} reads back.
      * The map keeps the shape older brokers record, or a rolling upgrade reads it as a config change.
+     * A config added to this record must also be written here, omitted at its default value -- this is
+     * the one spot adding a record component does not break compilation, and forgetting it makes the
+     * dropped config bump the group epoch on every heartbeat.
      */
     public Map<String, String> toMap() {
         Map<String, String> configs = new TreeMap<>();

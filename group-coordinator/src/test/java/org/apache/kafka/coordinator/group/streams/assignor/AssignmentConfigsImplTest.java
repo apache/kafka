@@ -87,6 +87,8 @@ public class AssignmentConfigsImplTest {
     @Test
     void testRoundTrip() {
         // A configuration that does not survive the round trip bumps the group epoch on every heartbeat.
+        // The instance must differ from DEFAULT in every component, or a config forgotten in toMap is
+        // legitimately omitted there and the round trip passes without covering it.
         AssignmentConfigsImpl configs = new AssignmentConfigsImpl(2, List.of("tag1", "tag2"));
         assertEquals(configs, AssignmentConfigsImpl.fromMap(configs.toMap()));
         assertEquals(AssignmentConfigsImpl.DEFAULT, AssignmentConfigsImpl.fromMap(AssignmentConfigsImpl.DEFAULT.toMap()));
