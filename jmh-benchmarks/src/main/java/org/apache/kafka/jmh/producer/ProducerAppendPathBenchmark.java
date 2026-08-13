@@ -18,7 +18,10 @@
 package org.apache.kafka.jmh.producer;
 
 import org.apache.kafka.clients.MetadataSnapshot;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.clients.producer.internals.BufferPool;
+import org.apache.kafka.clients.producer.internals.ChunkedRecordAccumulator;
+import org.apache.kafka.clients.producer.internals.ProducerBatch;
 import org.apache.kafka.clients.producer.internals.RecordAccumulator;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
@@ -37,6 +40,7 @@ import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.Mode;
+import org.openjdk.jmh.annotations.OperationsPerInvocation;
 import org.openjdk.jmh.annotations.OutputTimeUnit;
 import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
@@ -46,7 +50,6 @@ import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
 
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -59,81 +62,109 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Measures {@link RecordAccumulator#append} under the default ({@code full}) buffer.memory
- * allocation strategy, so the same source can be run on two revisions to check the producer's
- * default append path for regressions.
+ * Measures the producer's append path — {@link RecordAccumulator#append} and the
+ * {@link ChunkedRecordAccumulator} override of it — so the same source can be run on two revisions
+ * to check for regressions. Results are reported per record appended.
  * <p>
- * Uses only APIs that predate the incremental allocation strategy, and references nothing from it,
- * so this compiles and runs unchanged on a revision that does not have it.
- * <p>
- * Two modes:
+ * <b>Modes.</b> Each covers a different part of the path, because a change can be cheap on one and
+ * expensive on another:
  * <ul>
- * <li>{@code steadyStateAppend} — all records to one partition. Dominated by per-append work, but
- *     not purely per-append: batches still fill and get replaced. At the default 16KB batch size that
- *     is about 1 append in 145 creating a batch at {@code valueSize=100} and 1 in 15 at
- *     {@code valueSize=1024}; at 256KB it is roughly 16x rarer.</li>
- * <li>{@code newBatchAppend} — one record per partition, so every append also creates a batch.
- *     Maximizes per-batch work, but read its <em>allocation</em> numbers with care: the per-partition
- *     deque map is a {@link org.apache.kafka.common.utils.internals.CopyOnWriteMap}, which copies the
- *     whole map on every insert, so filling 500 partitions costs on the order of 125k entry copies
- *     per invocation — several MB, dwarfing anything the append path itself allocates.</li>
+ * <li>{@code steadyStateAppend} — explicit partition, all records to partition 0. Almost every
+ *     append lands in the already-open batch, so this isolates per-append work. About one append in
+ *     {@code batch.size / record size} still creates a batch (1 in 145 at {@code valueSize=100} and
+ *     16KB batches, 1 in 15 at 1024; roughly 16x rarer at 256KB).</li>
+ * <li>{@code newBatchAppend} — explicit partition, one record per partition, so every append also
+ *     creates a batch. Isolates per-batch work: pool acquisition, {@link org.apache.kafka.common.record.internal.MemoryRecordsBuilder}
+ *     construction, and — under {@code incremental} — {@code allocateChunks} plus the
+ *     {@code ChunkedByteBufferOutputStream} wrapper.</li>
+ * <li>{@code builtInPartitionerAppend} — {@link RecordMetadata#UNKNOWN_PARTITION}, which is what a
+ *     producer sending without an explicit partition does. This is the only mode that reaches
+ *     {@code peekCurrentPartitionInfo}, {@code partitionChanged} and the byte accounting in
+ *     {@code updatePartitionInfo}, including the periodic partition switch. A regression confined to
+ *     the sticky-partitioner path shows up only here.</li>
+ * </ul>
+ * <b>Strategy.</b> The {@code strategy} parameter selects the accumulator and its
+ * {@code buffer.memory} allocation mode. It is a single parameter rather than a
+ * strategy-by-compression grid because {@link ChunkedRecordAccumulator} rejects compression today,
+ * so a grid would contain a cell that cannot run:
+ * <ul>
+ * <li>{@code full} — {@link RecordAccumulator} with {@link Compression#NONE}: one whole
+ *     {@code batch.size} buffer per batch.</li>
+ * <li>{@code full-lz4} — the same with lz4. Compression is a separate branch in
+ *     {@code MemoryRecordsBuilder.estimatedBytesWritten}, which is on the per-append path, so it
+ *     needs its own cell. Read a null result here as weaker evidence than one under {@code full}:
+ *     the compressor does real work per record and dilutes per-append effects.</li>
+ * <li>{@code incremental} — {@link ChunkedRecordAccumulator} over an
+ *     {@link BufferPool.AllocationMode#INCREMENTAL} pool: {@value ChunkedRecordAccumulator#CHUNK_SIZE}-byte
+ *     chunks attached on demand. Add an {@code incremental-lz4} value once that combination is
+ *     supported.</li>
+ * </ul>
+ * <b>Warm state.</b> The accumulator, pool and metrics are built once per trial and the batches are
+ * drained and returned to the pool before each invocation (see {@link #resetAccumulator()}), so the
+ * measured appends run against a producer that is warm in the two ways a real one is: the
+ * per-partition deque map is already populated, and the pool's free list already holds buffers. That
+ * matters most for {@code newBatchAppend}: the deque map is a
+ * {@link org.apache.kafka.common.utils.internals.CopyOnWriteMap}, so the <em>first</em> touch of each
+ * of 500 partitions copies the whole map — about 125k entry copies, which swamps the batch creation
+ * the mode exists to measure. A real producer pays that once in its lifetime, not once per batch.
+ * <p>
+ * <b>What this does not cover.</b>
+ * <ul>
+ * <li>Contention. Every mode here is single-threaded, so nothing exercises the {@code synchronized (dq)}
+ *     hold time, the {@code appendsInProgress} counter, or {@link BufferPool}'s lock. See
+ *     {@code ProducerAppendContentionBenchmark}.</li>
+ * <li>Memory pressure. The pool is sized so no append ever blocks, so neither
+ *     {@code max.block.ms}, {@code BufferExhaustedException}, nor — for {@code incremental} — the
+ *     non-blocking extension path's pool-exhausted fallback is reached.</li>
+ * <li>Records larger than {@code batch.size}, which take the non-poolable branch of
+ *     {@code BufferPool.allocate} under {@code full} and a multi-chunk initial acquisition under
+ *     {@code incremental}.</li>
+ * <li>Record headers: every record is appended with {@link Record#EMPTY_HEADERS}, so the header
+ *     loops in {@code estimateSizeInBytesUpperBound} and {@code DefaultRecord.writeTo} stay empty.</li>
+ * <li>Draining. Nothing here calls {@code ready()} or {@code drain()} on the measured path, so
+ *     {@code lingerMs} and {@code enableAdaptivePartitioning} never come into play.</li>
  * </ul>
  * {@link Time#SYSTEM} is used rather than {@code MockTime} so clock calls cost what they cost in
- * production. Nothing drains, so no memory is ever returned to the pool, and the pool is sized so no
- * append ever blocks. ({@code lingerMs} is {@code Integer.MAX_VALUE} for good measure, but
- * {@code append} never reads it — readiness is only evaluated in {@code ready()} and {@code drain()},
- * which this benchmark does not call.)
+ * production; the {@code nowMs} passed to {@code append} is read once per invocation rather than per
+ * record, so the benchmark measures {@code append} and not {@code System.currentTimeMillis}.
  * <p>
- * Limitations:
- * <ul>
- * <li>It passes an <em>explicit</em> partition, so {@code partitionInfo} is always null:
- *     {@code peekCurrentPartitionInfo} is never called and {@code updatePartitionInfo} returns
- *     immediately. A default producer sending without an explicit partition goes through both, so a
- *     regression confined to the sticky-partitioner path would not show up here.</li>
- * <li>It uses the {@link RecordAccumulator} constructor which defaults
- *     {@code PartitionerConfig} to {@code (false, 0, false, "")}, where a default producer builds
- *     {@code enableAdaptivePartitioning = true}. That field is read only in {@code partitionReady},
- *     on the drain path this benchmark never invokes, so it cannot affect these measurements. The
- *     13-argument constructor exists on both revisions, so switching to it would cost no
- *     cross-revision compatibility.</li>
- * </ul>
+ * The full parameter matrix is 3 strategies x 2 batch sizes x 2 value sizes x 3 modes. Run a subset
+ * with, for example,
+ * {@code jmh.sh -p strategy=full,incremental -p batchSize=16384 ProducerAppendPathBenchmark.steadyStateAppend},
+ * and add {@code -prof gc} to compare allocation.
  */
 @State(Scope.Benchmark)
 @Fork(value = 3, jvmArgs = {"-Xmx3g"})
-@Warmup(iterations = 5)
-@Measurement(iterations = 5)
+@Warmup(iterations = 5, time = 1)
+@Measurement(iterations = 10, time = 1)
 @BenchmarkMode(Mode.AverageTime)
-@OutputTimeUnit(TimeUnit.MILLISECONDS)
+@OutputTimeUnit(TimeUnit.NANOSECONDS)
 public class ProducerAppendPathBenchmark {
 
     private static final String TOPIC = "test";
     private static final long TOTAL_MEMORY = 512 * 1024 * 1024L;
     private static final int STEADY_STATE_RECORDS = 10_000;
-    /** One append per partition in newBatchAppend, so this is also that mode's record count. */
+    /** One append per partition in {@code newBatchAppend}, so this is also that mode's record count. */
     private static final int NUM_PARTITIONS = 500;
-    /**
-     * Above the worst-case batch count of either mode (~670, for 10k records of 1024 bytes into
-     * 16KB batches), so no batch creation misses the free list.
-     */
-    private static final int POOL_WARM_BUFFERS = 800;
+    /** The single partition {@code steadyStateAppend} writes to. */
+    private static final int STEADY_STATE_PARTITION = 0;
+    private static final String FULL = "full";
+    private static final String FULL_LZ4 = "full-lz4";
+    private static final String INCREMENTAL = "incremental";
+
+    @Param({FULL, FULL_LZ4, INCREMENTAL})
+    private String strategy;
 
     /**
-     * 16384 is the producer default. 262144 is included to check that a regression on the default
-     * path does not depend on batch size — a larger batch means more records per batch, so it shifts
-     * the ratio of per-append to per-batch work.
+     * 16384 is the producer default and equals {@link ChunkedRecordAccumulator#CHUNK_SIZE}, so under
+     * {@code incremental} a batch fits in one chunk and the mid-batch extension path never runs.
+     * 262144 spans 16 chunks, so extension is exercised — on the appends that cross a chunk boundary,
+     * about 1 in 145 at {@code valueSize=100} and 1 in 15 at 1024. Under {@code full} the second size
+     * checks that a regression does not depend on batch size, which shifts the ratio of per-append to
+     * per-batch work.
      */
     @Param({"16384", "262144"})
     private int batchSize;
-
-    /**
-     * Uncompressed and compressed are separate code paths in
-     * {@code MemoryRecordsBuilder.estimatedBytesWritten}, which is on the per-append path, so both
-     * need covering. Note the compressor does real work as each record is written, which reduces
-     * sensitivity to per-append effects — a null result under lz4 is weaker evidence than one under
-     * none. Measured here, lz4 allocates 1.1-8.9 kB per record against none's 149-181 bytes.
-     */
-    @Param({"none", "lz4"})
-    private String compressionType;
 
     /**
      * Size in bytes of the record's value. Not the total record size: the key is a fixed 3 bytes and
@@ -145,103 +176,176 @@ public class ProducerAppendPathBenchmark {
     @Param({"100", "1024"})
     private int valueSize;
 
-    private RecordAccumulator accum;
-    private Metrics metrics;
-    private Cluster cluster;
     private Time time;
     private byte[] key;
     private byte[] value;
-    private List<ByteBuffer> warmBuffers;
+    private Set<Node> nodes;
+    private MetadataSnapshot metadataSnapshot;
+    /** Covers only {@link #STEADY_STATE_PARTITION}. See {@link #resetAccumulator()}. */
+    private MetadataSnapshot singlePartitionSnapshot;
+    private Cluster cluster;
+
+    private Metrics metrics;
+    private RecordAccumulator accum;
 
     /**
-     * Allocated once per fork and reused, so seeding each invocation's pool costs no allocation.
-     * Note this inflates the pool's {@code availableMemory()} bookkeeping, since these buffers were
-     * never handed out by it — harmless here because the pool is sized so nothing ever blocks.
+     * Everything below is built once per trial and reused, so no per-invocation fixture allocates it.
+     * JMH excludes invocation-level fixture <em>time</em> from the result but not its allocation, so
+     * anything built here rather than per invocation also keeps {@code gc.alloc.rate.norm} readable.
      */
     @Setup(Level.Trial)
     public void setupTrial() {
-        warmBuffers = new ArrayList<>(POOL_WARM_BUFFERS);
-        for (int i = 0; i < POOL_WARM_BUFFERS; i++)
-            warmBuffers.add(ByteBuffer.allocate(batchSize));
-    }
-
-    @Setup(Level.Invocation)
-    public void setup() {
         time = Time.SYSTEM;
-        metrics = new Metrics(time);
-        cluster = createTestCluster();
         key = "key".getBytes(StandardCharsets.UTF_8);
         value = new byte[valueSize];
-        Compression compression = "lz4".equals(compressionType)
-                ? Compression.lz4().build()
-                : Compression.NONE;
-        BufferPool pool = new BufferPool(TOTAL_MEMORY, batchSize, metrics, time, "producer-metrics");
-        // Seed the free list so batch creation hits free.pollFirst() rather than a raw
-        // ByteBuffer.allocate plus zeroing, as it would in a warm producer. Nothing in this
-        // benchmark drains, so without this no buffer is ever returned and every batch pays an
-        // allocation production does not — enough to swamp the per-batch effects this benchmark
-        // exists to detect. The buffers themselves come from setupTrial, so reseeding adds no
-        // per-invocation *buffer* allocation, though it does regrow the pool's free deque.
-        // Everything else built below (Metrics, the 500-partition Cluster, the pool, the
-        // accumulator) is rebuilt per invocation, and JMH's gc profiler counts that in
-        // gc.alloc.rate.norm — so read the absolute B/op as an upper bound on what append itself
-        // allocates. It cancels when comparing two revisions, which is what this benchmark is for.
-        for (ByteBuffer warm : warmBuffers)
-            pool.deallocate(warm);
-        accum = new RecordAccumulator(
+
+        Node node = new Node(0, "localhost", 1111);
+        nodes = Set.of(node);
+        metadataSnapshot = createMetadataSnapshot(node, NUM_PARTITIONS);
+        singlePartitionSnapshot = createMetadataSnapshot(node, STEADY_STATE_PARTITION + 1);
+        cluster = metadataSnapshot.cluster();
+
+        metrics = new Metrics(time);
+        accum = createAccumulator();
+    }
+
+    /**
+     * Drain every buffered batch and return its memory to the pool, so each invocation starts from an
+     * empty accumulator without rebuilding one.
+     * <p>
+     * A reset is needed because nothing on the measured path drains: batches would otherwise pile up
+     * across the thousands of invocations in an iteration and exhaust the pool. Draining rather than
+     * rebuilding keeps the deque map and the pool's free list warm across invocations, which is both
+     * cheaper and closer to a running producer — see the class javadoc.
+     * <p>
+     * JMH excludes an invocation-level fixture's <em>time</em> from the result (it times the benchmark
+     * method itself once a fixture is present) but not its allocation, so the reset has to stay cheap
+     * to keep {@code gc.alloc.rate.norm} readable. Two passes are used for that reason, not for
+     * correctness: {@code drain} takes at most one batch per partition per call but walks every
+     * partition the snapshot places on the node, allocating a {@code TopicPartition} for each. All of
+     * {@code steadyStateAppend}'s batches sit on one partition, so draining them through the
+     * {@value #NUM_PARTITIONS}-partition snapshot would cost a full scan per batch — measured at 25 kB
+     * per batch, several times what the appends themselves allocate. The single-partition snapshot
+     * clears that case cheaply and the full one then collects whatever the other modes left. What
+     * remains, measured by running the reset twice and taking the difference, is 2-3 B/op: about 2% of
+     * the reported allocation, and identical across revisions.
+     */
+    @Setup(Level.Invocation)
+    public void resetAccumulator() {
+        long now = time.milliseconds();
+        drainAll(singlePartitionSnapshot, now);
+        drainAll(metadataSnapshot, now);
+    }
+
+    private void drainAll(MetadataSnapshot snapshot, long now) {
+        boolean drainedAny = true;
+        while (drainedAny) {
+            drainedAny = false;
+            Map<Integer, List<ProducerBatch>> drained = accum.drain(snapshot, nodes, Integer.MAX_VALUE, now);
+            for (List<ProducerBatch> batches : drained.values()) {
+                for (ProducerBatch batch : batches) {
+                    drainedAny = true;
+                    accum.completeBatch(batch);
+                    accum.deallocate(batch);
+                }
+            }
+        }
+    }
+
+    @TearDown(Level.Trial)
+    public void tearDown() {
+        accum.close();
+        metrics.close();
+    }
+
+    /**
+     * Per-append work: all records go to one explicit partition, so all but roughly one append per
+     * batch lands in the already-open batch.
+     */
+    @Benchmark
+    @OperationsPerInvocation(STEADY_STATE_RECORDS)
+    public void steadyStateAppend(Blackhole blackhole) throws InterruptedException {
+        long nowMs = time.milliseconds();
+        for (int i = 0; i < STEADY_STATE_RECORDS; i++) {
+            blackhole.consume(accum.append(TOPIC, STEADY_STATE_PARTITION, 0L, key, value, Record.EMPTY_HEADERS,
+                    null, 1000L, nowMs, cluster));
+        }
+    }
+
+    /** Per-batch work: each record goes to a fresh partition, so every append creates a batch. */
+    @Benchmark
+    @OperationsPerInvocation(NUM_PARTITIONS)
+    public void newBatchAppend(Blackhole blackhole) throws InterruptedException {
+        long nowMs = time.milliseconds();
+        for (int partition = 0; partition < NUM_PARTITIONS; partition++) {
+            blackhole.consume(accum.append(TOPIC, partition, 0L, key, value, Record.EMPTY_HEADERS,
+                    null, 1000L, nowMs, cluster));
+        }
+    }
+
+    /**
+     * The default producer path: no explicit partition, so the built-in partitioner picks one, the
+     * post-lock {@code partitionChanged} check runs, and {@code updatePartitionInfo} accumulates bytes
+     * and switches partition every {@code batch.size} bytes.
+     */
+    @Benchmark
+    @OperationsPerInvocation(STEADY_STATE_RECORDS)
+    public void builtInPartitionerAppend(Blackhole blackhole) throws InterruptedException {
+        long nowMs = time.milliseconds();
+        for (int i = 0; i < STEADY_STATE_RECORDS; i++) {
+            blackhole.consume(accum.append(TOPIC, RecordMetadata.UNKNOWN_PARTITION, 0L, key, value,
+                    Record.EMPTY_HEADERS, null, 1000L, nowMs, cluster));
+        }
+    }
+
+    private RecordAccumulator createAccumulator() {
+        // Matches what KafkaProducer builds: adaptive partitioning on, which is what
+        // builtInPartitionerAppend needs to exercise the real partition-switch accounting.
+        RecordAccumulator.PartitionerConfig partitionerConfig =
+                new RecordAccumulator.PartitionerConfig(true, 0, false, "");
+        if (INCREMENTAL.equals(strategy)) {
+            BufferPool pool = new BufferPool(TOTAL_MEMORY, ChunkedRecordAccumulator.CHUNK_SIZE, metrics, time,
+                    "producer-metrics", BufferPool.AllocationMode.INCREMENTAL);
+            return new ChunkedRecordAccumulator(
+                new LogContext(),
+                batchSize,
+                Compression.NONE,
+                Integer.MAX_VALUE,  // lingerMs, so nothing ever becomes ready
+                100L,               // retryBackoffMs
+                1000L,              // retryBackoffMaxMs
+                3200,               // deliveryTimeoutMs
+                partitionerConfig,
+                metrics,
+                "producer-metrics",
+                time,
+                null,               // transactionManager
+                pool
+            );
+        }
+        Compression compression = FULL_LZ4.equals(strategy) ? Compression.lz4().build() : Compression.NONE;
+        BufferPool pool = new BufferPool(TOTAL_MEMORY, batchSize, metrics, time, "producer-metrics",
+                BufferPool.AllocationMode.FULL);
+        return new RecordAccumulator(
             new LogContext(),
             batchSize,
             compression,
-            Integer.MAX_VALUE,  // lingerMs, so nothing ever becomes ready
-            100L,               // retryBackoffMs
-            1000L,              // retryBackoffMaxMs
-            3200,               // deliveryTimeoutMs
+            Integer.MAX_VALUE,
+            100L,
+            1000L,
+            3200,
+            partitionerConfig,
             metrics,
             "producer-metrics",
             time,
-            null,               // transactionManager
+            null,
             pool
         );
     }
 
-    @TearDown(Level.Invocation)
-    public void tearDown() {
-        if (accum != null)
-            accum.close();
-        if (metrics != null)
-            metrics.close();
-    }
-
-    /**
-     * Mostly per-append work: records go to one partition, so an append lands in the already-open
-     * batch unless it has filled (about 1 in 145 at {@code valueSize=100}, 1 in 15 at 1024).
-     */
-    @Benchmark
-    public void steadyStateAppend(Blackhole blackhole) throws InterruptedException {
-        for (int i = 0; i < STEADY_STATE_RECORDS; i++) {
-            blackhole.consume(accum.append(TOPIC, 0, 0L, key, value, Record.EMPTY_HEADERS,
-                    null, 1000L, time.milliseconds(), cluster));
-        }
-    }
-
-    /**
-     * Per-batch work: each record goes to a fresh partition, so every append creates a batch. See the
-     * class javadoc before reading this mode's allocation numbers — the CopyOnWriteMap insert cost
-     * dominates them.
-     */
-    @Benchmark
-    public void newBatchAppend(Blackhole blackhole) throws InterruptedException {
-        for (int partition = 0; partition < NUM_PARTITIONS; partition++) {
-            blackhole.consume(accum.append(TOPIC, partition, 0L, key, value, Record.EMPTY_HEADERS,
-                    null, 1000L, time.milliseconds(), cluster));
-        }
-    }
-
-    private Cluster createTestCluster() {
-        Node node = new Node(0, "localhost", 1111);
-        Map<Integer, Node> nodes = Stream.of(node).collect(Collectors.toMap(Node::id, Function.identity()));
-        List<MetadataResponse.PartitionMetadata> partitions = new ArrayList<>(NUM_PARTITIONS);
-        for (int partition = 0; partition < NUM_PARTITIONS; partition++) {
+    private MetadataSnapshot createMetadataSnapshot(Node node, int partitionCount) {
+        Map<Integer, Node> nodesById = Stream.of(node).collect(Collectors.toMap(Node::id, Function.identity()));
+        List<MetadataResponse.PartitionMetadata> partitions = new ArrayList<>(partitionCount);
+        for (int partition = 0; partition < partitionCount; partition++) {
             partitions.add(new MetadataResponse.PartitionMetadata(
                 Errors.NONE,
                 new TopicPartition(TOPIC, partition),
@@ -252,9 +356,9 @@ public class ProducerAppendPathBenchmark {
                 null
             ));
         }
-        MetadataSnapshot metadataCache = new MetadataSnapshot(
+        return new MetadataSnapshot(
             null,
-            nodes,
+            nodesById,
             partitions,
             Set.of(),
             Set.of(),
@@ -262,6 +366,5 @@ public class ProducerAppendPathBenchmark {
             null,
             Map.of()
         );
-        return metadataCache.cluster();
     }
 }
