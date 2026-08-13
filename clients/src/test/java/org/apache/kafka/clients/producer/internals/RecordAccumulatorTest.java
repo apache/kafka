@@ -1560,34 +1560,24 @@ public class RecordAccumulatorTest {
         assertTrue(batches.get(node2.id()).isEmpty());
     }
 
-    /**
-     * The retry policy that bounds an append loop, on its own and without the interleavings needed to reach
-     * each branch through append: the first pass and one pass past the deadline are free, passes inside the
-     * deadline are always free, and giving up reports the cause of the pass that gave up.
-     */
     @Test
     public void testRetryPolicy() {
         RecordAccumulator accum = createTestRecordAccumulator(1024, 10 * 1024, Compression.NONE, 0);
         try {
-            RecordAccumulator.AppendAttemptState firstAttempt = RecordAccumulator.AppendAttemptState.FIRST_ATTEMPT;
-            RecordAccumulator.AppendAttemptState retrying = RecordAccumulator.AppendAttemptState.RETRYING;
-            RecordAccumulator.AppendAttemptState expired = RecordAccumulator.AppendAttemptState.RETRIES_EXPIRED;
-            long spent = time.milliseconds();            // a deadline that has already passed
-            long open = time.milliseconds() + 1000;      // and one that has not
+            long spent = time.milliseconds();            // a deadline that is up: reached, so no time is left
+            long open = time.milliseconds() + 1000;      // and one that is not
 
             // The first pass may always run, whether or not there is time left.
-            assertEquals(retrying, accum.throwIfNoMoreRetriesAllowed(firstAttempt, spent, false, topic));
-            assertEquals(retrying, accum.throwIfNoMoreRetriesAllowed(firstAttempt, open, false, topic));
+            accum.throwIfNoMoreRetriesAllowed(/* firstPass */ true, spent, false, topic);
+            accum.throwIfNoMoreRetriesAllowed(/* firstPass */ true, open, false, topic);
 
-            // Inside the deadline a retry is free and stays a retry, so the free pass is still in hand.
-            assertEquals(retrying, accum.throwIfNoMoreRetriesAllowed(retrying, open, false, topic));
+            // So may a retry, while there is time left.
+            accum.throwIfNoMoreRetriesAllowed(/* firstPass */ false, open, false, topic);
 
-            // Past the deadline, exactly one more pass.
-            assertEquals(expired, accum.throwIfNoMoreRetriesAllowed(retrying, spent, false, topic));
-
-            // And then it gives up, reporting the cause the last pass hit.
+            // A retry that finds the deadline gone gives up, reporting the cause the pass before it hit.
             TimeoutException timeout = assertThrows(TimeoutException.class,
-                    () -> accum.throwIfNoMoreRetriesAllowed(expired, spent, false, topic));
+                    () -> accum.throwIfNoMoreRetriesAllowed(false, spent, false, topic));
+            // BufferExhaustedException extends TimeoutException, so assertThrows above would accept it too.
             assertEquals(TimeoutException.class, timeout.getClass(), timeout.getMessage());
             assertTrue(timeout.getMessage().contains("kept retrying"), timeout.getMessage());
 
@@ -1597,7 +1587,7 @@ public class RecordAccumulatorTest {
             // A pass the pool refused is the only one reported as exhaustion, and it is the incremental
             // strategy's extension acquire that reaches this; pinned here because the policy decides it.
             BufferExhaustedException denied = assertThrows(BufferExhaustedException.class,
-                    () -> accum.throwIfNoMoreRetriesAllowed(expired, spent, true, topic));
+                    () -> accum.throwIfNoMoreRetriesAllowed(false, spent, true, topic));
             assertTrue(denied.getMessage().contains("Failed to allocate memory for a record"), denied.getMessage());
             assertEquals(1.0, (double) exhausted.metricValue(),
                     "giving up on a pass the pool refused must count the dropped record");

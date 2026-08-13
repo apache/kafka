@@ -414,7 +414,7 @@ public class RecordAccumulator {
      * </ul>
      * The deadline therefore bounds the loop as well as the waiting inside it.
      * Every acquire is bounded by the {@link #remainingTimeToBlockMs}.
-     * Every retry that wait for nothing is bounded too (e.g., the partition changed, the batch the pass
+     * Every retry that waits for nothing is bounded too (e.g., the partition changed, the batch the pass
      * read was replaced or filled under it).
      *
      * @param firstPass whether this is the append's first pass, which is always allowed no matter the deadline.
