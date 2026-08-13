@@ -2567,6 +2567,7 @@ org.apache.kafka.clients.consumer.internals.ShareSessionHandlerTest:
 - testSkipEmptyShareFetchWhenSessionEmpty
 - testTopicIdReplaced
 org.apache.kafka.clients.consumer.internals.StreamsGroupHeartbeatRequestManagerTest:
+- testBuildingHeartbeatAllOwnedTaskListsSentWhenOnlyOneRoleChanges
 - testBuildingHeartbeatAssignmentSentWhenChanged
 - testBuildingHeartbeatClientTagsSentWhenJoining
 - testBuildingHeartbeatEndpointSentWhenJoining
@@ -2758,6 +2759,9 @@ org.apache.kafka.clients.consumer.internals.StreamsRebalanceDataTest:
 - assignmentShouldNotAcceptNulls
 - assignmentShouldNotBeModifiable
 - emptyAssignmentShouldNotBeModifiable
+- endpointPartitionsShouldCopyPartitionsPassedToConstructor
+- endpointPartitionsShouldNotAcceptNulls
+- endpointPartitionsShouldNotBeModifiable
 - shouldCopyAssignment
 - shouldCopyEmptyAssignment
 - streamsRebalanceDataShouldBeAbleToUpdateHeartbeatIntervalMs
@@ -2777,6 +2781,7 @@ org.apache.kafka.clients.consumer.internals.StreamsRebalanceDataTest:
 - subtopologyShouldNotBeModifiable
 - taskIdShouldNotAcceptNulls
 - testAssignmentEqualsAndHashCode
+- testEndpointPartitionsEqualsAndHashCode
 - testTaskIdCompareTo
 - testTaskIdEqualsAndHashCode
 - topicInfoShouldNotAcceptNulls

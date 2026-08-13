@@ -298,6 +298,7 @@ org.apache.kafka.connect.runtime.AbstractHerderTest:
 - testConnectorStatusMissingPlugin
 - testConnectors
 - testConverterPluginConfig
+- testDifferenceInConfigDefAndValidation
 - testGenerateResultWithConfigValuesAllUsingConfigKeysAndWithNoErrors
 - testGenerateResultWithConfigValuesAllUsingConfigKeysAndWithSomeErrors
 - testGenerateResultWithConfigValuesMoreThanConfigKeysAndWithSomeErrors
