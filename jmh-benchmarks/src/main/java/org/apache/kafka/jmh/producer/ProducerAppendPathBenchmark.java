@@ -62,76 +62,49 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Measures the producer's append path — {@link RecordAccumulator#append} and the
- * {@link ChunkedRecordAccumulator} override of it — so the same source can be run on two revisions
- * to check for regressions. Results are reported per record appended.
+ * Measures the producer's append path: {@link RecordAccumulator#append} and the
+ * {@link ChunkedRecordAccumulator} override of it. Run the same source on two revisions to detect
+ * regressions.
  * <p>
- * <b>Modes.</b> Each covers a different part of the path, because a change can be cheap on one and
- * expensive on another:
- * <ul>
- * <li>{@code steadyStateAppend} — explicit partition, all records to partition 0. Almost every
- *     append lands in the already-open batch, so this isolates per-append work. About one append in
- *     {@code batch.size / record size} still creates a batch (1 in 145 at {@code valueSize=100} and
- *     16KB batches, 1 in 15 at 1024; roughly 16x rarer at 256KB).</li>
- * <li>{@code newBatchAppend} — explicit partition, one record per partition, so every append also
- *     creates a batch. Isolates per-batch work: pool acquisition, {@link org.apache.kafka.common.record.internal.MemoryRecordsBuilder}
- *     construction, and — under {@code incremental} — {@code allocateChunks} plus the
- *     {@code ChunkedByteBufferOutputStream} wrapper.</li>
- * <li>{@code builtInPartitionerAppend} — {@link RecordMetadata#UNKNOWN_PARTITION}, which is what a
- *     producer sending without an explicit partition does. This is the only mode that reaches
- *     {@code peekCurrentPartitionInfo}, {@code partitionChanged} and the byte accounting in
- *     {@code updatePartitionInfo}, including the periodic partition switch. A regression confined to
- *     the sticky-partitioner path shows up only here.</li>
- * </ul>
- * <b>Strategy.</b> The {@code strategy} parameter selects the accumulator and its
- * {@code buffer.memory} allocation mode. It is a single parameter rather than a
- * strategy-by-compression grid because {@link ChunkedRecordAccumulator} rejects compression today,
- * so a grid would contain a cell that cannot run:
- * <ul>
- * <li>{@code full} — {@link RecordAccumulator} with {@link Compression#NONE}: one whole
- *     {@code batch.size} buffer per batch.</li>
- * <li>{@code full-lz4} — the same with lz4. Compression is a separate branch in
- *     {@code MemoryRecordsBuilder.estimatedBytesWritten}, which is on the per-append path, so it
- *     needs its own cell. Read a null result here as weaker evidence than one under {@code full}:
- *     the compressor does real work per record and dilutes per-append effects.</li>
- * <li>{@code incremental} — {@link ChunkedRecordAccumulator} over an
- *     {@link BufferPool.AllocationMode#INCREMENTAL} pool: {@value ChunkedRecordAccumulator#CHUNK_SIZE}-byte
- *     chunks attached on demand. Add an {@code incremental-lz4} value once that combination is
- *     supported.</li>
- * </ul>
- * <b>Warm state.</b> The accumulator, pool and metrics are built once per trial and the batches are
- * drained and returned to the pool before each invocation (see {@link #resetAccumulator()}), so the
- * measured appends run against a producer that is warm in the two ways a real one is: the
- * per-partition deque map is already populated, and the pool's free list already holds buffers. That
- * matters most for {@code newBatchAppend}: the deque map is a
- * {@link org.apache.kafka.common.utils.internals.CopyOnWriteMap}, so the <em>first</em> touch of each
- * of 500 partitions copies the whole map — about 125k entry copies, which swamps the batch creation
- * the mode exists to measure. A real producer pays that once in its lifetime, not once per batch.
+ * <b>Results are nanoseconds per record appended</b>, and under {@code -prof gc}, bytes allocated per
+ * record. The accumulator is built once per trial and drained between invocations, so appends are
+ * measured against a warm producer: partition map already populated, buffers already on the pool's
+ * free list. {@link Time#SYSTEM} is used, but {@code nowMs} is read once per invocation, so a clock
+ * read is not part of the per-record cost.
  * <p>
- * <b>What this does not cover.</b>
+ * <b>Modes</b>, each loading a different part of the path:
  * <ul>
- * <li>Contention. Every mode here is single-threaded, so nothing exercises the {@code synchronized (dq)}
- *     hold time, the {@code appendsInProgress} counter, or {@link BufferPool}'s lock. See
- *     {@code ProducerAppendContentionBenchmark}.</li>
- * <li>Memory pressure. The pool is sized so no append ever blocks, so neither
- *     {@code max.block.ms}, {@code BufferExhaustedException}, nor — for {@code incremental} — the
- *     non-blocking extension path's pool-exhausted fallback is reached.</li>
- * <li>Records larger than {@code batch.size}, which take the non-poolable branch of
- *     {@code BufferPool.allocate} under {@code full} and a multi-chunk initial acquisition under
- *     {@code incremental}.</li>
- * <li>Record headers: every record is appended with {@link Record#EMPTY_HEADERS}, so the header
- *     loops in {@code estimateSizeInBytesUpperBound} and {@code DefaultRecord.writeTo} stay empty.</li>
- * <li>Draining. Nothing here calls {@code ready()} or {@code drain()} on the measured path, so
- *     {@code lingerMs} and {@code enableAdaptivePartitioning} never come into play.</li>
+ * <li>{@code steadyStateAppend} — one explicit partition. Per-append work: nearly every record lands
+ *     in the open batch.</li>
+ * <li>{@code newBatchAppend} — one record per partition, so every append also creates a batch.
+ *     Per-batch work: pool acquisition, builder construction, and under {@code incremental}
+ *     {@code allocateChunks}.</li>
+ * <li>{@code builtInPartitionerAppend} — no explicit partition, as a default producer sends. The only
+ *     mode reaching {@code peekCurrentPartitionInfo}, {@code partitionChanged} and
+ *     {@code updatePartitionInfo}.</li>
  * </ul>
- * {@link Time#SYSTEM} is used rather than {@code MockTime} so clock calls cost what they cost in
- * production; the {@code nowMs} passed to {@code append} is read once per invocation rather than per
- * record, so the benchmark measures {@code append} and not {@code System.currentTimeMillis}.
+ * <b>Strategies:</b> {@code full} is today's {@code buffer.memory} behaviour, a whole
+ * {@code batch.size} buffer per batch; {@code full-lz4} the same compressed, which is a separate
+ * branch of the per-append size estimate; {@code incremental} is {@link ChunkedRecordAccumulator} over
+ * an {@link BufferPool.AllocationMode#INCREMENTAL} pool, taking
+ * {@value ChunkedRecordAccumulator#CHUNK_SIZE}-byte chunks on demand. One parameter rather than a
+ * strategy-by-compression grid, since the chunked accumulator rejects compression; add
+ * {@code incremental-lz4} when it stops doing so.
  * <p>
- * The full parameter matrix is 3 strategies x 2 batch sizes x 2 value sizes x 3 modes. Run a subset
- * with, for example,
- * {@code jmh.sh -p strategy=full,incremental -p batchSize=16384 ProducerAppendPathBenchmark.steadyStateAppend},
- * and add {@code -prof gc} to compare allocation.
+ * <b>Reading allocation.</b> {@code gc.alloc.rate.norm} also counts the per-invocation reset
+ * ({@link #resetAccumulator()}): 2-16% of the figure under {@code full}, but 45-90% under
+ * {@code incremental}, whose batches are flattened as they drain. That pedestal is identical on both
+ * sides of a revision comparison and cancels there; it does not cancel between strategies. Timing is
+ * clean — JMH does not count fixture time.
+ * <p>
+ * <b>Not covered:</b> contention (see {@code ProducerAppendContentionBenchmark}); memory pressure, as
+ * the pool never blocks, leaving {@code max.block.ms} and the incremental pool-exhausted fallback
+ * unreached; records above {@code batch.size}; non-empty headers; and chunk extension at
+ * {@code batchSize=16384}, where a batch is a single chunk — only 262144 extends, and only on 5.9% of
+ * appends at {@code valueSize=1024} and 0.6% at 100.
+ * <p>
+ * Run a subset with, for example,
+ * {@code jmh.sh -p strategy=full,incremental -p batchSize=16384 ProducerAppendPathBenchmark.steadyStateAppend}.
  */
 @State(Scope.Benchmark)
 @Fork(value = 3, jvmArgs = {"-Xmx3g"})
@@ -157,21 +130,15 @@ public class ProducerAppendPathBenchmark {
 
     /**
      * 16384 is the producer default and equals {@link ChunkedRecordAccumulator#CHUNK_SIZE}, so under
-     * {@code incremental} a batch fits in one chunk and the mid-batch extension path never runs.
-     * 262144 spans 16 chunks, so extension is exercised — on the appends that cross a chunk boundary,
-     * about 1 in 145 at {@code valueSize=100} and 1 in 15 at 1024. Under {@code full} the second size
-     * checks that a regression does not depend on batch size, which shifts the ratio of per-append to
-     * per-batch work.
+     * {@code incremental} a batch is one chunk and never extends; 262144 spans 16 and does. Under
+     * {@code full} the larger size shifts the ratio of per-append to per-batch work.
      */
     @Param({"16384", "262144"})
     private int batchSize;
 
     /**
-     * Size in bytes of the record's value. Not the total record size: the key is a fixed 3 bytes and
-     * V2 record overhead adds about another 9 bytes of varints (length, attributes, timestamp and
-     * offset deltas, key and value lengths, header count), so the total is ~112 bytes at
-     * {@code valueSize=100} and ~1036 at 1024. Parameterized to separate fixed per-append cost from
-     * per-byte cost — a fixed cost is a much larger share of a small record.
+     * Value bytes, not total record size — the 3-byte key and V2 varint overhead add about 12 more,
+     * giving ~112 and ~1036 byte records. Separates fixed per-append cost from per-byte cost.
      */
     @Param({"100", "1024"})
     private int valueSize;
@@ -188,11 +155,7 @@ public class ProducerAppendPathBenchmark {
     private Metrics metrics;
     private RecordAccumulator accum;
 
-    /**
-     * Everything below is built once per trial and reused, so no per-invocation fixture allocates it.
-     * JMH excludes invocation-level fixture <em>time</em> from the result but not its allocation, so
-     * anything built here rather than per invocation also keeps {@code gc.alloc.rate.norm} readable.
-     */
+    /** Built once per trial, so the per-invocation reset neither rebuilds nor re-allocates any of it. */
     @Setup(Level.Trial)
     public void setupTrial() {
         time = Time.SYSTEM;
@@ -210,25 +173,22 @@ public class ProducerAppendPathBenchmark {
     }
 
     /**
-     * Drain every buffered batch and return its memory to the pool, so each invocation starts from an
-     * empty accumulator without rebuilding one.
+     * Empties the accumulator between invocations by draining every batch and returning its memory to
+     * the pool. Needed because nothing on the measured path drains, so batches would otherwise pile up
+     * across an iteration's invocations and exhaust the pool. Draining rather than rebuilding leaves the
+     * partition map and the pool's free list warm, as in a running producer.
      * <p>
-     * A reset is needed because nothing on the measured path drains: batches would otherwise pile up
-     * across the thousands of invocations in an iteration and exhaust the pool. Draining rather than
-     * rebuilding keeps the deque map and the pool's free list warm across invocations, which is both
-     * cheaper and closer to a running producer — see the class javadoc.
+     * Two passes for speed: {@code drain} takes one batch per partition per call but scans every
+     * partition the snapshot puts on the node, so draining {@code steadyStateAppend}'s single partition
+     * through the {@value #NUM_PARTITIONS}-partition snapshot costs 25 kB per batch. The small snapshot
+     * clears that case first, the full one collects what the other modes leave.
      * <p>
-     * JMH excludes an invocation-level fixture's <em>time</em> from the result (it times the benchmark
-     * method itself once a fixture is present) but not its allocation, so the reset has to stay cheap
-     * to keep {@code gc.alloc.rate.norm} readable. Two passes are used for that reason, not for
-     * correctness: {@code drain} takes at most one batch per partition per call but walks every
-     * partition the snapshot places on the node, allocating a {@code TopicPartition} for each. All of
-     * {@code steadyStateAppend}'s batches sit on one partition, so draining them through the
-     * {@value #NUM_PARTITIONS}-partition snapshot would cost a full scan per batch — measured at 25 kB
-     * per batch, several times what the appends themselves allocate. The single-partition snapshot
-     * clears that case cheaply and the full one then collects whatever the other modes left. What
-     * remains, measured by running the reset twice and taking the difference, is 2-3 B/op: about 2% of
-     * the reported allocation, and identical across revisions.
+     * The reset's allocation is charged to {@code gc.alloc.rate.norm}, though its time is not: 2.7-29.5 B
+     * per record under {@code full}, but 116-1078 B under {@code incremental}, where draining closes each
+     * batch and closing a chunked batch flattens its chunks into one buffer — roughly a record's worth
+     * per record (see {@code ChunkedByteBufferOutputStream.buffer()}, KAFKA-20580). Measured by sampling
+     * {@code getCurrentThreadAllocatedBytes} here; running the reset twice and differencing does not
+     * measure it, since the second pass finds the deques already empty.
      */
     @Setup(Level.Invocation)
     public void resetAccumulator() {
