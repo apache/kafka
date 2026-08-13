@@ -77,7 +77,7 @@ public class SaslPlaintextConsumerTest {
     private static File workingDir;
     private static Properties kdcConf = MiniKdc.createConfig();
     private static MiniKdc kdc;
-    
+
     public SaslPlaintextConsumerTest(ClusterInstance cluster) {
         this.cluster = cluster;
     }
@@ -107,7 +107,7 @@ public class SaslPlaintextConsumerTest {
         kdc = new MiniKdc(kdcConf, workingDir);
         kdc.start();
         kdc.createPrincipal(
-            serverKeytabFile.get(), 
+            serverKeytabFile.get(),
             List.of(KAFKA_SERVER_PRINCIPAL_UNQUALIFIED_NAME + "/localhost")
         );
         kdc.createPrincipal(
@@ -120,12 +120,12 @@ public class SaslPlaintextConsumerTest {
         // This will cause a reload of the Configuration singleton when `getConfiguration` is called
         Configuration.setConfiguration(null);
     }
-    
+
     @BeforeEach
     public void beforeEach() throws InterruptedException {
         cluster.createTopic(ClientsTestUtils.BaseConsumerTestcase.TOPIC, 2, (short) ClientsTestUtils.BaseConsumerTestcase.BROKER_COUNT);
     }
-    
+
     @AfterAll
     public static void teardown() {
         if (kdc != null)
@@ -146,7 +146,7 @@ public class SaslPlaintextConsumerTest {
     }
 
     @ClusterTest(
-            brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT
+        brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT
     )
     public void testAsyncConsumerSimpleConsumption() throws InterruptedException {
         testSimpleConsumption(cluster, Map.of(
@@ -155,7 +155,7 @@ public class SaslPlaintextConsumerTest {
     }
 
     @ClusterTest(
-            brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT
+        brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT
     )
     public void testClassicConsumerClusterResourceListener() throws InterruptedException {
         testClusterResourceListener(cluster, Map.of(
@@ -164,7 +164,7 @@ public class SaslPlaintextConsumerTest {
     }
 
     @ClusterTest(
-            brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT
+        brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT
     )
     public void testAsyncConsumerClusterResourceListener() throws InterruptedException {
         testClusterResourceListener(cluster, Map.of(
@@ -173,7 +173,7 @@ public class SaslPlaintextConsumerTest {
     }
 
     @ClusterTest(
-            brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT
+        brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT
     )
     public void testClassicConsumerCoordinatorFailover() throws InterruptedException {
         Map<String, Object> config = Map.of(
@@ -187,7 +187,7 @@ public class SaslPlaintextConsumerTest {
     }
 
     @ClusterTest(
-            brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT
+        brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT
     )
     public void testAsyncConsumeCoordinatorFailover() throws InterruptedException {
         Map<String, Object> config = Map.of(
