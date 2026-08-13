@@ -23033,10 +23033,8 @@ public class GroupMetadataManagerTest {
 
     @Test
     public void testStreamsGroupEpochBumpsOnlyWhenRackAwareAssignmentTagsLeaveOrReturnToTheirDefault() {
-        // rack.aware.assignment.tags walks default -> zone -> default. Only the two real changes may bump the
-        // group epoch, and the map recorded at either end of the walk must hold no tags at all: that is what a
-        // broker that predates the configuration records, and what it recomputes when a group's coordinator
-        // moves to it during a rolling upgrade.
+        // rack.aware.assignment.tags walks default -> zone -> default. Only the two real changes may bump
+        // the group epoch, and the map recorded at either end must hold no tags, like older brokers record.
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
         String subtopology1 = "subtopology1";
@@ -23109,8 +23107,7 @@ public class GroupMetadataManagerTest {
         assertEquals("zone", group.lastAssignmentConfigs().get("rack.aware.assignment.tags"));
         assertEquals(List.of("zone"), assignor.lastPassedAssignmentConfigs().rackAwareAssignmentTags());
 
-        // Clearing the tags is a change as well, even though the value is back at its default. The configuration
-        // then drops out of the map entirely, which is what a broker that predates it records too.
+        // Clearing the tags is a change too, even though the value is back at its default.
         context.groupConfigManager.updateGroupConfig(groupId, new Properties());
         assignor.prepareGroupAssignment(
             Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
@@ -23121,10 +23118,7 @@ public class GroupMetadataManagerTest {
 
         assertEquals(12, result.response().data().memberEpoch());
         assertEquals(12, group.groupEpoch());
-        // Asserted in full, and not just for the absence of the tags: this is exactly the map 4.2 and 4.3 record
-        // for a group that sets nothing. A configuration recorded here at its default value is read as a change
-        // by a coordinator that predates it, and fromMap cannot repair that - it only runs on this side of the
-        // upgrade.
+        // Asserted in full: this is exactly the map 4.2 and 4.3 record for a group that sets nothing.
         Map<String, String> defaultConfigs =
             Map.of("num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT));
         assertEquals(defaultConfigs, group.lastAssignmentConfigs());
@@ -23133,9 +23127,8 @@ public class GroupMetadataManagerTest {
 
     @Test
     public void testStreamsGroupEpochDoesNotIncreaseWhenEveryAssignmentConfigIsAtItsDefault() {
-        // Guards the parsing in AssignmentConfigsImpl.fromMap: a configuration absent from the recorded map must
-        // be filled in with its static default. A group that sets nothing must compare equal to the empty
-        // configurations a version recording none of them wrote, or upgrading the broker rebalances every group.
+        // A group that sets nothing must compare equal to the empty map an older version recorded, or
+        // upgrading the broker rebalances every group.
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
         String subtopology1 = "subtopology1";
@@ -23151,8 +23144,7 @@ public class GroupMetadataManagerTest {
             .buildCoordinatorMetadataImage();
 
         MockTaskAssignor assignor = new MockTaskAssignor("sticky");
-        // No assignment configuration is set on the broker, and none on the group either: every one of them is left
-        // at the static default of CONFIG_DEF, which is what an upgraded broker computes for a group that sets none.
+        // Nothing is set on the broker or on the group: every configuration is at its static default.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withStreamsGroupTaskAssignors(List.of(assignor))
             .withMetadataImage(metadataImage)
@@ -23177,8 +23169,7 @@ public class GroupMetadataManagerTest {
 
         StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
 
-        // Nothing should be recomputed here. Prepared anyway, so that a spurious recompute reaches the assertion
-        // below instead of failing inside the assignor with an unrelated message.
+        // Nothing should be recomputed here; prepared anyway, so a spurious recompute reaches the assertion below.
         assignor.prepareGroupAssignment(
             Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                 TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)))
@@ -23189,9 +23180,8 @@ public class GroupMetadataManagerTest {
 
         assertTrue(
             result.records().stream().noneMatch(record -> record.key() instanceof StreamsGroupMetadataKey),
-            "Expected no StreamsGroupMetadata record, and therefore no group epoch bump. An assignment "
-                + "configuration that is absent from the recorded map, but not filled in with its static "
-                + "default by AssignmentConfigsImpl.fromMap, reads as a change here."
+            "Expected no StreamsGroupMetadata record, and therefore no group epoch bump. A configuration "
+                + "absent from the recorded map must parse to its static default."
         );
         assertEquals(10, result.response().data().memberEpoch());
         assertEquals(10, group.groupEpoch());

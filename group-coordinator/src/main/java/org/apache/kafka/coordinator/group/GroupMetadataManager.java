@@ -2227,9 +2227,8 @@ public class GroupMetadataManager {
             assignmentUpdate = AssignmentUpdate.RECOMPUTE;
         }
 
-        // Check if assignment configurations have changed. The recorded configurations are compared in their
-        // parsed form, so that a configuration that an older version wrote out explicitly at its default value
-        // does not read as a change.
+        // Check if assignment configurations have changed. The recorded map is parsed first, so a default
+        // value written out explicitly by an older version does not read as a change.
         AssignmentConfigsImpl currentAssignmentConfigs = streamsGroupAssignmentConfigs(groupId);
         if (assignmentUpdate == AssignmentUpdate.NONE
                 && !currentAssignmentConfigs.equals(AssignmentConfigsImpl.fromMap(group.lastAssignmentConfigs()))) {
@@ -4642,8 +4641,7 @@ public class GroupMetadataManager {
                 metadataImage,
                 records,
                 Optional.empty(),
-                // May replay empty from a record written before the configs were persisted; fromMap then falls
-                // back to the defaults.
+                // The recorded configs may replay as an empty map; fromMap then falls back to the defaults.
                 AssignmentConfigsImpl.fromMap(group.lastAssignmentConfigs()),
                 false
             );
