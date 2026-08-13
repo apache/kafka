@@ -621,7 +621,10 @@ public class InternalTopologyBuilder {
             throw new TopologyException("A different GlobalStateStore has already been added with the name " + storeName);
         }
 
-        stateFactories.put(storeName, storeFactory);
+        // Reuse existing compatible factory to preserve connectedProcessorNames (KAFKA-20464).
+        if (stateFactory == null || allowOverride) {
+            stateFactories.put(storeName, storeFactory);
+        }
 
         if (processorNames != null) {
             for (final String processorName : processorNames) {
