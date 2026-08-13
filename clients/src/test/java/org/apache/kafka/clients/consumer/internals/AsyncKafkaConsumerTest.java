@@ -2480,6 +2480,8 @@ public class AsyncKafkaConsumerTest {
         client.prepareResponseFrom(result, coordinator);
 
         SubscriptionState subscriptionState = mock(SubscriptionState.class);
+        SubscriptionPattern pattern = new SubscriptionPattern("t*");
+        when(subscriptionState.subscriptionPattern()).thenReturn(pattern);
 
         consumer = new AsyncKafkaConsumer<>(
             new LogContext(),
@@ -2493,9 +2495,7 @@ public class AsyncKafkaConsumerTest {
         );
         completeTopicRe2JPatternSubscriptionChangeEventSuccessfully();
 
-        SubscriptionPattern pattern = new SubscriptionPattern("t*");
         consumer.subscribe(pattern);
-        when(subscriptionState.subscriptionPattern()).thenReturn(pattern);
         TestUtils.waitForCondition(() -> {
             try {
                 // The request is generated in the background thread so allow for that

@@ -421,7 +421,7 @@ public class FetchRequestManagerTest {
     }
 
     @Test
-    public void testMaximumTimeToWaitBoundedWhenPartitionsSkippedDueToInflight() {
+    public void testMaximumTimeToWaitUnboundedWhenPartitionsSkippedDueToInflight() {
         buildFetcher();
 
         assignFromUser(singleton(tp0));
@@ -431,17 +431,35 @@ public class FetchRequestManagerTest {
         assertEquals(1, sendFetches());
         assertEquals(Long.MAX_VALUE, fetcher.maximumTimeToWait(time.milliseconds()));
 
-        // The in-flight request blocks the node, so the next prepare() skips the partition.
-        // maximumTimeToWait should now be bounded to retryBackoffMs.
+        // The in-flight request blocks the node, so the next prepare() skips the partition. maximumTimeToWait
+        // stays unbounded: the in-flight request's completion will wake the buffer regardless.
         assertEquals(0, sendFetches());
-        assertEquals(retryBackoffMs, fetcher.maximumTimeToWait(time.milliseconds()));
+        assertEquals(Long.MAX_VALUE, fetcher.maximumTimeToWait(time.milliseconds()));
 
         // Complete the in-flight request and consume the buffered data.
         client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
         networkClientDelegate.poll(time.timer(0));
         fetchRecords();
 
-        // A new fetch request can now be sent; maximumTimeToWait reverts to unbounded.
+        // A new fetch request can now be sent; maximumTimeToWait remains unbounded.
+        assertEquals(1, sendFetches());
+        assertEquals(Long.MAX_VALUE, fetcher.maximumTimeToWait(time.milliseconds()));
+    }
+
+    @Test
+    public void testMaximumTimeToWaitBoundedWhenPartitionsSkippedDueToBackoff() {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+        Node node = metadata.fetch().leaderFor(tp0);
+
+        client.backoff(node, 500);
+        assertEquals(0, sendFetches());
+        assertEquals(retryBackoffMs, fetcher.maximumTimeToWait(time.milliseconds()));
+
+        // Once the backoff clears, a fetch request can be sent and maximumTimeToWait reverts to unbounded.
+        time.sleep(500);
         assertEquals(1, sendFetches());
         assertEquals(Long.MAX_VALUE, fetcher.maximumTimeToWait(time.milliseconds()));
     }

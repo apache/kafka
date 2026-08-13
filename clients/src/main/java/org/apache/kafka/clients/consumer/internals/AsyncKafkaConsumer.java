@@ -1983,9 +1983,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             return fetch;
         }
 
-        long pollTimeout = isCommittedOffsetsManagementEnabled()
-                ? Math.min(applicationEventHandler.maximumTimeToWait(), timer.remainingMs())
-                : timer.remainingMs();
+        long pollTimeout = Math.min(applicationEventHandler.maximumTimeToWait(), timer.remainingMs());
         // With the non-blocking poll design, it's possible that at this point the background thread is
         // concurrently working to update positions. Therefore, a _copy_ of the current assignment is retrieved
         // and iterated looking for any partitions with invalid positions. This is done to avoid being stuck
@@ -2099,15 +2097,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             wakeupTrigger.clearTask();
         }
         return true;
-    }
-
-    /**
-     *
-     * Indicates if the consumer is using the Kafka-based offset management strategy,
-     * according to config {@link CommonClientConfigs#GROUP_ID_CONFIG}
-     */
-    private boolean isCommittedOffsetsManagementEnabled() {
-        return groupMetadata.get().isPresent();
     }
 
     /**

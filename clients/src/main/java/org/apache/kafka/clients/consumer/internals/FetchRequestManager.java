@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollRes
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest;
 import org.apache.kafka.clients.consumer.internals.events.CreateFetchRequestsEvent;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
@@ -31,6 +32,7 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
@@ -46,12 +48,6 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
     private final NetworkClientDelegate networkClientDelegate;
     private final long retryBackoffMs;
     private CompletableFuture<Void> pendingFetchRequestFuture;
-
-    // Whether the most recent prepare() produced no requests only because all fetchable-but-unbuffered
-    // partitions were skipped (backoff, in-flight request, etc.). This state can only change after an
-    // external event occurs. Read by maximumTimeToWait() to cap the application thread's wait at
-    // retryBackoffMs, since nothing else will wake it to retry sooner.
-    private boolean shouldBoundMaximumTimeToWait;
 
     FetchRequestManager(final LogContext logContext,
                         final Time time,
@@ -81,14 +77,24 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
     /**
      * {@inheritDoc}
      *
-     * If the most recent attempt to prepare fetch requests found nothing to send solely because every candidate 
-     * partition was skipped for a reason that only changes over time (reconnect backoff, an in-flight request, etc.), 
-     * nothing else will wake the application thread. In that case, its wait is bounded by {@code retryBackoffMs} to 
-     * ensure it wakes up and re-evaluates fetch eligibility periodically.
+     * Computed live from current state rather than cached from the last {@code prepare()} call, since that call
+     * happens before the network I/O step in {@link ConsumerNetworkThread#runOnce()} while this is read after it,
+     * and state (e.g. an in-flight request completing) can change in between.
+     *
+     * <p>If a request is in flight for any node, its completion will wake the application thread whatever the
+     * outcome, so no separate bound is needed. Otherwise, if some fetchable partition still isn't buffered, it was
+     * skipped for a reason that only changes over time (reconnect backoff, leader not yet known, etc.), and nothing
+     * else will wake the application thread, so its wait is bounded by {@code retryBackoffMs} instead.
      */
     @Override
     public long maximumTimeToWait(long currentTimeMs) {
-        return shouldBoundMaximumTimeToWait ? retryBackoffMs : Long.MAX_VALUE;
+        if (!nodesWithPendingFetchRequests.isEmpty()) {
+            return Long.MAX_VALUE;
+        }
+
+        Set<TopicPartition> buffered = fetchBuffer.bufferedPartitions();
+        boolean hasUnbufferedFetchablePartition = !subscriptions.fetchablePartitions(tp -> !buffered.contains(tp)).isEmpty();
+        return hasUnbufferedFetchablePartition ? retryBackoffMs : Long.MAX_VALUE;
     }
 
     /**
@@ -174,17 +180,11 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
                     // wake up the FetchBuffer so it doesn't needlessly wait for a wakeup that won't come until
                     // the data in the fetch buffer is consumed.
                     fetchBuffer.wakeup();
-                    shouldBoundMaximumTimeToWait = false;
-                } else {
-                    // Nothing was sent, and nothing else will prompt a wakeup, so bound the wait instead of
-                    // leaving the application thread blocked until an unrelated event happens to wake it.
-                    shouldBoundMaximumTimeToWait = true;
                 }
                 pendingFetchRequestFuture.complete(null);
                 return PollResult.EMPTY;
             }
 
-            shouldBoundMaximumTimeToWait = false;
             List<UnsentRequest> requests = fetchRequests.entrySet().stream().map(entry -> {
                 final Node fetchTarget = entry.getKey();
                 final FetchSessionHandler.FetchRequestData data = entry.getValue();
