@@ -1578,8 +1578,11 @@ public class RecordAccumulatorTest {
             TimeoutException timeout = assertThrows(TimeoutException.class,
                     () -> accum.throwIfNoMoreRetriesAllowed(false, spent, false, topic));
             // BufferExhaustedException extends TimeoutException, so assertThrows above would accept it too.
-            assertEquals(TimeoutException.class, timeout.getClass(), timeout.getMessage());
-            assertTrue(timeout.getMessage().contains("kept retrying"), timeout.getMessage());
+            assertEquals(TimeoutException.class, timeout.getClass(),
+                    "the pass that gave up was not denied memory, so it must fail with TimeoutException");
+            assertTrue(timeout.getMessage().contains("kept retrying"),
+                    "the failure must be the TimeoutException throwIfNoMoreRetriesAllowed "
+                            + "raises when a retry finds the deadline gone, but was: " + timeout.getMessage());
 
             KafkaMetric exhausted = metrics.metric(metrics.metricName("buffer-exhausted-total", "producer-metrics"));
             assertEquals(0.0, (double) exhausted.metricValue(), "a timeout is not a buffer-exhausted drop");
@@ -1588,7 +1591,8 @@ public class RecordAccumulatorTest {
             // strategy's extension acquire that reaches this; pinned here because the policy decides it.
             BufferExhaustedException denied = assertThrows(BufferExhaustedException.class,
                     () -> accum.throwIfNoMoreRetriesAllowed(false, spent, true, topic));
-            assertTrue(denied.getMessage().contains("Failed to allocate memory for a record"), denied.getMessage());
+            assertTrue(denied.getMessage().contains("Failed to allocate memory for a record"),
+                    "a pass the pool refused must be reported as an exhausted-pool drop, but was: " + denied.getMessage());
             assertEquals(1.0, (double) exhausted.metricValue(),
                     "giving up on a pass the pool refused must count the dropped record");
         } finally {

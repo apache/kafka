@@ -679,7 +679,9 @@ public class ChunkedRecordAccumulatorTest {
                             maxBlockTimeMs, time.milliseconds(), cluster));
             // BufferPool's own exhaustion message also reports "Available memory", so match the wording only
             // the retry bound uses: the failure must come from it, not from the blocking new-batch acquire.
-            assertTrue(e.getMessage().contains("Failed to allocate memory for a record"), e.getMessage());
+            assertTrue(e.getMessage().contains("Failed to allocate memory for a record"),
+                    "the drop must be reported by throwIfNoMoreRetriesAllowed (not by the "
+                            + "blocking new-batch acquire in BufferPool), but was: " + e.getMessage());
             assertEquals(1.0, (double) exhausted.metricValue(),
                     "a record dropped because the pool had no memory must be counted as one");
             assertEquals(1, refusals.get(),
@@ -745,8 +747,11 @@ public class ChunkedRecordAccumulatorTest {
                     () -> accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null,
                             maxBlockTimeMs, time.milliseconds(), cluster));
             // BufferExhaustedException extends TimeoutException, so assertThrows above would accept it too.
-            assertEquals(TimeoutException.class, e.getClass(), e.getMessage());
-            assertTrue(e.getMessage().contains("kept retrying"), e.getMessage());
+            assertEquals(TimeoutException.class, e.getClass(),
+                    "the pass that gave up was not denied memory, so it must fail with TimeoutException");
+            assertTrue(e.getMessage().contains("kept retrying"),
+                    "the failure must be the TimeoutException throwIfNoMoreRetriesAllowed "
+                            + "raises when a retry finds the deadline gone, but was: " + e.getMessage());
             assertEquals(0.0, (double) exhausted.metricValue(),
                     "every acquire this append made was granted, so no drop may be charged to the pool");
 
@@ -849,7 +854,9 @@ public class ChunkedRecordAccumulatorTest {
             }
             assertEquals(1, refusals.get(), "the extension acquire was never reached");
             assertNotNull(e, "the append past its deadline must be refused, not recovered");
-            assertTrue(e.getMessage().contains("Failed to allocate memory for a record"), e.getMessage());
+            assertTrue(e.getMessage().contains("Failed to allocate memory for a record"),
+                    "the drop must be reported by throwIfNoMoreRetriesAllowed (not by the "
+                            + "blocking new-batch acquire in BufferPool), but was: " + e.getMessage());
 
             Deque<ProducerBatch> dq = batchesFor(accum, tp1);
             assertEquals(1, dq.size(), "only the replacement batch is expected");
@@ -1133,8 +1140,11 @@ public class ChunkedRecordAccumulatorTest {
                     () -> accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, key, new byte[100],
                             Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), cluster));
             // BufferExhaustedException extends TimeoutException, so assertThrows above would accept it too.
-            assertEquals(TimeoutException.class, e.getClass(), e.getMessage());
-            assertTrue(e.getMessage().contains("kept retrying"), e.getMessage());
+            assertEquals(TimeoutException.class, e.getClass(),
+                    "the pass that gave up was not denied memory, so it must fail with TimeoutException");
+            assertTrue(e.getMessage().contains("kept retrying"),
+                    "the failure must be the TimeoutException throwIfNoMoreRetriesAllowed "
+                            + "raises when a retry finds the deadline gone, but was: " + e.getMessage());
             assertEquals(1, forcedSwitches.get(),
                     "the partition must be moved exactly once: the first pass must run, and the retry after it "
                             + "must give up on the spent deadline rather than re-read the partition");
@@ -1200,7 +1210,8 @@ public class ChunkedRecordAccumulatorTest {
                     () -> accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, key, new byte[100],
                             Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), cluster));
             // BufferExhaustedException extends TimeoutException, so assertThrows above would accept it too.
-            assertEquals(TimeoutException.class, e.getClass(), e.getMessage());
+            assertEquals(TimeoutException.class, e.getClass(),
+                    "the pass that gave up was not denied memory, so it must fail with TimeoutException");
             assertEquals(1, retries.get(),
                     "the stream must have been held across the retry that gave up");
             assertEquals(totalMemory, pool.availableMemory(),
@@ -1246,8 +1257,11 @@ public class ChunkedRecordAccumulatorTest {
             assertEquals(1, refusals.get(), "the extension acquire must have been refused once");
             assertEquals(1, retries.get(), "the interleaving under test was never reached");
             // BufferExhaustedException extends TimeoutException, so assertThrows above would accept it too.
-            assertEquals(TimeoutException.class, e.getClass(), e.getMessage());
-            assertTrue(e.getMessage().contains("kept retrying"), e.getMessage());
+            assertEquals(TimeoutException.class, e.getClass(),
+                    "the pass that gave up was not denied memory, so it must fail with TimeoutException");
+            assertTrue(e.getMessage().contains("kept retrying"),
+                    "the failure must be the TimeoutException throwIfNoMoreRetriesAllowed "
+                            + "raises when a retry finds the deadline gone, but was: " + e.getMessage());
             assertEquals(0.0, (double) exhausted.metricValue(),
                     "the pass that gave up never asked the pool, so no drop may be attributed to it");
         } finally {
