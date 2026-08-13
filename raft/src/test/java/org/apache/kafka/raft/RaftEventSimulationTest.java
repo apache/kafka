@@ -906,7 +906,7 @@ public class RaftEventSimulationTest {
                 clusterId,
                 List.of(),
                 endpointsFromId(nodeId, channel.listenerName()),
-                Feature.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(true),
                 logContext,
                 random,
                 quorumConfig

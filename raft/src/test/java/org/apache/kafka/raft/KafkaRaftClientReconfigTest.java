@@ -1679,7 +1679,7 @@ public class KafkaRaftClientReconfigTest {
         context.deliverRequest(
             context.updateVoterRequest(
                 follower,
-                Feature.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(true),
                 newListeners
             )
         );
@@ -1725,7 +1725,7 @@ public class KafkaRaftClientReconfigTest {
         context.deliverRequest(
             context.updateVoterRequest(
                 follower,
-                Feature.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(true),
                 voters.listeners(follower.id())
             )
         );
@@ -1777,7 +1777,7 @@ public class KafkaRaftClientReconfigTest {
         context.deliverRequest(
             context.updateVoterRequest(
                 follower,
-                Feature.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(true),
                 voters.listeners(follower.id())
             )
         );
@@ -1905,7 +1905,7 @@ public class KafkaRaftClientReconfigTest {
             VoterSet.VoterNode.of(
                 local,
                 localListeners,
-                Feature.KRAFT_VERSION.supportedVersionRange()
+                Feature.KRAFT_VERSION.supportedVersionRange(true)
             )
         );
         assertEquals(updatedVoterSet, context.listener.lastCommittedVoterSet());
@@ -1933,7 +1933,7 @@ public class KafkaRaftClientReconfigTest {
                 "",
                 follower,
                 epoch,
-                Feature.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(true),
                 Endpoints.empty()
             )
         );
@@ -1950,7 +1950,7 @@ public class KafkaRaftClientReconfigTest {
                 "invalid-uuid",
                 follower,
                 epoch,
-                Feature.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(true),
                 Endpoints.empty()
             )
         );
@@ -1989,7 +1989,7 @@ public class KafkaRaftClientReconfigTest {
         context.deliverRequest(
             context.updateVoterRequest(
                 ReplicaKey.of(follower.id(), Uuid.ZERO_UUID),
-                Feature.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(true),
                 Endpoints.empty()
             )
         );
@@ -2004,7 +2004,7 @@ public class KafkaRaftClientReconfigTest {
         context.deliverRequest(
             context.updateVoterRequest(
                 follower,
-                Feature.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(true),
                 Endpoints.empty()
             )
         );
@@ -2037,7 +2037,7 @@ public class KafkaRaftClientReconfigTest {
                 context.clusterId,
                 follower,
                 epoch - 1,
-                Feature.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(true),
                 Endpoints.empty()
             )
         );
@@ -2070,7 +2070,7 @@ public class KafkaRaftClientReconfigTest {
                 context.clusterId,
                 follower,
                 epoch + 1,
-                Feature.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(true),
                 Endpoints.empty()
             )
         );
@@ -2099,7 +2099,7 @@ public class KafkaRaftClientReconfigTest {
         context.deliverRequest(
             context.updateVoterRequest(
                 follower,
-                Feature.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(true),
                 Endpoints.empty()
             )
         );
@@ -2143,7 +2143,7 @@ public class KafkaRaftClientReconfigTest {
         context.deliverRequest(
             context.updateVoterRequest(
                 follower,
-                Feature.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(true),
                 newListeners
             )
         );
@@ -2194,7 +2194,7 @@ public class KafkaRaftClientReconfigTest {
         context.deliverRequest(
             context.updateVoterRequest(
                 follower,
-                Feature.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(true),
                 newListeners
             )
         );
@@ -2249,7 +2249,7 @@ public class KafkaRaftClientReconfigTest {
         context.deliverRequest(
             context.updateVoterRequest(
                 notVoter,
-                Feature.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(true),
                 newListeners
             )
         );
@@ -2304,7 +2304,7 @@ public class KafkaRaftClientReconfigTest {
         context.deliverRequest(
             context.updateVoterRequest(
                 notVoter,
-                Feature.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(true),
                 newListeners
             )
         );
@@ -2377,7 +2377,7 @@ public class KafkaRaftClientReconfigTest {
         context.deliverRequest(
             context.updateVoterRequest(
                 follower,
-                Feature.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(true),
                 newListeners
             )
         );
@@ -2423,7 +2423,7 @@ public class KafkaRaftClientReconfigTest {
         RaftRequest.Outbound updateRequest = context.assertSentUpdateVoterRequest(
             local,
             epoch,
-            Feature.KRAFT_VERSION.supportedVersionRange(),
+            Feature.KRAFT_VERSION.supportedVersionRange(true),
             localListeners
         );
         context.deliverResponse(
@@ -2476,7 +2476,7 @@ public class KafkaRaftClientReconfigTest {
         RaftRequest.Outbound updateRequest = context.assertSentUpdateVoterRequest(
             local,
             epoch,
-            Feature.KRAFT_VERSION.supportedVersionRange(),
+            Feature.KRAFT_VERSION.supportedVersionRange(true),
             localListeners
         );
         context.deliverResponse(
@@ -2547,7 +2547,7 @@ public class KafkaRaftClientReconfigTest {
         RaftRequest.Outbound updateRequest = context.assertSentUpdateVoterRequest(
             local,
             epoch,
-            Feature.KRAFT_VERSION.supportedVersionRange(),
+            Feature.KRAFT_VERSION.supportedVersionRange(true),
             localListeners
         );
         context.deliverResponse(
@@ -2575,7 +2575,7 @@ public class KafkaRaftClientReconfigTest {
         updateRequest = context.assertSentUpdateVoterRequest(
             local,
             newEpoch,
-            Feature.KRAFT_VERSION.supportedVersionRange(),
+            Feature.KRAFT_VERSION.supportedVersionRange(true),
             localListeners
         );
         context.deliverResponse(
@@ -2624,7 +2624,7 @@ public class KafkaRaftClientReconfigTest {
             context.deliverRequest(
                 context.updateVoterRequest(
                     voter,
-                    Feature.KRAFT_VERSION.supportedVersionRange(),
+                    Feature.KRAFT_VERSION.supportedVersionRange(true),
                     startingVoters.listeners(voter.id())
                 )
             );
@@ -2702,7 +2702,7 @@ public class KafkaRaftClientReconfigTest {
             context.deliverRequest(
                 context.updateVoterRequest(
                     voter,
-                    Feature.KRAFT_VERSION.supportedVersionRange(),
+                    Feature.KRAFT_VERSION.supportedVersionRange(true),
                     startingVoters.listeners(voter.id())
                 )
             );
@@ -2755,7 +2755,7 @@ public class KafkaRaftClientReconfigTest {
         context.deliverRequest(
             context.updateVoterRequest(
                 voter1,
-                Feature.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(true),
                 newVoter1Listeners
             )
         );
@@ -2829,7 +2829,7 @@ public class KafkaRaftClientReconfigTest {
         context.deliverRequest(
             context.updateVoterRequest(
                 voter1,
-                Feature.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(true),
                 startingVoters.listeners(voter1.id())
             )
         );
@@ -2940,7 +2940,7 @@ public class KafkaRaftClientReconfigTest {
         context.assertSentUpdateVoterRequest(
             local,
             epoch,
-            Feature.KRAFT_VERSION.supportedVersionRange(),
+            Feature.KRAFT_VERSION.supportedVersionRange(true),
             localListeners
         );
     }
@@ -2979,7 +2979,7 @@ public class KafkaRaftClientReconfigTest {
         RaftRequest.Outbound updateRequest = context.assertSentUpdateVoterRequest(
             local,
             epoch,
-            Feature.KRAFT_VERSION.supportedVersionRange(),
+            Feature.KRAFT_VERSION.supportedVersionRange(true),
             localListeners
         );
         context.deliverResponse(
@@ -3167,7 +3167,7 @@ public class KafkaRaftClientReconfigTest {
     }
 
     private static ApiVersionsResponseData apiVersionsResponse(Errors error) {
-        return apiVersionsResponse(error, Feature.KRAFT_VERSION.supportedVersionRange());
+        return apiVersionsResponse(error, Feature.KRAFT_VERSION.supportedVersionRange(true));
     }
 
     private static ApiVersionsResponseData apiVersionsResponse(Errors error, SupportedVersionRange supportedVersions) {

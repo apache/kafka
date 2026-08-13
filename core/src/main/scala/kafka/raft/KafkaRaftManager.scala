@@ -177,7 +177,7 @@ class KafkaRaftManager[T](
       clusterId,
       bootstrapServers,
       localListeners,
-      Feature.KRAFT_VERSION.supportedVersionRange(),
+      Feature.KRAFT_VERSION.supportedVersionRange(config.unstableFeatureVersionsEnabled),
       raftConfig
     )
   }

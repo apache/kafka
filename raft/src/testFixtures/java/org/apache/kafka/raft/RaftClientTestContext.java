@@ -473,7 +473,7 @@ public final class RaftClientTestContext {
                 clusterId,
                 computedBootstrapServers,
                 localListeners,
-                Feature.KRAFT_VERSION.supportedVersionRange(),
+                Feature.KRAFT_VERSION.supportedVersionRange(true),
                 logContext,
                 random,
                 quorumConfig
