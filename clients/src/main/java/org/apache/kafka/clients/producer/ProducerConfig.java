@@ -19,6 +19,7 @@ package org.apache.kafka.clients.producer;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -51,6 +52,7 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  * Configuration for the Kafka Producer. Documentation for these configurations can be found in the <a
  * href="http://kafka.apache.org/documentation.html#producerconfigs">Kafka documentation</a>
  */
+@InterfaceAudience.Public
 public class ProducerConfig extends AbstractConfig {
     private static final Logger log = LoggerFactory.getLogger(ProducerConfig.class);
 
@@ -228,11 +230,28 @@ public class ProducerConfig extends AbstractConfig {
                                                     + "not all memory the producer uses is used for buffering. Some additional memory will be used for compression (if "
                                                     + "compression is enabled) as well as for maintaining in-flight requests.";
 
+    /** <code>buffer.memory.allocation.strategy</code> */
+    public static final String BUFFER_MEMORY_ALLOCATION_STRATEGY_CONFIG = "buffer.memory.allocation.strategy";
+    public static final String BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL = "full";
+    public static final String BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL = "incremental";
+    private static final String BUFFER_MEMORY_ALLOCATION_STRATEGY_DOC = "Controls how the producer allocates memory from <code>" + BUFFER_MEMORY_CONFIG + "</code> for record batches. The following values are supported: "
+                                                    + "<ul>"
+                                                    + "<li><code>" + BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL + "</code>: reserves a full <code>" + BATCH_SIZE_CONFIG + "</code> up front when a batch is created, "
+                                                    + "regardless of how much data it ends up holding. Pool memory therefore scales with the number of active partitions.</li>"
+                                                    + "<li><code>" + BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL + "</code>: allocates memory on demand as records are appended, growing a batch "
+                                                    + "up to <code>" + BATCH_SIZE_CONFIG + "</code>. Pool memory therefore scales with the data actually buffered rather than the number of active "
+                                                    + "partitions, allowing larger <code>" + BATCH_SIZE_CONFIG + "</code> values (e.g. for high-latency clusters) without reserving "
+                                                    + "<code>" + BATCH_SIZE_CONFIG + "</code> for every active partition.</li>"
+                                                    + "</ul>";
+
     /** <code>retry.backoff.ms</code> */
     public static final String RETRY_BACKOFF_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
 
     /** <code>retry.backoff.max.ms</code> */
     public static final String RETRY_BACKOFF_MAX_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MAX_MS_CONFIG;
+
+    /** <code>bootstrap.resolve.timeout.ms</code> */
+    public static final String BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG = CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG;
 
     /**
      * <code>enable.metrics.push</code>
@@ -399,6 +418,14 @@ public class ProducerConfig extends AbstractConfig {
                                         Importance.MEDIUM,
                                         CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
                                 .define(BUFFER_MEMORY_CONFIG, Type.LONG, 32 * 1024 * 1024L, atLeast(0L), Importance.HIGH, BUFFER_MEMORY_DOC)
+                                // Internal until the incremental strategy is fully implemented
+                                .defineInternal(BUFFER_MEMORY_ALLOCATION_STRATEGY_CONFIG,
+                                        Type.STRING,
+                                        BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL,
+                                        ConfigDef.CaseInsensitiveValidString
+                                                .in(BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL, BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL),
+                                        Importance.MEDIUM,
+                                        BUFFER_MEMORY_ALLOCATION_STRATEGY_DOC)
                                 .define(RETRIES_CONFIG, Type.INT, Integer.MAX_VALUE, between(0, Integer.MAX_VALUE), Importance.HIGH, RETRIES_DOC)
                                 .define(ACKS_CONFIG,
                                         Type.STRING,
@@ -441,6 +468,12 @@ public class ProducerConfig extends AbstractConfig {
                                         atLeast(0L),
                                         Importance.LOW,
                                         CommonClientConfigs.RETRY_BACKOFF_MAX_MS_DOC)
+                                .define(BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG,
+                                        Type.LONG,
+                                        CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
+                                        atLeast(1L),
+                                        Importance.HIGH,
+                                        CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC)
                                 .define(ENABLE_METRICS_PUSH_CONFIG,
                                         Type.BOOLEAN,
                                         true,
@@ -578,10 +611,10 @@ public class ProducerConfig extends AbstractConfig {
                                         Importance.LOW,
                                         CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_DOC)
                                 .define(CONFIG_PROVIDERS_CONFIG,
-                                        ConfigDef.Type.LIST,
+                                        Type.LIST,
                                         List.of(),
                                         ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                                        ConfigDef.Importance.LOW,
+                                        Importance.LOW,
                                         CONFIG_PROVIDERS_DOC);
     }
 

@@ -107,6 +107,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final Sensor bufferedRecordsSensor;
     private final Sensor droppedRecordsSensor;
     private final Map<String, Sensor> e2eLatencySensors = new HashMap<>();
+    // per-terminal-node timestamp aggregates for the current batch/punctuation, flushed against a
+    // single wall-clock time in maybeFlushTerminalE2ELatency so we avoid a clock read per record
+    private final Map<String, TerminalE2ELatencyAccumulator> terminalE2ELatencyAccumulators = new HashMap<>();
 
     private final RecordQueueCreator recordQueueCreator;
 
@@ -175,6 +178,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 terminalNodeName,
                 ProcessorNodeMetrics.e2ELatencySensor(threadId, taskId, terminalNodeName, streamsMetrics)
             );
+            terminalE2ELatencyAccumulators.put(terminalNodeName, new TerminalE2ELatencyAccumulator());
         }
 
         for (final ProcessorNode<?, ?, ?, ?> sourceNode : topology.sources()) {
@@ -254,12 +258,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
-    public void recordRestoration(final Time time, final long numRecords, final boolean initRemaining) {
+    public void recordRestoration(final Time time, final long numRecords, final long numOffsets, final boolean initRemaining) {
         if (initRemaining) {
-            maybeRecordSensor(numRecords, time, restoreRemainingSensor);
+            maybeRecordSensor(numOffsets, time, restoreRemainingSensor);
         } else {
             maybeRecordSensor(numRecords, time, restoreSensor);
-            maybeRecordSensor(-1 * numRecords, time, restoreRemainingSensor);
+            maybeRecordSensor(-1 * numOffsets, time, restoreRemainingSensor);
         }
     }
 
@@ -417,6 +421,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     public void flush() {
         stateMgr.flushCache();
+        // flushing the caches may evict records into terminal nodes, so record their e2e latency
+        // before we leave the processing path; otherwise those samples would either be attributed
+        // to the next batch's end time or dropped entirely if the task never processes again
+        maybeFlushTerminalE2ELatency(time.milliseconds());
         recordCollector.flush();
     }
 
@@ -1006,6 +1014,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 droppedRecordsSensor.record();
             }
         } finally {
+            // flush e2e latency for any records the punctuator forwarded to terminal nodes; the clock
+            // must be re-read because the punctuator itself is part of the latency we are measuring,
+            // and punctuators fire on a schedule so the extra read is not on the per-record path
+            maybeFlushTerminalE2ELatency(time.milliseconds());
             processorContext.setCurrentNode(null);
         }
     }
@@ -1290,6 +1302,90 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     /**
+     * Buffers a terminal node's record timestamp. The latency is recorded later by
+     * {@link #maybeFlushTerminalE2ELatency(long)}, so processing delay is captured without a
+     * wall-clock read per output record.
+     */
+    void maybeAddTerminalE2ELatency(final long recordTimestamp, final String nodeName) {
+        final Sensor e2eLatencySensor = e2eLatencySensors.get(nodeName);
+        if (e2eLatencySensor == null) {
+            throw new IllegalStateException("Requested to record e2e latency but could not find sensor for node " + nodeName);
+        } else if (e2eLatencySensor.shouldRecord() && e2eLatencySensor.hasMetrics()) {
+            terminalE2ELatencyAccumulators.get(nodeName).add(recordTimestamp);
+        }
+    }
+
+    /**
+     * Records terminal {@code record-e2e-latency} for all records buffered since the last flush,
+     * against a single already-read wall-clock time {@code endMs}. Emits the exact max and min
+     * latency and, for larger batches, fills the remaining samples with the interior-timestamp mean
+     * so the count-weighted average is exact as well. Emitting one sample per record keeps the
+     * metric's weighting unchanged; all records are attributed {@code endMs}, a conservative upper
+     * bound on their completion time.
+     */
+    @Override
+    public void maybeFlushTerminalE2ELatency(final long endMs) {
+        for (final Map.Entry<String, TerminalE2ELatencyAccumulator> entry : terminalE2ELatencyAccumulators.entrySet()) {
+            final TerminalE2ELatencyAccumulator accumulator = entry.getValue();
+            final long n = accumulator.count;
+            if (n > 0) {
+                final Sensor e2eLatencySensor = e2eLatencySensors.get(entry.getKey());
+                if (e2eLatencySensor.shouldRecord() && e2eLatencySensor.hasMetrics()) {
+                    final double maxLatency = endMs - accumulator.minTs;
+                    final double minLatency = endMs - accumulator.maxTs;
+                    e2eLatencySensor.record(maxLatency, endMs);
+                    if (n >= 2) {
+                        e2eLatencySensor.record(minLatency, endMs);
+                    }
+                    if (n >= 3) {
+                        final double interiorMeanTs = accumulator.baseTs
+                            + (double) (accumulator.sumOffset
+                                        - (accumulator.minTs - accumulator.baseTs)
+                                        - (accumulator.maxTs - accumulator.baseTs)) / (n - 2);
+                        // clamp against rounding so the filler can't move the sensor's max/min
+                        final double filler = Math.min(maxLatency, Math.max(minLatency, endMs - interiorMeanTs));
+                        for (long i = 0; i < n - 2; i++) {
+                            e2eLatencySensor.record(filler, endMs);
+                        }
+                    }
+                }
+                accumulator.reset();
+            }
+        }
+    }
+
+    /**
+     * Per-terminal-node timestamp aggregates used to reconstruct e2e latency without keeping a
+     * sample per record. Timestamps are summed as offsets from the first one so the running sum
+     * stays small and overflow-safe.
+     */
+    private static final class TerminalE2ELatencyAccumulator {
+        private long count;
+        private long baseTs;
+        private long minTs;
+        private long maxTs;
+        private long sumOffset;
+
+        void add(final long recordTimestamp) {
+            if (count == 0) {
+                baseTs = recordTimestamp;
+                minTs = recordTimestamp;
+                maxTs = recordTimestamp;
+                sumOffset = 0L;
+            } else {
+                minTs = Math.min(minTs, recordTimestamp);
+                maxTs = Math.max(maxTs, recordTimestamp);
+                sumOffset += recordTimestamp - baseTs;
+            }
+            count++;
+        }
+
+        void reset() {
+            count = 0L;
+        }
+    }
+
+    /**
      * Request committing the current task's state
      */
     void requestCommit() {
@@ -1349,6 +1445,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             sb.append("]\n");
         }
         return sb.toString();
+    }
+
+    @Override
+    public long approximateNumUncommittedBytes() {
+        return stateMgr.approximateNumUncommittedBytes();
     }
 
     @Override

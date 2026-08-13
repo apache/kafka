@@ -92,6 +92,7 @@ public final class ConsumerUtils {
                                                                     long retryBackoffMs,
                                                                     ClientTelemetrySender clientTelemetrySender) {
         NetworkClient netClient = ClientUtils.createNetworkClient(config,
+                config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG),
                 metrics,
                 CONSUMER_METRIC_GROUP_PREFIX,
                 logContext,

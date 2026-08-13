@@ -57,10 +57,17 @@ class StreamsSmokeTest(BaseStreamsTest):
             metadata_quorum=[quorum.combined_kraft],
             group_protocol=["streams"],
             enable_assignment_batching=[False, True])
-    def test_streams(self, processing_guarantee, crash, metadata_quorum, group_protocol, enable_assignment_batching):
-        processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee, group_protocol)
-        processor2 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee, group_protocol)
-        processor3 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee, group_protocol)
+    # transactional state stores (KIP-892) are an EOS feature; exercise them under EOS + crash
+    @matrix(processing_guarantee=['exactly_once_v2'],
+            crash=[True, False],
+            metadata_quorum=[quorum.combined_kraft],
+            group_protocol=["streams"],
+            enable_assignment_batching=[True],
+            transactional=[True])
+    def test_streams(self, processing_guarantee, crash, metadata_quorum, group_protocol, enable_assignment_batching, transactional=False):
+        processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee, group_protocol, transactional=transactional)
+        processor2 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee, group_protocol, transactional=transactional)
+        processor3 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee, group_protocol, transactional=transactional)
 
         with processor1.node.account.monitor_log(processor1.STDOUT_FILE) as monitor1:
             processor1.start()

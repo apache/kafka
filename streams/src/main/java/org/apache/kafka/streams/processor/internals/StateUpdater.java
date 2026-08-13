@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.streams.processor.StandbyUpdateListener;
@@ -23,6 +24,7 @@ import org.apache.kafka.streams.processor.TaskId;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -133,6 +135,9 @@ public interface StateUpdater {
      *
      * This method does not block until the task is added to the state updater.
      *
+     * If the state updater is not able to update tasks anymore, the task is immediately reported as failed and can be
+     * retrieved with {@link StateUpdater#drainExceptionsAndFailedTasks()}.
+     *
      * @param task task to add
      */
     void add(final Task task);
@@ -143,6 +148,9 @@ public interface StateUpdater {
      * This method does not block until the removed task is removed from the state updater. But it returns a future on
      * which processing can be blocked. The task to remove is removed from the updating tasks, paused tasks,
      * restored tasks, or failed tasks.
+     *
+     * If the state updater is not able to remove tasks anymore, the returned future is completed exceptionally
+     * instead of never being completed.
      *
      * @param taskId ID of the task to remove
      * @param suspendReason the reason for suspending standby update, passed through to the changelog reader
@@ -183,6 +191,17 @@ public interface StateUpdater {
      * @return true if a subsequent call to `drainExceptionsAndFailedTasks` would return a non-empty collection.
      */
     boolean hasExceptionsAndFailedTasks();
+
+    /**
+     * Gets the exception that made the state updater die.
+     *
+     * A state updater that died cannot update any task anymore, neither the tasks it owned when it died nor tasks that
+     * are added afterwards. Hence, the application cannot continue and must be failed with this exception.
+     *
+     * @return the exception that made the state updater die, or {@link Optional#empty()} if the state updater is
+     *         running or was shut down regularly
+     */
+    Optional<RuntimeException> fatalException();
 
     /**
      * Gets all tasks that are managed by the state updater.
@@ -246,4 +265,10 @@ public interface StateUpdater {
      * Get the restore consumer instance id for telemetry, and complete the given future to return it.
      */
     KafkaFutureImpl<Uuid> restoreConsumerInstanceId(final Duration timeout);
+
+    /**
+     * Returns the latest per-task changelog end-offset-sum snapshot for tasks currently
+     * being restored. Safe to invoke from any thread.
+     */
+    Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSumSnapshot();
 }

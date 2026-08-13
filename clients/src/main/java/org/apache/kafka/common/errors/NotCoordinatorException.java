@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * In the context of the group coordinator, the broker returns this error code if it receives an offset fetch
@@ -23,6 +26,7 @@ package org.apache.kafka.common.errors;
  * In the context of the transactional coordinator, it returns this error when it receives a transactional
  * request with a transactionalId the coordinator doesn't own.
  */
+@InterfaceAudience.Public
 public class NotCoordinatorException extends RefreshRetriableException {
 
     private static final long serialVersionUID = 1L;

@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.sink;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.metrics.PluginMetrics;
 
 import java.util.Map;
@@ -25,6 +26,7 @@ import java.util.Set;
 /**
  * Context passed to {@link SinkTask}s, allowing them to access utilities in the Kafka Connect runtime.
  */
+@InterfaceAudience.Public
 public interface SinkTaskContext {
 
     /**

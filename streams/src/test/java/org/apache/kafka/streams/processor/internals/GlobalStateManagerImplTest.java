@@ -395,6 +395,34 @@ public class GlobalStateManagerImplTest {
 
 
     @Test
+    public void shouldReportZeroApproximateNumUncommittedBytesBeforeStoresAreRegistered() {
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
+        stateManager.initialize();
+        assertEquals(0L, stateManager.approximateNumUncommittedBytes());
+    }
+
+    @Test
+    public void shouldAggregateApproximateNumUncommittedBytesAcrossRegisteredStores() {
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
+        stateManager.initialize();
+        initializeConsumer(1, 0, t1);
+        stateManager.registerStore(new NoOpReadOnlyStore<>(store1.name()) {
+            @Override
+            public long approximateNumUncommittedBytes() {
+                return 100L;
+            }
+        }, stateRestoreCallback, null);
+        initializeConsumer(1, 0, t2);
+        stateManager.registerStore(new NoOpReadOnlyStore<>(store2.name()) {
+            @Override
+            public long approximateNumUncommittedBytes() {
+                return 250L;
+            }
+        }, stateRestoreCallback, null);
+        assertEquals(350L, stateManager.approximateNumUncommittedBytes());
+    }
+
+    @Test
     public void shouldCommitStateStores() {
         initializeConsumer(0, 0, t1, t2, t3, t4, t5);
         stateManager.initialize();

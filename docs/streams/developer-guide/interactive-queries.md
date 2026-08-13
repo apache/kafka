@@ -1,6 +1,6 @@
 ---
 title: Interactive Queries
-description: 
+description: Kafka Streams interactive queries for local and remote state stores.
 weight: 8
 tags: ['kafka', 'docs']
 aliases: 
@@ -31,7 +31,7 @@ Interactive queries allow you to leverage the state of your application from out
 
 
 
-The full state of your application is typically [split across many distributed instances of your application](../architecture.html#streams_architecture_state), and across many state stores that are managed locally by these application instances.
+The full state of your application is typically [split across many distributed instances of your application](../../architecture#streams_architecture_state), and across many state stores that are managed locally by these application instances.
 
 ![](/43/images/streams-interactive-queries-03.png)
 
@@ -125,7 +125,7 @@ Not supported (you must configure)
 
 # Querying local state stores for an app instance {#querying-local-state-stores-for-an-app-instance}
 
-A Kafka Streams application typically runs on multiple instances. The state that is locally available on any given instance is only a subset of the [application's entire state](../architecture.html#streams-architecture-state). Querying the local stores on an instance will only return data locally available on that particular instance.
+A Kafka Streams application typically runs on multiple instances. The state that is locally available on any given instance is only a subset of the [application's entire state](../../architecture#streams-architecture-state). Querying the local stores on an instance will only return data locally available on that particular instance.
 
 The method `KafkaStreams#store(...)` finds an application instance's local state stores by name and type. Note that interactive queries are not supported for [versioned state stores](/{version}/streams/developer-guide/processor-api/#versioned-key-value-state-stores) at this time.
 
@@ -396,7 +396,7 @@ There are many ways to add an RPC layer. The only requirements are that the RPC 
 
 ## Exposing the RPC endpoints of your application
 
-To enable remote state store discovery in a distributed Kafka Streams application, you must set the [configuration property](config-streams.html#streams-developer-guide-required-configs) in the config properties. The `application.server` property defines a unique `host:port` pair that points to the RPC endpoint of the respective instance of a Kafka Streams application. The value of this configuration property will vary across the instances of your application. When this property is set, Kafka Streams will keep track of the RPC endpoint information for every instance of an application, its state stores, and assigned stream partitions through instances of [StreamsMetadata](/{version}/javadoc/org/apache/kafka/streams/state/StreamsMetadata.html).
+To enable remote state store discovery in a distributed Kafka Streams application, you must set the [configuration property](../config-streams#streams-developer-guide-required-configs) in the config properties. The `application.server` property defines a unique `host:port` pair that points to the RPC endpoint of the respective instance of a Kafka Streams application. The value of this configuration property will vary across the instances of your application. When this property is set, Kafka Streams will keep track of the RPC endpoint information for every instance of an application, its state stores, and assigned stream partitions through instances of [StreamsMetadata](/{version}/javadoc/org/apache/kafka/streams/state/StreamsMetadata.html).
 
 **Tip**
 

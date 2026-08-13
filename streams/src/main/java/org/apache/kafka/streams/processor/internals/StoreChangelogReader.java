@@ -38,9 +38,12 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
+import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.MeteredStateStore;
 
 import org.slf4j.Logger;
@@ -140,6 +143,9 @@ public class StoreChangelogReader implements ChangelogReader {
         private int bufferedLimitIndex;
 
         private long restoreStartTimeNs;
+
+        // the consumer position at which restoration started, so progress can be measured in offset slots
+        private long restoreStartOffset;
 
         private ChangelogMetadata(final StateStoreMetadata storeMetadata, final ProcessorStateManager stateManager) {
             this.changelogState = ChangelogState.REGISTERED;
@@ -432,6 +438,23 @@ public class StoreChangelogReader implements ChangelogReader {
             .collect(Collectors.toSet());
     }
 
+    // Report a conservative value (higher than the real value) as fallback.
+    // Only "source topic optimized" changelogs have a logical end offset from `ChangelogMetadata` (the committed offset on the source topic).
+    // If not known (not set yet, or no "source topic optimization"), fall back to physical end offset.
+    @Override
+    public Map<TopicPartition, Long> logicalChangelogEndOffsets() {
+        final Map<TopicPartition, Long> endOffsets = new HashMap<>(changelogs.size());
+        for (final Map.Entry<TopicPartition, ChangelogMetadata> entry : changelogs.entrySet()) {
+            final ChangelogMetadata metadata = entry.getValue();
+            Long endOffset = metadata.restoreEndOffset;
+            if (endOffset == null) {
+                endOffset = metadata.storeMetadata.endOffset();
+            }
+            endOffsets.put(entry.getKey(), endOffset);
+        }
+        return endOffsets;
+    }
+
     // 1. if there are any registered changelogs that needs initialization, try to initialize them first;
     // 2. if all changelogs have finished, return early;
     // 3. if there are any restoring changelogs, try to read from the restore consumer and process them.
@@ -651,6 +674,8 @@ public class StoreChangelogReader implements ChangelogReader {
 
         if (numRecords != 0) {
             final List<ConsumerRecord<byte[], byte[]>> records = changelogMetadata.bufferedRecords.subList(0, numRecords);
+            // where restoration had reached before this batch; null until the first batch is restored
+            final Long offsetBeforeRestore = storeMetadata.offset();
             final OptionalLong optionalLag = restoreConsumer.currentLag(partition);
             stateManager.restore(storeMetadata, records, optionalLag);
 
@@ -663,9 +688,9 @@ public class StoreChangelogReader implements ChangelogReader {
                 changelogMetadata.bufferedRecords.clear();
             }
 
-            task.recordRestoration(time, numRecords, false);
+            final long currentOffset = storeMetadata.offset();
+            recordRestorationProgress(task, changelogMetadata, numRecords, offsetBeforeRestore, currentOffset + 1);
 
-            final Long currentOffset = storeMetadata.offset();
             log.trace("Restored {} records from changelog {} to store {}, end offset is {}, current offset is {}",
                 numRecords, partition, storeName, recordEndOffset(changelogMetadata.restoreEndOffset), currentOffset);
 
@@ -693,6 +718,10 @@ public class StoreChangelogReader implements ChangelogReader {
             log.info("Finished restoring changelog {} to store {} with a total number of {} records",
                 partition, storeName, changelogMetadata.totalRestored);
 
+            // account for any offset slots past the last restored record (e.g. trailing transaction
+            // markers) so the remaining-records metric reaches exactly zero on completion
+            recordRestorationProgress(task, changelogMetadata, 0, storeMetadata.offset(), changelogMetadata.restoreEndOffset);
+
             changelogMetadata.transitTo(ChangelogState.COMPLETED);
             pauseChangelogsFromRestoreConsumer(Collections.singleton(partition));
             if (storeMetadata.store() instanceof MeteredStateStore) {
@@ -711,6 +740,23 @@ public class StoreChangelogReader implements ChangelogReader {
         }
 
         return numRecords;
+    }
+
+    /**
+     * Record restoration progress: restore-total/restore-rate advance by the records restored
+     * ({@code numRecords}), while the remaining-records metric is decremented by the offset slots
+     * between {@code lastRestoredOffset} (or {@code restoreStartOffset} if null) and {@code restoredToOffset}.
+     * Measuring the latter in offset slots accounts for offsets the restore consumer never returns
+     * (transaction markers, compacted records) so it reaches exactly zero on completion.
+     */
+    private void recordRestorationProgress(final Task task,
+                                           final ChangelogMetadata changelogMetadata,
+                                           final long numRecords,
+                                           final Long lastRestoredOffset, // this is not a "position" so we need to correct it below
+                                           final long restoredToOffset) {
+        final long restoredFromOffset = lastRestoredOffset == null ? changelogMetadata.restoreStartOffset : lastRestoredOffset + 1;
+        final long numOffsets = Math.max(restoredToOffset - restoredFromOffset, 0L);
+        task.recordRestoration(time, numRecords, numOffsets, false);
     }
 
     private Set<Task> getTasksFromPartitions(final Map<TaskId, Task> tasks,
@@ -992,6 +1038,12 @@ public class StoreChangelogReader implements ChangelogReader {
                 if (retentionPeriod > 0 && retentionPeriod != Long.MAX_VALUE) {
                     newWindowedPartitionsRetention.put(partition, retentionPeriod);
                 } else {
+                    final StateStore store = storeMetadata.store();
+                    if (store instanceof WindowStore || store instanceof SessionStore) {
+                        log.warn("Windowed store {} reported no usable retention period ({}), so changelog " +
+                            "partition {} is restored in full rather than skipping expired data.",
+                            store.name(), retentionPeriod, partition);
+                    }
                     log.debug("Start restoring changelog partition {} from the beginning offset to end offset {} " +
                         "since we cannot find current offset.", partition, recordEndOffset(endOffset));
                     newSeekToBeginningPartitions.add(partition);
@@ -1016,6 +1068,8 @@ public class StoreChangelogReader implements ChangelogReader {
                 throw new StreamsException("Restore consumer get unexpected error trying to get the position " +
                         " of " + partition, e);
             }
+            // remember where restoration began so progress can be measured in offset slots
+            changelogMetadata.restoreStartOffset = startOffset;
             if (changelogMetadata.stateManager.taskType() == Task.TaskType.ACTIVE) {
                 try {
                     stateRestoreListener.onRestoreStart(partition, storeName, startOffset, changelogMetadata.restoreEndOffset);
@@ -1028,8 +1082,8 @@ public class StoreChangelogReader implements ChangelogReader {
                 // if the log is truncated between when we get the log end offset and when we get the
                 // consumer position, then it's possible that the difference become negative and there's actually
                 // no records to restore; in this case we just initialize the sensor to zero
-                final long recordsToRestore = Math.max(changelogMetadata.restoreEndOffset - startOffset, 0L);
-                task.recordRestoration(time, recordsToRestore, true);
+                final long offsetsToRestore = Math.max(changelogMetadata.restoreEndOffset - startOffset, 0L);
+                task.recordRestoration(time, 0, offsetsToRestore, true);
                 changelogMetadata.restoreStartTimeNs = time.nanoseconds();
             }  else if (changelogMetadata.stateManager.taskType() == TaskType.STANDBY) {
                 try {

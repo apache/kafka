@@ -44,9 +44,9 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -240,7 +240,7 @@ public class RecordAccumulatorTest {
             assertEquals(1, partitionBatches.size());
 
             ProducerBatch batch = partitionBatches.peekFirst();
-            assertTrue(batch.isWritable());
+            assertFalse(batch.isFull(), "batch should still accept appends");
             assertEquals(0, accum.ready(metadataCache, now).readyNodes.size(), "No partitions should be ready.");
         }
 
@@ -250,7 +250,7 @@ public class RecordAccumulatorTest {
         Deque<ProducerBatch> partitionBatches = accum.getDeque(tp1);
         assertEquals(2, partitionBatches.size());
         Iterator<ProducerBatch> partitionBatchesIterator = partitionBatches.iterator();
-        assertTrue(partitionBatchesIterator.next().isWritable());
+        assertTrue(partitionBatchesIterator.next().isFull(), "the first batch should no longer accept appends");
         assertEquals(Collections.singleton(node1), accum.ready(metadataCache, time.milliseconds()).readyNodes, "Our partition's leader should be ready");
 
         List<ProducerBatch> batches = accum.drain(metadataCache, Collections.singleton(node1), Integer.MAX_VALUE, 0).get(node1.id());

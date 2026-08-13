@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.protocol.Errors;
@@ -30,6 +31,7 @@ import java.util.stream.Collectors;
 /**
  * The result of the {@link Admin#alterShareGroupOffsets(String, Map, AlterShareGroupOffsetsOptions)} call.
  */
+@InterfaceAudience.Public
 public class AlterShareGroupOffsetsResult {
 
     private final KafkaFuture<Map<TopicPartition, ApiException>> future;
@@ -76,8 +78,14 @@ public class AlterShareGroupOffsetsResult {
                 .collect(Collectors.toList());
             for (ApiException exception : topicPartitionErrorsMap.values()) {
                 if (exception != null) {
-                    throw Errors.forException(exception).exception(
-                        "Failed altering group offsets for the following partitions: " + partitionsFailed);
+                    String message = exception.getMessage();
+                    if ((message != null) && !message.isEmpty()) {
+                        throw Errors.forException(exception).exception(message +
+                            " Failed altering group offsets for the following partitions: " + partitionsFailed);
+                    } else {
+                        throw Errors.forException(exception).exception(
+                            "Failed altering group offsets for the following partitions: " + partitionsFailed);
+                    }
                 }
             }
             return null;
