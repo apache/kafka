@@ -217,7 +217,14 @@ public class TaskManagerTest {
     private TaskManager setUpTaskManager(final ProcessingMode processingMode,
                                          final TasksRegistry tasks,
                                          final boolean processingThreadsEnabled) {
-        topologyMetadata = new TopologyMetadata(topologyBuilder, new DummyStreamsConfig(processingMode));
+        return setUpTaskManager(processingMode, tasks, processingThreadsEnabled, false);
+    }
+
+    private TaskManager setUpTaskManager(final ProcessingMode processingMode,
+                                         final TasksRegistry tasks,
+                                         final boolean processingThreadsEnabled,
+                                         final boolean streamsProtocolEnabled) {
+        topologyMetadata = new TopologyMetadata(topologyBuilder, new DummyStreamsConfig(processingMode, streamsProtocolEnabled));
         final TaskManager taskManager = new TaskManager(
             time,
             changeLogReader,
@@ -289,6 +296,20 @@ public class TaskManagerTest {
 
         verify(schedulingTaskManager).lockTasks(Set.of(taskId00, taskId01));
         verify(schedulingTaskManager).unlockTasks(Set.of(taskId00, taskId01));
+    }
+
+    @Test
+    public void shouldFailStreamThreadIfStateUpdaterDied() {
+        final RuntimeException fatalException = new RuntimeException("KABOOM!");
+        when(stateUpdater.fatalException()).thenReturn(Optional.of(fatalException));
+
+        final StreamsException thrown = assertThrows(
+            StreamsException.class,
+            () -> taskManager.checkStateUpdater(time.milliseconds(), noOpResetter)
+        );
+
+        assertEquals("The state updater died and cannot update tasks anymore.", thrown.getMessage());
+        assertEquals(fatalException, thrown.getCause());
     }
 
     @Test
@@ -2003,13 +2024,26 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldNotPublishTaskOffsetSumSnapshotUnderClassicProtocol() {
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+
+        taskManager.maybeUpdateTaskOffsetSumSnapshot();
+
+        // the classic protocol reports offset sums through taskOffsetSums() instead, so the state directory is
+        // never consulted for the snapshot
+        assertThat(taskManager.taskOffsetSumSnapshot(), is(Collections.emptyMap()));
+        verify(stateDirectory, never()).taskOffsetSums();
+    }
+
+    @Test
     public void shouldPublishTaskOffsetSumSnapshotFromStateDirectoryExcludingRunningActiveTasks() {
         final StreamTask runningActiveTask = statefulTask(taskId00, taskId00ChangelogPartitions).inState(State.RUNNING).build();
         final StreamTask restoringActiveTask = statefulTask(taskId01, taskId01ChangelogPartitions).inState(State.RESTORING).build();
         final StandbyTask standbyTask = standbyTask(taskId02, taskId02ChangelogPartitions).inState(State.RUNNING).build();
 
         final TasksRegistry tasks = mock(TasksRegistry.class);
-        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, false, true);
         // running-active tasks are owned by the stream thread; restoring-active and standby tasks live in the state updater
         when(tasks.allInitializedTasksPerId()).thenReturn(mkMap(mkEntry(taskId00, runningActiveTask)));
         when(stateUpdater.tasks()).thenReturn(Set.of(restoringActiveTask, standbyTask));
@@ -2038,7 +2072,7 @@ public class TaskManagerTest {
         when(ownStandbyTask.changelogOffsets()).thenReturn(mkMap(mkEntry(t1p2changelog, 90L)));
 
         final TasksRegistry tasks = mock(TasksRegistry.class);
-        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, false, true);
         when(tasks.allInitializedTasksPerId()).thenReturn(Collections.emptyMap());
         when(stateUpdater.tasks()).thenReturn(Set.of(ownStandbyTask));
         // the shared sums only cover what is recoverable from disk, so they can trail an open task's in-memory stores
@@ -3565,9 +3599,8 @@ public class TaskManagerTest {
         verify(stateUpdater).shutdown(Duration.ofMinutes(1L));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
-    public void shouldCloseTasksIfStateUpdaterTimesOutOnRemove() throws Exception {
+    public void shouldCloseTasksIfStateUpdaterFailsRemoval() {
         final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RUNNING)
             .withInputPartitions(taskId00Partitions)
@@ -3578,13 +3611,39 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, false);
 
         when(stateUpdater.tasks()).thenReturn(singleton(task00));
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = mock(CompletableFuture.class);
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
         when(stateUpdater.remove(eq(taskId00), eq(SuspendReason.MIGRATED))).thenReturn(future);
-        when(future.get(anyLong(), any())).thenThrow(new java.util.concurrent.TimeoutException());
+        future.completeExceptionally(new StreamsException("The state updater thread died."));
 
         taskManager.shutdown(true);
 
         verify(task00).closeDirty();
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldKeepWaitingForRemovalIfStateUpdaterDoesNotCompleteItWithinLogInterval() throws Exception {
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId00Partitions)
+            .build();
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, false);
+
+        when(stateUpdater.tasks()).thenReturn(singleton(task00)).thenReturn(emptySet());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = mock(CompletableFuture.class);
+        when(future.get(anyLong(), any()))
+            .thenThrow(new java.util.concurrent.TimeoutException())
+            .thenReturn(new StateUpdater.RemovedTaskResult(task00));
+        when(stateUpdater.remove(eq(taskId00), eq(SuspendReason.MIGRATED))).thenReturn(future);
+
+        taskManager.shutdown(true);
+
+        verify(future, times(2)).get(anyLong(), any());
+        verify(tasks).addTask(task00);
+        verify(task00, never()).closeDirty();
     }
 
     @Test

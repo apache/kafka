@@ -60,9 +60,14 @@ public abstract class AbstractKeyValueStoreTest {
     protected KeyValueStore<Integer, String> store;
     protected KeyValueStoreTestDriver<Integer, String> driver;
 
+    /** Overridden by subclasses to exercise the transactional (staged-write) code path. */
+    boolean transactional() {
+        return false;
+    }
+
     @BeforeEach
     public void before() {
-        driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
+        driver = KeyValueStoreTestDriver.create(Integer.class, String.class, transactional());
         context = (InternalMockProcessorContext<?, ?>) driver.context();
         context.setTime(10);
         store = createKeyValueStore(context);

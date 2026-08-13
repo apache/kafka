@@ -47,6 +47,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -155,8 +156,8 @@ class DefaultStateUpdaterTest {
 
         stateUpdater.shutdown(Duration.ofMinutes(1));
 
-        verifyRestoredActiveTasks(statelessTask, restoredStatefulTask);
-        verifyExceptionsAndFailedTasks(new ExceptionAndTask(taskCorruptedException, failedStatefulTask));
+        verifyRestoredActiveTasks();
+        verifyFailedTasks(StreamsException.class, statelessTask, restoredStatefulTask, failedStatefulTask, standbyTask);
         verifyUpdatingTasks();
         verifyPausedTasks();
         verify(changelogReader).clear();
@@ -178,23 +179,24 @@ class DefaultStateUpdaterTest {
         stateUpdater.shutdown(Duration.ofMinutes(1));
 
         verifyRestoredActiveTasks();
-        verifyExceptionsAndFailedTasks();
+        verifyFailedTasks(StreamsException.class, statefulTask, standbyTask);
         verifyUpdatingTasks();
         verifyPausedTasks();
         verify(changelogReader).clear();
     }
 
     @Test
-    public void shouldShutdownStateUpdaterAndRestart() {
+    public void shouldThrowIfStartedAfterShutdown() {
         stateUpdater.start();
 
         stateUpdater.shutdown(Duration.ofMinutes(1));
 
-        stateUpdater.start();
+        final IllegalStateException exception = assertThrows(IllegalStateException.class, stateUpdater::start);
 
-        stateUpdater.shutdown(Duration.ofMinutes(1));
-
-        verify(changelogReader, times(2)).clear();
+        assertEquals("State updater cannot be started again after it was shut down."
+            + " This indicates a bug. Please report at https://issues.apache.org/jira/projects/KAFKA/issues or to the"
+            + " dev-mailing list (https://kafka.apache.org/contact).", exception.getMessage());
+        verify(changelogReader).clear();
     }
 
     @Test
@@ -943,6 +945,134 @@ class DefaultStateUpdaterTest {
         verifyPausedTasks();
         verifyExceptionsAndFailedTasks(new ExceptionAndTask(exception, task));
         assertEquals(shouldStillBeRunning, stateUpdater.isRunning());
+    }
+
+    @Test
+    public void shouldFailPendingRemovalsWhenStateUpdaterThreadDies() throws Exception {
+        final StreamTask taskWithFailingRemoval = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask otherTask = statefulTask(TASK_1_0, Set.of(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
+        final RuntimeException fatalException = new RuntimeException("Something happened");
+        when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
+        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+        final Collection<TopicPartition> changelogPartitions = taskWithFailingRemoval.changelogPartitions();
+        doThrow(fatalException).when(changelogReader)
+            .unregister(changelogPartitions, StandbyUpdateListener.SuspendReason.MIGRATED);
+        stateUpdater.start();
+        stateUpdater.add(taskWithFailingRemoval);
+        stateUpdater.add(otherTask);
+        verifyUpdatingTasks(taskWithFailingRemoval, otherTask);
+
+        final CompletableFuture<StateUpdater.RemovedTaskResult> futureOfFailingRemoval =
+            stateUpdater.remove(taskWithFailingRemoval.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
+        final CompletableFuture<StateUpdater.RemovedTaskResult> futureOfOtherTask =
+            stateUpdater.remove(otherTask.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
+
+        assertInstanceOf(
+            StreamsException.class,
+            assertThrows(ExecutionException.class, futureOfFailingRemoval::get).getCause()
+        );
+        assertInstanceOf(
+            StreamsException.class,
+            assertThrows(ExecutionException.class, futureOfOtherTask::get).getCause()
+        );
+        verifyExceptionsAndFailedTasks(
+            new ExceptionAndTask(fatalException, taskWithFailingRemoval),
+            new ExceptionAndTask(fatalException, otherTask)
+        );
+        // the exception that made the thread die is reported separately, so that the stream thread can fail the
+        // application even if the thread did not own any task
+        assertEquals(Optional.of(fatalException), stateUpdater.fatalException());
+        assertFalse(stateUpdater.isRunning());
+    }
+
+    @Test
+    public void shouldFailRemovalOfTaskWhenStateUpdaterThreadDiesWhilePerformingIt() throws Exception {
+        final StreamTask task = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
+        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+        final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
+        doThrow(new Error("Something happened")).when(changelogReader)
+            .unregister(changelogPartitions, StandbyUpdateListener.SuspendReason.MIGRATED);
+        stateUpdater.start();
+        stateUpdater.add(task);
+        verifyUpdatingTasks(task);
+
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future =
+            stateUpdater.remove(task.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
+
+        assertInstanceOf(StreamsException.class, assertThrows(ExecutionException.class, future::get).getCause());
+        verifyFailedTasks(StreamsException.class, task);
+        assertFalse(stateUpdater.isRunning());
+    }
+
+    @Test
+    public void shouldFailRemovalOfTaskWhenStateUpdaterThreadIsNotRunningAnymore() throws Exception {
+        killStateUpdaterThread();
+
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future =
+            stateUpdater.remove(TASK_0_1, StandbyUpdateListener.SuspendReason.MIGRATED);
+
+        assertInstanceOf(StreamsException.class, assertThrows(ExecutionException.class, future::get).getCause());
+    }
+
+    @Test
+    public void shouldFailRemovalOfTaskAfterStateUpdaterWasShutDown() {
+        stateUpdater.start();
+        stateUpdater.shutdown(Duration.ofMinutes(1));
+
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future =
+            stateUpdater.remove(TASK_0_0, StandbyUpdateListener.SuspendReason.MIGRATED);
+
+        assertInstanceOf(StreamsException.class, assertThrows(ExecutionException.class, future::get).getCause());
+    }
+
+    @Test
+    public void shouldReportTaskAsFailedWhenStateUpdaterThreadIsNotRunningAnymore() throws Exception {
+        final StreamTask task = statefulTask(TASK_0_1, Set.of(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
+        killStateUpdaterThread();
+
+        stateUpdater.add(task);
+
+        verifyFailedTasks(StreamsException.class, task);
+        verifyUpdatingTasks();
+    }
+
+    @Test
+    public void shouldReportFatalExceptionWhenStateUpdaterThreadDied() throws Exception {
+        final StreamTask task = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final RuntimeException fatalException = new RuntimeException("Something happened");
+        doThrow(fatalException).when(changelogReader).restore(mkMap(mkEntry(TASK_0_0, task)));
+        assertEquals(Optional.empty(), stateUpdater.fatalException());
+        stateUpdater.start();
+        assertEquals(Optional.empty(), stateUpdater.fatalException());
+
+        stateUpdater.add(task);
+
+        verifyExceptionsAndFailedTasks(new ExceptionAndTask(fatalException, task));
+        assertEquals(Optional.of(fatalException), stateUpdater.fatalException());
+    }
+
+    @Test
+    public void shouldNotReportFatalExceptionWhenStateUpdaterWasShutDown() {
+        stateUpdater.start();
+
+        stateUpdater.shutdown(Duration.ofMinutes(1));
+
+        assertEquals(Optional.empty(), stateUpdater.fatalException());
+    }
+
+    private void killStateUpdaterThread() throws Exception {
+        final StreamTask task = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final RuntimeException fatalException = new RuntimeException("Something happened");
+        doThrow(fatalException).when(changelogReader).restore(mkMap(mkEntry(TASK_0_0, task)));
+        stateUpdater.start();
+        stateUpdater.add(task);
+        verifyExceptionsAndFailedTasks(new ExceptionAndTask(fatalException, task));
+        // the changelog reader is cleared at the very end of the state updater thread, so this ensures that the thread
+        // stopped completely
+        verify(changelogReader, timeout(VERIFICATION_TIMEOUT)).clear();
+        assertFalse(stateUpdater.isRunning());
+        stateUpdater.drainExceptionsAndFailedTasks();
     }
 
     @Test
