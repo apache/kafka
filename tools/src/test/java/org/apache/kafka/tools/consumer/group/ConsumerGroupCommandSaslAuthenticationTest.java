@@ -126,10 +126,12 @@ public class ConsumerGroupCommandSaslAuthenticationTest {
                 }
             }, "failed to poll data with authentication");
 
-            TestUtils.waitForCondition(
-                () -> consumerGroupService.listConsumerGroups().size() == 1,
-                "failed to find consumer group after successful poll"
-            );
+            TestUtils.waitForCondition(() -> {
+                // Keep polling so the classic consumer (no background thread) can
+                // finish JoinGroup/SyncGroup; otherwise the group never becomes visible.
+                consumer.poll(Duration.ofMillis(1000));
+                return consumerGroupService.listConsumerGroups().size() == 1;
+            }, "failed to find consumer group after successful poll");
         }
     }
 
