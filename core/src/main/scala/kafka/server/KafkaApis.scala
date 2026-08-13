@@ -2227,7 +2227,8 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleAlterConfigsRequest(request: Request): Unit = {
     val original = request.body(classOf[AlterConfigsRequest])
-    val preprocessingResponses = configManager.preprocess(original.data())
+    val preprocessingResponses = configManager.preprocess(original.data(),
+      (rType, rName) => authHelper.authorize(request.context, ALTER_CONFIGS, rType, rName))
     val remaining = ConfigAdminManager.copyWithoutPreprocessed(original.data(), preprocessingResponses)
     def sendResponse(secondPart: Optional[ApiMessage]): Unit = {
       secondPart.toScala match {

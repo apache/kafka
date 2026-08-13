@@ -348,7 +348,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
    */
   private def validatedKafkaProps(propsOverride: Properties, perBrokerConfig: Boolean): Map[String, String] = {
     val propsResolved = JDynamicBrokerConfig.resolveVariableConfigs(propsOverride)
-    JDynamicBrokerConfig.validateConfigs(propsResolved, perBrokerConfig)
+    JDynamicBrokerConfig.validateConfigs(propsOverride, propsResolved, perBrokerConfig)
     val newProps = mutable.Map[String, String]()
     newProps ++= staticBrokerConfigs
     if (perBrokerConfig) {

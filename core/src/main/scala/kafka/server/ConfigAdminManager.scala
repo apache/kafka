@@ -24,12 +24,13 @@ import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, CLIENT_METRICS, GROUP, TOPIC}
 import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
-import org.apache.kafka.common.errors.{ApiException, InvalidConfigurationException, InvalidRequestException}
+import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException, InvalidConfigurationException, InvalidRequestException}
 import org.apache.kafka.common.message.{AlterConfigsRequestData, AlterConfigsResponseData, IncrementalAlterConfigsRequestData, IncrementalAlterConfigsResponseData}
 import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResource => LAlterConfigsResource}
 import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => LAlterConfigsResourceResponse}
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource => IAlterConfigsResource}
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.{AlterConfigsResourceResponse => IAlterConfigsResourceResponse}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.Errors.{INVALID_REQUEST, UNKNOWN_SERVER_ERROR}
 import org.apache.kafka.common.requests.ApiError
 import org.apache.kafka.common.resource.{Resource, ResourceType}
@@ -90,9 +91,7 @@ class ConfigAdminManager(nodeId: Int,
    *
    * @param request     The request data.
    * @param authorize   A callback which is invoked when we need to authorize an operation.
-   *                    Currently, we only use this for log4j operations. Other types of
-   *                    operations are authorized in the persistence step. The arguments
-   *                    are the type and name of the resource to be authorized.
+   *                    The arguments are the type and name of the resource to be authorized.
    *
    * @return            A map from resources to errors. If a resource appears in this map,
    *                    it has been preprocessed and does not need further processing.
@@ -137,6 +136,9 @@ class ConfigAdminManager(nodeId: Int,
                   resource)
               results.put(resource, ApiError.NONE)
             case BROKER =>
+              if (!authorize(ResourceType.CLUSTER, Resource.CLUSTER_NAME)) {
+                throw new ClusterAuthorizationException(Errors.CLUSTER_AUTHORIZATION_FAILED.message())
+              }
               // The resource name must be either blank (if setting a cluster config) or
               // the ID of this specific broker.
               if (configResource.name().nonEmpty) {
@@ -203,11 +205,14 @@ class ConfigAdminManager(nodeId: Int,
    * Preprocess a legacy configuration operation on the broker.
    *
    * @param request     The request data.
+   * @param authorize   A callback which is invoked when we need to authorize an operation.
+   *                    The arguments are the type and name of the resource to be authorized.
    *
    * @return
    */
   def preprocess(
     request: AlterConfigsRequestData,
+    authorize: (ResourceType, String) => Boolean
   ): util.IdentityHashMap[LAlterConfigsResource, ApiError] = {
     val results = new util.IdentityHashMap[LAlterConfigsResource, ApiError]()
     val resourceIds = new util.HashMap[(Byte, String), LAlterConfigsResource]
@@ -238,6 +243,9 @@ class ConfigAdminManager(nodeId: Int,
           }
           resourceType match {
             case BROKER =>
+              if (!authorize(ResourceType.CLUSTER, Resource.CLUSTER_NAME)) {
+                throw new ClusterAuthorizationException(Errors.CLUSTER_AUTHORIZATION_FAILED.message())
+              }
               if (configResource.name().nonEmpty) {
                 validateResourceNameIsCurrentNodeId(resource.resourceName())
               }
