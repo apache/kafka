@@ -58,6 +58,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.server.config.ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG;
+import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIRS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -397,6 +398,66 @@ public class CordonedLogDirsIntegrationTest {
             clusterInstance.brokers().get(brokerId).awaitShutdown();
             admin.unregisterBroker(brokerId).all().get();
             TestUtils.waitForCondition(() -> admin.describeCluster().nodes().get().size() == 1, 10_000, "Unable to unregister " + brokerId);
+        }
+    }
+
+    @ClusterTest(
+            brokers = 2,
+            controllers = 1
+    )
+    public void testDecommissionLogDir() throws ExecutionException, InterruptedException {
+        // Select the target broker
+        int brokerId = clusterInstance.brokerIds().stream().filter(id -> !clusterInstance.controllerIds().contains(id)).findFirst().get();
+        try (var admin = clusterInstance.admin()) {
+            List<String> logDirs = clusterInstance.brokers().get(brokerId).config().logDirs();
+            assertTrue(logDirs.size() > 1, "Test requires more than one log dir per broker");
+            String logDirToRemove = logDirs.get(logDirs.size() - 1);
+            List<String> remainingLogDirs = logDirs.subList(0, logDirs.size() - 1);
+
+            // Create 10 topics, replicated to every broker so brokerId is guaranteed to host some
+            // replicas on the log dir we're about to decommission
+            for (int i = 0; i < 10; i++) {
+                admin.createTopics(newTopic("topic" + i)).all().get();
+            }
+            TestUtils.waitForCondition(() -> admin.listTopics().names().get().size() == 10, 10_000, "Topics were not created");
+
+            ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER, String.valueOf(brokerId));
+
+            // Cordon the log dir we're going to decommission and move any replicas hosted on it elsewhere
+            setCordonedLogDirs(admin, List.of(logDirToRemove), brokerResource);
+            Set<TopicPartition> partitionsToMove = new HashSet<>();
+            LogDirDescription description = admin.describeLogDirs(List.of(brokerId)).allDescriptions().get().get(brokerId).get(logDirToRemove);
+            partitionsToMove.addAll(description.replicaInfos().keySet());
+            assertFalse(partitionsToMove.isEmpty());
+            int target = clusterInstance.brokerIds().stream().filter(id -> id != brokerId).findFirst().get();
+            movePartitions(admin, partitionsToMove, brokerId, Optional.of(logDirToRemove), target);
+
+            // Shut down the broker so the log dir can be physically decommissioned while it's offline
+            clusterInstance.brokers().get(brokerId).shutdown();
+            clusterInstance.brokers().get(brokerId).awaitShutdown();
+
+            // Uncordon the log dir via the controller while the broker is shut down
+            try (Admin controllerAdmin = clusterInstance.admin(Map.of(), true)) {
+                controllerAdmin.incrementalAlterConfigs(cordonedDirsConfig("", brokerResource)).all().get();
+            }
+
+            // Physically decommission the log dir: restart the
+            // broker without it in its static log.dirs config
+            Map<String, Object> propOverrides = Map.of(LOG_DIRS_CONFIG, String.join(",", remainingLogDirs), CORDONED_LOG_DIRS_CONFIG, "");
+            clusterInstance.restartBroker(brokerId, propOverrides);
+            clusterInstance.waitForReadyBrokers();
+
+            // The broker restarted with the reduced set of log dirs, and no longer reports the removed one
+            assertEquals(remainingLogDirs, clusterInstance.brokers().get(brokerId).config().logDirs());
+            TestUtils.waitForCondition(() ->
+                !admin.describeLogDirs(List.of(brokerId)).allDescriptions().get().get(brokerId).containsKey(logDirToRemove),
+                10_000, "Broker " + brokerId + " is still reporting the removed log dir " + logDirToRemove);
+
+            // The broker is still fully functional after losing a log dir
+            admin.createTopics(newTopic("topic-after-decommission")).all().get();
+            TestUtils.waitForCondition(() ->
+                admin.listTopics().names().get().size() == 11,
+                10_000, "Topic was not created after decommissioning a log dir");
         }
     }
 

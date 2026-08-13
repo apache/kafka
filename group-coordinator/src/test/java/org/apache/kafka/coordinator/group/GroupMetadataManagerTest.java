@@ -27,6 +27,7 @@ import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.FencedMemberEpochException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
+import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
 import org.apache.kafka.common.errors.InvalidRegularExpression;
@@ -38,6 +39,8 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnreleasedInstanceIdException;
 import org.apache.kafka.common.internals.Plugin;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsRequestData;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -154,6 +157,7 @@ import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.TaskRole;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
+import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
@@ -163,6 +167,7 @@ import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.InitializeShareGroupStateParameters;
+import org.apache.kafka.server.share.persister.PartitionFactory;
 import org.apache.kafka.server.share.persister.PartitionIdData;
 import org.apache.kafka.server.share.persister.PartitionStateData;
 import org.apache.kafka.server.share.persister.TopicData;
@@ -186,7 +191,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
@@ -227,6 +231,7 @@ import static org.apache.kafka.coordinator.group.GroupMetadataManager.groupSessi
 import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext.DEFAULT_CLIENT_ADDRESS;
 import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext.DEFAULT_CLIENT_ID;
 import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext.DEFAULT_PROCESS_ID;
+import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.getDefaultAssignmentConfigs;
 import static org.apache.kafka.coordinator.group.Utils.computeGroupHash;
 import static org.apache.kafka.coordinator.group.Utils.computeTopicHash;
 import static org.apache.kafka.coordinator.group.Utils.toAssignmentWithEpochs;
@@ -23654,7 +23659,7 @@ public class GroupMetadataManagerTest {
                     .setWarmupTasks(List.of()));
         assertEquals(2, result.response().data().memberEpoch());
         assertEquals(
-            getDefaultAssignmentConfigs(),
+            AssignmentConfigsImpl.DEFAULT,
             assignor.lastPassedAssignmentConfigs()
         );
 
@@ -23693,7 +23698,7 @@ public class GroupMetadataManagerTest {
 
         // Verify that the new number of standby replicas is used
         assertEquals(
-            Map.of("num.standby.replicas", "2"),
+            AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(2),
             assignor.lastPassedAssignmentConfigs()
         );
 
@@ -24041,7 +24046,7 @@ public class GroupMetadataManagerTest {
         context.assertSessionTimeout(groupId, memberId,
             GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_DEFAULT);
         assertEquals(
-            getDefaultAssignmentConfigs(),
+            AssignmentConfigsImpl.DEFAULT,
             assignor.lastPassedAssignmentConfigs());
         assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT,
             result.response().data().taskOffsetIntervalMs());
@@ -24081,7 +24086,7 @@ public class GroupMetadataManagerTest {
         // Verify that the number of standby replicas is evaluated to max,
         // and task offset interval is evaluated to min
         assertEquals(
-            Map.of("num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT)),
+            AssignmentConfigsImpl.DEFAULT.withNumStandbyReplicas(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT),
             assignor.lastPassedAssignmentConfigs());
         assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT,
             result.response().data().taskOffsetIntervalMs());
@@ -28188,6 +28193,109 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testAlterShareGroupOffsetsBumpsGroupEpoch() {
+        // Per KIP-932's Administration section, altering share group offsets must bump the
+        // group epoch, write a ShareGroupMetadata record, and only then send the
+        // InitializeShareGroupState request (using the bumped epoch) to the share coordinator.
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+
+        String groupId = "share-group";
+        String topicName = "topic-1";
+        Uuid topicId = Uuid.randomUuid();
+
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
+            .addTopic(topicId, topicName, 3)
+            .buildCoordinatorMetadataImage();
+
+        context.groupMetadataManager.onMetadataUpdate(mock(CoordinatorMetadataDelta.class), image);
+
+        // The share group already exists (empty) at epoch 5.
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 5, 0));
+        context.commit();
+
+        AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopicCollection requestTopics =
+            new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopicCollection(List.of(
+                new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
+                    .setTopicName(topicName)
+                    .setPartitions(List.of(
+                        new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
+                            .setPartitionIndex(0)
+                            .setStartOffset(10L)
+                    ))
+            ));
+
+        CoordinatorResult<Map.Entry<AlterShareGroupOffsetsResponseData, InitializeShareGroupStateParameters>, CoordinatorRecord> result =
+            context.groupMetadataManager.alterShareGroupOffsets(groupId, requestTopics);
+
+        // The group epoch must be bumped from 5 to 6 via a ShareGroupMetadata record.
+        assertTrue(
+            result.records().contains(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 6, 0)),
+            () -> "Expected records to contain a bumped ShareGroupMetadata record but got: " + result.records()
+        );
+
+        // The InitializeShareGroupState request sent to the share coordinator must carry the
+        // bumped (new) group epoch as the partitions' state epoch.
+        List<PartitionStateData> partitions = result.response().getValue()
+            .groupTopicPartitionData()
+            .topicsData()
+            .get(0)
+            .partitions();
+        assertEquals(List.of(PartitionFactory.newPartitionStateData(0, 6, 10L)), partitions);
+    }
+
+    @Test
+    public void testAlterShareGroupOffsetsErroneousCallDoesNotBumpGroupEpoch() {
+        // A rejected AlterShareGroupOffsets request (e.g. because the group isn't empty) must
+        // leave the group epoch untouched -- the epoch bump only applies to a successful call.
+        String groupId = "share-group";
+        String memberId = "member-1";
+        Uuid topicId = Uuid.randomUuid();
+        String topicName = "topic-1";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(topicId, topicName, 3)
+                .buildCoordinatorMetadataImage())
+            .withShareGroup(new ShareGroupBuilder(groupId, 5)
+                .withMember(new ShareGroupMember.Builder(memberId)
+                    .setState(MemberState.STABLE)
+                    .setMemberEpoch(5)
+                    .setPreviousMemberEpoch(5)
+                    .setClientId(DEFAULT_CLIENT_ID)
+                    .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+                    .setSubscribedTopicNames(List.of(topicName))
+                    .build()))
+            .build();
+
+        assertEquals(5, context.groupMetadataManager.shareGroup(groupId).groupEpoch());
+
+        AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopicCollection requestTopics =
+            new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopicCollection(List.of(
+                new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
+                    .setTopicName(topicName)
+                    .setPartitions(List.of(
+                        new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
+                            .setPartitionIndex(0)
+                            .setStartOffset(10L)
+                    ))
+            ));
+
+        assertThrows(GroupNotEmptyException.class,
+            () -> context.groupMetadataManager.alterShareGroupOffsets(groupId, requestTopics));
+
+        // The group epoch must be unchanged since the request was rejected before any records
+        // (including the epoch bump) were generated or replayed.
+        assertEquals(5, context.groupMetadataManager.shareGroup(groupId).groupEpoch());
+    }
+
+    @Test
     public void testShareGroupHeartbeatInitializeOnPartitionUpdate() {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
@@ -30349,16 +30457,5 @@ public class GroupMetadataManagerTest {
     ) {
         return responseTopics.stream()
             .collect(Collectors.toMap(DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic::topicId, Function.identity()));
-    }
-
-    /**
-     * Returns the default assignment configurations that would be used by the system.
-     * This matches what streamsGroupAssignmentConfigs() would return.
-     */
-    private Map<String, String> getDefaultAssignmentConfigs() {
-        // Use the same default value as GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT
-        return new TreeMap<>(Map.of(
-            "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT)
-        ));
     }
 }

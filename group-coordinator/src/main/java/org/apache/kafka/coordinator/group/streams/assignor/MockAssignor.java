@@ -64,7 +64,11 @@ public class MockAssignor implements TaskAssignor {
 
         // Copy existing assignment and fill temporary data structures
         for (final String memberId : groupSpec.memberIds()) {
-            Map<String, Set<Integer>> activeTasks = new HashMap<>(groupSpec.memberAssignmentState(memberId).activeTasks());
+            // Deep-copy: the partition sets are grown below when assigning unassigned tasks, and the ones owned by
+            // the group spec are unmodifiable.
+            Map<String, Set<Integer>> activeTasks = new HashMap<>();
+            groupSpec.memberAssignmentState(memberId).activeTasks().forEach((subtopologyId, partitions) ->
+                activeTasks.put(subtopologyId, new HashSet<>(partitions)));
 
             newTargetAssignment.put(memberId, new MemberAssignment(activeTasks, new HashMap<>()));
             for (Map.Entry<String, Set<Integer>> entry : activeTasks.entrySet()) {
