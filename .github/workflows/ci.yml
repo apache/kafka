@@ -20,6 +20,7 @@ on:
     branches:
       - 'trunk'
       - '4.3'
+      - '4.4'
 
   schedule:
     - cron: '0 0 * * 6,0'    # Run on Saturday and Sunday at midnight UTC
@@ -29,6 +30,7 @@ on:
     branches:
       - 'trunk'
       - '4.3'
+      - '4.4'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

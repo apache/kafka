@@ -26,6 +26,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import javax.net.ssl.SSLSocketFactory;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -49,6 +51,14 @@ public class JaasOptionsUtilsTest extends OAuthBearerTest {
         assertEquals(sslKeystore, sslClientConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG));
         assertEquals(sslTruststore, sslClientConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
         assertEquals(SslConfigs.DEFAULT_SSL_PROTOCOL, sslClientConfig.get(SslConfigs.SSL_PROTOCOL_CONFIG));
+    }
+
+    @Test
+    public void testCreateSSLSocketFactory() {
+        JaasOptionsUtils jou = new JaasOptionsUtils(Collections.emptyMap());
+        SSLSocketFactory socketFactory = jou.createSSLSocketFactory();
+        assertNotNull(socketFactory);
+        assertTrue(socketFactory.getDefaultCipherSuites().length > 0);
     }
 
     @Test
