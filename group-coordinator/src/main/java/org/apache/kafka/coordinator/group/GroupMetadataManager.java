@@ -9416,6 +9416,12 @@ public class GroupMetadataManager {
         final ShareGroup group = getOrMaybeCreateShareGroup(groupId, true);
         throwIfShareGroupIsNotEmpty(group);
 
+        // Per KIP-932, altering share group offsets must bump the group epoch and write a
+        // ShareGroupMetadata record before the InitializeShareGroupState request is sent to the
+        // share coordinator, so that the persisted state epoch reflects the new group epoch.
+        final int groupEpoch = group.groupEpoch() + 1;
+        records.add(newShareGroupEpochRecord(groupId, groupEpoch, group.metadataHash()));
+
         AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection alterShareGroupOffsetsResponseTopics = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection();
 
         Map<Uuid, InitMapValue> initializingTopics = new HashMap<>();
@@ -9480,7 +9486,7 @@ public class GroupMetadataManager {
             Map.entry(
                 new AlterShareGroupOffsetsResponseData()
                     .setResponses(alterShareGroupOffsetsResponseTopics),
-                buildInitializeShareGroupState(groupId, group.groupEpoch(), offsetByTopicPartitions)
+                buildInitializeShareGroupState(groupId, groupEpoch, offsetByTopicPartitions)
             )
         );
     }
