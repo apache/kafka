@@ -73,22 +73,6 @@ import java.util.function.Supplier;
  */
 public class RecordAccumulator {
 
-    /**
-     * Track progress of an append's retry loop, advanced by
-     * {@link #throwIfNoMoreRetriesAllowed}.
-     */
-    protected enum AppendAttemptState {
-        /** No pass has run yet. The first one is always allowed, so the deadline is not enforced in this state. */
-        FIRST_ATTEMPT,
-        /** At least one pass has run; the append stays in this state while there is time left under the deadline. */
-        RETRYING,
-        /**
-         * The deadline passed while retrying. The pass that moved into this state did run even after the
-         * deadline passed (and it may have appended). Once in this state no more passes will be allowed.
-         */
-        RETRIES_EXPIRED
-    }
-
     protected final LogContext logContext;
     protected final Logger log;
     protected volatile boolean closed;
@@ -423,36 +407,32 @@ public class RecordAccumulator {
     /**
      * Decide whether an append pass may run, and throw if it may not because no time is left.
      * <ul>
-     * <li>the first pass is always allowed — the deadline is not even read, so an append that completes in one
-     *     pass never depends on the clock;</li>
-     * <li>retries are allowed while there is time left before {@code deadlineMs};</li>
-     * <li>after the deadline, one more retry is allowed, since it may need no memory at all and
-     *     {@code max.block.ms} of 0 is already past its deadline when the append starts. The pass after that
-     *     throws, which is the only thing that stops the loop repeating.</li>
+     * <li>The first pass is always allowed. The deadline is not even read, so an append that completes in one
+     *     pass never depends on the clock</li>
+     * <li>Every following pass is allowed only while there is time left before {@code deadlineMs}. The first one
+     *     that finds the deadline gone throws.</li>
      * </ul>
-     * These allow a pass, never waiting time: past the deadline a blocking acquire is given
-     * {@link #remainingTimeToBlockMs}, which is 0 by then, and the extension acquire never waits at all. So
-     * retries that wait for memory are bounded by that wait, and this bounds the ones that wait for nothing —
-     * retries because the partition moved, or the batch the pass read was replaced or filled under it.
+     * The deadline therefore bounds the loop as well as the waiting inside it.
+     * Every acquire is bounded by the {@link #remainingTimeToBlockMs}.
+     * Every retry that wait for nothing is bounded too (e.g., the partition changed, the batch the pass
+     * read was replaced or filled under it).
      *
+     * @param firstPass whether this is the append's first pass, which is always allowed no matter the deadline.
      * @param deniedMemory whether the pool refused the pass that just ended; it only decides how giving up is
      *                     reported. Only the incremental extension acquire can be refused and still let its
      *                     pass finish, and it suppresses the pool's own buffer-exhausted metric so the drop is
      *                     counted here — exactly once either way. The full path should pass {@code false}:
      *                     {@link BufferPool#allocate} records that metric itself and its refusal ends the append.
-     * @return the state to pass to the next call, when this pass may run
      * @throws BufferExhaustedException if the pass that gave up was denied memory
-     * @throws TimeoutException if it gave up for any other reason
+     * @throws TimeoutException if the deadline has been reached (and it's not the first pass).
      */
-    protected AppendAttemptState throwIfNoMoreRetriesAllowed(AppendAttemptState attemptState, long deadlineMs,
-                                                            boolean deniedMemory, String topic) {
+    protected void throwIfNoMoreRetriesAllowed(boolean firstPass, long deadlineMs,
+                                              boolean deniedMemory, String topic) {
         // The common case is a single pass, so it costs no clock read.
-        if (attemptState == AppendAttemptState.FIRST_ATTEMPT)
-            return AppendAttemptState.RETRYING;
+        if (firstPass)
+            return;
         if (time.milliseconds() < deadlineMs)
-            return attemptState;
-        if (attemptState == AppendAttemptState.RETRYING)
-            return AppendAttemptState.RETRIES_EXPIRED;
+            return;
         if (deniedMemory) {
             free.recordBufferExhausted();
             throw new BufferExhaustedException("Failed to allocate memory for a record of topic " + topic
