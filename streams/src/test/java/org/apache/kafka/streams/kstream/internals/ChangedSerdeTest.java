@@ -29,6 +29,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.Map;
@@ -215,5 +216,43 @@ public class ChangedSerdeTest {
 
         verify(mockDeserializer).deserialize(TOPIC, HEADERS, value.getBytes());
         verify(mockDeserializer, never()).deserialize(TOPIC, value.getBytes());
+    }
+
+    @Test
+    public void shouldThrowOnNewDataLengthLargerThanRemainingBytesForFlag2() {
+        final byte[] newData = STRING_SERIALIZER.serialize(TOPIC, HEADERS, nonNullNewValue);
+        final byte[] oldData = STRING_SERIALIZER.serialize(TOPIC, HEADERS, nonNullOldValue);
+        final int fakeNewDataLength = newData.length + oldData.length + 1; // one past what the buffer can actually back
+
+        final int capacity = MAX_VARINT_LENGTH + newData.length + oldData.length + ENCODING_FLAG_SIZE;
+        final ByteBuffer buf = ByteBuffer.allocate(capacity);
+        ByteUtils.writeVarint(fakeNewDataLength, buf);
+        buf.put(newData).put(oldData).put((byte) 2);
+        final byte[] serialized = new byte[buf.position()];
+        buf.position(0);
+        buf.get(serialized);
+
+        assertThrows(
+                BufferUnderflowException.class,
+                () -> CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, HEADERS, serialized));
+    }
+
+    @Test
+    public void shouldThrowOnNewDataLengthLargerThanRemainingBytesForFlag5() {
+        final byte[] newData = STRING_SERIALIZER.serialize(TOPIC, HEADERS, nonNullNewValue);
+        final byte[] oldData = STRING_SERIALIZER.serialize(TOPIC, HEADERS, nonNullOldValue);
+        final int fakeNewDataLength = newData.length + oldData.length + 1;
+
+        final int capacity = MAX_VARINT_LENGTH + newData.length + oldData.length + IS_LATEST_FLAG_SIZE + ENCODING_FLAG_SIZE;
+        final ByteBuffer buf = ByteBuffer.allocate(capacity);
+        ByteUtils.writeVarint(fakeNewDataLength, buf);
+        buf.put(newData).put(oldData).put((byte) 1).put((byte) 5);
+        final byte[] serialized = new byte[buf.position()];
+        buf.position(0);
+        buf.get(serialized);
+
+        assertThrows(
+                BufferUnderflowException.class,
+                () -> CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, HEADERS, serialized));
     }
 }
