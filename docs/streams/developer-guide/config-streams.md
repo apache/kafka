@@ -1809,7 +1809,7 @@ If you call `streamsBuilder.build()` without passing the `Properties` object, op
  
  #### group.instance.id {#group-instance-id}
 
- `group.instance.id` is an embedded consumer configuration that enables static membership. Kafka Streams appends the 1-based stream thread index to the configured value; for example, `my-app` produces `my-app-1`, `my-app-2`, and so on. The configured value must be unique to each `KafkaStreams` instance so that the derived IDs are unique within the application. The setting may be provided without a prefix or with `consumer.` or `main.consumer.`. Static membership is supported with both `group.protocol=classic` and, starting in 4.4, `group.protocol=streams`.
+ `group.instance.id` is a consumer configuration that enables static membership. For Kafka Streams, it is configured at the Kafka Streams client level, and the configured value must be unique to each `KafkaStreams` instance. Internally, Kafka Streams appends the 1-based stream thread index to the configured `group.instance.id` to ensure that each stream thread's main consumer uses a unique value. For example, a configured value of `ks-client-A` results in `ks-client-A-1`, `ks-client-A-2`, and so on. Static membership is supported with both `group.protocol=classic` and `group.protocol=streams`.
 
  #### Default Values
  
