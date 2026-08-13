@@ -32,6 +32,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StateUpdater.ExceptionAndTask;
 import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.test.TestUtils;
 
 import org.hamcrest.Matcher;
 import org.junit.jupiter.api.AfterEach;
@@ -51,6 +52,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -2158,6 +2160,121 @@ class DefaultStateUpdaterTest {
 
         stateUpdater.add(activeTask2);
         verifyUpdatingTasks(activeTask1, activeTask2);
+    }
+
+    @Test
+    public void shouldNotListTheSameTaskTwiceWhilePausingAStandbyTask() throws Exception {
+        final StandbyTask task = standbyTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
+        stateUpdater.start();
+        stateUpdater.add(task);
+        verifyUpdatingTasks(task);
+
+        // pauseTask() moves the task from the updating tasks to the paused tasks
+        shouldNotListTheSameTaskTwiceWhileMovingIt(
+            "updatingTasks",
+            () -> when(topologyMetadata.isPaused(null)).thenReturn(true)
+        );
+    }
+
+    @Test
+    public void shouldNotListTheSameTaskTwiceWhileResumingAStandbyTask() throws Exception {
+        final StandbyTask task = standbyTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
+        when(topologyMetadata.isPaused(null)).thenReturn(true);
+        stateUpdater.start();
+        stateUpdater.add(task);
+        verifyPausedTasks(task);
+
+        // resumeTask() moves the task from the paused tasks to the updating tasks
+        shouldNotListTheSameTaskTwiceWhileMovingIt(
+            "pausedTasks",
+            () -> {
+                when(topologyMetadata.isPaused(null)).thenReturn(false);
+                stateUpdater.signalResume();
+            }
+        );
+    }
+
+    private void shouldNotListTheSameTaskTwiceWhileMovingIt(final String mapToFreeze,
+                                                            final Runnable triggerMove) throws Exception {
+        final CountDownLatch removeInitiatedLatch = new CountDownLatch(1);
+        final CountDownLatch removeCompletedLatch = new CountDownLatch(1);
+        // Replacing the map in the state updater to be able to synchronize the calls so that they happen in the right order
+        replaceTasksMap(mapToFreeze, removeInitiatedLatch, removeCompletedLatch);
+
+        final AtomicReference<List<TaskId>> taskIds = new AtomicReference<>();
+        // Calling tasks() concurrently to avoid a deadlock
+        final Thread reader = new Thread(
+                () -> taskIds.set(stateUpdater.tasks().stream().map(Task::id).collect(Collectors.toList()))
+        );
+        try {
+            triggerMove.run();
+            assertTrue(
+                removeInitiatedLatch.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS),
+                "State updater thread never reached the put->remove window of " + mapToFreeze + "!"
+            );
+
+            reader.start();
+            waitForCondition(
+                () -> !reader.isAlive() || reader.getState() == Thread.State.WAITING,
+                VERIFICATION_TIMEOUT,
+                "Reader thread neither completed nor got blocked on the state updater lock!"
+            );
+        } finally {
+            removeCompletedLatch.countDown();
+        }
+
+        reader.join(VERIFICATION_TIMEOUT);
+        assertFalse(reader.isAlive(), "Reader thread did not finish within " + VERIFICATION_TIMEOUT + " ms!");
+
+        assertEquals(
+                taskIds.get().size(),
+                taskIds.get().stream().distinct().count(),
+                "tasks() returned duplicate task IDs while the task was moved between the maps: " + taskIds.get()
+        );
+    }
+
+    private void replaceTasksMap(final String fieldName,
+                                 final CountDownLatch removeInitiatedLatch,
+                                 final CountDownLatch removeCompletedLatch) throws Exception {
+        final Object stateUpdaterThread = TestUtils.fieldValue(stateUpdater, DefaultStateUpdater.class, "stateUpdaterThread");
+        final Map<TaskId, Task> tasks =
+                TestUtils.fieldValue(stateUpdaterThread, stateUpdaterThread.getClass(), fieldName);
+        TestUtils.setFieldValue(
+                stateUpdaterThread,
+                fieldName,
+                new SynchronizedTestMap(tasks, removeInitiatedLatch, removeCompletedLatch)
+        );
+    }
+
+    private static class SynchronizedTestMap extends ConcurrentHashMap<TaskId, Task> {
+
+        private final CountDownLatch removeInitiatedLatch;
+        private final CountDownLatch removeCompletedLatch;
+        private boolean frozen = false;
+
+        SynchronizedTestMap(final Map<TaskId, Task> oldMap,
+                            final CountDownLatch removeInitiatedLatch,
+                            final CountDownLatch removeCompletedLatch) {
+            super(oldMap);
+            this.removeInitiatedLatch = removeInitiatedLatch;
+            this.removeCompletedLatch = removeCompletedLatch;
+        }
+
+        @Override
+        public Task remove(final Object key) {
+            // Freeze the first removal (the one that moves the task between the maps), holding the task in both
+            // maps until the test releases us. Time out instead of blocking forever if the test never does.
+            if (!frozen) {
+                frozen = true;
+                removeInitiatedLatch.countDown();
+                try {
+                    assertTrue(removeCompletedLatch.await(VERIFICATION_TIMEOUT, TimeUnit.MILLISECONDS));
+                } catch (final InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            return super.remove(key);
+        }
     }
 
     private static List<MetricName> getMetricNames(final String threadId) {
