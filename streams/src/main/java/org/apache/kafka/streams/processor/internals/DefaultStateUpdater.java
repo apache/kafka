@@ -717,8 +717,13 @@ public class DefaultStateUpdater implements StateUpdater {
             // do not need to unregister changelog partitions for paused tasks
             try {
                 measureCheckpointLatency(() -> task.maybeCheckpoint());
-                pausedTasks.put(taskId, task);
-                updatingTasks.remove(taskId);
+                tasksAndActionsLock.lock();
+                try {
+                    pausedTasks.put(taskId, task);
+                    updatingTasks.remove(taskId);
+                } finally {
+                    tasksAndActionsLock.unlock();
+                }
                 if (task.isActive()) {
                     transitToUpdateStandbysIfOnlyStandbysLeft();
                 }
@@ -732,8 +737,13 @@ public class DefaultStateUpdater implements StateUpdater {
 
         private void resumeTask(final Task task) {
             final TaskId taskId = task.id();
-            updatingTasks.put(taskId, task);
-            pausedTasks.remove(taskId);
+            tasksAndActionsLock.lock();
+            try {
+                updatingTasks.put(taskId, task);
+                pausedTasks.remove(taskId);
+            } finally {
+                tasksAndActionsLock.unlock();
+            }
 
             if (task.isActive()) {
                 log.info("Stateful active task " + task.id() + " was resumed to the updating tasks of the state updater");
