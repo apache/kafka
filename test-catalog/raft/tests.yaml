@@ -786,6 +786,11 @@ org.apache.kafka.raft.internals.RecordsBatchReaderTest:
 - testLeaderChangeControlBatch
 - testReadFromFileRecords
 - testReadFromMemoryRecords
+org.apache.kafka.raft.internals.RecordsDecodingStrategyTest:
+- testControlOnly
+- testDataAndControl
+- testDataOnly
+- testNone
 org.apache.kafka.raft.internals.RecordsIteratorTest:
 - testControlRecordIterationWithKraftVersion0
 - testControlRecordIterationWithKraftVersion1

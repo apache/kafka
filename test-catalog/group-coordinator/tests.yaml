@@ -1609,6 +1609,13 @@ org.apache.kafka.coordinator.group.streams.TopologyMetadataTest:
 - testMetadataImage
 - testSubtopologies
 - testTopology
+org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImplTest:
+- testDefault
+- testFromEmptyMap
+- testFromMap
+- testFromMapWithoutRackAwareAssignmentTags
+- testRackAwareAssignmentTagsAreUnmodifiable
+- testWithers
 org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImplTest:
 - testConfigs
 - testMemberAssignmentState
@@ -1650,13 +1657,16 @@ org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignorTest:
 - shouldAssignStandbyTaskToPreviousOwnerBasedOnBelowQuotaCondition
 - shouldAssignStandbyTasksToDifferentClientThanCorrespondingActiveTaskIsAssignedTo
 - shouldAssignStandbyToPreviousStandbyThatDoesNotHoldTheActiveTask
+- shouldAssignStandbysAwayFromProcessHoldingStateOnColdStart
 - shouldAssignTasksEvenlyWithUnequalTopicGroupSizes
 - shouldAssignTasksNotPreviouslyActiveToMultipleNewClients
 - shouldAssignTasksNotPreviouslyActiveToNewClient
 - shouldAssignTasksToClientWithPreviousStandbyTasks
+- shouldAssignTasksToMembersReportingTaskOffsetsOnColdStart
 - shouldAssignTasksToNewClient
 - shouldAssignTasksToNewClientWithoutFlippingAssignmentBetweenExistingAndBouncedClients
 - shouldAssignTasksToNewClientWithoutFlippingAssignmentBetweenExistingClients
+- shouldAssignTasksToProcessesReportingTaskOffsetsOnColdStartWithMultipleMembersPerProcess
 - shouldAssignTopicGroupIdEvenlyAcrossClientsWithNoStandByTasks
 - shouldAssignTopicGroupIdEvenlyAcrossClientsWithStandByTasks
 - shouldBalanceActiveAndStandbyTasksAcrossAvailableClients
@@ -1675,6 +1685,7 @@ org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignorTest:
 - shouldNotMoveAnyTasksWhenNewTasksAdded
 - shouldRangeAssignTasksWhenScalingUp
 - shouldRangeAssignTasksWhenStartingEmpty
+- shouldRankCurrentOwnersAheadOfReportedTaskOffsetsAndMostCaughtUpFirst
 - shouldReBalanceTasksAcrossAllClientsWhenCapacityAndTaskCountTheSame
 - shouldReBalanceTasksAcrossClientsWhenCapacityLessThanTaskCount
 - shouldReassignTasksWhenNewNodeJoinsWithExistingActiveAndStandbyAssignments

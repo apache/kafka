@@ -3281,6 +3281,7 @@ org.apache.kafka.streams.processor.internals.TaskManagerTest:
 - shouldNotFailOnTimeoutException
 - shouldNotLockAnythingIfStateDirIsEmpty
 - shouldNotPauseReadyTasksOnRebalanceComplete
+- shouldNotPublishTaskOffsetSumSnapshotUnderClassicProtocol
 - shouldNotRecreateActiveTasksThatAreAlreadyOwned
 - shouldNotRecreateStandbyTasksThatAreAlreadyOwned
 - shouldNotReportOffsetSumsAndReleaseLockForUnassignedTaskWithoutCheckpoint
