@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import java.io.ByteArrayOutputStream;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -52,9 +53,15 @@ public class ProcessorMetadata {
 
         final ByteBuffer buffer = ByteBuffer.wrap(metaDataBytes);
         final int entrySize = buffer.getInt();
+        if (entrySize < 0 || entrySize > buffer.remaining() / (Integer.BYTES + Long.BYTES)) {
+            throw new BufferUnderflowException();
+        }
         final Map<String, Long> metadata = new HashMap<>(entrySize);
         for (int i = 0; i < entrySize; i++) {
             final int keySize = buffer.getInt();
+            if (keySize < 0 || keySize > buffer.remaining() - Long.BYTES) {
+                throw new BufferUnderflowException();
+            }
             final byte[] keyBytes = new byte[keySize];
             buffer.get(keyBytes);
             final Long value = buffer.getLong();

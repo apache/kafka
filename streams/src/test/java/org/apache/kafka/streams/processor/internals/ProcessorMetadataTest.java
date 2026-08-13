@@ -18,6 +18,9 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.BufferUnderflowException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -26,6 +29,7 @@ import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ProcessorMetadataTest {
@@ -160,5 +164,56 @@ public class ProcessorMetadataTest {
 
         assertEquals(metadata1, metadata2);
         assertEquals(metadata1.hashCode(), metadata2.hashCode());
+    }
+
+    @Test
+    public void shouldThrowWhenKeySizeExceedsRemainingBytes() {
+        final byte[] keyBytes = "key1".getBytes(StandardCharsets.UTF_8);
+        final int fakeKeySize = keyBytes.length + Long.BYTES + 1; // one past what's actually left for this entry
+
+        final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES + Integer.BYTES + keyBytes.length + Long.BYTES);
+        buf.putInt(1);              // entrySize = 1, legitimate
+        buf.putInt(fakeKeySize);    // keySize is too large
+        buf.put(keyBytes);
+        buf.putLong(1L);
+        final byte[] serialized = new byte[buf.position()];
+        buf.position(0);
+        buf.get(serialized);
+
+        assertThrows(BufferUnderflowException.class, () -> ProcessorMetadata.deserialize(serialized));
+    }
+
+    @Test
+    public void shouldThrowWhenKeySizeIsNegative() {
+        final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES + Integer.BYTES);
+        buf.putInt(1);    // entrySize = 1, legitimate
+        buf.putInt(-1);   // keySize is negative
+
+        assertThrows(BufferUnderflowException.class, () -> ProcessorMetadata.deserialize(buf.array()));
+    }
+
+    @Test
+    public void shouldThrowWhenEntrySizeExceedsRemainingBytes() {
+        final byte[] keyBytes = "k".getBytes(StandardCharsets.UTF_8);
+        final int fakeEntrySize = 2; // claims 2 entries, but only enough real bytes exist for 1
+
+        final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES + Integer.BYTES + keyBytes.length + Long.BYTES);
+        buf.putInt(fakeEntrySize);    // entrySize too large
+        buf.putInt(keyBytes.length);  // keySize for the one real entry that follows
+        buf.put(keyBytes);
+        buf.putLong(1L);
+        final byte[] serialized = new byte[buf.position()];
+        buf.position(0);
+        buf.get(serialized);
+
+        assertThrows(BufferUnderflowException.class, () -> ProcessorMetadata.deserialize(serialized));
+    }
+
+    @Test
+    public void shouldThrowWhenEntrySizeIsNegative() {
+        final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES);
+        buf.putInt(-1);
+
+        assertThrows(BufferUnderflowException.class, () -> ProcessorMetadata.deserialize(buf.array()));
     }
 }
