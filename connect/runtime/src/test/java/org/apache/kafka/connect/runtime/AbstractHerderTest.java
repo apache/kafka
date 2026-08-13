@@ -1094,6 +1094,41 @@ public class AbstractHerderTest {
     }
 
     @Test
+    public void testMaybeAddConfigErrorsWithNullConfigInfoAndNullConfigValue() throws Exception {
+        AbstractHerder herder = testHerder();
+        Map<String, ConfigDef.ConfigKey> keys = new HashMap<>();
+        addConfigKey(keys, "config.a1", null);
+        addConfigKey(keys, "config.b1", "group B");
+
+        List<ConfigValue> values = new ArrayList<>();
+        addValue(values, "config.b1", "value.b1", "error b1");
+
+        ConfigInfos infos = AbstractHerder.generateResult(
+                "com.acme.connector.MyConnector", keys, values, List.of("group B"));
+        infos.configs().add(null);
+
+        FutureCallback<Herder.Created<ConnectorInfo>> callback = new FutureCallback<>();
+        assertTrue(herder.maybeAddConfigErrors(infos, callback));
+        ExecutionException e = assertThrows(ExecutionException.class, callback::get);
+        assertTrue(e.getCause() instanceof BadRequestException);
+    }
+
+    @Test
+    public void testMaybeAddConfigErrorsWithNullConfigValueAndNoErrors() {
+        AbstractHerder herder = testHerder();
+        Map<String, ConfigDef.ConfigKey> keys = new HashMap<>();
+        addConfigKey(keys, "config.a1", null);
+        addConfigKey(keys, "config.b1", "group B");
+
+        List<ConfigValue> values = new ArrayList<>();
+        addValue(values, "config.b1", "value.b1");
+
+        ConfigInfos infos = AbstractHerder.generateResult(
+                "com.acme.connector.MyConnector", keys, values, List.of("group B"));
+        assertFalse(herder.maybeAddConfigErrors(infos, new FutureCallback<>()));
+    }
+
+    @Test
     public void testSinkConnectorPluginConfig() throws ClassNotFoundException {
         testConnectorPluginConfig(
                 "sink",
