@@ -255,4 +255,36 @@ public class ChangedSerdeTest {
                 BufferUnderflowException.class,
                 () -> CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, HEADERS, serialized));
     }
+
+    @Test
+    public void shouldThrowOnNegativeNewDataLengthForFlag2() {
+        final byte[] oldData = STRING_SERIALIZER.serialize(TOPIC, HEADERS, nonNullOldValue);
+
+        final ByteBuffer buf = ByteBuffer.allocate(MAX_VARINT_LENGTH + oldData.length + ENCODING_FLAG_SIZE);
+        ByteUtils.writeVarint(-1, buf);   // decodes to a negative newDataLength
+        buf.put(oldData).put((byte) 2);
+        final byte[] serialized = new byte[buf.position()];
+        buf.position(0);
+        buf.get(serialized);
+
+        assertThrows(
+                BufferUnderflowException.class,
+                () -> CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, HEADERS, serialized));
+    }
+
+    @Test
+    public void shouldThrowOnNegativeNewDataLengthForFlag5() {
+        final byte[] oldData = STRING_SERIALIZER.serialize(TOPIC, HEADERS, nonNullOldValue);
+
+        final ByteBuffer buf = ByteBuffer.allocate(MAX_VARINT_LENGTH + oldData.length + IS_LATEST_FLAG_SIZE + ENCODING_FLAG_SIZE);
+        ByteUtils.writeVarint(-1, buf);   // decodes to a negative newDataLength
+        buf.put(oldData).put((byte) 1).put((byte) 5);
+        final byte[] serialized = new byte[buf.position()];
+        buf.position(0);
+        buf.get(serialized);
+
+        assertThrows(
+                BufferUnderflowException.class,
+                () -> CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, HEADERS, serialized));
+    }
 }
