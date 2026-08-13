@@ -36,7 +36,7 @@ import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -575,17 +575,13 @@ public class InternalTopicManager {
                     log.error("Unexpected error during topic creation for {}.\n" +
                             "Error message was: {}", topicName, cause.toString());
 
-                    if (cause instanceof UnsupportedVersionException) {
-                        final String errorMessage = cause.getMessage();
-                        if (errorMessage != null &&
-                                errorMessage.startsWith("Creating topics with default partitions/replication factor are only supported in CreateTopicRequest version 4+")) {
-
-                            throw new StreamsException(String.format(
-                                    "Could not create topic %s, because brokers don't support configuration replication.factor=-1."
-                                            + " You can change the replication.factor config or upgrade your brokers to version 2.4 or newer to avoid this error.",
-                                    topicName)
-                            );
-                        }
+                    if (cause instanceof UnsupportedProtocolFieldException) {
+                        // An older broker rejected a field we rely on (e.g. the default
+                        // replication.factor=-1, which requires CreateTopics request version 4+).
+                        throw new StreamsException(String.format(
+                                "Could not create topic %s, because brokers don't support configuration replication.factor=-1."
+                                        + " You can change the replication.factor config or upgrade your brokers to version 2.4 or newer to avoid this error.",
+                                topicName), cause);
                     } else if (cause instanceof TimeoutException) {
                         log.error("Creating topic {} timed out.\n" +
                                 "Error message was: {}", topicName, cause.toString());

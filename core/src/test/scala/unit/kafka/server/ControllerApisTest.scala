@@ -18,7 +18,7 @@
 package kafka.server
 
 import kafka.network.RequestChannel
-import kafka.server.QuotaFactory.QuotaManagers
+import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
 import org.apache.kafka.clients.admin.AlterConfigOp
 import org.apache.kafka.common.Uuid.ZERO_UUID
 import org.apache.kafka.common.acl.AclOperation
@@ -432,6 +432,15 @@ class ControllerApisTest {
       controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
       controllerApis.handleUnregisterBroker(buildRequest(new UnregisterBrokerRequest.Builder(
         new UnregisterBrokerRequestData()).build(0)))
+    })
+  }
+
+  @Test
+  def testUnauthorizedHandleUnregisterController(): Unit = {
+    assertThrows(classOf[ClusterAuthorizationException], () => {
+      controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
+      controllerApis.handleUnregisterController(buildRequest(new UnregisterControllerRequest.Builder(
+        new UnregisterControllerRequestData()).build(0)))
     })
   }
 

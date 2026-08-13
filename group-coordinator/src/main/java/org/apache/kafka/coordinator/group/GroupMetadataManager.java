@@ -92,6 +92,8 @@ import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.assignor.SimpleAssignor;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
@@ -152,7 +154,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup.ShareGroupStatePartitionMetadataInfo;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupAssignmentBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
-import org.apache.kafka.coordinator.group.streams.MemberTaskOffsets;
+import org.apache.kafka.coordinator.group.streams.AssignmentRefiner;
 import org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
@@ -162,8 +164,6 @@ import org.apache.kafka.coordinator.group.streams.StreamsTopology;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
-import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
-import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
@@ -185,6 +185,7 @@ import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -261,6 +262,8 @@ import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecor
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroupMember.hasAssignedTasksChanged;
+import static org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl.NUM_STANDBY_REPLICAS_CONFIG;
+import static org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG;
 
 
 /**
@@ -510,6 +513,11 @@ public class GroupMetadataManager {
     private final Map<String, TaskAssignor> streamsGroupAssignors;
 
     /**
+     * The default streams group task assignor used.
+     */
+    private final TaskAssignor defaultStreamsGroupAssignor;
+
+    /**
      * The metadata image.
      */
     private CoordinatorMetadataImage metadataImage;
@@ -579,6 +587,7 @@ public class GroupMetadataManager {
         this.shareGroupStatePartitionMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
         this.groupConfigManager = groupConfigManager;
         this.shareGroupAssignor = shareGroupAssignor;
+        this.defaultStreamsGroupAssignor = streamsGroupAssignors.get(0);
         this.streamsGroupAssignors = streamsGroupAssignors.stream().collect(Collectors.toMap(TaskAssignor::name, Function.identity()));
         this.topicRegexResolver = new TopicRegexResolver(() -> authorizerPlugin, this.time);
         this.topicHashCache = new HashMap<>();
@@ -751,7 +760,10 @@ public class GroupMetadataManager {
         groupIds.forEach(groupId -> {
             try {
                 StreamsGroup group = streamsGroup(groupId, committedOffset);
-                describedGroups.add(group.asDescribedGroup(committedOffset));
+                describedGroups.add(group.asDescribedGroup(
+                    committedOffset,
+                    streamsGroupAssignor(groupId, false).name()
+                ));
                 groupIdToStoredDescriptionTopologyEpochs.put(groupId, group.storedDescriptionTopologyEpoch(committedOffset));
             } catch (GroupIdNotFoundException exception) {
                 describedGroups.add(new StreamsGroupDescribeResponseData.DescribedGroup()
@@ -2049,6 +2061,7 @@ public class GroupMetadataManager {
      * @param clientTags          Used for rack-aware assignment algorithm, or null.
      * @param shutdownApplication Whether all Streams clients in the group should shut down.
      * @param memberEndpointEpoch The last endpoint information epoch seen be the group member.
+     * @param requestApiVersion   The api version of the StreamsGroupHeartbeat request.
      * @return A result containing the StreamsGroupHeartbeat response and a list of records to update the state machine.
      */
     private CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
@@ -2070,7 +2083,8 @@ public class GroupMetadataManager {
         Endpoint userEndpoint,
         List<KeyValue> clientTags,
         boolean shutdownApplication,
-        int memberEndpointEpoch
+        int memberEndpointEpoch,
+        int requestApiVersion
     ) throws ApiException {
         final long currentTimeMs = time.milliseconds();
         final List<CoordinatorRecord> records = new ArrayList<>();
@@ -2102,7 +2116,14 @@ public class GroupMetadataManager {
         } else {
             StreamsGroupMember maybeOldStaticMember = group.staticMember(instanceId);
             if (maybeOldStaticMember != null && !maybeOldStaticMember.memberId().equals(memberId)) {
-                replaceStaticOldMember = maybeOldStaticMember;    
+                replaceStaticOldMember = maybeOldStaticMember;
+                // Replacing a static member relabels its target assignment from the old to the new member ID without
+                // bumping the assignment epoch, so an intermediate assignment derived for this epoch no longer matches
+                // the members it was derived for. Re-key it rather than dropping it: the replacement copies the old
+                // member's state, so the decisions of this epoch still hold, and deriving a new one here would re-plan
+                // mid-epoch and could revise the slice of a member that already reconciled and is therefore not
+                // reconciled again within this epoch.
+                group.relabelRefinedAssignment(maybeOldStaticMember.memberId(), memberId);
             }
             member = getOrMaybeCreateStaticStreamsGroupMember(
                 group,
@@ -2139,8 +2160,12 @@ public class GroupMetadataManager {
         StreamsGroupMember updatedMember = updatedMemberBuilder.build();
         
         // If the member is new or has changed, a StreamsGroupMemberMetadataValue record is written to the __consumer_offsets partition
-        // to persist the change, and bump the group epoch later.
-        boolean bumpGroupEpoch = hasStreamsMemberMetadataChanged(groupId, instanceId, member, updatedMember, records);
+        // to persist the change, and bump the group epoch later. We track whether (and why) the group epoch is bumped:
+        // RECOMPUTE re-runs the assignor to produce a new final target assignment; REFINE only advances the assignment epoch to move
+        // the in-memory refinement (warm-up promotion) forward without recomputing the final target.
+        AssignmentUpdate assignmentUpdate = hasStreamsMemberMetadataChanged(groupId, instanceId, member, updatedMember, records)
+            ? AssignmentUpdate.RECOMPUTE
+            : AssignmentUpdate.NONE;
 
         // 2. Initialize/Update the group topology.
         // If the topology is new or has changed, a StreamsGroupTopologyValue record is written to the __consumer_offsets partition to persist
@@ -2163,7 +2188,7 @@ public class GroupMetadataManager {
             if (metadataHash != group.metadataHash()) {
                 log.info("[GroupId {}][MemberId {}] Computed new metadata hash: {}.",
                     groupId, memberId, metadataHash);
-                bumpGroupEpoch = true;
+                assignmentUpdate = AssignmentUpdate.RECOMPUTE;
                 reconfigureTopology = true;
             }
 
@@ -2201,21 +2226,31 @@ public class GroupMetadataManager {
 
         // We validated a topology that was not validated before, so bump the group epoch as we may have to reassign tasks.
         if (validatedTopologyEpoch != group.validatedTopologyEpoch()) {
-            bumpGroupEpoch = true;
+            assignmentUpdate = AssignmentUpdate.RECOMPUTE;
         }
 
         // Check if assignment configurations have changed
         Map<String, String> currentAssignmentConfigs = streamsGroupAssignmentConfigs(groupId);
         Map<String, String> storedAssignmentConfigs = group.lastAssignmentConfigs();
-        if (!bumpGroupEpoch && !currentAssignmentConfigs.equals(storedAssignmentConfigs)) {
+        if (assignmentUpdate == AssignmentUpdate.NONE && !currentAssignmentConfigs.equals(storedAssignmentConfigs)) {
             log.info("[GroupId {}][MemberId {}] Assignment configurations changed to {}. Triggering rebalance.",
                 groupId, memberId, currentAssignmentConfigs);
-            bumpGroupEpoch = true;
+            assignmentUpdate = AssignmentUpdate.RECOMPUTE;
+        }
+
+        Map<String, TasksTuple> refinedGroupAssignment = null;
+        if (assignmentUpdate == AssignmentUpdate.NONE && group.state() == StreamsGroup.StreamsGroupState.STABLE) {
+            // We are not computing a new target assignment later, thus we try to refine the current target assignment
+            // into an intermediate assignment (with warm-up tasks) the member should be reconciled towards.
+            refinedGroupAssignment = refineAssignment(group, group.targetAssignment(), updatedConfiguredTopology);
+            if (!refinedGroupAssignment.getOrDefault(memberId, TasksTuple.EMPTY).sameTasks(updatedMember.assignedTasks())) {
+                assignmentUpdate = AssignmentUpdate.REFINED;
+            }
         }
 
         // Actually bump the group epoch
         int groupEpoch = group.groupEpoch();
-        if (bumpGroupEpoch) {
+        if (assignmentUpdate != AssignmentUpdate.NONE) {
             groupEpoch += 1;
             records.add(newStreamsGroupMetadataRecord(
                 groupId,
@@ -2256,18 +2291,27 @@ public class GroupMetadataManager {
             metadataImage,
             records,
             Optional.of(returnedStatus),
-            currentAssignmentConfigs
+            currentAssignmentConfigs,
+            assignmentUpdate == AssignmentUpdate.REFINED
         );
 
-        // 4b. Refine the target assignment into the intermediate assignment (with warm-up tasks) the member should be
-        // reconciled toward. Runs on every heartbeat, before reconciliation. No-op for now.
-        TasksTuple refinedTarget = refine(
-            updatedMember,
-            updateTargetAssignmentResult.targetAssignment,
-            group.taskOffsets(),
-            streamsGroupNumWarmupReplicas(group.groupId()),
-            streamsGroupAcceptableRecoveryLag(group.groupId())
-        );
+        // 4b. If we did not already refine above -- ie, we computed a new target assignment, or the group is not
+        // yet reconciled (a rebalance is still in progress) -- refine the target assignment into an intermediate
+        // assignment (with warm-up tasks) the member should be reconciled towards. Otherwise, the assignment we
+        // refined above is the intermediate assignment of this epoch, whether we bumped the epoch for it or not: it
+        // was derived from a settled group, so it also holds for the target assignment of the bumped epoch, which a
+        // refinement step leaves unchanged.
+        if (refinedGroupAssignment == null) {
+            refinedGroupAssignment = refinedAssignmentForEpoch(
+                group,
+                updateTargetAssignmentResult.targetAssignmentEpoch(),
+                updateTargetAssignmentResult.targetAssignment,
+                updatedConfiguredTopology
+            );
+        } else {
+            maybeCacheRefinedAssignment(group, updateTargetAssignmentResult.targetAssignmentEpoch(), refinedGroupAssignment);
+        }
+        TasksTuple refinedAssignment = refinedGroupAssignment.getOrDefault(memberId, TasksTuple.EMPTY);
 
         // 5. Reconcile the member's assignment with the (refined) target assignment if the member is not
         // fully reconciled yet.
@@ -2278,7 +2322,7 @@ public class GroupMetadataManager {
             group::currentStandbyTaskProcessIds,
             group::currentWarmupTaskProcessIds,
             updateTargetAssignmentResult.targetAssignmentEpoch(),
-            refinedTarget,
+            refinedAssignment,
             ownedActiveTasks,
             ownedStandbyTasks,
             ownedWarmupTasks,
@@ -2354,6 +2398,27 @@ public class GroupMetadataManager {
                         requestingMemberId)
                 )
         ));
+
+        String rackAwareTagsValue = currentAssignmentConfigs.getOrDefault(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "").trim();
+        // The MISSING_CLIENT_TAGS status (code 6) requires version 1 of the RPC: version 0 clients
+        // throw on unknown status codes, so it must not be sent to them.
+        if (requestApiVersion >= 1 && !rackAwareTagsValue.isEmpty()) {
+            List<String> requiredTags = Arrays.asList(rackAwareTagsValue.split("\\s*,\\s*", -1));
+            Set<String> memberTagKeys = updatedMember.clientTags().keySet();
+            List<String> missingTags = requiredTags.stream()
+                .filter(tag -> !memberTagKeys.contains(tag))
+                .collect(Collectors.toList());
+            if (!missingTags.isEmpty()) {
+                returnedStatus.add(
+                    new Status()
+                        .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_CLIENT_TAGS.code())
+                        .setStatusDetail(
+                            String.format("Missing required client tags for rack-aware standby assignment: %s. " +
+                                "Configure them via 'client.tag.<tagKey>' in your Streams config.", missingTags)
+                        )
+                );
+            }
+        }
 
         response.setStatus(returnedStatus);
 
@@ -4313,6 +4378,22 @@ public class GroupMetadataManager {
     }
 
     /**
+     * How a streams-group heartbeat updates the group epoch and target assignment.
+     * <ul>
+     *   <li>{@code NONE} - nothing changed; the group epoch is not bumped.</li>
+     *   <li>{@code RECOMPUTE} - the group changed (membership, topology or configuration); bump the group epoch and re-run the
+     *       assignor to produce a new final target assignment.</li>
+     *   <li>{@code REFINE} - a warm-up task has caught up; bump the group epoch to advance the in-memory refinement one step
+     *       WITHOUT re-running the assignor (the final target assignment is unchanged).</li>
+     * </ul>
+     */
+    private enum AssignmentUpdate {
+        NONE,
+        RECOMPUTE,
+        REFINED
+    }
+
+    /**
      * Updates the target assignment according to the updated member and metadata image.
      *
      * @param group                The StreamsGroup.
@@ -4321,6 +4402,8 @@ public class GroupMetadataManager {
      * @param metadataImage        The metadata image.
      * @param records              The list to accumulate any new records.
      * @param returnedStatus       A mutable collection of status to be returned in the response.
+     * @param refineOnly           If true, only advance the assignment epoch of the unchanged final target (warm-up refinement step)
+     *                             instead of re-running the assignor.
      * @return The target assignment epoch and the full per-member target assignment.
      */
     private UpdateTargetAssignmentResult<Map<String, TasksTuple>> maybeUpdateStreamsTargetAssignment(
@@ -4331,7 +4414,8 @@ public class GroupMetadataManager {
         CoordinatorMetadataImage metadataImage,
         List<CoordinatorRecord> records,
         Optional<List<Status>> returnedStatus,
-        Map<String, String> assignmentConfigs
+        Map<String, String> assignmentConfigs,
+        boolean refineOnly
     ) {
         boolean initialDelayActive = timer.isScheduled(streamsInitialRebalanceKey(group.groupId()));
         if (initialDelayActive) {
@@ -4363,6 +4447,17 @@ public class GroupMetadataManager {
             return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), updatedMembersAndTargetAssignment.targetAssignment());
         }
 
+        // The second condition rules out taking the shortcut while an assignment is still pending (deferred by the
+        // assignment interval, or offloaded): the caller only refines a STABLE group, where both epochs are equal, but
+        // if that ever changes, closing the epoch gap here would drop the pending assignor run instead of deferring to it.
+        if (refineOnly && group.assignmentEpoch() >= group.groupEpoch()) {
+            // A refinement step only advances the assignment epoch of the unchanged final target so that members
+            // re-reconcile toward the next in-memory intermediate assignment. The assignor is not run and the per-member target
+            // assignment records are left untouched; only the (small) target-assignment metadata record carrying the epoch is written.
+            records.add(newStreamsGroupTargetAssignmentMetadataRecord(group.groupId(), groupEpoch, group.assignmentTimestamp()));
+            return new UpdateTargetAssignmentResult<>(groupEpoch, updatedMembersAndTargetAssignment.targetAssignment());
+        }
+
         boolean canComputeNextTargetAssignment = canComputeNextTargetAssignment(
             group.assignmentTimestamp(),
             streamsGroupAssignmentIntervalMs(group.groupId()),
@@ -4378,7 +4473,7 @@ public class GroupMetadataManager {
             return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), updatedMembersAndTargetAssignment.targetAssignment());
         }
 
-        TaskAssignor assignor = streamsGroupAssignor(group.groupId());
+        TaskAssignor assignor = streamsGroupAssignor(group.groupId(), true);
         try {
             org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder assignmentResultBuilder =
                 new org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder(
@@ -4420,40 +4515,96 @@ public class GroupMetadataManager {
 
 
     /**
-     * Refines the task assignor's target assignment into the <em>intermediate</em> assignment that
-     * the reconciler ({@link org.apache.kafka.coordinator.group.streams.CurrentAssignmentBuilder}) converges members toward.
-     * <p>
-     * The intermediate assignment is the current assignment with warm-up tasks inserted (for later promotion to active,
-     * based on per-member changelog lag), so that a task is moved to a new owner only once that owner has caught up.
-     * It is held in memory only and is never persisted: the assignor's target assignment remains the persisted source of
-     * truth (and the intermediate is reconstructed from the persisted current-assignment records after a coordinator failover).
-     * <p>
-     * The refiner is invoked on every heartbeat, before reconciliation, so it can react to all the inputs that can change
-     * the intermediate assignment between reassignments — newly reported task offsets (a warm-up may have become hot),
-     * {@code num.warmup.replicas} / {@code acceptable.recovery.lag} config changes, and members acknowledging task
-     * revocation/restoration (advancing an in-flight migration).
+     * Derives the <em>intermediate</em> assignment that the reconciler
+     * ({@link org.apache.kafka.coordinator.group.streams.CurrentAssignmentBuilder}) converges the members toward, for a
+     * refinement step that is not minted yet. It is compared against the members' current assignments to decide whether
+     * a refinement step is due at all, and becomes the intermediate assignment of the epoch if it is (see
+     * {@link #refinedAssignmentForEpoch}).
      *
-     * @param member
-     *        The member to produce the refined (intermediate) assignment for.
-     * @param targetAssignment
-     *        All members' target assignments (group context).
-     * @param taskOffsets
-     *        The latest per-member changelog offsets/end-offsets reported via heartbeats (group context).
-     * @param numWarmupReplicas
-     *        The configured maximum number of warm-up replicas.
-     * @param acceptableRecoveryLag
-     *        The lag at or below which a warm-up is considered caught up and can be promoted.
+     * @param group              The streams group.
+     * @param targetAssignment   All members' target assignments.
+     * @param configuredTopology The configured topology.
      *
-     * @return The member's intermediate assignment tuple.
+     * @return The intermediate assignment keyed by member ID.
      */
-    private static TasksTuple refine(
-        final StreamsGroupMember member,
+    private Map<String, TasksTuple> refineAssignment(
+        final StreamsGroup group,
         final Map<String, TasksTuple> targetAssignment,
-        final Map<String, MemberTaskOffsets> taskOffsets,
-        final int numWarmupReplicas,
-        final long acceptableRecoveryLag
+        final ConfiguredTopology configuredTopology
     ) {
-        return targetAssignment.getOrDefault(member.memberId(), TasksTuple.EMPTY);
+        final int numWarmupReplicas = streamsGroupNumWarmupReplicas(group.groupId());
+        if (numWarmupReplicas == 0) {
+            // Warm-up tasks are disabled, so there is nothing to refine and no state to keep for the group.
+            return targetAssignment;
+        }
+        final Map<String, TasksTuple> refinedAssignment = AssignmentRefiner.refine(
+            group.members(),
+            targetAssignment,
+            group.taskOffsets(),
+            configuredTopology,
+            numWarmupReplicas,
+            streamsGroupAcceptableRecoveryLag(group.groupId())
+        );
+        if (!AssignmentRefiner.preservesActiveTaskCount(targetAssignment, refinedAssignment)) {
+            // Reconciling towards an intermediate assignment that lost or duplicated an active task would leave input
+            // partitions unprocessed or processed twice, so fall back to the target assignment. That is the same
+            // assignment the group reconciles towards with warm-up tasks disabled, so no further handling is needed --
+            // beyond that tasks now move without warming up, which the operator should know about.
+            log.error("[GroupId {}] The refined assignment does not hand out as many active tasks as the target " +
+                    "assignment. Reconciling towards the target assignment instead, so tasks that have to move do so " +
+                    "without warming up first. Target assignment: {}, refined assignment: {}.",
+                group.groupId(), targetAssignment, refinedAssignment);
+            return targetAssignment;
+        }
+        return refinedAssignment;
+    }
+
+    /**
+     * Returns the intermediate assignment of the given assignment epoch, deriving it once and caching it for the
+     * lifetime of the epoch. Every refinement step is an epoch of its own, so the decisions of a step are taken when
+     * its epoch is minted and do not change while the members reconcile toward it.
+     *
+     * @param group              The streams group.
+     * @param assignmentEpoch    The assignment epoch the members are being reconciled to.
+     * @param targetAssignment   All members' target assignments.
+     * @param configuredTopology The configured topology.
+     *
+     * @return The intermediate assignment keyed by member ID.
+     */
+    private Map<String, TasksTuple> refinedAssignmentForEpoch(
+        final StreamsGroup group,
+        final int assignmentEpoch,
+        final Map<String, TasksTuple> targetAssignment,
+        final ConfiguredTopology configuredTopology
+    ) {
+        final Map<String, TasksTuple> cached = group.refinedAssignment(assignmentEpoch);
+        if (cached != null) {
+            return cached;
+        }
+        final Map<String, TasksTuple> refinedAssignment = refineAssignment(group, targetAssignment, configuredTopology);
+        maybeCacheRefinedAssignment(group, assignmentEpoch, refinedAssignment);
+        return refinedAssignment;
+    }
+
+    /**
+     * Freezes the given intermediate assignment as the one of the given assignment epoch, so that the decisions of a
+     * refinement step do not change while the members reconcile toward it.
+     * <p>
+     * Nothing is kept for a group that has warm-up tasks disabled: the intermediate assignment is then just the target
+     * assignment, which the caller has anyway, so there is nothing to freeze.
+     *
+     * @param group              The streams group.
+     * @param assignmentEpoch    The assignment epoch the intermediate assignment was derived for.
+     * @param refinedAssignment  The intermediate assignment keyed by member ID.
+     */
+    private void maybeCacheRefinedAssignment(
+        final StreamsGroup group,
+        final int assignmentEpoch,
+        final Map<String, TasksTuple> refinedAssignment
+    ) {
+        if (streamsGroupNumWarmupReplicas(group.groupId()) > 0) {
+            group.setRefinedAssignment(assignmentEpoch, refinedAssignment);
+        }
     }
 
     /**
@@ -4492,7 +4643,8 @@ public class GroupMetadataManager {
                 metadataImage,
                 records,
                 Optional.empty(),
-                group.lastAssignmentConfigs()
+                group.lastAssignmentConfigs(),
+                false
             );
 
             return new CoordinatorResult<>(records, null);
@@ -5483,7 +5635,8 @@ public class GroupMetadataManager {
                 request.userEndpoint(),
                 request.clientTags(),
                 request.shutdownApplication(),
-                request.endpointInformationEpoch()
+                request.endpointInformationEpoch(),
+                context.requestVersion()
             );
         }
     }
@@ -9726,9 +9879,31 @@ public class GroupMetadataManager {
 
     /**
      * Get the assignor of the provided streams group.
+     *
+     * <p>The assignor is selected by the group-level {@link GroupConfig#STREAMS_ASSIGNOR_NAME_CONFIG}
+     * configuration. When the group does not select an assignor, the broker's default assignor
+     * (the first entry of {@code group.streams.assignors}) is used. If the selected assignor is no
+     * longer registered on the broker, the coordinator falls back to the default.
+     *
+     * @param maybeLogWarning Whether to warn about the fallback. Set to false on read-only paths such as
+     *                        describe, which would otherwise log on every request.
      */
-    private TaskAssignor streamsGroupAssignor(String groupId) {
-        return streamsGroupAssignors.get("sticky");
+    // Visible for testing
+    TaskAssignor streamsGroupAssignor(String groupId, boolean maybeLogWarning) {
+        Optional<String> configuredName = groupConfigManager.groupConfig(groupId)
+            .flatMap(GroupConfig::streamsAssignorName);
+        if (configuredName.isPresent()) {
+            TaskAssignor assignor = streamsGroupAssignors.get(configuredName.get());
+            if (assignor != null) {
+                return assignor;
+            }
+            if (maybeLogWarning) {
+                log.warn("[GroupId {}] The configured task assignor '{}' is not available; " +
+                        "falling back to the default assignor '{}'.",
+                    groupId, configuredName.get(), defaultStreamsGroupAssignor.name());
+            }
+        }
+        return defaultStreamsGroupAssignor;
     }
 
     /**
@@ -9738,9 +9913,14 @@ public class GroupMetadataManager {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
         final Integer numStandbyReplicas = groupConfig.flatMap(GroupConfig::streamsNumStandbyReplicas)
             .orElse(config.streamsGroupNumStandbyReplicas());
-        return new TreeMap<>(Map.of(
-            "num.standby.replicas", numStandbyReplicas.toString()
-        ));
+        final List<String> rackAwareAssignmentTags = groupConfig.flatMap(GroupConfig::streamsRackAwareAssignmentTags)
+            .orElse(config.streamsGroupRackAwareAssignmentTags());
+        Map<String, String> configs = new TreeMap<>();
+        configs.put(NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas.toString());
+        if (!rackAwareAssignmentTags.isEmpty()) {
+            configs.put(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, String.join(",", rackAwareAssignmentTags));
+        }
+        return configs;
     }
 
     private static boolean hasUserEndpointChanged(StreamsGroupMember maybeOldMember, StreamsGroupMember updatedMember) {

@@ -125,7 +125,6 @@ import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
@@ -617,6 +616,10 @@ public class TopologyTestDriver implements Closeable {
             while (task.hasRecordsQueued() && task.isProcessable(mockWallClockTime.milliseconds())) {
                 // Process the record ...
                 task.process(mockWallClockTime.milliseconds());
+                // flush terminal e2e latency for the record just processed, mirroring the end-of-batch
+                // flush in TaskExecutor; the mock clock only advances via advanceWallClockTime, so this
+                // second read returns the same value the record was processed with
+                task.maybeFlushTerminalE2ELatency(mockWallClockTime.milliseconds());
                 task.maybePunctuateStreamTime();
                 commit(task.prepareCommit(true));
                 task.postCommit(true);
@@ -1360,11 +1363,6 @@ public class TopologyTestDriver implements Closeable {
             }
             timeMs.addAndGet(ms);
             highResTimeNs.addAndGet(TimeUnit.MILLISECONDS.toNanos(ms));
-        }
-
-        @Override
-        public void waitObject(final Object obj, final Supplier<Boolean> condition, final long timeoutMs) {
-            throw new UnsupportedOperationException();
         }
     }
 
