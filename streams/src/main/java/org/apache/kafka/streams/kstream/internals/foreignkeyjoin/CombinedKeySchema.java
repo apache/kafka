@@ -23,6 +23,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.function.Supplier;
 
@@ -91,6 +92,9 @@ public class CombinedKeySchema<KRight, KLeft> {
         final byte[] dataArray = data.get();
         final ByteBuffer dataBuffer = ByteBuffer.wrap(dataArray);
         final int foreignKeyLength = dataBuffer.getInt();
+        if (foreignKeyLength < 0 || foreignKeyLength > dataBuffer.remaining()) {
+            throw new BufferUnderflowException();
+        }
         final byte[] foreignKeyRaw = new byte[foreignKeyLength];
         dataBuffer.get(foreignKeyRaw, 0, foreignKeyLength);
         final KRight foreignKey = foreignKeyDeserializer.deserialize(foreignKeySerdeTopic, headers, foreignKeyRaw);

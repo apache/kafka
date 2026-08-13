@@ -29,6 +29,7 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -183,5 +184,38 @@ public class CombinedKeySchemaTest {
         verify(mockDeserializer, never()).deserialize(FK_TOPIC, foreignKeyRaw);
         verify(mockDeserializer).deserialize(PK_TOPIC, HEADERS, primaryKeyRaw);
         verify(mockDeserializer, never()).deserialize(PK_TOPIC, primaryKeyRaw);
+    }
+
+    @Test
+    public void shouldThrowWhenForeignKeyLengthExceedsRemainingBytes() {
+        final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>(
+                () -> FK_TOPIC, Serdes.String(),
+                () -> PK_TOPIC, Serdes.Integer()
+        );
+
+        final byte[] foreignKeyRaw = Serdes.String().serializer().serialize(FK_TOPIC, "foreignKey");
+        final byte[] primaryKeyRaw = Serdes.Integer().serializer().serialize(PK_TOPIC, 1);
+        final int fakeForeignKeyLength = foreignKeyRaw.length + primaryKeyRaw.length + 1; // one past what's actually there
+
+        final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES + foreignKeyRaw.length + primaryKeyRaw.length);
+        buf.putInt(fakeForeignKeyLength);
+        buf.put(foreignKeyRaw).put(primaryKeyRaw);
+        final Bytes corrupted = Bytes.wrap(buf.array());
+
+        assertThrows(BufferUnderflowException.class, () -> cks.fromBytes(corrupted, HEADERS));
+    }
+
+    @Test
+    public void shouldThrowWhenForeignKeyLengthIsNegative() {
+        final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>(
+                () -> FK_TOPIC, Serdes.String(),
+                () -> PK_TOPIC, Serdes.Integer()
+        );
+
+        final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES);
+        buf.putInt(-1);
+        final Bytes corrupted = Bytes.wrap(buf.array());
+
+        assertThrows(BufferUnderflowException.class, () -> cks.fromBytes(corrupted, HEADERS));
     }
 }
