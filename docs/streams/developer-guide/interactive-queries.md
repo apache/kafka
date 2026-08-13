@@ -263,7 +263,7 @@ A [header-aware store](/{version}/streams/developer-guide/processor-api/#headers
 
 ### Reading headers with the `store()` API
 
-Look up the store with the `*WithHeaders()` entry from `QueryableStoreTypes` that matches your store type. The returned `ReadOnly*Store` surfaces the headers as part of its value type: [ValueTimestampHeaders](/{version}/javadoc/org/apache/kafka/streams/state/ValueTimestampHeaders.html) for key-value and window stores, and [AggregationWithHeaders](/{version}/javadoc/org/apache/kafka/streams/state/AggregationWithHeaders.html) for session stores. These examples assume a header-aware store built with a `*WithHeaders` supplier, as shown in [Headers in State Stores](/{version}/streams/developer-guide/processor-api/#headers-in-state-stores). There are only three such helpers — `timestampedKeyValueStoreWithHeaders()`, `timestampedWindowStoreWithHeaders()`, and `sessionStoreWithHeaders()`; there is no `*WithHeaders()` helper for a plain (non-timestamped) key-value or window store. What the store returns also depends on the supplier the `*WithHeaders` builder wraps (see the store-build table below): on the adapter paths the `store()` API degrades silently — empty headers, or a `-1` timestamp — rather than failing the way the IQv2 `query()` API does.
+Look up the store with the `*WithHeaders()` entry from `QueryableStoreTypes` that matches your store type. The returned `ReadOnly*Store` surfaces the headers as part of its value type: [ValueTimestampHeaders](/{version}/javadoc/org/apache/kafka/streams/state/ValueTimestampHeaders.html) for key-value and window stores, and [AggregationWithHeaders](/{version}/javadoc/org/apache/kafka/streams/state/AggregationWithHeaders.html) for session stores. These examples assume a header-aware store built with a `*WithHeaders` supplier, as shown in [Headers in State Stores](/{version}/streams/developer-guide/processor-api/#headers-in-state-stores). There are only three such helpers — `timestampedKeyValueStoreWithHeaders()`, `timestampedWindowStoreWithHeaders()`, and `sessionStoreWithHeaders()`; there is no `*WithHeaders()` helper for a plain (non-timestamped) key-value or window store. What the store returns also depends on the supplier the `*WithHeaders` builder wraps (see the store-build table below): on the adapter paths the `store()` API degrades silently — a timestamped supplier returns empty headers, and a plain one surfaces a `-1` timestamp without error, whereas the IQv2 `query()` API fails on that `-1`.
     
     
     // Key-value store built with a *WithHeaders supplier
@@ -334,7 +334,7 @@ Before [KIP-1356](../../upgrade-guide/#kip-1356-iqv2-header-queries), no IQv2 qu
       }
     }
 
-Chain `skipCache()` when building the query — `TimestampedKeyWithHeadersQuery.withKey("hello").skipCache()` — to bypass the record cache and read directly from the underlying store. The query types are immutable, so `skipCache()` returns a new query rather than mutating the one you already built (of the four header-aware queries, only this single-key one offers `skipCache()`).
+Chain `skipCache()` when building the query — `TimestampedKeyWithHeadersQuery.<String, Long>withKey("hello").skipCache()`, with an explicit type witness because a chained call isn't target-typed the way the assignment above is — to bypass the record cache and read directly from the underlying store. The query types are immutable, so `skipCache()` returns a new query rather than mutating the one you already built (of the four header-aware queries, only this single-key one offers `skipCache()`).
 
 `TimestampedRangeWithHeadersQuery` is a key-range scan, parallel to `TimestampedRangeQuery`. It returns a `ReadOnlyRecordIterator`, so close it when done (for example, with try-with-resources). A range can span several local partitions, so iterate `getPartitionResults()`:
     
@@ -451,7 +451,7 @@ Persistent *timestamped* non-header supplier
 </td>
 <td>
 
-Empty
+Returned while cache-served; empty once store-served (after a flush or with `skipCache()`)
 </td>
 <td>
 
