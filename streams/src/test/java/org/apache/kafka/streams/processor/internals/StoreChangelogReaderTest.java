@@ -1610,7 +1610,7 @@ public class StoreChangelogReaderTest {
             final StateStore store = mock(StateStore.class);
             when(meta.changelogPartition()).thenReturn(tps[i]);
             when(meta.store()).thenReturn(store);
-            when(meta.offset()).thenReturn(null, 0L);   // no checkpoint, then a value once restoring          // no checkpoint
+            when(meta.offset()).thenReturn(null, 0L);   // no checkpoint, then a value once restoring
             when(meta.retentionPeriod()).thenReturn(shortRetentionMs);
             when(store.name()).thenReturn(storeName);
             when(manager.storeMetadata(tps[i])).thenReturn(meta);
