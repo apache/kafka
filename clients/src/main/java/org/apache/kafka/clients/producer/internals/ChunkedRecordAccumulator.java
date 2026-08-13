@@ -158,7 +158,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                 }
 
                 if (appendResult.needsBufferExtension()) {
-                    extensionChunks = allocateExtensionChunks(appendResult.extensionBytesNeeded, dq, topic, effectivePartition);
+                    extensionChunks = allocateExtensionChunks(appendResult.extensionBytesNeeded(), dq, topic, effectivePartition);
                     if (extensionChunks == null) {
                         // Pool exhausted, so no writable batch is left to extend: retry, normally
                         // landing on the blocking new-batch path (needsNewBatch).
