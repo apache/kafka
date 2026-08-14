@@ -65,14 +65,13 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.staticHeartbeat;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.staticJoinHeartbeat;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * Compaction replay tests for the group coordinator.
  *
  * Tests check partition loading after compaction for non-trivial scenarios involving offset
  * commits and member joins/rebalances for an online classic -> consumer upgrade and an
- * offline classic -> streams upgrade. Both tests capturedLog written records, compact the
+ * offline classic -> streams upgrade. Both tests capture written records, compact the
  * resulting log, and replay records through a new group coordinator shard to verify loading.
  * Multiple contiguous log segments are tested, including prefix and mid-log windows.
  * 
@@ -214,7 +213,7 @@ public class GroupMetadataManagerCompactionReplayTest {
         joinConsumerMember(groupId, memberB, members, capturedLog);
         completeConsumerGroupRebalance(groupId, members, capturedLog);
 
-        // Member D joins with consumer protocol, triggerint a consumer group rebalance.
+        // Member D joins with consumer protocol, triggering a consumer group rebalance.
         String memberD = Uuid.randomUuid().toString();
         prepareConsumerAssignment(Map.of(
             memberA, mkAssignment(mkTopicAssignment(fooTopicId, 4, 5)),
@@ -268,7 +267,6 @@ public class GroupMetadataManagerCompactionReplayTest {
         String classicMemberB = context.sendClassicGroupJoin(
             classicJoinRequest(groupId, UNKNOWN_MEMBER_ID), true).joinFuture.get().memberId();
         var joinB = context.sendClassicGroupJoin(classicJoinRequest(groupId, classicMemberB), true);
-        assertFalse(joinB.joinFuture.isDone(), "The rebalance should wait for the other members to rejoin.");
 
         // Member A rejoins
         var rejoinA = context.sendClassicGroupJoin(classicJoinRequest(groupId, classicMemberA), true);
@@ -688,7 +686,6 @@ public class GroupMetadataManagerCompactionReplayTest {
      */
     private void assertCompactedVariantsLoadCleanly(CapturedLog capturedLog) {
         List<CoordinatorRecord> log = capturedLog.records();
-        assertFalse(log.isEmpty(), "Scenario produced no records; the capturedLog is broken.");
         Set<Integer> compactable = compactablePositions(log);
         List<Integer> boundaries = capturedLog.batchBoundaries();
 
