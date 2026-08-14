@@ -152,6 +152,16 @@ To reduce the likelihood of this for an affected low-traffic store, you can make
 
 This is a trade-off: a smaller write buffer bounds how stale the persisted offset can get, but increases the number of SST files and the compaction load.  So tune only the specific low-traffic stores that need it, and size the buffer to the store's write rate. Note that flushing is **volume-based, not time-based**.  A store that receives only a trickle of writes may still not flush until it is closed, so the most reliable protection is a **clean shutdown**. Register a shutdown hook that calls `KafkaStreams#close`, and ensure it is allowed to complete — on Kubernetes, set the close timeout comfortably below the pod termination grace period (default 30s) so the process is not `SIGKILL`ed mid-close.  Note that the record cache (`statestore.cache.max.bytes`) in front of the store coalesces repeated updates to the same key in place before they are written to RocksDB. So for an update-heavy, small-keyspace workload even fewer bytes reach the memtable per commit, making it fill more slowly.
 
+### Restore performance and write buffer size {#rocksdb-restore-tuning}
+
+Flushing also affects **state restoration**, which writes to the store in bulk. A flush happens when the memtable fills, and each flush produces another level-0 (L0) SST file. Restoring a store with large state through a small write buffer therefore produces many L0 files and a lot of compaction work. The restore can then stall on the L0 file count (`level0_slowdown_writes_trigger` / `level0_stop_writes_trigger`) or on the flush queue (`max_write_buffer_number`). A stalled restore takes longer, and its duration is less predictable.
+
+If restore time is a concern for such a store, we recommend increasing `write_buffer_size` above the 16 MB default through a custom `RocksDBConfigSetter`. A starting range of 32 MB to 64 MB is reasonable, for example `options.setWriteBufferSize(64 * 1024 * 1024L)`. Fewer, larger flushes mean fewer L0 files and less compaction work, which typically restores faster. Raising `level0_file_num_compaction_trigger` can help further. Both settings cost off-heap memory. A store holds up to `max_write_buffer_number` buffers, multiplied by the stores and stream threads on the instance. If you bound total memory with a shared `WriteBufferManager` (see below), budget for the increase.
+
+Note that this recommendation points the opposite way from the guidance above, because it applies to a different case. Shrink the buffer for a low-traffic store whose memtable rarely fills. Enlarge it for a store that is slow to restore.
+
+### Off-heap memory usage {#rocksdb-off-heap-memory}
+
 Also, we recommend changing RocksDB's default memory allocator, because the default allocator may lead to increased memory consumption. To change the memory allocator to `jemalloc`, you need to set the environment variable `LD_PRELOAD`before you start your Kafka Streams application:
     
     
