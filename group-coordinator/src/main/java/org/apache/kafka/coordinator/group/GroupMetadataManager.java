@@ -2226,11 +2226,12 @@ public class GroupMetadataManager {
             assignmentUpdate = AssignmentUpdate.RECOMPUTE;
         }
 
-        // Check if assignment configurations have changed. If the group has no recorded configs (its metadata
-        // record predates persisting them), the configs of its last assignment are unknown, so count them as changed.
+        // Check if assignment configurations have changed. A group with no recorded configs (its metadata
+        // record predates persisting them) compares against the defaults, so upgrading the broker does not
+        // rebalance every group that has nothing configured.
         AssignmentConfigsImpl currentAssignmentConfigs = streamsGroupAssignmentConfigs(groupId);
-        Optional<AssignmentConfigsImpl> storedAssignmentConfigs = group.lastAssignmentConfigs();
-        if (assignmentUpdate == AssignmentUpdate.NONE && !Optional.of(currentAssignmentConfigs).equals(storedAssignmentConfigs)) {
+        AssignmentConfigsImpl storedAssignmentConfigs = group.lastAssignmentConfigs().orElse(AssignmentConfigsImpl.DEFAULT);
+        if (assignmentUpdate == AssignmentUpdate.NONE && !currentAssignmentConfigs.equals(storedAssignmentConfigs)) {
             log.info("[GroupId {}][MemberId {}] Assignment configurations changed to {}. Triggering rebalance.",
                 groupId, memberId, currentAssignmentConfigs);
             assignmentUpdate = AssignmentUpdate.RECOMPUTE;

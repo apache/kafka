@@ -110,8 +110,8 @@ public class StreamsCoordinatorRecordHelpers {
         Objects.requireNonNull(groupId, "groupId should not be null here");
         Objects.requireNonNull(assignmentConfigs, "assignmentConfigs should not be null here");
 
-        // Configs that were never recorded stay unrecorded (an empty list): materializing defaults here would
-        // defeat the forced rebalance that a group replayed from a record without configs must go through.
+        // Configs that were never recorded stay unrecorded (an empty list); the epoch bump check treats an
+        // unrecorded group as running the defaults.
         List<StreamsGroupMetadataValue.LastAssignmentConfig> assignmentConfigList =
             assignmentConfigs.map(AssignmentConfigsImpl::toMap).orElse(Map.of()).entrySet().stream()
                 .map(entry -> new StreamsGroupMetadataValue.LastAssignmentConfig()
