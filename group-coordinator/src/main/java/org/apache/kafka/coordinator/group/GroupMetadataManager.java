@@ -2226,9 +2226,8 @@ public class GroupMetadataManager {
             assignmentUpdate = AssignmentUpdate.RECOMPUTE;
         }
 
-        // Check if assignment configurations have changed. A group without recorded configs (replayed from a record
-        // written before they were persisted) always counts as changed, since the configs of its last assignment
-        // are unknown.
+        // Check if assignment configurations have changed. If the group has no recorded configs (its metadata
+        // record predates persisting them), the configs of its last assignment are unknown, so count them as changed.
         AssignmentConfigsImpl currentAssignmentConfigs = streamsGroupAssignmentConfigs(groupId);
         Optional<AssignmentConfigsImpl> storedAssignmentConfigs = group.lastAssignmentConfigs();
         if (assignmentUpdate == AssignmentUpdate.NONE && !Optional.of(currentAssignmentConfigs).equals(storedAssignmentConfigs)) {

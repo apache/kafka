@@ -57,11 +57,13 @@ public record AssignmentConfigsImpl(
      */
     public static AssignmentConfigsImpl fromMap(Map<String, String> configs) {
         // Configs are only recorded when set, so every absent key means the configuration is at its default.
+        String numStandbyReplicas = configs.getOrDefault(NUM_STANDBY_REPLICAS_CONFIG,
+            Integer.toString(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT));
+        String rackAwareAssignmentTags = configs.getOrDefault(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
+            GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT);
         return new AssignmentConfigsImpl(
-            Integer.parseInt(configs.getOrDefault(NUM_STANDBY_REPLICAS_CONFIG,
-                Integer.toString(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT))),
-            parseRackAwareAssignmentTags(configs.getOrDefault(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
-                GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT))
+            Integer.parseInt(numStandbyReplicas),
+            parseRackAwareAssignmentTags(rackAwareAssignmentTags)
         );
     }
 
