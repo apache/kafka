@@ -20,6 +20,7 @@ KAFKA_RUN_CLASS="fixtures/kafka/bin/kafka-run-class.sh"
 
 COMBINED_MODE_COMPOSE="fixtures/mode/combined/docker-compose.yml"
 ISOLATED_MODE_COMPOSE="fixtures/mode/isolated/docker-compose.yml"
+DEFAULT_MODE_COMPOSE="fixtures/mode/default/docker-compose.yml"
 
 CLIENT_TIMEOUT=40000
 
@@ -48,3 +49,7 @@ SASL_ERROR_PREFIX="SASL_ERR"
 BROKER_RESTART_ERROR_PREFIX="BROKER_RESTART_ERR"
 FILE_INPUT_ERROR_PREFIX="FILE_INPUT_ERR"
 BROKER_METRICS_ERROR_PREFIX="BROKER_METRICS_ERR"
+
+PLAINTEXT_FLOW_TESTS="PLAINTEXT Flow Tests"
+PLAINTEXT_TOPIC="test-topic-plaintext"
+PLAINTEXT_ERROR_PREFIX="PLAINTEXT_ERR"
