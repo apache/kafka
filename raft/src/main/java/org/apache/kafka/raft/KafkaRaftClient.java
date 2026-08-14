@@ -1863,6 +1863,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     private LogAppendInfo appendAsLeader(Records records) {
         LogAppendInfo info = log.appendAsLeader(records, quorum.epoch());
+        // Make the append durable before we advertise the new end offset.
+        log.flush(false);
 
         partitionState.updateState();
 
