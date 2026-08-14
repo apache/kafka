@@ -299,7 +299,7 @@ public class ShareGroupCommand {
             for (String groupId : groupIdSet) {
                 Optional<GroupListing> listing = shareGroupIds.stream().filter(item -> item.groupId().equals(groupId)).findAny();
                 if (listing.isEmpty()) {
-                    errGroups.put(groupId, new IllegalArgumentException("Group '" + groupId + "' is not a share group."));
+                    errGroups.put(groupId, new GroupIdNotFoundException("Group '" + groupId + "' is not a share group."));
                 } else {
                     Optional<GroupState> groupState = listing.get().groupState();
                     groupState.ifPresent(state -> {

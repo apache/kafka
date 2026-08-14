@@ -38,20 +38,20 @@ The record caches are implemented slightly different in the DSL and Processor AP
 You can specify the total memory (RAM) size of the record cache for an instance of the processing topology. It is leveraged by the following `KTable` instances:
 
   * Source `KTable`: `KTable` instances that are created via `StreamsBuilder#table()` or `StreamsBuilder#globalTable()`.
-  * Aggregation `KTable`: instances of `KTable` that are created as a result of [aggregations](dsl-api.html#streams-developer-guide-dsl-aggregating).
+  * Aggregation `KTable`: instances of `KTable` that are created as a result of [aggregations](../dsl-api#streams-developer-guide-dsl-aggregating).
 
 
 
 For such `KTable` instances, the record cache is used for:
 
-  * Internal caching and compacting of output records before they are written by the underlying stateful [processor node](../core-concepts#streams_processor_node) to its internal state stores.
-  * Internal caching and compacting of output records before they are forwarded from the underlying stateful [processor node](../core-concepts#streams_processor_node) to any of its downstream processor nodes.
+  * Internal caching and compacting of output records before they are written by the underlying stateful [processor node](../../core-concepts#streams_processor_node) to its internal state stores.
+  * Internal caching and compacting of output records before they are forwarded from the underlying stateful [processor node](../../core-concepts#streams_processor_node) to any of its downstream processor nodes.
 
 
 
 Use the following example to understand the behaviors with and without record caching. In this example, the input is a `KStream<String, Integer>` with the records `<K,V>: <A, 1>, <D, 5>, <A, 20>, <A, 300>`. The focus in this example is on the records with key == `A`.
 
-  * An [aggregation](dsl-api.html#streams-developer-guide-dsl-aggregating) computes the sum of record values, grouped by key, for the input and returns a `KTable<String, Integer>`.
+  * An [aggregation](../dsl-api#streams-developer-guide-dsl-aggregating) computes the sum of record values, grouped by key, for the input and returns a `KTable<String, Integer>`.
 
 >     * **Without caching** : a sequence of output records is emitted for key `A` that represent changes in the resulting aggregation table. The parentheses (`()`) denote changes, the left number is the new aggregate value and the right number is the old aggregate value: `<A, (1, null)>, <A, (21, 1)>, <A, (321, 21)>`.
 >     * **With caching** : a single output record is emitted for key `A` that would likely be compacted in the cache, leading to a single output record of `<A, (321, null)>`. This record is written to the aggregation's internal state store and forwarded to any downstream operations.
@@ -112,7 +112,7 @@ You can specify the total memory (RAM) size of the record cache for an instance 
 
 The record cache in the Processor API does not cache or compact any output records that are being forwarded downstream. This means that all downstream processor nodes can see all records, whereas the state stores see a reduced number of records. This does not impact correctness of the system, but is a performance optimization for the state stores. For example, with the Processor API you can store a record in a state store while forwarding a different value downstream.
 
-Following from the example first shown in section [State Stores](processor-api.html#streams-developer-guide-state-store), to disable caching, you can add the `withCachingDisabled` call (note that caches are enabled by default, however there is an explicit `withCachingEnabled` call).
+Following from the example first shown in section [State Stores](../processor-api#streams-developer-guide-state-store), to disable caching, you can add the `withCachingDisabled` call (note that caches are enabled by default, however there is an explicit `withCachingEnabled` call).
     
     
     StoreBuilder countStoreBuilder =
@@ -122,9 +122,9 @@ Following from the example first shown in section [State Stores](processor-api.h
         Serdes.Long())
       .withCachingEnabled();
 
-Record caches are not supported for [versioned state stores](processor-api.html#streams-developer-guide-state-store-versioned).
+Record caches are not supported for [versioned state stores](../processor-api#streams-developer-guide-state-store-versioned).
 
-To avoid reading stale data, you can `flush()` the store before creating the iterator. Note, that flushing too often can lead to performance degration if RocksDB is used, so we advice to avoid flushing manually in general.
+To avoid reading stale data, you can `flush()` the store before creating the iterator. Note, that flushing too often can lead to performance degradation if RocksDB is used, so we advise to avoid flushing manually in general.
 
 # RocksDB
 

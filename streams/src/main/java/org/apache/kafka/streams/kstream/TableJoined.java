@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
 import java.util.function.Function;
@@ -28,6 +29,7 @@ import java.util.function.Function;
  * @param <K>   this key type ; key type for the left (primary) table
  * @param <KO>  other key type ; key type for the right (foreign key) table
  */
+@InterfaceAudience.Public
 public class TableJoined<K, KO> implements NamedOperation<TableJoined<K, KO>> {
 
     protected final StreamPartitioner<K, Void> partitioner;

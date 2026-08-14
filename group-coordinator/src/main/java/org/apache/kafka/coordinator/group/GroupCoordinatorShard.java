@@ -120,6 +120,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
+import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
@@ -273,6 +274,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 .withGroupConfigManager(groupConfigManager)
                 .withGroupCoordinatorMetricsShard(metricsShard)
                 .withShareGroupAssignor(config.shareGroupAssignors().get(0))
+                .withStreamsGroupAssignors(config.streamsGroupAssignors())
                 .withAuthorizerPlugin(authorizerPlugin)
                 .build();
 
@@ -554,21 +556,26 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     /**
      * Handles a JoinGroup request.
      *
-     * @param context The request context.
-     * @param request The actual JoinGroup request.
+     * @param context                The request context.
+     * @param request                The actual JoinGroup request.
+     * @param responseFuture         The join group response future.
+     * @param topologyCleanupHandled Whether streams-topology cleanup has already run (or is not
+     *                               needed) for this request.
      *
-     * @return A Result containing the JoinGroup response and
-     *         a list of records to update the state machine.
+     * @return A Result whose response signals whether the join must be deferred for streams-topology
+     *         cleanup, and a list of records to update the state machine.
      */
-    public CoordinatorResult<Void, CoordinatorRecord> classicGroupJoin(
+    public CoordinatorResult<Boolean, CoordinatorRecord> classicGroupJoin(
         AuthorizableRequestContext context,
         JoinGroupRequestData request,
-        CompletableFuture<JoinGroupResponseData> responseFuture
+        CompletableFuture<JoinGroupResponseData> responseFuture,
+        boolean topologyCleanupHandled
     ) {
         return groupMetadataManager.classicGroupJoin(
             context,
             request,
-            responseFuture
+            responseFuture,
+            topologyCleanupHandled
         );
     }
 
@@ -983,6 +990,80 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
+     * Return the streams groups on this shard eligible for plugin-side topology cleanup: empty
+     * (no live members), no committed offsets and no pending transactional offsets, and a
+     * {@code StoredDescriptionTopologyEpoch != -1}. The cleanup cycle marks each candidate
+     * UNCERTAIN at the latest state before the plugin delete and smart-finalizes afterwards, so a
+     * concurrent {@code setTopology} that has since advanced the field is re-solicited rather than
+     * silently undone by a stale plugin delete — the observed epoch is not needed downstream, so
+     * only the group-id set is returned.
+     *
+     * <p>This sweep relies on the regular offset-expiration cycle to have already tombstoned
+     * expired offsets, so the eligibility check itself only asks "does this group still have any
+     * offsets at all?" — see {@link OffsetMetadataManager#groupHasNoOffsets}. Three independent
+     * cycles thus compose cleanly: offset expiration, topology cleanup (here), and group
+     * tombstoning on the next sweep once the stored epoch is cleared.
+     *
+     * <p>Every state lookup goes through the snapshot at {@code committedOffset}: the iterated
+     * group-id set, the per-group resolution, the {@code EMPTY}-state check, the stored
+     * topology epoch, and the no-offsets check.
+     *
+     * <p>Non-streams and missing groups are silently skipped. Per-group errors are logged and
+     * the scan continues so one bad group cannot stall the cycle.
+     */
+    public Set<String> listStreamsGroupsNeedingTopologyCleanup(long committedOffset) {
+        Set<String> eligible = new HashSet<>();
+        for (String groupId : groupMetadataManager.groupIds(committedOffset)) {
+            try {
+                Group group = groupMetadataManager.maybeGroup(groupId, committedOffset);
+                if (group == null || group.type() != Group.GroupType.STREAMS) continue;
+                StreamsGroup streamsGroup = (StreamsGroup) group;
+                if (!streamsGroup.isEmpty(committedOffset)) continue;
+                int storedEpoch = streamsGroup.storedDescriptionTopologyEpoch(committedOffset);
+                // -2 (UNCERTAIN) falls through: a half-finished push/delete may have left plugin data.
+                if (storedEpoch == StreamsGroup.STORED_TOPOLOGY_EPOCH_NONE) continue;
+                if (!offsetMetadataManager.groupHasNoOffsets(groupId, committedOffset)) continue;
+                eligible.add(groupId);
+            } catch (Throwable t) {
+                // One bad group must not abort the whole scan; the next cycle retries.
+                log.warn("Unexpected error scanning streams group {} for topology cleanup; skipping.", groupId, t);
+            }
+        }
+        return eligible;
+    }
+
+    /**
+     * Shard entry point for the {@code -2} (UNCERTAIN) barrier write. See
+     * {@link GroupMetadataManager#markStoredDescriptionTopologyEpochUncertain(String, boolean)}.
+     */
+    public CoordinatorResult<Boolean, CoordinatorRecord> markStoredDescriptionTopologyEpochUncertain(
+        String groupId,
+        boolean markWhenNone
+    ) {
+        return groupMetadataManager.markStoredDescriptionTopologyEpochUncertain(groupId, markWhenNone);
+    }
+
+    /**
+     * Batched UNCERTAIN(-2) barrier write for the cleanup cycle. See
+     * {@link GroupMetadataManager#markStoredDescriptionTopologyEpochUncertainBatch(Set)}.
+     */
+    public CoordinatorResult<Set<String>, CoordinatorRecord> markStoredDescriptionTopologyEpochUncertainBatch(
+        Set<String> groupIds
+    ) {
+        return groupMetadataManager.markStoredDescriptionTopologyEpochUncertainBatch(groupIds);
+    }
+
+    /**
+     * Smart finalize after {@code plugin.deleteTopology} for the cleanup cycle. See
+     * {@link GroupMetadataManager#finalizeStoredDescriptionTopologyEpochAfterDeleteBatch(Set)}.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> finalizeStoredDescriptionTopologyEpochAfterDeleteBatch(
+        Set<String> groupIds
+    ) {
+        return groupMetadataManager.finalizeStoredDescriptionTopologyEpochAfterDeleteBatch(groupIds);
+    }
+
+    /**
      * Handles a ShareGroupDescribe request.
      *
      * @param groupIds      The IDs of the groups to describe.
@@ -1057,12 +1138,15 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         List<CoordinatorRecord> records = new ArrayList<>();
         groupMetadataManager.groupIds().forEach(groupId -> {
             Group group = groupMetadataManager.group(groupId);
-            if (group.shouldExpire()) {
-                boolean allOffsetsExpired = offsetMetadataManager.cleanupExpiredOffsets(groupId, records);
-                if (allOffsetsExpired) {
-                    groupMetadataManager.maybeDeleteGroup(groupId, records);
-                }
-            }
+            // Offset cleanup runs for every group regardless of whether shouldExpire(config)
+            // returns true — see Group.shouldExpire's javadoc — so a group whose metadata is
+            // pinned (e.g. a streams group with a pending topology-plugin clean-up) still has
+            // its expired committed offsets tombstoned, which is what feeds the topology
+            // cleanup cycle's "no offsets remaining" eligibility check.
+            boolean allOffsetsExpired = offsetMetadataManager.cleanupExpiredOffsets(groupId, records);
+            if (!allOffsetsExpired) return;
+            if (!group.shouldExpire(config)) return;
+            groupMetadataManager.maybeDeleteGroup(groupId, records);
         });
 
         if (!records.isEmpty()) {

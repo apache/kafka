@@ -20,15 +20,22 @@ import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
+import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse.Status;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionPermanentFailureException;
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
+import org.apache.kafka.server.util.timer.Timer;
+import org.apache.kafka.server.util.timer.TimerTask;
+
+import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -39,14 +46,22 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
+
+import static org.apache.kafka.common.requests.StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_AVAILABLE;
+import static org.apache.kafka.common.requests.StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_ERROR;
+import static org.apache.kafka.common.requests.StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_NOT_STORED;
 
 /**
- * Broker-level component that owns the streams-group topology description plugin
- * reference and the per-group re-solicitation back-off. The chain that drives a push
- * RPC (validate → convert → plugin → metadata write → back-off mutation) lives on
- * {@code GroupCoordinatorService}; this class exposes the building blocks (plugin
- * invocation, back-off mutations) and the heartbeat-path gate, but does not assemble
- * the chain itself.
+ * Broker-level component that owns the streams-group topology description plugin reference
+ * and the per-group re-solicitation back-off. The push-RPC chain (validate → convert →
+ * plugin → metadata write → back-off mutation) and the periodic cleanup cycle's body live
+ * on {@code GroupCoordinatorService}; this class exposes the building blocks
+ * ({@link #invokeSetTopology}, {@link #completeEpochWrite}, {@link #armBackoff},
+ * {@link #invokeDeleteTopologies}, {@link #clearBackoffGroup}) and one harness method,
+ * {@link #startCleanupCycle}, that wraps a service-supplied cycle body with single-flight
+ * scheduling on the broker timer.
  *
  * <p>This class is broker-level (one instance per {@code GroupCoordinatorService}); the
  * back-off map is keyed by {@code groupId} and shared across all partitions hosted on the
@@ -56,28 +71,149 @@ import java.util.concurrent.CompletionException;
  * convergence after a restart.
  */
 public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
+    private final Logger log;
     private final Optional<StreamsGroupTopologyDescriptionPlugin> plugin;
     private final StreamsGroupTopologyDescriptionBackoff backoff;
+    // Get sensors are recorded here, not in GroupCoordinatorService like set/delete:
+    // the get outcome is only finally classified inside applyGetTopologyOutcome, so the metric lives next to that single source of truth.
+    private final GroupCoordinatorMetrics metrics;
+
+    /**
+     * True between {@link #startCleanupCycle} and {@link #close}. The {@link TimerTask}
+     * checks this on each tick before invoking the cycle supplier, so {@code close} flips
+     * the flag and the next tick refuses to fire even if {@code cancel} on the task races.
+     */
+    private final AtomicBoolean running = new AtomicBoolean(false);
+
+    /**
+     * Single-flight guard for the periodic cleanup cycle: a tick that fires while the
+     * previous cycle is still settling is dropped with a warn-level log. Set true in
+     * {@link #runOnce} before invoking the supplier; released by the terminal
+     * {@code whenComplete} attached to the future the supplier returns.
+     */
+    private final AtomicBoolean cycleInFlight = new AtomicBoolean(false);
+
+    /**
+     * The currently-scheduled cleanup tick on the broker-level {@link Timer}.
+     * Self-rescheduled inside the {@link TimerTask}'s {@code run}; {@link #close} cancels
+     * this snapshot and the task's own re-arm check observes {@code running == false}
+     * so the next tick does not re-schedule itself.
+     */
+    private volatile TimerTask scheduledTask;
 
     public StreamsGroupTopologyDescriptionManager(
+        LogContext logContext,
         Optional<StreamsGroupTopologyDescriptionPlugin> plugin,
-        Time time
+        Time time,
+        GroupCoordinatorMetrics metrics
     ) {
+        this.log = logContext.logger(StreamsGroupTopologyDescriptionManager.class);
         this.plugin = plugin;
         this.backoff = new StreamsGroupTopologyDescriptionBackoff(time);
+        this.metrics = metrics;
     }
 
     /**
-     * Release plugin-side resources. The plugin is instantiated by the service via
-     * {@code config.getConfiguredInstance(...)}, so the service owns it and must close
-     * it on shutdown to avoid leaking threads, network clients, etc. across broker
-     * restart cycles.
+     * Arm the periodic cleanup cycle. The manager owns the scheduling harness — timer task,
+     * single-flight guard, running flag — and fires the service-supplied {@code cycleSupplier}
+     * on every tick; the cycle body (which operations to schedule on the runtime in what
+     * order) lives entirely on the service side. No-op when no plugin is configured. Must
+     * be called before {@link #close}; a second call while already running logs and is
+     * otherwise a no-op.
+     */
+    public void startCleanupCycle(
+        Timer timer,
+        long cleanupCheckIntervalMs,
+        Supplier<CompletableFuture<?>> cycleSupplier
+    ) {
+        if (plugin.isEmpty()) return;
+        if (!running.compareAndSet(false, true)) {
+            log.warn("Topology-description cleanup cycle is already started.");
+            return;
+        }
+        scheduleNextTick(timer, cleanupCheckIntervalMs, cycleSupplier);
+    }
+
+    /**
+     * Stop the cleanup cycle and release plugin-side resources. Flips {@code running}
+     * false (so the next timer tick refuses to fire) and cancels the currently-scheduled
+     * tick, then closes the plugin. Called by {@code GroupCoordinatorService.shutdown}
+     * before the runtime is closed, so writes already scheduled by the previous tick
+     * drain through their own futures rather than racing the runtime tear-down.
      */
     @Override
     public void close() throws Exception {
+        if (running.compareAndSet(true, false)) {
+            TimerTask snapshot = scheduledTask;
+            if (snapshot != null) {
+                snapshot.cancel();
+            }
+        }
         if (plugin.isPresent()) {
             plugin.get().close();
         }
+    }
+
+    private void scheduleNextTick(
+        Timer timer,
+        long cleanupCheckIntervalMs,
+        Supplier<CompletableFuture<?>> cycleSupplier
+    ) {
+        if (!running.get()) return;
+        TimerTask task = new TimerTask(cleanupCheckIntervalMs) {
+            @Override
+            public void run() {
+                if (!running.get()) return;
+                try {
+                    runOnce(cycleSupplier);
+                } catch (Throwable t) {
+                    log.warn("Unexpected error running topology-description cleanup cycle.", t);
+                }
+                if (running.get()) scheduleNextTick(timer, cleanupCheckIntervalMs, cycleSupplier);
+            }
+        };
+        scheduledTask = task;
+        timer.add(task);
+    }
+
+    /**
+     * Invoke {@code cycleSupplier} once under the single-flight guard: a call that fires
+     * while a previous cycle is still settling its returned future is dropped with a
+     * warn-level log. Released in the terminal {@code whenComplete}; a synchronous throw
+     * from the supplier releases the flag before propagating so the next tick can run.
+     */
+    // Visible for testing.
+    public void runOnce(Supplier<CompletableFuture<?>> cycleSupplier) {
+        if (!cycleInFlight.compareAndSet(false, true)) {
+            log.warn("Topology-description cleanup cycle skipped: previous cycle is still in flight.");
+            return;
+        }
+        try {
+            CompletableFuture<?> chain = cycleSupplier.get();
+            if (chain == null) {
+                cycleInFlight.set(false);
+                return;
+            }
+            chain.whenComplete((__, throwable) -> {
+                if (throwable != null) {
+                    log.warn("Topology-description cleanup cycle failed to complete cleanly.", throwable);
+                }
+                cycleInFlight.set(false);
+            });
+        } catch (Throwable t) {
+            cycleInFlight.set(false);
+            throw t;
+        }
+    }
+
+    // Visible for testing.
+    TimerTask scheduledCleanupTask() {
+        return scheduledTask;
+    }
+
+    // Visible for testing.
+    boolean isRunning() {
+        return running.get();
     }
 
     /**
@@ -133,6 +269,8 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
         // both arm the back-off and double the window beyond its intended length.
         if (backoff.armIfNotActive(groupId, currentEpoch)) {
             response.setTopologyDescriptionRequired(true);
+            log.info("[GroupId {}] Requested topology description push at topology epoch {}.",
+                groupId, currentEpoch);
         }
         return result;
     }
@@ -195,6 +333,29 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
     }
 
     /**
+     * @return true while the window armed by {@link #throttleConversionDelete} is in effect for
+     *         the group, i.e. a recent classic-join conversion delete failed and the join path
+     *         must not re-invoke the plugin yet.
+     */
+    public boolean isConversionDeleteThrottled(String groupId) {
+        return backoff.isActive(groupId, StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN);
+    }
+
+    /**
+     * Arm (or continue) the back-off chain that throttles the classic-join conversion delete
+     * against a failing plugin. On {@code REBALANCE_IN_PROGRESS} the classic client retries the
+     * join immediately (no client-side back-off), so without this window a broken plugin would
+     * be hit with {@code deleteTopology} in a tight loop. Keyed at
+     * {@link StreamsGroup#STORED_TOPOLOGY_EPOCH_UNCERTAIN} — the group's stored epoch after the
+     * barrier write and never a real push epoch — so heartbeat/push windows are not disturbed;
+     * a stale real-epoch entry left from before the group emptied is replaced. The window is
+     * dropped by {@link #clearBackoffGroup} when a conversion or cleanup-cycle delete succeeds.
+     */
+    public void throttleConversionDelete(String groupId) {
+        backoff.armIfNotActive(groupId, StreamsGroup.STORED_TOPOLOGY_EPOCH_UNCERTAIN);
+    }
+
+    /**
      * Settle the per-group back-off after the bookkeeping write that records a push outcome
      * (the stored epoch on success, the failed epoch on a permanent failure) completes, and
      * return the response to send to the client — or rethrow the write failure so the service's
@@ -252,10 +413,10 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
      * SPI contract) is mapped to the same {@code GROUP_DELETION_FAILED} as an
      * exceptional future.
      *
-     * <p>Pure plugin invocation: does not read group state and does not touch the
-     * back-off map. The service layer pre-filters the input via
-     * {@code streamsGroupsWithStoredTopologyDescription} and is responsible for invoking
-     * {@link #clearBackoffGroup} for the groups that were attempted.
+     * <p>Pure plugin invocation: does not read group state, does not touch the back-off
+     * map, and does not record metrics. The service layer pre-filters the input, records
+     * delete-success / delete-error sensors on the returned failure count, and is
+     * responsible for invoking {@link #clearBackoffGroup} for the groups it chose to clear.
      */
     public CompletableFuture<Map<String, ApiError>> invokeDeleteTopologies(Set<String> groupIds) {
         if (plugin.isEmpty() || groupIds.isEmpty()) {
@@ -297,6 +458,148 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
         // fixed generic message, mirroring invokeSetTopology.
         return Map.entry(groupId, new ApiError(Errors.GROUP_DELETION_FAILED,
             "Topology description plugin failed to delete the topology."));
+    }
+
+    /**
+     * Populate {@code TopologyDescription} and {@code TopologyDescriptionStatus} on each
+     * {@code DescribedGroup} carried by {@code result}, calling {@code plugin.getTopology} only
+     * for groups whose persisted {@code StoredDescriptionTopologyEpoch} matches the group's
+     * current topology epoch. Returns a future that completes when every per-group plugin call
+     * has settled; the future never completes exceptionally — per-group errors fold into
+     * {@code TOPOLOGY_DESCRIPTION_STATUS_ERROR} on the corresponding describedGroup.
+     *
+     * <p>Per-group status decisions:
+     * <ul>
+     *   <li>{@code errorCode != NONE} — the group could not be resolved; leave the status
+     *       field at its {@code NOT_REQUESTED} default since the client should consult the
+     *       group's error code first.</li>
+     *   <li>No plugin configured on this broker — every successful group becomes
+     *       {@code NOT_STORED}: from the client's perspective the broker simply has no
+     *       description to serve.</li>
+     *   <li>{@code Topology} field is null on the response (group has not yet declared a
+     *       topology), {@code storedEpoch} is missing or {@code -1}, or {@code storedEpoch}
+     *       does not match {@code topology().epoch()} — {@code NOT_STORED}.</li>
+     *   <li>Plugin call returns null (the plugin no longer has the data, e.g. backend wipe)
+     *       — {@code NOT_STORED}.</li>
+     *   <li>Plugin call completes exceptionally, throws synchronously, or returns a null
+     *       future (SPI contract violation) — {@code ERROR}. Conversion failures from the
+     *       returned POJO to the wire schema also fold into {@code ERROR} so a single
+     *       malformed plugin response cannot poison the rest of the batch.</li>
+     *   <li>Plugin call returns a non-null description — {@code AVAILABLE}, with the
+     *       converted topology attached.</li>
+     * </ul>
+     */
+    public CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> attachTopologyDescriptions(
+        StreamsGroupDescribeResult result
+    ) {
+        if (plugin.isEmpty()) {
+            for (StreamsGroupDescribeResponseData.DescribedGroup describedGroup : result.describedGroups()) {
+                if (describedGroup.errorCode() == Errors.NONE.code()) {
+                    describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_NOT_STORED);
+                }
+            }
+            return CompletableFuture.completedFuture(result.describedGroups());
+        }
+        final StreamsGroupTopologyDescriptionPlugin topologyDescriptionPlugin = plugin.get();
+        List<CompletableFuture<Void>> pluginFutures = new ArrayList<>();
+        for (StreamsGroupDescribeResponseData.DescribedGroup describedGroup : result.describedGroups()) {
+            CompletableFuture<Void> outcome = maybeAttachOne(topologyDescriptionPlugin, describedGroup, result);
+            if (outcome != null) pluginFutures.add(outcome);
+        }
+        if (pluginFutures.isEmpty()) {
+            return CompletableFuture.completedFuture(result.describedGroups());
+        }
+        return CompletableFuture.allOf(pluginFutures.toArray(new CompletableFuture<?>[0]))
+            .thenApply(unused -> result.describedGroups());
+    }
+
+    /**
+     * Inspect one describedGroup and, if eligible, fire {@code plugin.getTopology}. Returns
+     * null when no plugin call is needed (status has already been decided synchronously from
+     * the response shape); otherwise returns a future that completes once the plugin call has
+     * been folded into the describedGroup's status / topology fields.
+     */
+    private CompletableFuture<Void> maybeAttachOne(
+        StreamsGroupTopologyDescriptionPlugin p,
+        StreamsGroupDescribeResponseData.DescribedGroup describedGroup,
+        StreamsGroupDescribeResult result
+    ) {
+        if (describedGroup.errorCode() != Errors.NONE.code()) {
+            return null;
+        }
+        if (describedGroup.topology() == null) {
+            describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_NOT_STORED);
+            return null;
+        }
+        Integer storedEpoch = result.storedDescriptionTopologyEpochs().get(describedGroup.groupId());
+        if (storedEpoch == null
+            || !StreamsGroup.isReliablyStoredTopologyEpoch(storedEpoch)
+            || storedEpoch != describedGroup.topology().epoch()) {
+            describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_NOT_STORED);
+            return null;
+        }
+        int topologyEpoch = describedGroup.topology().epoch();
+        CompletableFuture<StreamsGroupTopologyDescription> pluginFuture;
+        try {
+            pluginFuture = p.getTopology(describedGroup.groupId(), topologyEpoch);
+        } catch (Exception e) {
+            // SPI contract violation: synchronous throw treated as ERROR.
+            recordGetError();
+            describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_ERROR);
+            return CompletableFuture.completedFuture(null);
+        }
+        if (pluginFuture == null) {
+            recordGetError();
+            describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_ERROR);
+            return CompletableFuture.completedFuture(null);
+        }
+        return pluginFuture.handle((topology, throwable) -> {
+            applyGetTopologyOutcome(describedGroup, topology, throwable);
+            return null;
+        });
+    }
+
+    private void applyGetTopologyOutcome(
+        StreamsGroupDescribeResponseData.DescribedGroup describedGroup,
+        StreamsGroupTopologyDescription topology,
+        Throwable throwable
+    ) {
+        if (throwable != null) {
+            Throwable cause = Errors.maybeUnwrapException(throwable);
+            log.warn("Topology description plugin getTopology failed for group {}.",
+                describedGroup.groupId(), cause != null ? cause : throwable);
+            recordGetError();
+            describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_ERROR);
+            return;
+        }
+        // The plugin call itself completed normally. A null return is the documented
+        // "plugin no longer has the data" path and surfaces as NOT_STORED, not an error,
+        // so it still counts as a successful getTopology.
+        if (topology == null) {
+            recordGetSuccess();
+            describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_NOT_STORED);
+            return;
+        }
+        try {
+            describedGroup.setTopologyDescription(
+                StreamsGroupTopologyDescriptionConverter.toDescribeResponse(topology));
+            describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_AVAILABLE);
+            recordGetSuccess();
+        } catch (Exception conversionError) {
+            // Defensive catch, should be unreachable in practice. The outcome surfaces as
+            // ERROR to the client, so count it as a failed getTopology to stay consistent.
+            recordGetError();
+            describedGroup.setTopologyDescription(null);
+            describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_ERROR);
+        }
+    }
+
+    private void recordGetSuccess() {
+        metrics.recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_SUCCESS_SENSOR_NAME);
+    }
+
+    private void recordGetError() {
+        metrics.recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_ERROR_SENSOR_NAME);
     }
 
     // Visible for testing.

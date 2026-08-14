@@ -19,9 +19,9 @@ package kafka.server
 
 import com.yammer.metrics.core.{Histogram, Meter}
 import kafka.cluster.Partition
-import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
+import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.network.RequestChannel
-import kafka.server.QuotaFactory.QuotaManagers
+import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
 import kafka.server.share.SharePartitionManager
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -76,18 +76,19 @@ import org.apache.kafka.common.requests.{FetchMetadata => JFetchMetadata, _}
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
-import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Utils}
-import org.apache.kafka.common.utils.internals.SecurityUtils
+import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollection
-import org.apache.kafka.coordinator.group.GroupConfig.{CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, CONSUMER_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_SESSION_TIMEOUT_MS_CONFIG, SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG, SHARE_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, SHARE_AUTO_OFFSET_RESET_CONFIG, SHARE_DELIVERY_COUNT_LIMIT_CONFIG, SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_ISOLATION_LEVEL_CONFIG, SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG, SHARE_RECORD_LOCK_DURATION_MS_CONFIG, SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG, SHARE_SESSION_TIMEOUT_MS_CONFIG, STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, STREAMS_NUM_STANDBY_REPLICAS_CONFIG, STREAMS_SESSION_TIMEOUT_MS_CONFIG, STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, STREAMS_NUM_WARMUP_REPLICAS_CONFIG, STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG, ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG}
+import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch
+import org.apache.kafka.common.utils.internals.SecurityUtils
+import org.apache.kafka.coordinator.group.GroupConfig.{CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, CONSUMER_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_SESSION_TIMEOUT_MS_CONFIG, SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG, SHARE_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, SHARE_AUTO_OFFSET_RESET_CONFIG, SHARE_DELIVERY_COUNT_LIMIT_CONFIG, SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_ISOLATION_LEVEL_CONFIG, SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG, SHARE_RECORD_LOCK_DURATION_MS_CONFIG, SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG, SHARE_SESSION_TIMEOUT_MS_CONFIG, STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, STREAMS_NUM_STANDBY_REPLICAS_CONFIG, STREAMS_SESSION_TIMEOUT_MS_CONFIG, STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, STREAMS_NUM_WARMUP_REPLICAS_CONFIG, STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG, STREAMS_ASSIGNOR_NAME_CONFIG, ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG}
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupConfigManager, GroupCoordinator, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorTestConfig}
-import org.apache.kafka.coordinator.transaction.TransactionLogConfig
+import org.apache.kafka.coordinator.transaction.{InitProducerIdResult, TransactionLogConfig}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.{ConfigRepository, KRaftMetadataCache, MetadataCache, MetadataCacheFixtures, MockConfigRepository}
-import org.apache.kafka.network.{Request, Session}
+import org.apache.kafka.network.{Request, SendResponse, Session}
 import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
 import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
 import org.apache.kafka.security.authorizer.AclEntry
@@ -99,7 +100,7 @@ import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, Server
 import org.apache.kafka.server.logger.LoggingController
 import org.apache.kafka.server.metrics.{ClientMetricsTestUtils, KafkaYammerMetrics}
 import org.apache.kafka.server.share.{CachedSharePartition, ErroneousAndValidPartitionData, SharePartitionKey}
-import org.apache.kafka.server.quota.{ClientQuotaManager, ControllerMutationQuota, ControllerMutationQuotaManager, ReplicaQuota, ReplicationQuotaManager, ThrottleCallback}
+import org.apache.kafka.server.quota.{ClientQuotaManager, ClientRequestQuotaManager, ControllerMutationQuota, ControllerMutationQuotaManager, ReplicaQuota, ReplicationQuotaManager, ThrottleCallback}
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch
 import org.apache.kafka.server.share.context.{FinalContext, ShareSessionContext}
 import org.apache.kafka.server.share.session.{ShareSession, ShareSessionKey}
@@ -126,7 +127,6 @@ import java.util.function.Consumer
 import java.util.{Comparator, Optional, OptionalInt, OptionalLong, Properties}
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters._
 
 class KafkaApisTest extends Logging {
   private val requestChannel: RequestChannel = mock(classOf[RequestChannel])
@@ -383,7 +383,9 @@ class KafkaApisTest extends Logging {
     cgConfigs.put(STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false")
     cgConfigs.put(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT.toString)
     cgConfigs.put(STREAMS_NUM_WARMUP_REPLICAS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_DEFAULT.toString)
+    cgConfigs.put(STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT)
     cgConfigs.put(STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DEFAULT.toString)
+    cgConfigs.put(STREAMS_ASSIGNOR_NAME_CONFIG, "sticky")
     cgConfigs.put(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "")
     cgConfigs.put(ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, "false")
     when(configRepository.groupConfig(consumerGroupId)).thenReturn(cgConfigs)
@@ -1811,7 +1813,7 @@ class KafkaApisTest extends Logging {
         ArgumentMatchers.eq(expectedProducerIdAndEpoch),
         responseCallback.capture(),
         ArgumentMatchers.eq(requestLocal)
-      )).thenAnswer(_ => responseCallback.getValue.apply(InitProducerIdResult(producerId, epoch, Errors.PRODUCER_FENCED)))
+      )).thenAnswer(_ => responseCallback.getValue.apply(new InitProducerIdResult(producerId, epoch, Errors.PRODUCER_FENCED)))
       val kafkaApis = createKafkaApis()
       try {
         kafkaApis.handleInitProducerIdRequest(request, requestLocal)
@@ -2055,7 +2057,7 @@ class KafkaApisTest extends Logging {
       any(),
       responseCallback.capture(),
       ArgumentMatchers.eq(requestLocal)
-    )).thenAnswer(_ => responseCallback.getValue.apply(InitProducerIdResult(15L, 0.toShort, Errors.NONE)))
+    )).thenAnswer(_ => responseCallback.getValue.apply(new InitProducerIdResult(15L, 0.toShort, Errors.NONE)))
 
     kafkaApis.handleInitProducerIdRequest(request, requestLocal)
 
@@ -10411,13 +10413,13 @@ class KafkaApisTest extends Logging {
       request.context.header.apiVersion
     )
 
-    // Create the RequestChannel.Response that is created when sendResponse is called in order to update the metrics.
-    val sendResponse = new RequestChannel.SendResponse(
+    // Create the Response that is created when sendResponse is called in order to update the metrics.
+    val sendResponse = new SendResponse(
       request,
       request.buildResponseSend(response),
-      request.responseNode(response).toScala
+      request.responseNode(response)
     )
-    request.updateRequestMetrics(time.milliseconds(), sendResponse.responseLog.toJava)
+    request.updateRequestMetrics(time.milliseconds(), sendResponse.responseLog)
 
     AbstractResponse.parseResponse(
       request.context.header.apiKey,
@@ -11240,6 +11242,113 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
+  def testStreamsGroupTopologyDescriptionUpdateReturnsUnsupportedVersionWhenStreamsProtocolDisabled(): Unit = {
+    // Streams group protocol disabled on this broker -> the gate at the top of
+    // handleStreamsGroupTopologyDescriptionUpdate short-circuits with UNSUPPORTED_VERSION,
+    // matching the sibling handleStreamsGroupHeartbeat behavior and the placeholder semantics
+    // KAFKA-20620 introduced before this real handler landed.
+    val updateRequest = new StreamsGroupTopologyDescriptionUpdateRequestData().setGroupId("group")
+
+    val requestChannelRequest = buildRequest(new StreamsGroupTopologyDescriptionUpdateRequest.Builder(updateRequest).build())
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta.Builder()
+        .setImage(MetadataImage.EMPTY)
+        .build()
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val response = verifyNoThrottling[StreamsGroupTopologyDescriptionUpdateResponse](requestChannelRequest)
+    assertEquals(Errors.UNSUPPORTED_VERSION.code, response.data.errorCode)
+  }
+
+  @Test
+  def testStreamsGroupTopologyDescriptionUpdateRequest(): Unit = {
+    // Happy path: streams protocol enabled, no authorizer configured (default ALLOW),
+    // coordinator returns a clean response that must be forwarded to the client verbatim.
+    val features = mock(classOf[FinalizedFeatures])
+    when(features.finalizedFeatures()).thenReturn(util.Map.of(StreamsVersion.FEATURE_NAME, 1.toShort))
+
+    metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.features()).thenReturn(features)
+
+    val updateRequest = new StreamsGroupTopologyDescriptionUpdateRequestData().setGroupId("group")
+    val requestChannelRequest = buildRequest(new StreamsGroupTopologyDescriptionUpdateRequest.Builder(updateRequest).build())
+
+    val future = new CompletableFuture[StreamsGroupTopologyDescriptionUpdateResponseData]()
+    when(groupCoordinator.streamsGroupTopologyDescriptionUpdate(
+      requestChannelRequest.context,
+      updateRequest
+    )).thenReturn(future)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val expectedResponse = new StreamsGroupTopologyDescriptionUpdateResponseData()
+    future.complete(expectedResponse)
+    val response = verifyNoThrottling[StreamsGroupTopologyDescriptionUpdateResponse](requestChannelRequest)
+    assertEquals(expectedResponse, response.data)
+  }
+
+  @Test
+  def testStreamsGroupTopologyDescriptionUpdateRequestFutureFailed(): Unit = {
+    // Coordinator-side exception (e.g. NOT_COORDINATOR, fenced member, plugin transient
+    // failure) must be folded into an error response via getErrorResponse and surfaced to
+    // the client.
+    val features = mock(classOf[FinalizedFeatures])
+    when(features.finalizedFeatures()).thenReturn(util.Map.of(StreamsVersion.FEATURE_NAME, 1.toShort))
+
+    metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.features()).thenReturn(features)
+
+    val updateRequest = new StreamsGroupTopologyDescriptionUpdateRequestData().setGroupId("group")
+    val requestChannelRequest = buildRequest(new StreamsGroupTopologyDescriptionUpdateRequest.Builder(updateRequest).build())
+
+    val future = new CompletableFuture[StreamsGroupTopologyDescriptionUpdateResponseData]()
+    when(groupCoordinator.streamsGroupTopologyDescriptionUpdate(
+      requestChannelRequest.context,
+      updateRequest
+    )).thenReturn(future)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    future.completeExceptionally(Errors.NOT_COORDINATOR.exception)
+    val response = verifyNoThrottling[StreamsGroupTopologyDescriptionUpdateResponse](requestChannelRequest)
+    assertEquals(Errors.NOT_COORDINATOR.code, response.data.errorCode)
+  }
+
+  @Test
+  def testStreamsGroupTopologyDescriptionUpdateRequestGroupAuthorizationFailed(): Unit = {
+    // Per KIP-1331 the RPC requires READ on the GROUP resource (like offset commits). When
+    // the authorizer denies that ACL, the request must NOT reach the coordinator — fail
+    // fast at the KafkaApis layer with GROUP_AUTHORIZATION_FAILED.
+    val features = mock(classOf[FinalizedFeatures])
+    when(features.finalizedFeatures()).thenReturn(util.Map.of(StreamsVersion.FEATURE_NAME, 1.toShort))
+
+    metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.features()).thenReturn(features)
+
+    val updateRequest = new StreamsGroupTopologyDescriptionUpdateRequestData().setGroupId("group")
+    val requestChannelRequest = buildRequest(new StreamsGroupTopologyDescriptionUpdateRequest.Builder(updateRequest).build())
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
+      .thenReturn(util.List.of(AuthorizationResult.DENIED))
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val response = verifyNoThrottling[StreamsGroupTopologyDescriptionUpdateResponse](requestChannelRequest)
+    assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code, response.data.errorCode)
+    verify(groupCoordinator, never()).streamsGroupTopologyDescriptionUpdate(any(), any())
+  }
+
+  @Test
   def testStreamsGroupHeartbeatRequestTopicAuthorizationFailed(): Unit = {
     val features = mock(classOf[FinalizedFeatures])
     when(features.finalizedFeatures()).thenReturn(util.Map.of(StreamsVersion.FEATURE_NAME, 1.toShort))
@@ -11727,7 +11836,8 @@ class KafkaApisTest extends Logging {
     val future = new CompletableFuture[util.List[StreamsGroupDescribeResponseData.DescribedGroup]]()
     when(groupCoordinator.streamsGroupDescribe(
       any[RequestContext],
-      any[util.List[String]]
+      any[util.List[String]],
+      any[Boolean]
     )).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
@@ -11839,7 +11949,8 @@ class KafkaApisTest extends Logging {
     val future = new CompletableFuture[util.List[StreamsGroupDescribeResponseData.DescribedGroup]]()
     when(groupCoordinator.streamsGroupDescribe(
       any[RequestContext],
-      any[util.List[String]]
+      any[util.List[String]],
+      any[Boolean]
     )).thenReturn(future)
     future.complete(util.List.of)
     kafkaApis = createKafkaApis(
@@ -11866,7 +11977,8 @@ class KafkaApisTest extends Logging {
     val future = new CompletableFuture[util.List[StreamsGroupDescribeResponseData.DescribedGroup]]()
     when(groupCoordinator.streamsGroupDescribe(
       any[RequestContext],
-      any[util.List[String]]
+      any[util.List[String]],
+      any[Boolean]
     )).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
@@ -11874,6 +11986,42 @@ class KafkaApisTest extends Logging {
     future.completeExceptionally(Errors.FENCED_MEMBER_EPOCH.exception)
     val response = verifyNoThrottling[StreamsGroupDescribeResponse](requestChannelRequest)
     assertEquals(Errors.FENCED_MEMBER_EPOCH.code, response.data.groups.get(0).errorCode)
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testStreamsGroupDescribeForwardsIncludeTopologyDescriptionFlag(includeTopologyDescription: Boolean): Unit = {
+    // The KafkaApis layer must thread IncludeTopologyDescription from the request schema
+    // through to the coordinator unchanged — the coordinator gates the plugin call on it,
+    // so a silent drop here would make the flag unobservable to operators.
+    val features = mock(classOf[FinalizedFeatures])
+    when(features.finalizedFeatures()).thenReturn(util.Map.of(StreamsVersion.FEATURE_NAME, 1.toShort))
+
+    metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.features()).thenReturn(features)
+
+    val streamsGroupDescribeRequestData = new StreamsGroupDescribeRequestData()
+      .setIncludeTopologyDescription(includeTopologyDescription)
+    streamsGroupDescribeRequestData.groupIds.add("group-id")
+    // IncludeTopologyDescription is v1+ and v1 is marked latestVersionUnstable; build at v1
+    // explicitly so the field reaches the wire.
+    val requestChannelRequest = buildRequest(new StreamsGroupDescribeRequest.Builder(streamsGroupDescribeRequestData).build(1.toShort))
+
+    val future = new CompletableFuture[util.List[StreamsGroupDescribeResponseData.DescribedGroup]]()
+    when(groupCoordinator.streamsGroupDescribe(
+      any[RequestContext],
+      any[util.List[String]],
+      ArgumentMatchers.eq(includeTopologyDescription)
+    )).thenReturn(future)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    future.complete(util.List.of(new StreamsGroupDescribeResponseData.DescribedGroup().setGroupId("group-id")))
+    verify(groupCoordinator).streamsGroupDescribe(
+      any[RequestContext],
+      any[util.List[String]],
+      ArgumentMatchers.eq(includeTopologyDescription)
+    )
   }
 
   @ParameterizedTest
@@ -11916,7 +12064,8 @@ class KafkaApisTest extends Logging {
     val future = new CompletableFuture[util.List[StreamsGroupDescribeResponseData.DescribedGroup]]()
     when(groupCoordinator.streamsGroupDescribe(
       any[RequestContext],
-      any[util.List[String]]
+      any[util.List[String]],
+      any[Boolean]
     )).thenReturn(future)
     kafkaApis = createKafkaApis(
       authorizer = Some(authorizer)
@@ -12161,8 +12310,8 @@ class KafkaApisTest extends Logging {
       verify(metadataCache, never).getAllTopics
       verify(groupConfigManager, never).groupIds
       verify(metadataCache, never).getBrokerNodes(any)
-      assertTrue(requestMetrics.apply(ApiKeys.LIST_CONFIG_RESOURCES.name).requestQueueTimeHist.count > 0)
-      assertTrue(requestMetrics.apply(RequestMetrics.LIST_CLIENT_METRICS_RESOURCES_METRIC_NAME).requestQueueTimeHist.count > 0)
+      assertTrue(requestMetrics.get(ApiKeys.LIST_CONFIG_RESOURCES.name).requestQueueTimeHist.count > 0)
+      assertTrue(requestMetrics.get(RequestMetrics.LIST_CLIENT_METRICS_RESOURCES_METRIC_NAME).requestQueueTimeHist.count > 0)
     } finally {
       requestMetrics.close()
     }
@@ -12209,8 +12358,8 @@ class KafkaApisTest extends Logging {
             ).toList
           ).flatMap(s => s.stream).collect(util.stream.Collectors.toList[ListConfigResourcesResponseData.ConfigResource]))
       assertEquals(expectedResponseData, response.data)
-      assertTrue(requestMetrics.apply(ApiKeys.LIST_CONFIG_RESOURCES.name).requestQueueTimeHist.count > 0)
-      assertEquals(0, requestMetrics.apply(RequestMetrics.LIST_CLIENT_METRICS_RESOURCES_METRIC_NAME).requestQueueTimeHist.count)
+      assertTrue(requestMetrics.get(ApiKeys.LIST_CONFIG_RESOURCES.name).requestQueueTimeHist.count > 0)
+      assertEquals(0, requestMetrics.get(RequestMetrics.LIST_CLIENT_METRICS_RESOURCES_METRIC_NAME).requestQueueTimeHist.count)
     } finally {
       requestMetrics.close()
     }

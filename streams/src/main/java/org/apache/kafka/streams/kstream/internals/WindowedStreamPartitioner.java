@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.clients.producer.internals.BuiltInPartitioner;
-import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
@@ -33,21 +33,28 @@ public class WindowedStreamPartitioner<K, V> implements StreamPartitioner<Window
         this.serializer = serializer;
     }
 
+    @SuppressWarnings("removal")
+    @Override
+    public Optional<Set<Integer>> partitions(final String topic, final Windowed<K> windowedKey, final V value, final int numPartitions) {
+        throw new UnsupportedOperationException("This method is deprecated and should not be called.");
+    }
+
     /**
      * WindowedStreamPartitioner determines the partition number for a record with the given windowed key and value
      * and the current number of partitions. The partition number id determined by the original key of the windowed key
      * using the same logic as DefaultPartitioner so that the topic is partitioned by the original key.
      *
-     * @param topic the topic name this record is sent to
-     * @param windowedKey the key of the record
-     * @param value the value of the record
+     * @param topic         the topic name this record is sent to
+     * @param windowedKey   the key of the record
+     * @param value         the value of the record
+     * @param headers       the record headers
      * @param numPartitions the total number of partitions
      * @return an integer between 0 and {@code numPartitions-1}, or {@code null} if the default partitioning logic should be used
      */
     @Override
-    public Optional<Set<Integer>> partitions(final String topic, final Windowed<K> windowedKey, final V value, final int numPartitions) {
+    public Optional<Set<Integer>> partitions(final String topic, final Windowed<K> windowedKey, final V value, final Headers headers, final int numPartitions) {
         // for windowed key, the key bytes should never be null
-        final byte[] keyBytes = serializer.serializeBaseKey(topic, new RecordHeaders(), windowedKey);
+        final byte[] keyBytes = serializer.serializeBaseKey(topic, headers, windowedKey);
 
         // stick with the same built-in partitioner util functions that producer used
         // to make sure its behavior is consistent with the producer

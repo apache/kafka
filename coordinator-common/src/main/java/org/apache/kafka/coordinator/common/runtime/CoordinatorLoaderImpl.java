@@ -197,7 +197,7 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
             int sizeInBytes = fileRecords.sizeInBytes();
             int bytesNeeded = Math.max(loadBufferSize, sizeInBytes);
 
-            // "minOneMessage = true in the above log.read() means that the buffer may need to
+            // minOneMessage = true in the above log.read() means that the buffer may need to
             // be grown to ensure progress can be made.
             if (buffer.capacity() < bytesNeeded) {
                 if (loadBufferSize < bytesNeeded) {

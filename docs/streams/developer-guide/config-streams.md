@@ -91,6 +91,7 @@ This section contains the most common Streams configuration parameters. For a fu
     * topology.optimization
   * Kafka consumers and producer configuration parameters
     * Naming
+    * group.instance.id
     * Default Values
     * Parameters controlled by Kafka Streams
     * enable.auto.commit
@@ -1131,6 +1132,23 @@ The maximum amount of time in milliseconds a task might stall due to internal er
 <tr>  
 <td>
 
+topology.description.push.enabled
+</td>  
+<td>
+
+Medium
+</td>  
+<td>
+
+Controls whether the Kafka Streams client sends topology descriptions to the broker when requested. When set to `false`, the client will not prepare or push topology descriptions. See [Topology Description Plugin](/{version}/streams/developer-guide/topology-description-plugin/).
+</td>  
+<td>
+
+`true`
+</td> </tr>  
+<tr>  
+<td>
+
 topology.optimization
 </td>  
 <td>
@@ -1183,7 +1201,7 @@ Added to a windows maintainMs to ensure data is not deleted from the log prematu
 <tr>  
 <td>
 
-window.size.ms (Deprecated. See [Window Serdes](datatypes.html#window-serdes) for alternatives.)
+window.size.ms (Deprecated. See [Window Serdes](../datatypes#window-serdes) for alternatives.)
 </td>  
 <td>
 
@@ -1200,7 +1218,7 @@ Sets window size for the deserializer in order to calculate window end times.
 <tr>  
 <td>
 
-windowed.inner.class.serde (Deprecated. See [Window Serdes](datatypes.html#window-serdes) for alternatives.)
+windowed.inner.class.serde (Deprecated. See [Window Serdes](../datatypes#window-serdes) for alternatives.)
 </td>  
 <td>
 
@@ -1364,7 +1382,7 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 > 
 
 > 
-> This is discussed in more detail in [Data types and serialization](datatypes.html#streams-developer-guide-serdes).
+> This is discussed in more detail in [Data types and serialization](../datatypes#streams-developer-guide-serdes).
 
 ### default.value.serde
 
@@ -1375,7 +1393,7 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 > 
 
 > 
-> This is discussed in more detail in [Data types and serialization](datatypes.html#streams-developer-guide-serdes).
+> This is discussed in more detail in [Data types and serialization](../datatypes#streams-developer-guide-serdes).
 
 ### dsl.store.format {#dsl-store-format}
 
@@ -1390,7 +1408,7 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 >
 > See [KIP-1271](https://cwiki.apache.org/confluence/x/QIM8G) for migration procedures, changelog compatibility, restore behavior, and per-record overhead.
 >
-> **Current limitations**: `dsl.store.format=HEADERS` changes the state store format. It does not define how DSL operators create headers for output records. Some operators write empty headers to their materialized stores, and the buffer stores used by `suppress()` and left/outer stream-stream joins are not headers-aware. See [Stateful transformations](/{version}/streams/developer-guide/dsl-api.html#stateful-transformations) and the [Streams upgrade guide](/{version}/streams/upgrade-guide.html#current-limitations) for details.
+> **Current limitations**: `dsl.store.format=HEADERS` changes the state store format. It does not define how DSL operators create headers for output records. Some operators write empty headers to their materialized stores, and the buffer store used by left/outer stream-stream joins for not-yet-matched records is not headers-aware. See [Stateful transformations](/{version}/streams/developer-guide/dsl-api.html#stateful-transformations) and the [Streams upgrade guide](/{version}/streams/upgrade-guide.html#current-limitations) for details.
 
 ### ensure.explicit.internal.resource.naming
 
@@ -1398,7 +1416,7 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 
 ### group.protocol
 
-> The group protocol used by the Kafka Streams client used for coordination. It determines how the client will communicate with the Kafka brokers and other clients in the same group. The default value is `"classic"`, which is the classic consumer group protocol. Can be set to `"streams"` (requires broker-side enablement) to enable the new Kafka Streams group protocol.
+> The group protocol used by the Kafka Streams client used for coordination. It determines how the client will communicate with the Kafka brokers and other clients in the same group. The default value is `"classic"`, which is the classic consumer group protocol. Can be set to `"streams"` (requires broker-side enablement) to enable the new Kafka Streams group protocol. When set to `"streams"`, `group.instance.id` can be used for static membership.
 
 ### rack.aware.assignment.non_overlap_cost
 
@@ -1476,7 +1494,7 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 
 ### num.standby.replicas
 
-> The number of standby replicas. Standby replicas are shadow copies of local state stores. Kafka Streams attempts to create the specified number of replicas per store and keep them up to date as long as there are enough instances running. Standby replicas are used to minimize the latency of task failover. A task that was previously running on a failed instance is preferred to restart on an instance that has standby replicas so that the local state store restoration process from its changelog can be minimized. Details about how Kafka Streams makes use of the standby replicas to minimize the cost of resuming tasks on failover can be found in the [State](../architecture.html#streams_architecture_state) section. 
+> The number of standby replicas. Standby replicas are shadow copies of local state stores. Kafka Streams attempts to create the specified number of replicas per store and keep them up to date as long as there are enough instances running. Standby replicas are used to minimize the latency of task failover. A task that was previously running on a failed instance is preferred to restart on an instance that has standby replicas so that the local state store restoration process from its changelog can be minimized. Details about how Kafka Streams makes use of the standby replicas to minimize the cost of resuming tasks on failover can be found in the [State](../../architecture#streams_architecture_state) section. 
 > 
 > Recommendation:
 >     Increase the number of standbys to 1 to get instant fail-over, i.e., high-availability. Increasing the number of standbys requires more client-side storage space. For example, with 1 standby, 2x space is required.
@@ -1486,7 +1504,7 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 
 ### num.stream.threads
 
-> This specifies the number of stream threads in an instance of the Kafka Streams application. The stream processing code runs in these threads. For more information about Kafka Streams threading model, see [Threading Model](../architecture.html#streams_architecture_threads).
+> This specifies the number of stream threads in an instance of the Kafka Streams application. The stream processing code runs in these threads. For more information about Kafka Streams threading model, see [Threading Model](../../architecture#streams_architecture_threads).
 
 ### probing.rebalance.interval.ms
 
@@ -1617,7 +1635,7 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 
 ### processing.guarantee
 
-> The processing guarantee that should be used. Possible values are `"at_least_once"` (default) and `"exactly_once_v2"` (for EOS version 2). Deprecated config options are `"exactly_once"` (for EOS alpha), and `"exactly_once_beta"` (for EOS version 2). Using `"exactly_once_v2"` (or the deprecated `"exactly_once_beta"`) requires broker version 2.5 or newer, while using the deprecated `"exactly_once"` requires broker version 0.11.0 or newer. Note that if exactly-once processing is enabled, the default for parameter `commit.interval.ms` changes to 100ms. Additionally, consumers are configured with `isolation.level="read_committed"` and producers are configured with `enable.idempotence=true` per default. Note that by default exactly-once processing requires a cluster of at least three brokers, which is the recommended setting for production. For development, you can change this configuration by adjusting broker setting `transaction.state.log.replication.factor` and `transaction.state.log.min.isr` to the number of brokers you want to use. For more details see [Processing Guarantees](../core-concepts#streams_processing_guarantee). 
+> The processing guarantee that should be used. Possible values are `"at_least_once"` (default) and `"exactly_once_v2"` (for EOS version 2). Deprecated config options are `"exactly_once"` (for EOS alpha), and `"exactly_once_beta"` (for EOS version 2). Using `"exactly_once_v2"` (or the deprecated `"exactly_once_beta"`) requires broker version 2.5 or newer, while using the deprecated `"exactly_once"` requires broker version 0.11.0 or newer. Note that if exactly-once processing is enabled, the default for parameter `commit.interval.ms` changes to 100ms. Additionally, consumers are configured with `isolation.level="read_committed"` and producers are configured with `enable.idempotence=true` per default. Note that by default exactly-once processing requires a cluster of at least three brokers, which is the recommended setting for production. For development, you can change this configuration by adjusting broker setting `transaction.state.log.replication.factor` and `transaction.state.log.min.isr` to the number of brokers you want to use. For more details see [Processing Guarantees](../../core-concepts#streams_processing_guarantee). 
 > 
 > Recommendation:
 >     While it is technically possible to use EOS with any replication factor, using a replication factor lower than 3 effectively voids EOS. Thus it is strongly recommended to use a replication factor of 3 (together with `min.in.sync.replicas=2`). This recommendation applies to all topics (i.e. `__transaction_state`, `__consumer_offsets`, Kafka Streams internal topics, and user topics).
@@ -1690,6 +1708,12 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
  #### task.assignor.class
 
 > A task assignor class or class name implementing the `org.apache.kafka.streams.processor.assignment.TaskAssignor` interface. Defaults to the high-availability task assignor. One possible alternative implementation provided in Apache Kafka is the `org.apache.kafka.streams.processor.assignment.assignors.StickyTaskAssignor`, which was the default task assignor before KIP-441 and minimizes task movement at the cost of stateful task availability. Alternative implementations of the task assignment algorithm can be plugged into the application by implementing a custom `TaskAssignor` and setting this config to the name of the custom task assignor class. 
+ 
+ #### topology.description.push.enabled
+
+> Controls whether the Kafka Streams client sends topology descriptions to the broker when requested. When set to `false`, the client will not prepare or push topology descriptions. Enabled by default.
+
+This configuration only has an effect for streams groups (`group.protocol=streams`) on clusters where the broker configuration `group.streams.topology.description.plugin.class` is set; otherwise, the broker never requests topology descriptions. See [Topology Description Plugin](/{version}/streams/developer-guide/topology-description-plugin/) for details.
  
  #### topology.optimization
 
@@ -1783,6 +1807,10 @@ If you call `streamsBuilder.build()` without passing the `Properties` object, op
      // alternatively, you can use
      streamsSettings.put(StreamsConfig.topicPrefix("PARAMETER_NAME"), "topic-value");
  
+ #### group.instance.id {#group-instance-id}
+
+ `group.instance.id` is a consumer configuration that enables static membership. For Kafka Streams, it is configured at the Kafka Streams client level, and the configured value must be unique to each `KafkaStreams` instance. Internally, Kafka Streams appends the 1-based stream thread index to the configured `group.instance.id` to ensure that each stream thread's main consumer uses a unique value. For example, a configured value of `ks-client-A` results in `ks-client-A-1`, `ks-client-A-2`, and so on. Static membership is supported with both `group.protocol=classic` and `group.protocol=streams`.
+
  #### Default Values
  
  Kafka Streams uses different default values for some of the underlying client configs, which are summarized below. For detailed descriptions of these configs, see [Producer Configs](/43/documentation.html#producerconfigs) and [Consumer Configs](/43/documentation.html#consumerconfigs).  

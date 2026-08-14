@@ -24,8 +24,7 @@ import java.util.Map.Entry
 import java.util.concurrent.CompletableFuture
 import java.util.function.Consumer
 import kafka.network.RequestChannel
-import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.logger.RuntimeLoggerManager
+import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.clients.admin.{AlterConfigOp, EndpointType}
 import org.apache.kafka.common.Uuid.ZERO_UUID
@@ -55,12 +54,13 @@ import org.apache.kafka.metadata.{BrokerHeartbeatReply, BrokerRegistrationReply,
 import org.apache.kafka.network.Request
 import org.apache.kafka.raft.RaftManager
 import org.apache.kafka.security.DelegationTokenManager
-import org.apache.kafka.server.{ApiVersionManager, EnvelopeUtils, ProcessRole}
+import org.apache.kafka.server.{ApiVersionManager, AuthHelper, EnvelopeUtils, ProcessRole}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, RequestLocal}
+import org.apache.kafka.server.logger.RuntimeLoggerManager
 import org.apache.kafka.server.quota.ControllerMutationQuota
 
-import scala.jdk.CollectionConverters._
+import scala.jdk.javaapi.OptionConverters
 
 
 /**
@@ -81,7 +81,7 @@ class ControllerApis(
 ) extends ApiRequestHandler with Logging {
 
   this.logIdent = s"[ControllerApis nodeId=${config.nodeId}] "
-  val authHelper = new AuthHelper(authorizerPlugin)
+  val authHelper = new AuthHelper(OptionConverters.toJava(authorizerPlugin))
   val configHelper = new ConfigHelper(metadataCache, config, metadataCache)
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
   val runtimeLoggerManager = new RuntimeLoggerManager(config.nodeId, logger.underlying)
@@ -108,6 +108,7 @@ class ControllerApis(
         case ApiKeys.BROKER_REGISTRATION => handleBrokerRegistration(request)
         case ApiKeys.BROKER_HEARTBEAT => handleBrokerHeartBeatRequest(request)
         case ApiKeys.UNREGISTER_BROKER => handleUnregisterBroker(request)
+        case ApiKeys.UNREGISTER_CONTROLLER => handleUnregisterController(request)
         case ApiKeys.ALTER_CLIENT_QUOTAS => handleAlterClientQuotas(request)
         case ApiKeys.INCREMENTAL_ALTER_CONFIGS => handleIncrementalAlterConfigs(request)
         case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => handleAlterPartitionReassignments(request)
@@ -204,9 +205,9 @@ class ControllerApis(
     val future = deleteTopics(context,
       deleteTopicsRequest.data,
       request.context.apiVersion,
-      authHelper.authorize(request.context, DELETE, CLUSTER, CLUSTER_NAME, logIfDenied = false),
-      names => authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC, names)(n => n),
-      names => authHelper.filterByAuthorized(request.context, DELETE, TOPIC, names)(n => n))
+      authHelper.authorize(request.context, DELETE, CLUSTER, CLUSTER_NAME, true, false, 1),
+      names => authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC, names, (n: String) => n),
+      names => authHelper.filterByAuthorized(request.context, DELETE, TOPIC, names, (n: String) => n))
     future.handle[Unit] { (results, exception) =>
       val response = if (exception != null) {
         deleteTopicsRequest.getErrorResponse(exception)
@@ -224,8 +225,8 @@ class ControllerApis(
     request: DeleteTopicsRequestData,
     apiVersion: Int,
     hasClusterAuth: Boolean,
-    getDescribableTopics: Iterable[String] => Set[String],
-    getDeletableTopics: Iterable[String] => Set[String]
+    getDescribableTopics: util.Collection[String] => util.Set[String],
+    getDeletableTopics: util.Collection[String] => util.Set[String]
   ): CompletableFuture[util.List[DeletableTopicResult]] = {
     // Check if topic deletion is enabled at all.
     if (!config.deleteTopicEnable) {
@@ -298,11 +299,10 @@ class ControllerApis(
       }
       // Get the list of deletable topics (those we can delete) and the list of describable
       // topics.
-      val topicsToAuthenticate = toAuthenticate.asScala
       val (describable, deletable) = if (hasClusterAuth) {
-        (topicsToAuthenticate.toSet, topicsToAuthenticate.toSet)
+        (toAuthenticate, toAuthenticate)
       } else {
-        (getDescribableTopics(topicsToAuthenticate), getDeletableTopics(topicsToAuthenticate))
+        (getDescribableTopics(toAuthenticate), getDeletableTopics(toAuthenticate))
       }
       // For each topic that was provided by ID, check if authentication failed.
       // If so, remove it from the idToName map and create an error response for it.
@@ -367,10 +367,10 @@ class ControllerApis(
       controllerMutationQuotaRecorderFor(controllerMutationQuota))
     val future = createTopics(context,
         createTopicsRequest.data,
-        authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME, logIfDenied = false),
-        names => authHelper.filterByAuthorized(request.context, CREATE, TOPIC, names)(identity),
+        authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME, true, false, 1),
+        names => authHelper.filterByAuthorized(request.context, CREATE, TOPIC, names, (n: String) => n),
         names => authHelper.filterByAuthorized(request.context, DESCRIBE_CONFIGS, TOPIC,
-            names, logIfDenied = false)(identity),
+            names, true, false, (n: String) => n),
         request.isForwarded)
     future.handle[Unit] { (result, exception) =>
       val response = if (exception != null) {
@@ -392,8 +392,8 @@ class ControllerApis(
     context: ControllerRequestContext,
     request: CreateTopicsRequestData,
     hasClusterAuth: Boolean,
-    getCreatableTopics: Iterable[String] => Set[String],
-    getDescribableTopics: Iterable[String] => Set[String],
+    getCreatableTopics: util.Collection[String] => util.Set[String],
+    getDescribableTopics: util.Collection[String] => util.Set[String],
     forwarded: Boolean
   ): CompletableFuture[CreateTopicsResponseData] = {
     val topicNames = new util.HashSet[String]()
@@ -407,14 +407,15 @@ class ControllerApis(
       }
     }
 
-    val allowedTopicNames = topicNames.asScala.diff(Set(Topic.CLUSTER_METADATA_TOPIC_NAME))
+    val allowedTopicNames = new util.HashSet[String](topicNames)
+    allowedTopicNames.remove(Topic.CLUSTER_METADATA_TOPIC_NAME)
 
     val authorizedTopicNames = if (hasClusterAuth) {
       allowedTopicNames
     } else {
       getCreatableTopics.apply(allowedTopicNames)
     }
-    val describableTopicNames = getDescribableTopics.apply(allowedTopicNames).asJava
+    val describableTopicNames = getDescribableTopics.apply(allowedTopicNames)
     val effectiveRequest = request.duplicate()
     val iterator = effectiveRequest.topics().iterator()
     while (iterator.hasNext) {
@@ -656,6 +657,27 @@ class ControllerApis(
     }
   }
 
+  def handleUnregisterController(request: Request): CompletableFuture[Unit] = {
+    val unregisterRequest = request.body(classOf[UnregisterControllerRequest])
+    authHelper.authorizeClusterOperation(request, ALTER)
+    val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
+      OptionalLong.empty())
+
+    controller.unregisterController(context, unregisterRequest.data.controllerId).handle[Unit] { (_, e) =>
+      def createResponseCallback(requestThrottleMs: Int,
+                                 e: Throwable): UnregisterControllerResponse = {
+        if (e != null) {
+          unregisterRequest.getErrorResponse(requestThrottleMs, e)
+        } else {
+          new UnregisterControllerResponse(new UnregisterControllerResponseData().
+            setThrottleTimeMs(requestThrottleMs))
+        }
+      }
+      requestHelper.sendResponseMaybeThrottle(request,
+        requestThrottleMs => createResponseCallback(requestThrottleMs, e))
+    }
+  }
+
   private def handleBrokerRegistration(request: Request): CompletableFuture[Unit] = {
     val registrationRequest = request.body(classOf[BrokerRegistrationRequest])
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
@@ -686,7 +708,7 @@ class ControllerApis(
     request: Request,
     buildResponse: ApiMessage => AbstractResponse
   ): CompletableFuture[Unit] = {
-    val requestBody = request.body(classOf[AbstractRequest])
+    val requestBody = request.body
     val future = raftManager
       .handleRequest(request.context, request.header, requestBody.data, time.milliseconds())
       .toCompletableFuture
@@ -798,8 +820,8 @@ class ControllerApis(
   }
 
   private def handleCreatePartitions(request: Request): CompletableFuture[Unit] = {
-    def filterAlterAuthorizedTopics(topics: Iterable[String]): Set[String] = {
-      authHelper.filterByAuthorized(request.context, ALTER, TOPIC, topics)(n => n)
+    def filterAlterAuthorizedTopics(topics: util.Collection[String]): util.Set[String] = {
+      authHelper.filterByAuthorized(request.context, ALTER, TOPIC, topics, (n: String) => n)
     }
     val createPartitionsRequest = request.body(classOf[CreatePartitionsRequest])
     val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request.session, request.header, 3)
@@ -830,7 +852,7 @@ class ControllerApis(
   def createPartitions(
     context: ControllerRequestContext,
     request: CreatePartitionsRequestData,
-    getAlterAuthorizedTopics: Iterable[String] => Set[String]
+    getAlterAuthorizedTopics: util.Collection[String] => util.Set[String]
   ): CompletableFuture[util.List[CreatePartitionsTopicResult]] = {
     val responses = new util.ArrayList[CreatePartitionsTopicResult]()
     val duplicateTopicNames = new util.HashSet[String]()
@@ -848,7 +870,7 @@ class ControllerApis(
         setErrorMessage("Duplicate topic name."))
         topicNames.remove(topicName)
     }
-    val authorizedTopicNames = getAlterAuthorizedTopics(topicNames.asScala)
+    val authorizedTopicNames = getAlterAuthorizedTopics(topicNames)
     val topics = new util.ArrayList[CreatePartitionsTopic]
     topicNames.forEach { topicName =>
       if (authorizedTopicNames.contains(topicName)) {
