@@ -1817,11 +1817,14 @@ org.apache.kafka.streams.processor.internals.DefaultStateUpdaterTest:
 - shouldCompleteWithNullIfNoTasks
 - shouldCompleteWithNullIfTaskNotFound
 - shouldDrainFailedTasksAndExceptions
+- shouldDrainQueuedTaskThatWasNotPickedUpFromTheInputQueue
+- shouldDrainQueuedTasks
 - shouldDrainRestoredActiveTasks
 - shouldFailPendingRemovalsWhenStateUpdaterThreadDies
 - shouldFailRemovalOfTaskAfterStateUpdaterWasShutDown
 - shouldFailRemovalOfTaskWhenStateUpdaterThreadDiesWhilePerformingIt
 - shouldFailRemovalOfTaskWhenStateUpdaterThreadIsNotRunningAnymore
+- shouldFailTaskAddedWhileStateUpdaterThreadIsStopping
 - shouldGetTasksFromExceptionsAndFailedTasks
 - shouldGetTasksFromPausedTasks
 - shouldGetTasksFromRestoredActiveTasks
