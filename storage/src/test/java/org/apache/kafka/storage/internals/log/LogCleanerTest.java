@@ -1473,7 +1473,7 @@ public class LogCleanerTest {
 
     @Test
     public void testCleanSegmentsWithAbort() throws IOException {
-        Cleaner cleaner = makeCleaner(Integer.MAX_VALUE, this::abortCheckDone, 64 * 1024, Integer.MAX_VALUE, Integer.MAX_VALUE);
+        Cleaner cleaner = makeCleaner(Integer.MAX_VALUE, this::abortCheckDone, 64 * 1024);
         Properties logProps = new Properties();
         logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 1024);
 
@@ -1812,78 +1812,6 @@ public class LogCleanerTest {
         assertEquals(-1L, map.get(key(start - 1)), "Should not find a value too small");
         assertEquals(-1L, map.get(key(end)), "Should not find a value too large");
         assertEquals(end - start, stats.mapMessagesRead());
-    }
-
-    @Test
-    public void testCleanedSegmentSizeOverflow() throws IOException {
-        // Put one record per source segment so each filterTo() call reads exactly one batch.
-        // After cleaning source segment 0 into currentCleaned, cleaning source segment 1 would push
-        // currentCleaned over maxCleanedSegmentSize, triggering overflow and
-        // rolling to a second cleaned segment.
-        Properties logProps = new Properties();
-        logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 4096);
-        UnifiedLog log = makeLog(LogConfig.fromProps(logConfig.originals(), logProps));
-
-        log.appendAsLeader(record(0, 0), 0);
-        log.roll();
-        log.appendAsLeader(record(1, 1), 0);
-        log.roll();
-
-        List<LogSegment> sourceSegments = log.logSegments().subList(0, 2);
-        int singleBatchSize = StreamSupport.stream(sourceSegments.get(0).log().batches().spliterator(), false)
-            .mapToInt(RecordBatch::sizeInBytes)
-            .max().orElse(0);
-        // maxCleanedSize allows exactly 1 batch; adding a 2nd batch overflows.
-        long maxCleanedSize = (long) singleBatchSize + 1L;
-
-        // No deletions; both records are retained.
-        Cleaner cleaner = makeCleaner(Integer.MAX_VALUE, tp -> { }, 64 * 1024, maxCleanedSize, Integer.MAX_VALUE);
-        LogTestUtils.FakeOffsetMap offsetMap = new LogTestUtils.FakeOffsetMap(Integer.MAX_VALUE);
-
-        // Before: sourceSegment0, sourceSegment1, activeSegment = 3 total
-        int segmentCountBefore = log.logSegments().size();
-
-        log.updateHighWatermark(sourceSegments.get(sourceSegments.size() - 1).readNextOffset());
-        cleaner.cleanSegments(log, sourceSegments, offsetMap, 0L,
-            new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(), -1);
-
-        // With overflow, 2 source segments → 2 cleaned segments; net segment count unchanged.
-        // Without overflow, 2 source → 1 cleaned; net count would be segmentCountBefore - 1.
-        assertEquals(segmentCountBefore, log.logSegments().size());
-        assertEquals(List.of(0L, 1L), LogTestUtils.keysInLog(log));
-        log.close();
-    }
-
-    @Test
-    public void testCleanedSegmentOffsetOverflow() throws IOException {
-        // Put one record per source segment so each filterTo() call reads exactly one batch.
-        // After cleaning source segment 0 into currentCleaned (offset 0), cleaning source segment 1
-        // would push the offset range of currentCleaned over maxCleanedOffsetRange, triggering
-        // overflow and rolling to a second cleaned segment.
-        Properties logProps = new Properties();
-        logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 4096);
-        UnifiedLog log = makeLog(LogConfig.fromProps(logConfig.originals(), logProps));
-
-        log.appendAsLeader(record(0, 0), 0);
-        log.roll();
-        log.appendAsLeader(record(1, 1), 0);
-        log.roll();
-
-        List<LogSegment> sourceSegments = log.logSegments().subList(0, 2);
-        // Allow an offset range of 0: after offset 0 is written, any record at offset > 0 overflows.
-        Cleaner cleaner = makeCleaner(Integer.MAX_VALUE, tp -> { }, 64 * 1024, Integer.MAX_VALUE, 0L);
-        LogTestUtils.FakeOffsetMap offsetMap = new LogTestUtils.FakeOffsetMap(Integer.MAX_VALUE);
-
-        int segmentCountBefore = log.logSegments().size();
-
-        log.updateHighWatermark(sourceSegments.get(sourceSegments.size() - 1).readNextOffset());
-        cleaner.cleanSegments(log, sourceSegments, offsetMap, 0L,
-            new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(), -1);
-
-        assertEquals(segmentCountBefore, log.logSegments().size(),
-            "offset overflow should produce 2 cleaned segments, keeping total segment count the same");
-        assertEquals(List.of(0L, 1L), LogTestUtils.keysInLog(log));
-        log.close();
     }
 
     /**
@@ -2552,15 +2480,14 @@ public class LogCleanerTest {
     }
 
     private Cleaner makeCleaner(int capacity) {
-        return makeCleaner(capacity, tp -> { }, 64 * 1024, Integer.MAX_VALUE, Integer.MAX_VALUE);
+        return makeCleaner(capacity, tp -> { }, 64 * 1024);
     }
 
     private Cleaner makeCleaner(int capacity, int maxMessageSize) {
-        return makeCleaner(capacity, tp -> { }, maxMessageSize, Integer.MAX_VALUE, Integer.MAX_VALUE);
+        return makeCleaner(capacity, tp -> { }, maxMessageSize);
     }
 
-    private Cleaner makeCleaner(int capacity, Consumer<TopicPartition> checkDone, int maxMessageSize,
-                                long maxCleanedSegmentSize, long maxCleanedOffsetRange) {
+    private Cleaner makeCleaner(int capacity, Consumer<TopicPartition> checkDone, int maxMessageSize) {
         return new Cleaner(0,
             new LogTestUtils.FakeOffsetMap(capacity),
             maxMessageSize,
@@ -2568,9 +2495,7 @@ public class LogCleanerTest {
             0.75,
             throttler,
             time,
-            checkDone,
-            maxCleanedSegmentSize,
-            maxCleanedOffsetRange);
+            checkDone);
     }
 
     private ByteBuffer key(long id) {
