@@ -106,7 +106,6 @@ public class OptimizedKTableIntegrationTest {
     }
 
     @Test
-    @SuppressWarnings("removal")
     public void shouldApplyUpdatesToStandbyStore(final TestInfo testInfo) throws Exception {
         final int batch1NumMessages = 100;
         final int batch2NumMessages = 100;
@@ -139,6 +138,7 @@ public class OptimizedKTableIntegrationTest {
                 final ReadOnlyKeyValueStore<Integer, Integer> store1 = IntegrationTestUtils.getStore(TABLE_NAME, kafkaStreams1, QueryableStoreTypes.keyValueStore());
                 final ReadOnlyKeyValueStore<Integer, Integer> store2 = IntegrationTestUtils.getStore(TABLE_NAME, kafkaStreams2, QueryableStoreTypes.keyValueStore());
 
+                @SuppressWarnings("removal")
                 final KeyQueryMetadata keyQueryMetadata = kafkaStreams1
                         .queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> Optional.of(Collections.singleton(0)));
 
