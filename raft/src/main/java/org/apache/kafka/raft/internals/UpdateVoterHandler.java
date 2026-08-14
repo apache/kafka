@@ -83,6 +83,9 @@ import java.util.concurrent.CompletionStage;
  *     b. Otherwise, compare-and-set the leader's in-memory voter set, completing the RPC
  *        immediately with success, or with the REQUEST_TIMED_OUT error if the in-memory state was
  *        concurrently changed by another operation.
+ *     In either successful case, this also resets the leader's check quorum tracking for the
+ *     voter (see {@link LeaderState#updateCheckQuorumForFollowingVoter}), since a successful
+ *     UpdateVoter request is evidence that the voter is following the leader.
  *
  * A pending operation that doesn't complete before its timeout expires is also aborted with the
  * REQUEST_TIMED_OUT error, by {@link ChangeVoterHandlerState#maybeExpirePendingOperation}.
@@ -440,6 +443,10 @@ public final class UpdateVoterHandler {
              * request and help to commit the voter set change.
              */
             current.setLastOffset(leaderState.appendVotersRecord(newVoters, currentTimeMs));
+
+            // Reset the check quorum state since the leader received a successful request
+            leaderState.updateCheckQuorumForFollowingVoter(current.voterKey(), currentTimeMs);
+
             current.completeFuture(
                 RaftUtil.updateVoterResponse(
                     Errors.NONE,

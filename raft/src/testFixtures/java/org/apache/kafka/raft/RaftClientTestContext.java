@@ -150,7 +150,7 @@ public final class RaftClientTestContext {
     private final List<RaftResponse.Outbound> sentResponses = new ArrayList<>();
     private final List<Throwable> uncaughtExceptions = new ArrayList<>();
 
-    private static final int NUMBER_FETCH_TIMEOUTS_IN_UPDATE_VOTER_SET_PERIOD = 1;
+    private static final int NUMBER_FETCH_TIMEOUTS_IN_UPDATE_VOTER_SET_PERIOD = 2;
 
     public static final class Builder {
         static final int DEFAULT_ELECTION_TIMEOUT_MS = 10000;

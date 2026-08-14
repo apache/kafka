@@ -1699,6 +1699,84 @@ public class KafkaRaftClientReconfigTest {
     }
 
     @Test
+    void testUpdateVoterResetsCheckQuorumTimer() throws Exception {
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
+        ReplicaKey follower1 = replicaKey(local.id() + 1, true);
+        ReplicaKey follower2 = replicaKey(local.id() + 2, true);
+
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower1, follower2));
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+            .withKip853Rpc(true)
+            .withBootstrapSnapshot(Optional.of(voters))
+            .withUnknownLeader(3)
+            .build();
+        int resignLeadershipTimeout = context.checkQuorumTimeoutMs;
+
+        context.unattachedToLeader();
+        int epoch = context.currentEpoch();
+
+        // Establish a HWM; this also resets the check quorum timer
+        context.deliverRequest(
+            context.fetchRequest(epoch, follower1, context.log.endOffset().offset(), epoch, 0)
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
+
+        // check quorum timeout has not expired, the leader should not resign
+        context.time.sleep(resignLeadershipTimeout / 2);
+        context.poll();
+        assertFalse(context.client.quorum().isResigned());
+
+        // The leader periodically re-sends BeginQuorumEpoch heartbeats; drain and answer them
+        // so the connection to follower2 is free for the UpdateVoter's ApiVersions probe below
+        for (RaftRequest.Outbound request : context.collectBeginEpochRequests(epoch)) {
+            context.deliverResponse(
+                request.correlationId(),
+                request.destination(),
+                context.beginEpochResponse(epoch, local.id())
+            );
+        }
+        context.poll();
+
+        // follower2 successfully completes an UpdateVoter request; this should reset the
+        // check quorum timer even though follower2 never sends a FETCH request
+        InetSocketAddress defaultAddress = InetSocketAddress.createUnresolved(
+            "new_host",
+            7770 + follower2.id()
+        );
+        Endpoints newListeners = Endpoints.fromInetSocketAddresses(
+            Map.of(context.channel.listenerName(), defaultAddress)
+        );
+        context.deliverRequest(
+            context.updateVoterRequest(
+                follower2,
+                Feature.KRAFT_VERSION.supportedVersionRange(true),
+                newListeners
+            )
+        );
+        completeApiVersions(context, follower2, defaultAddress);
+        context.pollUntilResponse();
+        context.assertSentUpdateVoterResponse(Errors.NONE, OptionalInt.of(local.id()), epoch);
+
+        // If the UpdateVoter request had not reset the check quorum timer, the leader would
+        // resign once the timeout from the original FETCH-based reset elapses. Sleeping past
+        // that point here, with no further FETCH request from either follower, verifies the
+        // reset actually happened: the leader should still not resign.
+        context.time.sleep((resignLeadershipTimeout / 2) + 2);
+        context.poll();
+        assertFalse(context.client.quorum().isResigned());
+
+        // Confirm the timer was actually reset and not simply broken: without any further
+        // FETCH or UpdateVoter request, sleeping past the (reset) timeout now causes the
+        // leader to resign
+        context.time.sleep(resignLeadershipTimeout);
+        context.poll();
+        assertTrue(context.client.quorum().isResigned());
+        context.assertResignedLeader(epoch, local.id());
+    }
+
+    @Test
     void testUpdateVoterWithUnreachableListener() throws Exception {
         ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
