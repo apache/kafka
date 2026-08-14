@@ -1,0 +1,109 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# KRaft JMH benchmark regression gate.
+#   * 1. runs on PRs touching KRaft paths, diffs the deterministic counters against
+#     the stored baseline, and fails the check on a mismatch (the `benchmark-override` label
+#     downgrades that to a warning). It never pushes.
+#   * 2. runs on pushes to trunk that touch KRaft paths and refreshes the baseline on
+#     the `benchmark-results` orphan branch.
+# See .github/scripts/benchmark_regression.py for the compare/update engine.
+name: KRaft Benchmarks
+on:
+  push:
+    branches: [trunk]
+    paths: ['raft/**', 'metadata/**', 'jmh-benchmarks/**']
+  pull_request:
+    types: [opened, labeled, synchronize, reopened]
+    paths: ['raft/**', 'metadata/**', 'jmh-benchmarks/**']
+
+concurrency:
+  group: kraft-benchmarks-${{ github.event_name == 'push' && 'baseline' || github.ref }}
+  # PRs: cancel a superseded run when a newer commit is pushed
+  # Baseline (push): never cancel
+  cancel-in-progress: ${{ github.event_name != 'push' }}
+
+permissions:
+  contents: write
+
+jobs:
+  kraft-benchmarks:
+    name: KRaft Benchmarks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: true
+
+      - name: Setup Gradle
+        uses: ./.github/actions/setup-gradle
+        with:
+          java-version: 25
+
+      - name: Setup Python
+        uses: ./.github/actions/setup-python
+
+      - name: Checkout baseline branch
+        id: baseline
+        uses: actions/checkout@v5
+        continue-on-error: true
+        with:
+          ref: benchmark-results
+          path: baseline
+          persist-credentials: true
+
+      - name: Ensure baseline directory
+        run: mkdir -p baseline/benchmarks
+
+      - name: Run raft JMH benchmarks
+        run: >-
+          ./gradlew :jmh-benchmarks:jmh
+          -DjmhArgs="-rf json -rff $GITHUB_WORKSPACE/jmh-result.json -foe true -prof gc -jvmArgsAppend -Xmx4g org.apache.kafka.jmh.raft"
+
+      - name: Upload JMH result
+        uses: actions/upload-artifact@v4
+        with:
+          name: jmh-result
+          path: jmh-result.json
+
+      - name: Compare or update baseline
+        env:
+          OVERRIDE: ${{ contains(github.event.pull_request.labels.*.name, 'benchmark-override') }}
+        run: |
+          python .github/scripts/benchmark_regression.py \
+            --result jmh-result.json \
+            --baseline-dir baseline/benchmarks \
+            --mode ${{ github.event_name == 'push' && 'update' || 'compare' }} \
+            --override "$OVERRIDE" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Push baseline
+        if: github.event_name == 'push'
+        working-directory: baseline
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          # First run: the branch did not exist, so seed it as an orphan with a token-authed remote.
+          if [ ! -d .git ]; then
+            git init -b benchmark-results
+            git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          fi
+          git add benchmarks
+          git diff --quiet && git diff --staged --quiet \
+            || git commit -m "Update KRaft benchmark baseline for ${GITHUB_SHA}"
+          git push origin HEAD:benchmark-results

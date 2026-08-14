@@ -69,6 +69,12 @@ public class MockLog implements RaftLog {
     private long firstUnflushedOffset = 0;
     private boolean flushedSinceLastChecked = false;
 
+    // Cumulative work counters used by the JMH raft benchmarks. They grow for the lifetime of the
+    // log; benchmarks read them as drainable deltas (see RaftClientBenchmarkContext).
+    private int flushCount = 0;
+    private int readCount = 0;
+    private int truncationCount = 0;
+
     public MockLog(
         TopicPartition topicPartition,
         Uuid topicId,
@@ -85,6 +91,7 @@ public class MockLog implements RaftLog {
             throw new IllegalArgumentException("Illegal attempt to truncate to offset " + offset +
                 " which is below the current high watermark " + highWatermark);
         }
+        truncationCount++;
 
         logger.debug("Truncating log to end offset {}", offset);
         batches.removeIf(entry -> entry.lastOffset() >= offset);
@@ -109,6 +116,7 @@ public class MockLog implements RaftLog {
                 flush(false);
 
                 truncated.set(true);
+                truncationCount++;
             }
         });
 
@@ -363,6 +371,7 @@ public class MockLog implements RaftLog {
     @Override
     public void flush(boolean forceFlushActiveSegment) {
         flushedSinceLastChecked = true;
+        flushCount++;
         firstUnflushedOffset = endOffset().offset();
     }
 
@@ -382,6 +391,22 @@ public class MockLog implements RaftLog {
         boolean oldValue = flushedSinceLastChecked;
         flushedSinceLastChecked = false;
         return oldValue;
+    }
+
+    /**
+     * Cumulative number of {@link #flush(boolean)} calls since this log was created. Used as a
+     * proxy for disk I/Os by the JMH raft benchmarks.
+     */
+    public int flushCount() {
+        return flushCount;
+    }
+
+    public int readCount() {
+        return readCount;
+    }
+
+    public int truncationCount() {
+        return truncationCount;
     }
 
     /**
@@ -421,6 +446,7 @@ public class MockLog implements RaftLog {
     @Override
     public LogFetchInfo read(long startOffset, Isolation isolation, int maxTotalBatchBytes) {
         verifyOffsetInRange(startOffset);
+        readCount++;
 
         long maxOffset = isolation == Isolation.COMMITTED ? highWatermark.offset() : endOffset().offset();
         if (startOffset >= maxOffset) {

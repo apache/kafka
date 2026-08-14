@@ -3603,6 +3603,7 @@ project(':jmh-benchmarks') {
     implementation testFixtures(project(':clients'))
     implementation testFixtures(project(':server-common'))
     implementation testFixtures(project(':metadata'))
+    implementation testFixtures(project(':raft'))
 
     implementation libs.jmhCore
     annotationProcessor libs.jmhGeneratorAnnProcess
