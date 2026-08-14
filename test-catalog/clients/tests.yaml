@@ -3251,18 +3251,27 @@ org.apache.kafka.clients.producer.internals.ChunkedByteBufferOutputStreamTest:
 org.apache.kafka.clients.producer.internals.ChunkedRecordAccumulatorTest:
 - testBatchCloseDoesNotDeallocateChunksPrematurely
 - testBatchClosedForAppendsDuringAllocationIsNotExtended
+- testBlockingAcquireGetsOnlyWhatIsLeftOfMaxBlockTimeAfterFailedExtension
 - testBufferExhaustedNotDoubleCountedAcrossExtensionAndNewBatch
 - testChunkedBatchRejectsNonChunkedStream
 - testConcurrentExtensionRaceLoserExtendsAgain
 - testConcurrentExtensionRaceLoserStartsNewBatch
 - testCumulativeAccountsForBatchHeaderOnce
 - testExhaustedExtensionFallsBackToBlockingNewBatchPath
+- testExhaustedExtensionLeavesAReplacementBatchOpen
+- testExtensionRetriesBoundedByMaxBlockTimeWhenAcquireFails
+- testExtensionRetryPastDeadlineFailsAfterInsufficientAttach
 - testExtensionTracksCumulativeBatchSize
 - testFirstRecordCreatesChunkedBatch
+- testGivingUpRefundsAnUnattachedNewBatchStream
 - testInflightExpirationReturnsAllChunksToPool
 - testMidBatchExtensionGrowsExistingBatch
+- testPartitionChangeRetriesBoundedByMaxBlockTime
+- testPartitionChangeTimeoutAfterExtensionFail
 - testPartitionSwitchRefundsHeldExtensionChunks
+- testRetryPastDeadlineIsRefusedEvenWhenTheRecordNeedsNoMemory
 - testSmallFollowupRecordFitsWithoutExtension
+- testZeroMaxBlockTimeStillAppendsWhenNothingHasToBeWaitedFor
 org.apache.kafka.clients.producer.internals.FutureRecordMetadataTest:
 - testFutureGetWithMilliSeconds
 - testFutureGetWithSeconds
@@ -3306,6 +3315,7 @@ org.apache.kafka.clients.producer.internals.RecordAccumulatorTest:
 - testAbortIncompleteBatches
 - testAbortUnsentBatches
 - testAdaptiveBuiltInPartitioner
+- testAppendDeadline
 - testAppendLargeCompressed
 - testAppendLargeNonCompressed
 - testAppendLargeOldMessageFormatCompressed
@@ -3331,6 +3341,7 @@ org.apache.kafka.clients.producer.internals.RecordAccumulatorTest:
 - testReadyAndDrainWhenABatchIsBeingRetried
 - testRecordsDrainedWhenTransactionCompleting
 - testRetryBackoff
+- testRetryPolicy
 - testSoonToExpireBatchesArePickedUpForExpiry
 - testSplitAndReenqueue
 - testSplitAndReenqueuePreventInfiniteRecursion
