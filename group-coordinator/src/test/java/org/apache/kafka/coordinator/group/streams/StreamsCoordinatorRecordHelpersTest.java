@@ -33,6 +33,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignment
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.TaskRole;
+import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import org.junit.jupiter.api.Test;
@@ -41,6 +42,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
@@ -278,9 +280,8 @@ class StreamsCoordinatorRecordHelpersTest {
             )
         );
 
-        assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(GROUP_ID, 42, 43, 44, Map.of(
-            "num.standby.replicas", "2"
-        ), -1, -1));
+        assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            GROUP_ID, 42, 43, 44, Optional.of(new AssignmentConfigsImpl(2, List.of())), -1, -1));
     }
 
     @Test
@@ -301,7 +302,7 @@ class StreamsCoordinatorRecordHelpersTest {
         );
 
         assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-            GROUP_ID, 42, 43, 44, Map.of(), 7, 5));
+            GROUP_ID, 42, 43, 44, Optional.empty(), 7, 5));
     }
 
     @Test
@@ -710,7 +711,7 @@ class StreamsCoordinatorRecordHelpersTest {
     @Test
     public void testNewStreamsGroupMetadataRecordNullGroupId() {
         NullPointerException exception = assertThrows(NullPointerException.class, () ->
-            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(null, 1, 1, 1, Map.of(), -1, -1));
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(null, 1, 1, 1, Optional.empty(), -1, -1));
         assertEquals("groupId should not be null here", exception.getMessage());
     }
 

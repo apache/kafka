@@ -34,7 +34,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
 
 import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext.DEFAULT_CLIENT_ADDRESS;
 import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext.DEFAULT_CLIENT_ID;
@@ -71,11 +70,8 @@ class StreamsGroupTestUtil {
      * Returns the default assignment configurations that would be used by the system.
      * This matches what streamsGroupAssignmentConfigs() would return.
      */
-    static Map<String, String> getDefaultAssignmentConfigs() {
-        return new TreeMap<>(Map.of(
-            AssignmentConfigsImpl.NUM_STANDBY_REPLICAS_CONFIG,
-            String.valueOf(AssignmentConfigsImpl.DEFAULT.numStandbyReplicas())
-        ));
+    static AssignmentConfigsImpl getDefaultAssignmentConfigs() {
+        return AssignmentConfigsImpl.DEFAULT;
     }
 
     static List<StreamsGroupHeartbeatResponseData.TaskIds> mkResponseTasks(

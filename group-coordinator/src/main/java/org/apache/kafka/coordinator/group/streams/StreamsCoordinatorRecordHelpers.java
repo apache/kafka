@@ -30,6 +30,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignment
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
+import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.ArrayList;
@@ -37,6 +38,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -101,18 +103,21 @@ public class StreamsCoordinatorRecordHelpers {
         int newGroupEpoch,
         long metadataHash,
         int validatedTopologyEpoch,
-        Map<String, String> assignmentConfigs,
+        Optional<AssignmentConfigsImpl> assignmentConfigs,
         int storedDescriptionTopologyEpoch,
         int failedDescriptionTopologyEpoch
     ) {
         Objects.requireNonNull(groupId, "groupId should not be null here");
         Objects.requireNonNull(assignmentConfigs, "assignmentConfigs should not be null here");
 
-        List<StreamsGroupMetadataValue.LastAssignmentConfig> assignmentConfigList = assignmentConfigs.entrySet().stream()
-            .map(entry -> new StreamsGroupMetadataValue.LastAssignmentConfig()
-                .setKey(entry.getKey())
-                .setValue(entry.getValue()))
-            .toList();
+        // Configs that were never recorded stay unrecorded (an empty list): materializing defaults here would
+        // defeat the forced rebalance that a group replayed from a record without configs must go through.
+        List<StreamsGroupMetadataValue.LastAssignmentConfig> assignmentConfigList =
+            assignmentConfigs.map(AssignmentConfigsImpl::toMap).orElse(Map.of()).entrySet().stream()
+                .map(entry -> new StreamsGroupMetadataValue.LastAssignmentConfig()
+                    .setKey(entry.getKey())
+                    .setValue(entry.getValue()))
+                .toList();
 
         return CoordinatorRecord.record(
             new StreamsGroupMetadataKey()

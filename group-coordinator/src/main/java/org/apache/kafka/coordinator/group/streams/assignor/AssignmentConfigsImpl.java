@@ -22,6 +22,7 @@ import org.apache.kafka.coordinator.group.api.streams.assignor.AssignmentConfigs
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 
 /**
  * The assignment configurations for a streams group.
@@ -76,6 +77,19 @@ public record AssignmentConfigsImpl(
      */
     private static List<String> parseRackAwareAssignmentTags(String rackAwareAssignmentTags) {
         return rackAwareAssignmentTags.isEmpty() ? List.of() : List.of(rackAwareAssignmentTags.split(","));
+    }
+
+    /**
+     * Converts the typed configs into the raw configs recorded for the group; the inverse of {@link #fromMap(Map)}.
+     */
+    public Map<String, String> toMap() {
+        // The rack-aware assignment tags are only recorded when any are configured, matching what fromMap expects.
+        Map<String, String> configs = new TreeMap<>();
+        configs.put(NUM_STANDBY_REPLICAS_CONFIG, Integer.toString(numStandbyReplicas));
+        if (!rackAwareAssignmentTags.isEmpty()) {
+            configs.put(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, String.join(",", rackAwareAssignmentTags));
+        }
+        return configs;
     }
 
     /**

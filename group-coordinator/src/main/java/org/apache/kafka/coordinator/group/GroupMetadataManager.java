@@ -163,6 +163,7 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsTopology;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
+import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
@@ -185,7 +186,6 @@ import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -198,7 +198,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.SortedMap;
-import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
@@ -262,8 +261,6 @@ import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecor
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroupMember.hasAssignedTasksChanged;
-import static org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl.NUM_STANDBY_REPLICAS_CONFIG;
-import static org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG;
 
 
 /**
@@ -2229,10 +2226,12 @@ public class GroupMetadataManager {
             assignmentUpdate = AssignmentUpdate.RECOMPUTE;
         }
 
-        // Check if assignment configurations have changed
-        Map<String, String> currentAssignmentConfigs = streamsGroupAssignmentConfigs(groupId);
-        Map<String, String> storedAssignmentConfigs = group.lastAssignmentConfigs();
-        if (assignmentUpdate == AssignmentUpdate.NONE && !currentAssignmentConfigs.equals(storedAssignmentConfigs)) {
+        // Check if assignment configurations have changed. A group without recorded configs (replayed from a record
+        // written before they were persisted) always counts as changed, since the configs of its last assignment
+        // are unknown.
+        AssignmentConfigsImpl currentAssignmentConfigs = streamsGroupAssignmentConfigs(groupId);
+        Optional<AssignmentConfigsImpl> storedAssignmentConfigs = group.lastAssignmentConfigs();
+        if (assignmentUpdate == AssignmentUpdate.NONE && !Optional.of(currentAssignmentConfigs).equals(storedAssignmentConfigs)) {
             log.info("[GroupId {}][MemberId {}] Assignment configurations changed to {}. Triggering rebalance.",
                 groupId, memberId, currentAssignmentConfigs);
             assignmentUpdate = AssignmentUpdate.RECOMPUTE;
@@ -2257,7 +2256,7 @@ public class GroupMetadataManager {
                 groupEpoch,
                 metadataHash,
                 validatedTopologyEpoch,
-                currentAssignmentConfigs,
+                Optional.of(currentAssignmentConfigs),
                 group.storedDescriptionTopologyEpoch(),
                 group.failedDescriptionTopologyEpoch()
             ));
@@ -2399,11 +2398,10 @@ public class GroupMetadataManager {
                 )
         ));
 
-        String rackAwareTagsValue = currentAssignmentConfigs.getOrDefault(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "").trim();
+        List<String> requiredTags = currentAssignmentConfigs.rackAwareAssignmentTags();
         // The MISSING_CLIENT_TAGS status (code 6) requires version 1 of the RPC: version 0 clients
         // throw on unknown status codes, so it must not be sent to them.
-        if (requestApiVersion >= 1 && !rackAwareTagsValue.isEmpty()) {
-            List<String> requiredTags = Arrays.asList(rackAwareTagsValue.split("\\s*,\\s*", -1));
+        if (requestApiVersion >= 1 && !requiredTags.isEmpty()) {
             Set<String> memberTagKeys = updatedMember.clientTags().keySet();
             List<String> missingTags = requiredTags.stream()
                 .filter(tag -> !memberTagKeys.contains(tag))
@@ -4414,7 +4412,7 @@ public class GroupMetadataManager {
         CoordinatorMetadataImage metadataImage,
         List<CoordinatorRecord> records,
         Optional<List<Status>> returnedStatus,
-        Map<String, String> assignmentConfigs,
+        AssignmentConfigsImpl assignmentConfigs,
         boolean refineOnly
     ) {
         boolean initialDelayActive = timer.isScheduled(streamsInitialRebalanceKey(group.groupId()));
@@ -4643,7 +4641,7 @@ public class GroupMetadataManager {
                 metadataImage,
                 records,
                 Optional.empty(),
-                group.lastAssignmentConfigs(),
+                group.lastAssignmentConfigs().orElse(AssignmentConfigsImpl.DEFAULT),
                 false
             );
 
@@ -6235,16 +6233,19 @@ public class GroupMetadataManager {
             streamsGroup.setStoredDescriptionTopologyEpoch(value.storedDescriptionTopologyEpoch());
             streamsGroup.setFailedDescriptionTopologyEpoch(value.failedDescriptionTopologyEpoch());
 
-            if (value.lastAssignmentConfigs() != null) {
-                streamsGroup.setLastAssignmentConfigs(
+            // A record without configs (written before they were persisted, or re-persisting such a state) leaves
+            // them unrecorded, which forces a rebalance on the next heartbeat since the configs of the last
+            // assignment are unknown.
+            if (value.lastAssignmentConfigs() == null || value.lastAssignmentConfigs().isEmpty()) {
+                streamsGroup.setLastAssignmentConfigs(Optional.empty());
+            } else {
+                streamsGroup.setLastAssignmentConfigs(Optional.of(AssignmentConfigsImpl.fromMap(
                     value.lastAssignmentConfigs().stream()
                         .collect(Collectors.toMap(
                             StreamsGroupMetadataValue.LastAssignmentConfig::key,
                             StreamsGroupMetadataValue.LastAssignmentConfig::value
                         ))
-                );
-            } else {
-                streamsGroup.setLastAssignmentConfigs(Map.of());
+                )));
             }
 
         } else {
@@ -9913,20 +9914,15 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Get the assignor of the provided streams group.
+     * Get the assignment configs of the provided streams group.
      */
-    private Map<String, String> streamsGroupAssignmentConfigs(String groupId) {
+    private AssignmentConfigsImpl streamsGroupAssignmentConfigs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
-        final Integer numStandbyReplicas = groupConfig.flatMap(GroupConfig::streamsNumStandbyReplicas)
+        final int numStandbyReplicas = groupConfig.flatMap(GroupConfig::streamsNumStandbyReplicas)
             .orElse(config.streamsGroupNumStandbyReplicas());
         final List<String> rackAwareAssignmentTags = groupConfig.flatMap(GroupConfig::streamsRackAwareAssignmentTags)
             .orElse(config.streamsGroupRackAwareAssignmentTags());
-        Map<String, String> configs = new TreeMap<>();
-        configs.put(NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas.toString());
-        if (!rackAwareAssignmentTags.isEmpty()) {
-            configs.put(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, String.join(",", rackAwareAssignmentTags));
-        }
-        return configs;
+        return new AssignmentConfigsImpl(numStandbyReplicas, rackAwareAssignmentTags);
     }
 
     private static boolean hasUserEndpointChanged(StreamsGroupMember maybeOldMember, StreamsGroupMember updatedMember) {
