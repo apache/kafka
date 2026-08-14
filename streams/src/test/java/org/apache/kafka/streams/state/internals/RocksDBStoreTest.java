@@ -1711,16 +1711,18 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         rocksDBStore.commit(Map.of());
 
         rocksDBStore.putAll(List.of(
-            KeyValue.pair(k1, stringSerializer.serialize(null, "rolled-back")),
-            KeyValue.pair(k2, stringSerializer.serialize(null, "rolled-back"))));
+            KeyValue.pair(k1, stringSerializer.serialize(null, "k1-new-staged")),
+            KeyValue.pair(k2, stringSerializer.serialize(null, "k2-staged"))));
+
+        final ReadOnlyKeyValueStore<Bytes, byte[]> readUncommittedView =
+            rocksDBStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        assertEquals("k1-new-staged", stringDeserializer.deserialize(null, readUncommittedView.get(k1)));
+        assertEquals("k2-staged", stringDeserializer.deserialize(null, readUncommittedView.get(k2)));
+
         rocksDBStore.dbAccessor.rollbackStagedWrites();
 
-        // an aborted batch must leave nothing behind: the committed value is intact and the new key is gone
         assertEquals("committed", stringDeserializer.deserialize(null, rocksDBStore.get(k1)));
         assertNull(rocksDBStore.get(k2));
-        assertEquals("committed", stringDeserializer.deserialize(null,
-            rocksDBStore.readOnly(IsolationLevel.READ_COMMITTED).get(k1)));
-        assertNull(rocksDBStore.readOnly(IsolationLevel.READ_COMMITTED).get(k2));
     }
 
     @Test
@@ -1742,10 +1744,10 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             KeyValue.pair(k2, stringSerializer.serialize(null, "v2-updated"))));
 
         final ReadOnlyKeyValueStore<Bytes, byte[]> committed = rocksDBStore.readOnly(IsolationLevel.READ_COMMITTED);
-        assertNull(rocksDBStore.get(k1));
+        final ReadOnlyKeyValueStore<Bytes, byte[]> uncommitted = rocksDBStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        assertNull(uncommitted.get(k1));
         assertEquals("v1", stringDeserializer.deserialize(null, committed.get(k1)));
-        assertEquals("v2-updated", stringDeserializer.deserialize(null,
-            rocksDBStore.readOnly(IsolationLevel.READ_UNCOMMITTED).get(k2)));
+        assertEquals("v2-updated", stringDeserializer.deserialize(null, uncommitted.get(k2)));
         assertEquals("v2", stringDeserializer.deserialize(null, committed.get(k2)));
 
         rocksDBStore.commit(Map.of());

@@ -1083,15 +1083,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         /**
          * Applies a batch of writes through {@code cfAccessor}, which owns the column-family layout.
-         * The default applies the entries one at a time; accessors that can write them as a single
-         * batch — or that must stage them instead of writing them — override this.
+         * Deliberately has no default. Each accessor must state how it makes the batch atomic — a single
+         * batch write, or staging it.
          */
-        default void putAll(final ColumnFamilyAccessor cfAccessor,
-                            final List<KeyValue<Bytes, byte[]>> entries) throws RocksDBException {
-            for (final KeyValue<Bytes, byte[]> entry : entries) {
-                cfAccessor.put(this, entry.key.get(), entry.value);
-            }
-        }
+        void putAll(final ColumnFamilyAccessor cfAccessor,
+                    final List<KeyValue<Bytes, byte[]>> entries) throws RocksDBException;
 
         default DBAccessor readOnly(final IsolationLevel isolationLevel) {
             Objects.requireNonNull(isolationLevel, "isolationLevel cannot be null");
@@ -1283,13 +1279,13 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         @Override
         public void putAll(final ColumnFamilyAccessor cfAccessor,
                            final List<KeyValue<Bytes, byte[]>> entries) {
-            // Batch writes must be staged like single-key puts, or they would land in the store
-            // uncommitted: visible at READ_COMMITTED, surviving a rollback, and uncounted by
-            // approximateNumUncommittedBytes(). Staging the batch under one write-lock acquisition
-            // also keeps it invisible to a concurrent IQ reader until it is complete, matching the
-            // atomicity of the direct accessor's single db.write(batch); the buffer's own WriteBatch
-            // then applies it atomically on commit. Reusing cfAccessor.put() keeps the column-family
-            // layout — including the dual-CF upgrade path — identical to a single-key put.
+            // Batch writes must be staged like single-key puts. If written directly to RocksDB
+            // (what the direct accessor does), the uncommitted data would sit in the store rather
+            // than the buffer so would not get removed on error. Staging under one write-lock
+            // acquisition also hides the batch from a concurrent IQ reader until complete,
+            // matching the atomicity of the direct accessor's single db.write(batch). Reusing
+            // cfAccessor.put() keeps the column-family layout — including the dual-CF upgrade
+            // path — identical to a single-key put.
             buffer.stageAll(() -> {
                 for (final KeyValue<Bytes, byte[]> entry : entries) {
                     cfAccessor.put(this, entry.key.get(), entry.value);
