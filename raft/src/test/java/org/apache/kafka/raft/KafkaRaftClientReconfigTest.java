@@ -85,7 +85,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(0)
@@ -161,7 +161,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(0)
@@ -191,7 +191,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withStaticVoters(voters)
             .withUnknownLeader(0)
             .build();
@@ -226,7 +226,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, leader));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withElectedLeader(epoch, leader.id())
@@ -256,7 +256,7 @@ public class KafkaRaftClientReconfigTest {
         VoterSet voterSet = VoterSetTest.voterSet(Stream.of(local, leader));
         int epoch = 5;
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voterSet))
             .withElectedLeader(epoch, leader.id())
@@ -325,7 +325,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -371,7 +371,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withRaftProtocol(RaftProtocol.KIP_1186_PROTOCOL)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -496,7 +496,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -533,7 +533,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -561,7 +561,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -591,7 +591,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -647,7 +647,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -685,7 +685,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withStaticVoters(voters)
             .withUnknownLeader(3)
@@ -730,7 +730,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -775,7 +775,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -847,7 +847,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -907,7 +907,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -967,7 +967,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -1020,7 +1020,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -1075,7 +1075,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -1114,7 +1114,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower1, follower2));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -1167,7 +1167,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower1, follower2));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -1245,7 +1245,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower1, follower2));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -1274,7 +1274,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower1, follower2));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -1294,7 +1294,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower1, follower2));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -1332,7 +1332,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower1, follower2));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -1354,7 +1354,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower1, follower2));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withStaticVoters(voters)
             .withUnknownLeader(3)
@@ -1384,7 +1384,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower1, follower2));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -1414,7 +1414,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower1, follower2));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -1446,7 +1446,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .build();
@@ -1466,7 +1466,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower1, follower2));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -1510,7 +1510,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower1, follower2));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -1552,7 +1552,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower1, follower2));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -1597,7 +1597,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -1645,7 +1645,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -1714,7 +1714,7 @@ public class KafkaRaftClientReconfigTest {
         );
         Endpoints localListeners = Endpoints.fromInetSocketAddresses(listenersMap);
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -1750,7 +1750,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -1801,7 +1801,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -1848,7 +1848,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -1881,7 +1881,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -1914,7 +1914,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -1943,7 +1943,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -1987,7 +1987,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withStaticVoters(voters)
             .withUnknownLeader(3)
@@ -2038,7 +2038,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -2089,7 +2089,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -2140,7 +2140,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -2223,7 +2223,7 @@ public class KafkaRaftClientReconfigTest {
         );
         Endpoints localListeners = Endpoints.fromInetSocketAddresses(listenersMap);
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withElectedLeader(epoch, voter1.id())
@@ -2276,7 +2276,7 @@ public class KafkaRaftClientReconfigTest {
         );
         Endpoints localListeners = Endpoints.fromInetSocketAddresses(listenersMap);
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withStaticVoters(voters)
             .withElectedLeader(epoch, voter1.id())
@@ -2347,7 +2347,7 @@ public class KafkaRaftClientReconfigTest {
         );
         Endpoints localListeners = Endpoints.fromInetSocketAddresses(listenersMap);
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withStaticVoters(voters)
             .withElectedLeader(epoch, voter1.id())
@@ -2416,7 +2416,7 @@ public class KafkaRaftClientReconfigTest {
             VoterSetTest.voterMap(IntStream.of(local.id(), voter1.id(), voter2.id()), false)
         );
 
-        var context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        var context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withRaftProtocol(RaftProtocol.KIP_853_PROTOCOL)
             .withStartingVoters(startingVoters, KRaftVersion.KRAFT_VERSION_0)
             .build();
@@ -2487,7 +2487,7 @@ public class KafkaRaftClientReconfigTest {
             VoterSetTest.voterMap(IntStream.of(local.id(), voter1.id(), voter2.id()), false)
         );
 
-        var context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        var context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withRaftProtocol(RaftProtocol.KIP_853_PROTOCOL)
             .withStartingVoters(startingVoters, KRaftVersion.KRAFT_VERSION_0)
             .build();
@@ -2594,7 +2594,7 @@ public class KafkaRaftClientReconfigTest {
             VoterSetTest.voterMap(IntStream.of(local.id(), voter1.id(), voter2.id()), false)
         );
 
-        var context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        var context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withRaftProtocol(RaftProtocol.KIP_853_PROTOCOL)
             .withStartingVoters(startingVoters, KRaftVersion.KRAFT_VERSION_0)
             .build();
@@ -2650,7 +2650,7 @@ public class KafkaRaftClientReconfigTest {
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, voter1, voter2));
         int epoch = 4;
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withElectedLeader(epoch, voter1.id())
@@ -2690,7 +2690,7 @@ public class KafkaRaftClientReconfigTest {
         );
         Endpoints localListeners = Endpoints.fromInetSocketAddresses(listenersMap);
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withElectedLeader(epoch, voter1.id())
@@ -2751,7 +2751,7 @@ public class KafkaRaftClientReconfigTest {
         );
         Endpoints localListeners = Endpoints.fromInetSocketAddresses(listenersMap);
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withElectedLeader(epoch, voter1.id())
@@ -2790,7 +2790,7 @@ public class KafkaRaftClientReconfigTest {
         InetSocketAddress bootstrapAddress = InetSocketAddress.createUnresolved("localhost", 1234);
         int epoch = 3;
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.empty())
             .withUnknownLeader(epoch)
@@ -2811,7 +2811,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, leader));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withBootstrapSnapshot(Optional.of(voters))
             .withElectedLeader(leaderEpoch, leader.id())
             .withKip853Rpc(true)
@@ -2849,7 +2849,7 @@ public class KafkaRaftClientReconfigTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
 
-        RaftClientTestContext context = new RaftClientContextBuilder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(local.id(), local.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)

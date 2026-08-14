@@ -82,33 +82,20 @@ public abstract class SharedRaftClientContext {
 
     private static final int MAX_POLLS = 50;
 
-    @SuppressWarnings("ParameterNumber")
-    SharedRaftClientContext(
-        String clusterId,
-        OptionalInt localId,
-        Uuid localDirectoryId,
-        KRaftVersion kraftVersion,
-        KafkaRaftClient<String> client,
-        MockLog log,
-        MockNetworkChannel channel,
-        MockTime time,
-        MockQuorumStateStore quorumStateStore,
-        VoterSet startingVoters,
-        RaftProtocol raftProtocol,
-        int fetchMaxBytes
-    ) {
-        this.clusterId = clusterId;
-        this.localId = localId;
-        this.localDirectoryId = localDirectoryId;
-        this.kraftVersion = kraftVersion;
-        this.client = client;
-        this.log = log;
-        this.channel = channel;
-        this.time = time;
-        this.quorumStateStore = quorumStateStore;
-        this.startingVoters = startingVoters;
-        this.raftProtocol = raftProtocol;
-        this.fetchMaxBytes = fetchMaxBytes;
+    SharedRaftClientContext(RaftClientContextBuilder<?> builder, RaftClient.Listener<String> listener) {
+        this.clusterId = builder.clusterId;
+        this.localId = builder.localId;
+        this.localDirectoryId = builder.localDirectoryId;
+        this.kraftVersion = builder.kraftVersion;
+        this.log = builder.log;
+        this.channel = builder.channel;
+        this.time = builder.time;
+        this.quorumStateStore = builder.quorumStateStore;
+        this.startingVoters = builder.startingVoters;
+        this.raftProtocol = builder.raftProtocol;
+        this.fetchMaxBytes = builder.fetchMaxBytes;
+        this.electionTimeoutMs = builder.electionTimeoutMs;
+        this.client = builder.buildClient(listener);
     }
 
     public void unattachedToCandidate() throws Exception {

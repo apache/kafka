@@ -18,7 +18,6 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.AddRaftVoterRequestData;
@@ -55,7 +54,6 @@ import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.requests.DescribeQuorumResponse;
 import org.apache.kafka.common.requests.FetchSnapshotResponse;
-import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.internals.BatchBuilder;
 import org.apache.kafka.server.common.KRaftVersion;
@@ -113,35 +111,20 @@ public final class RaftClientTestContext extends SharedRaftClientContext {
 
     private static final int NUMBER_FETCH_TIMEOUTS_IN_UPDATE_VOTER_SET_PERIOD = 1;
 
-    @SuppressWarnings("ParameterNumber")
-    RaftClientTestContext(
-        String clusterId,
-        OptionalInt localId,
-        Uuid localDirectoryId,
-        KRaftVersion kraftVersion,
-        KafkaRaftClient<String> client,
-        MockLog log,
-        MockNetworkChannel channel,
-        MockMessageQueue messageQueue,
-        MockTime time,
-        MockQuorumStateStore quorumStateStore,
-        VoterSet startingVoters,
-        Set<Integer> bootstrapIds,
-        RaftProtocol raftProtocol,
-        boolean canBecomeVoter,
-        Metrics metrics,
-        ExternalKRaftMetrics externalKRaftMetrics,
-        MockListener listener,
-        int fetchMaxBytes
-    ) {
-        super(clusterId, localId, localDirectoryId, kraftVersion, client, log, channel, time,
-            quorumStateStore, startingVoters, raftProtocol, fetchMaxBytes);
-        this.messageQueue = messageQueue;
-        this.bootstrapIds = bootstrapIds;
-        this.canBecomeVoter = canBecomeVoter;
-        this.metrics = metrics;
-        this.externalKRaftMetrics = externalKRaftMetrics;
+    public RaftClientTestContext(RaftClientContextBuilder<RaftClientTestContext> builder) {
+        this(builder, new MockListener(builder.localId));
+    }
+
+    private RaftClientTestContext(RaftClientContextBuilder<RaftClientTestContext> builder, MockListener listener) {
+        super(builder, listener);
+        this.messageQueue = builder.messageQueue;
+        this.bootstrapIds = builder.bootstrapIds();
+        this.canBecomeVoter = builder.canBecomeVoter;
+        this.metrics = builder.metrics;
+        this.externalKRaftMetrics = builder.externalKRaftMetrics;
         this.listener = listener;
+        this.requestTimeoutMs = builder.requestTimeoutMs;
+        this.appendLingerMs = builder.appendLingerMs;
     }
 
     int electionTimeoutMs() {

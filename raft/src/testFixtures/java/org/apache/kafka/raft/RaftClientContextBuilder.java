@@ -35,7 +35,6 @@ import org.apache.kafka.snapshot.Snapshots;
 
 import org.mockito.Mockito;
 
-import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.List;
@@ -50,7 +49,7 @@ import java.util.stream.IntStream;
 
 import static org.apache.kafka.raft.SharedRaftClientContext.RaftProtocol.KIP_853_PROTOCOL;
 
-public final class RaftClientContextBuilder {
+public final class RaftClientContextBuilder<T extends SharedRaftClientContext> {
     static final int DEFAULT_ELECTION_TIMEOUT_MS = 10000;
 
     static final RecordSerde<String> SERDE = new StringSerde();
@@ -63,51 +62,61 @@ public final class RaftClientContextBuilder {
     static final int RETRY_BACKOFF_MS = 50;
     private static final int DEFAULT_APPEND_LINGER_MS = 0;
 
-    private final MockMessageQueue messageQueue = new MockMessageQueue();
-    private final MockTime time = new MockTime();
-    private final MockQuorumStateStore quorumStateStore = new MockQuorumStateStore();
+    final MockMessageQueue messageQueue = new MockMessageQueue();
+    final MockTime time = new MockTime();
+    final MockQuorumStateStore quorumStateStore = new MockQuorumStateStore();
     private final MockableRandom random = new MockableRandom(1L);
     private final LogContext logContext = new LogContext();
-    private final MockLog log = new MockLog(METADATA_PARTITION, Uuid.METADATA_TOPIC_ID, logContext);
-    private final String clusterId = Uuid.randomUuid().toString();
-    private final OptionalInt localId;
-    private KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_0;
-    private final Uuid localDirectoryId;
+    final MockLog log = new MockLog(METADATA_PARTITION, Uuid.METADATA_TOPIC_ID, logContext);
+    final String clusterId = Uuid.randomUuid().toString();
+    final OptionalInt localId;
+    KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_0;
+    final Uuid localDirectoryId;
 
-    private int requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS;
-    private int electionTimeoutMs = DEFAULT_ELECTION_TIMEOUT_MS;
-    private int appendLingerMs = DEFAULT_APPEND_LINGER_MS;
+    int requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS;
+    int electionTimeoutMs = DEFAULT_ELECTION_TIMEOUT_MS;
+    int appendLingerMs = DEFAULT_APPEND_LINGER_MS;
     private MemoryPool memoryPool = MemoryPool.NONE;
     private Optional<List<InetSocketAddress>> bootstrapServers = Optional.empty();
-    private SharedRaftClientContext.RaftProtocol raftProtocol = SharedRaftClientContext.RaftProtocol.KIP_595_PROTOCOL;
-    private boolean canBecomeVoter = false;
-    private VoterSet startingVoters = VoterSet.empty();
+    SharedRaftClientContext.RaftProtocol raftProtocol = SharedRaftClientContext.RaftProtocol.KIP_595_PROTOCOL;
+    boolean canBecomeVoter = false;
+    VoterSet startingVoters = VoterSet.empty();
     private Endpoints localListeners = Endpoints.empty();
     private boolean isStartingVotersStatic = false;
     private boolean autoJoin = false;
     private int fetchSnapshotMaxBytes = QuorumConfig.DEFAULT_QUORUM_FETCH_SNAPSHOT_MAX_BYTES;
-    private int fetchMaxBytes = QuorumConfig.DEFAULT_QUORUM_FETCH_MAX_BYTES;
+    int fetchMaxBytes = QuorumConfig.DEFAULT_QUORUM_FETCH_MAX_BYTES;
 
-    public RaftClientContextBuilder(int localId, Set<Integer> staticVoters) {
-        this(OptionalInt.of(localId), staticVoters);
+    MockNetworkChannel channel;
+    Metrics metrics;
+    ExternalKRaftMetrics externalKRaftMetrics;
+    private final Function<RaftClientContextBuilder<T>, T> factory;
+
+    public RaftClientContextBuilder(int localId, Set<Integer> staticVoters,
+                                    Function<RaftClientContextBuilder<T>, T> factory) {
+        this(OptionalInt.of(localId), staticVoters, factory);
     }
 
-    public RaftClientContextBuilder(OptionalInt localId, Set<Integer> staticVoters) {
-        this(localId, Uuid.randomUuid());
+    public RaftClientContextBuilder(OptionalInt localId, Set<Integer> staticVoters,
+                                    Function<RaftClientContextBuilder<T>, T> factory) {
+        this(localId, Uuid.randomUuid(), factory);
 
         withStaticVoters(staticVoters);
     }
 
-    public RaftClientContextBuilder(int localId, Uuid localDirectoryId) {
-        this(OptionalInt.of(localId), localDirectoryId);
+    public RaftClientContextBuilder(int localId, Uuid localDirectoryId,
+                                    Function<RaftClientContextBuilder<T>, T> factory) {
+        this(OptionalInt.of(localId), localDirectoryId, factory);
     }
 
-    public RaftClientContextBuilder(OptionalInt localId, Uuid localDirectoryId) {
+    public RaftClientContextBuilder(OptionalInt localId, Uuid localDirectoryId,
+                                    Function<RaftClientContextBuilder<T>, T> factory) {
         this.localId = localId;
         this.localDirectoryId = localDirectoryId;
+        this.factory = factory;
     }
 
-    RaftClientContextBuilder withElectedLeader(int epoch, int leaderId) {
+    RaftClientContextBuilder<T> withElectedLeader(int epoch, int leaderId) {
         quorumStateStore.writeElectionState(
             ElectionState.withElectedLeader(epoch, leaderId, Optional.empty(), startingVoters.voterIds()),
             kraftVersion
@@ -115,7 +124,7 @@ public final class RaftClientContextBuilder {
         return this;
     }
 
-    RaftClientContextBuilder withUnknownLeader(int epoch) {
+    RaftClientContextBuilder<T> withUnknownLeader(int epoch) {
         quorumStateStore.writeElectionState(
             ElectionState.withUnknownLeader(epoch, startingVoters.voterIds()),
             kraftVersion
@@ -123,7 +132,7 @@ public final class RaftClientContextBuilder {
         return this;
     }
 
-    RaftClientContextBuilder withVotedCandidate(int epoch, ReplicaKey votedKey) {
+    RaftClientContextBuilder<T> withVotedCandidate(int epoch, ReplicaKey votedKey) {
         quorumStateStore.writeElectionState(
             ElectionState.withVotedCandidate(epoch, votedKey, startingVoters.voterIds()),
             kraftVersion
@@ -131,22 +140,22 @@ public final class RaftClientContextBuilder {
         return this;
     }
 
-    RaftClientContextBuilder updateRandom(Consumer<MockableRandom> consumer) {
+    RaftClientContextBuilder<T> updateRandom(Consumer<MockableRandom> consumer) {
         consumer.accept(random);
         return this;
     }
 
-    RaftClientContextBuilder withMemoryPool(MemoryPool pool) {
+    RaftClientContextBuilder<T> withMemoryPool(MemoryPool pool) {
         this.memoryPool = pool;
         return this;
     }
 
-    RaftClientContextBuilder withAppendLingerMs(int appendLingerMs) {
+    RaftClientContextBuilder<T> withAppendLingerMs(int appendLingerMs) {
         this.appendLingerMs = appendLingerMs;
         return this;
     }
 
-    public RaftClientContextBuilder appendToLog(int epoch, List<String> records) {
+    public RaftClientContextBuilder<T> appendToLog(int epoch, List<String> records) {
         MemoryRecords batch = RaftClientTestContext.buildBatch(
             time.milliseconds(),
             log.endOffset().offset(),
@@ -165,7 +174,7 @@ public final class RaftClientContextBuilder {
         return this;
     }
 
-    RaftClientContextBuilder withEmptySnapshot(OffsetAndEpoch snapshotId) {
+    RaftClientContextBuilder<T> withEmptySnapshot(OffsetAndEpoch snapshotId) {
         try (RecordsSnapshotWriter<?> snapshot = new RecordsSnapshotWriter.Builder()
                 .setTime(time)
                 .setKraftVersion(KRaftVersion.KRAFT_VERSION_0)
@@ -178,7 +187,7 @@ public final class RaftClientContextBuilder {
         return this;
     }
 
-    RaftClientContextBuilder deleteBeforeSnapshot(OffsetAndEpoch snapshotId) {
+    RaftClientContextBuilder<T> deleteBeforeSnapshot(OffsetAndEpoch snapshotId) {
         if (snapshotId.offset() > log.highWatermark().offset()) {
             log.updateHighWatermark(new LogOffsetMetadata(snapshotId.offset()));
         }
@@ -187,40 +196,40 @@ public final class RaftClientContextBuilder {
         return this;
     }
 
-    RaftClientContextBuilder withElectionTimeoutMs(int electionTimeoutMs) {
+    RaftClientContextBuilder<T> withElectionTimeoutMs(int electionTimeoutMs) {
         this.electionTimeoutMs = electionTimeoutMs;
         return this;
     }
 
-    RaftClientContextBuilder withRequestTimeoutMs(int requestTimeoutMs) {
+    RaftClientContextBuilder<T> withRequestTimeoutMs(int requestTimeoutMs) {
         this.requestTimeoutMs = requestTimeoutMs;
         return this;
     }
 
-    RaftClientContextBuilder withBootstrapServers(Optional<List<InetSocketAddress>> bootstrapServers) {
+    RaftClientContextBuilder<T> withBootstrapServers(Optional<List<InetSocketAddress>> bootstrapServers) {
         this.bootstrapServers = bootstrapServers;
         return this;
     }
 
     // deprecated, use withRpc instead
-    RaftClientContextBuilder withKip853Rpc(boolean withKip853Rpc) {
+    RaftClientContextBuilder<T> withKip853Rpc(boolean withKip853Rpc) {
         if (withKip853Rpc) {
             this.raftProtocol = KIP_853_PROTOCOL;
         }
         return this;
     }
 
-    RaftClientContextBuilder withRaftProtocol(SharedRaftClientContext.RaftProtocol raftProtocol) {
+    RaftClientContextBuilder<T> withRaftProtocol(SharedRaftClientContext.RaftProtocol raftProtocol) {
         this.raftProtocol = raftProtocol;
         return this;
     }
 
-    RaftClientContextBuilder withCanBecomeVoter(boolean canBecomeVoter) {
+    RaftClientContextBuilder<T> withCanBecomeVoter(boolean canBecomeVoter) {
         this.canBecomeVoter = canBecomeVoter;
         return this;
     }
 
-    RaftClientContextBuilder withStartingVoters(VoterSet voters, KRaftVersion kraftVersion) {
+    RaftClientContextBuilder<T> withStartingVoters(VoterSet voters, KRaftVersion kraftVersion) {
         if (kraftVersion.isReconfigSupported()) {
             return withBootstrapSnapshot(Optional.of(voters));
         } else {
@@ -228,7 +237,7 @@ public final class RaftClientContextBuilder {
         }
     }
 
-    RaftClientContextBuilder withStaticVoters(Set<Integer> staticVoters) {
+    RaftClientContextBuilder<T> withStaticVoters(Set<Integer> staticVoters) {
         Map<Integer, InetSocketAddress> staticVoterAddressMap = staticVoters
             .stream()
             .collect(
@@ -243,7 +252,7 @@ public final class RaftClientContextBuilder {
         );
     }
 
-    RaftClientContextBuilder withStaticVoters(VoterSet staticVoters) {
+    RaftClientContextBuilder<T> withStaticVoters(VoterSet staticVoters) {
         startingVoters = staticVoters;
         isStartingVotersStatic = true;
         kraftVersion = KRaftVersion.KRAFT_VERSION_0;
@@ -251,11 +260,11 @@ public final class RaftClientContextBuilder {
         return this;
     }
 
-    RaftClientContextBuilder withBootstrapSnapshot(Optional<VoterSet> voters) {
+    RaftClientContextBuilder<T> withBootstrapSnapshot(Optional<VoterSet> voters) {
         return withBootstrapSnapshotRecords(voters, List.of());
     }
 
-    RaftClientContextBuilder withBootstrapSnapshotRecords(Optional<VoterSet> voters, List<String> records) {
+    RaftClientContextBuilder<T> withBootstrapSnapshotRecords(Optional<VoterSet> voters, List<String> records) {
         startingVoters = voters.orElse(VoterSet.empty());
         isStartingVotersStatic = false;
 
@@ -284,66 +293,34 @@ public final class RaftClientContextBuilder {
         return this;
     }
 
-    RaftClientContextBuilder withLocalListeners(Endpoints localListeners) {
+    RaftClientContextBuilder<T> withLocalListeners(Endpoints localListeners) {
         this.localListeners = localListeners;
         return this;
     }
 
-    RaftClientContextBuilder withAutoJoin(boolean autoJoin) {
+    RaftClientContextBuilder<T> withAutoJoin(boolean autoJoin) {
         this.autoJoin = autoJoin;
         return this;
     }
 
-    RaftClientContextBuilder withFetchSnapshotMaxBytes(int fetchSnapshotMaxSizeBytes) {
+    RaftClientContextBuilder<T> withFetchSnapshotMaxBytes(int fetchSnapshotMaxSizeBytes) {
         this.fetchSnapshotMaxBytes = fetchSnapshotMaxSizeBytes;
         return this;
     }
 
-    RaftClientContextBuilder withFetchMaxBytes(int fetchMaxBytes) {
+    RaftClientContextBuilder<T> withFetchMaxBytes(int fetchMaxBytes) {
         this.fetchMaxBytes = fetchMaxBytes;
         return this;
     }
 
-    public RaftClientTestContext build() throws IOException {
-        Metrics metrics = new Metrics(time);
-        MockNetworkChannel channel = new MockNetworkChannel();
-        ExternalKRaftMetrics externalKRaftMetrics = Mockito.mock(ExternalKRaftMetrics.class);
-        RaftClientTestContext.MockListener listener = new RaftClientTestContext.MockListener(localId);
-        KafkaRaftClient<String> client = buildClient(listener, channel, metrics, externalKRaftMetrics);
-
-        RaftClientTestContext context = new RaftClientTestContext(
-            clusterId,
-            localId,
-            localDirectoryId,
-            kraftVersion,
-            client,
-            log,
-            channel,
-            messageQueue,
-            time,
-            quorumStateStore,
-            startingVoters,
-            bootstrapIds(),
-            raftProtocol,
-            canBecomeVoter,
-            metrics,
-            externalKRaftMetrics,
-            listener,
-            fetchMaxBytes
-        );
-
-        context.electionTimeoutMs = electionTimeoutMs;
-        context.requestTimeoutMs = requestTimeoutMs;
-        context.appendLingerMs = appendLingerMs;
-        return context;
+    public T build() {
+        this.channel = new MockNetworkChannel();
+        this.metrics = new Metrics(time);
+        this.externalKRaftMetrics = Mockito.mock(ExternalKRaftMetrics.class);
+        return factory.apply(this);
     }
 
-    private KafkaRaftClient<String> buildClient(
-        RaftClient.Listener<String> registeredListener,
-        MockNetworkChannel channel,
-        Metrics metrics,
-        ExternalKRaftMetrics externalKRaftMetrics
-    ) {
+    KafkaRaftClient<String> buildClient(RaftClient.Listener<String> registeredListener) {
         Map<Integer, InetSocketAddress> staticVoterAddressMap = Map.of();
         if (isStartingVotersStatic) {
             staticVoterAddressMap = startingVoters
@@ -424,7 +401,7 @@ public final class RaftClientContextBuilder {
         return client;
     }
 
-    private Set<Integer> bootstrapIds() {
+    Set<Integer> bootstrapIds() {
         return IntStream
             .iterate(-2, id -> id - 1)
             .limit(bootstrapServers.map(List::size).orElse(0))

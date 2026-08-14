@@ -67,7 +67,7 @@ public final class KafkaRaftClientSnapshotTest {
         int epoch = 2;
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 1);
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .appendToLog(snapshotId.epoch(), List.of("a", "b", "c"))
             .appendToLog(snapshotId.epoch(), List.of("d", "e", "f"))
             .withEmptySnapshot(snapshotId)
@@ -85,7 +85,7 @@ public final class KafkaRaftClientSnapshotTest {
         int epoch = 2;
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 1);
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .appendToLog(snapshotId.epoch(), List.of("a", "b", "c"))
             .appendToLog(snapshotId.epoch(), List.of("d", "e", "f"))
             .withElectedLeader(epoch, leaderId)
@@ -102,7 +102,7 @@ public final class KafkaRaftClientSnapshotTest {
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 1);
 
-        RaftClientContextBuilder contextBuilder = new RaftClientContextBuilder(localId, voters)
+        RaftClientContextBuilder<RaftClientTestContext> contextBuilder = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .withKip853Rpc(withKip853Rpc)
             .appendToLog(snapshotId.epoch(), List.of("a", "b", "c"))
             .appendToLog(snapshotId.epoch(), List.of("d", "e", "f"))
@@ -141,7 +141,7 @@ public final class KafkaRaftClientSnapshotTest {
         int epoch = 2;
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 1);
 
-        RaftClientContextBuilder contextBuilder = new RaftClientContextBuilder(localId, voters)
+        RaftClientContextBuilder<RaftClientTestContext> contextBuilder = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .appendToLog(snapshotId.epoch(), List.of("a", "b", "c"))
             .appendToLog(snapshotId.epoch(), List.of("d", "e", "f"))
             .withEmptySnapshot(snapshotId)
@@ -195,7 +195,7 @@ public final class KafkaRaftClientSnapshotTest {
         int epoch = 2;
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 1);
 
-        RaftClientContextBuilder contextBuilder = new RaftClientContextBuilder(localId, voters)
+        RaftClientContextBuilder<RaftClientTestContext> contextBuilder = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .appendToLog(snapshotId.epoch(), List.of("a", "b", "c"))
             .appendToLog(snapshotId.epoch(), List.of("d", "e", "f"))
             .withEmptySnapshot(snapshotId)
@@ -251,7 +251,7 @@ public final class KafkaRaftClientSnapshotTest {
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 1);
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .withKip853Rpc(withKip853Rpc)
             .appendToLog(snapshotId.epoch(), List.of("a", "b", "c"))
             .appendToLog(snapshotId.epoch(), List.of("d", "e", "f"))
@@ -307,7 +307,7 @@ public final class KafkaRaftClientSnapshotTest {
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 4);
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .withUnknownLeader(snapshotId.epoch())
             .withKip853Rpc(withKip853Rpc)
             .appendToLog(snapshotId.epoch(), List.of("a", "b", "c"))
@@ -340,7 +340,7 @@ public final class KafkaRaftClientSnapshotTest {
         ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .withAppendLingerMs(1)
             .withKip853Rpc(withKip853Rpc)
             .build();
@@ -390,7 +390,7 @@ public final class KafkaRaftClientSnapshotTest {
         ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .withAppendLingerMs(1)
             .withKip853Rpc(withKip853Rpc)
             .build();
@@ -440,7 +440,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         OffsetAndEpoch oldestSnapshotId = new OffsetAndEpoch(3, 2);
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .appendToLog(oldestSnapshotId.epoch(), List.of("a", "b", "c"))
             .appendToLog(oldestSnapshotId.epoch(), List.of("d", "e", "f"))
             .withAppendLingerMs(1)
@@ -482,7 +482,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         OffsetAndEpoch oldestSnapshotId = new OffsetAndEpoch(3, 2);
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .appendToLog(oldestSnapshotId.epoch(), List.of("a", "b", "c"))
             .appendToLog(oldestSnapshotId.epoch() + 2, List.of("d", "e", "f"))
             .withAppendLingerMs(1)
@@ -532,7 +532,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         OffsetAndEpoch oldestSnapshotId = new OffsetAndEpoch(3, 2);
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .appendToLog(oldestSnapshotId.epoch(), List.of("a", "b", "c"))
             .appendToLog(oldestSnapshotId.epoch(), List.of("d", "e", "f"))
             .appendToLog(oldestSnapshotId.epoch() + 2, List.of("g", "h", "i"))
@@ -578,7 +578,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         OffsetAndEpoch oldestSnapshotId = new OffsetAndEpoch(3, 2);
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .appendToLog(oldestSnapshotId.epoch(), List.of("a", "b", "c"))
             .appendToLog(oldestSnapshotId.epoch(), List.of("d", "e", "f"))
             .appendToLog(oldestSnapshotId.epoch() + 2, List.of("g", "h", "i"))
@@ -632,7 +632,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         OffsetAndEpoch oldestSnapshotId = new OffsetAndEpoch(3, 2);
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .appendToLog(oldestSnapshotId.epoch(), List.of("a", "b", "c"))
             .appendToLog(oldestSnapshotId.epoch(), List.of("d", "e", "f"))
             .appendToLog(oldestSnapshotId.epoch() + 2, List.of("g", "h", "i"))
@@ -679,7 +679,7 @@ public final class KafkaRaftClientSnapshotTest {
         int localId = randomReplicaId();
         Set<Integer> voters = Set.of(localId, localId + 1);
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .withUnknownLeader(3)
             .withKip853Rpc(withKip853Rpc)
             .build();
@@ -710,7 +710,7 @@ public final class KafkaRaftClientSnapshotTest {
             Stream.of(localKey, replicaKey(localKey.id() + 1, true))
         );
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localKey.id(), localKey.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localKey.id(), localKey.directoryId().get(), RaftClientTestContext::new)
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withUnknownLeader(3)
@@ -742,7 +742,7 @@ public final class KafkaRaftClientSnapshotTest {
         Set<Integer> voters = Set.of(localId, localId + 1);
         TopicPartition topicPartition = new TopicPartition("unknown", 0);
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .withUnknownLeader(3)
             .withKip853Rpc(withKip853Rpc)
             .build();
@@ -774,7 +774,7 @@ public final class KafkaRaftClientSnapshotTest {
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(1, 1);
         List<String> records = List.of("foo", "bar");
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .appendToLog(snapshotId.epoch(), List.of("a"))
             .withKip853Rpc(withKip853Rpc)
             .build();
@@ -830,7 +830,7 @@ public final class KafkaRaftClientSnapshotTest {
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(1, 1);
         List<String> records = List.of("foo", "bar");
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
                 .appendToLog(snapshotId.epoch(), List.of("a"))
                 .withKip853Rpc(withKip853Rpc)
                 .build();
@@ -920,7 +920,7 @@ public final class KafkaRaftClientSnapshotTest {
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(2, 1);
         List<String> records = List.of("foo", "bar");
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .appendToLog(snapshotId.epoch(), records)
             .withKip853Rpc(withKip853Rpc)
             .build();
@@ -1002,7 +1002,7 @@ public final class KafkaRaftClientSnapshotTest {
         int epoch = 2;
         OffsetAndEpoch snapshotId = Snapshots.BOOTSTRAP_SNAPSHOT_ID;
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .withElectedLeader(epoch, leaderId)
             .withKip853Rpc(withKip853Rpc)
             .build();
@@ -1032,7 +1032,7 @@ public final class KafkaRaftClientSnapshotTest {
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(1, 1);
         List<String> records = List.of("foo", "bar");
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .appendToLog(snapshotId.epoch(), List.of("a"))
             .withKip853Rpc(true)
             .build();
@@ -1114,7 +1114,7 @@ public final class KafkaRaftClientSnapshotTest {
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(1, 1);
         List<String> records = List.of("foo", "bar");
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .appendToLog(snapshotId.epoch(), List.of("a"))
             .withKip853Rpc(withKip853Rpc)
             .build();
@@ -1173,7 +1173,7 @@ public final class KafkaRaftClientSnapshotTest {
         Set<Integer> voters = Set.of(localId, localId + 1);
         OffsetAndEpoch snapshotId = Snapshots.BOOTSTRAP_SNAPSHOT_ID;
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .withUnknownLeader(1)
             .withKip853Rpc(withKip853Rpc)
             .build();
@@ -1206,7 +1206,7 @@ public final class KafkaRaftClientSnapshotTest {
         Set<Integer> voters = Set.of(localId, localId + 1);
         OffsetAndEpoch snapshotId = Snapshots.BOOTSTRAP_SNAPSHOT_ID;
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .withUnknownLeader(1)
             .withKip853Rpc(withKip853Rpc)
             .build();
@@ -1243,7 +1243,7 @@ public final class KafkaRaftClientSnapshotTest {
         OffsetAndEpoch invalidEndOffset = new OffsetAndEpoch(-1L, 1);
         int slept = 0;
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .withElectedLeader(epoch, leaderId)
             .withKip853Rpc(withKip853Rpc)
             .build();
@@ -1305,7 +1305,7 @@ public final class KafkaRaftClientSnapshotTest {
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(100L, 1);
         int expectedFetchMaxSnapshotBytes = 1024;
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .withElectedLeader(epoch, leaderId)
             .withKip853Rpc(withKip853Rpc)
             .withFetchSnapshotMaxBytes(expectedFetchMaxSnapshotBytes)
@@ -1386,7 +1386,7 @@ public final class KafkaRaftClientSnapshotTest {
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(100L, 1);
         int expectedFetchMaxSnapshotBytes = 6;
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .withElectedLeader(epoch, leaderId)
             .withKip853Rpc(withKip853Rpc)
             .withFetchSnapshotMaxBytes(expectedFetchMaxSnapshotBytes)
@@ -1498,7 +1498,7 @@ public final class KafkaRaftClientSnapshotTest {
         int epoch = 2;
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(100L, 1);
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .withElectedLeader(epoch, leaderId)
             .withKip853Rpc(withKip853Rpc)
             .build();
@@ -1560,7 +1560,7 @@ public final class KafkaRaftClientSnapshotTest {
         int epoch = 2;
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(100L, 1);
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .withElectedLeader(epoch, firstLeaderId)
             .withKip853Rpc(withKip853Rpc)
             .build();
@@ -1621,7 +1621,7 @@ public final class KafkaRaftClientSnapshotTest {
         int epoch = 2;
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(100L, 1);
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .withElectedLeader(epoch, leaderId)
             .withKip853Rpc(withKip853Rpc)
             .build();
@@ -1682,7 +1682,7 @@ public final class KafkaRaftClientSnapshotTest {
         int epoch = 2;
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(100L, 1);
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .withElectedLeader(epoch, leaderId)
             .withKip853Rpc(withKip853Rpc)
             .build();
@@ -1753,7 +1753,7 @@ public final class KafkaRaftClientSnapshotTest {
         int epoch = 2;
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(100L, 1);
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .withElectedLeader(epoch, leaderId)
             .withKip853Rpc(withKip853Rpc)
             .build();
@@ -1869,7 +1869,7 @@ public final class KafkaRaftClientSnapshotTest {
         int epoch = 2;
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(100L, 1);
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .withElectedLeader(epoch, leaderId)
             .withKip853Rpc(withKip853Rpc)
             .build();
@@ -1943,7 +1943,7 @@ public final class KafkaRaftClientSnapshotTest {
         ReplicaKey otherNode = replicaKey(localId + 1, withKip853Rpc);
         Set<Integer> voters = Set.of(localId, otherNode.id());
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .withUnknownLeader(4)
             .withKip853Rpc(withKip853Rpc)
             .build();
@@ -2023,7 +2023,7 @@ public final class KafkaRaftClientSnapshotTest {
         List<String> appendRecords = List.of("a", "b", "c");
         OffsetAndEpoch invalidSnapshotId1 = new OffsetAndEpoch(4, epoch);
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .appendToLog(epoch, appendRecords)
             .withAppendLingerMs(1)
             .withKip853Rpc(withKip853Rpc)
@@ -2111,7 +2111,7 @@ public final class KafkaRaftClientSnapshotTest {
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, leaderId, otherFollowerId);
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localId, voters)
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localId, voters, RaftClientTestContext::new)
             .appendToLog(1, List.of("a"))
             .withElectedLeader(epoch, leaderId)
             .withKip853Rpc(withKip853Rpc)
@@ -2222,7 +2222,7 @@ public final class KafkaRaftClientSnapshotTest {
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localKey));
         List<String> bootstrapRecords = List.of("a", "b", "c");
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localKey.id(), localKey.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localKey.id(), localKey.directoryId().get(), RaftClientTestContext::new)
             .withRaftProtocol(KIP_853_PROTOCOL)
             .withBootstrapSnapshotRecords(Optional.of(voters), bootstrapRecords)
             .build();
@@ -2239,7 +2239,7 @@ public final class KafkaRaftClientSnapshotTest {
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey));
         List<String> bootstrapRecords = List.of("a", "b", "c");
 
-        RaftClientTestContext context = new RaftClientContextBuilder(localKey.id(), localKey.directoryId().get())
+        RaftClientTestContext context = new RaftClientContextBuilder<>(localKey.id(), localKey.directoryId().get(), RaftClientTestContext::new)
             .withRaftProtocol(KIP_853_PROTOCOL)
             .withBootstrapSnapshotRecords(Optional.of(voters), bootstrapRecords)
             .withUnknownLeader(3)
