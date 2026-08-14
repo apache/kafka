@@ -64,8 +64,14 @@ fi
 
 path /opt/kafka/config/ writable
 
-# Set if ADVERTISED_LISTENERS has SSL:// or SASL_SSL:// endpoints.
-if [[ -n "${KAFKA_ADVERTISED_LISTENERS-}" ]] && [[ $KAFKA_ADVERTISED_LISTENERS == *"SSL://"* ]]
+is_ssl_enabled() {
+  [[ ${KAFKA_ADVERTISED_LISTENERS-} == *"SSL://"* ]] ||
+    [[ ${KAFKA_LISTENERS-} == *"SSL://"* ]] ||
+    [[ ${KAFKA_LISTENER_SECURITY_PROTOCOL_MAP-} =~ (^|,)[[:space:]]*[^,:]+:(SSL|SASL_SSL)(,|$) ]]
+}
+
+# Set if any configured listener uses SSL or SASL_SSL.
+if is_ssl_enabled
 then
   echo "SSL is enabled."
 
