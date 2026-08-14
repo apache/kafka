@@ -53,21 +53,15 @@ public record AssignmentConfigsImpl(
     }
 
     /**
-     * Converts the raw assignment configs computed for the group into the typed configs passed to the assignor.
+     * Converts the raw assignment configs recorded for the group into the typed configs passed to the assignor.
      */
     public static AssignmentConfigsImpl fromMap(Map<String, String> configs) {
-        // The map is empty when it was replayed from a group metadata record written before the last assignment
-        // configs were persisted.
-        if (configs.isEmpty()) {
-            return DEFAULT;
-        }
-        // The rack-aware assignment tags are only recorded when any are configured, so an absent value means the
-        // configuration is at its default.
-        String rackAwareAssignmentTags = configs.getOrDefault(
-            RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT);
+        // Configs are only recorded when set, so every absent key means the configuration is at its default.
         return new AssignmentConfigsImpl(
-            Integer.parseInt(configs.get(NUM_STANDBY_REPLICAS_CONFIG)),
-            parseRackAwareAssignmentTags(rackAwareAssignmentTags)
+            Integer.parseInt(configs.getOrDefault(NUM_STANDBY_REPLICAS_CONFIG,
+                Integer.toString(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT))),
+            parseRackAwareAssignmentTags(configs.getOrDefault(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
+                GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT))
         );
     }
 
