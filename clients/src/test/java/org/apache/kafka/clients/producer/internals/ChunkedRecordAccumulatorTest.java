@@ -18,10 +18,12 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.producer.BufferExhaustedException;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
@@ -36,6 +38,8 @@ import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -48,7 +52,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -87,6 +93,10 @@ public class ChunkedRecordAccumulatorTest {
 
     private ChunkedRecordAccumulator newAccumulator(int batchSize, int chunkSize, long totalMemory, Compression compression) {
         BufferPool pool = new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL);
+        return newAccumulator(batchSize, compression, pool);
+    }
+
+    private ChunkedRecordAccumulator newAccumulator(int batchSize, Compression compression, BufferPool pool) {
         return new ChunkedRecordAccumulator(logContext, batchSize, compression,
                 /* lingerMs */ 0, /* retryBackoffMs */ 0L, /* retryBackoffMaxMs */ 0L,
                 /* deliveryTimeoutMs */ 3200, metrics, "producer-metrics", time,
@@ -170,10 +180,9 @@ public class ChunkedRecordAccumulatorTest {
             public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
                 List<ByteBuffer> chunks = super.allocateChunks(totalSize, maxTimeToBlockMs);
                 ChunkedRecordAccumulator toInject = injectAppendOnce.getAndSet(null);
-                if (toInject != null) {
+                if (toInject != null)
                     toInject.append(topic, partition1, 0L, key, injectedValue, Record.EMPTY_HEADERS, null,
                             maxBlockTimeMs, time.milliseconds(), cluster);
-                }
                 return chunks;
             }
         };
@@ -195,10 +204,7 @@ public class ChunkedRecordAccumulatorTest {
         final AtomicReference<ChunkedRecordAccumulator> injectAppendOnce = new AtomicReference<>();
 
         BufferPool pool = poolMockingConcurrentChunkAllocation(chunkSize, 64L * chunkSize, injectAppendOnce, value);
-        ChunkedRecordAccumulator accum = new ChunkedRecordAccumulator(logContext, 8192, Compression.NONE,
-                /* lingerMs */ 0, /* retryBackoffMs */ 0L, /* retryBackoffMaxMs */ 0L,
-                /* deliveryTimeoutMs */ 3200, metrics, "producer-metrics", time,
-                /* transactionManager */ null, pool);
+        ChunkedRecordAccumulator accum = newAccumulator(8192, Compression.NONE, pool);
         try {
             // Tiny first record opens the batch, both racing records extend.
             accum.append(topic, partition1, 0L, key, new byte[1], Record.EMPTY_HEADERS, null,
@@ -406,6 +412,13 @@ public class ChunkedRecordAccumulatorTest {
         return accum.getDeque(tp);
     }
 
+    private boolean hasOpenBatch(RecordAccumulator accum) {
+        Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+        synchronized (dq) {
+            return !dq.isEmpty();
+        }
+    }
+
     /**
      * When the pool is exhausted during a mid-batch extension, the append must not busy-loop
      * retrying the non-blocking acquire: after a single failed extension acquire
@@ -475,6 +488,382 @@ public class ChunkedRecordAccumulatorTest {
             assertEquals(1, dq.peekFirst().recordCount);
             assertNotNull(dq.peekLast());
             assertEquals(1, dq.peekLast().recordCount);
+        } finally {
+            accum.close();
+        }
+    }
+
+    /**
+     * The extension acquire runs off the deque lock, so the open batch can be replaced while it is in
+     * flight: the sender drains the batch the gap was sized against and a concurrent appender creates a
+     * new one with the memory that drain just freed. On exhaustion the append must then leave that new
+     * batch open.
+     */
+    @Test
+    public void testExhaustedExtensionLeavesAReplacementBatchOpen() throws Exception {
+        int chunkSize = 256;
+        AtomicBoolean injected = new AtomicBoolean();
+        AtomicInteger closeForAppendsCalls = new AtomicInteger();
+        AtomicReference<ChunkedRecordAccumulator> accumRef = new AtomicReference<>();
+        AtomicReference<ProducerBatch> drainedRef = new AtomicReference<>();
+
+        BufferPool pool = new BufferPool(16L * chunkSize, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
+            @Override
+            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
+                // Only the first non-blocking (extension) acquire is intercepted; the deque lock is not
+                // held here, which is exactly what lets the open batch change under the appender.
+                if (maxTimeToBlockMs == 0L && injected.compareAndSet(false, true)) {
+                    // From here on dq.peekLast() is no longer the batch the gap was sized against.
+                    drainedRef.set(simulateConcurrentDrainAndReplace(accumRef.get()));
+                    throw new BufferExhaustedException("injected: pool exhausted");
+                }
+                return super.allocateChunks(totalSize, maxTimeToBlockMs);
+            }
+        };
+        ChunkedRecordAccumulator accum = new ChunkedRecordAccumulator(logContext, 8192, Compression.NONE,
+                /* lingerMs */ 0, /* retryBackoffMs */ 0L, /* retryBackoffMaxMs */ 0L,
+                /* deliveryTimeoutMs */ 3200, metrics, "producer-metrics", time,
+                /* transactionManager */ null, pool) {
+            @Override
+            protected ProducerBatch createProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long nowMs) {
+                return new ChunkedProducerBatch(tp, recordsBuilder, nowMs) {
+                    @Override
+                    public void closeForRecordAppends() {
+                        closeForAppendsCalls.incrementAndGet();
+                        super.closeForRecordAppends();
+                    }
+                };
+            }
+        };
+        accumRef.set(accum);
+        try {
+            // First record establishes the open batch the extension gap will be sized against.
+            accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+
+            // Second record overflows that batch's chunk, so it needs an extension. The injected
+            // exhaustion fires after the batch has been replaced by the nested append's batch.
+            accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+
+            assertTrue(injected.get(), "the extension acquire must have been intercepted");
+            assertNotNull(drainedRef.get(), "the sized batch must have been drained by the injection");
+            assertEquals(0, closeForAppendsCalls.get(),
+                    "the failed extension must not close a batch it did not size the gap against");
+
+            Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+            assertEquals(1, dq.size(), "only the replacement batch is expected");
+            ProducerBatch replacement = dq.peekLast();
+            assertNotNull(replacement);
+            // Far below its writeLimit, so isFull() can only be true via a closed append stream.
+            assertFalse(replacement.isFull(), "the replacement batch must stay open for appends");
+            assertEquals(2, replacement.recordCount,
+                    "the retried record must land in the replacement batch, extending it");
+        } finally {
+            accum.close();
+        }
+    }
+
+    /**
+     * Simulates the concurrent activity that can move the deque while an extension acquire runs off
+     * the deque lock: the sender drains the open batch, returning its chunks to the pool, and another
+     * appender claims that memory for a fresh batch in its place.
+     *
+     * @return the batch that was drained
+     */
+    private ProducerBatch simulateConcurrentDrainAndReplace(ChunkedRecordAccumulator accum) throws InterruptedException {
+        Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+        ProducerBatch drained;
+        synchronized (dq) {
+            drained = dq.pollFirst();
+        }
+        assertNotNull(drained, "there must be an open batch to drain");
+        accum.deallocate(drained);
+        accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
+                maxBlockTimeMs, time.milliseconds(), cluster);
+        return drained;
+    }
+
+    /**
+     * Pool that refuses the non-blocking extension acquire after replacing the batch that acquire was sized
+     * against. The refusal therefore closes nothing, since the batch it would close is no longer the open one.
+     * <p>
+     * The replacement batch is pre-sized for its own single record, so {@code chunkSize} decides whether
+     * it has room to spare for the retried one.
+     *
+     * @param refusals counts the refusals: gates the safety limit below, and is what callers assert on
+     * @param sleepOnRefusalMs mock-clock time the refusal spends, standing in for time gone earlier in the
+     *                         append (a prior blocking acquire, or the metadata wait). Pass 0 to leave the
+     *                         append time on the clock for another pass.
+     */
+    private BufferPool poolRefusingExtensionAfterBatchReplaced(int chunkSize,
+                                                               AtomicReference<ChunkedRecordAccumulator> accumRef,
+                                                               AtomicInteger refusals,
+                                                               long sleepOnRefusalMs) {
+        // Used to prevent the test from retrying forever if the logic fails.
+        final int retrySafetyLimit = 5;
+        return new BufferPool(16L * chunkSize, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
+            @Override
+            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
+                // The extension acquire always passes a zero timeout, and a new-batch acquire does too once no
+                // time is left — but only with an empty deque here, since these tests always create the first
+                // batch with a blocking acquire.
+                boolean isExtensionPath = maxTimeToBlockMs == 0L && hasOpenBatch(accumRef.get());
+                if (isExtensionPath && refusals.get() < retrySafetyLimit) {
+                    refusals.incrementAndGet();
+                    simulateConcurrentDrainAndReplace(accumRef.get());
+                    if (sleepOnRefusalMs > 0)
+                        time.sleep(sleepOnRefusalMs);
+                    throw new BufferExhaustedException("injected: pool exhausted");
+                }
+                return super.allocateChunks(totalSize, maxTimeToBlockMs);
+            }
+        };
+    }
+
+    /**
+     * Accumulator whose {@code partitionChanged} reports that the sticky partition moved, so the append
+     * retries its pass having asked the pool for nothing. It stands in for a concurrent appender crossing the
+     * switch threshold; only the append under test is affected, since {@code partitionInfo} is null for the
+     * appends that name their partition (as the concurrent ones the pool overrides inject all do).
+     *
+     * @param activeWhile when to report the move, so the retry lands on the pass the test needs — it is
+     *                    re-evaluated on every call, and reports nothing until it first holds
+     * @param retries    counts the retries: gates the cap, and is what callers assert on
+     * @param maxRetries caps the retries, so a bound that regressed fails an assertion rather than spinning
+     */
+    private ChunkedRecordAccumulator accumulatorWithPartitionChange(BufferPool pool,
+                                                                    BooleanSupplier activeWhile,
+                                                                    AtomicInteger retries, int maxRetries) {
+        return new ChunkedRecordAccumulator(logContext, 8192, Compression.NONE,
+                /* lingerMs */ 0, /* retryBackoffMs */ 0L, /* retryBackoffMaxMs */ 0L,
+                /* deliveryTimeoutMs */ 3200, metrics, "producer-metrics", time,
+                /* transactionManager */ null, pool) {
+            @Override
+            protected boolean partitionChanged(String topic, TopicInfo topicInfo,
+                                               BuiltInPartitioner.StickyPartitionInfo partitionInfo,
+                                               Deque<ProducerBatch> deque, long nowMs, Cluster cluster) {
+                if (partitionInfo != null && activeWhile.getAsBoolean() && retries.get() < maxRetries) {
+                    retries.incrementAndGet();
+                    return true;
+                }
+                return super.partitionChanged(topic, topicInfo, partitionInfo, deque, nowMs, cluster);
+            }
+        };
+    }
+
+    /**
+     * The extension acquire is refused with the batch it was sized against already replaced, so nothing is
+     * closed, the append's {@code max.block.ms} is spent, and the replacement needs memory too. The retry
+     * finds the deadline gone and gives up, reporting the exhausted pool that refused the pass before it.
+     */
+    @Test
+    public void testExtensionRetriesBoundedByMaxBlockTimeWhenAcquireFails() throws Exception {
+        AtomicInteger refusals = new AtomicInteger();
+        AtomicReference<ChunkedRecordAccumulator> accumRef = new AtomicReference<>();
+        BufferPool pool = poolRefusingExtensionAfterBatchReplaced(256, accumRef, refusals,
+                /* sleepOnRefusalMs */ maxBlockTimeMs + 1);
+        ChunkedRecordAccumulator accum = newAccumulator(8192, Compression.NONE, pool);
+        accumRef.set(accum);
+        try {
+            KafkaMetric exhausted = metrics.metric(metrics.metricName("buffer-exhausted-total", "producer-metrics"));
+
+            accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+
+            // Needs an extension it never gets, on a batch that keeps being replaced: the first pass is
+            // refused and spends the budget, so the retry gives up. The pass before it was denied memory, so
+            // the failure carries the type, the metric and the diagnosis of an exhausted pool.
+            BufferExhaustedException e = assertThrows(BufferExhaustedException.class,
+                    () -> accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
+                            maxBlockTimeMs, time.milliseconds(), cluster));
+            // BufferPool's own exhaustion message also reports "Available memory", so match the wording only
+            // the retry bound uses: the failure must come from it, not from the blocking new-batch acquire.
+            assertTrue(e.getMessage().contains("Failed to allocate memory for a record"),
+                    "the drop must be reported by throwIfNoMoreRetriesAllowed (not by the "
+                            + "blocking new-batch acquire in BufferPool), but was: " + e.getMessage());
+            assertEquals(1.0, (double) exhausted.metricValue(),
+                    "a record dropped because the pool had no memory must be counted as one");
+            assertEquals(1, refusals.get(),
+                    "the extension acquire must be refused exactly once: the first pass must run, and the retry "
+                            + "after it must give up on the spent deadline rather than acquire again");
+
+            // Giving up must leave the open batch untouched.
+            Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+            assertEquals(1, dq.size(), "only the replacement batch is expected");
+            ProducerBatch replacement = dq.peekLast();
+            assertNotNull(replacement);
+            // Far below its writeLimit, so isFull() can only be true via a closed append stream.
+            assertFalse(replacement.isFull(), "the replacement batch must stay open for appends");
+            assertEquals(1, replacement.recordCount, "the dropped record must not have landed anywhere");
+        } finally {
+            accum.close();
+        }
+    }
+
+    /**
+     * A successful extension acquire whose chunks fall short, because a concurrent appender took the capacity
+     * first, so the append comes back for more with the deadline already gone. Every acquire this append made
+     * was granted, so it gives up with a plain timeout and charges the pool no buffer-exhausted drop.
+     */
+    @Test
+    public void testExtensionRetryPastDeadlineFailsAfterInsufficientAttach() throws Exception {
+        int chunkSize = 256;
+        byte[] value = new byte[350];  // needs 2 chunks, so the open batch always needs an extension for it
+        AtomicBoolean injecting = new AtomicBoolean();
+        AtomicInteger extensionAcquires = new AtomicInteger();
+        AtomicReference<ChunkedRecordAccumulator> accumRef = new AtomicReference<>();
+
+        BufferPool pool = new BufferPool(64L * chunkSize, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
+            @Override
+            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
+                List<ByteBuffer> chunks = super.allocateChunks(totalSize, maxTimeToBlockMs);
+                if (maxTimeToBlockMs == 0L && injecting.compareAndSet(false, true)) {
+                    try {
+                        extensionAcquires.incrementAndGet();
+                        // Takes the capacity this acquire was sized against, so the attach that follows is
+                        // too small and the append has to come back for more.
+                        accumRef.get().append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null,
+                                maxBlockTimeMs, time.milliseconds(), cluster);
+                        // Leave the append with no max.block.ms left, so its retry is refused.
+                        time.sleep(maxBlockTimeMs + 1);
+                    } finally {
+                        injecting.set(false);
+                    }
+                }
+                return chunks;
+            }
+        };
+        ChunkedRecordAccumulator accum = newAccumulator(8192, Compression.NONE, pool);
+        accumRef.set(accum);
+        try {
+            // Tiny first record opens the batch.
+            accum.append(topic, partition1, 0L, key, new byte[1], Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+
+            KafkaMetric exhausted = metrics.metric(metrics.metricName("buffer-exhausted-total", "producer-metrics"));
+
+            TimeoutException e = assertThrows(TimeoutException.class,
+                    () -> accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null,
+                            maxBlockTimeMs, time.milliseconds(), cluster));
+            // BufferExhaustedException extends TimeoutException, so assertThrows above would accept it too.
+            assertEquals(TimeoutException.class, e.getClass(),
+                    "the pass that gave up was not denied memory, so it must fail with TimeoutException");
+            assertTrue(e.getMessage().contains("kept retrying"),
+                    "the failure must be the TimeoutException throwIfNoMoreRetriesAllowed "
+                            + "raises when a retry finds the deadline gone, but was: " + e.getMessage());
+            assertEquals(0.0, (double) exhausted.metricValue(),
+                    "every acquire this append made was granted, so no drop may be charged to the pool");
+
+            assertEquals(1, extensionAcquires.get(),
+                    "the retry must be refused at the top of the loop, before it can acquire again");
+            Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+            assertEquals(1, dq.size(), "only the one open batch is expected");
+            // The opening record and the injected concurrent append; the record under test never landed.
+            assertEquals(2, dq.peekLast().recordCount, "the refused record must not have landed");
+        } finally {
+            accum.close();
+        }
+    }
+
+    /**
+     * A failed extension acquire spends part of the append's {@code max.block.ms} before closing the batch
+     * and falling through to the blocking new-batch acquire. That acquire is given what is left of it.
+     */
+    @Test
+    public void testBlockingAcquireGetsOnlyWhatIsLeftOfMaxBlockTimeAfterFailedExtension() throws Exception {
+        int chunkSize = 256;
+        long spentInExtensionMs = 600;
+        AtomicBoolean injected = new AtomicBoolean();
+        AtomicLong blockingAcquireTimeout = new AtomicLong(-1);
+
+        BufferPool pool = new BufferPool(16L * chunkSize, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
+            @Override
+            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
+                // The extension is the only acquire that does not block.
+                boolean isExtensionPath = maxTimeToBlockMs == 0L;
+                if (isExtensionPath && injected.compareAndSet(false, true)) {
+                    // The open batch is left in place, so this failure closes it and the retry falls
+                    // through to the blocking new-batch acquire below.
+                    time.sleep(spentInExtensionMs);
+                    throw new BufferExhaustedException("injected: pool exhausted");
+                }
+                // The first blocking acquire after that failure is the new-batch one under test.
+                if (injected.get() && !isExtensionPath)
+                    blockingAcquireTimeout.compareAndSet(-1, maxTimeToBlockMs);
+                return super.allocateChunks(totalSize, maxTimeToBlockMs);
+            }
+        };
+        ChunkedRecordAccumulator accum = newAccumulator(8192, Compression.NONE, pool);
+        try {
+            accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+
+            // Needs an extension; the failed acquire burns part of max.block.ms before the batch is
+            // closed and the record retries on the blocking path.
+            accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+
+            assertEquals(maxBlockTimeMs - spentInExtensionMs, blockingAcquireTimeout.get(),
+                    "the blocking acquire must only get the remaining max.block.ms");
+        } finally {
+            accum.close();
+        }
+    }
+
+    /**
+     * Appends 100-byte records until one needs an extension, which the pool refuses after replacing the batch
+     * it was sized against and spending the whole of the append's budget. The deadline is enforced strictly on
+     * that append: the retry gives up even though the roomier replacement batch would take the record with no
+     * allocation at all, so the deadline bounds the loop as well as the waiting inside it. The pool refused
+     * this append, so the failure carries the type, metric and diagnosis of an exhausted pool.
+     * <p>
+     * Parameterized over the two ways an append arrives at its retry with no time left:
+     * <ul>
+     * <li>{@code zeroMaxBlockTime=false}: a normal {@code max.block.ms}, spent by an acquire that
+     *     succeeded.</li>
+     * <li>{@code zeroMaxBlockTime=true}: {@code max.block.ms} of 0, which is legal and whose deadline is
+     *     behind the append before it starts, so such a producer gets a single pass and cannot survive a
+     *     concurrent change to the batch it was sized against.</li>
+     * </ul>
+     */
+    @ParameterizedTest(name = "{displayName} zeroMaxBlockTime={0}")
+    @ValueSource(booleans = {false, true})
+    public void testRetryPastDeadlineIsRefusedEvenWhenTheRecordNeedsNoMemory(boolean zeroMaxBlockTime) throws Exception {
+        long maxTimeToBlock = zeroMaxBlockTime ? 0L : maxBlockTimeMs;
+        AtomicInteger refusals = new AtomicInteger();
+        AtomicReference<ChunkedRecordAccumulator> accumRef = new AtomicReference<>();
+        // A chunk many times a record's size, so the replacement batch has room to spare and the
+        // retried record needs no memory at all.
+        BufferPool pool = poolRefusingExtensionAfterBatchReplaced(1024, accumRef, refusals,
+                /* sleepOnRefusalMs */ maxBlockTimeMs + 1);
+        ChunkedRecordAccumulator accum = newAccumulator(8192, Compression.NONE, pool);
+        accumRef.set(accum);
+        try {
+            KafkaMetric exhausted = metrics.metric(metrics.metricName("buffer-exhausted-total", "producer-metrics"));
+
+            BufferExhaustedException e = null;
+            for (int i = 0; i < 50 && refusals.get() == 0; i++) {
+                try {
+                    accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
+                            maxTimeToBlock, time.milliseconds(), cluster);
+                } catch (BufferExhaustedException thrown) {
+                    e = thrown;
+                    break;
+                }
+            }
+            assertEquals(1, refusals.get(), "the extension acquire was never reached");
+            assertNotNull(e, "the append past its deadline must be refused, not recovered");
+            assertTrue(e.getMessage().contains("Failed to allocate memory for a record"),
+                    "the drop must be reported by throwIfNoMoreRetriesAllowed (not by the "
+                            + "blocking new-batch acquire in BufferPool), but was: " + e.getMessage());
+
+            Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+            assertEquals(1, dq.size(), "only the replacement batch is expected");
+            assertEquals(1, dq.peekLast().recordCount,
+                    "the refused record must not have landed, even though the batch had room for it");
+            assertEquals(1.0, (double) exhausted.metricValue(),
+                    "the pool refused this append, so the drop is counted against it");
         } finally {
             accum.close();
         }
@@ -709,6 +1098,172 @@ public class ChunkedRecordAccumulatorTest {
             assertFalse(extensionChunks.isEmpty(), "the extension path should have acquired chunks");
             assertTrue(returnedToPool.containsAll(extensionChunks),
                     "every chunk acquired to extend the closed batch must be returned to the pool");
+        } finally {
+            accum.close();
+        }
+    }
+
+    /**
+     * When the sticky partition keeps changing between the peek and the check under the deque lock,
+     * the append abandons every pass without acquiring anything, so only this bound stops it.
+     * The override stands in for the concurrent appender that moves the partition.
+     */
+    @Test
+    public void testPartitionChangeRetriesBoundedByMaxBlockTime() {
+        int chunkSize = 256;
+        int batchSize = 1024;
+        AtomicInteger forcedSwitches = new AtomicInteger();
+        BufferPool pool = new BufferPool(16L * chunkSize, chunkSize, metrics, time, "producer-metrics",
+                BufferPool.AllocationMode.INCREMENTAL);
+        ChunkedRecordAccumulator accum = new ChunkedRecordAccumulator(logContext, batchSize, Compression.NONE,
+                /* lingerMs */ 0, /* retryBackoffMs */ 0L, /* retryBackoffMaxMs */ 0L,
+                /* deliveryTimeoutMs */ 3200, metrics, "producer-metrics", time,
+                /* transactionManager */ null, pool) {
+            @Override
+            protected boolean partitionChanged(String topic, TopicInfo topicInfo,
+                                               BuiltInPartitioner.StickyPartitionInfo partitionInfo,
+                                               Deque<ProducerBatch> deque, long nowMs, Cluster cluster) {
+                // Capped so a regressed bound fails an assertion rather than spinning forever.
+                if (partitionInfo != null && forcedSwitches.get() < 5) {
+                    forcedSwitches.incrementAndGet();
+                    // A concurrent appender to the sticky partition crossing the switch threshold, so the
+                    // check below always sees a partition that moved and the caller always retries.
+                    topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, batchSize, cluster, true);
+                    // Leave no time, so the append gets its first pass and the retry after it gives up.
+                    time.sleep(maxBlockTimeMs + 1);
+                }
+                return super.partitionChanged(topic, topicInfo, partitionInfo, deque, nowMs, cluster);
+            }
+        };
+        try {
+            TimeoutException e = assertThrows(TimeoutException.class,
+                    () -> accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, key, new byte[100],
+                            Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), cluster));
+            // BufferExhaustedException extends TimeoutException, so assertThrows above would accept it too.
+            assertEquals(TimeoutException.class, e.getClass(),
+                    "the pass that gave up was not denied memory, so it must fail with TimeoutException");
+            assertTrue(e.getMessage().contains("kept retrying"),
+                    "the failure must be the TimeoutException throwIfNoMoreRetriesAllowed "
+                            + "raises when a retry finds the deadline gone, but was: " + e.getMessage());
+            assertEquals(1, forcedSwitches.get(),
+                    "the partition must be moved exactly once: the first pass must run, and the retry after it "
+                            + "must give up on the spent deadline rather than re-read the partition");
+        } finally {
+            accum.close();
+        }
+    }
+
+    /**
+     * An append that needs no waiting still lands its record, on the first pass,
+     * which always runs whatever the time left.
+     */
+    @Test
+    public void testZeroMaxBlockTimeStillAppendsWhenNothingHasToBeWaitedFor() throws Exception {
+        int chunkSize = 256;
+        ChunkedRecordAccumulator accum = newAccumulator(8192, chunkSize, 16L * chunkSize, Compression.NONE);
+        try {
+            // First record creates the batch; the acquire is non-blocking but the memory is there.
+            accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
+                    /* maxTimeToBlock */ 0L, time.milliseconds(), cluster);
+            // Second record overflows the batch's chunk, so it needs an extension — also non-blocking, also
+            // satisfiable right away.
+            accum.append(topic, partition1, 0L, key, new byte[100], Record.EMPTY_HEADERS, null,
+                    /* maxTimeToBlock */ 0L, time.milliseconds(), cluster);
+
+            Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+            assertEquals(1, dq.size(), "both records belong in the one extended batch");
+            assertEquals(2, dq.peekLast().recordCount, "no record may be dropped for lack of time alone");
+        } finally {
+            accum.close();
+        }
+    }
+
+    /**
+     * An append that gives up still holding the stream it allocated for a new batch refunds it to the pool.
+     * The stream is allocated on one pass and carried unattached across a partition switch, so the pass that
+     * finds nothing left to spend leaves it for the {@code finally} to return.
+     */
+    @Test
+    public void testGivingUpRefundsAnUnattachedNewBatchStream() {
+        int chunkSize = 256;
+        long totalMemory = 16L * chunkSize;
+        AtomicBoolean streamAllocated = new AtomicBoolean();
+        AtomicInteger retries = new AtomicInteger();
+
+        BufferPool pool = new BufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics", BufferPool.AllocationMode.INCREMENTAL) {
+            @Override
+            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
+                List<ByteBuffer> chunks = super.allocateChunks(totalSize, maxTimeToBlockMs);
+                // Use up the time on the acquire that succeeded, standing in for a blocking acquire that
+                // waited out the whole of max.block.ms before getting its memory.
+                if (streamAllocated.compareAndSet(false, true))
+                    time.sleep(maxBlockTimeMs + 1);
+                return chunks;
+            }
+        };
+        // The cap allows two retries so a regressed bound spins no further than an assertion failure; a
+        // correct bound takes the single retry asserted below, holding the stream across it.
+        ChunkedRecordAccumulator accum = accumulatorWithPartitionChange(pool, streamAllocated::get, retries,
+                /* maxRetries */ 2);
+        try {
+            TimeoutException e = assertThrows(TimeoutException.class,
+                    () -> accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, key, new byte[100],
+                            Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), cluster));
+            // BufferExhaustedException extends TimeoutException, so assertThrows above would accept it too.
+            assertEquals(TimeoutException.class, e.getClass(),
+                    "the pass that gave up was not denied memory, so it must fail with TimeoutException");
+            assertEquals(1, retries.get(),
+                    "the stream must have been held across the retry that gave up");
+            assertEquals(totalMemory, pool.availableMemory(),
+                    "the chunks reserved for a batch that was never created must go back to the pool");
+        } finally {
+            accum.close();
+        }
+    }
+
+    /**
+     * A refusal describes only the pass it happened on. The extension acquire is refused, then the pass after
+     * it retries because the sticky partition moved, asking the pool for nothing at all, and it is that pass
+     * which runs out of time. The append gives up with a plain timeout and charges the pool no
+     * buffer-exhausted drop.
+     */
+    @Test
+    public void testPartitionChangeTimeoutAfterExtensionFail() throws Exception {
+        AtomicInteger refusals = new AtomicInteger();
+        AtomicInteger retries = new AtomicInteger();
+        AtomicReference<ChunkedRecordAccumulator> accumRef = new AtomicReference<>();
+
+        // The refusal leaves time on the clock, so the pass after it runs rather than giving up.
+        BufferPool pool = poolRefusingExtensionAfterBatchReplaced(256, accumRef, refusals,
+                /* sleepOnRefusalMs */ 0);
+        // Exactly one retry, on the pass right after the refusal — and it is that pass which spends the rest of
+        // max.block.ms, so the pass after it gives up having asked the pool for nothing.
+        ChunkedRecordAccumulator accum = accumulatorWithPartitionChange(pool, () -> {
+            if (refusals.get() == 0)
+                return false;
+            time.sleep(maxBlockTimeMs + 1);
+            return true;
+        }, retries, /* maxRetries */ 1);
+        accumRef.set(accum);
+        try {
+            KafkaMetric exhausted = metrics.metric(metrics.metricName("buffer-exhausted-total", "producer-metrics"));
+            accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, key, new byte[100], Record.EMPTY_HEADERS,
+                    null, maxBlockTimeMs, time.milliseconds(), cluster);
+
+            TimeoutException e = assertThrows(TimeoutException.class,
+                    () -> accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, key, new byte[100],
+                            Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), cluster));
+
+            assertEquals(1, refusals.get(), "the extension acquire must have been refused once");
+            assertEquals(1, retries.get(), "the interleaving under test was never reached");
+            // BufferExhaustedException extends TimeoutException, so assertThrows above would accept it too.
+            assertEquals(TimeoutException.class, e.getClass(),
+                    "the pass that gave up was not denied memory, so it must fail with TimeoutException");
+            assertTrue(e.getMessage().contains("kept retrying"),
+                    "the failure must be the TimeoutException throwIfNoMoreRetriesAllowed "
+                            + "raises when a retry finds the deadline gone, but was: " + e.getMessage());
+            assertEquals(0.0, (double) exhausted.metricValue(),
+                    "the pass that gave up never asked the pool, so no drop may be attributed to it");
         } finally {
             accum.close();
         }

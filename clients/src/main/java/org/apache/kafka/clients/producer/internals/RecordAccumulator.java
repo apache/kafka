@@ -18,7 +18,9 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataSnapshot;
+import org.apache.kafka.clients.producer.BufferExhaustedException;
 import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -27,6 +29,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
@@ -380,6 +383,66 @@ public class RecordAccumulator {
         boolean enableSwitch = allBatchesFull(dq);
         topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, appendResult.appendedBytes, cluster, enableSwitch);
         return appendResult;
+    }
+
+    /**
+     * Adds {@code maxTimeToBlock} to {@code nowMs}, capped at {@link Long#MAX_VALUE} so that a large
+     * {@code max.block.ms} cannot overflow into a deadline in the past.
+     */
+    protected static long appendDeadlineMs(long nowMs, long maxTimeToBlock) {
+        return maxTimeToBlock > Long.MAX_VALUE - nowMs ? Long.MAX_VALUE : nowMs + maxTimeToBlock;
+    }
+
+    /**
+     * What is left of {@code deadlineMs} to wait for memory. An acquire given this rather than the raw
+     * {@code max.block.ms} has the time already spent retrying counted against its wait. Reads the clock, not a
+     * cached {@code nowMs}, which retries that acquired nothing never refresh.
+     * <p>
+     * Only {@link ChunkedRecordAccumulator#append} uses it so far; {@link #append} still passes the raw value.
+     */
+    protected long remainingTimeToBlockMs(long deadlineMs) {
+        return Math.max(0L, deadlineMs - time.milliseconds());
+    }
+
+    /**
+     * Decide whether an append pass may run, and throw if it may not because no time is left.
+     * <ul>
+     * <li>The first pass is always allowed. The deadline is not even read, so an append that completes in one
+     *     pass never depends on the clock</li>
+     * <li>Every following pass is allowed only while there is time left before {@code deadlineMs}. The first one
+     *     that finds the deadline gone throws.</li>
+     * </ul>
+     * The deadline therefore bounds the loop as well as the waiting inside it.
+     * Every acquire is bounded by the {@link #remainingTimeToBlockMs}.
+     * Every retry that waits for nothing is bounded too (e.g., the partition changed, the batch the pass
+     * read was replaced or filled under it).
+     *
+     * @param firstPass whether this is the append's first pass, which is always allowed no matter the deadline.
+     * @param deniedMemory whether the pool refused the pass that just ended; it only decides how giving up is
+     *                     reported. Only the incremental extension acquire can be refused and still let its
+     *                     pass finish, and it suppresses the pool's own buffer-exhausted metric so the drop is
+     *                     counted here — exactly once either way. The full path should pass {@code false}:
+     *                     {@link BufferPool#allocate} records that metric itself and its refusal ends the append.
+     * @throws BufferExhaustedException if the pass that gave up was denied memory
+     * @throws TimeoutException if the deadline has been reached (and it's not the first pass).
+     */
+    protected void throwIfNoMoreRetriesAllowed(boolean firstPass, long deadlineMs,
+                                              boolean deniedMemory, String topic) {
+        // The common case is a single pass, so it costs no clock read.
+        if (firstPass)
+            return;
+        if (time.milliseconds() < deadlineMs)
+            return;
+        if (deniedMemory) {
+            free.recordBufferExhausted();
+            throw new BufferExhaustedException("Failed to allocate memory for a record of topic " + topic
+                    + " within " + ProducerConfig.MAX_BLOCK_MS_CONFIG + ". Total memory: "
+                    + free.totalMemory() + " bytes. Available memory: "
+                    + free.availableMemory() + " bytes.");
+        }
+        throw new TimeoutException("Failed to append a record to topic " + topic + " within "
+                + ProducerConfig.MAX_BLOCK_MS_CONFIG + ". The append kept retrying because concurrent "
+                + "appends changed the state it read.");
     }
 
     /**
