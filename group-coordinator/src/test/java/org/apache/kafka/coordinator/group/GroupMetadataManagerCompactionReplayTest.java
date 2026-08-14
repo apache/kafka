@@ -266,7 +266,7 @@ public class GroupMetadataManagerCompactionReplayTest {
         // Member B joins with classic protocol, triggering rebalance
         String classicMemberB = context.sendClassicGroupJoin(
             classicJoinRequest(groupId, UNKNOWN_MEMBER_ID), true).joinFuture.get().memberId();
-        var joinB = context.sendClassicGroupJoin(classicJoinRequest(groupId, classicMemberB), true);
+        context.sendClassicGroupJoin(classicJoinRequest(groupId, classicMemberB), true);
 
         // Member A rejoins
         var rejoinA = context.sendClassicGroupJoin(classicJoinRequest(groupId, classicMemberA), true);
