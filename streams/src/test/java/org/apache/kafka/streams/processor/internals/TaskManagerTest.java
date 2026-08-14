@@ -3628,10 +3628,13 @@ public class TaskManagerTest {
 
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, false);
 
-        when(stateUpdater.tasks()).thenReturn(singleton(task00));
+        // the state updater only exposes read-only tasks, which cannot be closed
+        when(stateUpdater.tasks()).thenReturn(singleton(new ReadOnlyTask(task00)));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
         when(stateUpdater.remove(eq(taskId00), eq(SuspendReason.MIGRATED))).thenReturn(future);
         future.completeExceptionally(new StreamsException("The state updater thread died."));
+        // the removal failed, so the state updater reported the task as failed and still owns it
+        when(stateUpdater.drainQueuedTasks()).thenReturn(singleton(task00));
 
         taskManager.shutdown(true);
 
