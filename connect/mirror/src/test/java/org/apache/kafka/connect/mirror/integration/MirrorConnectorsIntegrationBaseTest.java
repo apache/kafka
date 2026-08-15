@@ -33,7 +33,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.MetricName;
@@ -1016,26 +1015,26 @@ public class MirrorConnectorsIntegrationBaseTest {
     }
 
     @Test
-    public void testConnectorMetricsNew() throws InterruptedException, ExecutionException {
+    public void testConnectorMetricsNew() throws InterruptedException {
         testConnectorMetrics(METRIC_NAMES_NEW, () -> assertMetrics(false));
     }
 
     @Test
-    public void testConnectorMetricsLegacy() throws InterruptedException, ExecutionException {
+    public void testConnectorMetricsLegacy() throws InterruptedException {
         testConnectorMetrics(METRIC_NAMES_LEGACY, () -> assertMetrics(true));
     }
 
     @Test
-    public void testConnectorMetricsDefault() throws InterruptedException, ExecutionException {
+    public void testConnectorMetricsDefault() throws InterruptedException {
         testConnectorMetrics(null, () -> assertMetrics(true));
     }
 
     @Test
-    public void testConnectorMetricsNewAndLegacy() throws InterruptedException, ExecutionException {
+    public void testConnectorMetricsNewAndLegacy() throws InterruptedException {
         testConnectorMetrics(METRIC_NAMES_NEW + "," + METRIC_NAMES_LEGACY, () -> assertMetrics(true) && assertMetrics(false));
     }
 
-    private void testConnectorMetrics(String format, Supplier<Boolean> assertions) throws InterruptedException, ExecutionException {
+    private void testConnectorMetrics(String format, Supplier<Boolean> assertions) throws InterruptedException {
         // one way replication from primary to backup
         mm2Props.put(BACKUP_CLUSTER_ALIAS + "->" + PRIMARY_CLUSTER_ALIAS + ".enabled", "false");
         if (format != null) {
@@ -1049,11 +1048,9 @@ public class MirrorConnectorsIntegrationBaseTest {
 
         String topic = "test-topic-metrics";
         primary.kafka().createTopic(topic);
-        try (KafkaProducer<byte[], byte[]> producer = primary.kafka().createProducer(Map.of())) {
-            for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
-                producer.send(new ProducerRecord<>(topic, ("value" + i).getBytes())).get();
-            }
-        }
+        primary.kafka().produce(IntStream.range(0, NUM_RECORDS_PRODUCED)
+                .mapToObj(i -> new ProducerRecord<byte[], byte[]>(topic, ("value" + i).getBytes()))
+                .toList());
 
         waitUntilMirrorMakerIsRunning(backup,
                 List.of(MirrorSourceConnector.class, MirrorCheckpointConnector.class),
@@ -1326,8 +1323,9 @@ public class MirrorConnectorsIntegrationBaseTest {
         Timer timer = Time.SYSTEM.timer(RECORD_PRODUCE_DURATION_MS);
 
         try {
-            for (ProducerRecord<byte[], byte[]> record : records) {
-                producer.send(record).get(timer.remainingMs(), TimeUnit.MILLISECONDS);
+            var futures = records.stream().map(producer::send).toList();
+            for (var future : futures) {
+                future.get(timer.remainingMs(), TimeUnit.MILLISECONDS);
                 timer.update();
             }
         } catch (ExecutionException | InterruptedException | TimeoutException e) {

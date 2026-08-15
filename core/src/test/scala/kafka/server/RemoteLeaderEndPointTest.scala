@@ -29,6 +29,7 @@ import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartit
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
+import org.apache.kafka.server.quota.QuotaFactory
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.server.{LeaderEndPoint, PartitionFetchState, ReplicaState}

@@ -30,17 +30,17 @@ buildscript {
 }
 
 plugins {
-  id 'com.github.ben-manes.versions' version '0.54.0'
+  id 'io.github.ben-manes.versions' version '0.56.0'
   id 'idea'
   id 'jacoco'
   id 'java-library'
-  id 'org.owasp.dependencycheck' version '12.2.1'
+  id 'org.owasp.dependencycheck' version '12.2.2'
   id 'org.nosphere.apache.rat' version "0.8.1"
   id "io.swagger.core.v3.swagger-gradle-plugin" version "${swaggerVersion}"
 
-  id "com.github.spotbugs" version '6.5.1' apply false
-  id 'org.scoverage' version '8.1' apply false
-  id 'com.gradleup.shadow' version '9.4.1' apply false
+  id "com.github.spotbugs" version '6.5.9' apply false
+  id 'org.scoverage' version '9.1' apply false
+  id 'com.gradleup.shadow' version '9.6.1' apply false
   id 'com.diffplug.spotless' version "8.4.0"
 
   // Pre-register the KIP-1265 checker so `apply plugin:` resolves it inside subprojects { }.
@@ -1244,6 +1244,8 @@ project(':core') {
       // To prevent a UniqueResourceException due the same resource existing in both
       // org.apache.directory.api/api-all and org.apache.directory.api/api-ldap-schema-data
       testRuntimeOnly.exclude module: 'api-ldap-schema-data'
+      testCompileClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
+      testRuntimeClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
     }
 
     testRuntimeOnly(libs.apacheda) {
@@ -1274,7 +1276,7 @@ project(':core') {
       exclude('kafka-clients*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs-${versions.scala}"
-    duplicatesStrategy 'exclude'
+    duplicatesStrategy = 'exclude'
   }
 
   task genProtocolErrorDocs(type: JavaExec) {
@@ -1378,7 +1380,7 @@ project(':core') {
     from "$rootDir/LICENSE"
     from "$rootDir/NOTICE"
     into 'site-docs'
-    duplicatesStrategy 'exclude'
+    duplicatesStrategy = 'exclude'
   }
 
   tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) {
@@ -1423,7 +1425,7 @@ project(':core') {
     from(project(':streams:test-utils').configurations.runtimeClasspath) { into("libs/") }
     from(project(':streams:examples').jar) { into("libs/") }
     from(project(':streams:examples').configurations.runtimeClasspath) { into("libs/") }
-    duplicatesStrategy 'exclude'
+    duplicatesStrategy = 'exclude'
   }
 
   jar {
@@ -1451,7 +1453,7 @@ project(':core') {
     //By default gradle does not handle test dependencies between the sub-projects
     //This line is to include clients project test jar to dependant-testlibs
     from (project(':clients').testJar ) { "${layout.buildDirectory.get().asFile.path}/dependant-testlibs" }
-    duplicatesStrategy 'exclude'
+    duplicatesStrategy = 'exclude'
   }
 
   systemTestLibs.dependsOn('jar', 'testJar', 'copyDependantTestLibs')
@@ -1496,10 +1498,6 @@ project(':metadata') {
     implementation project(':server-common')
     implementation project(':clients')
     implementation project(':raft')
-    // commons-io is a transitive dependency not needed by SubnetUtils/SubnetUtils6
-    implementation(libs.commonsNet) {
-      exclude group: 'commons-io', module: 'commons-io'
-    }
     implementation libs.jacksonDatabind
     implementation libs.metrics
     implementation libs.slf4jApi
@@ -2022,6 +2020,10 @@ project(':clients') {
     implementation libs.opentelemetryProto
     implementation libs.protobuf
     implementation libs.slf4jApi
+    // commons-io is a transitive dependency not needed by SubnetUtils/SubnetUtils6
+    implementation(libs.commonsNet) {
+      exclude group: 'commons-io', module: 'commons-io'
+    }
 
     // libraries which should be added as runtime dependencies in generated pom.xml should be defined here:
     shadowed libs.zstd
@@ -2088,6 +2090,7 @@ project(':clients') {
     // KIP-714: move shaded dependencies to a shaded location
     relocate('io.opentelemetry.proto', 'org.apache.kafka.shaded.io.opentelemetry.proto')
     relocate('com.google.protobuf', 'org.apache.kafka.shaded.com.google.protobuf')
+    relocate('org.apache.commons.net', 'org.apache.kafka.shaded.org.apache.commons.net')
 
     // dependencies excluded from the final jar, since they are declared as runtime dependencies
     dependencies {
@@ -2108,7 +2111,7 @@ project(':clients') {
   }
 
   jar {
-    enabled false
+    enabled = false
     dependsOn 'shadowJar'
   }
 
@@ -2703,8 +2706,7 @@ project(':tools') {
     testImplementation testFixtures(project(':connect:runtime'))
     testImplementation testFixtures(project(':storage'))
     testImplementation project(':streams')
-    testImplementation project(':streams').sourceSets.test.output
-    testImplementation project(':streams:integration-tests').sourceSets.test.output
+    testImplementation testFixtures(project(':streams'))
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
@@ -2727,7 +2729,7 @@ project(':tools') {
     }
     from (configurations.releaseOnly)
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs-${versions.scala}"
-    duplicatesStrategy 'exclude'
+    duplicatesStrategy = 'exclude'
   }
 
   jar {
@@ -2784,7 +2786,7 @@ project(':trogdor') {
       exclude('kafka-clients*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs-${versions.scala}"
-    duplicatesStrategy 'exclude'
+    duplicatesStrategy = 'exclude'
   }
 
   jar {
@@ -2828,7 +2830,7 @@ project(':shell') {
       include('jline-*jar')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs-${versions.scala}"
-    duplicatesStrategy 'exclude'
+    duplicatesStrategy = 'exclude'
   }
 
   jar {
@@ -2840,6 +2842,8 @@ project(':streams') {
   base {
     archivesName = "kafka-streams"
   }
+
+  apply plugin: 'java-test-fixtures'
 
   ext.buildStreamsVersionFileName = "kafka-streams-version.properties"
 
@@ -2855,6 +2859,12 @@ project(':streams') {
     implementation libs.jacksonAnnotations
     implementation libs.jacksonDatabind
     implementation libs.slf4jApi
+
+    testFixturesImplementation testFixtures(project(':clients'))
+    testFixturesImplementation libs.hamcrest
+    testFixturesImplementation libs.junitJupiter
+    testFixturesImplementation libs.mockitoCore
+    testFixturesImplementation libs.slf4jApi
 
     // testCompileOnly prevents streams from exporting a dependency on test-utils, which would cause a dependency cycle
     testCompileOnly project(':streams:test-utils')
@@ -2914,7 +2924,7 @@ project(':streams') {
       exclude('kafka-clients*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs-${versions.scala}"
-    duplicatesStrategy 'exclude'
+    duplicatesStrategy = 'exclude'
   }
 
   task createStreamsVersionFile() {
@@ -2945,6 +2955,7 @@ project(':streams') {
 
   systemTestLibs {
     dependsOn testJar
+    dependsOn testFixturesJar
   }
 
   task genStreamsConfigDocs(type: JavaExec) {
@@ -3002,7 +3013,6 @@ project(':streams:streams-scala') {
     api project(':streams')
 
     api libs.scalaLibrary
-    testImplementation project(':streams').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':streams:test-utils')
 
@@ -3026,7 +3036,7 @@ project(':streams:streams-scala') {
       exclude('kafka-streams*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs-${versions.scala}"
-    duplicatesStrategy 'exclude'
+    duplicatesStrategy = 'exclude'
   }
 
   jar {
@@ -3052,13 +3062,13 @@ project(':streams:integration-tests') {
     implementation libs.slf4jApi
 
     testImplementation testFixtures(project(':clients'))
+    testImplementation testFixtures(project(':streams'))
     testImplementation project(':group-coordinator')
     testImplementation project(':group-coordinator:group-coordinator-api')
     testImplementation project(':server')
     testImplementation project(':server-common')
     testImplementation testFixtures(project(':server-common'))
     testImplementation project(':storage')
-    testImplementation project(':streams').sourceSets.test.output
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':tools')
     testImplementation project(':transaction-coordinator')
@@ -3098,7 +3108,7 @@ project(':streams:test-utils') {
       exclude('kafka-streams*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs-${versions.scala}"
-    duplicatesStrategy 'exclude'
+    duplicatesStrategy = 'exclude'
   }
 
   jar {
@@ -3136,7 +3146,7 @@ project(':streams:examples') {
       exclude('kafka-streams*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs-${versions.scala}"
-    duplicatesStrategy 'exclude'
+    duplicatesStrategy = 'exclude'
   }
 
   jar {
@@ -3662,7 +3672,7 @@ project(':connect:api') {
       exclude('connect-*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs"
-    duplicatesStrategy 'exclude'
+    duplicatesStrategy = 'exclude'
   }
 
   jar {
@@ -3697,7 +3707,7 @@ project(':connect:transforms') {
       exclude('connect-*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs"
-    duplicatesStrategy 'exclude'
+    duplicatesStrategy = 'exclude'
   }
 
   jar {
@@ -3735,7 +3745,7 @@ project(':connect:json') {
       exclude('connect-*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs"
-    duplicatesStrategy 'exclude'
+    duplicatesStrategy = 'exclude'
   }
 
   jar {
@@ -3843,7 +3853,7 @@ project(':connect:runtime') {
       exclude('connect-*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs"
-    duplicatesStrategy 'exclude'
+    duplicatesStrategy = 'exclude'
   }
 
   jar {
@@ -3952,7 +3962,7 @@ project(':connect:file') {
       exclude('connect-*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs"
-    duplicatesStrategy 'exclude'
+    duplicatesStrategy = 'exclude'
   }
 
   jar {
@@ -3991,7 +4001,7 @@ project(':connect:basic-auth-extension') {
       exclude('connect-*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs"
-    duplicatesStrategy 'exclude'
+    duplicatesStrategy = 'exclude'
   }
 
   jar {
@@ -4057,7 +4067,7 @@ project(':connect:mirror') {
       exclude('connect-*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs"
-    duplicatesStrategy 'exclude'
+    duplicatesStrategy = 'exclude'
   }
 
   task genMirrorConnectorConfigDocs(type: JavaExec) {
@@ -4119,7 +4129,7 @@ project(':connect:mirror-client') {
       exclude('connect-*')
     }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs"
-    duplicatesStrategy 'exclude'
+    duplicatesStrategy = 'exclude'
   }
 
   jar {
@@ -4171,6 +4181,8 @@ gradle.projectsEvaluated {
     'raft': ':raft',
     'connect/runtime': ':connect:runtime',
     'core': ':core',
+    'streams': ':streams',
+    'streams/integration-tests': ':streams:integration-tests',
   ]
   allprojects { proj ->
     proj.configurations.all { config ->

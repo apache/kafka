@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
 
 import org.junit.jupiter.api.Test;
@@ -205,6 +206,78 @@ public class StreamsRebalanceDataTest {
 
         assertEquals(emptyAssignment, copy);
         assertNotSame(emptyAssignment, copy);
+    }
+
+    @Test
+    public void endpointPartitionsShouldNotAcceptNulls() {
+        final Exception exception1 = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsRebalanceData.EndpointPartitions(null, List.of())
+        );
+        assertEquals("Active partitions cannot be null", exception1.getMessage());
+        final Exception exception2 = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsRebalanceData.EndpointPartitions(List.of(), null)
+        );
+        assertEquals("Standby partitions cannot be null", exception2.getMessage());
+    }
+
+    @Test
+    public void endpointPartitionsShouldNotBeModifiable() {
+        final StreamsRebalanceData.EndpointPartitions endpointPartitions = new StreamsRebalanceData.EndpointPartitions(
+            List.of(new TopicPartition("topic", 0)),
+            List.of(new TopicPartition("topic", 1))
+        );
+
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> endpointPartitions.activePartitions().add(new TopicPartition("topic", 2))
+        );
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> endpointPartitions.standbyPartitions().add(new TopicPartition("topic", 3))
+        );
+    }
+
+    @Test
+    public void endpointPartitionsShouldCopyPartitionsPassedToConstructor() {
+        final List<TopicPartition> activePartitions = new ArrayList<>(List.of(new TopicPartition("topic", 0)));
+        final List<TopicPartition> standbyPartitions = new ArrayList<>(List.of(new TopicPartition("topic", 1)));
+        final StreamsRebalanceData.EndpointPartitions endpointPartitions =
+            new StreamsRebalanceData.EndpointPartitions(activePartitions, standbyPartitions);
+
+        activePartitions.add(new TopicPartition("topic", 2));
+        standbyPartitions.add(new TopicPartition("topic", 3));
+
+        assertEquals(List.of(new TopicPartition("topic", 0)), endpointPartitions.activePartitions());
+        assertEquals(List.of(new TopicPartition("topic", 1)), endpointPartitions.standbyPartitions());
+    }
+
+    @Test
+    public void testEndpointPartitionsEqualsAndHashCode() {
+        final StreamsRebalanceData.EndpointPartitions endpointPartitions = new StreamsRebalanceData.EndpointPartitions(
+            List.of(new TopicPartition("topic", 0)),
+            List.of(new TopicPartition("topic", 1))
+        );
+        final StreamsRebalanceData.EndpointPartitions endpointPartitionsEqual = new StreamsRebalanceData.EndpointPartitions(
+            endpointPartitions.activePartitions(),
+            endpointPartitions.standbyPartitions()
+        );
+        final StreamsRebalanceData.EndpointPartitions unequalActivePartitions = new StreamsRebalanceData.EndpointPartitions(
+            List.of(new TopicPartition("topic", 2)),
+            endpointPartitions.standbyPartitions()
+        );
+        final StreamsRebalanceData.EndpointPartitions unequalStandbyPartitions = new StreamsRebalanceData.EndpointPartitions(
+            endpointPartitions.activePartitions(),
+            List.of(new TopicPartition("topic", 3))
+        );
+
+        assertEquals(endpointPartitions, endpointPartitionsEqual);
+        assertNotEquals(endpointPartitions, unequalActivePartitions);
+        assertNotEquals(endpointPartitions, unequalStandbyPartitions);
+        assertEquals(endpointPartitions.hashCode(), endpointPartitionsEqual.hashCode());
+        assertNotEquals(endpointPartitions.hashCode(), unequalActivePartitions.hashCode());
+        assertNotEquals(endpointPartitions.hashCode(), unequalStandbyPartitions.hashCode());
     }
 
     @Test

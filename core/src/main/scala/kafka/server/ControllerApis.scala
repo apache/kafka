@@ -24,8 +24,7 @@ import java.util.Map.Entry
 import java.util.concurrent.CompletableFuture
 import java.util.function.Consumer
 import kafka.network.RequestChannel
-import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.logger.RuntimeLoggerManager
+import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.clients.admin.{AlterConfigOp, EndpointType}
 import org.apache.kafka.common.Uuid.ZERO_UUID
@@ -58,6 +57,7 @@ import org.apache.kafka.security.DelegationTokenManager
 import org.apache.kafka.server.{ApiVersionManager, AuthHelper, EnvelopeUtils, ProcessRole}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, RequestLocal}
+import org.apache.kafka.server.logger.RuntimeLoggerManager
 import org.apache.kafka.server.quota.ControllerMutationQuota
 
 import scala.jdk.javaapi.OptionConverters
@@ -108,6 +108,7 @@ class ControllerApis(
         case ApiKeys.BROKER_REGISTRATION => handleBrokerRegistration(request)
         case ApiKeys.BROKER_HEARTBEAT => handleBrokerHeartBeatRequest(request)
         case ApiKeys.UNREGISTER_BROKER => handleUnregisterBroker(request)
+        case ApiKeys.UNREGISTER_CONTROLLER => handleUnregisterController(request)
         case ApiKeys.ALTER_CLIENT_QUOTAS => handleAlterClientQuotas(request)
         case ApiKeys.INCREMENTAL_ALTER_CONFIGS => handleIncrementalAlterConfigs(request)
         case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => handleAlterPartitionReassignments(request)
@@ -648,6 +649,27 @@ class ControllerApis(
           decommissionRequest.getErrorResponse(requestThrottleMs, e)
         } else {
           new UnregisterBrokerResponse(new UnregisterBrokerResponseData().
+            setThrottleTimeMs(requestThrottleMs))
+        }
+      }
+      requestHelper.sendResponseMaybeThrottle(request,
+        requestThrottleMs => createResponseCallback(requestThrottleMs, e))
+    }
+  }
+
+  def handleUnregisterController(request: Request): CompletableFuture[Unit] = {
+    val unregisterRequest = request.body(classOf[UnregisterControllerRequest])
+    authHelper.authorizeClusterOperation(request, ALTER)
+    val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
+      OptionalLong.empty())
+
+    controller.unregisterController(context, unregisterRequest.data.controllerId).handle[Unit] { (_, e) =>
+      def createResponseCallback(requestThrottleMs: Int,
+                                 e: Throwable): UnregisterControllerResponse = {
+        if (e != null) {
+          unregisterRequest.getErrorResponse(requestThrottleMs, e)
+        } else {
+          new UnregisterControllerResponse(new UnregisterControllerResponseData().
             setThrottleTimeMs(requestThrottleMs))
         }
       }

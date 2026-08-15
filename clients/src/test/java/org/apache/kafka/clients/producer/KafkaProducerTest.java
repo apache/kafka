@@ -2079,7 +2079,7 @@ public class KafkaProducerTest {
         properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 
-        var time = new MockTime(1);
+        var time = new MockTime();
         var metadata = newMetadata(0, 0, Long.MAX_VALUE);
         var client = new MockClient(time, metadata);
         // Seed the metadata cache with a known topic id so the producer can
@@ -2154,7 +2154,7 @@ public class KafkaProducerTest {
         properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 
-        var time = new MockTime(1);
+        var time = new MockTime();
         var metadata = newMetadata(0, 0, Long.MAX_VALUE);
         var client = new MockClient(time, metadata);
         // The initial metadata snapshot contains the topic so the producer can
@@ -2943,7 +2943,7 @@ public class KafkaProducerTest {
             RecordAccumulator.AppendCallbacks callbacks =
                 (RecordAccumulator.AppendCallbacks) invocation.getArguments()[6];
             callbacks.setPartition(initialSelectedPartition.partition());
-            return new RecordAccumulator.RecordAppendResult(
+            return RecordAccumulator.RecordAppendResult.appended(
                 futureRecordMetadata,
                 false,
                 false,
@@ -3450,7 +3450,8 @@ public class KafkaProducerTest {
             new TopicPartition("test-topic", 0),
             new OffsetAndMetadata(0L)
         );
-        ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata("test-group");
+        ConsumerGroupMetadata groupMetadata = mock(ConsumerGroupMetadata.class);
+        when(groupMetadata.groupId()).thenReturn("test-group");
 
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(configs)) {
             assertThrows(BootstrapResolutionException.class,
