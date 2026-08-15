@@ -249,4 +249,4 @@ def run_tests(image, mode, fixtures_dir, container_runtime="docker"):
                 description='This demonstrates the report output.'
                 )
     result = runner.run(combined_suite)
-    return result.failure_count
+    return (result.failure_count, result.error_count)
