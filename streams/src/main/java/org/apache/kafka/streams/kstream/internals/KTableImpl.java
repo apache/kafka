@@ -439,6 +439,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final Serde<K> keySerde;
         final Serde<VR> valueSerde;
         final String queryableStoreName;
+        final String materializedStoreName;
         final Set<StoreBuilder<?>> storeBuilder;
 
         if (materializedInternal != null) {
@@ -448,6 +449,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             // we preserve the value following the order of 1) materialized, 2) null
             valueSerde = materializedInternal.valueSerde();
             queryableStoreName = materializedInternal.queryableStoreName();
+            materializedStoreName = queryableStoreName;
             // only materialize if materialized is specified and it has queryable name
             if (queryableStoreName != null) {
                 final StoreFactory storeFactory = new KeyValueStoreMaterializer<>(materializedInternal);
@@ -459,7 +461,16 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             keySerde = this.keySerde;
             valueSerde = null;
             queryableStoreName = null;
-            storeBuilder = null;
+            if (stateStoreNames.length > 0) {
+                final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> implicitMaterialized =
+                    new MaterializedInternal<>(Materialized.with(keySerde, null), builder, TRANSFORMVALUES_NAME);
+                materializedStoreName = implicitMaterialized.storeName();
+                final StoreFactory storeFactory = new KeyValueStoreMaterializer<>(implicitMaterialized);
+                storeBuilder = Collections.singleton(new FactoryWrappingStoreBuilder<>(storeFactory));
+            } else {
+                materializedStoreName = null;
+                storeBuilder = null;
+            }
         }
 
         final String name = namedInternal.orElseGenerateWithPrefix(builder, TRANSFORMVALUES_NAME);
@@ -467,7 +478,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final KTableProcessorSupplier<K, V, K, VR> processorSupplier = new KTableTransformValues<>(
             this,
             transformerSupplier,
-            queryableStoreName);
+            materializedStoreName);
 
         final ProcessorParameters<K, VR, ?, ?> processorParameters =
             unsafeCastProcessorParametersToCompletelyDifferentType(
