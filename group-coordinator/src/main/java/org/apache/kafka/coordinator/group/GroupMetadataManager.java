@@ -6234,8 +6234,8 @@ public class GroupMetadataManager {
             streamsGroup.setFailedDescriptionTopologyEpoch(value.failedDescriptionTopologyEpoch());
 
             // A record without configs (written before they were persisted, or re-persisting such a state) leaves
-            // them unrecorded, which forces a rebalance on the next heartbeat since the configs of the last
-            // assignment are unknown.
+            // them unrecorded. The next heartbeat then compares the effective configs against the defaults, so it
+            // only rebalances the group if any effective config differs from its default.
             if (value.lastAssignmentConfigs() == null || value.lastAssignmentConfigs().isEmpty()) {
                 streamsGroup.setLastAssignmentConfigs(Optional.empty());
             } else {
