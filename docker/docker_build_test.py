@@ -61,18 +61,15 @@ def run_docker_tests(image, tag, kafka_url, kafka_archive, image_type, container
             raise ValueError("Either --kafka-url or --kafka-archive must be passed")
         execute(["mkdir", f"{temp_dir_path}/fixtures/kafka"])
         execute(["tar", "xfz", f"{temp_dir_path}/kafka.tgz", "-C", f"{temp_dir_path}/fixtures/kafka", "--strip-components", "1"])
-        failure_count, error_count = run_tests(f"{image}:{tag}", image_type, temp_dir_path, container_runtime)
+        test_exit_code = run_tests(f"{image}:{tag}", image_type, temp_dir_path, container_runtime)
     except:
         raise SystemError("Failed to run the tests")
     finally:
         shutil.rmtree(temp_dir_path)
     test_report_location_text = f"To view test report please check {current_dir}/test/report_{image_type}.html"
-    if failure_count != 0:
-        raise SystemError(f"{failure_count} tests have failed. {test_report_location_text}")
-    elif error_count != 0:
-        raise SystemError(f"{error_count} tests have errored. {test_report_location_text}")
-    else:
-        print(f"All tests passed successfully. {test_report_location_text}")
+    if test_exit_code != 0:
+        raise SystemError(f"Tests failed with pytest exit code {test_exit_code}. {test_report_location_text}")
+    print(f"All tests passed successfully. {test_report_location_text}")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
