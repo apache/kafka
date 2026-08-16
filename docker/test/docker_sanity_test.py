@@ -246,6 +246,7 @@ def run_tests(image, mode, fixtures_dir, container_runtime="docker", report_path
         __name__,
         f"--html={report_path}",
         "--self-contained-html",
+        "--capture=tee-sys",
         "-p",
         "no:cacheprovider",
     ], plugins=[ReportTitlePlugin()])
