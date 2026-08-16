@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.server.QuotaFactory.UNBOUNDED_QUOTA
+import org.apache.kafka.server.quota.QuotaFactory.UNBOUNDED_QUOTA
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochRequestData}

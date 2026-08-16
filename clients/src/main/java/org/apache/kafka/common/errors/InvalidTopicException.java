@@ -14,11 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.HashSet;
 import java.util.Set;
-
 
 /**
  * The client has attempted to perform an operation on an invalid topic.
@@ -27,6 +29,7 @@ import java.util.Set;
  *
  * @see UnknownTopicOrPartitionException
  */
+@InterfaceAudience.Public
 public class InvalidTopicException extends InvalidConfigurationException {
     private static final long serialVersionUID = 1L;
 

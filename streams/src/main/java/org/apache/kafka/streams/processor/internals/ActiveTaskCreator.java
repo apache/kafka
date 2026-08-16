@@ -152,6 +152,7 @@ class ActiveTaskCreator {
                 applicationConfig.getBoolean(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG),
                 logContext,
                 stateDirectory,
+                time,
                 topology.storeToChangelogTopic(),
                 partitions,
                 upgradeFrom);

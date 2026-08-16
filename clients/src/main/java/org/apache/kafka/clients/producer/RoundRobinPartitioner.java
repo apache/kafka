@@ -18,6 +18,7 @@ package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.List;
@@ -34,6 +35,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * is the behaviour regardless of record key hash. 
  *
  */
+@InterfaceAudience.Public
 public class RoundRobinPartitioner implements Partitioner {
     private final ConcurrentMap<String, AtomicInteger> topicCounterMap = new ConcurrentHashMap<>();
 

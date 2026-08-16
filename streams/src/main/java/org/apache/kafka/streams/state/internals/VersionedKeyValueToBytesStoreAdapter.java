@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes.ByteArraySerde;
@@ -82,6 +83,11 @@ public class VersionedKeyValueToBytesStoreAdapter implements VersionedBytesStore
     public byte[] delete(final Bytes key, final long timestamp) {
         final VersionedRecord<byte[]> versionedRecord = inner.delete(key, timestamp);
         return serializeAsBytes(versionedRecord);
+    }
+
+    @Override
+    public VersionedBytesStore readOnly(final IsolationLevel isolationLevel) {
+        return new VersionedKeyValueToBytesStoreAdapter(inner.readOnly(isolationLevel));
     }
 
     @Override

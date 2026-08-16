@@ -16,13 +16,14 @@
  */
 package kafka.examples;
 
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
+import org.apache.kafka.clients.consumer.RebalanceConsumer;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
@@ -48,7 +49,7 @@ import static java.time.Duration.ofMillis;
 /**
  * This class implements a read-process-write application.
  */
-public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebalanceListener, AutoCloseable {
+public class ExactlyOnceMessageProcessor extends Thread implements RebalanceListener, AutoCloseable {
     private static final int MAX_RETRIES = 5;
     
     private final String bootstrapServers;
@@ -120,7 +121,8 @@ public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebal
                  "processor-group", Optional.of(groupInstanceId), readCommitted, -1, null).createKafkaConsumer()) {
             // called first and once to fence zombies and abort any pending transaction
             producer.initTransactions();
-            consumer.subscribe(Set.of(inputTopic), this);
+            consumer.setRebalanceListener(this);
+            consumer.subscribe(Set.of(inputTopic));
 
             Utils.printOut("Processing new records");
             while (!closed && remainingRecords > 0) {
@@ -178,17 +180,17 @@ public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebal
     }
 
     @Override
-    public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+    public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
         Utils.printOut("Revoked partitions: %s", partitions);
     }
 
     @Override
-    public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+    public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
         Utils.printOut("Assigned partitions: %s", partitions);
     }
 
     @Override
-    public void onPartitionsLost(Collection<TopicPartition> partitions) {
+    public void onPartitionsLost(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
         Utils.printOut("Lost partitions: %s", partitions);
     }
 

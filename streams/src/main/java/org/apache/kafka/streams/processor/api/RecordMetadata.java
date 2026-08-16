@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.streams.processor.api;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.Punctuator;
 
+@InterfaceAudience.Public
 public interface RecordMetadata {
     /**
      * Return the topic name of the current input record; could be {@code null} if it is not

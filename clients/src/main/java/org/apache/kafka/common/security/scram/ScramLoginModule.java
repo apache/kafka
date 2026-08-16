@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.security.scram;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.security.scram.internals.ScramSaslClientProvider;
 import org.apache.kafka.common.security.scram.internals.ScramSaslServerProvider;
 
@@ -25,6 +26,7 @@ import javax.security.auth.Subject;
 import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.spi.LoginModule;
 
+@InterfaceAudience.Public
 public class ScramLoginModule implements LoginModule {
 
     private static final String USERNAME_CONFIG = "username";

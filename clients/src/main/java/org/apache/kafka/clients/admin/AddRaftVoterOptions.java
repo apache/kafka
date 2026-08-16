@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.protocol.Errors;
 
@@ -35,6 +36,7 @@ import java.util.Set;
  * If not provided, the cluster id check is skipped.
  */
 @InterfaceStability.Stable
+@InterfaceAudience.Public
 public class AddRaftVoterOptions extends AbstractOptions<AddRaftVoterOptions> {
     private Optional<String> clusterId = Optional.empty();
     private Optional<Uuid> voterDirectoryId = Optional.empty();

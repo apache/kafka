@@ -17,6 +17,8 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -26,6 +28,7 @@ import java.util.Map;
  * A configuration object containing the configuration entries for a resource.
  * <p>
  */
+@InterfaceAudience.Public
 public class Config {
 
     private final Map<String, ConfigEntry> entries = new HashMap<>();

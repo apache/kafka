@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.query;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.query.internals.FailedQueryResult;
 import org.apache.kafka.streams.query.internals.SucceededQueryResult;
@@ -27,6 +28,7 @@ import java.util.List;
  *
  * @param <R> The result type of the query.
  */
+@InterfaceAudience.Public
 public interface QueryResult<R> {
     /**
      * Static factory method to create a result object for a successful query. Used by StateStores

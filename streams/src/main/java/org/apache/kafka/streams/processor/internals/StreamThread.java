@@ -52,7 +52,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.LogContext;
-import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
@@ -106,6 +105,7 @@ import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOper
 import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.LEAVE_GROUP;
 import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.streamsProtocolEnabled;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.adminClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.consumerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.restoreConsumerClientId;
@@ -467,6 +467,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             config,
             streamsMetrics,
             stateDirectory,
+            time,
             threadId,
             logContext);
 
@@ -568,7 +569,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                                                        final Map<String, Object> consumerConfigs,
                                                        final Supplier<Map<StreamsRebalanceData.TaskId, Long>> taskOffsetSum,
                                                        final Supplier<Map<StreamsRebalanceData.TaskId, Long>> taskEndOffsetSum) {
-        if (config.getString(StreamsConfig.GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.STREAMS.name)) {
+        if (streamsProtocolEnabled(config)) {
             if (topologyMetadata.hasNamedTopologies()) {
                 throw new IllegalStateException("Named topologies and the STREAMS protocol cannot be used at the same time.");
             }
@@ -827,6 +828,8 @@ public class StreamThread extends Thread implements ProcessingThread {
                         final long maxUncommittedBytesPerThread
                         ) {
         super(threadId);
+        // explicitly non-daemon so the JVM doesn't exit while this thread is still processing
+        setDaemon(false);
         this.stateLock = new Object();
         this.adminClient = adminClient;
         this.streamsMetrics = streamsMetrics;
@@ -967,6 +970,12 @@ public class StreamThread extends Thread implements ProcessingThread {
      * @throws StreamsException      if the store's change log does not contain the partition
      */
     boolean runLoop() {
+        // Populate the task-offset-sum snapshot before subscribing: subscribing triggers the join heartbeat,
+        // which must already carry the offset sums of tasks discovered in the local state directory, so that
+        // the broker-side sticky assignor can assign those tasks back to this client on a cold start. The sums
+        // are available this early because StateDirectory#initializeStartupStores runs during KafkaStreams#start,
+        // before any stream thread is started.
+        taskManager.maybeUpdateTaskOffsetSumSnapshot();
         subscribeConsumer();
 
         // if the thread is still in the middle of a rebalance, we should keep polling
@@ -1112,19 +1121,15 @@ public class StreamThread extends Thread implements ProcessingThread {
         if (assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()) {
             final long now = time.milliseconds();
             final long lastLogged = lastShutdownWarningTimestamp.get();
-            if (now - lastLogged >= 10_000L) {
-                if (lastShutdownWarningTimestamp.compareAndSet(lastLogged, now)) {
-                    log.warn("Detected that shutdown was requested. " +
-                            "All clients in this app will now begin to shutdown");
+
+            if (now - lastLogged >= 10_000L && lastShutdownWarningTimestamp.compareAndSet(lastLogged, now)) {
+                log.warn("Detected that shutdown was requested. " +
+                        "All clients in this app will now begin to shutdown");
+                // The classic protocol propagates the shutdown request via an enforced rebalance,
+                // whereas the Streams protocol (KIP-1071) uses the group heartbeat.
+                if (streamsRebalanceData.isEmpty()) {
+                    mainConsumer.enforceRebalance("Shutdown requested");
                 }
-            }
-            // Under the classic protocol the shutdown request is propagated to the rest of the group
-            // by the assignor during a rebalance, so we need to enforce one. Under the Streams group
-            // protocol (KIP-1071) the request is propagated through the group heartbeat (see
-            // sendShutdownRequest), and enforceRebalance is not supported by the consumer (it would
-            // only log a warning), so we skip it.
-            if (streamsRebalanceData.isEmpty()) {
-                mainConsumer.enforceRebalance("Shutdown requested");
             }
         }
     }
@@ -1244,6 +1249,10 @@ public class StreamThread extends Thread implements ProcessingThread {
             // regardless of streamsGroupReady, as these may throw exceptions that need to be handled.
             handleStreamsRebalanceData();
 
+            // The group coordinator places tasks based on the offsets we report to it, so publish them on every
+            // iteration -- including the ones that return early below, where a task may well still be restoring.
+            taskManager.maybeUpdateTaskOffsetSumSnapshot();
+
             if (!streamsGroupReady) {
                 return;
             }
@@ -1269,7 +1278,6 @@ public class StreamThread extends Thread implements ProcessingThread {
         if (isStartingRunningOrPartitionAssigned()) {
 
             taskManager.updateLags();
-            taskManager.maybeUpdateTaskOffsetSumSnapshot();
 
             /*
              * Within an iteration, after processing up to N (N initialized as 1 upon start up) records for each applicable tasks, check the current time:
@@ -1399,6 +1407,10 @@ public class StreamThread extends Thread implements ProcessingThread {
             // regardless of streamsGroupReady, as these may throw exceptions that need to be handled.
             handleStreamsRebalanceData();
 
+            // The group coordinator places tasks based on the offsets we report to it, so publish them on every
+            // iteration -- including the ones that return early below, where a task may well still be restoring.
+            taskManager.maybeUpdateTaskOffsetSumSnapshot();
+
             if (!streamsGroupReady) {
                 return;
             }
@@ -1417,7 +1429,6 @@ public class StreamThread extends Thread implements ProcessingThread {
         if (isRunning()) {
 
             taskManager.updateLags();
-            taskManager.maybeUpdateTaskOffsetSumSnapshot();
 
             checkStateUpdater();
 
@@ -2230,7 +2241,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         if (runOnceLatencyWindow > 0.0) {
             final double latencyWindow =
                 windowedSum.measure(metricsConfig, now);
-            ratioSensor.record(latencyWindow / runOnceLatencyWindow);
+            ratioSensor.record(latencyWindow / runOnceLatencyWindow, now);
         } else {
             ratioSensor.record(0.0, now);
         }

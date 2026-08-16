@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.GroupCoordinatorNode;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Node;
@@ -26,6 +28,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData;
@@ -65,7 +68,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 // This test exercises the KafkaShareConsumer with the MockClient to validate the Kafka protocol RPCs
 @Timeout(value = 120)
@@ -317,7 +322,7 @@ public class KafkaShareConsumerTest {
 
     private Node findCoordinator(MockClient client, Node node) {
         client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
-        return new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        return new GroupCoordinatorNode(node.id(), node.host(), node.port());
     }
 
     // This method generates a sequence of prepared SHARE_GROUP_HEARTBEAT responses with increasing member epochs.
@@ -407,5 +412,49 @@ public class KafkaShareConsumerTest {
             new ShareAcknowledgeResponseData()
                 .setResponses(new ShareAcknowledgeResponseData.ShareAcknowledgeTopicResponseCollection(List.of(topicResponse)))
         );
+    }
+
+    @Test
+    public void testShareConsumerBootstrapResolutionExceptionPropagatedToPoll() {
+        // Use an invalid hostname that will fail DNS resolution (using RFC 6761 reserved .invalid TLD)
+        String invalidHost = "unresolvable.invalid:9092";
+
+        Map<String, Object> configs = Map.of(
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, invalidHost,
+            // Set a short bootstrap timeout so the test doesn't take too long
+            CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "3000",
+            ConsumerConfig.GROUP_ID_CONFIG, "test-share-group"
+        );
+
+        KafkaShareConsumer<String, String> consumer = new KafkaShareConsumer<>(configs);
+        try {
+            consumer.subscribe(Set.of("test-topic"));
+
+            // Poll continuously until we get the BootstrapResolutionException
+            // The exception should be thrown after bootstrap.resolve.timeout.ms expires
+            BootstrapResolutionException exception =
+                assertThrows(BootstrapResolutionException.class, () -> {
+                    long startTime = System.currentTimeMillis();
+                    long maxWaitTime = 15000; // 15 seconds max to prevent test hanging
+
+                    while (System.currentTimeMillis() - startTime < maxWaitTime) {
+                        consumer.poll(Duration.ofMillis(100));
+                    }
+                    fail("Expected BootstrapResolutionException to be thrown within " + maxWaitTime + "ms");
+                });
+
+            // Verify the exception message contains information about DNS resolution failure
+            assertTrue(exception.getMessage().contains("Failed to resolve bootstrap servers") ||
+                       exception.getMessage().contains("DNS resolution"),
+                       "Exception message should mention DNS resolution failure: " + exception.getMessage());
+
+            // After the first failure, any further API call must also throw. This guards against
+            // accidentally clearing the bootstrap error from the metadata layer.
+            assertThrows(BootstrapResolutionException.class, () -> consumer.poll(Duration.ofMillis(100)));
+        } finally {
+            consumer.close();
+        }
     }
 }

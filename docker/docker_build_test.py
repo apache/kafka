@@ -38,19 +38,30 @@ from datetime import date
 import argparse
 import shutil
 from test.docker_sanity_test import run_tests
-from common import execute, build_docker_image_runner
+from common import execute, build_docker_image_runner, detect_container_runtime
 import tempfile
 import os
 
-def run_docker_tests(image, tag, kafka_url, image_type):
+def run_docker_tests(image, tag, kafka_url, kafka_archive, image_type, container_runtime="docker"):
+    compose_command = f"{container_runtime}-compose"
+    if shutil.which(compose_command) is None:
+        raise RuntimeError(
+            f"Required Compose command '{compose_command}' was not found. "
+            "Please install it and ensure it is available on PATH."
+        )
     temp_dir_path = tempfile.mkdtemp()
     try:
         current_dir = os.path.dirname(os.path.realpath(__file__))
         shutil.copytree(f"{current_dir}/test/fixtures", f"{temp_dir_path}/fixtures", dirs_exist_ok=True)
-        execute(["wget", "-nv", "-O", f"{temp_dir_path}/kafka.tgz", kafka_url])
+        if kafka_url is not None:
+            execute(["wget", "-nv", "-O", f"{temp_dir_path}/kafka.tgz", kafka_url])
+        elif kafka_archive is not None:
+            shutil.copy(kafka_archive, f"{temp_dir_path}/kafka.tgz")
+        else:
+            raise ValueError("Either --kafka-url or --kafka-archive must be passed")
         execute(["mkdir", f"{temp_dir_path}/fixtures/kafka"])
         execute(["tar", "xfz", f"{temp_dir_path}/kafka.tgz", "-C", f"{temp_dir_path}/fixtures/kafka", "--strip-components", "1"])
-        failure_count = run_tests(f"{image}:{tag}", image_type, temp_dir_path)
+        failure_count, error_count = run_tests(f"{image}:{tag}", image_type, temp_dir_path, container_runtime)
     except:
         raise SystemError("Failed to run the tests")
     finally:
@@ -58,6 +69,8 @@ def run_docker_tests(image, tag, kafka_url, image_type):
     test_report_location_text = f"To view test report please check {current_dir}/test/report_{image_type}.html"
     if failure_count != 0:
         raise SystemError(f"{failure_count} tests have failed. {test_report_location_text}")
+    elif error_count != 0:
+        raise SystemError(f"{error_count} tests have errored. {test_report_location_text}")
     else:
         print(f"All tests passed successfully. {test_report_location_text}")
 
@@ -75,11 +88,13 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    container_runtime = detect_container_runtime()
+
     if args.build_only or not (args.build_only or args.test_only):
         if args.kafka_url:
-            build_docker_image_runner(f"docker build -f $DOCKER_FILE -t {args.image}:{args.tag} --build-arg kafka_url={args.kafka_url} --build-arg build_date={date.today()} --no-cache --progress=plain $DOCKER_DIR", args.image_type)
+            build_docker_image_runner(f"{container_runtime} build -f $DOCKER_FILE -t {args.image}:{args.tag} --build-arg kafka_url={args.kafka_url} --build-arg build_date={date.today()} --no-cache $DOCKER_DIR", args.image_type)
         elif args.kafka_archive:
-            build_docker_image_runner(f"docker build -f $DOCKER_FILE -t {args.image}:{args.tag} --build-arg build_date={date.today()} --no-cache --progress=plain $DOCKER_DIR", args.image_type, args.kafka_archive)
-    
+            build_docker_image_runner(f"{container_runtime} build -f $DOCKER_FILE -t {args.image}:{args.tag} --build-arg build_date={date.today()} --no-cache $DOCKER_DIR", args.image_type, args.kafka_archive)
+
     if args.test_only or not (args.build_only or args.test_only):
-        run_docker_tests(args.image, args.tag, args.kafka_url, args.image_type)
+        run_docker_tests(args.image, args.tag, args.kafka_url, args.kafka_archive, args.image_type, container_runtime)

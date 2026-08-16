@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.StateStore;
@@ -84,6 +85,7 @@ import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDur
  *
  * @see org.apache.kafka.streams.state.Stores
  */
+@InterfaceAudience.Public
 public class Materialized<K, V, S extends StateStore> {
     protected StoreSupplier<S> storeSupplier;
     protected String storeName;

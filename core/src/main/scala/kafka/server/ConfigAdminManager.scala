@@ -16,8 +16,6 @@
   */
 package kafka.server
 
-import kafka.server.logger.RuntimeLoggerManager
-
 import java.util
 import java.util.Properties
 import kafka.utils._
@@ -37,6 +35,7 @@ import org.apache.kafka.common.requests.ApiError
 import org.apache.kafka.common.resource.{Resource, ResourceType}
 import org.apache.kafka.metadata.ConfigRepository
 import org.apache.kafka.server.config.AbstractKafkaConfig
+import org.apache.kafka.server.logger.RuntimeLoggerManager
 import org.slf4j.{Logger, LoggerFactory}
 
 import scala.collection.{Map, Seq}

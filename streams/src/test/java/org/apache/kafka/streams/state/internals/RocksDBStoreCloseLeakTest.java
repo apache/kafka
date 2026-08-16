@@ -45,10 +45,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *     Constructing a {@code ColumnFamilyOptions} on the JNI side auto-allocates a default
  *     {@code BlockBasedTableFactory} and its {@code LRUCache}; the cache itself has no Java
  *     handle, so we assert on the options' own handle and rely on the destructor contract.</li>
- * <li>KIP-1035 close-path — {@link AbstractColumnFamilyAccessor#close} writes a closed-state
- *     marker to the offsets CF. If that {@code put} throws (e.g. during an EOSv2 fencing
- *     cascade or unclean shutdown), the column family handles must still be released. We
- *     simulate the throw via {@link ThrowingOnOffsetsPutDBAccessor} and observe via
+ * <li>KIP-1035 close-path — for non-transactional stores, {@link AbstractColumnFamilyAccessor#close}
+ *     writes a closed-state marker to the offsets CF. If that {@code put} throws (e.g. during
+ *     an EOSv2 fencing cascade or unclean shutdown), the column family handles must still be
+ *     released. We simulate the throw via {@link ThrowingOnOffsetsPutDBAccessor} and observe via
  *     {@code isOwningHandle()} because {@code RocksDBStore.close()} swallows the resulting
  *     {@code RocksDBException}.</li>
  * </ol>

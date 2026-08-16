@@ -12,8 +12,8 @@
   */
 package kafka.api
 
-import kafka.security.JaasTestUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.security.JaasTestUtils
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
 
 @Timeout(600)

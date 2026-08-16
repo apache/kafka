@@ -176,6 +176,8 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
 
     @Override
     public void close() {
+        // JaasOptionsUtils.createSSLSocketFactory() closes the SslFactory after obtaining an SSLSocketFactory,
+        // relying on close() not invalidating already returned SSLContext/SSLSocketFactory objects.
         this.sslContext = null;
     }
 

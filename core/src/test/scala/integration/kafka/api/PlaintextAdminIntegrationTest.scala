@@ -48,7 +48,7 @@ import org.apache.kafka.common.requests.DeleteRecordsRequest
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{ConsumerGroupState, ElectionType, GroupState, GroupType, IsolationLevel, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
+import org.apache.kafka.common.{ConsumerGroupState, ElectionType, GroupState, GroupType, IsolationLevel, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.network.SocketServerConfigs
@@ -631,41 +631,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @Test
-  def testListNodes(): Unit = {
-    client = createAdminClient
-    val brokerStrs = bootstrapServers().split(",").toList.sorted
-    var nodeStrs: List[String] = null
-    do {
-      val nodes = client.describeCluster().nodes().get().asScala
-      nodeStrs = nodes.map(node => s"${node.host}:${node.port}").toList.sorted
-    } while (nodeStrs.size < brokerStrs.size)
-    assertEquals(brokerStrs.mkString(","), nodeStrs.mkString(","))
-  }
-
-  @Test
-  def testListNodesWithFencedBroker(): Unit = {
-    client = createAdminClient
-    val fencedBrokerId = brokers.last.config.brokerId
-    killBroker(fencedBrokerId, JDuration.ofMillis(0))
-    // It takes a few seconds for a broker to get fenced after being killed
-    // So we retry until only 2 of 3 brokers returned in the result or the max wait is reached
-    TestUtils.retry(20000) {
-      assertTrue(client.describeCluster().nodes().get().asScala.size.equals(brokers.size - 1))
-    }
-
-    // List nodes again but this time include the fenced broker
-    val nodes = client.describeCluster(new DescribeClusterOptions().includeFencedBrokers(true)).nodes().get().asScala
-    assertTrue(nodes.size.equals(brokers.size))
-    nodes.foreach(node => {
-      if (node.id().equals(fencedBrokerId)) {
-        assertTrue(node.isFenced)
-      } else {
-        assertFalse(node.isFenced)
-      }
-    })
-  }
-
-  @Test
   def testAdminClientHandlingBadIPWithoutTimeout(): Unit = {
     val config = createConfig
     config.put(AdminClientConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, "1000")
@@ -723,124 +688,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         client.deleteTopics(util.List.of("test-topic"), timeoutOption).all().get())
       assertInstanceOf(classOf[TimeoutException], exception.getCause)
     } finally client.close(time.Duration.ZERO)
-  }
-
-  @Test
-  def testListTopicsWithOptionTimeoutMs(): Unit = {
-    client = createInvalidAdminClient()
-
-    try {
-      val timeoutOption = new ListTopicsOptions().timeoutMs(0)
-      val exception = assertThrows(classOf[ExecutionException], () =>
-        client.listTopics(timeoutOption).names().get())
-      assertInstanceOf(classOf[TimeoutException], exception.getCause)
-    } finally client.close(time.Duration.ZERO)
-  }
-
-  @Test
-  def testListTopicsWithOptionListInternal(): Unit = {
-    client = createAdminClient
-
-    val topicNames = client.listTopics(new ListTopicsOptions().listInternal(true)).names().get()
-    assertFalse(topicNames.isEmpty, "Expected to see internal topics")
-  }
-
-  @Test
-  def testDescribeTopicsWithOptionPartitionSizeLimitPerResponse(): Unit = {
-    client = createAdminClient
-
-    val testTopics = Seq("test-topic")
-    client.createTopics(testTopics.map(new NewTopic(_, 3, 1.toShort)).asJava).all.get()
-    waitForTopics(client, testTopics, List())
-
-    val topics = client.describeTopics(testTopics.asJava, new DescribeTopicsOptions().partitionSizeLimitPerResponse(1)).allTopicNames().get()
-    assertEquals(1, topics.size())
-    assertEquals(3, topics.get("test-topic").partitions().size())
-
-    client.deleteTopics(testTopics.asJava).all().get()
-    waitForTopics(client, List(), testTopics)
-  }
-
-  @Test
-  def testDescribeTopicsWithOptionTimeoutMs(): Unit = {
-    client = createInvalidAdminClient()
-
-    try {
-      val timeoutOption = new DescribeTopicsOptions().timeoutMs(0)
-      val exception = assertThrows(classOf[ExecutionException], () =>
-        client.describeTopics(util.List.of("test-topic"), timeoutOption).allTopicNames().get())
-      assertInstanceOf(classOf[TimeoutException], exception.getCause)
-    } finally client.close(time.Duration.ZERO)
-  }
-
-  /**
-    * describe should not auto create topics
-    */
-  @Test
-  def testDescribeNonExistingTopic(): Unit = {
-    client = createAdminClient
-
-    val existingTopic = "existing-topic"
-    client.createTopics(Seq(existingTopic).map(new NewTopic(_, 1, 1.toShort)).asJava).all.get()
-    waitForTopics(client, Seq(existingTopic), List())
-
-    val nonExistingTopic = "non-existing"
-    val results = client.describeTopics(util.List.of(nonExistingTopic, existingTopic)).topicNameValues()
-    assertEquals(existingTopic, results.get(existingTopic).get.name)
-    assertFutureThrows(classOf[UnknownTopicOrPartitionException], results.get(nonExistingTopic))
-  }
-
-  @Test
-  def testDescribeTopicsWithIds(): Unit = {
-    client = createAdminClient
-
-    val existingTopic = "existing-topic"
-    client.createTopics(Seq(existingTopic).map(new NewTopic(_, 1, 1.toShort)).asJava).all.get()
-    waitForTopics(client, Seq(existingTopic), List())
-    ensureConsistentKRaftMetadata()
-
-    val existingTopicId = brokers.head.metadataCache.getTopicId(existingTopic)
-
-    val nonExistingTopicId = Uuid.randomUuid()
-
-    val results = client.describeTopics(TopicCollection.ofTopicIds(util.List.of(existingTopicId, nonExistingTopicId))).topicIdValues()
-    assertEquals(existingTopicId, results.get(existingTopicId).get.topicId())
-    assertFutureThrows(classOf[UnknownTopicIdException], results.get(nonExistingTopicId))
-  }
-
-  @Test
-  def testDescribeTopicsWithNames(): Unit = {
-    client = createAdminClient
-
-    val existingTopic = "existing-topic"
-    client.createTopics(Seq(existingTopic).map(new NewTopic(_, 1, 1.toShort)).asJava).all.get()
-    waitForTopics(client, Seq(existingTopic), List())
-    ensureConsistentKRaftMetadata()
-
-    val existingTopicId = brokers.head.metadataCache.getTopicId(existingTopic)
-    val results = client.describeTopics(TopicCollection.ofTopicNames(util.List.of(existingTopic))).topicNameValues()
-    assertEquals(existingTopicId, results.get(existingTopic).get.topicId())
-  }
-
-  @Test
-  def testDescribeCluster(): Unit = {
-    client = createAdminClient
-    val result = client.describeCluster
-    val nodes = result.nodes.get()
-    val clusterId = result.clusterId().get()
-    assertEquals(brokers.head.dataPlaneRequestProcessor.clusterId, clusterId)
-    val controller = result.controller().get()
-
-    // In KRaft, we return a random brokerId as the current controller.
-    val brokerIds = brokers.map(_.config.brokerId).toSet
-    assertTrue(brokerIds.contains(controller.id))
-
-    val brokerEndpoints = bootstrapServers().split(",")
-    assertEquals(brokerEndpoints.size, nodes.size)
-    for (node <- nodes.asScala) {
-      val hostStr = s"${node.host}:${node.port}"
-      assertTrue(brokerEndpoints.contains(hostStr), s"Unknown host:port pair $hostStr in brokerVersionInfos")
-    }
   }
 
   @Test
@@ -4478,6 +4325,54 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       val describedNonExistingGroupResponse = client.describeStreamsGroups(util.List.of(nonExistingGroup))
       assertFutureThrows(classOf[GroupIdNotFoundException], describedNonExistingGroupResponse.all())
 
+    } finally {
+      Utils.closeQuietly(streams, "streams")
+      Utils.closeQuietly(client, "adminClient")
+    }
+  }
+
+  @Test
+  def testDescribeStreamsGroupsWithTopologyDescription(): Unit = {
+    val streamsGroupId = "stream_group_id"
+    val testTopicName = "test_topic"
+    val testNumPartitions = 1
+
+    val config = createConfig
+    client = Admin.create(config)
+
+    prepareTopics(List(testTopicName), testNumPartitions)
+    prepareRecords(testTopicName)
+
+    val streams = createStreamsGroup(
+      inputTopics = Set(testTopicName),
+      changelogTopics = Set(testTopicName + "-changelog"),
+      streamsGroupId = streamsGroupId
+    )
+    streams.poll(JDuration.ofMillis(500L))
+
+    try {
+      TestUtils.waitUntilTrue(() => {
+        val firstGroup = client.listGroups().all().get().stream()
+          .filter(g => g.groupId() == streamsGroupId).findFirst().orElse(null)
+        firstGroup != null && firstGroup.groupState().orElse(null) == GroupState.STABLE
+      }, "Streams group did not transition to STABLE before timeout")
+
+      // Without IncludeTopologyDescription the status stays at its NOT_REQUESTED default
+      // and no topology description is attached.
+      val groupWithoutTopology = client.describeStreamsGroups(util.List.of(streamsGroupId)).all().get().get(streamsGroupId)
+      assertNotNull(groupWithoutTopology)
+      assertEquals(StreamsGroupTopologyDescriptionStatus.NOT_REQUESTED, groupWithoutTopology.topologyDescriptionStatus())
+      assertTrue(groupWithoutTopology.topologyDescription().isEmpty)
+
+      // With IncludeTopologyDescription the brokers of this cluster have no topology
+      // description plugin configured, so there is no description to serve: NOT_STORED.
+      val groupWithTopology = client.describeStreamsGroups(
+        util.List.of(streamsGroupId),
+        new DescribeStreamsGroupsOptions().includeTopologyDescription(true)
+      ).all().get().get(streamsGroupId)
+      assertNotNull(groupWithTopology)
+      assertEquals(StreamsGroupTopologyDescriptionStatus.NOT_STORED, groupWithTopology.topologyDescriptionStatus())
+      assertTrue(groupWithTopology.topologyDescription().isEmpty)
     } finally {
       Utils.closeQuietly(streams, "streams")
       Utils.closeQuietly(client, "adminClient")

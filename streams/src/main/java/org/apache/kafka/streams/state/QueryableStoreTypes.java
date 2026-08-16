@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.Topology;
@@ -33,6 +35,7 @@ import java.util.Set;
  * These can be used with {@link KafkaStreams#store(StoreQueryParameters)}.
  * To access and query the {@link StateStore}s that are part of a {@link Topology}.
  */
+@InterfaceAudience.Public
 public final class QueryableStoreTypes {
 
     /**
@@ -149,6 +152,7 @@ public final class QueryableStoreTypes {
         }
 
         @Override
+        @SuppressKafkaInternalApiUsage("KIP-1265: override leaks internal StateStoreProvider — pending KIP review")
         public ReadOnlyKeyValueStore<K, V> create(
             final StateStoreProvider storeProvider,
             final String storeName
@@ -172,6 +176,7 @@ public final class QueryableStoreTypes {
         }
 
         @Override
+        @SuppressKafkaInternalApiUsage("KIP-1265: override leaks internal StateStoreProvider — pending KIP review")
         public ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> create(
             final StateStoreProvider storeProvider,
             final String storeName
@@ -203,6 +208,7 @@ public final class QueryableStoreTypes {
         }
 
         @Override
+        @SuppressKafkaInternalApiUsage("KIP-1265: override leaks internal StateStoreProvider — pending KIP review")
         public ReadOnlyWindowStore<K, V> create(
             final StateStoreProvider storeProvider,
             final String storeName
@@ -225,6 +231,7 @@ public final class QueryableStoreTypes {
         }
 
         @Override
+        @SuppressKafkaInternalApiUsage("KIP-1265: override leaks internal StateStoreProvider — pending KIP review")
         public ReadOnlyWindowStore<K, ValueAndTimestamp<V>> create(
             final StateStoreProvider storeProvider,
             final String storeName
@@ -256,6 +263,7 @@ public final class QueryableStoreTypes {
         }
 
         @Override
+        @SuppressKafkaInternalApiUsage("KIP-1265: override leaks internal StateStoreProvider — pending KIP review")
         public ReadOnlySessionStore<K, V> create(
             final StateStoreProvider storeProvider,
             final String storeName

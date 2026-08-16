@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 
@@ -34,6 +35,7 @@ import static org.apache.kafka.common.security.oauthbearer.internals.secured.Cac
  * <code>FileJwtRetriever</code> is an {@link JwtRetriever} that will load the contents
  * of a file, interpreting them as a JWT access key in the serialized form.
  */
+@InterfaceAudience.Public
 public class FileJwtRetriever implements JwtRetriever {
 
     private CachedFile<String> jwtFile;

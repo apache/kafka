@@ -1009,7 +1009,7 @@ class Partition(val topicPartition: TopicPartition,
    */
   private def maybeIncrementLeaderHW(leaderLog: UnifiedLog, currentTimeMs: Long = time.milliseconds): Boolean = {
     if (isUnderMinIsr) {
-      trace(s"Not increasing HWM because partition is under min ISR(ISR=${partitionState.isr}")
+      trace(s"Not increasing HWM because partition is under min ISR(ISR=${partitionState.isr})")
       return false
     }
     // maybeIncrementLeaderHW is in the hot path, the following code is written to

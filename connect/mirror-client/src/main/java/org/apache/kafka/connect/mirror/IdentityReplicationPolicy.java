@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,6 +30,7 @@ import java.util.Map;
  * N.B. MirrorMaker is not able to prevent cycles when using this replication policy, so take care that
  * your replication topology is acyclic. If migrating from legacy MirrorMaker, this will likely already be the case.
  */
+@InterfaceAudience.Public
 public class IdentityReplicationPolicy extends DefaultReplicationPolicy {
     private static final Logger log = LoggerFactory.getLogger(IdentityReplicationPolicy.class);
 

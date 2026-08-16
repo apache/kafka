@@ -19,6 +19,7 @@ package org.apache.kafka.streams.errors;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.errors.internals.DefaultErrorHandlerContext;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
@@ -29,6 +30,7 @@ import java.util.List;
  * Interface that specifies how an exception from source node deserialization
  * (e.g., reading from Kafka) should be handled.
  */
+@InterfaceAudience.Public
 public interface DeserializationExceptionHandler extends Configurable {
 
     /**

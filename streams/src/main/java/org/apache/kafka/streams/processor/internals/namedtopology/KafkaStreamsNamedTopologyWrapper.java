@@ -20,6 +20,8 @@ import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResult;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.internals.LogContext;
@@ -306,7 +308,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                 log.info("Successfully completed resetting offsets.");
                 break;
             } catch (final InterruptedException ex) {
-                ex.printStackTrace();
+                Thread.currentThread().interrupt();
                 log.error("Offset reset failed.", ex);
                 throw new StreamsException(ex);
             } catch (final ExecutionException ex) {
@@ -331,7 +333,9 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
             try {
                 Thread.sleep(100);
             } catch (final InterruptedException ex) {
-                ex.printStackTrace();
+                Thread.currentThread().interrupt();
+                log.warn("Interrupted during offset reset retry backoff", ex);
+                break;
             }
         }
     }
@@ -416,7 +420,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     }
 
     /**
-     * See {@link KafkaStreams#queryMetadataForKey(String, Object, Serializer)}
+     * See {@link KafkaStreams#queryMetadataForKey(String, Object, Headers, Serializer)}
      */
     public <K> KeyQueryMetadata queryMetadataForKey(final String storeName,
                                                     final K key,
@@ -424,7 +428,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                                                     final String topologyName) {
         verifyTopologyStateStore(topologyName, storeName);
         validateIsRunningOrRebalancing();
-        return streamsMetadataState.keyQueryMetadataForKey(storeName, key, keySerializer, topologyName);
+        return streamsMetadataState.keyQueryMetadataForKey(storeName, key, new RecordHeaders(), keySerializer, topologyName);
     }
 
     /**

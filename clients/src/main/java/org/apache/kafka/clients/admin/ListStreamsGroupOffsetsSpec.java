@@ -18,6 +18,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
@@ -29,6 +30,7 @@ import java.util.Map;
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
+@InterfaceAudience.Public
 public class ListStreamsGroupOffsetsSpec {
 
     private Collection<TopicPartition> topicPartitions;

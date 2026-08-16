@@ -20,6 +20,7 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclOperation;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collections;
 import java.util.List;
@@ -30,6 +31,7 @@ import java.util.stream.Collectors;
 /**
  * A detailed description of a single topic in the cluster.
  */
+@InterfaceAudience.Public
 public class TopicDescription {
     private final String name;
     private final boolean internal;

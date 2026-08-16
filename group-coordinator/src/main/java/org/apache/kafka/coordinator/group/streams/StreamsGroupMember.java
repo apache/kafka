@@ -364,10 +364,17 @@ public record StreamsGroupMember(String memberId,
      * Creates a member description for the streams group describe response from this member.
      *
      * @param targetAssignment The target assignment of this member in the corresponding group.
+     * @param taskOffsets      The latest per-task changelog offsets and end-offsets the member reported via its
+     *                         heartbeat. These are transient (never persisted) and read from live in-memory group
+     *                         state, so {@link MemberTaskOffsets#EMPTY} (or {@code null}) yields empty lists.
      *
      * @return The StreamsGroupMember mapped as StreamsGroupDescribeResponseData.Member.
      */
-    public StreamsGroupDescribeResponseData.Member asStreamsGroupDescribeMember(TasksTuple targetAssignment) {
+    public StreamsGroupDescribeResponseData.Member asStreamsGroupDescribeMember(
+        TasksTuple targetAssignment,
+        MemberTaskOffsets taskOffsets
+    ) {
+        final MemberTaskOffsets reportedOffsets = taskOffsets == null ? MemberTaskOffsets.EMPTY : taskOffsets;
         final StreamsGroupDescribeResponseData.Assignment describedTargetAssignment =
             new StreamsGroupDescribeResponseData.Assignment();
 
@@ -396,6 +403,8 @@ public record StreamsGroupMember(String memberId,
                     .setKey(entry.getKey())
                     .setValue(entry.getValue())
             ).toList())
+            .setTaskOffsets(taskOffsetsFromMap(reportedOffsets.taskOffsets()))
+            .setTaskEndOffsets(taskOffsetsFromMap(reportedOffsets.taskEndOffsets()))
             .setProcessId(processId)
             .setTopologyEpoch(topologyEpoch)
             .setUserEndpoint(
@@ -405,6 +414,18 @@ public record StreamsGroupMember(String memberId,
                         .setPort(endpoint.port())
                     ).orElse(null)
             );
+    }
+
+    private static List<StreamsGroupDescribeResponseData.TaskOffset> taskOffsetsFromMap(Map<String, Map<Integer, Long>> offsets) {
+        List<StreamsGroupDescribeResponseData.TaskOffset> taskOffsets = new ArrayList<>();
+        offsets.keySet().stream().sorted().forEach(subtopologyId ->
+            offsets.get(subtopologyId).entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(entry -> taskOffsets.add(new StreamsGroupDescribeResponseData.TaskOffset()
+                    .setSubtopologyId(subtopologyId)
+                    .setPartition(entry.getKey())
+                    .setOffset(entry.getValue()))));
+        return taskOffsets;
     }
 
     private static List<StreamsGroupDescribeResponseData.TaskIds> taskIdsFromMap(Map<String, Set<Integer>> tasks) {

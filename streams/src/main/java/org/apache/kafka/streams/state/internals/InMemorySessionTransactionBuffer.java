@@ -19,6 +19,8 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import java.util.Map;
@@ -34,6 +36,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 class InMemorySessionTransactionBuffer extends AbstractTransactionBuffer<InMemorySessionTransactionBuffer.SessionEntryKey> {
 
     private final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> endTimeMap;
+    private Position pendingPosition = Position.emptyPosition();
 
     InMemorySessionTransactionBuffer(
             final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> endTimeMap) {
@@ -160,6 +163,39 @@ class InMemorySessionTransactionBuffer extends AbstractTransactionBuffer<InMemor
             timeRange = endTimeMap;
         }
 
+        final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> copy = deepCopy(timeRange);
+        return baseIterator(forward ? copy : copy.descendingMap(), from, to, forward);
+    }
+
+    /**
+     * Committed-only point read for a single session, bypassing the staging layer. Non-owner (IQ)
+     * reads take the snapshot read-lock so the read reflects a single committed state rather than a
+     * commit in progress.
+     */
+    byte[] getCommitted(final Bytes key, final long startTime, final long endTime) {
+        if (Thread.currentThread() == ownerThread) {
+            return baseGet(key, startTime, endTime);
+        }
+        snapshotLock.readLock().lock();
+        try {
+            return baseGet(key, startTime, endTime);
+        } finally {
+            snapshotLock.readLock().unlock();
+        }
+    }
+
+    private byte[] baseGet(final Bytes key, final long startTime, final long endTime) {
+        final ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>> keyMap = endTimeMap.get(endTime);
+        if (keyMap == null) {
+            return null;
+        }
+        final ConcurrentNavigableMap<Long, byte[]> startTimeMap = keyMap.get(key);
+        return startTimeMap == null ? null : startTimeMap.get(startTime);
+    }
+
+    /** Deep-copies a bounded end-time range into a private map so iterators are isolated from later mutation. */
+    private static ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> deepCopy(
+            final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> timeRange) {
         final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> copy = new ConcurrentSkipListMap<>();
         for (final Map.Entry<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> endTimeEntry : timeRange.entrySet()) {
             final ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>> keyCopy = new ConcurrentSkipListMap<>();
@@ -168,8 +204,7 @@ class InMemorySessionTransactionBuffer extends AbstractTransactionBuffer<InMemor
             }
             copy.put(endTimeEntry.getKey(), keyCopy);
         }
-
-        return baseIterator(forward ? copy : copy.descendingMap(), from, to, forward);
+        return copy;
     }
 
     /**
@@ -192,6 +227,34 @@ class InMemorySessionTransactionBuffer extends AbstractTransactionBuffer<InMemor
                 timeRange.entrySet().iterator(),
                 ignored -> { },
                 forward));
+    }
+
+    void updatePosition(final StateStoreContext stateStoreContext) {
+        snapshotLock.writeLock().lock();
+        try {
+            StoreQueryUtils.updatePosition(pendingPosition, stateStoreContext);
+        } finally {
+            snapshotLock.writeLock().unlock();
+        }
+    }
+
+    Position pendingPosition() {
+        snapshotLock.readLock().lock();
+        try {
+            return pendingPosition.copy();
+        } finally {
+            snapshotLock.readLock().unlock();
+        }
+    }
+
+    void mergePendingPositionInto(final Position committed) {
+        snapshotLock.writeLock().lock();
+        try {
+            committed.merge(pendingPosition);
+            pendingPosition = Position.emptyPosition();
+        } finally {
+            snapshotLock.writeLock().unlock();
+        }
     }
 
     @Override
@@ -224,7 +287,7 @@ class InMemorySessionTransactionBuffer extends AbstractTransactionBuffer<InMemor
 
     @Override
     void discardPendingBatch() {
-        // no-op — no backend batch to discard
+        pendingPosition = Position.emptyPosition();
     }
 
     /**

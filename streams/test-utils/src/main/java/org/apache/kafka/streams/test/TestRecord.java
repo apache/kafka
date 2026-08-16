@@ -18,6 +18,7 @@ package org.apache.kafka.streams.test;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.TestInputTopic;
@@ -32,6 +33,7 @@ import java.util.StringJoiner;
  * If [a] record does not contain a timestamp,
  * {@link TestInputTopic} will auto advance it's time when the record is piped.
  */
+@InterfaceAudience.Public
 public class TestRecord<K, V> {
     private static final int NO_PARTITION = -1;
     private final Headers headers;

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientAssertionRequestFormatter;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientSecretRequestFormatter;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
@@ -52,6 +53,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_
  * The configuration required by the individual {@code JwtRetriever} classes will likely differ. Please refer to the
  * official Apache Kafka documentation for more information on these, and related configuration.
  */
+@InterfaceAudience.Public
 public class DefaultJwtRetriever implements JwtRetriever {
 
     private static final Logger LOG = LoggerFactory.getLogger(DefaultJwtRetriever.class);

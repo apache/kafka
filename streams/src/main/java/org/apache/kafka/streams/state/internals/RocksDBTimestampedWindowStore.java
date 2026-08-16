@@ -20,7 +20,7 @@ import org.apache.kafka.streams.state.TimestampedBytesStore;
 
 class RocksDBTimestampedWindowStore extends RocksDBWindowStore implements TimestampedBytesStore {
 
-    RocksDBTimestampedWindowStore(final SegmentedBytesStore bytesStore,
+    RocksDBTimestampedWindowStore(final AbstractRocksDBSegmentedBytesStore<?> bytesStore,
                                   final boolean retainDuplicates,
                                   final long windowSize) {
         super(bytesStore, retainDuplicates, windowSize);

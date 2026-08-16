@@ -18,6 +18,7 @@ package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.processor.api.Record;
 
 import java.util.Collections;
@@ -26,6 +27,7 @@ import java.util.List;
 /**
  * An interface that allows user code to inspect a record that has failed processing
  */
+@InterfaceAudience.Public
 public interface ProcessingExceptionHandler extends Configurable {
 
     /**

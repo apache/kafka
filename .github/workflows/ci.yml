@@ -19,7 +19,9 @@ on:
   push:
     branches:
       - 'trunk'
+      - '4.4'
       - '4.3'
+      - '4.2'
 
   schedule:
     - cron: '0 0 * * 6,0'    # Run on Saturday and Sunday at midnight UTC
@@ -28,7 +30,9 @@ on:
     types: [ opened, synchronize, ready_for_review, reopened ]
     branches:
       - 'trunk'
+      - '4.4'
       - '4.3'
+      - '4.2'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

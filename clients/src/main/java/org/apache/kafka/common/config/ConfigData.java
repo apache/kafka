@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.config;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 
 import java.util.Map;
@@ -23,6 +24,7 @@ import java.util.Map;
 /**
  * Configuration data from a {@link ConfigProvider}.
  */
+@InterfaceAudience.Public
 public class ConfigData {
 
     private final Map<String, String> data;

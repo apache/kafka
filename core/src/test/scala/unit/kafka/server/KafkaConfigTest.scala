@@ -45,6 +45,8 @@ import org.apache.logging.log4j.Level
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.function.Executable
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 import scala.util.Using
@@ -1110,7 +1112,9 @@ class KafkaConfigTest {
         case GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", -1)
         case GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", -1)
         case GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", -1)
+        case GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG => // ignore list
         case GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", -1)
+        case GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG => // ignore list
 
         /** Share coordinator configs */
         case ShareCoordinatorConfig.APPEND_LINGER_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", -2, -0.5)
@@ -1659,7 +1663,8 @@ class KafkaConfigTest {
     props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "1")
     props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
-    assertEquals("You must set `node.id` to the same value as `broker.id`.",
+    assertEquals("`node.id` and `broker.id` must be set to the same value. " +
+      "`broker.id` is deprecated, please use `node.id` instead.",
       assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props)).getMessage())
   }
 
@@ -1706,6 +1711,38 @@ class KafkaConfigTest {
     val originals = config.originals()
     assertEquals("3", originals.get(ServerConfigs.BROKER_ID_CONFIG))
     assertEquals("3", originals.get(KRaftConfigs.NODE_ID_CONFIG))
+  }
+
+  // The warning must fire regardless of doLog, since the broker startup path passes doLog = false.
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testBrokerIdDeprecationWarning(doLog: Boolean): Unit = {
+    val deprecationWarning = "The 'broker.id' configuration is deprecated and will be removed in " +
+      "Apache Kafka 5.0. Please use 'node.id' instead."
+
+    // Register on the KafkaConfig logger rather than the root logger, so that the warning is only
+    // captured if it is actually logged by `object KafkaConfig`.
+    Using.resource(LogCaptureAppender.createAndRegister(KafkaConfig.getClass)) { appender =>
+      appender.setClassLogger(KafkaConfig.getClass, Level.WARN)
+      // The appender cannot be reset, so the counts asserted below are cumulative.
+      def warningCount: Int = appender.getMessages.asScala.count(_ == deprecationWarning)
+
+      // Only node.id set: no warning.
+      val props = new Properties()
+      props.putAll(kraftProps())
+      KafkaConfig.fromProps(props, doLog)
+      assertEquals(0, warningCount)
+
+      // Both broker.id and node.id set to the same value: deprecation warning.
+      props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "3")
+      KafkaConfig.fromProps(props, doLog)
+      assertEquals(1, warningCount)
+
+      // Only broker.id set: deprecation warning.
+      props.remove(KRaftConfigs.NODE_ID_CONFIG)
+      KafkaConfig.fromProps(props, doLog)
+      assertEquals(2, warningCount)
+    }
   }
 
   @Test

@@ -30,7 +30,7 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
-import org.apache.kafka.server.config.ServerConfigs;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.metrics.MetricConfigs;
 import org.apache.kafka.test.MockConsumerInterceptor;
 import org.apache.kafka.test.MockDeserializer;
@@ -102,7 +102,7 @@ public class EndToEndClusterIdTest {
             String roles = (String) configs.get("process.roles");
             if (roles == null) return;
 
-            String id = (String) configs.get(ServerConfigs.BROKER_ID_CONFIG);
+            String id = (String) configs.get(KRaftConfigs.NODE_ID_CONFIG);
             controllerId = roles.contains("controller") ? id : null;
             brokerId    = roles.contains("broker")    ? id : null;
         }

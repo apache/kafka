@@ -53,10 +53,65 @@ public final class ClientUtils {
     private ClientUtils() {
     }
 
-    public static List<InetSocketAddress> parseAndValidateAddresses(AbstractConfig config) {
-        List<String> urls = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
-        String clientDnsLookupConfig = config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG);
-        return parseAndValidateAddresses(urls, clientDnsLookupConfig);
+    /**
+     * Resolves a single URL to one or more InetSocketAddress based on the DNS lookup strategy.
+     *
+     * @param url the original URL string (for logging)
+     * @param host the hostname extracted from the URL
+     * @param port the port extracted from the URL
+     * @param clientDnsLookup the DNS lookup strategy
+     * @return list of resolved addresses (may be empty if addresses are unresolved)
+     * @throws UnknownHostException if DNS resolution fails
+     */
+    private static List<InetSocketAddress> resolveAddress(
+        String url,
+        String host,
+        Integer port,
+        ClientDnsLookup clientDnsLookup) throws UnknownHostException {
+
+        List<InetSocketAddress> addresses = new ArrayList<>();
+
+        if (clientDnsLookup == ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY) {
+            InetAddress[] inetAddresses = InetAddress.getAllByName(host);
+            for (InetAddress inetAddress : inetAddresses) {
+                String resolvedCanonicalName = inetAddress.getCanonicalHostName();
+                InetSocketAddress address = new InetSocketAddress(resolvedCanonicalName, port);
+                if (address.isUnresolved()) {
+                    log.warn("Couldn't resolve server {} from {} as DNS resolution of the canonical hostname {} failed for {}",
+                            url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, resolvedCanonicalName, host);
+                } else {
+                    addresses.add(address);
+                }
+            }
+        } else {
+            InetSocketAddress address = new InetSocketAddress(host, port);
+            if (address.isUnresolved()) {
+                log.warn("Couldn't resolve server {} from {} as DNS resolution failed for {}",
+                        url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, host);
+            } else {
+                addresses.add(address);
+            }
+        }
+
+        return addresses;
+    }
+
+    public static List<InetSocketAddress> parseAddresses(List<String> urls, ClientDnsLookup clientDnsLookup) {
+        List<InetSocketAddress> addresses = new ArrayList<>();
+        if (urls == null) {
+            return addresses;
+        }
+        for (String url : urls) {
+            if (Thread.currentThread().isInterrupted()) {
+                break;
+            }
+            try {
+                addresses.addAll(resolveAddress(url, getHost(url), getPort(url), clientDnsLookup));
+            } catch (UnknownHostException e) {
+                // Silently ignore - this matches the original behavior
+            }
+        }
+        return addresses;
     }
 
     public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls, String clientDnsLookupConfig) {
@@ -73,25 +128,7 @@ public final class ClientUtils {
                     if (host == null || port == null)
                         throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
 
-                    if (clientDnsLookup == ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY) {
-                        InetAddress[] inetAddresses = InetAddress.getAllByName(host);
-                        for (InetAddress inetAddress : inetAddresses) {
-                            String resolvedCanonicalName = inetAddress.getCanonicalHostName();
-                            InetSocketAddress address = new InetSocketAddress(resolvedCanonicalName, port);
-                            if (address.isUnresolved()) {
-                                log.warn("Couldn't resolve server {} from {} as DNS resolution of the canonical hostname {} failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, resolvedCanonicalName, host);
-                            } else {
-                                addresses.add(address);
-                            }
-                        }
-                    } else {
-                        InetSocketAddress address = new InetSocketAddress(host, port);
-                        if (address.isUnresolved()) {
-                            log.warn("Couldn't resolve server {} from {} as DNS resolution failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, host);
-                        } else {
-                            addresses.add(address);
-                        }
-                    }
+                    addresses.addAll(resolveAddress(url, host, port, clientDnsLookup));
 
                 } catch (IllegalArgumentException e) {
                     throw new ConfigException("Invalid port in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
@@ -151,6 +188,7 @@ public final class ClientUtils {
     }
 
     public static NetworkClient createNetworkClient(AbstractConfig config,
+                                                    List<String> bootstrapServers,
                                                     Metrics metrics,
                                                     String metricsGroupPrefix,
                                                     LogContext logContext,
@@ -161,6 +199,7 @@ public final class ClientUtils {
                                                     Sensor throttleTimeSensor,
                                                     ClientTelemetrySender clientTelemetrySender) {
         return createNetworkClient(config,
+                bootstrapServers,
                 config.getString(CommonClientConfigs.CLIENT_ID_CONFIG),
                 metrics,
                 metricsGroupPrefix,
@@ -177,6 +216,7 @@ public final class ClientUtils {
     }
 
     public static NetworkClient createNetworkClient(AbstractConfig config,
+                                                    List<String> bootstrapServers,
                                                     String clientId,
                                                     Metrics metrics,
                                                     String metricsGroupPrefix,
@@ -201,6 +241,14 @@ public final class ClientUtils {
                     metricsGroupPrefix,
                     channelBuilder,
                     logContext);
+            ClientDnsLookup dnsLookup = ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG));
+
+            BootstrapConfiguration bootstrapConfiguration = BootstrapConfiguration.enabled(
+                bootstrapServers,
+                dnsLookup,
+                config.getLong(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG),
+                config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG));
+
             return new NetworkClient(metadataUpdater,
                     metadata,
                     selector,
@@ -222,6 +270,7 @@ public final class ClientUtils {
                     clientTelemetrySender,
                     config.getLong(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG),
                     MetadataRecoveryStrategy.forName(config.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG)),
+                    bootstrapConfiguration,
                     config.getBoolean(CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG)
             );
         } catch (Throwable t) {

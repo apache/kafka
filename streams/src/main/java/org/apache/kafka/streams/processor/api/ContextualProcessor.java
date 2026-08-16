@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.processor.api;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * An abstract implementation of {@link Processor} that manages the {@link ProcessorContext} instance.
@@ -24,6 +27,7 @@ package org.apache.kafka.streams.processor.api;
  * @param <KOut> the type of output keys
  * @param <VOut> the type of output values
  */
+@InterfaceAudience.Public
 public abstract class ContextualProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, KOut, VOut> {
 
     private ProcessorContext<KOut, VOut> context;

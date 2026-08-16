@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.Position;
 
 import java.util.Map;
 import java.util.Objects;
@@ -32,6 +34,7 @@ class InMemoryWindowTransactionBuffer extends AbstractTransactionBuffer<InMemory
 
     private final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> segmentMap;
     private final boolean retainDuplicates;
+    private Position pendingPosition = Position.emptyPosition();
 
     InMemoryWindowTransactionBuffer(
             final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> segmentMap,
@@ -151,12 +154,40 @@ class InMemoryWindowTransactionBuffer extends AbstractTransactionBuffer<InMemory
             timeRange = segmentMap;
         }
 
+        final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> copy = deepCopy(timeRange);
+        return baseIterator(forward ? copy : copy.descendingMap(), from, to, forward);
+    }
+
+    /**
+     * Committed-only point read for a single window, bypassing the staging layer. Non-owner (IQ)
+     * reads take the snapshot read-lock so the read reflects a single committed state rather than a
+     * commit in progress.
+     */
+    byte[] getCommitted(final long timestamp, final Bytes key) {
+        if (Thread.currentThread() == ownerThread) {
+            return baseGet(timestamp, key);
+        }
+        snapshotLock.readLock().lock();
+        try {
+            return baseGet(timestamp, key);
+        } finally {
+            snapshotLock.readLock().unlock();
+        }
+    }
+
+    private byte[] baseGet(final long timestamp, final Bytes key) {
+        final ConcurrentNavigableMap<Bytes, byte[]> kvMap = segmentMap.get(timestamp);
+        return kvMap == null ? null : kvMap.get(key);
+    }
+
+    /** Deep-copies a bounded segment range into a private map so iterators are isolated from later mutation. */
+    private static ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> deepCopy(
+            final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> timeRange) {
         final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> copy = new ConcurrentSkipListMap<>();
         for (final Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>> segment : timeRange.entrySet()) {
             copy.put(segment.getKey(), new ConcurrentSkipListMap<>(segment.getValue()));
         }
-
-        return baseIterator(forward ? copy : copy.descendingMap(), from, to, forward);
+        return copy;
     }
 
     /**
@@ -174,6 +205,34 @@ class InMemoryWindowTransactionBuffer extends AbstractTransactionBuffer<InMemory
         final Bytes keyTo = (to != null) ? to.key() : null;
         return new InMemoryWindowStore.WindowEntryKeyIterator(
             keyFrom, keyTo, timeRange.entrySet().iterator(), retainDuplicates, forward);
+    }
+
+    void updatePosition(final StateStoreContext stateStoreContext) {
+        snapshotLock.writeLock().lock();
+        try {
+            StoreQueryUtils.updatePosition(pendingPosition, stateStoreContext);
+        } finally {
+            snapshotLock.writeLock().unlock();
+        }
+    }
+
+    Position pendingPosition() {
+        snapshotLock.readLock().lock();
+        try {
+            return pendingPosition.copy();
+        } finally {
+            snapshotLock.readLock().unlock();
+        }
+    }
+
+    void mergePendingPositionInto(final Position committed) {
+        snapshotLock.writeLock().lock();
+        try {
+            committed.merge(pendingPosition);
+            pendingPosition = Position.emptyPosition();
+        } finally {
+            snapshotLock.writeLock().unlock();
+        }
     }
 
     @Override
@@ -197,7 +256,7 @@ class InMemoryWindowTransactionBuffer extends AbstractTransactionBuffer<InMemory
 
     @Override
     void discardPendingBatch() {
-        // no-op — no backend batch to discard
+        pendingPosition = Position.emptyPosition();
     }
 
 }

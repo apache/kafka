@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.state.DslStoreSuppliers;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
@@ -31,6 +32,7 @@ import java.util.Map;
  * @param <V1>  this value type
  * @param <V2>  other value type
  */
+@InterfaceAudience.Public
 public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V1, V2>> {
 
     protected final Serde<K> keySerde;

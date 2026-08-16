@@ -56,8 +56,19 @@ import static org.apache.kafka.streams.state.internals.Utils.rawTimestampedValue
  *   <li>Read: {@code [timestamp][value]} → {@code [headers][timestamp][value]} (add empty headers)</li>
  * </ul>
  */
-public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte[]> {
+public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte[]>, WithRetentionPeriod {
     final WindowStore<Bytes, byte[]> store;
+
+    /**
+     * Report the retention of the store being adapted. This adapter holds its delegate in a field
+     * rather than as a {@link WrappedStateStore}, so {@code extractRetentionPeriod}'s unwrap walk
+     * terminates here; without this it resolves -1 and the windowed restore optimisation is
+     * silently skipped for every store behind the adapter.
+     */
+    @Override
+    public long retentionPeriod() {
+        return WithRetentionPeriod.resolveRetentionPeriod(store);
+    }
 
     public TimestampedToHeadersWindowStoreAdapter(final WindowStore<Bytes, byte[]> store) {
         if (!store.persistent()) {

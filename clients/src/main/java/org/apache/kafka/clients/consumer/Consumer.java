@@ -21,6 +21,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.metrics.KafkaMetric;
 
 import java.io.Closeable;
@@ -36,6 +37,7 @@ import java.util.regex.Pattern;
  * @see KafkaConsumer
  * @see MockConsumer
  */
+@InterfaceAudience.Public
 public interface Consumer<K, V> extends Closeable {
 
     /**
@@ -64,8 +66,8 @@ public interface Consumer<K, V> extends Closeable {
     void assign(Collection<TopicPartition> partitions);
 
     /**
-    * @see KafkaConsumer#subscribe(Pattern, ConsumerRebalanceListener)
-    */
+     * @see KafkaConsumer#subscribe(Pattern, ConsumerRebalanceListener)
+     */
     void subscribe(Pattern pattern, ConsumerRebalanceListener callback);
 
     /**
@@ -87,6 +89,11 @@ public interface Consumer<K, V> extends Closeable {
      * @see KafkaConsumer#unsubscribe()
      */
     void unsubscribe();
+
+    /**
+     * @see KafkaConsumer#setRebalanceListener(RebalanceListener)
+     */
+    void setRebalanceListener(RebalanceListener callback);
 
     /**
      * @see KafkaConsumer#poll(Duration)
@@ -177,7 +184,7 @@ public interface Consumer<K, V> extends Closeable {
     Map<TopicPartition, OffsetAndMetadata> committed(Set<TopicPartition> partitions, final Duration timeout);
 
     /**
-     * See {@link KafkaConsumer#clientInstanceId(Duration)}}
+     * See {@link KafkaConsumer#clientInstanceId(Duration)}
      */
     Uuid clientInstanceId(Duration timeout);
 

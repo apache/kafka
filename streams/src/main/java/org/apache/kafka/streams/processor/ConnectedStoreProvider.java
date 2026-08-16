@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Named;
@@ -94,6 +95,7 @@ import java.util.Set;
  * @see KStream#processValues(FixedKeyProcessorSupplier, String...)
  * @see KStream#processValues(FixedKeyProcessorSupplier, Named, String...)
  */
+@InterfaceAudience.Public
 public interface ConnectedStoreProvider {
 
     /**

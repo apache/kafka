@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Map;
 import java.util.Objects;
@@ -60,6 +63,7 @@ import java.util.Objects;
  * sensor.record(messageSize);
  * }</pre>
  */
+@InterfaceAudience.Public
 public final class MetricName {
 
     private final String name;

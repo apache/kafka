@@ -124,17 +124,21 @@ public enum MetadataVersion {
     // BrokerRegistrationChangeRecord and RegisterBrokerRecord are updated
     IBP_4_3_IV0(30, "4.3", "IV0", true),
 
+    // IBP_4_4_IV0 enables dead-letter queue support for share groups (KIP-1191).
+    IBP_4_4_IV0(31, "4.4", "IV0", false),
+
+    // Add support for CIDR-based ACL host patterns (KIP-1276).
+    IBP_4_4_IV1(32, "4.4", "IV1", true),
+
+    // Add support for controller unregistration (KIP-1312).
+    IBP_4_4_IV2(33, "4.4", "IV2", true);
+
     //
     // NOTE: MetadataVersions after this point are unstable and may be changed.
     // If users attempt to use an unstable MetadataVersion, they will get an error unless
     // they have set the configuration unstable.feature.versions.enable=true.
     // Please move this comment when updating the LATEST_PRODUCTION constant.
     //
-
-    // IBP_4_4_IV0 enables dead-letter queue support for share groups (KIP-1191). When this version
-    // is finalized, so will the DLQ support.
-    IBP_4_4_IV0(31, "4.4", "IV0", false);
-
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
@@ -153,7 +157,7 @@ public enum MetadataVersion {
      * <strong>Think carefully before you update this value. ONCE A METADATA VERSION IS PRODUCTION,
      * IT CANNOT BE CHANGED.</strong>
      */
-    public static final MetadataVersion LATEST_PRODUCTION = IBP_4_3_IV0;
+    public static final MetadataVersion LATEST_PRODUCTION = IBP_4_4_IV2;
     // If you change the value above please also update
     // LATEST_STABLE_METADATA_VERSION version in tests/kafkatest/version.py
 
@@ -213,6 +217,10 @@ public enum MetadataVersion {
         return this.isAtLeast(IBP_4_0_IV1);
     }
 
+    public boolean isCidrAclSupported() {
+        return this.isAtLeast(IBP_4_4_IV1);
+    }
+
     public boolean isMigrationSupported() {
         return this.isAtLeast(MetadataVersion.IBP_3_4_IV0);
     }
@@ -247,6 +255,10 @@ public enum MetadataVersion {
 
     public boolean isControllerRegistrationSupported() {
         return this.isAtLeast(MetadataVersion.IBP_3_7_IV0);
+    }
+
+    public boolean isControllerUnregistrationSupported() {
+        return this.isAtLeast(MetadataVersion.IBP_4_4_IV2);
     }
 
     public short partitionChangeRecordVersion() {

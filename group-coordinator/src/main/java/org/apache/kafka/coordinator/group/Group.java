@@ -210,11 +210,22 @@ public interface Group {
     void requestMetadataRefresh();
 
     /**
-     * Returns whether this group should be expired or not.
+     * Whether this group's metadata record should be tombstoned by the natural-expiration sweep
+     * after its offsets have been expired. Returning {@code false} preserves the group's
+     * metadata for the current sweep — useful when a group-type-specific async cleanup needs to
+     * run first (e.g. the streams topology-description plugin cycle). The next sweep
+     * re-evaluates and proceeds once the override returns {@code true}.
      *
-     * @return whether the group should be expired.
+     * <p><b>This does not prevent expiration of the group's offsets.</b> The caller always runs
+     * {@code cleanupExpiredOffsets} for the group before consulting this method, so a
+     * {@code false} return only suppresses the group-metadata tombstone — committed offsets
+     * past {@code offsets.retention.ms} are still removed.
+     *
+     * @param config The broker-level group coordinator config; passed so per-group-type overrides
+     *               can read broker-side feature flags (e.g. whether a streams topology plugin is
+     *               configured).
      */
-    default boolean shouldExpire() {
+    default boolean shouldExpire(GroupCoordinatorConfig config) {
         return true;
     }
 }

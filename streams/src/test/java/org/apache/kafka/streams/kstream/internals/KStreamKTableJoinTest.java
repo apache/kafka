@@ -17,8 +17,15 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.KeyValue;
@@ -28,6 +35,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Joined;
@@ -35,6 +43,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
@@ -44,6 +53,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
@@ -85,7 +95,7 @@ public class KStreamKTableJoinTest {
         stream.join(table, MockValueJoiner.TOSTRING_JOINER).process(supplier);
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
         StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
-        driver = new TopologyTestDriver(builder.build(), props);
+        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build();
         inputStreamTopic = driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
         inputTableTopic = driver.createInputTopic(tableTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
@@ -146,7 +156,7 @@ public class KStreamKTableJoinTest {
             Joined.with(Serdes.Integer(), Serdes.String(), Serdes.String(), "Grace", grace)
         ).process(supplier);
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
-        driver = new TopologyTestDriver(builder.build(), props);
+        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build();
         inputStreamTopic = driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
         inputTableTopic = driver.createInputTopic("tableTopic2", new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
@@ -309,6 +319,82 @@ public class KStreamKTableJoinTest {
         pushToStream(1, "X");
         processor.checkAndClearProcessResult(
             new KeyValueTimestamp<>(0, "X0+Y0", 0));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldDeserializeBufferedValueWithPutTimeHeadersDuringEviction(final boolean withHeaders) {
+        builder = new StreamsBuilder();
+        final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
+        final KStream<Integer, String> stream = builder.stream(streamTopic, consumed);
+        final KTable<Integer, String> table = builder.table("tableTopic2", consumed, Materialized.as(
+            Stores.persistentVersionedKeyValueStore("V-grace", Duration.ofMinutes(5))));
+        stream.join(table,
+            MockValueJoiner.TOSTRING_JOINER,
+            // The built-in leaf serdes (String, primitives, …) ignore the `headers` argument, so with any of them the test would pass identically
+            // with and without the fix (a false green). The HeaderValueAppendingSerde is the minimal serde whose deserializer reflects the `headers`
+            // argument into the value
+            Joined.with(Serdes.Integer(), new HeaderValueAppendingSerde(), Serdes.String(), "Grace", Duration.ofMillis(2))
+        ).process(supplier);
+        final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
+        driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build();
+        inputStreamTopic = driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+        inputTableTopic = driver.createInputTopic("tableTopic2", new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+        processor = supplier.theCapturedProcessor();
+
+        // Table entry so the buffered stream record finds a join match when it is evicted.
+        inputTableTopic.pipeInput(0, "Y0", 0L);
+
+        // Record A is buffered (grace not yet elapsed) with header v=first at t=0. Nothing is emitted yet.
+        inputStreamTopic.pipeInput(new TestRecord<>(0, "X0", headers("first"), 0L));
+        processor.checkAndClearProcessResult(EMPTY);
+
+        // Record B carries header v=second and its t=10 timestamp advances stream time past A's grace window, which
+        // triggers A's eviction while the live processor context still holds B's headers (v=second). B itself is
+        // buffered, not evicted, so it produces no output here.
+        inputStreamTopic.pipeInput(new TestRecord<>(1, "X1", headers("second"), 10L));
+
+        // A must be deserialized with its own put-time header (first), NOT B's live-context header (second). Before
+        // the fix this asserted "X0[second]+Y0".
+        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0[first]+Y0", 0));
+    }
+
+    private static Headers headers(final String value) {
+        return new RecordHeaders(new Header[]{new RecordHeader("v", value.getBytes(StandardCharsets.UTF_8))});
+    }
+
+    /**
+     * A stream-side value {@link Serde} whose <em>deserializer</em> output depends on the headers it is handed: it
+     * appends the value of the {@code "v"} header to the deserialized string. Serialization is a plain string encode
+     * and ignores headers. This fixture exists so tests can observe <em>which</em> headers reached the buffer's value
+     * deserializer during eviction -- a plain serde would ignore the headers argument and hide the difference.
+     */
+    private static final class HeaderValueAppendingSerde implements Serde<String> {
+        @Override
+        public Serializer<String> serializer() {
+            return new StringSerializer();
+        }
+
+        @Override
+        public Deserializer<String> deserializer() {
+            return new Deserializer<>() {
+                @Override
+                public String deserialize(final String topic, final byte[] data) {
+                    return data == null ? null : new String(data, StandardCharsets.UTF_8);
+                }
+
+                @Override
+                public String deserialize(final String topic, final Headers headers, final byte[] data) {
+                    final String base = deserialize(topic, data);
+                    final Header header = headers == null ? null : headers.lastHeader("v");
+                    if (base == null || header == null) {
+                        return base;
+                    }
+                    return base + "[" + new String(header.value(), StandardCharsets.UTF_8) + "]";
+                }
+            };
+        }
     }
 
     @ParameterizedTest

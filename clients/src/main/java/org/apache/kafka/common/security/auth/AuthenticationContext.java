@@ -14,16 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.security.auth;
 
-import java.net.InetAddress;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
+import java.net.InetAddress;
 
 /**
  * An object representing contextual information from the authentication session. See
  * {@link PlaintextAuthenticationContext}, {@link SaslAuthenticationContext}
  * and {@link SslAuthenticationContext}. This class is only used in the broker.
  */
+@InterfaceAudience.Public
 public interface AuthenticationContext {
     /**
      * Underlying security protocol of the authentication session.

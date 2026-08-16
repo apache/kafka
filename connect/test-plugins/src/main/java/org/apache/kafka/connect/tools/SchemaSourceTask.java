@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.tools;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
@@ -33,6 +34,7 @@ import java.util.Map;
 /**
  * Task implementation for {@link SchemaSourceConnector}.
  */
+@InterfaceAudience.Public
 public class SchemaSourceTask extends SourceTask {
 
     private static final Logger log = LoggerFactory.getLogger(SchemaSourceTask.class);

@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 
@@ -46,6 +47,7 @@ import java.util.stream.Collectors;
  * Client to interact with MirrorMaker internal topics (checkpoints, heartbeats) on a given cluster.
  * Whenever possible use the methods from {@link RemoteClusterUtils} instead of directly using MirrorClient.
  */
+@InterfaceAudience.Public
 public class MirrorClient implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(MirrorClient.class);
 

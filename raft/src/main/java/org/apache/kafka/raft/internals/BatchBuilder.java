@@ -26,8 +26,9 @@ import org.apache.kafka.common.record.internal.DefaultRecord;
 import org.apache.kafka.common.record.internal.DefaultRecordBatch;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.RecordBatch;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.internals.ByteUtils;
+import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 
 import java.io.DataOutputStream;
@@ -73,7 +74,7 @@ public class BatchBuilder<T> {
         int maxBytes
     ) {
         this.initialBuffer = buffer;
-        this.batchOutput = new ByteBufferOutputStream(buffer);
+        this.batchOutput = new SingleByteBufferOutputStream(buffer);
         this.serde = serde;
         this.compression = compression;
         this.baseOffset = baseOffset;

@@ -18,6 +18,7 @@ package org.apache.kafka.connect.sink;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.transforms.Transformation;
 
@@ -52,6 +53,7 @@ import java.util.Map;
  * </ol>
  *
  */
+@InterfaceAudience.Public
 public abstract class SinkTask implements Task {
 
     /**

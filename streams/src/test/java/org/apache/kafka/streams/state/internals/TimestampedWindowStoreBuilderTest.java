@@ -39,6 +39,7 @@ import java.time.Duration;
 import java.util.Collections;
 
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.Is.is;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -196,6 +197,32 @@ public class TimestampedWindowStoreBuilderTest {
             .withCachingDisabled()
             .build();
         assertThat(((WrappedStateStore) store).wrapped(), instanceOf(WindowToTimestampedWindowByteStoreAdapter.class));
+    }
+
+    @ValueSource(strings = {TIMESTAMP_STORE_NAME, TIMEORDERED_STORE_NAME})
+    @ParameterizedTest
+    public void shouldExposeRetentionPeriodThroughTimestampedAdapter(final String storeName) {
+        final long retentionMs = 10L;
+        setUp(storeName);
+        when(supplier.get()).thenReturn(new RocksDBWindowStore(
+            new RocksDBSegmentedBytesStore(
+                "name",
+                "metric-scope",
+                retentionMs,
+                5L,
+                new WindowKeySchema()),
+            false,
+            1L));
+
+        final TimestampedWindowStore<String, String> store = builder
+            .withLoggingDisabled()
+            .withCachingDisabled()
+            .build();
+
+        // typed as StateStore so this compiles, and fails, when the adapter does not expose it
+        final StateStore adapter = ((WrappedStateStore) store).wrapped();
+        assertThat(adapter, instanceOf(WithRetentionPeriod.class));
+        assertThat(((WithRetentionPeriod) adapter).retentionPeriod(), is(retentionMs));
     }
 
     @ValueSource(strings = {TIMESTAMP_STORE_NAME, TIMEORDERED_STORE_NAME})

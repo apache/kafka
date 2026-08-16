@@ -16,6 +16,13 @@
  */
 package org.apache.kafka.coordinator.group.streams.assignor;
 
+import org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec;
+import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TopologyDescriber;
+
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -56,13 +63,14 @@ public class MockAssignor implements TaskAssignor {
         }
 
         // Copy existing assignment and fill temporary data structures
-        for (Map.Entry<String, AssignmentMemberSpec> memberEntry : groupSpec.members().entrySet()) {
-            final String memberId = memberEntry.getKey();
-            final AssignmentMemberSpec memberSpec = memberEntry.getValue();
+        for (final String memberId : groupSpec.memberIds()) {
+            // Deep-copy: the partition sets are grown below when assigning unassigned tasks, and the ones owned by
+            // the group spec are unmodifiable.
+            Map<String, Set<Integer>> activeTasks = new HashMap<>();
+            groupSpec.memberAssignmentState(memberId).activeTasks().forEach((subtopologyId, partitions) ->
+                activeTasks.put(subtopologyId, new HashSet<>(partitions)));
 
-            Map<String, Set<Integer>> activeTasks = new HashMap<>(memberSpec.activeTasks());
-
-            newTargetAssignment.put(memberId, new MemberAssignment(activeTasks, new HashMap<>(), new HashMap<>()));
+            newTargetAssignment.put(memberId, new MemberAssignment(activeTasks, new HashMap<>()));
             for (Map.Entry<String, Set<Integer>> entry : activeTasks.entrySet()) {
                 final String subtopologyId = entry.getKey();
                 final Set<Integer> taskIds = entry.getValue();

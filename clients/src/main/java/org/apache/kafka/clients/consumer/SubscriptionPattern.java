@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.consumer;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Objects;
 
@@ -23,6 +26,7 @@ import java.util.Objects;
  * This just keeps the String representation of the pattern, and all validations to ensure
  * it is RE2/J compatible are delegated to the broker.
  */
+@InterfaceAudience.Public
 public class SubscriptionPattern {
 
     /**

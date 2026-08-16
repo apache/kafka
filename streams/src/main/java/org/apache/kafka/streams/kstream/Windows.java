@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.util.Map;
@@ -36,6 +37,7 @@ import java.util.Map;
  * @see SessionWindows
  * @see TimestampExtractor
  */
+@InterfaceAudience.Public
 public abstract class Windows<W extends Window> {
 
     /**

@@ -3196,9 +3196,13 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     val allowAllOpsAcl = new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, ALL, ALLOW)
     addAndVerifyAcls(Set(allowAllOpsAcl), groupResource)
 
-    // Member on inter-broker listener has all access and is assigned the matching topic
+    // Member on inter-broker listener has all access and is assigned the matching topic.
+    // The first heartbeat only schedules the asynchronous regex resolution, so retry until
+    // the resolution completes and the assignment is available.
     var member1Response = sendAndReceiveFirstRegexHeartbeat("memberWithAllAccess", interBrokerListenerName)
-    member1Response = sendAndReceiveRegexHeartbeat(member1Response, interBrokerListenerName, Some(2))
+    TestUtils.tryUntilNoAssertionError() {
+      member1Response = sendAndReceiveRegexHeartbeat(member1Response, interBrokerListenerName, Some(2))
+    }
 
     // Member on client listener has no topic describe access, but is assigned a partition of the
     // unauthorized topic. This is leaking unauthorized topic metadata to member2. Simply filtering out

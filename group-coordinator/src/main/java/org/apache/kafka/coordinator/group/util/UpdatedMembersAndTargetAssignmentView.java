@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.util;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
 
 /**
  * A view of a group's members, static members, and target assignment after unwritten membership
@@ -45,18 +46,26 @@ public class UpdatedMembersAndTargetAssignmentView<M, A> {
     private final OverlayMap<String, A> targetAssignment;
 
     /**
+     * Gets a member's instance id, or {@code null} if the member is not static.
+     */
+    private final Function<M, String> getInstanceId;
+
+    /**
      * @param members          The group members. Must not be modified during the lifetime of the view.
      * @param staticMembers    The static group members. Must not be modified during the lifetime of the view.
      * @param targetAssignment The target assignment per member id. Must not be modified during the lifetime of the view.
+     * @param getInstanceId    Gets a member's instance id, or {@code null} if the member is not static.
      */
     public UpdatedMembersAndTargetAssignmentView(
         Map<String, M> members,
         Map<String, String> staticMembers,
-        Map<String, A> targetAssignment
+        Map<String, A> targetAssignment,
+        Function<M, String> getInstanceId
     ) {
         this.members = new OverlayMap<>(Objects.requireNonNull(members));
         this.staticMembers = new OverlayMap<>(Objects.requireNonNull(staticMembers));
         this.targetAssignment = new OverlayMap<>(Objects.requireNonNull(targetAssignment));
+        this.getInstanceId = Objects.requireNonNull(getInstanceId);
     }
 
     /**
@@ -85,12 +94,21 @@ public class UpdatedMembersAndTargetAssignmentView<M, A> {
      * member for the same instance id, the previous static member's target assignment is moved to
      * the new member and the previous static member is removed from the view.
      *
-     * @param memberId   The member id.
-     * @param instanceId The instance id of the member, or {@code null} if the member is not static.
-     * @param member     The member to add or update.
+     * @param memberId The member id.
+     * @param member   The member to add or update.
      */
-    public void addOrUpdateMember(String memberId, String instanceId, M member) {
-        members.put(memberId, member);
+    public void addOrUpdateMember(String memberId, M member) {
+        M previousMember = members.put(memberId, member);
+        String previousInstanceId = previousMember != null ? getInstanceId.apply(previousMember) : null;
+        String instanceId = getInstanceId.apply(member);
+
+        // Remove the old static member mapping when the instance id has changed.
+        // We don't remove the mapping when the instance id has not changed, otherwise we won't
+        // detect static member replacement correctly below.
+        if (previousInstanceId != null && !previousInstanceId.equals(instanceId)) {
+            staticMembers.remove(previousInstanceId);
+        }
+
         if (instanceId != null) {
             String previousMemberId = staticMembers.put(instanceId, memberId);
             if (previousMemberId != null && !memberId.equals(previousMemberId)) {
@@ -110,11 +128,11 @@ public class UpdatedMembersAndTargetAssignmentView<M, A> {
     /**
      * Removes a member.
      *
-     * @param memberId   The member id.
-     * @param instanceId The instance id of the member, or {@code null} if the member is not static.
+     * @param memberId The member id.
      */
-    public void removeMember(String memberId, String instanceId) {
-        members.remove(memberId);
+    public void removeMember(String memberId) {
+        M member = members.remove(memberId);
+        String instanceId = member != null ? getInstanceId.apply(member) : null;
         if (instanceId != null && memberId.equals(staticMembers.get(instanceId))) {
             staticMembers.remove(instanceId);
         }

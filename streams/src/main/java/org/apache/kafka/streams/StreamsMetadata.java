@@ -17,6 +17,7 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.state.HostInfo;
 
 import java.util.Set;
@@ -24,6 +25,7 @@ import java.util.Set;
 /**
  * Metadata of a Kafka Streams client.
  */
+@InterfaceAudience.Public
 public interface StreamsMetadata {
 
     /**

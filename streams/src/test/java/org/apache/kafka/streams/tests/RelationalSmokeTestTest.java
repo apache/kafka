@@ -22,6 +22,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -39,15 +40,15 @@ public class RelationalSmokeTestTest extends SmokeTestUtil {
     @Test
     public void verifySmokeTestLogic() {
         try (final TopologyTestDriver driver =
-                 new TopologyTestDriver(RelationalSmokeTest.App.getTopology(),
-                                        RelationalSmokeTest.App.getConfig(
-                                            "nothing:0",
-                                            "test",
-                                            "test",
-                                            StreamsConfig.AT_LEAST_ONCE,
-                                            "classic",
-                                            TestUtils.tempDirectory().getAbsolutePath()
-                                        ))) {
+                     new TopologyTestDriverBuilder(RelationalSmokeTest.App.getTopology())
+                         .withConfig(RelationalSmokeTest.App.getConfig(
+                             "nothing:0",
+                             "test",
+                             "test",
+                             StreamsConfig.AT_LEAST_ONCE,
+                             "classic",
+                             TestUtils.tempDirectory().getAbsolutePath()))
+                         .build()) {
 
             final TestInputTopic<Integer, RelationalSmokeTest.Article> articles =
                 driver.createInputTopic(RelationalSmokeTest.ARTICLE_SOURCE,

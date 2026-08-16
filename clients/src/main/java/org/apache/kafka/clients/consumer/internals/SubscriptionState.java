@@ -19,9 +19,11 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.RebalanceConsumer;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
@@ -46,6 +48,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -111,8 +114,9 @@ public class SubscriptionState {
     /* Default offset reset strategy */
     private final AutoOffsetResetStrategy defaultResetStrategy;
 
-    /* User-provided listener to be invoked when assignment changes */
-    private Optional<ConsumerRebalanceListener> rebalanceListener = Optional.empty();
+    /* Current listener context to trigger rebalance listener callbacks. Nonnull - defaults to NULL_LISTENER. */
+    private final AtomicReference<ListenerContext> listenerContext =
+            new AtomicReference<>(ListenerContext.NULL_LISTENER);
 
     private int assignmentId = 0;
 
@@ -189,20 +193,17 @@ public class SubscriptionState {
             throw new IllegalStateException(SUBSCRIPTION_EXCEPTION_MESSAGE);
     }
 
-    public synchronized boolean subscribe(Set<String> topics, Optional<ConsumerRebalanceListener> listener) {
-        registerRebalanceListener(listener);
+    public synchronized boolean subscribe(Set<String> topics) {
         setSubscriptionType(SubscriptionType.AUTO_TOPICS);
         return changeSubscription(topics);
     }
 
-    public synchronized void subscribe(Pattern pattern, Optional<ConsumerRebalanceListener> listener) {
-        registerRebalanceListener(listener);
+    public synchronized void subscribe(Pattern pattern) {
         setSubscriptionType(SubscriptionType.AUTO_PATTERN);
         this.subscribedPattern = pattern;
     }
 
-    public synchronized void subscribe(SubscriptionPattern pattern, Optional<ConsumerRebalanceListener> listener) {
-        registerRebalanceListener(listener);
+    public synchronized void subscribe(SubscriptionPattern pattern) {
         setSubscriptionType(SubscriptionType.AUTO_PATTERN_RE2J);
         this.subscribedRe2JPattern = pattern;
     }
@@ -216,7 +217,7 @@ public class SubscriptionState {
     }
 
     public synchronized boolean subscribeToShareGroup(Set<String> topics) {
-        registerRebalanceListener(Optional.empty());
+        this.listenerContext.set(ListenerContext.NULL_LISTENER);
         setSubscriptionType(SubscriptionType.AUTO_TOPICS_SHARE);
         return changeSubscription(topics);
     }
@@ -328,8 +329,28 @@ public class SubscriptionState {
         this.assignment.set(assignedPartitionStates);
     }
 
-    private void registerRebalanceListener(Optional<ConsumerRebalanceListener> listener) {
-        this.rebalanceListener = Objects.requireNonNull(listener, "RebalanceListener cannot be null");
+    /**
+     * Visible for tests only. Used when a consumer instance is unavailable for registration such as in simple
+     * tests or membership management.
+     * @param listener the listener; must not be null
+     */
+    public synchronized void setRebalanceListener(RebalanceListener listener) {
+        Objects.requireNonNull(listener, "Listener must not be null when setting a rebalance listener");
+        this.listenerContext.set(new ListenerContext(listener));
+    }
+
+    /**
+     * Sets the current rebalance listener for this subscription.
+     * @param listener the listener
+     * @param consumer the consumer instance to orchestrate callbacks in {@link RebalanceConsumer}. must not be null
+     */
+    public synchronized void setRebalanceListener(RebalanceListener listener, Consumer<?, ?> consumer) {
+        if (listener != null) {
+            Objects.requireNonNull(consumer, "Consumer must not be null when a listener is provided");
+            this.listenerContext.set(new ListenerContext(listener, consumer));
+        } else {
+            this.listenerContext.set(ListenerContext.NULL_LISTENER);
+        }
     }
 
     /**
@@ -351,6 +372,7 @@ public class SubscriptionState {
         this.assignedTopicIds = Collections.emptySet();
         this.subscribedPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
+        this.listenerContext.set(ListenerContext.NULL_LISTENER);
         this.assignmentId++;
     }
 
@@ -374,7 +396,7 @@ public class SubscriptionState {
 
     /**
      * @return The RE2J compatible pattern in use, provided via a call to
-     * {@link #subscribe(SubscriptionPattern, Optional)}.
+     * {@link #subscribe(SubscriptionPattern)}.
      * Null if there is no SubscriptionPattern in use.
      */
     public synchronized SubscriptionPattern subscriptionPattern() {
@@ -902,16 +924,6 @@ public class SubscriptionState {
         return result;
     }
 
-    public synchronized boolean hasPartitionsNeedingValidation(long nowMs) {
-        for (TopicPartitionState tps  : assignment.partitionStateValues()) {
-            if (tps.awaitingValidation() && !tps.awaitingRetryBackoff(nowMs) && tps.position != null) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     public synchronized boolean isAssigned(TopicPartition tp) {
         return assignment.contains(tp);
     }
@@ -1004,8 +1016,80 @@ public class SubscriptionState {
         assignment.moveToEnd(tp);
     }
 
-    public synchronized Optional<ConsumerRebalanceListener> rebalanceListener() {
-        return rebalanceListener;
+    /** @return true if a {@link RebalanceListener} has been registered with this subscription. */
+    public synchronized boolean hasRebalanceListener() {
+        return listenerContext.get().rebalanceListener != null;
+    }
+
+    public synchronized Optional<String> listenerName() {
+        return Optional.ofNullable(listenerContext.get().rebalanceListener)
+                .map(listener -> listener.getClass().getName());
+    }
+
+    private synchronized ListenerContext listenerContext() {
+        return listenerContext.get();
+    }
+
+    /** Invoke {@link RebalanceListener#onPartitionsAssigned(Collection, RebalanceConsumer)} on the given partitions.*/
+    public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+        dispatch(partitions, RebalanceListener::onPartitionsAssigned);
+    }
+
+    /** Invoke {@link RebalanceListener#onPartitionsRevoked(Collection, RebalanceConsumer)} on the given partitions.*/
+    public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+        dispatch(partitions, RebalanceListener::onPartitionsRevoked);
+    }
+
+    /** Invoke {@link RebalanceListener#onPartitionsLost(Collection, RebalanceConsumer)} on the given partitions.*/
+    public void onPartitionsLost(Collection<TopicPartition> partitions) {
+        dispatch(partitions, RebalanceListener::onPartitionsLost);
+    }
+
+    private void dispatch(
+            Collection<TopicPartition> partitions,
+            TriConsumer<RebalanceListener, Collection<TopicPartition>, RebalanceConsumer> method) {
+        ListenerContext lc = listenerContext();
+
+        if (lc.rebalanceListener == null)
+            return;
+        if (lc.consumer == null)
+            throw new IllegalStateException("Rebalance consumer has not been initialized");
+        invokeRebalanceListener(
+                partitions, lc.consumer, (parts, view) -> method.accept(lc.rebalanceListener, parts, view));
+    }
+
+
+    private void invokeRebalanceListener(
+            Collection<TopicPartition> partitions,
+            Consumer<?, ?> rebalanceConsumer,
+            java.util.function.BiConsumer<Collection<TopicPartition>, RebalanceConsumer> callback) {
+        try (var view = new DelegatingRebalanceConsumer(rebalanceConsumer)) {
+            callback.accept(partitions, view);
+        }
+    }
+
+    @FunctionalInterface
+    private interface TriConsumer<A, B, C> {
+        void accept(A a, B b, C c);
+    }
+
+    private static class ListenerContext {
+        private static final ListenerContext NULL_LISTENER = new ListenerContext(null);
+
+        /** User-provided listener to be invoked when assignment changes */
+        private final RebalanceListener rebalanceListener;
+        /** The consumer that last registered a RebalanceListener via {@link Consumer#setRebalanceListener(RebalanceListener)}. */
+        private final Consumer<?, ?> consumer;
+
+        private ListenerContext(RebalanceListener listener) {
+            this.rebalanceListener = listener;
+            this.consumer = null;
+        }
+
+        private ListenerContext(RebalanceListener listener, Consumer<?, ?> consumer) {
+            this.rebalanceListener = listener;
+            this.consumer = consumer;
+        }
     }
 
     private static class TopicPartitionState {

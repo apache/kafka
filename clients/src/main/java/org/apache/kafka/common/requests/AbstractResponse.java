@@ -292,6 +292,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return DeleteShareGroupOffsetsResponse.parse(readable, version);
             case STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE:
                 return StreamsGroupTopologyDescriptionUpdateResponse.parse(readable, version);
+            case UNREGISTER_CONTROLLER:
+                return UnregisterControllerResponse.parse(readable, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));
@@ -304,7 +306,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
      * quota violation, sends out responses before throttling.
      */
     public boolean shouldClientThrottle(short version) {
-        return false;
+        return apiKey.messageType.responseSchemas()[version].get("throttle_time_ms") != null;
     }
 
     public ApiKeys apiKey() {

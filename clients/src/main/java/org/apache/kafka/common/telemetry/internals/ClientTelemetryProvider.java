@@ -23,9 +23,9 @@ import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.metrics.MetricsContext;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import io.opentelemetry.proto.common.v1.AnyValue;
 import io.opentelemetry.proto.common.v1.KeyValue;
@@ -117,8 +117,7 @@ public class ClientTelemetryProvider implements Configurable {
      */
     synchronized void updateLabels(Map<String, String> labels) {
         final Resource.Builder resourceBuilder = resource.toBuilder();
-        Map<String, String> finalLabels = resource.getAttributesList().stream().collect(Collectors.toMap(
-            KeyValue::getKey, kv -> kv.getValue().getStringValue()));
+        Map<String, String> finalLabels = resourceLabels();
         finalLabels.putAll(labels);
 
         resourceBuilder.clearAttributes();
@@ -133,6 +132,19 @@ public class ClientTelemetryProvider implements Configurable {
      */
     Resource resource() {
         return resource;
+    }
+
+    /**
+     * The resource attributes as plain labels.
+     *
+     * @return resource attributes keyed by label name, preserving insertion order.
+     */
+    synchronized Map<String, String> resourceLabels() {
+        Map<String, String> labels = new LinkedHashMap<>();
+        for (KeyValue attribute : resource.getAttributesList()) {
+            labels.put(attribute.getKey(), attribute.getValue().getStringValue());
+        }
+        return labels;
     }
 
     /**

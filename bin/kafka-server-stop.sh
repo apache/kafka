@@ -30,7 +30,7 @@ if [[ "$OSNAME" == "OS/390" ]]; then
 elif [[ "$OSNAME" == "OS400" ]]; then
     PIDS=$(ps -Af | grep -i 'kafka\.Kafka' | grep java | grep -v grep | awk '{print $2}')
 else
-    PIDS=$(ps ax | grep ' kafka\.Kafka ' | grep java | grep -v grep | awk '{print $1}'| xargs)
+    PIDS=$(ps axww | grep ' kafka\.Kafka ' | grep java | grep -v grep | awk '{print $1}'| xargs)
 fi
 
 if [ -z "$PIDS" ]; then

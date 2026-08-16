@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -31,6 +33,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
+@InterfaceAudience.Public
+@SuppressKafkaInternalApiUsage("KIP-1265: implements internal WindowedSerializer — pending KIP review to promote the parent or refactor the Streams windowed-serializer hierarchy")
 public class TimeWindowedSerializer<T> implements WindowedSerializer<T> {
 
     /**

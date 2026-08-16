@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -41,6 +42,7 @@ import java.util.Map;
  * <p>
  * This implementation currently does nothing with the topic names or header keys.
  */
+@InterfaceAudience.Public
 public class StringConverter implements Converter, HeaderConverter {
 
     private final StringSerializer serializer = new StringSerializer();

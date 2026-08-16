@@ -16,12 +16,14 @@
  */
 package org.apache.kafka.connect.source;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
 
 /**
  * A context to allow a {@link SourceConnector} to interact with the Kafka Connect runtime.
  */
+@InterfaceAudience.Public
 public interface SourceConnectorContext extends ConnectorContext {
 
     /**

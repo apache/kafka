@@ -18,6 +18,7 @@
 package org.apache.kafka.connect.connector.policy;
 
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.components.ConnectPlugin;
@@ -38,6 +39,7 @@ import java.util.List;
  * <code>connector.client.config.override.policy</code>, and <code>class</code> set to the
  * ConnectorClientConfigOverridePolicy class name.
  */
+@InterfaceAudience.Public
 public interface ConnectorClientConfigOverridePolicy extends Configurable, AutoCloseable, ConnectPlugin {
 
 

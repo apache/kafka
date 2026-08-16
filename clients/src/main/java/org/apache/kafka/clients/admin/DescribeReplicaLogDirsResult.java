@@ -18,6 +18,7 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartitionReplica;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 
 import java.util.Collection;
@@ -28,6 +29,7 @@ import java.util.concurrent.ExecutionException;
 /**
  * The result of {@link Admin#describeReplicaLogDirs(Collection)}.
  */
+@InterfaceAudience.Public
 public class DescribeReplicaLogDirsResult {
     private final Map<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>> futures;
 

@@ -23,7 +23,7 @@ import java.util.{Collections, Random}
 import java.util.concurrent.atomic.AtomicInteger
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.cluster.Partition
-import kafka.server.QuotaFactory.QuotaManagers
+import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
 import kafka.server._
 import kafka.utils._
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition}

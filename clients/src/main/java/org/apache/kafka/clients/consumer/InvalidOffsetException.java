@@ -14,10 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Set;
 
@@ -27,6 +29,7 @@ import java.util.Set;
  * @see NoOffsetForPartitionException
  * @see OffsetOutOfRangeException
  */
+@InterfaceAudience.Public
 public abstract class InvalidOffsetException extends KafkaException {
 
     /**

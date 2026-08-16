@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.tools;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
@@ -29,6 +30,7 @@ import java.util.Map;
 /**
  * Task implementation for {@link MockSourceConnector}.
  */
+@InterfaceAudience.Public
 public class MockSourceTask extends SourceTask {
     private static final Logger log = LoggerFactory.getLogger(MockSourceTask.class);
 

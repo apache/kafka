@@ -19,6 +19,7 @@ package org.apache.kafka.tools;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.utils.Utils;
 
@@ -48,6 +49,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -791,5 +793,159 @@ public class ProducerPerformanceTest {
         ProducerPerformance.ConfigPostProcessor configs = new ProducerPerformance.ConfigPostProcessor(parser, args);
         assertEquals("10", configs.producerProps.get(ProducerConfig.LINGER_MS_CONFIG));
         assertEquals("32768", configs.producerProps.get(ProducerConfig.BATCH_SIZE_CONFIG));
+    }
+
+    @Test
+    public void testKeyDistributionNoneByDefault() throws IOException, ArgumentParserException {
+        ArgumentParser parser = ProducerPerformance.argParser();
+        String[] args = new String[]{
+            "--topic", "Hello-Kafka",
+            "--num-records", "5",
+            "--throughput", "100",
+            "--record-size", "100",
+            "--bootstrap-server", "localhost:9000"};
+        ProducerPerformance.ConfigPostProcessor configs = new ProducerPerformance.ConfigPostProcessor(parser, args);
+        assertEquals(ProducerPerformance.KeyDistribution.NONE, configs.keyDistribution);
+        assertNull(configs.recordKeyRange);
+    }
+
+    @Test
+    public void testKeyDistributionRange() throws IOException {
+        List<ProducerRecord<byte[], byte[]>> sentRecords = new ArrayList<>();
+        doReturn(producerMock).when(producerPerformanceSpy).createKafkaProducer(any(Properties.class));
+        doAnswer(invocation -> {
+            sentRecords.add(invocation.getArgument(0));
+            producerPerformanceSpy.cb.onCompletion(null, null);
+            return null;
+        }).when(producerMock).send(any(), any());
+
+        String[] args = new String[]{
+            "--topic", "Hello-Kafka",
+            "--num-records", "6",
+            "--throughput", "100",
+            "--record-size", "100",
+            "--key-distribution", "range",
+            "--record-key-range", "3",
+            "--bootstrap-server", "localhost:9000"};
+        producerPerformanceSpy.start(args);
+
+        assertEquals(6, sentRecords.size());
+        for (int i = 0; i < 6; i++) {
+            byte[] expectedKey = Integer.toString(i % 3).getBytes(StandardCharsets.UTF_8);
+            assertArrayEquals(expectedKey, sentRecords.get(i).key(),
+                "Record " + i + " should have key " + (i % 3));
+        }
+    }
+
+    @Test
+    public void testKeyDistributionRandom() throws IOException {
+        List<ProducerRecord<byte[], byte[]>> sentRecords = new ArrayList<>();
+        doReturn(producerMock).when(producerPerformanceSpy).createKafkaProducer(any(Properties.class));
+        doAnswer(invocation -> {
+            sentRecords.add(invocation.getArgument(0));
+            producerPerformanceSpy.cb.onCompletion(null, null);
+            return null;
+        }).when(producerMock).send(any(), any());
+
+        String[] args = new String[]{
+            "--topic", "Hello-Kafka",
+            "--num-records", "10",
+            "--throughput", "100",
+            "--record-size", "100",
+            "--key-distribution", "random",
+            "--record-key-range", "5",
+            "--bootstrap-server", "localhost:9000"};
+        producerPerformanceSpy.start(args);
+
+        assertEquals(10, sentRecords.size());
+        for (ProducerRecord<byte[], byte[]> record : sentRecords) {
+            assertNotNull(record.key(), "Key should not be null for random distribution");
+            int keyValue = Integer.parseInt(new String(record.key(), StandardCharsets.UTF_8));
+            assertTrue(keyValue >= 0 && keyValue < 5, "Key should be in [0, 5): " + keyValue);
+        }
+    }
+
+    @Test
+    public void testNullKeyWhenDistributionNone() throws IOException {
+        List<ProducerRecord<byte[], byte[]>> sentRecords = new ArrayList<>();
+        doReturn(producerMock).when(producerPerformanceSpy).createKafkaProducer(any(Properties.class));
+        doAnswer(invocation -> {
+            sentRecords.add(invocation.getArgument(0));
+            producerPerformanceSpy.cb.onCompletion(null, null);
+            return null;
+        }).when(producerMock).send(any(), any());
+
+        String[] args = new String[]{
+            "--topic", "Hello-Kafka",
+            "--num-records", "3",
+            "--throughput", "100",
+            "--record-size", "100",
+            "--bootstrap-server", "localhost:9000"};
+        producerPerformanceSpy.start(args);
+
+        assertEquals(3, sentRecords.size());
+        for (ProducerRecord<byte[], byte[]> record : sentRecords) {
+            assertNull(record.key(), "Key should be null when --key-distribution is 'none'");
+        }
+    }
+
+    @Test
+    public void testInvalidRecordKeyRange() {
+        ArgumentParser parser = ProducerPerformance.argParser();
+        String[] args = new String[]{
+            "--topic", "Hello-Kafka",
+            "--num-records", "5",
+            "--throughput", "100",
+            "--record-size", "100",
+            "--bootstrap-server", "localhost:9000",
+            "--key-distribution", "range",
+            "--record-key-range", "0"};
+        assertEquals("--record-key-range should be greater than zero.",
+            assertThrows(ArgumentParserException.class,
+                () -> new ProducerPerformance.ConfigPostProcessor(parser, args)).getMessage());
+    }
+
+    @Test
+    public void testKeyDistributionRequiresKeyRange() {
+        ArgumentParser parser = ProducerPerformance.argParser();
+        String[] args = new String[]{
+            "--topic", "Hello-Kafka",
+            "--num-records", "5",
+            "--throughput", "100",
+            "--record-size", "100",
+            "--bootstrap-server", "localhost:9000",
+            "--key-distribution", "range"};
+        assertEquals("--record-key-range is required when --key-distribution is 'range' or 'random'.",
+            assertThrows(ArgumentParserException.class,
+                () -> new ProducerPerformance.ConfigPostProcessor(parser, args)).getMessage());
+    }
+
+    @Test
+    public void testKeyRangeRequiresKeyDistribution() {
+        ArgumentParser parser = ProducerPerformance.argParser();
+        String[] args = new String[]{
+            "--topic", "Hello-Kafka",
+            "--num-records", "5",
+            "--throughput", "100",
+            "--record-size", "100",
+            "--bootstrap-server", "localhost:9000",
+            "--record-key-range", "5"};
+        assertEquals("--key-distribution must be 'range' or 'random' when --record-key-range is specified.",
+            assertThrows(ArgumentParserException.class,
+                () -> new ProducerPerformance.ConfigPostProcessor(parser, args)).getMessage());
+    }
+
+    @Test
+    public void testRandomSeedCustomValue() throws IOException, ArgumentParserException {
+        ArgumentParser parser = ProducerPerformance.argParser();
+        String[] args = new String[]{
+            "--topic", "Hello-Kafka",
+            "--num-records", "5",
+            "--throughput", "100",
+            "--record-size", "100",
+            "--bootstrap-server", "localhost:9000",
+            "--random-seed", "42"};
+        ProducerPerformance.ConfigPostProcessor configs = new ProducerPerformance.ConfigPostProcessor(parser, args);
+        assertEquals(42L, configs.randomSeed);
     }
 }

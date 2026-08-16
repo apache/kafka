@@ -14,12 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Exception thrown when attempting to define a credential that does not meet the criteria for acceptability
  * (for example, attempting to create a SCRAM credential with an empty username or password or too few/many iterations).
  */
+@InterfaceAudience.Public
 public class UnacceptableCredentialException extends ApiException {
 
     private static final long serialVersionUID = 1L;

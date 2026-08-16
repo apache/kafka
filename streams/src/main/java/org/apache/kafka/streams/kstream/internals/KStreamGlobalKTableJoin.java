@@ -17,22 +17,22 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
+import org.apache.kafka.streams.kstream.ValueJoinerWithStreamAndMappedKey;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 
 import java.util.Optional;
 
-class KStreamGlobalKTableJoin<K1, V1, K2, V2, VOut> implements ProcessorSupplier<K1, V1, K1, VOut> {
+class KStreamGlobalKTableJoin<StreamKey, StreamValue, TableKey, TableValue, VOut> implements ProcessorSupplier<StreamKey, StreamValue, StreamKey, VOut> {
 
-    private final KTableValueGetterSupplier<K2, V2> valueGetterSupplier;
-    private final ValueJoinerWithKey<? super K1, ? super V1, ? super V2, ? extends VOut> joiner;
-    private final KeyValueMapper<? super K1, ? super V1, ? extends K2> mapper;
+    private final KTableValueGetterSupplier<TableKey, TableValue> valueGetterSupplier;
+    private final ValueJoinerWithStreamAndMappedKey<? super StreamKey, ? super TableKey, ? super StreamValue, ? super TableValue, ? extends VOut> joiner;
+    private final KeyValueMapper<? super StreamKey, ? super StreamValue, ? extends TableKey> mapper;
     private final boolean leftJoin;
 
-    KStreamGlobalKTableJoin(final KTableValueGetterSupplier<K2, V2> valueGetterSupplier,
-                            final ValueJoinerWithKey<? super K1, ? super V1, ? super V2, ? extends VOut> joiner,
-                            final KeyValueMapper<? super K1, ? super V1, ? extends K2> mapper,
+    KStreamGlobalKTableJoin(final KTableValueGetterSupplier<TableKey, TableValue> valueGetterSupplier,
+                            final ValueJoinerWithStreamAndMappedKey<? super StreamKey, ? super TableKey, ? super StreamValue, ? super TableValue, ? extends VOut> joiner,
+                            final KeyValueMapper<? super StreamKey, ? super StreamValue, ? extends TableKey> mapper,
                             final boolean leftJoin) {
         this.valueGetterSupplier = valueGetterSupplier;
         this.joiner = joiner;
@@ -41,7 +41,7 @@ class KStreamGlobalKTableJoin<K1, V1, K2, V2, VOut> implements ProcessorSupplier
     }
 
     @Override
-    public Processor<K1, V1, K1, VOut> get() {
+    public Processor<StreamKey, StreamValue, StreamKey, VOut> get() {
         return new KStreamKTableJoinProcessor<>(valueGetterSupplier.get(), mapper, joiner, leftJoin, Optional.empty(), Optional.empty());
     }
 }

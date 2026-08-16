@@ -29,6 +29,7 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -159,7 +160,7 @@ public abstract class AbstractJoinIntegrationTest {
             final String storeName,
             final Properties properties,
             final Topology topology) {
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, properties)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(properties).build()) {
             final TestInputTopic<Long, String> right = driver.createInputTopic(INPUT_TOPIC_RIGHT, new LongSerializer(), new StringSerializer());
             final TestInputTopic<Long, String> left = driver.createInputTopic(INPUT_TOPIC_LEFT, new LongSerializer(), new StringSerializer());
             final TestOutputTopic<Long, String> outputTopic = driver.createOutputTopic(OUTPUT_TOPIC, new LongDeserializer(), new StringDeserializer());
@@ -203,7 +204,7 @@ public abstract class AbstractJoinIntegrationTest {
             final String storeName,
             final Properties streamsConfig,
             final Topology topology) {
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(streamsConfig).build()) {
             final TestInputTopic<Long, String> right = driver.createInputTopic(INPUT_TOPIC_RIGHT, new LongSerializer(), new StringSerializer());
             final TestInputTopic<Long, String> left = driver.createInputTopic(INPUT_TOPIC_LEFT, new LongSerializer(), new StringSerializer());
             final TestOutputTopic<Long, String> outputTopic = driver.createOutputTopic(OUTPUT_TOPIC, new LongDeserializer(), new StringDeserializer());
@@ -239,7 +240,7 @@ public abstract class AbstractJoinIntegrationTest {
             final List<List<TestRecord<Long, String>>> expectedResult,
             final Properties streamsConfig,
             final Topology topology) {
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(streamsConfig).build()) {
             final TestInputTopic<Long, String> left = driver.createInputTopic(INPUT_TOPIC_LEFT, new LongSerializer(), new StringSerializer());
             final TestOutputTopic<Long, String> outputTopic = driver.createOutputTopic(OUTPUT_TOPIC, new LongDeserializer(), new StringDeserializer());
 

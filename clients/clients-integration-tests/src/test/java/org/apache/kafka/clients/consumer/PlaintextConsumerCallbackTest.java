@@ -40,6 +40,7 @@ import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -218,9 +219,11 @@ public class PlaintextConsumerCallbackTest {
     private void subscribeAndExpectOnPartitionsAssigned(Consumer<byte[], byte[]> consumer, List<String> topics, Collection<TopicPartition> expectedPartitionsInCallback) throws InterruptedException {
         var partitionsAssigned = new AtomicBoolean(false);
         AtomicReference<Collection<TopicPartition>> partitionsFromCallback = new AtomicReference<>();
-        consumer.subscribe(topics, new ConsumerRebalanceListener() {
+        consumer.subscribe(topics);
+        consumer.setRebalanceListener(new RebalanceListener() {
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            public void onPartitionsAssigned(
+                    Collection<TopicPartition> partitions, RebalanceConsumer rc) {
                 if (partitions.containsAll(expectedPartitionsInCallback)) {
                     partitionsFromCallback.set(partitions);
                     partitionsAssigned.set(true);
@@ -228,7 +231,7 @@ public class PlaintextConsumerCallbackTest {
             }
 
             @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
                 // noop
             }
         });
@@ -291,15 +294,267 @@ public class PlaintextConsumerCallbackTest {
         }
     }
 
+    @ClusterTest
+    public void testClassicConsumerAwareSeekAndCommitOnPartitionsAssigned() throws InterruptedException {
+        testConsumerAwareSeekAndCommitOnPartitionsAssigned(CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerAwareSeekAndCommitOnPartitionsAssigned() throws InterruptedException {
+        testConsumerAwareSeekAndCommitOnPartitionsAssigned(CONSUMER);
+    }
+
+    private void testConsumerAwareSeekAndCommitOnPartitionsAssigned(GroupProtocol groupProtocol) throws InterruptedException {
+        var startingOffset = 100L;
+        var totalRecords = 120;
+        var startingTimestamp = 0L;
+
+        sendRecords(cluster, tp, totalRecords, startingTimestamp);
+
+        try (var consumer = createConsumer(groupProtocol)) {
+            triggerOnPartitionsAssignedConsumerAware(tp, consumer, (rebalanceConsumer, partitions) -> {
+                rebalanceConsumer.seek(tp, startingOffset);
+                rebalanceConsumer.pause(List.of(tp));
+            });
+
+            assertTrue(consumer.paused().contains(tp));
+            consumer.resume(List.of(tp));
+            consumeAndVerifyRecords(
+                    consumer,
+                    tp,
+                    (int) (totalRecords - startingOffset),
+                    (int) startingOffset,
+                    (int) startingOffset,
+                    startingOffset
+            );
+        }
+    }
+
+    @ClusterTest
+    public void testClassicConsumerAwarePositionOnPartitionsAssigned() throws InterruptedException {
+        testConsumerAwarePositionOnPartitionsAssigned(CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerAwarePositionOnPartitionsAssigned() throws InterruptedException {
+        testConsumerAwarePositionOnPartitionsAssigned(CONSUMER);
+    }
+
+    private void testConsumerAwarePositionOnPartitionsAssigned(GroupProtocol groupProtocol) throws InterruptedException {
+        try (var consumer = createConsumer(groupProtocol)) {
+            triggerOnPartitionsAssignedConsumerAware(tp, consumer, (rebalanceConsumer, partitions) ->
+                    assertDoesNotThrow(() -> rebalanceConsumer.position(tp))
+            );
+        }
+    }
+
+    @ClusterTest
+    public void testClassicConsumerAwareAssignmentVisibleOnPartitionsAssigned() throws InterruptedException {
+        testConsumerAwareAssignmentVisibleOnPartitionsAssigned(CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerAwareAssignmentVisibleOnPartitionsAssigned() throws InterruptedException {
+        testConsumerAwareAssignmentVisibleOnPartitionsAssigned(CONSUMER);
+    }
+
+    private void testConsumerAwareAssignmentVisibleOnPartitionsAssigned(GroupProtocol groupProtocol) throws InterruptedException {
+        try (var consumer = createConsumer(groupProtocol)) {
+            triggerOnPartitionsAssignedConsumerAware(tp, consumer, (rebalanceConsumer, partitions) ->
+                    assertTrue(rebalanceConsumer.assignment().contains(tp))
+            );
+        }
+    }
+
+    @ClusterTest
+    public void testClassicConsumerAwarePauseStatePersistsAfterAssigned() throws InterruptedException {
+        testConsumerAwarePauseStatePersistsAfterAssigned(CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerAwarePauseStatePersistsAfterAssigned() throws InterruptedException {
+        testConsumerAwarePauseStatePersistsAfterAssigned(CONSUMER);
+    }
+
+    private void testConsumerAwarePauseStatePersistsAfterAssigned(GroupProtocol groupProtocol) throws InterruptedException {
+        try (var consumer = createConsumer(groupProtocol)) {
+            triggerOnPartitionsAssignedConsumerAware(tp, consumer, (rebalanceConsumer, partitions) -> {
+                rebalanceConsumer.pause(List.of(tp));
+                assertTrue(rebalanceConsumer.paused().contains(tp));
+            });
+
+            // Verify pause state persists after callback completes
+            assertTrue(consumer.paused().contains(tp));
+            consumer.resume(List.of(tp));
+        }
+    }
+
+    @ClusterTest
+    public void testClassicConsumerAwareBeginningOffsetsOnPartitionsAssigned() throws InterruptedException {
+        testConsumerAwareBeginningOffsetsOnPartitionsAssigned(CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerAwareBeginningOffsetsOnPartitionsAssigned() throws InterruptedException {
+        testConsumerAwareBeginningOffsetsOnPartitionsAssigned(CONSUMER);
+    }
+
+    private void testConsumerAwareBeginningOffsetsOnPartitionsAssigned(GroupProtocol groupProtocol) throws InterruptedException {
+        try (var consumer = createConsumer(groupProtocol)) {
+            triggerOnPartitionsAssignedConsumerAware(tp, consumer, (rebalanceConsumer, partitions) -> {
+                var offsets = rebalanceConsumer.beginningOffsets(List.of(tp));
+                assertTrue(offsets.containsKey(tp));
+                assertEquals(0L, offsets.get(tp));
+            });
+        }
+    }
+
+    @ClusterTest
+    public void testClassicConsumerAwareCommitOnPartitionsRevoked() throws InterruptedException {
+        testConsumerAwareCommitOnPartitionsRevoked(CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerAwareCommitOnPartitionsRevoked() throws InterruptedException {
+        testConsumerAwareCommitOnPartitionsRevoked(CONSUMER);
+    }
+
+    private void testConsumerAwareCommitOnPartitionsRevoked(GroupProtocol groupProtocol) throws InterruptedException {
+        triggerOnPartitionsRevokedConsumerAware(tp, groupProtocol, (rebalanceConsumer, partitions) ->
+                assertDoesNotThrow(() -> rebalanceConsumer.commitSync())
+        );
+    }
+
+    @ClusterTest
+    public void testClassicRebalanceConsumerExpiredAfterAssignedCallback() throws InterruptedException {
+        testRebalanceConsumerExpiredAfterAssignedCallback(CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncRebalanceConsumerExpiredAfterAssignedCallback() throws InterruptedException {
+        testRebalanceConsumerExpiredAfterAssignedCallback(CONSUMER);
+    }
+
+    private void testRebalanceConsumerExpiredAfterAssignedCallback(GroupProtocol groupProtocol) throws InterruptedException {
+        AtomicReference<RebalanceConsumer> captured = new AtomicReference<>();
+        try (var consumer = createConsumer(groupProtocol)) {
+            var partitionsAssigned = new AtomicBoolean(false);
+            consumer.subscribe(List.of(topic));
+            consumer.setRebalanceListener(new RebalanceListener() {
+                @Override
+                public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
+                    if (partitions.contains(tp)) {
+                        captured.set(rc);
+                        partitionsAssigned.set(true);
+                    }
+                }
+
+                @Override
+                public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
+                }
+            });
+            ClientsTestUtils.pollUntilTrue(
+                    consumer,
+                    partitionsAssigned::get,
+                    "Timed out before expected rebalance completed"
+            );
+        }
+
+        assertNotNull(captured.get());
+        assertThrows(IllegalStateException.class, () -> captured.get().assignment());
+    }
+
+    @ClusterTest
+    public void testClassicConsumerAwareGroupMetadataOnPartitionsAssigned() throws InterruptedException {
+        testConsumerAwareGroupMetadataOnPartitionsAssigned(CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerAwareGroupMetadataOnPartitionsAssigned() throws InterruptedException {
+        testConsumerAwareGroupMetadataOnPartitionsAssigned(CONSUMER);
+    }
+
+    private void testConsumerAwareGroupMetadataOnPartitionsAssigned(GroupProtocol groupProtocol) throws InterruptedException {
+        try (var consumer = createConsumer(groupProtocol)) {
+            triggerOnPartitionsAssignedConsumerAware(tp, consumer, (rebalanceConsumer, partitions) -> {
+                var metadata = rebalanceConsumer.groupMetadata();
+                assertNotNull(metadata);
+                assertNotNull(metadata.groupId());
+            });
+        }
+    }
+
+    private void triggerOnPartitionsAssignedConsumerAware(
+            TopicPartition tp,
+            Consumer<byte[], byte[]> consumer,
+            BiConsumer<RebalanceConsumer, Collection<TopicPartition>> execute
+    ) throws InterruptedException {
+        var partitionsAssigned = new AtomicBoolean(false);
+        consumer.subscribe(List.of(topic));
+        consumer.setRebalanceListener(new RebalanceListener() {
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
+                if (partitions.contains(tp)) {
+                    execute.accept(rc, partitions);
+                    partitionsAssigned.set(true);
+                }
+            }
+
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
+            }
+        });
+        ClientsTestUtils.pollUntilTrue(
+                consumer,
+                partitionsAssigned::get,
+                "Timed out before expected rebalance completed"
+        );
+    }
+
+    private void triggerOnPartitionsRevokedConsumerAware(
+            TopicPartition tp,
+            GroupProtocol protocol,
+            BiConsumer<RebalanceConsumer, Collection<TopicPartition>> execute
+    ) throws InterruptedException {
+        var partitionsAssigned = new AtomicBoolean(false);
+        var partitionsRevoked = new AtomicBoolean(false);
+        try (var consumer = createConsumer(protocol)) {
+            consumer.setRebalanceListener(new RebalanceListener() {
+                @Override
+                public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
+                    if (partitions.contains(tp)) {
+                        partitionsAssigned.set(true);
+                    }
+                }
+
+                @Override
+                public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
+                    if (partitions.contains(tp)) {
+                        execute.accept(rc, partitions);
+                        partitionsRevoked.set(true);
+                    }
+                }
+            });
+            consumer.subscribe(List.of(topic));
+            ClientsTestUtils.pollUntilTrue(
+                    consumer,
+                    partitionsAssigned::get,
+                    "Timed out before expected rebalance completed"
+            );
+        }
+        assertTrue(partitionsRevoked.get());
+    }
+
     private void triggerOnPartitionsAssigned(
         TopicPartition tp,
         Consumer<byte[], byte[]> consumer,
         BiConsumer<Consumer<byte[], byte[]>, Collection<TopicPartition>> execute
     ) throws InterruptedException {
         var partitionsAssigned = new AtomicBoolean(false);
-        consumer.subscribe(List.of(topic), new ConsumerRebalanceListener() {
+        consumer.setRebalanceListener(new RebalanceListener() {
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            public void onPartitionsAssigned(
+                    Collection<TopicPartition> partitions, RebalanceConsumer rc) {
                 // Make sure the partition used in the test is actually assigned before continuing.
                 if (partitions.contains(tp)) {
                     execute.accept(consumer, partitions);
@@ -308,10 +563,13 @@ public class PlaintextConsumerCallbackTest {
             }
 
             @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            public void onPartitionsRevoked(
+                    Collection<TopicPartition> partitions, RebalanceConsumer rc) {
                 // noop
             }
         });
+        consumer.subscribe(List.of(topic));
+
         ClientsTestUtils.pollUntilTrue(
             consumer, 
             partitionsAssigned::get, 
@@ -327,9 +585,11 @@ public class PlaintextConsumerCallbackTest {
         var partitionsAssigned = new AtomicBoolean(false);
         var partitionsRevoked = new AtomicBoolean(false);
         try (var consumer = createConsumer(protocol)) {
-            consumer.subscribe(List.of(topic), new ConsumerRebalanceListener() {
+            consumer.subscribe(List.of(topic));
+            consumer.setRebalanceListener(new RebalanceListener() {
                 @Override
-                public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                public void onPartitionsAssigned(
+                        Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                     // Make sure the partition used in the test is actually assigned before continuing.
                     if (partitions.contains(tp)) {
                         partitionsAssigned.set(true);
@@ -337,7 +597,8 @@ public class PlaintextConsumerCallbackTest {
                 }
 
                 @Override
-                public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                public void onPartitionsRevoked(
+                        Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                     // Make sure the partition used in the test is actually revoked before continuing.
                     if (partitions.contains(tp)) {
                         execute.accept(consumer, partitions);

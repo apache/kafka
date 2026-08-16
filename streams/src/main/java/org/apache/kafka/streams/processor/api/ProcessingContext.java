@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.api;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -39,6 +40,7 @@ import java.util.Optional;
 /**
  * Processor context interface.
  */
+@InterfaceAudience.Public
 public interface ProcessingContext {
 
     /**

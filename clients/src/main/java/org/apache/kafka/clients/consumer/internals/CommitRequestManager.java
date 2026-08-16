@@ -554,8 +554,12 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         currentResult.whenComplete((res, error) -> {
             boolean inflightRemoved = pendingRequests.inflightOffsetFetches.remove(fetchRequest);
             if (!inflightRemoved) {
-                log.warn("A duplicated, inflight, request was identified, but unable to find it in the " +
-                    "outbound buffer: {}", fetchRequest);
+                // A completed request may legitimately not be in the in-flight buffer for a few
+                // reasons: it was deduplicated and chained onto an existing request (so it was never
+                // added to the buffers), or it completed before it was ever sent (e.g. while there
+                // was no coordinator available). In all these cases there is nothing to remove here.
+                log.debug("Completed offset fetch request was not found in the in-flight buffer: {}",
+                    fetchRequest);
             }
 
             // Group-level error
@@ -1223,9 +1227,14 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     " anymore.", responseError);
                 future.completeExceptionally(exception);
             } else if (responseError == Errors.STALE_MEMBER_EPOCH) {
-                log.error("OffsetFetch failed with {} and the consumer is not part " +
-                    "of the group anymore (it probably left the group, got fenced" +
-                    " or failed). The request cannot be retried and will fail.", responseError);
+                if (memberInfo.memberEpoch.isPresent()) {
+                    log.debug("OffsetFetch failed with {}. The member is still in the group, so the " +
+                        "request can be retried with the latest member epoch as long as it has not expired.", responseError);
+                } else {
+                    log.error("OffsetFetch failed with {} and the consumer is not part " +
+                        "of the group anymore (it probably left the group, got fenced" +
+                        " or failed). The request cannot be retried and will fail.", responseError);
+                }
                 future.completeExceptionally(exception);
             } else if (responseError == Errors.NOT_COORDINATOR || responseError == Errors.COORDINATOR_NOT_AVAILABLE) {
                 // Re-discover the coordinator and retry
@@ -1395,17 +1404,21 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         /**
-         * <p>Adding an offset fetch request to the outgoing buffer.  If the same request was made, we chain the future
-         * to the existing one.
+         * <p>Adding an offset fetch request to the outgoing buffer.  If the same request was made and has not
+         * completed yet, we chain the future to the existing one.
          *
          * <p>If the request is new, it invokes a callback to remove itself from the {@code inflightOffsetFetches}
          * upon completion.
          */
         private CompletableFuture<OffsetFetchResult> addOffsetFetchRequest(final OffsetFetchRequestState request) {
+            // A request that already completed cannot deliver a result anymore, but may still appear in the
+            // buffers while its completion callbacks run (removal from the buffer is itself one of those
+            // callbacks). Chaining onto it would complete the new request immediately with the stale outcome
+            // instead of sending it (e.g. re-failing the retry of a STALE_MEMBER_EPOCH error in a tight loop).
             Optional<OffsetFetchRequestState> dupe =
-                    unsentOffsetFetches.stream().filter(r -> r.sameRequest(request)).findAny();
+                    unsentOffsetFetches.stream().filter(r -> r.sameRequest(request) && !r.future.isDone()).findAny();
             Optional<OffsetFetchRequestState> inflight =
-                    inflightOffsetFetches.stream().filter(r -> r.sameRequest(request)).findAny();
+                    inflightOffsetFetches.stream().filter(r -> r.sameRequest(request) && !r.future.isDone()).findAny();
 
             if (dupe.isPresent() || inflight.isPresent()) {
                 log.debug("Duplicated unsent offset fetch request found for partitions: {}", request.requestedPartitions);
@@ -1532,6 +1545,15 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
         public long remainingMs(final long currentTimeMs) {
             this.timer.update(currentTimeMs);
+            // KAFKA-20253: If the auto-commit interval has elapsed but a previous auto-commit is still
+            // in-flight (for example it cannot complete because the coordinator is unavailable after a
+            // failed re-authentication), a new auto-commit cannot be started yet. Returning 0 here would
+            // busy-spin the application thread, since this value feeds AsyncKafkaConsumer.pollForFetches()
+            // via maximumTimeToWait(). Wait for the interval instead; the network thread still wakes on the
+            // in-flight commit's response, which resets this timer.
+            if (this.timer.isExpired() && this.hasInflightCommit) {
+                return autoCommitInterval;
+            }
             return this.timer.remainingMs();
         }
 

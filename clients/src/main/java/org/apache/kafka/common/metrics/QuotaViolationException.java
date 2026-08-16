@@ -14,13 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.metrics;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Thrown when a sensor records a value that causes a metric to go outside the bounds configured as its quota
  */
+@InterfaceAudience.Public
 public class QuotaViolationException extends KafkaException {
 
     private static final long serialVersionUID = 1L;

@@ -26,6 +26,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.CogroupedKStream;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -179,7 +180,7 @@ public class TimeWindowedCogroupedKStreamImplTest {
                 MockInitializer.STRING_INIT, Materialized.with(Serdes.String(), Serdes.String()));
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(
                     TOPIC, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<Windowed<String>, String> testOutputTopic = driver.createOutputTopic(
@@ -215,7 +216,7 @@ public class TimeWindowedCogroupedKStreamImplTest {
                 MockInitializer.STRING_INIT, Materialized.with(Serdes.String(), Serdes.String()));
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(
                     TOPIC, new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> testInputTopic2 = driver.createInputTopic(
@@ -254,7 +255,7 @@ public class TimeWindowedCogroupedKStreamImplTest {
                         MockInitializer.STRING_INIT, Materialized.with(Serdes.String(), Serdes.String()));
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(
                     TOPIC, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<Windowed<String>, String> testOutputTopic = driver.createOutputTopic(
@@ -282,7 +283,7 @@ public class TimeWindowedCogroupedKStreamImplTest {
                         MockInitializer.STRING_INIT, Materialized.with(Serdes.String(), Serdes.String()));
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(
                     TOPIC, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<Windowed<String>, String> testOutputTopic = driver.createOutputTopic(
@@ -317,7 +318,7 @@ public class TimeWindowedCogroupedKStreamImplTest {
                 MockInitializer.STRING_INIT, Materialized.with(Serdes.String(), Serdes.String()));
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(
                     TOPIC, new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> testInputTopic2 = driver.createInputTopic(

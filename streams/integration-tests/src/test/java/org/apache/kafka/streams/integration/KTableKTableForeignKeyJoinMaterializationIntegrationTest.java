@@ -26,6 +26,7 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -74,7 +75,7 @@ public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
     public void shouldEmitTombstoneWhenDeletingNonJoiningRecords(final boolean materialized, final boolean queryable, final boolean withHeaders) {
         StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfig, withHeaders);
         final Topology topology = getTopology(streamsConfig, "store", materialized, queryable);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(topology).withConfig(streamsConfig).build()) {
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
             final KeyValueStore<String, String> store = driver.getKeyValueStore("store");

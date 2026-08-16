@@ -14,12 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Indicates that the broker did not attempt to execute this operation. This may happen for batched RPCs where some
  * operations in the batch failed, causing the broker to respond without trying the rest.
  */
+@InterfaceAudience.Public
 public class OperationNotAttemptedException extends ApiException {
     public OperationNotAttemptedException(final String message) {
         super(message);

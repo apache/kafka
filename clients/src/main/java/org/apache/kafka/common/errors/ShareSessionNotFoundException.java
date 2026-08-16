@@ -14,11 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Thrown when the share session was not found.
  */
+@InterfaceAudience.Public
 public class ShareSessionNotFoundException extends RetriableException {
     private static final long serialVersionUID = 1L;
 

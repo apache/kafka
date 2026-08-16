@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
 
@@ -34,6 +35,7 @@ import java.time.Instant;
  * @param <K> Type of keys
  * @param <V> Type of values
  */
+@InterfaceAudience.Public
 public interface ReadOnlyWindowStore<K, V> {
 
     /**

@@ -21,6 +21,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.errors.ApiException;
 
 import java.util.ArrayList;
@@ -31,6 +32,7 @@ import java.util.Map;
 /**
  * The result of the {@link Admin#deleteAcls(Collection)} call.
  */
+@InterfaceAudience.Public
 public class DeleteAclsResult {
 
     /**

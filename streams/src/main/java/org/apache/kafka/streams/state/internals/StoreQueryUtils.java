@@ -373,7 +373,7 @@ public final class StoreQueryUtils {
     ) {
         if (store instanceof VersionedKeyValueStore) {
             final VersionedKeyValueStore<Bytes, byte[]> versionedKeyValueStore =
-                (VersionedKeyValueStore<Bytes, byte[]>) store;
+                ((VersionedKeyValueStore<Bytes, byte[]>) store).readOnly(config.getIsolationLevel());
             final VersionedKeyQuery<Bytes, byte[]> rawKeyQuery =
                 (VersionedKeyQuery<Bytes, byte[]>) query;
             try {
@@ -413,7 +413,8 @@ public final class StoreQueryUtils {
                             rawKeyQuery.key(),
                             rawKeyQuery.fromTime().get().toEpochMilli(),
                             rawKeyQuery.toTime().get().toEpochMilli(),
-                            rawKeyQuery.resultOrder()
+                            rawKeyQuery.resultOrder(),
+                            config.getIsolationLevel()
                         );
                 return (QueryResult<R>) QueryResult.forResult(segmentIterator);
             } catch (final Exception e) {

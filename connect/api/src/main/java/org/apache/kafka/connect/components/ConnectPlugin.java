@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.components;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigDef;
 
 /**
@@ -30,6 +31,7 @@ import org.apache.kafka.common.config.ConfigDef;
  * including their names, types, default values, validators, and documentation.
  *
  */
+@InterfaceAudience.Public
 public interface ConnectPlugin extends Versioned {
 
     /**

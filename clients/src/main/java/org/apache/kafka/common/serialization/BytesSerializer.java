@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.utils.Bytes;
 
+@InterfaceAudience.Public
 public class BytesSerializer implements Serializer<Bytes> {
     public byte[] serialize(String topic, Bytes data) {
         if (data == null)

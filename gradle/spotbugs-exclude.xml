@@ -127,6 +127,17 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Bug pattern="RV_EXCEPTION_NOT_THROWN"/>
     </Match>
 
+    <Match>
+        <!-- False positive: ChunkedRecordAccumulator.append creates a ChunkedByteBufferOutputStream
+             and either transfers ownership to a new ProducerBatch (through the recordsBuilder
+             supplier passed to appendNewBatch) or releases it via bufferStream.deallocate() in the
+             finally block. Spotbugs only recognizes close() as the cleanup method, and doesn't
+             follow ownership through the supplier lambda — verified 2026-06-05 by removing this
+             suppression and observing the warning at the constructor site. -->
+        <Class name="org.apache.kafka.clients.producer.internals.ChunkedRecordAccumulator"/>
+        <Bug pattern="OS_OPEN_STREAM"/>
+    </Match>
+
     <!-- false positive in Java 11, related to https://github.com/spotbugs/spotbugs/issues/756 but more complex -->
     <Match>
         <Class name="org.apache.kafka.common.compress.Lz4BlockOutputStream"/>
@@ -623,6 +634,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="org.apache.kafka.streams.processor.internals.StreamsProducer"/>
             <Class name="org.apache.kafka.streams.processor.internals.TaskManager"/>
             <Class name="org.apache.kafka.streams.state.internals.AbstractRocksDBSegmentedBytesStore"/>
+            <Class name="org.apache.kafka.streams.state.internals.AbstractDualSchemaRocksDBSegmentedBytesStore"/>
             <Class name="org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer"/>
             <Class name="org.apache.kafka.streams.state.internals.RocksDBStore"/>
             <Class name="org.apache.kafka.streams.state.internals.TimeOrderedCachingWindowStore"/>
@@ -708,6 +720,17 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="org.apache.kafka.jmh.util.BytesCompareBenchmark$HandwrittenLexicoComparator"/>
         </Or>
         <Bug pattern="SE_COMPARATOR_SHOULD_BE_SERIALIZABLE"/>
+    </Match>
+
+    <Match>
+        <!-- AdminMetadataManager's lastMetadataFetchAttemptMs and lastMetadataUpdateMs are only
+             written from the AdminClient I/O thread, so non-atomic 64-bit writes are safe. -->
+        <Class name="org.apache.kafka.clients.admin.internals.AdminMetadataManager"/>
+        <Or>
+            <Field name="lastMetadataFetchAttemptMs"/>
+            <Field name="lastMetadataUpdateMs"/>
+        </Or>
+        <Bug pattern="AT_NONATOMIC_64BIT_PRIMITIVE"/>
     </Match>
 
 </FindBugsFilter>

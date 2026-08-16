@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.common.config;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString;
 import org.apache.kafka.common.config.ConfigDef.Range;
 
 import java.util.List;
 
+@InterfaceAudience.Public
 public class SaslConfigs {
 
     private static final String OAUTHBEARER_NOTE = " Currently applies only to OAUTHBEARER.";

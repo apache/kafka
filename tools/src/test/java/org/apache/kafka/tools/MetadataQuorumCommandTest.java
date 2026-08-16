@@ -22,6 +22,7 @@ import org.apache.kafka.clients.admin.QuorumInfo;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTests;
+import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.test.TestUtils;
 
@@ -46,6 +47,7 @@ class MetadataQuorumCommandTest {
      * 2. More brokers than controllers
      * 3. Fewer brokers than controllers
      */
+    @Flaky("KAFKA-15104")
     @ClusterTests({
         @ClusterTest(brokers = 2, controllers = 2),
         @ClusterTest(brokers = 2, controllers = 1),

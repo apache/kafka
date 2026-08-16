@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.processor.api.Record;
 
 import java.util.Map;
@@ -117,6 +118,7 @@ import java.util.Map;
  * @param <K> the key type of this stream
  * @param <V> the value type of this stream
  */
+@InterfaceAudience.Public
 public interface BranchedKStream<K, V> {
     /**
      * Define a branch for records that match the predicate.

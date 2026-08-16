@@ -19,7 +19,7 @@ package kafka.server
 
 import java.util.Properties
 import scala.collection.Seq
-import kafka.security.JaasTestUtils.JaasSection
+import org.apache.kafka.security.JaasTestUtils.JaasSection
 
 class MultipleListenersWithDefaultJaasContextTest extends MultipleListenersWithSameSecurityProtocolBaseTest {
 

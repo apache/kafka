@@ -16,11 +16,18 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Record;
@@ -40,11 +47,17 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.everyItem;
+import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.is;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -203,6 +216,100 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         buffer.evictWhile(() -> buffer.numRecords() > 0, r -> count.getAndIncrement());
         assertThat(count.get(), equalTo(2));
         assertNumSizeAndTimestamp(buffer, 1, 7, 42);
+    }
+
+    @Test
+    public void shouldDeserializeWithPutTimeHeadersEvenAfterContextMutation() {
+        final HeaderCapturingSerde serde = new HeaderCapturingSerde();
+        createBuffer(Duration.ZERO, serde);
+        final RecordHeaders putHeaders = new RecordHeaders(new Header[]{
+            new RecordHeader("at-put", "first".getBytes(StandardCharsets.UTF_8))
+        });
+        // Give the record its own headers, distinct from the context headers, so the assertions below prove that
+        // eviction deserialization reads from the stored recordContext snapshot rather than from record.headers().
+        final RecordHeaders recordHeaders = new RecordHeaders(new Header[]{
+            new RecordHeader("on-record", "rec".getBytes(StandardCharsets.UTF_8))
+        });
+        context.setRecordContext(new ProcessorRecordContext(0L, offset++, 0, "testing", putHeaders));
+        buffer.put(0L, new Record<>("k", "v", 0L, recordHeaders), context.recordContext());
+
+        // Simulate the processor moving on to another record with different headers before eviction runs.
+        final RecordHeaders laterHeaders = new RecordHeaders(new Header[]{
+            new RecordHeader("at-evict", "second".getBytes(StandardCharsets.UTF_8))
+        });
+        context.setRecordContext(new ProcessorRecordContext(0L, offset++, 0, "testing", laterHeaders));
+
+        final List<TimeOrderedKeyValueBuffer.Eviction<String, String>> evicted = new ArrayList<>();
+        buffer.evictWhile(() -> buffer.numRecords() > 0, evicted::add);
+
+        assertThat(evicted.size(), is(1));
+        // The key/value deserializers must see the headers captured at put time, not the mutated context headers.
+        assertThat(serde.capturedHeaders, hasItem(putHeaders));
+        assertThat(serde.capturedHeaders, everyItem(is(putHeaders)));
+        assertThat(evicted.get(0).recordContext().headers(), is(putHeaders));
+    }
+
+    @Test
+    public void shouldNotBeAffectedByProcessorContextHeaderMutationBetweenPutAndEvict() {
+        final HeaderCapturingSerde serde = new HeaderCapturingSerde();
+        createBuffer(Duration.ofMillis(1), serde);
+        final RecordHeaders putHeaders = new RecordHeaders(new Header[]{
+            new RecordHeader("at-put", "first".getBytes(StandardCharsets.UTF_8))
+        });
+        // Give the record its own headers, distinct from the context headers, so the assertions below prove that
+        // eviction deserialization reads from the stored recordContext snapshot rather than from record.headers().
+        final RecordHeaders recordHeaders = new RecordHeaders(new Header[]{
+            new RecordHeader("on-record", "rec".getBytes(StandardCharsets.UTF_8))
+        });
+        context.setRecordContext(new ProcessorRecordContext(0L, offset++, 0, "testing", putHeaders));
+        buffer.put(0L, new Record<>("k", "v", 0L, recordHeaders), context.recordContext());
+
+        // Simulate the processor moving on to handle a different record with different headers
+        // before the grace period expires and eviction runs.
+        final RecordHeaders laterHeaders = new RecordHeaders(new Header[]{
+            new RecordHeader("at-evict", "second".getBytes(StandardCharsets.UTF_8))
+        });
+        final RecordHeaders triggerRecordHeaders = new RecordHeaders(new Header[]{
+            new RecordHeader("on-trigger-record", "trig".getBytes(StandardCharsets.UTF_8))
+        });
+        context.setRecordContext(new ProcessorRecordContext(10L, offset++, 0, "testing", laterHeaders));
+        // Advance stream time past the grace period for the original record.
+        buffer.put(10L, new Record<>("trigger", "v", 10L, triggerRecordHeaders), context.recordContext());
+
+        final List<TimeOrderedKeyValueBuffer.Eviction<String, String>> evicted = new ArrayList<>();
+        buffer.evictWhile(() -> true, evicted::add);
+
+        // Only the original "k" record at t=0 falls outside the grace window of t=10.
+        assertThat(evicted.size(), is(1));
+        assertThat(evicted.get(0).key(), is("k"));
+        // The deserializers for the evicted record must see its put-time headers, not the later context headers.
+        assertThat(serde.capturedHeaders, hasItem(putHeaders));
+        assertThat(serde.capturedHeaders, everyItem(is(putHeaders)));
+        assertThat(evicted.get(0).recordContext().headers(), is(putHeaders));
+    }
+
+    /**
+     * A {@link Serde} whose deserializer records the {@link Headers} it is handed on each call, so tests can assert
+     * which headers reached the key/value deserializers during eviction. Serialization behaves like a plain String serde.
+     */
+    private static final class HeaderCapturingSerde implements Serde<String> {
+        private final List<Headers> capturedHeaders = new ArrayList<>();
+
+        @Override
+        public Serializer<String> serializer() {
+            return new StringSerializer();
+        }
+
+        @Override
+        public Deserializer<String> deserializer() {
+            return new StringDeserializer() {
+                @Override
+                public String deserialize(final String topic, final Headers headers, final byte[] data) {
+                    capturedHeaders.add(headers);
+                    return super.deserialize(topic, data);
+                }
+            };
+        }
     }
 
     private void assertNumSizeAndTimestamp(final TimeOrderedKeyValueBuffer<String, String, String> buffer,

@@ -1212,10 +1212,9 @@ public class IntegrationTestUtils {
         consumer.subscribe(singletonList(topic));
         final int pollIntervalMs = 100;
         consumerRecords = new ArrayList<>();
-        int totalPollTimeMs = 0;
-        while (totalPollTimeMs < waitTime &&
+        final long deadline = System.currentTimeMillis() + waitTime;
+        while (System.currentTimeMillis() < deadline &&
             continueConsuming(consumerRecords.size(), maxMessages)) {
-            totalPollTimeMs += pollIntervalMs;
             final ConsumerRecords<K, V> records = consumer.poll(Duration.ofMillis(pollIntervalMs));
 
             for (final ConsumerRecord<K, V> record : records) {

@@ -30,7 +30,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
-import org.apache.kafka.streams.KafkaStreamsTest;
 import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.LagInfo;
@@ -84,6 +83,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -294,7 +294,7 @@ public class QueryableStateIntegrationTest {
 
     private void verifyAllKVKeys(final List<KafkaStreams> streamsList,
                                  final KafkaStreams streams,
-                                 final KafkaStreamsTest.StateListenerStub stateListener,
+                                 final StateListenerStub stateListener,
                                  final Set<String> keys,
                                  final String storeName,
                                  final long timeout,
@@ -346,7 +346,7 @@ public class QueryableStateIntegrationTest {
 
     private void verifyAllWindowedKeys(final List<KafkaStreams> streamsList,
                                        final KafkaStreams streams,
-                                       final KafkaStreamsTest.StateListenerStub stateListenerStub,
+                                       final StateListenerStub stateListenerStub,
                                        final Set<String> keys,
                                        final String storeName,
                                        final Long from,
@@ -531,7 +531,7 @@ public class QueryableStateIntegrationTest {
     public void shouldBeAbleToQueryDuringRebalance() throws Exception {
         final int numThreads = STREAM_TWO_PARTITIONS;
         final List<KafkaStreams> streamsList = new ArrayList<>(numThreads);
-        final List<KafkaStreamsTest.StateListenerStub> listeners = new ArrayList<>(numThreads);
+        final List<StateListenerStub> listeners = new ArrayList<>(numThreads);
 
         final ProducerRunnable producerRunnable = new ProducerRunnable(streamThree, inputValues, 1);
         producerRunnable.run();
@@ -546,7 +546,7 @@ public class QueryableStateIntegrationTest {
             props.put(StreamsConfig.CLIENT_ID_CONFIG, "instance-" + i);
             final KafkaStreams streams =
                 createCountStream(streamThree, outputTopicThree, outputTopicConcurrentWindowed, storeName, windowStoreName, props);
-            final KafkaStreamsTest.StateListenerStub listener = new KafkaStreamsTest.StateListenerStub();
+            final StateListenerStub listener = new StateListenerStub();
             streams.setStateListener(listener);
             listeners.add(listener);
             streamsList.add(streams);
@@ -632,7 +632,7 @@ public class QueryableStateIntegrationTest {
     public void shouldBeAbleQueryStandbyStateDuringRebalance() throws Exception {
         final int numThreads = STREAM_TWO_PARTITIONS;
         final List<KafkaStreams> streamsList = new ArrayList<>(numThreads);
-        final List<KafkaStreamsTest.StateListenerStub> listeners = new ArrayList<>(numThreads);
+        final List<StateListenerStub> listeners = new ArrayList<>(numThreads);
 
         final ProducerRunnable producerRunnable = new ProducerRunnable(streamThree, inputValues, 1);
         producerRunnable.run();
@@ -649,7 +649,7 @@ public class QueryableStateIntegrationTest {
             props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("shouldBeAbleQueryStandbyStateDuringRebalance-" + i).getPath());
             final KafkaStreams streams =
                 createCountStream(streamThree, outputTopicThree, outputTopicConcurrentWindowed, storeName, windowStoreName, props);
-            final KafkaStreamsTest.StateListenerStub listener = new KafkaStreamsTest.StateListenerStub();
+            final StateListenerStub listener = new StateListenerStub();
             streams.setStateListener(listener);
             listeners.add(listener);
             streamsList.add(streams);
@@ -1290,6 +1290,20 @@ public class QueryableStateIntegrationTest {
                     incrementIteration();
                 }
             }
+        }
+    }
+
+    /**
+     * A state listener that records how many times each state was entered, so that tests can assert
+     * a rebalance has happened.
+     */
+    private static class StateListenerStub implements KafkaStreams.StateListener {
+        private final Map<KafkaStreams.State, Long> mapStates = new HashMap<>();
+
+        @Override
+        public void onChange(final KafkaStreams.State newState,
+                             final KafkaStreams.State oldState) {
+            mapStates.merge(newState, 1L, Long::sum);
         }
     }
 

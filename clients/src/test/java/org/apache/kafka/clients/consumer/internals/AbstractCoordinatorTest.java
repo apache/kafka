@@ -154,7 +154,7 @@ public class AbstractCoordinatorTest {
 
         mockClient.updateMetadata(RequestTestUtils.metadataUpdateWith(1, emptyMap()));
         this.node = metadata.fetch().nodes().get(0);
-        this.coordinatorNode = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        this.coordinatorNode = new GroupCoordinatorNode(node.id(), node.host(), node.port());
 
         GroupRebalanceConfig rebalanceConfig = new GroupRebalanceConfig(SESSION_TIMEOUT_MS,
                                                                         rebalanceTimeoutMs,
@@ -318,6 +318,21 @@ public class AbstractCoordinatorTest {
         coordinator.ensureCoordinatorReadyAsync();
 
         // But should wakeup in sync variation even if timer is 0.
+        assertThrows(WakeupException.class, () ->
+            coordinator.ensureCoordinatorReady(mockTime.timer(0))
+        );
+    }
+
+    @Test
+    public void testNoWakeupFromAsyncCoordinatorReadyOnRetriableError() {
+        setupCoordinator();
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.COORDINATOR_NOT_AVAILABLE));
+        consumerClient.wakeup();
+        // The async variation should not throw WakeupException
+        coordinator.ensureCoordinatorReadyAsync();
+
+        consumerClient.wakeup();
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.COORDINATOR_NOT_AVAILABLE));
         assertThrows(WakeupException.class, () ->
             coordinator.ensureCoordinatorReady(mockTime.timer(0))
         );
@@ -1286,6 +1301,67 @@ public class AbstractCoordinatorTest {
         } catch (RuntimeException exception) {
             assertEquals(exception, e);
         }
+    }
+
+    @Test
+    public void testAuthenticationErrorInHeartbeatThreadTriggersRejoin() throws Exception {
+        setupCoordinator();
+
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+
+        final AuthenticationException authError = new AuthenticationException("test auth failure");
+        // A matcher exception leaves the response queued, so fail only the first heartbeat.
+        final AtomicBoolean authErrorThrown = new AtomicBoolean(false);
+
+        mockClient.prepareResponse(body -> {
+            if (!(body instanceof HeartbeatRequest))
+                return false;
+            if (authErrorThrown.compareAndSet(false, true))
+                throw authError;
+            return true;
+        }, heartbeatResponse(Errors.NONE));
+
+        coordinator.ensureActiveGroup();
+        assertFalse(coordinator.rejoinNeededOrPending(),
+            "Sanity: group should be stable before the auth error");
+
+        mockTime.sleep(HEARTBEAT_INTERVAL_MS);
+
+        TestUtils.waitForCondition(() -> {
+            try {
+                coordinator.pollHeartbeat(mockTime.milliseconds());
+                return false;
+            } catch (AuthenticationException e) {
+                assertSame(authError, e);
+                return true;
+            }
+        }, 3000, "HeartbeatThread did not propagate the authentication error in time");
+
+        assertTrue(coordinator.rejoinNeededOrPending(),
+            "Expected the heartbeat thread to request a rejoin after an AuthenticationException " +
+                "so the next poll() restarts the heartbeat machinery via ensureActiveGroup()");
+
+        mockClient.prepareResponse(joinGroupFollowerResponse(2, memberId, leaderId, Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+
+        coordinator.ensureActiveGroup();
+
+        assertFalse(coordinator.rejoinNeededOrPending(), "Coordinator should have rejoined the group");
+        assertEquals(2, coordinator.generation().generationId);
+
+        mockClient.prepareResponse(body -> body instanceof HeartbeatRequest, heartbeatResponse(Errors.NONE));
+        mockTime.sleep(HEARTBEAT_INTERVAL_MS);
+
+        // Ensure the response was consumed instead of passing before a heartbeat was sent.
+        TestUtils.waitForCondition(() -> {
+            coordinator.pollHeartbeat(mockTime.milliseconds());
+            return !mockClient.hasPendingResponses() && !coordinator.heartbeat().hasInflight();
+        }, 3000, "Heartbeat was not sent and completed after recovering from the authentication error");
+
+        assertFalse(coordinator.rejoinNeededOrPending(),
+            "A successful post-recovery heartbeat should not trigger another rejoin");
     }
 
     @Test

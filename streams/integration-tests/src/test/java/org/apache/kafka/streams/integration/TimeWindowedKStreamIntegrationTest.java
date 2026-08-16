@@ -23,6 +23,8 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serdes.StringSerde;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.CloseOptions;
+import org.apache.kafka.streams.CloseOptions.GroupMembershipOperation;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -390,7 +392,9 @@ public class TimeWindowedKStreamIntegrationTest {
 
         assertThat(windowedMessages, is(expectResult));
 
-        kafkaStreams.close();
+        // Leave the group on close so the immediate restart below does not have to wait for the
+        // previous member to be evicted via session timeout (~45s) before its rebalance completes.
+        kafkaStreams.close(CloseOptions.groupMembershipOperation(GroupMembershipOperation.LEAVE_GROUP));
         kafkaStreams.cleanUp(); // Purge store to force restoration
 
         produceMessages(

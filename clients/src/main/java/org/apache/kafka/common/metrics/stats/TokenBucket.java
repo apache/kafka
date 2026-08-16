@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.metrics.stats;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Quota;
@@ -56,6 +57,7 @@ import static org.apache.kafka.common.metrics.internals.MetricsUtils.convert;
  * A burst of 560 brings the amount of credits to -60. One must wait 12s (-(-60)/5) to refill the
  * bucket to zero.
  */
+@InterfaceAudience.Public
 public class TokenBucket implements MeasurableStat {
     private final TimeUnit unit;
     private double tokens;

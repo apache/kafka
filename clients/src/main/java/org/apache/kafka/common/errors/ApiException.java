@@ -14,14 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Any API exception that is part of the public protocol and should be a subclass of this class and be part of this
  * package.
  */
+@InterfaceAudience.Public
 public class ApiException extends KafkaException {
 
     private static final long serialVersionUID = 1L;

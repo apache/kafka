@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server.log.remote.storage;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
 import com.yammer.metrics.core.MetricName;
@@ -27,6 +28,7 @@ import java.util.Set;
  * This class contains the metrics related to tiered storage feature, which is to have a centralized
  * place to store them, so that we can verify all of them easily.
  */
+@InterfaceAudience.Public
 public class RemoteStorageMetrics {
     private static final String REMOTE_LOG_READER_METRICS_NAME_PREFIX = "RemoteLogReader";
     private static final String REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT = "RemoteLogManagerTasksAvgIdlePercent";

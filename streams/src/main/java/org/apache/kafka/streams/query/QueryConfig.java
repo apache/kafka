@@ -17,12 +17,14 @@
 package org.apache.kafka.streams.query;
 
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 
 /**
  * Runtime configuration parameters
  */
 @Evolving
+@InterfaceAudience.Public
 public class QueryConfig {
     final boolean collectExecutionInfo;
     final IsolationLevel isolationLevel;
