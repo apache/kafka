@@ -1571,7 +1571,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (invalid && isTraceEnabled) {
         trace(s"Rejecting ApiVersionsRequest v${apiVersionRequest.version} from ${request.context.connectionId} " +
           s"with clusterId=${apiVersionRequest.data.clusterId}, nodeId=${apiVersionRequest.data.nodeId}; " +
-          s"expected clusterId=$clusterId, nodeId=$brokerId")
+          s"expected clusterId=$clusterId, nodeId=$brokerId for clientId=${request.context.clientId}")
       }
       invalid
     }
