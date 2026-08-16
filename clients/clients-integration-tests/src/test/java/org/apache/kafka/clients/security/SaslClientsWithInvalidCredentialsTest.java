@@ -146,7 +146,7 @@ public class SaslClientsWithInvalidCredentialsTest {
     public void testConsumerWithAuthenticationFailure() throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String user = userFor(groupProtocol);
-            try (Consumer<byte[], byte[]> consumer = createConsumer(user, CLIENT_PASSWORD, Map.of(
+            try (Consumer<byte[], byte[]> consumer = createConsumer(user, Map.of(
                 ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT)
             ))) {
                 consumer.subscribe(List.of(TOPIC));
@@ -159,7 +159,7 @@ public class SaslClientsWithInvalidCredentialsTest {
     public void testManualAssignmentConsumerWithAuthenticationFailure() throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String user = userFor(groupProtocol);
-            try (Consumer<byte[], byte[]> consumer = createConsumer(user, CLIENT_PASSWORD, Map.of(
+            try (Consumer<byte[], byte[]> consumer = createConsumer(user, Map.of(
                 ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT)
             ))) {
                 consumer.assign(List.of(TP));
@@ -172,7 +172,7 @@ public class SaslClientsWithInvalidCredentialsTest {
     public void testManualAssignmentConsumerWithAutoCommitDisabledWithAuthenticationFailure() throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String user = userFor(groupProtocol);
-            try (Consumer<byte[], byte[]> consumer = createConsumer(user, CLIENT_PASSWORD, Map.of(
+            try (Consumer<byte[], byte[]> consumer = createConsumer(user, Map.of(
                 ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
                 ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT)
             ))) {
@@ -258,8 +258,10 @@ public class SaslClientsWithInvalidCredentialsTest {
         return (KafkaProducer<byte[], byte[]>) cluster.<byte[], byte[]>producer(clientConfig(CLIENT_USER, CLIENT_PASSWORD, configOverrides));
     }
 
-    private Consumer<byte[], byte[]> createConsumer(String user, String password, Map<String, Object> configOverrides) {
-        return cluster.consumer(clientConfig(user, password, configOverrides));
+    private Consumer<byte[], byte[]> createConsumer(String user, Map<String, Object> configOverrides) {
+        Map<String, Object> configs = new java.util.HashMap<>(configOverrides);
+        configs.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        return cluster.consumer(clientConfig(user, SaslClientsWithInvalidCredentialsTest.CLIENT_PASSWORD, configs));
     }
 
     private KafkaProducer<byte[], byte[]> createProducer(String user, String password, Map<String, Object> configOverrides) {
