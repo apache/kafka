@@ -258,10 +258,6 @@ public class SaslClientsWithInvalidCredentialsTest {
         return (KafkaProducer<byte[], byte[]>) cluster.<byte[], byte[]>producer(clientConfig(CLIENT_USER, CLIENT_PASSWORD, configOverrides));
     }
 
-    private Consumer<byte[], byte[]> createConsumer(Map<String, Object> configOverrides) {
-        return createConsumer(CLIENT_USER, CLIENT_PASSWORD, configOverrides);
-    }
-
     private Consumer<byte[], byte[]> createConsumer(String user, String password, Map<String, Object> configOverrides) {
         return cluster.consumer(clientConfig(user, password, configOverrides));
     }
