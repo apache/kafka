@@ -769,7 +769,7 @@ kafkaPublicApiChecker {
     enabled = true
     failOnViolation = true
 }
-  task systemTestLibs(dependsOn: jar)
+  tasks.register('systemTestLibs') { dependsOn jar }
 
   if (!sourceSets.test.allSource.isEmpty()) {
     tasks.register('testJar', Jar) {
@@ -1526,7 +1526,7 @@ project(':metadata') {
     generator project(':generator')
   }
 
-  tasks.register('processMessages',JavaExec) {
+  tasks.register('processMessages', JavaExec) {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
     args = [ "-p", "org.apache.kafka.common.metadata",
@@ -4171,7 +4171,7 @@ configurations {
   }
 }
 
-task aggregatedJavadoc(type: Javadoc) {
+tasks.register('aggregatedJavadoc', Javadoc) {
   destinationDir = file("${layout.buildDirectory.get().asFile.path}/docs/javadoc")
 }
 
