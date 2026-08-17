@@ -42,7 +42,7 @@ class TestUtils {
 
     /* A consistent random number generator to make tests repeatable */
     public static final Random SEEDED_RANDOM = new Random(192348092834L);
-    
+
     public static final String LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
     public static final String DIGITS = "0123456789";
     public static final String LETTERS_AND_DIGITS = LETTERS + DIGITS;
@@ -67,7 +67,7 @@ class TestUtils {
      * Create a temporary relative directory in the specified parent directory with the given prefix.
      *
      */
-    public static File tempDirectory() {
+    static File tempDirectory() {
         final File file;
         String prefix = "kafka-";
         try {

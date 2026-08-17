@@ -72,9 +72,6 @@ public class SaslPlaintextConsumerTest {
 
     private final ClusterInstance cluster;
     public static final String MECHANISMS = "GSSAPI";
-    private static Optional<File> serverKeytabFile = Optional.empty();
-    private static Optional<File> clientKeytabFile = Optional.empty();
-    private static File workingDir;
     private static Properties kdcConf = MiniKdc.createConfig();
     private static MiniKdc kdc;
 
@@ -86,13 +83,9 @@ public class SaslPlaintextConsumerTest {
     public static void setup() throws Exception {
         // Important if tests leak consumers, producers or brokers
         LoginManager.closeAll();
-        workingDir = TestUtils.tempDirectory();
-        if (serverKeytabFile.isEmpty()) {
-            serverKeytabFile = Optional.of(TestUtils.tempFile());
-        }
-        if (clientKeytabFile.isEmpty()) {
-            clientKeytabFile = Optional.of(TestUtils.tempFile());
-        }
+        File workingDir = TestUtils.tempDirectory();
+        Optional<File> serverKeytabFile = Optional.of(TestUtils.tempFile());
+        Optional<File> clientKeytabFile = Optional.of(TestUtils.tempFile());
         List<JaasTestUtils.JaasSection> jaasSections = List.of(
             JaasTestUtils.kafkaServerSection(
                 JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME,
