@@ -308,7 +308,6 @@ public class SaslClientsWithInvalidCredentialsTest {
             producer.send(record).get(maxWaitMs, TimeUnit.MILLISECONDS);
             producer.flush();
         } catch (ExecutionException e) {
-            // Producer futures only ever fail with a KafkaException (unchecked).
             throw (RuntimeException) e.getCause();
         } catch (InterruptedException | TimeoutException e) {
             fail(e);
