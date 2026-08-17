@@ -118,6 +118,24 @@ public final class ClientUtils {
         return parseAndValidateAddresses(urls, ClientDnsLookup.forConfig(clientDnsLookupConfig));
     }
 
+    /**
+     * If {@code bootstrap.resolve.timeout.ms=0} (the default), resolves DNS for the given bootstrap
+     * servers synchronously and primes {@code metadata} with the resulting cluster. A DNS failure
+     * surfaces as {@link ConfigException} and no client instance is created.
+     * <p>
+     * A positive value opts in to asynchronous bootstrap resolution, in which case this method is
+     * a no-op — {@link NetworkClient} will resolve DNS on the first poll and defer failures to
+     * subsequent API calls as {@link org.apache.kafka.common.errors.BootstrapResolutionException}.
+     */
+    public static void maybeBootstrapMetadataSynchronously(AbstractConfig config,
+                                                           List<String> bootstrapServers,
+                                                           Metadata metadata) {
+        if (config.getLong(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG) == 0L) {
+            metadata.bootstrap(parseAndValidateAddresses(bootstrapServers,
+                config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)));
+        }
+    }
+
     public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls, ClientDnsLookup clientDnsLookup) {
         List<InetSocketAddress> addresses = new ArrayList<>();
         for (String url : urls) {
@@ -243,11 +261,17 @@ public final class ClientUtils {
                     logContext);
             ClientDnsLookup dnsLookup = ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG));
 
-            BootstrapConfiguration bootstrapConfiguration = BootstrapConfiguration.enabled(
-                bootstrapServers,
-                dnsLookup,
-                config.getLong(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG),
-                config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG));
+            // bootstrap.resolve.timeout.ms=0 means the caller has already resolved and bootstrapped
+            // metadata synchronously in the client constructor, so the NetworkClient does no async
+            // bootstrap resolution of its own.
+            long bootstrapResolveTimeoutMs = config.getLong(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG);
+            BootstrapConfiguration bootstrapConfiguration = bootstrapResolveTimeoutMs == 0L
+                ? BootstrapConfiguration.DISABLED
+                : BootstrapConfiguration.enabled(
+                    bootstrapServers,
+                    dnsLookup,
+                    bootstrapResolveTimeoutMs,
+                    config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG));
 
             return new NetworkClient(metadataUpdater,
                     metadata,
