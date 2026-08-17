@@ -843,7 +843,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 zkMetadataWriter.handleSnapshot(image, countingOperationConsumer(
                     dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation));
                 long endTime = time.nanoseconds();
-                controllerMetrics.updateZkWriteSnapshotTimeMs(NANOSECONDS.toMillis(startTime - endTime));
+                controllerMetrics.updateZkWriteSnapshotTimeMs(NANOSECONDS.toMillis(endTime - startTime));
                 if (dualWriteCounts.isEmpty()) {
                     log.info("Did not make any ZK writes when reconciling with KRaft state.");
                 } else {
