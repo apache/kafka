@@ -488,14 +488,12 @@ public abstract class AbstractFetch implements Closeable {
             }
         }
 
-        // If some fetchable-but-unbuffered partitions were skipped but at least one request was built,
-        // the in-flight request's completion will wake the buffer. If no request was built, all candidates
-        // were skipped due to reconnect backoff, existing in-flight requests, or already-buffered nodes.
-        // In that case, wake the buffer so the application thread is not left waiting for a wakeup that no
-        // pending request can deliver.
-        Map<Node, FetchSessionHandler.FetchRequestData> requests = convert(fetchable);
-        boolean canWake = requests.isEmpty();
-        return new FetchRequestPreparationResult(requests, canWake);
+        // If every fetchable-but-unbuffered partition was skipped (for example, due to reconnect backoff,
+        // an in-flight request, or its node already hosting buffered partitions), the state will only
+        // change over time. An immediate wakeup would therefore just busy-loop the caller instead of
+        // respecting its normal backoff. This case is only relevant when fetchable partitions exist but
+        // the resulting request map is empty; otherwise the caller ignores this flag.
+        return new FetchRequestPreparationResult(convert(fetchable), false);
     }
 
     /**

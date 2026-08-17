@@ -1988,7 +1988,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         // Bound the wait when background progress may make fetching possible soon.
         // Use the current application-thread state to avoid relying on stale state from the network thread.
         if (pollTimeout > retryBackoffMs) {
-            if (subscriptions.assignedPartitions().isEmpty()) {
+            if (subscriptions.numAssignedPartitions() == 0) {
                 // If there are no assigned partitions, reduce the fetch buffer wait time. This may happen when
                 // group membership has not been established yet, assignments have been revoked but not reassigned,
                 // bootstrap DNS resolution is still in progress, or manual assignment has not happened yet.
