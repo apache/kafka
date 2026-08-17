@@ -899,7 +899,8 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         return topicPartitions.stream()
                 .flatMap(partition ->
                         partition.partitions().stream().map(partitionId -> new TopicPartition(partition.topic(), partitionId)))
-                .collect(Collectors.toList());
+                // toUnmodifiableList rather than toList, so that List.copyOf in EndpointPartitions is a no-op
+                .collect(Collectors.toUnmodifiableList());
     }
 
 }

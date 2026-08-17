@@ -2040,6 +2040,7 @@ public class TaskManagerTest {
     public void shouldPublishTaskOffsetSumSnapshotFromStateDirectoryExcludingRunningActiveTasks() {
         final StreamTask runningActiveTask = statefulTask(taskId00, taskId00ChangelogPartitions).inState(State.RUNNING).build();
         final StreamTask restoringActiveTask = statefulTask(taskId01, taskId01ChangelogPartitions).inState(State.RESTORING).build();
+        when(restoringActiveTask.changelogOffsets()).thenReturn(mkMap(mkEntry(t1p1changelog, 25L)));
         final StandbyTask standbyTask = standbyTask(taskId02, taskId02ChangelogPartitions).inState(State.RUNNING).build();
 
         final TasksRegistry tasks = mock(TasksRegistry.class);
@@ -2058,9 +2059,26 @@ public class TaskManagerTest {
 
         taskManager.maybeUpdateTaskOffsetSumSnapshot();
 
-        // running-active taskId00 is omitted; restoring-active, standby, and dormant tasks are reported with their sums
+        // running-active taskId00 is omitted; restoring-active taskId01 reports its live sum (25L) rather than the
+        // stale 20L on disk; standby and dormant tasks are reported with their disk sums
         assertThat(taskManager.taskOffsetSumSnapshot(), is(mkMap(
-            mkEntry(new StreamsRebalanceData.TaskId("0", 1), 20L),
+            mkEntry(new StreamsRebalanceData.TaskId("0", 1), 25L),
+            mkEntry(new StreamsRebalanceData.TaskId("0", 2), 30L),
+            mkEntry(new StreamsRebalanceData.TaskId("0", 3), 40L)
+        )));
+
+        // once restoration completes, taskId01 moves from the state updater to the stream thread, just like taskId00
+        when(restoringActiveTask.state()).thenReturn(State.RUNNING);
+        when(tasks.allInitializedTasksPerId()).thenReturn(mkMap(
+            mkEntry(taskId00, runningActiveTask),
+            mkEntry(taskId01, restoringActiveTask)
+        ));
+        when(stateUpdater.tasks()).thenReturn(Set.of(standbyTask));
+
+        taskManager.maybeUpdateTaskOffsetSumSnapshot();
+
+        // taskId01 is now dropped entirely, not merely left unrefreshed at its last restoring sum
+        assertThat(taskManager.taskOffsetSumSnapshot(), is(mkMap(
             mkEntry(new StreamsRebalanceData.TaskId("0", 2), 30L),
             mkEntry(new StreamsRebalanceData.TaskId("0", 3), 40L)
         )));
@@ -3610,10 +3628,13 @@ public class TaskManagerTest {
 
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, false);
 
-        when(stateUpdater.tasks()).thenReturn(singleton(task00));
+        // the state updater only exposes read-only tasks, which cannot be closed
+        when(stateUpdater.tasks()).thenReturn(singleton(new ReadOnlyTask(task00)));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
         when(stateUpdater.remove(eq(taskId00), eq(SuspendReason.MIGRATED))).thenReturn(future);
         future.completeExceptionally(new StreamsException("The state updater thread died."));
+        // the removal failed, so the state updater reported the task as failed and still owns it
+        when(stateUpdater.drainQueuedTasks()).thenReturn(singleton(task00));
 
         taskManager.shutdown(true);
 
