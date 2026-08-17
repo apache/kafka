@@ -46,6 +46,7 @@ import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.function.Executable;
 
 import java.time.Duration;
 import java.util.List;
@@ -54,10 +55,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 @ClusterTestDefaults(
     types = {Type.KRAFT},
@@ -96,16 +100,16 @@ public class SaslClientsWithInvalidCredentialsTest {
     }
 
     @ClusterTest(brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT)
-    public void testIdempotentProducerWithAuthenticationFailure() throws Exception {
+    public void testIdempotentProducerWithAuthenticationFailure() {
         testProducerWithAuthenticationFailure(true);
     }
 
     @ClusterTest(brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT)
-    public void testNonIdempotentProducerWithAuthenticationFailure() throws Exception {
+    public void testNonIdempotentProducerWithAuthenticationFailure() {
         testProducerWithAuthenticationFailure(false);
     }
 
-    private void testProducerWithAuthenticationFailure(boolean isIdempotenceEnabled) throws Exception {
+    private void testProducerWithAuthenticationFailure(boolean isIdempotenceEnabled) {
         KafkaProducer<byte[], byte[]> producer = createProducer(Map.of(
             ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, Boolean.toString(isIdempotenceEnabled)
         ));
@@ -130,7 +134,7 @@ public class SaslClientsWithInvalidCredentialsTest {
     }
 
     @ClusterTest(brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT)
-    public void testTransactionalProducerWithAuthenticationFailure() throws Exception {
+    public void testTransactionalProducerWithAuthenticationFailure() {
         try (KafkaProducer<byte[], byte[]> producer = createProducer(Map.of(
             ProducerConfig.TRANSACTIONAL_ID_CONFIG, "txclient-1",
             ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true"
@@ -143,7 +147,7 @@ public class SaslClientsWithInvalidCredentialsTest {
     }
 
     @ClusterTest(brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT)
-    public void testConsumerWithAuthenticationFailure() throws Exception {
+    public void testConsumerWithAuthenticationFailure() {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String user = userFor(groupProtocol);
             try (Consumer<byte[], byte[]> consumer = createConsumer(user, Map.of(
@@ -156,7 +160,7 @@ public class SaslClientsWithInvalidCredentialsTest {
     }
 
     @ClusterTest(brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT)
-    public void testManualAssignmentConsumerWithAuthenticationFailure() throws Exception {
+    public void testManualAssignmentConsumerWithAuthenticationFailure() {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String user = userFor(groupProtocol);
             try (Consumer<byte[], byte[]> consumer = createConsumer(user, Map.of(
@@ -169,7 +173,7 @@ public class SaslClientsWithInvalidCredentialsTest {
     }
 
     @ClusterTest(brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT)
-    public void testManualAssignmentConsumerWithAutoCommitDisabledWithAuthenticationFailure() throws Exception {
+    public void testManualAssignmentConsumerWithAutoCommitDisabledWithAuthenticationFailure() {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String user = userFor(groupProtocol);
             try (Consumer<byte[], byte[]> consumer = createConsumer(user, Map.of(
@@ -187,7 +191,7 @@ public class SaslClientsWithInvalidCredentialsTest {
         Consumer<byte[], byte[]> consumer,
         String user,
         boolean usePollForInitialFailure
-    ) throws Exception {
+    ) {
         long startMs = System.currentTimeMillis();
         if (usePollForInitialFailure) {
             assertThrows(Exception.class, () -> consumer.poll(Duration.ofMillis(1000)));
@@ -197,7 +201,7 @@ public class SaslClientsWithInvalidCredentialsTest {
         long elapsedMs = System.currentTimeMillis() - startMs;
         assertTrue(elapsedMs <= 5000, "Poll took too long, elapsed=" + elapsedMs);
 
-        createScramCredential(user, CLIENT_PASSWORD);
+        createScramCredential(user);
         try (KafkaProducer<byte[], byte[]> producer = createProducer(user, CLIENT_PASSWORD, Map.of())) {
             verifyWithRetry(() -> sendOneRecord(producer, 15000));
         }
@@ -205,7 +209,7 @@ public class SaslClientsWithInvalidCredentialsTest {
         if (assignment.contains(TP)) {
             consumer.seek(TP, 0);
         }
-        TestUtils.waitForCondition(
+        assertDoesNotThrow(() -> TestUtils.waitForCondition(
             () -> {
                 try {
                     return consumer.poll(Duration.ofMillis(1000)).count() >= 1;
@@ -214,11 +218,11 @@ public class SaslClientsWithInvalidCredentialsTest {
                 }
             },
             "Consumer.poll() did not read the expected number of records within the timeout"
-        );
+        ));
     }
 
     @ClusterTest(brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT)
-    public void testKafkaAdminClientWithAuthenticationFailure() throws Exception {
+    public void testKafkaAdminClientWithAuthenticationFailure() {
         try (Admin admin = createAdminClient(CLIENT_USER, CLIENT_PASSWORD)) {
             verifyAuthenticationException(() -> describeTopic(admin));
 
@@ -227,30 +231,33 @@ public class SaslClientsWithInvalidCredentialsTest {
         }
     }
 
-    private void describeTopic(Admin admin) throws Exception {
+    private void describeTopic(Admin admin) {
         try {
             Map<String, TopicDescription> response = admin.describeTopics(List.of(TOPIC)).allTopicNames().get();
             assertEquals(1, response.size());
             response.forEach((topic, description) ->
                 assertEquals(NUM_PARTITIONS, description.partitions().size()));
         } catch (ExecutionException e) {
-            throw (Exception) e.getCause();
+            // Admin client futures only ever fail with a KafkaException (unchecked).
+            throw (RuntimeException) e.getCause();
+        } catch (InterruptedException e) {
+            fail(e);
         }
     }
 
-    private void createClientCredential() throws Exception {
-        createScramCredential(CLIENT_USER, CLIENT_PASSWORD);
+    private void createClientCredential() {
+        createScramCredential(CLIENT_USER);
     }
 
-    private void createScramCredential(String userName, String password) throws Exception {
+    private void createScramCredential(String userName) {
         try (Admin admin = cluster.admin()) {
-            admin.alterUserScramCredentials(List.of(
+            assertDoesNotThrow(() -> admin.alterUserScramCredentials(List.of(
                 new UserScramCredentialUpsertion(
                     userName,
                     new ScramCredentialInfo(org.apache.kafka.clients.admin.ScramMechanism.SCRAM_SHA_256, 4096),
-                    password
+                        SaslClientsWithInvalidCredentialsTest.CLIENT_PASSWORD
                 )
-            )).all().get();
+            )).all().get());
         }
     }
 
@@ -289,7 +296,7 @@ public class SaslClientsWithInvalidCredentialsTest {
         return CLIENT_USER + "-" + groupProtocol.name().toLowerCase(Locale.ROOT);
     }
 
-    private void sendOneRecord(KafkaProducer<byte[], byte[]> producer, long maxWaitMs) throws Exception {
+    private void sendOneRecord(KafkaProducer<byte[], byte[]> producer, long maxWaitMs) {
         ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
             TP.topic(),
             TP.partition(),
@@ -301,22 +308,25 @@ public class SaslClientsWithInvalidCredentialsTest {
             producer.send(record).get(maxWaitMs, TimeUnit.MILLISECONDS);
             producer.flush();
         } catch (ExecutionException e) {
-            throw (Exception) e.getCause();
+            // Producer futures only ever fail with a KafkaException (unchecked).
+            throw (RuntimeException) e.getCause();
+        } catch (InterruptedException | TimeoutException e) {
+            fail(e);
         }
     }
 
-    private void verifyAuthenticationException(ThrowingRunnable action) {
+    private void verifyAuthenticationException(Executable action) {
         long startMs = System.currentTimeMillis();
-        assertThrows(Exception.class, action::run);
+        assertThrows(Exception.class, action);
         long elapsedMs = System.currentTimeMillis() - startMs;
         assertTrue(elapsedMs <= 5000, "Authentication failure took too long, elapsed=" + elapsedMs);
     }
 
-    private void verifyWithRetry(ThrowingRunnable action) throws InterruptedException {
-        TestUtils.waitForCondition(
+    private void verifyWithRetry(Executable action) {
+        assertDoesNotThrow(() -> TestUtils.waitForCondition(
             () -> {
                 try {
-                    action.run();
+                    action.execute();
                     return true;
                 } catch (SaslAuthenticationException e) {
                     return false;
@@ -325,11 +335,6 @@ public class SaslClientsWithInvalidCredentialsTest {
                 }
             },
             "Operation did not succeed within timeout"
-        );
-    }
-
-    @FunctionalInterface
-    private interface ThrowingRunnable {
-        void run() throws Exception;
+        ));
     }
 }
