@@ -136,6 +136,24 @@ public final class ClientUtils {
         }
     }
 
+    /**
+     * Returns {@link BootstrapConfiguration#DISABLED} when {@code bootstrap.resolve.timeout.ms=0}
+     * (the caller is expected to have primed metadata synchronously via
+     * {@link #maybeBootstrapMetadataSynchronously}), otherwise an enabled configuration that
+     * lets {@link NetworkClient} resolve DNS asynchronously up to the configured budget.
+     */
+    public static BootstrapConfiguration bootstrapConfiguration(AbstractConfig config, List<String> bootstrapServers) {
+        long bootstrapResolveTimeoutMs = config.getLong(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG);
+        if (bootstrapResolveTimeoutMs == 0L) {
+            return BootstrapConfiguration.DISABLED;
+        }
+        return BootstrapConfiguration.enabled(
+            bootstrapServers,
+            ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
+            bootstrapResolveTimeoutMs,
+            config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG));
+    }
+
     public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls, ClientDnsLookup clientDnsLookup) {
         List<InetSocketAddress> addresses = new ArrayList<>();
         for (String url : urls) {
@@ -259,19 +277,7 @@ public final class ClientUtils {
                     metricsGroupPrefix,
                     channelBuilder,
                     logContext);
-            ClientDnsLookup dnsLookup = ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG));
-
-            // bootstrap.resolve.timeout.ms=0 means the caller has already resolved and bootstrapped
-            // metadata synchronously in the client constructor, so the NetworkClient does no async
-            // bootstrap resolution of its own.
-            long bootstrapResolveTimeoutMs = config.getLong(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG);
-            BootstrapConfiguration bootstrapConfiguration = bootstrapResolveTimeoutMs == 0L
-                ? BootstrapConfiguration.DISABLED
-                : BootstrapConfiguration.enabled(
-                    bootstrapServers,
-                    dnsLookup,
-                    bootstrapResolveTimeoutMs,
-                    config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG));
+            BootstrapConfiguration bootstrapConfiguration = bootstrapConfiguration(config, bootstrapServers);
 
             return new NetworkClient(metadataUpdater,
                     metadata,
