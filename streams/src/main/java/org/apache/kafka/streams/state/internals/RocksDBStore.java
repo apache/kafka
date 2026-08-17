@@ -511,7 +511,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     }
 
     @Override
-    public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
+    public synchronized void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
         Objects.requireNonNull(entries, "entries cannot be null");
         // Validate up front so a null key rejects the whole batch. An accessor may apply the entries
         // one at a time, and failing part-way through would otherwise leave the batch half-applied.
