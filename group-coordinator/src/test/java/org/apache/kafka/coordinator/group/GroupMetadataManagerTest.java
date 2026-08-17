@@ -7173,6 +7173,65 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testJoinGroupExistingMemberRejoinDuringPreparingRebalanceCompletesPreviousJoinFuture() throws Exception {
+        // A member re-joining (same memberId) while its previous JoinGroup is still pending must have
+        // that stale future completed with a retriable error, not silently discarded.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        ClassicGroup group = context.createClassicGroup("group-id");
+
+        JoinGroupRequestData leaderRequest = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId("group-id")
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withDefaultProtocolTypeAndProtocols()
+            .build();
+
+        JoinGroupResponseData leaderResponse = context.joinClassicGroupAsDynamicMemberAndCompleteJoin(leaderRequest);
+        assertEquals(Errors.NONE.code(), leaderResponse.errorCode());
+        String leaderId = leaderResponse.leader();
+        assertEquals(1, group.generationId());
+        assertTrue(group.isInState(COMPLETING_REBALANCE));
+
+        // A second member joins, forcing a new rebalance; the join phase doesn't complete since the
+        // leader hasn't rejoined, so this member's join future is left pending.
+        JoinGroupRequestData memberRequest = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId("group-id")
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withDefaultProtocolTypeAndProtocols()
+            .build();
+
+        GroupMetadataManagerTestContext.JoinResult firstJoin = context.sendClassicGroupJoin(memberRequest);
+        assertTrue(group.isInState(PREPARING_REBALANCE));
+        assertFalse(firstJoin.joinFuture.isDone());
+
+        String memberId = group.allMemberIds().stream()
+            .filter(id -> !id.equals(leaderId))
+            .findFirst()
+            .orElseThrow();
+
+        // Same member retries JoinGroup while its first join is still pending.
+        GroupMetadataManagerTestContext.JoinResult secondJoin = context.sendClassicGroupJoin(
+            memberRequest.setMemberId(memberId)
+        );
+        assertTrue(group.isInState(PREPARING_REBALANCE));
+
+        // Superseded first join must be completed promptly with a retriable error.
+        assertTrue(firstJoin.joinFuture.isDone());
+        assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), firstJoin.joinFuture.get().errorCode());
+        assertFalse(secondJoin.joinFuture.isDone());
+
+        // Leader rejoins, completing the rebalance.
+        context.sendClassicGroupJoin(leaderRequest.setMemberId(leaderId));
+
+        assertTrue(group.isInState(COMPLETING_REBALANCE));
+        assertEquals(2, group.generationId());
+
+        // The second join completes normally.
+        assertTrue(secondJoin.joinFuture.isDone());
+        assertEquals(Errors.NONE.code(), secondJoin.joinFuture.get().errorCode());
+    }
+
+    @Test
     public void testJoinGroupExistingMemberDoesNotTriggerRebalanceInStableState() throws Exception {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
@@ -9846,6 +9905,82 @@ public class GroupMetadataManagerTest {
         assertEquals(Errors.NONE.code(), followerSyncResult.syncFuture.get().errorCode());
         assertEquals(followerAssignment, followerSyncResult.syncFuture.get().assignment());
         assertTrue(group.isInState(STABLE));
+    }
+
+    @Test
+    public void testSyncGroupDuplicateFollowerSyncDuringCompletingRebalanceCompletesPreviousSyncFuture() throws Exception {
+        // Mirrors testJoinGroupExistingMemberRejoinDuringPreparingRebalanceCompletesPreviousJoinFuture,
+        // but for SyncGroup: a member's stale, still-pending sync future must be completed with a
+        // retriable error rather than silently orphaned when superseded.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        JoinGroupResponseData leaderJoinResponse = context.joinClassicGroupAsDynamicMemberAndCompleteRebalance("group-id");
+        ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup("group-id", false);
+
+        JoinGroupRequestData joinRequest = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId("group-id")
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withDefaultProtocolTypeAndProtocols()
+            .withRebalanceTimeoutMs(10000)
+            .withSessionTimeoutMs(5000)
+            .build();
+
+        GroupMetadataManagerTestContext.JoinResult followerJoinResult = context.sendClassicGroupJoin(joinRequest);
+        assertFalse(followerJoinResult.joinFuture.isDone());
+
+        GroupMetadataManagerTestContext.JoinResult leaderJoinResult = context.sendClassicGroupJoin(
+            joinRequest.setMemberId(leaderJoinResponse.memberId())
+        );
+        assertTrue(leaderJoinResult.joinFuture.isDone());
+        assertTrue(followerJoinResult.joinFuture.isDone());
+        assertTrue(group.isInState(COMPLETING_REBALANCE));
+
+        int nextGenerationId = leaderJoinResult.joinFuture.get().generationId();
+        String followerId = followerJoinResult.joinFuture.get().memberId();
+
+        SyncGroupRequestData syncRequest = new GroupMetadataManagerTestContext.SyncGroupRequestBuilder()
+            .withGroupId("group-id")
+            .withMemberId(followerId)
+            .withGenerationId(nextGenerationId)
+            .build();
+
+        // Follower syncs once, pending on the leader.
+        GroupMetadataManagerTestContext.SyncResult firstSync = context.sendClassicGroupSync(syncRequest);
+        assertTrue(firstSync.records.isEmpty());
+        assertFalse(firstSync.syncFuture.isDone());
+
+        // Same follower retries SyncGroup before the first sync has completed.
+        GroupMetadataManagerTestContext.SyncResult secondSync = context.sendClassicGroupSync(syncRequest);
+        assertTrue(secondSync.records.isEmpty());
+
+        // Superseded first sync must be completed promptly with a retriable error.
+        assertTrue(firstSync.syncFuture.isDone());
+        assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), firstSync.syncFuture.get().errorCode());
+        assertFalse(secondSync.syncFuture.isDone());
+
+        // Leader syncs, completing the rebalance.
+        List<SyncGroupRequestAssignment> assignment = new ArrayList<>();
+        assignment.add(new SyncGroupRequestAssignment()
+            .setMemberId(leaderJoinResponse.memberId())
+            .setAssignment(new byte[]{0})
+        );
+        assignment.add(new SyncGroupRequestAssignment()
+            .setMemberId(followerId)
+            .setAssignment(new byte[]{1})
+        );
+
+        GroupMetadataManagerTestContext.SyncResult leaderSync = context.sendClassicGroupSync(
+            syncRequest
+                .setMemberId(leaderJoinResponse.memberId())
+                .setAssignments(assignment)
+        );
+        leaderSync.appendFuture.complete(null);
+
+        assertTrue(group.isInState(STABLE));
+
+        // The second sync completes normally.
+        assertTrue(secondSync.syncFuture.isDone());
+        assertEquals(Errors.NONE.code(), secondSync.syncFuture.get().errorCode());
     }
 
     @Test
