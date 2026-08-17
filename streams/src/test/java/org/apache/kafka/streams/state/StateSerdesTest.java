@@ -30,8 +30,6 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -112,12 +110,11 @@ public class StateSerdesTest {
         final StateSerdes<Object, Object> stateSerdes = new StateSerdes<Object, Object>("anyName", Serdes.serdeFrom(myClass), Serdes.serdeFrom(myClass));
         final Integer myInt = 123;
         final Exception e = assertThrows(StreamsException.class, () -> stateSerdes.rawValue(myInt, new RecordHeaders()));
-        assertThat(
-            e.getMessage(),
-            equalTo(
+        assertEquals(
                 "A serializer (org.apache.kafka.common.serialization.StringSerializer) " +
                 "is not compatible to the actual value type (value type: java.lang.Integer). " +
-                "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters."));
+                "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters.",
+                e.getMessage());
     }
 
     @Test
@@ -129,12 +126,11 @@ public class StateSerdesTest {
             new StateSerdes<Object, Object>("anyName", Serdes.serdeFrom(myClass), new ValueAndTimestampSerde(Serdes.serdeFrom(myClass)));
         final Integer myInt = 123;
         final Exception e = assertThrows(StreamsException.class, () -> stateSerdes.rawValue(ValueAndTimestamp.make(myInt, 0L), new RecordHeaders()));
-        assertThat(
-            e.getMessage(),
-            equalTo(
-                "A serializer (org.apache.kafka.common.serialization.StringSerializer) " +
-                    "is not compatible to the actual value type (value type: java.lang.Integer). " +
-                    "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters."));
+        assertEquals(
+            "A serializer (org.apache.kafka.common.serialization.StringSerializer) " +
+                "is not compatible to the actual value type (value type: java.lang.Integer). " +
+                "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters.",
+            e.getMessage());
     }
 
     @Test
@@ -144,12 +140,11 @@ public class StateSerdesTest {
         final StateSerdes<Object, Object> stateSerdes = new StateSerdes<Object, Object>("anyName", Serdes.serdeFrom(myClass), Serdes.serdeFrom(myClass));
         final Integer myInt = 123;
         final Exception e = assertThrows(StreamsException.class, () -> stateSerdes.rawKey(myInt, new RecordHeaders()));
-        assertThat(
-            e.getMessage(),
-            equalTo(
-                "A serializer (org.apache.kafka.common.serialization.StringSerializer) " +
-                    "is not compatible to the actual key type (key type: java.lang.Integer). " +
-                    "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters."));
+        assertEquals(
+            "A serializer (org.apache.kafka.common.serialization.StringSerializer) " +
+                "is not compatible to the actual key type (key type: java.lang.Integer). " +
+                "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters.",
+            e.getMessage());
     }
 
     @Test
