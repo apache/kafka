@@ -202,7 +202,7 @@ public class DescribeConsumerGroupTest {
                     TestUtils.waitForCondition(() -> {
                         Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
                         String[] lines = res.getKey().trim().split("\n");
-                        if (lines.length != 2 && !res.getValue().isEmpty()) {
+                        if (lines.length != 2 || !res.getValue().isEmpty()) {
                             return false;
                         }
                         ConsumerGroupDescription consumerGroupDescription = admin.describeConsumerGroups(Set.of(group)).describedGroups().get(group).get();
@@ -245,7 +245,7 @@ public class DescribeConsumerGroupTest {
                     TestUtils.waitForCondition(() -> {
                         Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
                         String[] lines = res.getKey().trim().split("\n");
-                        if (lines.length != 2 && !res.getValue().isEmpty()) {
+                        if (lines.length != 2 || !res.getValue().isEmpty()) {
                             return false;
                         }
                         ConsumerGroupDescription consumerGroupDescription = admin.describeConsumerGroups(Set.of(group)).describedGroups().get(group).get();
@@ -298,7 +298,7 @@ public class DescribeConsumerGroupTest {
                 TestUtils.waitForCondition(() -> {
                     Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
                     String[] lines = res.getKey().trim().split("\n");
-                    if (lines.length != 3 && !res.getValue().isEmpty()) {
+                    if (lines.length != 3 || !res.getValue().isEmpty()) {
                         return false;
                     }
 
@@ -340,7 +340,7 @@ public class DescribeConsumerGroupTest {
                     TestUtils.waitForCondition(() -> {
                         Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
                         String[] lines = res.getKey().trim().split("\n");
-                        if (lines.length != 2 && !res.getValue().isEmpty()) {
+                        if (lines.length != 2 || !res.getValue().isEmpty()) {
                             return false;
                         }
                         ConsumerGroupDescription consumerGroupDescription = admin.describeConsumerGroups(Set.of(group)).describedGroups().get(group).get();
