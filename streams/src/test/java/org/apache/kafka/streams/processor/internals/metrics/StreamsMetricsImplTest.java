@@ -42,6 +42,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -339,6 +340,34 @@ public class StreamsMetricsImplTest {
         );
 
         assertThat(actualSensor, is(equalToObject(sensor)));
+    }
+
+    @Test
+    public void shouldNotRetainDuplicateSensorNamesWhenSensorIsRecreated() {
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), CLIENT_ID, time);
+
+        for (int i = 0; i < 5; i++) {
+            final Sensor recreated = streamsMetrics.topicLevelSensor(
+                THREAD_ID1, TASK_ID1, NODE_ID1, TOPIC_ID1, SENSOR_NAME_1, RecordingLevel.INFO);
+            streamsMetrics.removeSensor(recreated);
+        }
+
+        final int retainedNames = streamsMetrics.topicLevelSensors().values().stream()
+            .mapToInt(Set::size)
+            .sum();
+        assertThat(retainedNames, is(1));
+    }
+
+    @Test
+    public void shouldNotRetainDuplicateClientLevelSensorNamesWhenSensorIsRecreated() {
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), CLIENT_ID, time);
+
+        for (int i = 0; i < 5; i++) {
+            final Sensor recreated = streamsMetrics.clientLevelSensor(SENSOR_NAME_1, INFO_RECORDING_LEVEL);
+            streamsMetrics.removeSensor(recreated);
+        }
+
+        assertThat(streamsMetrics.clientLevelSensors().size(), is(1));
     }
 
     @Test

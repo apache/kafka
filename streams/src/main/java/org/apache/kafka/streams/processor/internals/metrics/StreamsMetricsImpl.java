@@ -40,10 +40,12 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
@@ -92,14 +94,14 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     private final Version version;
     private final Deque<MetricName> clientLevelMetrics = new LinkedList<>();
-    private final Deque<String> clientLevelSensors = new LinkedList<>();
+    private final Set<String> clientLevelSensors = new LinkedHashSet<>();
     private final Map<String, Deque<MetricName>> threadLevelMetrics = new HashMap<>();
-    private final Map<String, Deque<String>> threadLevelSensors = new HashMap<>();
-    private final Map<String, Deque<String>> taskLevelSensors = new HashMap<>();
-    private final Map<String, Deque<String>> nodeLevelSensors = new HashMap<>();
-    private final Map<String, Deque<String>> topicLevelSensors = new HashMap<>();
-    private final Map<String, Deque<String>> cacheLevelSensors = new HashMap<>();
-    private final ConcurrentMap<String, Deque<String>> storeLevelSensors = new ConcurrentHashMap<>();
+    private final Map<String, Set<String>> threadLevelSensors = new HashMap<>();
+    private final Map<String, Set<String>> taskLevelSensors = new HashMap<>();
+    private final Map<String, Set<String>> nodeLevelSensors = new HashMap<>();
+    private final Map<String, Set<String>> topicLevelSensors = new HashMap<>();
+    private final Map<String, Set<String>> cacheLevelSensors = new HashMap<>();
+    private final ConcurrentMap<String, Set<String>> storeLevelSensors = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Deque<MetricName>> storeLevelMetrics = new ConcurrentHashMap<>();
 
     private final RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger;
@@ -284,7 +286,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             final String fullSensorName = CLIENT_LEVEL_GROUP + SENSOR_NAME_DELIMITER + sensorName;
             final Sensor sensor = metrics.getSensor(fullSensorName);
             if (sensor == null) {
-                clientLevelSensors.push(fullSensorName);
+                clientLevelSensors.add(fullSensorName);
                 return metrics.sensor(fullSensorName, recordingLevel, parents);
             }
             return sensor;
@@ -340,18 +342,18 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     private void removeAllClientLevelSensors() {
         synchronized (clientLevelSensors) {
-            while (!clientLevelSensors.isEmpty()) {
-                metrics.removeSensor(clientLevelSensors.pop());
-            }
+            final List<String> sensorNames = List.copyOf(clientLevelSensors);
+            clientLevelSensors.clear();
+            sensorNames.forEach(metrics::removeSensor);
         }
     }
 
     public final void removeAllThreadLevelSensors(final String threadId) {
         final String key = threadSensorPrefix(threadId);
         synchronized (threadLevelSensors) {
-            final Deque<String> sensors = threadLevelSensors.remove(key);
-            while (sensors != null && !sensors.isEmpty()) {
-                metrics.removeSensor(sensors.pop());
+            final Set<String> sensors = threadLevelSensors.remove(key);
+            if (sensors != null) {
+                sensors.forEach(metrics::removeSensor);
             }
         }
     }
@@ -446,9 +448,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public final void removeAllTaskLevelSensors(final String threadId, final String taskId) {
         final String key = taskSensorPrefix(threadId, taskId);
         synchronized (taskLevelSensors) {
-            final Deque<String> sensors = taskLevelSensors.remove(key);
-            while (sensors != null && !sensors.isEmpty()) {
-                metrics.removeSensor(sensors.pop());
+            final Set<String> sensors = taskLevelSensors.remove(key);
+            if (sensors != null) {
+                sensors.forEach(metrics::removeSensor);
             }
         }
     }
@@ -475,9 +477,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                 final String processorNodeName) {
         final String key = nodeSensorPrefix(threadId, taskId, processorNodeName);
         synchronized (nodeLevelSensors) {
-            final Deque<String> sensors = nodeLevelSensors.remove(key);
-            while (sensors != null && !sensors.isEmpty()) {
-                metrics.removeSensor(sensors.pop());
+            final Set<String> sensors = nodeLevelSensors.remove(key);
+            if (sensors != null) {
+                sensors.forEach(metrics::removeSensor);
             }
         }
     }
@@ -506,9 +508,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                  final String topicName) {
         final String key = topicSensorPrefix(threadId, taskId, processorNodeName, topicName);
         synchronized (topicLevelSensors) {
-            final Deque<String> sensors = topicLevelSensors.remove(key);
-            while (sensors != null && !sensors.isEmpty()) {
-                metrics.removeSensor(sensors.pop());
+            final Set<String> sensors = topicLevelSensors.remove(key);
+            if (sensors != null) {
+                sensors.forEach(metrics::removeSensor);
             }
         }
     }
@@ -547,9 +549,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public final void removeAllCacheLevelSensors(final String threadId, final String taskId, final String cacheName) {
         final String key = cacheSensorPrefix(threadId, taskId, cacheName);
         synchronized (cacheLevelSensors) {
-            final Deque<String> strings = cacheLevelSensors.remove(key);
-            while (strings != null && !strings.isEmpty()) {
-                metrics.removeSensor(strings.pop());
+            final Set<String> sensors = cacheLevelSensors.remove(key);
+            if (sensors != null) {
+                sensors.forEach(metrics::removeSensor);
             }
         }
     }
@@ -567,7 +569,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         final String sensorPrefix = storeSensorPrefix(Thread.currentThread().getName(), taskId, storeName);
             // since the keys in the map storeLevelSensors contain the name of the current thread and threads only
             // access keys in which their name is contained, the value in the maps do not need to be thread safe
-            // and we can use a LinkedList here.
+            // and we can use a LinkedHashSet here.
             // TODO: In future, we could use thread local maps since each thread will exclusively access the set of keys
             //  that contain its name. Similar is true for the other metric levels. Thread-level metrics need some
             //  special attention, since they are created before the thread is constructed. The creation of those
@@ -608,9 +610,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                             final String taskId,
                                             final String storeName) {
         final String key = storeSensorPrefix(threadId, taskId, storeName);
-        final Deque<String> sensors = storeLevelSensors.remove(key);
-        while (sensors != null && !sensors.isEmpty()) {
-            metrics.removeSensor(sensors.pop());
+        final Set<String> sensors = storeLevelSensors.remove(key);
+        if (sensors != null) {
+            sensors.forEach(metrics::removeSensor);
         }
     }
 
@@ -971,7 +973,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         }
     }
 
-    private Sensor getSensors(final Map<String, Deque<String>> sensors,
+    private Sensor getSensors(final Map<String, Set<String>> sensors,
                               final String sensorSuffix,
                               final String sensorPrefix,
                               final RecordingLevel recordingLevel,
@@ -979,7 +981,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         final String fullSensorName = sensorPrefix + SENSOR_NAME_DELIMITER + sensorSuffix;
         final Sensor sensor = metrics.getSensor(fullSensorName);
         if (sensor == null) {
-            sensors.computeIfAbsent(sensorPrefix, ignored -> new LinkedList<>()).push(fullSensorName);
+            sensors.computeIfAbsent(sensorPrefix, ignored -> new LinkedHashSet<>()).add(fullSensorName);
             return metrics.sensor(fullSensorName, recordingLevel, parents);
         }
         return sensor;
@@ -1004,6 +1006,25 @@ public class StreamsMetricsImpl implements StreamsMetrics {
      */
     Map<Sensor, Sensor> parentSensors() {
         return Collections.unmodifiableMap(parentSensors);
+    }
+
+    /**
+     * Visible for testing
+     */
+    Map<String, Set<String>> topicLevelSensors() {
+        synchronized (topicLevelSensors) {
+            return topicLevelSensors.entrySet().stream()
+                .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, e -> Set.copyOf(e.getValue())));
+        }
+    }
+
+    /**
+     * Visible for testing
+     */
+    Set<String> clientLevelSensors() {
+        synchronized (clientLevelSensors) {
+            return Set.copyOf(clientLevelSensors);
+        }
     }
 
     private static String groupNameFromScope(final String scopeName) {
