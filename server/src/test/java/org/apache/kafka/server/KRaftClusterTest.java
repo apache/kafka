@@ -1209,8 +1209,16 @@ public class KRaftClusterTest {
                 // This makes test fail. Shutdown the controller to make sure the request is handled by another controller.
                 cluster.controllers().get(quorumInfo.leaderId()).shutdown();
                 QuorumInfo quorumInfo2 = quorumInfo2Future.get();
-                // Make sure the leader has changed
-                assertTrue(quorumInfo.leaderId() != quorumInfo2.leaderId());
+                if (quorumInfo.leaderId() == quorumInfo2.leaderId()) {
+                    TestUtils.waitForCondition(() -> {
+                        try {
+                            QuorumInfo retriedQuorumInfo = admin.describeMetadataQuorum().quorumInfo().get();
+                            return quorumInfo.leaderId() != retriedQuorumInfo.leaderId();
+                        } catch (Exception e) {
+                            return false;
+                        }
+                    }, "Timed out waiting for a new leader to be elected and returned by describeMetadataQuorum");
+                }
 
                 assertEquals(controllerIds, voterIds);
                 assertTrue(controllerIds.contains(quorumInfo.leaderId()),
