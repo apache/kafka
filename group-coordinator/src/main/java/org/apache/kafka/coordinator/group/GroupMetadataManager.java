@@ -7706,15 +7706,6 @@ public class GroupMetadataManager {
         String joinReason,
         CompletableFuture<JoinGroupResponseData> responseFuture
     ) {
-        // A prior JoinGroup for this member may still be pending; complete it before
-        // group.updateMember discards it, or it would never resolve on its own.
-        if (member.isAwaitingJoin()) {
-            group.completeJoinFuture(member, new JoinGroupResponseData()
-                .setMemberId(member.memberId())
-                .setErrorCode(Errors.REBALANCE_IN_PROGRESS.code())
-            );
-        }
-
         group.updateMember(
             member,
             request.protocols(),
@@ -8296,16 +8287,7 @@ public class GroupMetadataManager {
             responseFuture.complete(new SyncGroupResponseData()
                 .setErrorCode(Errors.REBALANCE_IN_PROGRESS.code()));
         } else if (group.isInState(COMPLETING_REBALANCE)) {
-            ClassicGroupMember syncingMember = group.member(memberId);
-            // A prior SyncGroup for this member may still be pending; complete it before
-            // it's discarded below, or it would never resolve on its own.
-            if (syncingMember.isAwaitingSync()) {
-                group.completeSyncFuture(syncingMember, new SyncGroupResponseData()
-                    .setErrorCode(Errors.REBALANCE_IN_PROGRESS.code())
-                );
-            }
-
-            syncingMember.setAwaitingSyncFuture(responseFuture);
+            group.member(memberId).setAwaitingSyncFuture(responseFuture);
             removePendingSyncMember(group, request.memberId());
 
             // If this is the leader, then we can attempt to persist state and transition to stable

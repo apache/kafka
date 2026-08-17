@@ -22,6 +22,7 @@ import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProt
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Bytes;
 
 import java.util.HashSet;
@@ -397,16 +398,35 @@ public class ClassicGroupMember {
     }
 
     /**
+     * Set the member's join future. If a join future is already pending when a new,
+     * non-null one is set, the new request supersedes it, so the earlier one is
+     * completed with REBALANCE_IN_PROGRESS first -- otherwise it would never resolve
+     * on its own.
+     *
      * @param value the updated join future.
      */
     public void setAwaitingJoinFuture(CompletableFuture<JoinGroupResponseData> value) {
+        if (value != null && awaitingJoinFuture != null) {
+            awaitingJoinFuture.complete(new JoinGroupResponseData()
+                .setMemberId(memberId)
+                .setErrorCode(Errors.REBALANCE_IN_PROGRESS.code()));
+        }
         this.awaitingJoinFuture = value;
     }
 
     /**
+     * Set the member's sync future. If a sync future is already pending when a new,
+     * non-null one is set, the new request supersedes it, so the earlier one is
+     * completed with REBALANCE_IN_PROGRESS first -- otherwise it would never resolve
+     * on its own.
+     *
      * @param value the updated sync future.
      */
     public void setAwaitingSyncFuture(CompletableFuture<SyncGroupResponseData> value) {
+        if (value != null && awaitingSyncFuture != null) {
+            awaitingSyncFuture.complete(new SyncGroupResponseData()
+                .setErrorCode(Errors.REBALANCE_IN_PROGRESS.code()));
+        }
         this.awaitingSyncFuture = value;
     }
 
