@@ -118,6 +118,8 @@ public abstract class RestServer {
      * Adds Jetty connector for each configured listener
      */
     public final void createConnectors(List<String> listeners, List<String> adminListeners) {
+        validateListenerConfig(listeners, adminListeners);
+
         List<Connector> connectors = new ArrayList<>();
 
         for (String listener : listeners) {
@@ -135,6 +137,57 @@ public abstract class RestServer {
                 log.info("Added admin connector for {}", adminListener);
             }
         }
+    }
+
+    /**
+     * Validate that no admin listener shares a host and port with a regular listener. The REST server creates a
+     * dedicated Jetty connector for each admin listener (bound to the {@link #ADMIN_SERVER_CONNECTOR_NAME} virtual
+     * host); if an admin listener reused the host and port of a regular listener, the two connectors would attempt
+     * to bind the same socket and the server would fail to start with an opaque "address already in use" error.
+     * To expose the admin endpoints on the regular listeners, leave {@code admin.listeners} unset.
+     */
+    private static void validateListenerConfig(List<String> listeners, List<String> adminListeners) {
+        if (adminListeners == null || adminListeners.isEmpty()) {
+            return;
+        }
+        for (String adminListener : adminListeners) {
+            for (String listener : listeners) {
+                if (listenersBindSameSocket(listener, adminListener)) {
+                    throw new ConfigException(String.format(
+                        "Admin listener %s conflicts with %s entry %s: %s and %s entries must not share a host and port. "
+                            + "To expose the admin endpoints on the regular listeners, leave %s unset.",
+                        adminListener, RestServerConfig.LISTENERS_CONFIG, listener,
+                        RestServerConfig.ADMIN_LISTENERS_CONFIG, RestServerConfig.LISTENERS_CONFIG,
+                        RestServerConfig.ADMIN_LISTENERS_CONFIG));
+                }
+            }
+        }
+    }
+
+    private static boolean listenersBindSameSocket(String listener, String adminListener) {
+        Matcher listenerMatcher = LISTENER_PATTERN.matcher(listener);
+        Matcher adminMatcher = LISTENER_PATTERN.matcher(adminListener);
+        if (!listenerMatcher.matches() || !adminMatcher.matches()) {
+            return false;
+        }
+
+        int port = Integer.parseInt(listenerMatcher.group(3));
+        int adminPort = Integer.parseInt(adminMatcher.group(3));
+        if (port != adminPort || port == 0) {
+            return false;
+        }
+
+        String host = normalizeListenerHost(listenerMatcher.group(2));
+        String adminHost = normalizeListenerHost(adminMatcher.group(2));
+        return host.equals(adminHost) || isWildcardHost(host) || isWildcardHost(adminHost);
+    }
+
+    private static String normalizeListenerHost(String host) {
+        return host == null ? "" : host.trim().toLowerCase(Locale.ENGLISH);
+    }
+
+    private static boolean isWildcardHost(String host) {
+        return host.isEmpty() || host.equals("0.0.0.0") || host.equals("::") || host.equals("[::]");
     }
 
     /**
@@ -242,8 +295,8 @@ public abstract class RestServer {
                 log.info("Adding admin resources to main listener");
                 adminResourceConfig = resourceConfig;
             } else {
-                // TODO: we need to check if these listeners are same as 'listeners'
-                // TODO: the following code assumes that they are different
+                // Admin listeners are validated in createConnectors() to be distinct from the regular listeners,
+                // so the admin resources are served on their own dedicated connector here.
                 log.info("Adding admin resources to admin listener");
                 adminResourceConfig = newResourceConfig();
             }
