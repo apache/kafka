@@ -208,7 +208,7 @@ Producer (for version <=2.8)
 </td>  
 <td>
 
-`acks="1")`
+`acks="1"`
 </td>  
 <td>
 
@@ -855,7 +855,7 @@ Medium
 <td>
 
 The processing mode. Can be either `"at_least_once"` or `"exactly_once_v2"` (for EOS version 2, requires broker version 2.5+). See Processing Guarantee.
-</td>.   
+</td>   
 <td>
 
 `"at_least_once"`
@@ -918,7 +918,7 @@ Low
 </td>  
 <td>
 
-The strategy used for rack aware assignment. Acceptable value are `"none"` (default), `"min_traffic"`, and `"balance_suttopology"`. See Rack Aware Assignment Strategy.
+The strategy used for rack aware assignment. Acceptable values are `"none"` (default), `"min_traffic"`, and `"balance_subtopology"`. See Rack Aware Assignment Strategy.
 </td>  
 <td>
 
@@ -961,7 +961,7 @@ Cost associated with moving tasks from existing assignment. See Rack Aware Assig
 <tr>  
 <td>
 
-rack.aware.assignment.non_overlap_cost
+rack.aware.assignment.traffic_cost
 </td>  
 <td>
 
@@ -1429,8 +1429,8 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 > This configuration sets the strategy Kafka Streams uses for rack aware task assignment so that cross traffic from broker to client can be reduced. This config will only take effect when `broker.rack` is set on the brokers and `client.rack` is set on Kafka Streams side. There are two settings for this config: 
 > 
 >   * `none`. This is the default value which means rack aware task assignment will be disabled.
->   * `min_traffic`. This settings means that the rack aware task assigner will compute an assignment which tries to minimize cross rack traffic.
->   * `balance_subtopology`. This settings means that the rack aware task assigner will compute an assignment which will try to balance tasks from same subtopology to different clients and minimize cross rack traffic on top of that.
+>   * `min_traffic`. This setting means that the rack aware task assigner will compute an assignment which tries to minimize cross rack traffic.
+>   * `balance_subtopology`. This setting means that the rack aware task assigner will compute an assignment which will try to balance tasks from same subtopology to different clients and minimize cross rack traffic on top of that.
 > 
 
 > 
@@ -1688,7 +1688,7 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 >     }
 >     
 >     Properties streamsSettings = new Properties();
->     streamsConfig.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, CustomRocksDBConfig.class);
+>     streamsSettings.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, CustomRocksDBConfig.class);
 > 
 > Notes for example:
 >     
@@ -1796,7 +1796,7 @@ If you call `streamsBuilder.build()` without passing the `Properties` object, op
      // alternatively, you can use
      streamsSettings.put(StreamsConfig.restoreConsumerPrefix("PARAMETER_NAME"), "restore-consumer-value");
  
- Same applied to `main.consumer.` and `main.consumer.`, if you only want to specify one consumer type config.
+ Same applied to `main.consumer.` and `global.consumer.`, if you only want to specify one consumer type config.
  
  Additionally, to configure the internal repartition/changelog topics, you could use the `topic.` prefix, followed by any of the standard topic configs.
      
