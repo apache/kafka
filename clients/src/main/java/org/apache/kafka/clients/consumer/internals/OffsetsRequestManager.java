@@ -93,7 +93,6 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     private final NetworkClientDelegate networkClientDelegate;
     private final CommitRequestManager commitRequestManager;
     private final long defaultApiTimeoutMs;
-    private final long retryBackoffMs;
 
     /**
      * Exception that occurred while updating positions after the triggering event had already
@@ -137,7 +136,6 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         this.requestsToSend = new ArrayList<>();
         this.subscriptionState = subscriptionState;
         this.time = time;
-        this.retryBackoffMs = retryBackoffMs;
         this.requestTimeoutMs = requestTimeoutMs;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.apiVersions = apiVersions;
