@@ -1238,6 +1238,24 @@ public class ReplicationControlManager {
     }
 
     /**
+     * Validates that a batch of partition changes will create at most {@value MAX_PARTITIONS_PER_BATCH}.
+     * Exceeding this number of topics per batch has led to out-of-memory-exceptions.
+     * Validation fails earlier to avoid allocating memory.
+     *
+     * @param topics a batch of new partitions to create.
+     * @throws PolicyViolationException if total number of partitions exceeds {@value MAX_PARTITIONS_PER_BATCH}.
+     */
+    static void validateTotalNumberOfPartitions(List<CreatePartitionsTopic> topics) {
+        long totalPartitions = 0;
+        for (CreatePartitionsTopic topic : topics) {
+            totalPartitions += topic.count();
+            if (totalPartitions > MAX_PARTITIONS_PER_BATCH) {
+                throw new PolicyViolationException("Excessively large number of partitions per request.");
+            }
+        }
+    }
+
+    /**
      * Validate the partition information included in the alter partition request.
      *
      * @param brokerId id of the broker requesting the alter partition
@@ -1882,6 +1900,7 @@ public class ReplicationControlManager {
         ControllerRequestContext context,
         List<CreatePartitionsTopic> topics
     ) {
+        validateTotalNumberOfPartitions(topics);
         List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         List<CreatePartitionsTopicResult> results = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         for (CreatePartitionsTopic topic : topics) {

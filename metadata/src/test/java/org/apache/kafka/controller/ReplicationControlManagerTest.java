@@ -1811,6 +1811,48 @@ public class ReplicationControlManagerTest {
     }
 
     @Test
+    public void testCreatePartitionsWithPolicyViolations() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        CreateTopicsRequestData request = new CreateTopicsRequestData();
+        request.topics().
+            add(new CreatableTopic().
+            setName("foo").
+            setNumPartitions(2).setReplicationFactor((short) 2));
+        ControllerRequestContext requestContext = anonymousContextFor(ApiKeys.CREATE_TOPICS);
+
+        List<CreatePartitionsTopic> oneLargePartition = List.of(
+            new CreatePartitionsTopic().
+                setName("foo").
+                setCount(Integer.MAX_VALUE).
+                setAssignments(null)
+        );
+        assertThrows(
+                PolicyViolationException.class,
+                () -> replicationControl.createPartitions(requestContext, oneLargePartition)
+        );
+
+        List<CreatePartitionsTopic> moreSmallerOnes = List.of(
+            new CreatePartitionsTopic().
+                setName("foo").
+                setCount(1).
+                setAssignments(null),
+            new CreatePartitionsTopic().
+                setName("foo").
+                setCount(ReplicationControlManager.MAX_PARTITIONS_PER_BATCH / 2).
+                setAssignments(null),
+            new CreatePartitionsTopic().
+                setName("foo").
+                setCount(ReplicationControlManager.MAX_PARTITIONS_PER_BATCH / 2).
+                setAssignments(null)
+        );
+        assertThrows(
+                PolicyViolationException.class,
+                () -> replicationControl.createPartitions(requestContext, moreSmallerOnes)
+        );
+    }
+
+    @Test
     public void testValidateGoodManualPartitionAssignments() {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
         ctx.registerBrokers(1, 2, 3);
