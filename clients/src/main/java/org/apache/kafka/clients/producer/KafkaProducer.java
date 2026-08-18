@@ -443,6 +443,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         config.getLong(ProducerConfig.METADATA_MAX_IDLE_CONFIG),
                         logContext,
                         clusterResourceListeners);
+                ClientUtils.maybeBootstrapMetadataSynchronously(config,
+                    config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG), this.metadata);
             }
             this.transactionManager = configureTransactionState(config, logContext);
             // There is no need to do work required for adaptive partitioning, if we use a custom partitioner.

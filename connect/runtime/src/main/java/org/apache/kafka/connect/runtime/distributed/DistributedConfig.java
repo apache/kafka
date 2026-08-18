@@ -408,7 +408,7 @@ public final class DistributedConfig extends WorkerConfig {
             .define(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG,
                     ConfigDef.Type.LONG,
                     CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
-                    atLeast(1L),
+                    atLeast(0L),
                     ConfigDef.Importance.HIGH,
                     CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC)
             .define(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG,
