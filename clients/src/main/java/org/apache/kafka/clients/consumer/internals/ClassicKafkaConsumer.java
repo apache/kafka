@@ -189,6 +189,8 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     interceptorList,
                     Arrays.asList(this.deserializers.keyDeserializer(), this.deserializers.valueDeserializer()));
             this.metadata = new ConsumerMetadata(config, subscriptions, logContext, clusterResourceListeners);
+            ClientUtils.maybeBootstrapMetadataSynchronously(config,
+                config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG), this.metadata);
 
             this.fetchMetricsManager = createFetchMetricsManager(metrics);
             FetchConfig fetchConfig = new FetchConfig(config);
