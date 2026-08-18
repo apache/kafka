@@ -825,7 +825,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             Function<String, TemporaryStage> reportStage,
             boolean doLog
     ) {
-        connectorProps = stripConfigProviderEntries(connectorProps);
+        connectorProps = removeCustomConfigProviders(connectorProps);
 
         String connType = connectorProps.get(CONNECTOR_CLASS_CONFIG);
         if (connType == null) {
@@ -895,7 +895,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         }
     }
 
-    static Map<String, String> stripConfigProviderEntries(Map<String, String> connectorProps) {
+    static Map<String, String> removeCustomConfigProviders(Map<String, String> connectorProps) {
         Map<String, String> sanitized = new HashMap<>(connectorProps);
         String prefix = AbstractConfig.CONFIG_PROVIDERS_CONFIG + ".";
         sanitized.keySet().removeIf(k -> k.equals(AbstractConfig.CONFIG_PROVIDERS_CONFIG) || k.startsWith(prefix));
@@ -920,10 +920,15 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             ConfigValueInfo cv = info.configValue();
             if (cv != null && substitutedKeys.containsKey(cv.name())) {
                 String placeholder = substitutedKeys.get(cv.name());
-                List<String> errors = cv.errors().isEmpty()
-                        ? cv.errors()
-                        : List.of("Invalid value for configuration '" + cv.name()
-                                + "': the value resolved from the config provider reference failed validation");
+                List<String> errors = List.of();
+                if (!cv.errors().isEmpty()) {
+                    if (log.isTraceEnabled()) {
+                        log.trace("Error while validating configuration {} for connector {}: {}",
+                                cv.name(), originalProps.get(CONNECTOR_CLASS_CONFIG), cv.errors());
+                    }
+                    errors = List.of("Invalid value for configuration '" + cv.name()
+                            + "': the value resolved from the config provider reference failed validation");
+                }
                 ConfigValueInfo redacted = new ConfigValueInfo(cv.name(), placeholder, List.of(), errors, cv.visible());
                 redactedConfigs.add(new ConfigInfo(info.configKey(), redacted));
                 errorCount += errors.size();

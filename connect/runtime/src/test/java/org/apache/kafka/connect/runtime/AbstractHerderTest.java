@@ -1371,7 +1371,7 @@ public class AbstractHerderTest {
     }
 
     @Test
-    public void testStripConfigProviderEntries() {
+    public void testRemoveCustomConfigProviders() {
         Map<String, String> props = Map.of(
             "name", "my-connector",
             "connector.class", "MyConnector",
@@ -1379,7 +1379,7 @@ public class AbstractHerderTest {
             "config.providers.file.class", "org.apache.kafka.common.config.provider.FileConfigProvider",
             "config.providers.file.param.allowed.paths", "/tmp");
 
-        Map<String, String> stripped = AbstractHerder.stripConfigProviderEntries(props);
+        Map<String, String> stripped = AbstractHerder.removeCustomConfigProviders(props);
 
         assertEquals(2, stripped.size());
         assertEquals("my-connector", stripped.get("name"));
@@ -1390,9 +1390,9 @@ public class AbstractHerderTest {
     }
 
     @Test
-    public void testStripConfigProviderEntriesNoProviders() {
+    public void testRemoveCustomConfigProvidersNoProviders() {
         Map<String, String> props = Map.of("name", "my-connector", "connector.class", "MyConnector");
-        Map<String, String> stripped = AbstractHerder.stripConfigProviderEntries(props);
+        Map<String, String> stripped = AbstractHerder.removeCustomConfigProviders(props);
         assertEquals(props, stripped);
     }
 
