@@ -330,6 +330,7 @@ org.apache.kafka.clients.admin.KafkaAdminClientTest:
 - testAdminBootstrapResolutionExceptionPropagated
 - testAdminClientApisAuthenticationFailure
 - testAdminClientFailureWhenClosed
+- testAdminConstructorFailsWithConfigExceptionOnUnresolvableBootstrapWhenTimeoutZero
 - testCalcTimeoutMsRemainingAsInt
 - testCallFailWithUnsupportedVersionExceptionDoesNotHaveConcurrentModificationException
 - testClientInstanceId
@@ -882,6 +883,7 @@ org.apache.kafka.clients.consumer.KafkaConsumerTest:
 - testConstructorFailsOnNetworkClientConstructorFailure
 - testConstructorInvalidMetricReporters
 - testConsumerBootstrapResolutionExceptionPropagatedToPoll
+- testConsumerConstructorFailsWithConfigExceptionOnUnresolvableBootstrapWhenTimeoutZero
 - testConsumerJmxPrefix
 - testConsumerProtocolDoesNotLogRecommendation
 - testCurrentLag
@@ -998,6 +1000,7 @@ org.apache.kafka.clients.consumer.KafkaShareConsumerMetricsTest:
 - testUnregisteringNonexistingMetricsDoesntCauseError
 org.apache.kafka.clients.consumer.KafkaShareConsumerTest:
 - testShareConsumerBootstrapResolutionExceptionPropagatedToPoll
+- testShareConsumerConstructorFailsWithConfigExceptionOnUnresolvableBootstrapWhenTimeoutZero
 - testVerifyFetchAndCloseImplicit
 - testVerifyFetchAndCommitSyncImplicit
 - testVerifyHeartbeats
@@ -3081,6 +3084,7 @@ org.apache.kafka.clients.producer.KafkaProducerTest:
 - testPrepareTransactionFailsWhen2PCDisabled
 - testPrepareTransactionSuccess
 - testProducerBootstrapResolutionExceptionPropagated
+- testProducerConstructorFailsWithConfigExceptionOnUnresolvableBootstrapWhenTimeoutZero
 - testProducerJmxPrefix
 - testProducerSendOffsetsToTransactionBootstrapResolutionExceptionPropagated
 - testRetriesAndIdempotenceForIdempotentProducers
