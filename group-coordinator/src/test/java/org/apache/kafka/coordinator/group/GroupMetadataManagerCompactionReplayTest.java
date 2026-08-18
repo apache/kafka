@@ -686,7 +686,17 @@ public class GroupMetadataManagerCompactionReplayTest {
      */
     private void assertCompactedVariantsLoadCleanly(CapturedLog capturedLog) {
         List<CoordinatorRecord> log = capturedLog.records();
-        Set<Integer> compactable = compactablePositions(log);
+
+        Set<ApiMessage> laterKeys = new HashSet<>();
+        Set<Integer> compactable = new HashSet<>();
+        for (int position = log.size() - 1; position >= 0; position--) {
+            CoordinatorRecord record = log.get(position);
+            if (record.value() == null || laterKeys.contains(record.key())) {
+                compactable.add(position);
+            }
+            laterKeys.add(record.key());
+        }
+
         List<Integer> boundaries = capturedLog.batchBoundaries();
 
         assertLoadsCleanly(compact(log, compactable, 0, 0));
@@ -745,23 +755,6 @@ public class GroupMetadataManagerCompactionReplayTest {
                 t
             );
         }
-    }
-
-    /**
-     * The positions in {@code log} of the records log compaction is allowed to remove: a record
-     * superseded by a later record with the same key, and any tombstone.
-     */
-    private static Set<Integer> compactablePositions(List<CoordinatorRecord> log) {
-        Set<ApiMessage> keysWrittenLater = new HashSet<>();
-        Set<Integer> positions = new HashSet<>();
-        for (int position = log.size() - 1; position >= 0; position--) {
-            CoordinatorRecord record = log.get(position);
-            if (record.value() == null || keysWrittenLater.contains(record.key())) {
-                positions.add(position);
-            }
-            keysWrittenLater.add(record.key());
-        }
-        return positions;
     }
 
     /**
