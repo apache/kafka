@@ -21,6 +21,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.metrics.KafkaMetric;
 
 import java.io.Closeable;
@@ -36,6 +37,7 @@ import java.util.Set;
  * @see KafkaShareConsumer
  * @see MockShareConsumer
  */
+@InterfaceAudience.Public
 public interface ShareConsumer<K, V> extends Closeable {
 
     /**

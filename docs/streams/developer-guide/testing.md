@@ -60,7 +60,7 @@ The test-utils package provides a `TopologyTestDriver` that can be used pipe dat
     Topology topology = builder.build();
     
     // create test driver
-    TopologyTestDriver testDriver = new TopologyTestDriver(topology);
+    TopologyTestDriver testDriver = new TopologyTestDriverBuilder(topology).build();
 
 With the test driver you can create `TestInputTopic` giving topic name and the corresponding serializers. `TestInputTopic` provides various methods to pipe new message values, keys and values, or list of KeyValue objects. 
     
@@ -84,7 +84,7 @@ Additionally, you can access state stores via the test driver before or after a 
     
     KeyValueStore store = testDriver.getKeyValueStore("store-name");
 
-Note, that you should always close the test driver at the end to make sure all resources are release properly. 
+Note, that you should always close the test driver at the end to make sure all resources are released properly. 
     
     
     testDriver.close();
@@ -119,7 +119,7 @@ The following example demonstrates how to use the test driver and helper classes
         Properties props = new Properties();
         props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass().getName());
-        testDriver = new TopologyTestDriver(topology, props);
+        testDriver = new TopologyTestDriverBuilder(topology).withConfig(props).build();
     
         // setup test topics
         inputTopic = testDriver.createInputTopic("input-topic", stringSerde.serializer(), longSerde.serializer());
@@ -230,7 +230,7 @@ The following example demonstrates how to use the test driver and helper classes
 
 # Unit Testing Processors
 
-If you [write a Processor](processor-api.html), you will want to test it. 
+If you [write a Processor](../processor-api), you will want to test it. 
 
 Because the `Processor` forwards its results to the context rather than returning them, Unit testing requires a mocked context capable of capturing forwarded data for inspection. For this reason, we provide a `MockProcessorContext` in `test-utils`. 
 
@@ -320,7 +320,7 @@ Processors can schedule punctuators to handle periodic tasks. The mock context d
     final Punctuator punctuator = capturedPunctuator.getPunctuator();
     punctuator.punctuate(/*timestamp*/ 0L);
 
-If you need to write tests involving automatic firing of scheduled punctuators, we recommend creating a simple topology with your processor and using the [`TopologyTestDriver`](testing.html#testing-topologytestdriver). 
+If you need to write tests involving automatic firing of scheduled punctuators, we recommend creating a simple topology with your processor and using the [`TopologyTestDriver`](.#testing-topologytestdriver). 
 
   * [Documentation](/documentation)
   * [Kafka Streams](/documentation/streams)

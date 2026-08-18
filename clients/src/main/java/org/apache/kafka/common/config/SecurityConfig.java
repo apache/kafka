@@ -14,11 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.config;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * Contains the common security config for SSL and SASL
  */
+@InterfaceAudience.Public
 public class SecurityConfig {
 
     public static final String SECURITY_PROVIDERS_CONFIG = "security.providers";

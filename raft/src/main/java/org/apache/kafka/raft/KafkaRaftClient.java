@@ -498,8 +498,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         partitionState = new KRaftControlRecordStateMachine(
             staticVoters,
             log,
-            serde,
-            BufferSupplier.create(),
             MAX_BATCH_SIZE_BYTES,
             logContext,
             kafkaRaftMetrics,
@@ -3594,7 +3592,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             }
         } else {
             if (listenerContexts.remove(listener) == null) {
-                logger.error("Attempting to remove a listener that doesn't exists: {}", listenerName(listener));
+                logger.error("Attempting to remove a listener that doesn't exist: {}", listenerName(listener));
             } else {
                 logger.info("Unregistered the listener {}", listenerName(listener));
             }
