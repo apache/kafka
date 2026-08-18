@@ -30,9 +30,9 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.raft.KafkaRaftClientTest.replicaKey;
+import static org.apache.kafka.raft.RaftClientTestContext.RaftProtocol.KIP_1186_PROTOCOL;
 import static org.apache.kafka.raft.RaftClientTestContext.RaftProtocol.KIP_595_PROTOCOL;
 import static org.apache.kafka.raft.RaftClientTestContext.RaftProtocol.KIP_853_PROTOCOL;
-import static org.apache.kafka.raft.RaftClientTestContext.RaftProtocol.KIP_1186_PROTOCOL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
