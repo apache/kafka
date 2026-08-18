@@ -25,11 +25,14 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
@@ -45,6 +48,7 @@ import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -83,7 +87,6 @@ import org.mockito.stubbing.Answer;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -164,20 +167,13 @@ public class KafkaStreamsTest {
     private MockedConstruction<GlobalStreamThread> globalStreamThreadMockedConstruction;
     private MockedConstruction<Metrics> metricsMockedConstruction;
 
-    public static class StateListenerStub implements KafkaStreams.StateListener {
-        int numChanges = 0;
-        KafkaStreams.State oldState;
-        KafkaStreams.State newState;
-        public Map<KafkaStreams.State, Long> mapStates = new HashMap<>();
+    private static class StateListenerStub implements KafkaStreams.StateListener {
+        private int numChanges = 0;
 
         @Override
         public void onChange(final KafkaStreams.State newState,
                              final KafkaStreams.State oldState) {
-            final long prevCount = mapStates.containsKey(newState) ? mapStates.get(newState) : 0;
             numChanges++;
-            this.oldState = oldState;
-            this.newState = newState;
-            mapStates.put(newState, prevCount + 1);
         }
     }
 
@@ -1109,13 +1105,60 @@ public class KafkaStreamsTest {
         final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
+        final StreamPartitioner<String, Object> simplePartitioner = new SimplePartitioner();
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
-            assertThrows(StreamsNotStartedException.class, () -> streams.queryMetadataForKey("store", "key", (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(0))));
+            assertThrows(StreamsNotStartedException.class, () -> streams.queryMetadataForKey("store", "key", simplePartitioner));
             streams.start();
             waitForApplicationState(Collections.singletonList(streams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
             streams.close();
             waitForApplicationState(Collections.singletonList(streams), KafkaStreams.State.NOT_RUNNING, DEFAULT_DURATION);
-            assertThrows(IllegalStateException.class, () -> streams.queryMetadataForKey("store", "key", (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(0))));
+            assertThrows(IllegalStateException.class, () -> streams.queryMetadataForKey("store", "key", simplePartitioner));
+        }
+    }
+
+    @Test
+    public void shouldPropagateSerializerAndHeadersToStreamsMetadataState() {
+        prepareStreams();
+        prepareStreamThread(streamThreadOne, 1);
+        prepareStreamThread(streamThreadTwo, 2);
+
+        try (final MockedConstruction<StreamsMetadataState> metadataStateMockedConstruction = mockConstruction(StreamsMetadataState.class)) {
+            try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+                streams.start();
+                final StreamsMetadataState mockMetadataState = metadataStateMockedConstruction.constructed().get(0);
+
+                final Headers headers = new RecordHeaders();
+                headers.add("key", "value".getBytes());
+                final Serializer<String> serializer = new StringSerializer();
+
+                streams.queryMetadataForKey("store", "key", headers, serializer);
+
+                verify(mockMetadataState).keyQueryMetadataForKey("store", "key", headers, serializer);
+            }
+        }
+    }
+
+    @Test
+    public void shouldPropagatePartitionerAndHeadersToStreamsMetadataState() {
+        prepareStreams();
+        prepareStreamThread(streamThreadOne, 1);
+        prepareStreamThread(streamThreadTwo, 2);
+
+        try (final MockedConstruction<StreamsMetadataState> metadataStateMockedConstruction = mockConstruction(StreamsMetadataState.class)) {
+            try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+                streams.start();
+                final StreamsMetadataState mockMetadataState = metadataStateMockedConstruction.constructed().get(0);
+
+                final Headers headers = new RecordHeaders();
+                headers.add("key", "value".getBytes());
+
+                @SuppressWarnings("unchecked")
+                final StreamPartitioner<String, Object> partitioner = mock(StreamPartitioner.class);
+
+                streams.queryMetadataForKey("store", "key", headers, partitioner);
+
+                verify(mockMetadataState).keyQueryMetadataForKey("store", "key", headers, partitioner);
+            }
         }
     }
 
@@ -2054,6 +2097,19 @@ public class KafkaStreamsTest {
                 // verify that stateDirectory constructor was called
                 assertFalse(stateDirectoryMockedConstruction.constructed().isEmpty());
             }
+        }
+    }
+
+    private static class SimplePartitioner implements StreamPartitioner<String, Object> {
+        @SuppressWarnings("removal")
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+            throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
+        }
+
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final Headers headers, final int numPartitions) {
+            return Optional.of(Collections.singleton(0));
         }
     }
 }

@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -53,6 +55,7 @@ import java.io.File;
 import java.time.Instant;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -165,6 +168,42 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
             assertEquals(windowedPair(3, "three", 2 * WINDOW_SIZE), iterator.next());
             assertFalse(iterator.hasNext());
         }
+    }
+
+    @Test
+    public void shouldMeasureExpiredRecordsDroppedDuringRestoreAsRecords() {
+        final StateSerdes<Integer, String> serdes = new StateSerdes<>("", Serdes.Integer(), Serdes.String());
+
+        final List<KeyValue<byte[], byte[]>> batch = new LinkedList<>();
+        // advances observed stream time far enough that every record after it falls outside retention
+        batch.add(new KeyValue<>(
+            toStoreKeyBinary(0, 4 * RETENTION_PERIOD, 0, new RecordHeaders(), serdes).get(),
+            serdes.rawValue("on-time")));
+        for (int key = 1; key <= 3; key++) {
+            batch.add(new KeyValue<>(
+                toStoreKeyBinary(key, 0L, 0, new RecordHeaders(), serdes).get(),
+                serdes.rawValue("expired")));
+        }
+
+        context.restore(STORE_NAME, batch);
+
+        final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
+        final String threadId = Thread.currentThread().getName();
+        final Map<String, String> tags = mkMap(mkEntry("thread-id", threadId), mkEntry("task-id", "0_0"));
+
+        final Metric dropTotal = metrics.get(
+            new MetricName("dropped-records-total", "stream-task-metrics", "", tags));
+        final Metric dropRate = metrics.get(
+            new MetricName("dropped-records-rate", "stream-task-metrics", "", tags));
+
+        assertEquals(3.0, dropTotal.metricValue());
+        assertEquals(
+            3.0 / 30.0,
+            ((Number) dropRate.metricValue()).doubleValue(),
+            0.005d,
+            "dropped-records-rate must reflect the 3 records dropped, not the single sensor recording; "
+                + "counting recordings would give 1/30 == 0.03333 (KAFKA-20877)"
+        );
     }
 
     @Test
@@ -405,6 +444,46 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
         } finally {
             stop.set(true);
             txnStore.close();
+        }
+    }
+
+    @Test
+    public void shouldReportUncommittedPositionForTransactionalStore() {
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        props.setProperty(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, "true");
+        final InternalMockProcessorContext<Bytes, byte[]> ctx = new InternalMockProcessorContext<>(
+            TestUtils.tempDirectory(),
+            new Serdes.BytesSerde(),
+            new Serdes.ByteArraySerde(),
+            new StreamsConfig(props)
+        );
+        final InMemoryWindowStore store = new InMemoryWindowStore(
+            "txn-pos-window-store", RETENTION_PERIOD, WINDOW_SIZE, false, "scope");
+        store.init(ctx, store);
+        try {
+            ctx.setRecordContext(new ProcessorRecordContext(0, 1, 0, "topic", new RecordHeaders()));
+            store.put(Bytes.wrap("k".getBytes()), "v".getBytes(), 0L);
+
+            final Position expected = Position.fromMap(mkMap(mkEntry("topic", mkMap(mkEntry(0, 1L)))));
+
+            // READ_UNCOMMITTED query should expose the staged position before commit
+            final QueryResult<?> uncommitted = store.query(
+                WindowKeyQuery.withKeyAndWindowStartRange(
+                    Bytes.wrap("k".getBytes()), Instant.ofEpochMilli(0), Instant.ofEpochMilli(WINDOW_SIZE)),
+                PositionBound.unbounded(),
+                new QueryConfig(false));
+            assertEquals(expected, uncommitted.getPosition(), "READ_UNCOMMITTED query position");
+
+            // getPosition() reports the uncommitted (committed + staged) position, mirroring
+            // RocksDBStore, so the changelog consistency vector reflects the staged write.
+            assertEquals(expected, store.getPosition(), "getPosition before commit (uncommitted)");
+
+            // after commit, committed position populated
+            store.commit(java.util.Map.of());
+            assertEquals(expected, store.getPosition(), "getPosition after commit");
+        } finally {
+            store.close();
         }
     }
 

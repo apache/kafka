@@ -71,7 +71,7 @@ import static org.apache.kafka.streams.state.internals.RocksDBStore.DB_FILE_DIR;
  * timestamps:
  * <ul>
  *     <li>a {@code validFrom} timestamp. This timestamp is explicitly associated with the record
- *     as part of the {@link VersionedKeyValueStore#put(Object, Object, long)}} call to the store;
+ *     as part of the {@link VersionedKeyValueStore#put(Object, Object, long)} call to the store;
  *     i.e., this is the record's timestamp.</li>
  *     <li>a {@code validTo} timestamp. This is the timestamp of the next record (or deletion)
  *     associated with the same key, and is implicitly associated with the record. This timestamp
@@ -132,7 +132,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
         synchronized (position) {
             if (timestamp < observedStreamTime - gracePeriod) {
-                expiredRecordSensor.record(1.0d, internalProcessorContext.currentSystemTimeMs());
+                expiredRecordSensor.record();
                 LOG.warn("Skipping record for expired put.");
                 StoreQueryUtils.updatePosition(position, internalProcessorContext);
                 return PUT_RETURN_CODE_NOT_PUT;
@@ -160,7 +160,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
         synchronized (position) {
             if (timestamp < observedStreamTime - gracePeriod) {
-                expiredRecordSensor.record(1.0d, internalProcessorContext.currentSystemTimeMs());
+                expiredRecordSensor.record();
                 LOG.warn("Skipping record for expired delete.");
                 return null;
             }

@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
-import org.apache.kafka.coordinator.group.streams.assignor.TaskId;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * The latest per-task cumulative changelog offsets and end-offsets that a member reported in its heartbeat.
@@ -31,10 +31,10 @@ import java.util.stream.Collectors;
  * constantly changing"); they are held in memory on the group coordinator and re-reported by the member on the
  * task-offset interval.
  *
- * @param taskOffsets    Cumulative changelog offsets per task.
- * @param taskEndOffsets Cumulative changelog end-offsets per task.
+ * @param taskOffsets    Cumulative changelog offsets, keyed by subtopology ID then partition.
+ * @param taskEndOffsets Cumulative changelog end-offsets, keyed by subtopology ID then partition.
  */
-public record MemberTaskOffsets(Map<TaskId, Long> taskOffsets, Map<TaskId, Long> taskEndOffsets) {
+public record MemberTaskOffsets(Map<String, Map<Integer, Long>> taskOffsets, Map<String, Map<Integer, Long>> taskEndOffsets) {
 
     public static final MemberTaskOffsets EMPTY = new MemberTaskOffsets(Map.of(), Map.of());
 
@@ -51,15 +51,23 @@ public record MemberTaskOffsets(Map<TaskId, Long> taskOffsets, Map<TaskId, Long>
         final List<StreamsGroupHeartbeatRequestData.TaskOffset> reportedTaskEndOffsets
     ) {
         return new MemberTaskOffsets(
-            reportedTaskOffsets == null ? taskOffsets : toTaskIdMap(reportedTaskOffsets),
-            reportedTaskEndOffsets == null ? taskEndOffsets : toTaskIdMap(reportedTaskEndOffsets)
+            reportedTaskOffsets == null ? taskOffsets : toNestedMap(reportedTaskOffsets),
+            reportedTaskEndOffsets == null ? taskEndOffsets : toNestedMap(reportedTaskEndOffsets)
         );
     }
 
-    private static Map<TaskId, Long> toTaskIdMap(final List<StreamsGroupHeartbeatRequestData.TaskOffset> taskOffsets) {
-        return taskOffsets.stream().collect(Collectors.toMap(
-            taskOffset -> new TaskId(taskOffset.subtopologyId(), taskOffset.partition()),
-            StreamsGroupHeartbeatRequestData.TaskOffset::offset
-        ));
+    private static Map<String, Map<Integer, Long>> toNestedMap(final List<StreamsGroupHeartbeatRequestData.TaskOffset> taskOffsets) {
+        final Map<String, Map<Integer, Long>> result = new HashMap<>();
+        for (final StreamsGroupHeartbeatRequestData.TaskOffset taskOffset : taskOffsets) {
+            final Map<Integer, Long> byPartition = result.computeIfAbsent(taskOffset.subtopologyId(), k -> new HashMap<>());
+            // The reported values come straight from the client heartbeat and the protocol does not enforce uniqueness
+            // of (subtopologyId, partition). Reject a duplicate with a clear client error rather than silently picking
+            // one of the values.
+            if (byPartition.putIfAbsent(taskOffset.partition(), taskOffset.offset()) != null) {
+                throw new InvalidRequestException("Task offsets contain a duplicate entry for subtopology "
+                    + taskOffset.subtopologyId() + " and partition " + taskOffset.partition() + ".");
+            }
+        }
+        return result;
     }
 }

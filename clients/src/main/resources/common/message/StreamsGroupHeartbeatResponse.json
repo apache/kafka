@@ -17,7 +17,8 @@
   "apiKey": 88,
   "type": "response",
   "name": "StreamsGroupHeartbeatResponse",
-  // Version 1 adds TopologyDescriptionRequired (KIP-1331).
+  // Version 1 adds TopologyDescriptionRequired (KIP-1331), and allows the broker to return the
+  // MISSING_CLIENT_TAGS status (code 6), which version 0 clients do not understand (KAFKA-20744).
   "validVersions": "0-1",
   "flexibleVersions": "0+",
   // Supported errors:
@@ -75,14 +76,14 @@
     { "name": "EndpointInformationEpoch", "type": "int32", "versions": "0+",
       "about": "The endpoint epoch set in the response"},
     { "name": "PartitionsByUserEndpoint", "type": "[]EndpointToPartitions", "versions": "0+", "nullableVersions": "0+", "default": "null",
-      "about": "Global assignment information used for IQ. Null if unchanged since last heartbeat." ,
+      "about": "Global assignment information used for IQ. There is one entry per member, so several entries carry the same UserEndpoint when a client runs more than one stream thread; clients must union the entries of an endpoint. Null if unchanged since last heartbeat.",
       "fields": [
         { "name": "UserEndpoint", "type": "Endpoint", "versions": "0+",
           "about": "User-defined endpoint to connect to the node" },
         { "name": "ActivePartitions", "type": "[]TopicPartition", "versions": "0+",
-          "about": "All topic partitions materialized by active tasks on the node" },
+          "about": "The source topic partitions, including repartition source topics, of the active tasks assigned to this member" },
         { "name": "StandbyPartitions", "type": "[]TopicPartition", "versions": "0+",
-          "about": "All topic partitions materialized by standby tasks on the node" }
+          "about": "The source topic partitions, including repartition source topics, of the standby and warm-up tasks assigned to this member" }
       ]
     }
   ],
@@ -102,6 +103,7 @@
       //                                       topic creation, this will be indicated in StatusDetail.
       //  4 - SHUTDOWN_APPLICATION           - A client requested the shutdown of the whole application.
       //  5 - ASSIGNMENT_DELAYED             - No assignment was provided because assignment computation was delayed.
+      //  6 - MISSING_CLIENT_TAGS            - One or more required client tags for rack-aware standby task assignment are missing.
       { "name": "StatusCode", "type": "int8", "versions": "0+",
         "about": "A code to indicate that a particular status is active for the group membership" },
       { "name": "StatusDetail", "type": "string", "versions": "0+",

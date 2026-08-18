@@ -76,6 +76,7 @@ import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.streamsGro
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.streamsTopicFixture;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -610,6 +611,12 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         
         assertEquals(rejoinMemberId, result.response().data().memberId());
         assertEquals(groupEpoch, result.response().data().memberEpoch());
+
+        // The static member rejoined with a new member id while the assignment is up to date, so the
+        // target assignment is reused from the persisted state. Its relabelling to the new member id
+        // is queued but not yet replayed, so the rejoining member must still get its assignment back
+        // (not an empty one).
+        assertEquals(topic.responseTasks(0, 1, 2, 3), result.response().data().activeTasks());
 
         Optional<StreamsGroupMemberMetadataValue> updatedMemberMetadataValue = result.records().stream()
             .filter(record -> record.key() instanceof StreamsGroupMemberMetadataKey)
@@ -1516,6 +1523,60 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         assertTrue(result.records().contains(
             StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedCopiedMember)
         ));
+    }
+
+    @Test
+    public void testStaticMemberReplacementRelabelsCachedRefinedAssignment() {
+        int groupEpoch = DEFAULT_GROUP_EPOCH;
+
+        String groupId = "fooup";
+        String oldMemberId = Uuid.randomUuid().toString();
+        String rejoinMemberId = Uuid.randomUuid().toString();
+        String instanceId = Uuid.randomUuid().toString();
+
+        StreamsTopicFixture topic = streamsTopicFixture("subtopology1", "foo", 4);
+        TasksTuple oldTargetAssignment = topic.targetAssignment(0, 1, 2, 3);
+        TasksTupleWithEpochs assignedTasks = topic.assignedTasks(groupEpoch, 0, 1, 2, 3);
+
+        StreamsGroupMember oldMember = streamsGroupMemberBuilderWithDefaults(oldMemberId, instanceId)
+            .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+            .setPreviousMemberEpoch(groupEpoch)
+            .setAssignedTasks(resetAssignedTasksEpochsToZero(assignedTasks))
+            .build();
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
+            .withMetadataImage(topic.metadataImage())
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, groupEpoch)
+                .withMember(oldMember)
+                .withTargetAssignment(oldMemberId, oldTargetAssignment)
+                .withTargetAssignmentEpoch(groupEpoch)
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
+                .withValidatedTopologyEpoch(0)
+                .withMetadataHash(topic.metadataHash())
+                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
+            .build();
+
+        // Prime the frozen intermediate assignment for the current assignment epoch, keyed by the OLD member ID, as a
+        // previous heartbeat of the departed member would have left it.
+        StreamsGroup streamsGroup = context.groupMetadataManager.streamsGroup(groupId);
+        streamsGroup.setRefinedAssignment(groupEpoch, Map.of(oldMemberId, oldTargetAssignment));
+
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            staticJoinHeartbeat(groupId, rejoinMemberId, instanceId, DEFAULT_PROCESS_ID)
+        );
+
+        // A static replacement relabels the target assignment oldMemberId -> rejoinMemberId WITHOUT advancing the
+        // assignment epoch, so the epoch alone cannot tell the cached entry apart from a still-valid one. Unless the
+        // cached entry is re-keyed too, the replacing member is sliced out of a map that only knows the old ID and gets
+        // no tasks at all.
+        assertEquals(groupEpoch, result.response().data().memberEpoch());
+        assertEquals(
+            oldTargetAssignment.activeTasks(),
+            streamsGroup.refinedAssignment(groupEpoch).get(rejoinMemberId).activeTasks()
+        );
+        assertFalse(streamsGroup.refinedAssignment(groupEpoch).containsKey(oldMemberId));
     }
 
     @Test

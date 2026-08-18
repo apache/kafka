@@ -16,13 +16,12 @@
   */
 package kafka.api
 
-import kafka.security.JaasTestUtils
-
 import java.util.Properties
 import kafka.utils._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.metadata.storage.Formatter
+import org.apache.kafka.security.JaasTestUtils
 import org.apache.kafka.test.TestSslUtils
 
 import scala.jdk.CollectionConverters._

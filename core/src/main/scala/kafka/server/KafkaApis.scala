@@ -19,7 +19,7 @@ package kafka.server
 
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.network.RequestChannel
-import kafka.server.QuotaFactory.{QuotaManagers, UNBOUNDED_QUOTA}
+import org.apache.kafka.server.quota.QuotaFactory.{QuotaManagers, UNBOUNDED_QUOTA}
 import kafka.server.handlers.DescribeTopicPartitionsRequestHandler
 import kafka.server.share.SharePartitionManager
 import kafka.utils.Logging
@@ -55,7 +55,8 @@ import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.{Resource, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
-import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
+import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch
 import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider
 import org.apache.kafka.coordinator.group.{Group, GroupConfig, GroupConfigManager, GroupCoordinator}
@@ -225,6 +226,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DESCRIBE_CLUSTER => handleDescribeCluster(request)
         case ApiKeys.DESCRIBE_PRODUCERS => handleDescribeProducersRequest(request)
         case ApiKeys.UNREGISTER_BROKER => forwardToController(request)
+        case ApiKeys.UNREGISTER_CONTROLLER => forwardToController(request)
         case ApiKeys.DESCRIBE_TRANSACTIONS => handleDescribeTransactionsRequest(request)
         case ApiKeys.LIST_TRANSACTIONS => handleListTransactionsRequest(request)
         case ApiKeys.DESCRIBE_QUORUM => forwardToController(request)
@@ -1563,9 +1565,15 @@ class KafkaApis(val requestChannel: RequestChannel,
     // client is connecting to the correct broker. If both are specified, they must match
     // the expected values for this broker.
     def clusterIdOrNodeIdIsInvalid(apiVersionRequest: ApiVersionsRequest): Boolean = {
-      apiVersionRequest.version >= 5 &&
+      val invalid = apiVersionRequest.version >= 5 &&
         apiVersionRequest.data.clusterId != null &&
         (apiVersionRequest.data.clusterId != clusterId || apiVersionRequest.data.nodeId != brokerId)
+      if (invalid && isTraceEnabled) {
+        trace(s"Rejecting ApiVersionsRequest v${apiVersionRequest.version} from ${request.context.connectionId} " +
+          s"with clusterId=${apiVersionRequest.data.clusterId}, nodeId=${apiVersionRequest.data.nodeId}; " +
+          s"expected clusterId=$clusterId, nodeId=$brokerId for clientId=${request.context.clientId}")
+      }
+      invalid
     }
 
     requestHelper.sendResponseMaybeThrottle(request, createResponseCallback)

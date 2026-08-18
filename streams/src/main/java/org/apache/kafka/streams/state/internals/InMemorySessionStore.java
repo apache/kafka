@@ -159,8 +159,8 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
                         }
                         removeExpiredSegments();
                         if (expiredRecords > 0) {
-                            if (expiredRecordSensor != null && context != null) {
-                                expiredRecordSensor.record(expiredRecords, context.currentSystemTimeMs());
+                            if (expiredRecordSensor != null) {
+                                expiredRecordSensor.record(expiredRecords);
                             }
                             LOG.warn("Skipping {} records for expired segments.", expiredRecords);
                         }
@@ -181,6 +181,16 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
 
     @Override
     public Position getPosition() {
+        // Mirror RocksDBStore#getPosition: report the uncommitted position (committed + staged) so the
+        // changelog consistency vector, which ChangeLogging*BytesStore writes at put() time via
+        // getPosition(), reflects the input position of the staged write. Otherwise a transactional
+        // store's changelog records carry the stale committed position and the position cannot be
+        // rebuilt when the store is restored from its changelog.
+        if (transactionBuffer != null) {
+            synchronized (position) {
+                return position.copy().merge(transactionBuffer.pendingPosition());
+            }
+        }
         return position;
     }
 
@@ -195,8 +205,8 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
             if (windowEndTimestamp <= observedStreamTime - retentionPeriod) {
                 // The provided context is not required to implement InternalProcessorContext,
                 // If it doesn't, we can't record this metric (in fact, we wouldn't have even initialized it).
-                if (expiredRecordSensor != null && context != null) {
-                    expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
+                if (expiredRecordSensor != null) {
+                    expiredRecordSensor.record();
                 }
                 LOG.warn("Skipping record for expired segment.");
             } else if (transactionBuffer != null) {
@@ -205,7 +215,11 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
                 putInternal(sessionKey, aggregate);
             }
 
-            StoreQueryUtils.updatePosition(position, stateStoreContext);
+            if (transactionBuffer != null) {
+                transactionBuffer.updatePosition(stateStoreContext);
+            } else {
+                StoreQueryUtils.updatePosition(position, stateStoreContext);
+            }
         }
     }
 
@@ -462,14 +476,26 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
 
-        return StoreQueryUtils.handleBasicQueries(
-            query,
-            positionBound,
-            config,
-            this,
-            position,
-            context
-        );
+        synchronized (position) {
+            // Mirror RocksDBStore#query: under READ_UNCOMMITTED, expose the writes staged in the
+            // transaction buffer since the last commit by merging the buffer's pending position
+            // deltas into a copy of the committed position. READ_COMMITTED (and the
+            // non-transactional store) query the committed position directly.
+            final Position queryPosition;
+            if (transactionBuffer != null && config.getIsolationLevel() == IsolationLevel.READ_UNCOMMITTED) {
+                queryPosition = position.copy().merge(transactionBuffer.pendingPosition());
+            } else {
+                queryPosition = position;
+            }
+            return StoreQueryUtils.handleBasicQueries(
+                query,
+                positionBound,
+                config,
+                this,
+                queryPosition,
+                context
+            );
+        }
     }
 
     @Override
@@ -563,7 +589,10 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
     @Override
     public void commit(final Map<TopicPartition, Long> changelogOffsets) {
         if (transactionBuffer != null) {
-            transactionBuffer.commit();
+            synchronized (position) {
+                transactionBuffer.mergePendingPositionInto(position);
+                transactionBuffer.commit();
+            }
         }
     }
 

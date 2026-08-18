@@ -37,17 +37,16 @@ import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.RemoteLogInputStream;
 import org.apache.kafka.common.requests.FetchRequest;
-import org.apache.kafka.common.utils.ChildFirstClassLoader;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.ChildFirstClassLoader;
 import org.apache.kafka.common.utils.internals.CloseableIterator;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.common.utils.internals.ThreadUtils;
 import org.apache.kafka.server.common.CheckpointFile;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.StopPartition;
-import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.log.remote.TopicPartitionLog;
 import org.apache.kafka.server.log.remote.metadata.storage.ClassLoaderAwareRemoteLogMetadataManager;
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManager;
@@ -153,6 +152,10 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RemoteLogManager.class);
     private static final String REMOTE_LOG_READER_THREAD_NAME_PATTERN = "remote-log-reader-%d";
+    // The keys the RSM/RLMM plugins are configured with, independent of the broker configs of the same
+    // names. broker.id is deprecated and will no longer be passed from 5.0 (KIP-1232).
+    private static final String BROKER_ID = "broker.id";
+    private static final String NODE_ID = "node.id";
     private final RemoteLogManagerConfig rlmConfig;
     private final int brokerId;
     private final String logDir;
@@ -401,7 +404,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
     private Plugin<RemoteStorageManager> configAndWrapRsmPlugin(RemoteStorageManager rsm) {
         final Map<String, Object> rsmProps = new HashMap<>(rlmConfig.remoteStorageManagerProps());
-        rsmProps.put(ServerConfigs.BROKER_ID_CONFIG, brokerId);
+        rsmProps.put(BROKER_ID, brokerId);
+        rsmProps.put(NODE_ID, brokerId);
         rsm.configure(rsmProps);
         return Plugin.wrapInstance(rsm, metrics, RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP);
     }
@@ -428,7 +432,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         // update the remoteLogMetadataProps here to override endpoint config if any
         rlmmProps.putAll(rlmConfig.remoteLogMetadataManagerProps());
 
-        rlmmProps.put(ServerConfigs.BROKER_ID_CONFIG, brokerId);
+        rlmmProps.put(BROKER_ID, brokerId);
+        rlmmProps.put(NODE_ID, brokerId);
         rlmmProps.put(LOG_DIR_CONFIG, logDir);
         rlmmProps.put("cluster.id", clusterId);
 

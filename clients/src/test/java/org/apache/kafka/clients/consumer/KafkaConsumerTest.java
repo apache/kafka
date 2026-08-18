@@ -28,6 +28,7 @@ import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.ClassicKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.clients.consumer.internals.GroupCoordinatorNode;
 import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
@@ -43,6 +44,7 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
@@ -301,7 +303,7 @@ public class KafkaConsumerTest {
         assertEquals(2.0d, getMetric(metrics, "assigned-partitions").metricValue());
 
         subscription.unsubscribe();
-        subscription.subscribe(Set.of(topic), Optional.empty());
+        subscription.subscribe(Set.of(topic));
         subscription.assignFromSubscribed(Set.of(tp0));
         assertEquals(1.0d, getMetric(metrics, "assigned-partitions").metricValue());
     }
@@ -490,11 +492,19 @@ public class KafkaConsumerTest {
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     @SuppressWarnings("unchecked")
-    public void testPollReturnsRecords(GroupProtocol groupProtocol) {
+    public void testPollReturnsRecords(GroupProtocol groupProtocol) throws InterruptedException {
         consumer = setUpConsumerWithRecordsToPoll(groupProtocol, tp0, 5);
 
-        ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ZERO);
+        // Poll until the expected records are consumed. A single poll(Duration.ZERO) may not be enough
+        // and make the test flaky, as it can return empty when the heartbeat thread and the consumer
+        // thread race to fire the fetch completion.
+        AtomicReference<ConsumerRecords<String, String>> polled = new AtomicReference<>(ConsumerRecords.empty());
+        TestUtils.waitForCondition(() -> {
+            polled.set((ConsumerRecords<String, String>) consumer.poll(Duration.ZERO));
+            return polled.get().count() == 5;
+        }, "Consumer did not return the fetched records.");
 
+        ConsumerRecords<String, String> records = polled.get();
         assertEquals(5, records.count());
         assertEquals(Set.of(tp0), records.partitions());
         assertEquals(5, records.records(tp0).size());
@@ -506,14 +516,23 @@ public class KafkaConsumerTest {
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     @SuppressWarnings("unchecked")
-    public void testSecondPollWithDeserializationErrorThrowsRecordDeserializationException(GroupProtocol groupProtocol) {
+    public void testSecondPollWithDeserializationErrorThrowsRecordDeserializationException(GroupProtocol groupProtocol) throws InterruptedException {
         int invalidRecordNumber = 4;
         int invalidRecordOffset = 3;
         StringDeserializer deserializer = mockErrorDeserializer(invalidRecordNumber);
 
         consumer = setUpConsumerWithRecordsToPoll(groupProtocol, tp0, 5, deserializer);
-        ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ZERO);
 
+        // Poll until the expected records are consumed. A single poll(Duration.ZERO) may not be enough
+        // and make the test flaky, as it can return empty when the heartbeat thread and the consumer
+        // thread race to fire the fetch completion.
+        AtomicReference<ConsumerRecords<String, String>> polled = new AtomicReference<>(ConsumerRecords.empty());
+        TestUtils.waitForCondition(() -> {
+            polled.set((ConsumerRecords<String, String>) consumer.poll(Duration.ZERO));
+            return polled.get().count() == invalidRecordNumber - 1;
+        }, "Consumer did not return the records preceding the deserialization error.");
+
+        ConsumerRecords<String, String> records = polled.get();
         assertEquals(invalidRecordNumber - 1, records.count());
         assertEquals(Set.of(tp0), records.partitions());
         assertEquals(invalidRecordNumber - 1, records.records(tp0).size());
@@ -588,8 +607,10 @@ public class KafkaConsumerTest {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testConstructorClose");
-        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "invalid-23-8409-adsfsdj");
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
+        // Use an invalid interceptor class to trigger constructor failure
+        props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, "invalid.interceptor.class");
 
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
         final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
@@ -1112,7 +1133,7 @@ public class KafkaConsumerTest {
         // Since we would enable the heartbeat thread after received join-response which could
         // send the sync-group on behalf of the consumer if it is enqueued, we may still complete
         // the rebalance and send out the fetch; in order to avoid it we do not prepare sync response here.
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        Node coordinator = new GroupCoordinatorNode(node.id(), node.host(), node.port());
         client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, memberId, leaderId, Errors.NONE), coordinator);
 
         consumer.poll(Duration.ZERO);
@@ -1262,7 +1283,7 @@ public class KafkaConsumerTest {
         Node node = metadata.fetch().nodes().get(0);
 
         client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        Node coordinator = new GroupCoordinatorNode(node.id(), node.host(), node.port());
         client.prepareResponseFrom(offsetResponse(Map.of(tp0, -1L), Errors.NONE), coordinator);
 
         consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor,
@@ -1295,7 +1316,7 @@ public class KafkaConsumerTest {
                 true, groupId, groupInstanceId, false);
         consumer.assign(List.of(tp0));
 
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        Node coordinator = new GroupCoordinatorNode(node.id(), node.host(), node.port());
 
         client.prepareResponseFrom(offsetResponse(Map.of(tp0, 539L), Errors.NONE), coordinator);
         consumer.poll(Duration.ZERO);
@@ -1331,7 +1352,7 @@ public class KafkaConsumerTest {
                 true, groupId, groupInstanceId, false);
         consumer.assign(List.of(tp0));
 
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        Node coordinator = new GroupCoordinatorNode(node.id(), node.host(), node.port());
 
         client.prepareResponseFrom(offsetResponse(Map.of(tp0, -1L), Errors.NONE), coordinator);
         client.prepareResponse(listOffsetsResponse(Map.of(tp0, 50L)));
@@ -1373,7 +1394,7 @@ public class KafkaConsumerTest {
         consumer.assign(List.of(tp0));
 
         // lookup coordinator
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        Node coordinator = new GroupCoordinatorNode(node.id(), node.host(), node.port());
 
         // fetch offset for one topic
         client.prepareResponseFrom(offsetResponse(Map.of(tp0, offset1), Errors.NONE), coordinator);
@@ -1440,7 +1461,7 @@ public class KafkaConsumerTest {
                 groupProtocol, time, client, subscription, metadata, assignor, true, groupId, groupInstanceId, true);
         consumer.assign(List.of(tp0));
 
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        Node coordinator = new GroupCoordinatorNode(node.id(), node.host(), node.port());
 
         client.prepareResponseFrom(offsetResponse(
             Map.of(tp0, offset1), Errors.NONE), coordinator);
@@ -1463,7 +1484,7 @@ public class KafkaConsumerTest {
         consumer.assign(Arrays.asList(tp0, tp1));
 
         // lookup coordinator
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        Node coordinator = new GroupCoordinatorNode(node.id(), node.host(), node.port());
 
         // fetch offset for one topic
         client.prepareResponseFrom(offsetResponse(Map.of(tp0, offset1, tp1, -1L), Errors.NONE), coordinator);
@@ -2012,7 +2033,7 @@ public class KafkaConsumerTest {
         consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
 
         // lookup coordinator
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        Node coordinator = new GroupCoordinatorNode(node.id(), node.host(), node.port());
 
         // manual assignment
         consumer.assign(Set.of(tp0));
@@ -2069,7 +2090,7 @@ public class KafkaConsumerTest {
         consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
 
         // lookup coordinator
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        Node coordinator = new GroupCoordinatorNode(node.id(), node.host(), node.port());
 
         // manual assignment
         consumer.assign(Set.of(tp0));
@@ -2124,7 +2145,7 @@ public class KafkaConsumerTest {
         consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
 
         // lookup coordinator
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        Node coordinator = new GroupCoordinatorNode(node.id(), node.host(), node.port());
 
         // manual assignment
         Set<TopicPartition> partitions = Set.of(tp0, tp1);
@@ -2369,8 +2390,6 @@ public class KafkaConsumerTest {
         consumer2.close(CloseOptions.timeout(Duration.ZERO));
     }
 
-    // TODO: this test references RPCs to be sent that are not part of the CONSUMER group protocol.
-    //       We are deferring any attempts at generalizing this test for both group protocols to the future.
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     @SuppressWarnings("unchecked")
@@ -2384,7 +2403,7 @@ public class KafkaConsumerTest {
         consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
         consumer.subscribe(Set.of(topic), getConsumerRebalanceListener(consumer));
         client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        Node coordinator = new GroupCoordinatorNode(node.id(), node.host(), node.port());
 
 
         client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, memberId, leaderId, Errors.NONE), coordinator);
@@ -2665,7 +2684,7 @@ public class KafkaConsumerTest {
 
         client.prepareResponseFrom(
             FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        Node coordinator = new GroupCoordinatorNode(node.id(), node.host(), node.port());
         client.prepareResponseFrom(
             offsetCommitResponse(Map.of(tp0, Errors.NONE)),
             coordinator
@@ -2714,7 +2733,7 @@ public class KafkaConsumerTest {
         // lookup coordinator
         client.prepareResponseFrom(
             FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        Node coordinator = new GroupCoordinatorNode(node.id(), node.host(), node.port());
 
         // fetch offset for one topic
         client.prepareResponseFrom(
@@ -2740,7 +2759,7 @@ public class KafkaConsumerTest {
         KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
 
         consumer.subscribe(Set.of(topic), getExceptionConsumerRebalanceListener());
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        Node coordinator = new GroupCoordinatorNode(node.id(), node.host(), node.port());
 
         client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
         client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, memberId, leaderId, Errors.NONE), coordinator);
@@ -3022,11 +3041,8 @@ public class KafkaConsumerTest {
         assertEquals(OptionalLong.of(45L), consumer.currentLag(tp0));
     }
 
-    // TODO: this test validate that the consumer clears the endOffsetRequested flag, but this is not yet implemented
-    //       in the CONSUMER group protocol (see KAFKA-20187).
-    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(GroupProtocol.class)
     public void testCurrentLagPreventsMultipleInFlightRequests(GroupProtocol groupProtocol) throws InterruptedException {
         final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
@@ -3045,6 +3061,11 @@ public class KafkaConsumerTest {
             consumer.poll(Duration.ofMillis(0));
         }
 
+        TestUtils.waitForCondition(
+            () -> requestGenerated(client, ApiKeys.LIST_OFFSETS),
+            "No LIST_OFFSETS request sent within allotted timeout"
+        );
+
         long count = client.requests().stream()
             .filter(request -> request.requestBuilder().apiKey().equals(ApiKeys.LIST_OFFSETS))
             .count();
@@ -3055,11 +3076,8 @@ public class KafkaConsumerTest {
         );
     }
 
-    // TODO: this test validate that the consumer clears the endOffsetRequested flag, but this is not yet implemented
-    //       in the CONSUMER group protocol (see KAFKA-20187).
-    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(GroupProtocol.class)
     public void testCurrentLagClearsFlagOnFatalPartitionError(GroupProtocol groupProtocol) throws InterruptedException {
         final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
@@ -3113,11 +3131,8 @@ public class KafkaConsumerTest {
         );
     }
 
-    // TODO: this test validate that the consumer clears the endOffsetRequested flag, but this is not yet implemented
-    //       in the CONSUMER group protocol (see KAFKA-20187).
-    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(GroupProtocol.class)
     public void testCurrentLagClearsFlagOnRetriablePartitionError(GroupProtocol groupProtocol) throws InterruptedException {
         final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
@@ -3285,7 +3300,7 @@ public class KafkaConsumerTest {
         if (coordinator == null) {
             // lookup coordinator
             client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
-            coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+            coordinator = new GroupCoordinatorNode(node.id(), node.host(), node.port());
         }
 
         // join group
@@ -3310,7 +3325,7 @@ public class KafkaConsumerTest {
         if (coordinator == null) {
             // lookup coordinator
             client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
-            coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+            coordinator = new GroupCoordinatorNode(node.id(), node.host(), node.port());
         }
 
         // join group
@@ -3839,7 +3854,8 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         MockRebalanceListener countingRebalanceListener = new MockRebalanceListener();
         initMetadata(client, Map.of(topic, 1, topic2, 1, topic3, 1));
 
-        consumer.subscribe(Arrays.asList(topic, topic2), countingRebalanceListener);
+        consumer.setRebalanceListener(countingRebalanceListener);
+        consumer.subscribe(Arrays.asList(topic, topic2));
         Node node = metadata.fetch().nodes().get(0);
         prepareRebalance(client, node, assignor, Arrays.asList(tp0, t2p0), null);
 
@@ -4118,7 +4134,7 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         consumer.assign(List.of(tp0));
 
         // lookup coordinator
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        Node coordinator = new GroupCoordinatorNode(node.id(), node.host(), node.port());
 
         // try to get committed offsets for one topic-partition - but it is disconnected so there's no response and it will time out
         client.prepareResponseFrom(offsetResponse(Map.of(tp0, 0L), Errors.NONE), coordinator, true);
@@ -4336,6 +4352,50 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         assertNotNull(cause);
         assertInstanceOf(LoginException.class, cause);
         assertEquals("No LoginModule found for org.example.InvalidLoginModule", cause.getMessage());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class)
+    public void testConsumerBootstrapResolutionExceptionPropagatedToPoll(GroupProtocol protocol) throws InterruptedException {
+        // Use an invalid hostname that will fail DNS resolution (using RFC 6761 reserved .invalid TLD)
+        String invalidHost = "unresolvable.invalid:9092";
+
+        Map<String, Object> configs = Map.of(
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, invalidHost,
+            // Set a short bootstrap timeout so the test doesn't take too long
+            CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "3000",
+            ConsumerConfig.GROUP_PROTOCOL_CONFIG, protocol.name(),
+            ConsumerConfig.GROUP_ID_CONFIG, "test-group"
+        );
+
+        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(configs)) {
+            // Subscribe to a topic to trigger metadata fetch
+            consumer.subscribe(Set.of("test-topic"));
+
+            // Poll continuously until we get the BootstrapResolutionException
+            // The exception should be thrown after bootstrap.resolve.timeout.ms expires
+            BootstrapResolutionException exception =
+                assertThrows(BootstrapResolutionException.class, () -> {
+                    long startTime = System.currentTimeMillis();
+                    long maxWaitTime = 15000; // 15 seconds max to prevent test hanging
+
+                    while (System.currentTimeMillis() - startTime < maxWaitTime) {
+                        consumer.poll(Duration.ofMillis(100));
+                    }
+                    fail("Expected BootstrapResolutionException to be thrown within " + maxWaitTime + "ms");
+                });
+
+            // Verify the exception message contains information about DNS resolution failure
+            assertTrue(exception.getMessage().contains("Failed to resolve bootstrap servers") ||
+                       exception.getMessage().contains("DNS resolution"),
+                       "Exception message should mention DNS resolution failure: " + exception.getMessage());
+
+            // After the first failure, any further API call must also throw. This guards against
+            // accidentally clearing the bootstrap error from the metadata layer.
+            assertThrows(BootstrapResolutionException.class, () -> consumer.poll(Duration.ofMillis(100)));
+        }
     }
 
     private MetricName expectedMetricName(String clientId, String config, Class<?> clazz) {

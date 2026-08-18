@@ -26,6 +26,8 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.CloseOptions;
+import org.apache.kafka.streams.CloseOptions.GroupMembershipOperation;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -67,6 +69,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -99,19 +102,28 @@ import static org.hamcrest.Matchers.is;
 
 @Tag("integration")
 @Timeout(600)
+// PER_CLASS lets the parameter source `data()` be a non-static, overridable method so subclasses
+// (e.g. the transactional variant) can supply a different matrix while reusing all the machinery below.
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class PositionRestartIntegrationTest {
     private static final Logger LOG = LoggerFactory.getLogger(PositionRestartIntegrationTest.class);
     private static final long SEED = new Random().nextLong();
     private static final int NUM_BROKERS = 3;
     public static final Duration WINDOW_SIZE = Duration.ofMinutes(5);
-    private static int port = 0;
     private static final String INPUT_TOPIC_NAME = "input-topic";
-    private static final Position INPUT_POSITION = Position.emptyPosition();
     private static final String STORE_NAME = "kv-store";
     private static final long RECORD_TIME = System.currentTimeMillis();
     private static final long WINDOW_START =
         (RECORD_TIME / WINDOW_SIZE.toMillis()) * WINDOW_SIZE.toMillis();
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+
+    // The cluster and the position it produces must be per-instance, not static. Subclasses (e.g. the
+    // transactional variant) inherit this class's @BeforeAll/@AfterAll, so a static cluster would be
+    // shared across both test classes: whichever ran second would find an already-closed
+    // KafkaClusterTestKit, whose executor service cannot be restarted. Under PER_CLASS lifecycle each
+    // test class gets its own instance, and therefore its own cluster.
+    private final EmbeddedKafkaCluster cluster = new EmbeddedKafkaCluster(NUM_BROKERS);
+    private final Position inputPosition = Position.emptyPosition();
+    private int port = 0;
     private KafkaStreams kafkaStreams;
 
     public enum StoresToTest {
@@ -250,7 +262,12 @@ public class PositionRestartIntegrationTest {
         }
     }
 
-    public static Stream<Arguments> data() {
+    /** Whether the store-under-test is configured transactional (KIP-892). Overridden by the transactional variant. */
+    protected boolean transactional() {
+        return false;
+    }
+
+    protected Stream<Arguments> data() {
         LOG.info("Generating test cases according to random seed: {}", SEED);
         final List<Arguments> values = new ArrayList<>();
         for (final boolean cacheEnabled : Arrays.asList(true, false)) {
@@ -270,16 +287,16 @@ public class PositionRestartIntegrationTest {
     }
 
     @BeforeAll
-    public static void before()
+    public void before()
         throws InterruptedException, IOException, ExecutionException, TimeoutException {
 
-        CLUSTER.start();
-        CLUSTER.deleteAllTopics();
+        cluster.start();
+        cluster.deleteAllTopics();
         final int partitions = 2;
-        CLUSTER.createTopic(INPUT_TOPIC_NAME, partitions, 1);
+        cluster.createTopic(INPUT_TOPIC_NAME, partitions, 1);
 
         final Properties producerProps = new Properties();
-        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
 
@@ -304,7 +321,7 @@ public class PositionRestartIntegrationTest {
             for (final Future<RecordMetadata> future : futures) {
                 final RecordMetadata recordMetadata = future.get(1, TimeUnit.MINUTES);
                 assertThat(recordMetadata.hasOffset(), is(true));
-                INPUT_POSITION.withComponent(
+                inputPosition.withComponent(
                     recordMetadata.topic(),
                     recordMetadata.partition(),
                     recordMetadata.offset()
@@ -312,7 +329,7 @@ public class PositionRestartIntegrationTest {
             }
         }
 
-        assertThat(INPUT_POSITION, equalTo(
+        assertThat(inputPosition, equalTo(
             Position
                 .emptyPosition()
                 .withComponent(INPUT_TOPIC_NAME, 0, 1L)
@@ -355,8 +372,8 @@ public class PositionRestartIntegrationTest {
     }
 
     @AfterAll
-    public static void after() {
-        CLUSTER.stop();
+    public void after() {
+        cluster.stop();
     }
 
     @ParameterizedTest
@@ -383,7 +400,7 @@ public class PositionRestartIntegrationTest {
         shouldReachExpectedPosition(query);
 
         // reboot
-        kafkaStreams.close();
+        kafkaStreams.close(CloseOptions.groupMembershipOperation(GroupMembershipOperation.LEAVE_GROUP));
         kafkaStreams = IntegrationTestUtils.getStartedStreams(streamsConfig, streamsBuilder, false);
 
         shouldReachExpectedPosition(query);
@@ -394,12 +411,12 @@ public class PositionRestartIntegrationTest {
             inStore(STORE_NAME)
                 .withQuery(query)
                 .withPartitions(Set.of(0, 1))
-                .withPositionBound(PositionBound.at(INPUT_POSITION));
+                .withPositionBound(PositionBound.at(inputPosition));
 
         final StateQueryResult<?> result =
             IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
 
-        assertThat(result.getPosition(), is(INPUT_POSITION));
+        assertThat(result.getPosition(), is(inputPosition));
     }
 
     private static void setUpSessionDSLTopology(final SessionBytesStoreSupplier supplier,
@@ -646,28 +663,31 @@ public class PositionRestartIntegrationTest {
             .process(processorSupplier, sessionStoreStoreBuilder.name());
     }
 
-    private static Properties streamsConfiguration(final boolean cache,
-                                            final boolean log,
-                                            final String supplier,
-                                            final String kind) {
+    protected Properties streamsConfiguration(final boolean cache,
+                                              final boolean log,
+                                              final String supplier,
+                                              final String kind) {
         final String safeTestName =
-            PositionRestartIntegrationTest.class.getName() + "-" + cache + "-" + log + "-"
-                + supplier + "-" + kind;
+            getClass().getName() + "-" + cache + "-" + log + "-"
+                + supplier + "-" + kind + "-" + transactional();
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         config.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + (++port));
-        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         config.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 100);
-        config.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 200);
-        config.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         config.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         config.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
+        if (transactional()) {
+            // Transactional state stores (KIP-892) are only meaningful under exactly-once.
+            config.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
+            config.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        }
         return config;
     }
 }
