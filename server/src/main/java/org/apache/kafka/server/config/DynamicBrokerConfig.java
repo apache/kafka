@@ -22,7 +22,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
@@ -192,7 +191,7 @@ public class DynamicBrokerConfig {
 
     public static Properties resolveVariableConfigs(Properties propsOriginal) {
         Properties props = new Properties();
-        AbstractConfig config = new AbstractConfig(new ConfigDef(), propsOriginal, Utils.castToStringObjectMap(propsOriginal), false);
+        AbstractConfig config = new AbstractConfig(new ConfigDef(), propsOriginal, false);
         config.originals().forEach((key, value) -> {
             if (!key.startsWith(AbstractConfig.CONFIG_PROVIDERS_CONFIG)) {
                 props.put(key, value);

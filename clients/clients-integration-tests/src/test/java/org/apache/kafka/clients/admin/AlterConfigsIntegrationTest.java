@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.provider.FileConfigProvider;
@@ -68,13 +69,28 @@ public class AlterConfigsIntegrationTest {
 
     @ClusterTest
     public void testAlterConfigsWithConfigProviders() {
-        checkAlterConfigs(Map.of(), InvalidRequestException.class, "token");
+        checkAlterConfigs(Map.of(), InvalidRequestException.class, "token", true);
     }
 
     @ClusterTest
     public void testAlterConfigsWithConfigProvidersAndValidatorRejection() throws IOException {
         Files.writeString(file, "key=" + Long.MAX_VALUE);
-        checkAlterConfigs(Map.of(), InvalidRequestException.class, String.valueOf(Long.MAX_VALUE));
+        checkAlterConfigs(Map.of(), InvalidRequestException.class, String.valueOf(Long.MAX_VALUE), true);
+    }
+
+    @ClusterTest
+    public void testAlterConfigsRespectsConfigProviderAllowlist() {
+        String previous = System.getProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY);
+        try {
+            System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, "none");
+            checkAlterConfigs(Map.of(), InvalidRequestException.class, "token", false);
+        } finally {
+            if (previous == null) {
+                System.clearProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY);
+            } else {
+                System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, previous);
+            }
+        }
     }
 
     @ClusterTest(
@@ -87,10 +103,10 @@ public class AlterConfigsIntegrationTest {
             SaslConfigs.SASL_JAAS_CONFIG,
                 PlainLoginModule.class.getName() + " required username=\"" + JaasUtils.KAFKA_PLAIN_USER1 +
                 "\" password=\"" + JaasUtils.KAFKA_PLAIN_USER1_PASSWORD + "\";");
-        checkAlterConfigs(adminConfig, ClusterAuthorizationException.class, "token");
+        checkAlterConfigs(adminConfig, ClusterAuthorizationException.class, "token", true);
     }
 
-    private void checkAlterConfigs(Map<String, Object> adminConfig, Class<? extends Throwable> expectedCause, String value) {
+    private void checkAlterConfigs(Map<String, Object> adminConfig, Class<? extends Throwable> expectedCause, String value, boolean placeholder) {
         try (Admin admin = clusterInstance.admin(adminConfig)) {
             ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER, "");
             Map<ConfigResource, Collection<AlterConfigOp>> alterations = Map.of(brokerResource, configProviderOps());
@@ -100,7 +116,11 @@ public class AlterConfigsIntegrationTest {
             String message = ee.getCause().getMessage();
             assertFalse(message.contains(value));
             if (expectedCause == InvalidRequestException.class) {
-                assertTrue(message.contains("${file:"));
+                if (placeholder) {
+                    assertTrue(message.contains("${file:"));
+                } else {
+                    assertTrue(message.contains(FileConfigProvider.class.getName() + " is not allowed"));
+                }
             }
         }
     }
