@@ -88,10 +88,6 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
             return Long.MAX_VALUE;
         }
 
-        if (subscriptions.numAssignedPartitions() == 0) {
-            return retryBackoffMs;
-        }
-
         // Materialize the buffered set (and release the FetchBuffer lock) before acquiring the
         // SubscriptionState lock below. This preserves a strict lock ordering: FetchBuffer first,
         // SubscriptionState second, with no nested lock acquisition.
