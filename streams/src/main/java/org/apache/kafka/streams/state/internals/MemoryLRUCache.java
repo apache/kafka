@@ -96,14 +96,18 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
             root,
             (RecordBatchingStateRestoreCallback) records -> {
                 restoring = true;
-                synchronized (position) {
-                    for (final ConsumerRecord<byte[], byte[]> record : records) {
-                        put(Bytes.wrap(record.key()), record.value());
-                        ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
-                            record,
-                            consistencyEnabled,
-                            position
-                        );
+                // Take the store monitor before the position lock (KAFKA-19629): put() below
+                // locks the store monitor, and IQ queries lock the store, then the position.
+                synchronized (this) {
+                    synchronized (position) {
+                        for (final ConsumerRecord<byte[], byte[]> record : records) {
+                            put(Bytes.wrap(record.key()), record.value());
+                            ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                                record,
+                                consistencyEnabled,
+                                position
+                            );
+                        }
                     }
                 }
                 restoring = false;

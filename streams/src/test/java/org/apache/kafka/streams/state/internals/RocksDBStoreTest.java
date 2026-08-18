@@ -53,6 +53,10 @@ import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializati
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -101,6 +105,8 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -1783,6 +1789,63 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         assertThrows(InvalidStateStoreException.class, () -> rocksDBStore.putAll(List.of(
             KeyValue.pair(new Bytes(stringSerializer.serialize(null, "k1")),
                 stringSerializer.serialize(null, "v1")))));
+    }
+
+    @Test
+    public void shouldNotDeadlockOnConcurrentPutAndQuery() throws Exception {
+        // KAFKA-19629: put() takes the store monitor and then the position lock, so IQ queries
+        // must take the two locks in the same order.
+        rocksDBStore.init(context, rocksDBStore);
+
+        final int iterations = 5000;
+        final AtomicReference<Throwable> failure = new AtomicReference<>();
+
+        final Thread writer = new Thread(() -> {
+            try {
+                for (int i = 0; i < iterations; i++) {
+                    rocksDBStore.put(
+                        new Bytes(stringSerializer.serialize(null, "key" + (i % 100))),
+                        stringSerializer.serialize(null, "value" + i));
+                }
+            } catch (final Throwable t) {
+                failure.set(t);
+            }
+        }, "writer");
+
+        final Thread reader = new Thread(() -> {
+            try {
+                for (int i = 0; i < iterations; i++) {
+                    final QueryResult<KeyValueIterator<Bytes, byte[]>> result = rocksDBStore.query(
+                        RangeQuery.withNoBounds(),
+                        PositionBound.unbounded(),
+                        new QueryConfig(false));
+                    try (KeyValueIterator<Bytes, byte[]> iterator = result.getResult()) {
+                        if (iterator.hasNext()) {
+                            iterator.next();
+                        }
+                    }
+                }
+            } catch (final Throwable t) {
+                failure.set(t);
+            }
+        }, "iq-reader");
+
+        writer.setDaemon(true);
+        reader.setDaemon(true);
+        writer.start();
+        reader.start();
+        writer.join(TimeUnit.SECONDS.toMillis(60));
+        reader.join(TimeUnit.SECONDS.toMillis(60));
+
+        if (failure.get() != null) {
+            throw new AssertionError(failure.get());
+        }
+        final boolean deadlocked = writer.isAlive() || reader.isAlive();
+        if (deadlocked) {
+            // leak the deadlocked store: tearDown's synchronized close() would block forever
+            rocksDBStore = getRocksDBStore();
+        }
+        assertFalse(deadlocked, "deadlock between concurrent put and IQ query");
     }
 
     private List<String> keysOf(final KeyValueIterator<Bytes, byte[]> it) {

@@ -17,21 +17,35 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.StreamsTestUtils;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
@@ -161,5 +175,123 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
 
         // and there are no other entries ...
         assertEquals(10, driver.sizeOf(store));
+    }
+
+    @Test
+    public void shouldNotDeadlockOnConcurrentPutAndQuery() throws Exception {
+        // KAFKA-19629: put() takes the store monitor and then the position lock, so IQ queries
+        // must take the two locks in the same order.
+        final InternalMockProcessorContext<Bytes, byte[]> ctx = new InternalMockProcessorContext<>(
+            TestUtils.tempDirectory(),
+            new Serdes.BytesSerde(),
+            new Serdes.ByteArraySerde(),
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
+        final MemoryNavigableLRUCache cache = new MemoryNavigableLRUCache("lru-put-store", 100);
+        cache.init((StateStoreContext) ctx, cache);
+
+        final int iterations = 5000;
+        final AtomicReference<Throwable> failure = new AtomicReference<>();
+
+        final Thread writer = new Thread(() -> {
+            try {
+                for (int i = 0; i < iterations; i++) {
+                    cache.put(
+                        Bytes.wrap(("key" + (i % 100)).getBytes()),
+                        ("value" + i).getBytes());
+                }
+            } catch (final Throwable t) {
+                failure.set(t);
+            }
+        }, "writer");
+
+        final Thread reader = new Thread(() -> {
+            try {
+                for (int i = 0; i < iterations; i++) {
+                    final QueryResult<KeyValueIterator<Bytes, byte[]>> result = cache.query(
+                        RangeQuery.withNoBounds(),
+                        PositionBound.unbounded(),
+                        new QueryConfig(false));
+                    try (KeyValueIterator<Bytes, byte[]> iterator = result.getResult()) {
+                        if (iterator.hasNext()) {
+                            iterator.next();
+                        }
+                    }
+                }
+            } catch (final Throwable t) {
+                failure.set(t);
+            }
+        }, "writer-query-reader");
+
+        writer.setDaemon(true);
+        reader.setDaemon(true);
+        writer.start();
+        reader.start();
+        writer.join(TimeUnit.SECONDS.toMillis(60));
+        reader.join(TimeUnit.SECONDS.toMillis(60));
+
+        if (failure.get() != null) {
+            throw new AssertionError(failure.get());
+        }
+        assertFalse(writer.isAlive() || reader.isAlive(),
+            "deadlock between concurrent put and IQ query");
+    }
+
+    @Test
+    public void shouldNotDeadlockOnConcurrentRestoreAndQuery() throws Exception {
+        // KAFKA-19629: the restore callback takes the position lock and then the store monitor
+        // via put(), so it must take the two locks in the same order as IQ queries do. Standby
+        // stores serve IQ queries while restoring.
+        final InternalMockProcessorContext<Bytes, byte[]> ctx = new InternalMockProcessorContext<>(
+            TestUtils.tempDirectory(),
+            new Serdes.BytesSerde(),
+            new Serdes.ByteArraySerde(),
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
+        final MemoryNavigableLRUCache cache = new MemoryNavigableLRUCache("lru-store", 100);
+        cache.init((StateStoreContext) ctx, cache);
+
+        final int iterations = 2000;
+        final AtomicReference<Throwable> failure = new AtomicReference<>();
+
+        final Thread restorer = new Thread(() -> {
+            try {
+                for (int i = 0; i < iterations; i++) {
+                    ctx.restore(cache.name(), List.of(
+                        KeyValue.pair(("key" + (i % 100)).getBytes(), ("value" + i).getBytes())));
+                }
+            } catch (final Throwable t) {
+                failure.set(t);
+            }
+        }, "restorer");
+
+        final Thread reader = new Thread(() -> {
+            try {
+                for (int i = 0; i < iterations; i++) {
+                    final QueryResult<KeyValueIterator<Bytes, byte[]>> result = cache.query(
+                        RangeQuery.withNoBounds(),
+                        PositionBound.unbounded(),
+                        new QueryConfig(false));
+                    try (KeyValueIterator<Bytes, byte[]> iterator = result.getResult()) {
+                        if (iterator.hasNext()) {
+                            iterator.next();
+                        }
+                    }
+                }
+            } catch (final Throwable t) {
+                failure.set(t);
+            }
+        }, "iq-reader");
+
+        restorer.setDaemon(true);
+        reader.setDaemon(true);
+        restorer.start();
+        reader.start();
+        restorer.join(TimeUnit.SECONDS.toMillis(60));
+        reader.join(TimeUnit.SECONDS.toMillis(60));
+
+        if (failure.get() != null) {
+            throw new AssertionError(failure.get());
+        }
+        assertFalse(restorer.isAlive() || reader.isAlive(),
+            "deadlock between concurrent restore and IQ query");
     }
 }

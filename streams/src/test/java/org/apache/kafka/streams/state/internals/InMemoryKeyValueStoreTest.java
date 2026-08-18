@@ -638,6 +638,65 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         }
     }
 
+    @Test
+    public void shouldNotDeadlockOnConcurrentPutAndQuery() throws Exception {
+        // KAFKA-19629: put() takes the store monitor and then the position lock, so IQ queries
+        // must take the two locks in the same order.
+        final InternalMockProcessorContext<Bytes, byte[]> ctx = new InternalMockProcessorContext<>(
+            TestUtils.tempDirectory(),
+            new Serdes.BytesSerde(),
+            new Serdes.ByteArraySerde(),
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig())
+        );
+        final InMemoryKeyValueStore store = new InMemoryKeyValueStore("concurrency-store");
+        store.init(ctx, store);
+        ctx.setRecordContext(new ProcessorRecordContext(0, 1, 0, "topic", new RecordHeaders()));
+
+        final int iterations = 5000;
+        final AtomicReference<Throwable> failure = new AtomicReference<>();
+
+        final Thread writer = new Thread(() -> {
+            try {
+                for (int i = 0; i < iterations; i++) {
+                    store.put(bytesKey("key" + (i % 100)), bytesValue("value" + i));
+                }
+            } catch (final Throwable t) {
+                failure.set(t);
+            }
+        }, "writer");
+
+        final Thread reader = new Thread(() -> {
+            try {
+                for (int i = 0; i < iterations; i++) {
+                    final org.apache.kafka.streams.query.QueryResult<KeyValueIterator<Bytes, byte[]>> result = store.query(
+                        org.apache.kafka.streams.query.RangeQuery.withNoBounds(),
+                        org.apache.kafka.streams.query.PositionBound.unbounded(),
+                        new org.apache.kafka.streams.query.QueryConfig(false));
+                    try (KeyValueIterator<Bytes, byte[]> iterator = result.getResult()) {
+                        if (iterator.hasNext()) {
+                            iterator.next();
+                        }
+                    }
+                }
+            } catch (final Throwable t) {
+                failure.set(t);
+            }
+        }, "iq-reader");
+
+        writer.setDaemon(true);
+        reader.setDaemon(true);
+        writer.start();
+        reader.start();
+        writer.join(TimeUnit.SECONDS.toMillis(60));
+        reader.join(TimeUnit.SECONDS.toMillis(60));
+
+        if (failure.get() != null) {
+            throw new AssertionError(failure.get());
+        }
+        assertFalse(writer.isAlive() || reader.isAlive(),
+            "deadlock between concurrent put and IQ query");
+    }
+
     private InMemoryKeyValueStore openTransactionalStore() {
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);

@@ -476,8 +476,9 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
 
-        // Lock order must match the write paths (store monitor, then position),
-        // otherwise concurrent put/query can deadlock (KAFKA-19629).
+        // Global lock order: store monitor before position lock (KAFKA-19629). This store's
+        // writes lock only the position, but handleBasicQueries locks the store monitor, so
+        // taking the position first here would invert the order.
         synchronized (this) {
             synchronized (position) {
                 // Mirror RocksDBStore#query: under READ_UNCOMMITTED, expose the writes staged in the
