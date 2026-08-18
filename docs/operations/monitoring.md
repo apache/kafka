@@ -1274,7 +1274,7 @@ Consumer Group Count, per state
 </td>  
 <td>
 
-kafka.server:type=group-coordinator-metrics,name=consumer-group-count,state=[empty|assigning|reconciling|stable|dead]
+kafka.server:type=group-coordinator-metrics,name=consumer-group-count,state=[Empty|Assigning|Reconciling|Stable|Dead]
 </td>  
 <td>
 
@@ -1313,11 +1313,11 @@ Streams Group Count, per state
 </td>  
 <td>
 
-kafka.server:type=group-coordinator-metrics,name=streams-group-count,state=[empty|not_ready|assigning|reconciling|stable|dead]
+kafka.server:type=group-coordinator-metrics,name=streams-group-count,state=[Empty|NotReady|Assigning|Reconciling|Stable|Dead]
 </td>  
 <td>
 
-Total number of Streams Groups in each state: Empty, Not Ready, Assigning, Reconciling, Stable, Dead
+Total number of Streams Groups in each state: Empty, NotReady, Assigning, Reconciling, Stable, Dead
 </td> </tr>  
 <tr>  
 <td>
@@ -1586,7 +1586,7 @@ Classic Group Count, per state
 </td>  
 <td>
 
-kafka.server:type=group-coordinator-metrics,name=classic-group-count,state=[empty|preparing_rebalance|completing_rebalance|stable|dead]
+kafka.server:type=group-coordinator-metrics,name=classic-group-count,state=[Empty|PreparingRebalance|CompletingRebalance|Stable|Dead]
 </td>  
 <td>
 
