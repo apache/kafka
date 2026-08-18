@@ -176,19 +176,6 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     }
 
     /**
-     * {@inheritDoc}
-     *
-     * While the background thread is concurrently resolving positions (validating positions, fetching committed
-     * offsets, looking up partition offsets, or backing off after a failure), assigned partitions without a valid
-     * position will not otherwise cause the application thread to wake up. During this time, the wait is bounded
-     * by {@code retryBackoffMs} so progress does not depend on an unrelated wakeup event.
-     */
-    @Override
-    public long maximumTimeToWait(long currentTimeMs) {
-        return subscriptionState.hasAllFetchPositions() ? Long.MAX_VALUE : retryBackoffMs;
-    }
-
-    /**
      * Retrieve offsets for the given partitions and timestamp. For each partition, this will
      * retrieve the offset of the first message whose timestamp is greater than or equals to the
      * target timestamp.
