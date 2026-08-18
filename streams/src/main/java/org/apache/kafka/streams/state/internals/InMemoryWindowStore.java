@@ -155,7 +155,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
                         }
                         removeExpiredSegments();
                         if (expiredRecords > 0) {
-                            expiredRecordSensor.record(expiredRecords, internalProcessorContext.currentSystemTimeMs());
+                            expiredRecordSensor.record(expiredRecords);
                             LOG.warn("Skipping {} records for expired segments.", expiredRecords);
                         }
                     }
@@ -195,7 +195,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
 
         synchronized (position) {
             if (windowStartTimestamp <= observedStreamTime - retentionPeriod) {
-                expiredRecordSensor.record(1.0d, internalProcessorContext.currentSystemTimeMs());
+                expiredRecordSensor.record();
                 LOG.warn("Skipping record for expired segment.");
             } else if (transactionBuffer != null) {
                 if (value != null) {

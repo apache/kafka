@@ -46,6 +46,14 @@ public class StickyTaskAssignor implements TaskAssignor {
     private static final String STICKY_ASSIGNOR_NAME = "sticky";
     private static final Logger log = LoggerFactory.getLogger(StickyTaskAssignor.class);
 
+    /**
+     * Standbys from the target assignment rank ahead of members only known to hold state through their reported
+     * offsets; within each group, the most caught-up state comes first.
+     */
+    private static final Comparator<StandbyCandidate> STANDBY_CANDIDATE_ORDER =
+        Comparator.comparingInt((StandbyCandidate candidate) -> candidate.isPrevStandby() ? 0 : 1)
+            .thenComparing(Comparator.comparingLong(StandbyCandidate::offsetSum).reversed());
+
     @Override
     public String name() {
         return STICKY_ASSIGNOR_NAME;
@@ -96,9 +104,7 @@ public class StickyTaskAssignor implements TaskAssignor {
 
     private static LocalState initialize(final GroupSpec groupSpec, final TopologyDescriber topologyDescriber) {
         final LocalState localState = new LocalState();
-        localState.numStandbyReplicas =
-            groupSpec.configs().isEmpty() ? 0
-                : Integer.parseInt(groupSpec.configs().get("num.standby.replicas"));
+        localState.numStandbyReplicas = groupSpec.configs().numStandbyReplicas();
 
         // Helpers for computing active tasks per member, and tasks per member
         localState.totalActiveTasks = 0;
@@ -117,14 +123,16 @@ public class StickyTaskAssignor implements TaskAssignor {
 
         localState.processIdToState = new HashMap<>(localState.totalMembersWithActiveTaskCapacity);
         localState.activeTaskToPrevMember = new HashMap<>(localState.totalActiveTasks);
-        localState.standbyTaskToPrevMember = new HashMap<>(localState.numStandbyReplicas > 0 ? (localState.totalTasks - localState.totalActiveTasks) / localState.numStandbyReplicas : 0);
+
+        // Standby-strength candidates per task, gathered in a single pass over the members and ranked below.
+        final Map<TaskId, ArrayList<StandbyCandidate>> standbyCandidates = new HashMap<>();
         for (final String memberId : groupSpec.memberIds()) {
             final MemberAssignmentState memberAssignmentState = groupSpec.memberAssignmentState(memberId);
             final String processId = groupSpec.memberMetadata(memberId).processId();
             final Member member = new Member(processId, memberId);
 
-            localState.processIdToState.putIfAbsent(processId, new ProcessState(processId));
-            localState.processIdToState.get(processId).addMember(memberId);
+            localState.processIdToState.computeIfAbsent(processId, ProcessState::new)
+                .addMember(memberId);
 
             // prev active tasks
             for (final Map.Entry<String, Set<Integer>> entry : memberAssignmentState.activeTasks().entrySet()) {
@@ -134,17 +142,71 @@ public class StickyTaskAssignor implements TaskAssignor {
                 }
             }
 
-            // prev standby tasks
-            for (final Map.Entry<String, Set<Integer>> entry : memberAssignmentState.standbyTasks().entrySet()) {
-                final Set<Integer> partitionNoSet = entry.getValue();
-                for (final int partitionNo : partitionNoSet) {
-                    final TaskId taskId = new TaskId(entry.getKey(), partitionNo);
-                    localState.standbyTaskToPrevMember.putIfAbsent(taskId, new ArrayList<>(localState.numStandbyReplicas));
-                    localState.standbyTaskToPrevMember.get(taskId).add(member);
-                }
+            collectStandbyCandidates(standbyCandidates, memberAssignmentState, member);
+        }
+
+        localState.standbyTaskToPrevMember = rankStandbyCandidates(standbyCandidates);
+        return localState;
+    }
+
+    private static void collectStandbyCandidates(final Map<TaskId, ArrayList<StandbyCandidate>> standbyCandidates,
+                                                 final MemberAssignmentState memberAssignmentState,
+                                                 final Member member) {
+        // prev standby tasks, carrying any reported offset sum so the most caught-up standby ranks first
+        for (final Map.Entry<String, Set<Integer>> entry : memberAssignmentState.standbyTasks().entrySet()) {
+            final String subtopologyId = entry.getKey();
+            final Set<Integer> partitionNoSet = entry.getValue();
+            for (final int partitionNo : partitionNoSet) {
+                standbyCandidates
+                    .computeIfAbsent(new TaskId(subtopologyId, partitionNo), task -> new ArrayList<>())
+                    .add(new StandbyCandidate(member, true, reportedOffsetSum(memberAssignmentState, subtopologyId, partitionNo)));
             }
         }
-        return localState;
+
+        // A member that rejoins after a restart gets a fresh member ID and an empty target assignment, so the maps
+        // above cannot capture what it owned before. Offsets reported for tasks with state on local disk make it a
+        // weaker standby candidate, so stickiness can still hand those tasks back to the local state.
+        for (final Map.Entry<String, Map<Integer, Long>> entry : memberAssignmentState.taskOffsets().entrySet()) {
+            final String subtopologyId = entry.getKey();
+            for (final Map.Entry<Integer, Long> partitionOffset : entry.getValue().entrySet()) {
+                final int partitionNo = partitionOffset.getKey();
+                if (isCurrentlyAssignedStandbyTask(memberAssignmentState, subtopologyId, partitionNo)) {
+                    continue;
+                }
+                standbyCandidates
+                    .computeIfAbsent(new TaskId(subtopologyId, partitionNo), task -> new ArrayList<>())
+                    .add(new StandbyCandidate(member, false, partitionOffset.getValue()));
+            }
+        }
+    }
+
+    private static Map<TaskId, ArrayList<Member>> rankStandbyCandidates(final Map<TaskId, ArrayList<StandbyCandidate>> standbyCandidates) {
+        final Map<TaskId, ArrayList<Member>> standbyTaskToPrevMember = new HashMap<>(standbyCandidates.size());
+        standbyCandidates.forEach((taskId, candidates) -> {
+            candidates.sort(STANDBY_CANDIDATE_ORDER);
+            final ArrayList<Member> prevMembers = new ArrayList<>(candidates.size());
+            for (final StandbyCandidate candidate : candidates) {
+                prevMembers.add(candidate.member());
+            }
+            standbyTaskToPrevMember.put(taskId, prevMembers);
+        });
+        return standbyTaskToPrevMember;
+    }
+
+    /** Falls back to {@code 0} when no offset is reported, the conservative bound implying maximum lag. */
+    private static long reportedOffsetSum(final MemberAssignmentState memberAssignmentState,
+                                          final String subtopologyId,
+                                          final int partitionNo) {
+        return memberAssignmentState.taskOffsets()
+            .getOrDefault(subtopologyId, Map.of())
+            .getOrDefault(partitionNo, 0L);
+    }
+
+    private static boolean isCurrentlyAssignedStandbyTask(final MemberAssignmentState memberAssignmentState,
+                                                          final String subtopologyId,
+                                                          final int partitionNo) {
+        final Set<Integer> partitionNoSet = memberAssignmentState.standbyTasks().get(subtopologyId);
+        return partitionNoSet != null && partitionNoSet.contains(partitionNo);
     }
 
     private static GroupAssignment buildGroupAssignment(final LocalState localState, final Collection<String> members) {
@@ -183,8 +245,8 @@ public class StickyTaskAssignor implements TaskAssignor {
     private static Map<String, Set<Integer>> toCompactedTaskIds(final Set<TaskId> taskIds) {
         final Map<String, Set<Integer>> ret = new HashMap<>();
         for (final TaskId taskId : taskIds) {
-            ret.putIfAbsent(taskId.subtopologyId(), new HashSet<>());
-            ret.get(taskId.subtopologyId()).add(taskId.partition());
+            ret.computeIfAbsent(taskId.subtopologyId(), subtopologyId -> new HashSet<>())
+                .add(taskId.partition());
         }
         return ret;
     }
@@ -436,6 +498,9 @@ public class StickyTaskAssignor implements TaskAssignor {
             this.processId = processId;
             this.memberId = memberId;
         }
+    }
+
+    private record StandbyCandidate(Member member, boolean isPrevStandby, long offsetSum) {
     }
 
     private static class LocalState {
