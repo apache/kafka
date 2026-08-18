@@ -1747,6 +1747,79 @@ class ShareCoordinatorShardTest {
     }
 
     @Test
+    public void testInitializeStateIdempotent() {
+        InitializeShareGroupStateRequestData request = new InitializeShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new InitializeShareGroupStateRequestData.InitializeStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new InitializeShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(10)
+                    .setStateEpoch(5)))
+            ));
+
+        // First call initializes the state and writes a record.
+        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> result = shard.initializeState(request);
+        result.records().forEach(record -> shard.replay(0L, 0L, (short) 0, record));
+
+        InitializeShareGroupStateResponseData expectedData = InitializeShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
+
+        assertEquals(expectedData, result.response());
+        assertEquals(1, result.records().size());
+
+        ShareGroupOffset stateAfterFirstCall = shard.getShareStateMapValue(SHARE_PARTITION_KEY);
+        Integer stateEpochAfterFirstCall = shard.getStateEpochMapValue(SHARE_PARTITION_KEY);
+        assertNotNull(stateAfterFirstCall);
+        assertNotNull(stateEpochAfterFirstCall);
+
+        // A retry of the exact same request (same stateEpoch and startOffset) should be
+        // treated as a no-op -- it should return the same successful response but generate
+        // no new record, and the in-memory state should remain unchanged.
+        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> retryResult = shard.initializeState(request);
+
+        assertEquals(expectedData, retryResult.response());
+        assertEquals(List.of(), retryResult.records());
+
+        assertEquals(stateAfterFirstCall, shard.getShareStateMapValue(SHARE_PARTITION_KEY));
+        assertEquals(stateEpochAfterFirstCall, shard.getStateEpochMapValue(SHARE_PARTITION_KEY));
+    }
+
+    @Test
+    public void testInitializeStateNotIdempotentWhenStartOffsetChanges() {
+        InitializeShareGroupStateRequestData request = new InitializeShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new InitializeShareGroupStateRequestData.InitializeStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new InitializeShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(10)
+                    .setStateEpoch(5)))
+            ));
+
+        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> result = shard.initializeState(request);
+        result.records().forEach(record -> shard.replay(0L, 0L, (short) 0, record));
+        assertEquals(1, result.records().size());
+
+        // Same stateEpoch but a different startOffset should not be treated as a duplicate
+        // and must produce a new record.
+        InitializeShareGroupStateRequestData sameEpochDifferentOffsetRequest = new InitializeShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new InitializeShareGroupStateRequestData.InitializeStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new InitializeShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(20)
+                    .setStateEpoch(5)))
+            ));
+
+        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> secondResult = shard.initializeState(sameEpochDifferentOffsetRequest);
+
+        InitializeShareGroupStateResponseData expectedData = InitializeShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
+        assertEquals(expectedData, secondResult.response());
+        assertEquals(1, secondResult.records().size());
+    }
+
+    @Test
     public void testInitializeStateInvalidRequestData() {
         // invalid partition
         int partition = -1;
