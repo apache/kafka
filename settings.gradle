@@ -25,6 +25,7 @@ pluginManagement {
 plugins {
     id 'com.gradle.develocity' version '3.19'
     id 'com.gradle.common-custom-user-data-gradle-plugin' version '2.0.2'
+    id 'io.github.ben-manes.versions.settings' version '0.61.0'
 }
 
 def isGithubActions = System.getenv('GITHUB_ACTIONS') != null
