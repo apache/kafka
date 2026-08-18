@@ -61,12 +61,14 @@ public class CommonClientConfigs {
                                                        + "the bootstrap phase, this behaves the same as <code>use_all_dns_ips</code>.";
 
     public static final String BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG = "bootstrap.resolve.timeout.ms";
-    public static final long DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS = 2 * 60 * 1000L;
-    public static final String BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC = "Maximum amount of time clients can spend trying to" +
-        " resolve for the bootstrap server address. If the resolution cannot be completed within this timeframe, a " +
-        "<code>BootstrapResolutionException</code> will be thrown. This failure is unrecoverable — the exception is" +
-        " re-thrown on every subsequent API call, so the client must be closed and re-created after fixing the" +
-        " underlying DNS or <code>bootstrap.servers</code> configuration issue.";
+    public static final long DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS = 0L;
+    public static final String BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC = "Selects the client's bootstrap DNS resolution mode." +
+        " When set to <code>0</code> (the default), DNS is resolved synchronously during client construction; any" +
+        " failure surfaces as <code>ConfigException</code> and no client instance is created. When set to a positive" +
+        " value, DNS is resolved asynchronously and this is the maximum amount of time the client will spend" +
+        " retrying resolution before failing with an unrecoverable <code>BootstrapResolutionException</code> from" +
+        " subsequent API calls (the client must then be closed and re-created after fixing the underlying DNS or" +
+        " <code>bootstrap.servers</code> configuration issue).";
 
     public static final String METADATA_MAX_AGE_CONFIG = "metadata.max.age.ms";
     public static final String METADATA_MAX_AGE_DOC = "The period of time in milliseconds after which we force a refresh of metadata even if we haven't seen any partition leadership changes to proactively discover any new brokers or partitions.";

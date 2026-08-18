@@ -79,6 +79,7 @@ import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -1847,7 +1848,7 @@ public class ShareConsumeRequestManagerTest {
         buildRequestManager();
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
-        ByteBufferOutputStream out = new ByteBufferOutputStream(buffer);
+        ByteBufferOutputStream out = new SingleByteBufferOutputStream(buffer);
 
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(out,
                 DefaultRecordBatch.CURRENT_MAGIC_VALUE,

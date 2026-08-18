@@ -109,6 +109,10 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
     private static final String PROCESS_REAPER_THREAD_PREFIX = "process reaper";
     private static final String RMI_THREAD_PREFIX = "RMI";
     private static final String JDK_INTERNAL_CLEANERIMPL_THREAD_PREFIX = "Cleaner-";
+    // Apache MINA I/O threads spawned by MiniKdc (via ApacheDS). They live for the KDC's lifetime,
+    // which a SASL/GSSAPI test manages across all its @ClusterTest methods (started in @BeforeAll,
+    // stopped in @AfterAll), so they must not be treated as per-test leaks.
+    private static final String MINA_NIO_PROCESSOR_THREAD_PREFIX = "NioProcessor";
     // The following three thread prefixes are spawned by MockOAuth2Server (which uses OkHttp's MockWebServer
     // internally) in ClientOAuthIntegrationTest.
     private static final String MOCK_WEB_SERVER_THREAD_PREFIX = "MockWebServer";
@@ -119,7 +123,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
     private static final Set<String> SKIPPED_THREAD_PREFIX = Set.of(METRICS_METER_TICK_THREAD_PREFIX, SCALA_THREAD_PREFIX,
             FORK_JOIN_POOL_THREAD_PREFIX, JUNIT_THREAD_PREFIX, ATTACH_LISTENER_THREAD_PREFIX, PROCESS_REAPER_THREAD_PREFIX,
             RMI_THREAD_PREFIX, SystemTimer.SYSTEM_TIMER_THREAD_PREFIX, JDK_INTERNAL_CLEANERIMPL_THREAD_PREFIX,
-            MOCK_WEB_SERVER_THREAD_PREFIX, KEEP_ALIVE_TIMER_THREAD_PREFIX, POOL_THREAD_PREFIX);
+            MINA_NIO_PROCESSOR_THREAD_PREFIX, MOCK_WEB_SERVER_THREAD_PREFIX, KEEP_ALIVE_TIMER_THREAD_PREFIX, POOL_THREAD_PREFIX);
 
     @Override
     public boolean supportsTestTemplate(ExtensionContext context) {

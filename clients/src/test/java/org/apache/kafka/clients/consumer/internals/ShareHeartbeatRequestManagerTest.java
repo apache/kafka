@@ -376,7 +376,7 @@ public class ShareHeartbeatRequestManagerTest
 
         // Join the group and subscribe to a topic, but the response has not yet been received
         String topic = "topic1";
-        subscriptions.subscribe(Set.of(topic), Optional.empty());
+        subscriptions.subscribe(Set.of(topic));
         when(subscriptions.subscription()).thenReturn(Set.of(topic));
         mockRejoiningMemberData();
         data = heartbeatState.buildRequestData();
