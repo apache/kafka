@@ -38,9 +38,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBindingFilter;
-import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -146,7 +144,7 @@ public interface ClusterInstance {
         props.putIfAbsent(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         props.putIfAbsent(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         props.putIfAbsent(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-        return new KafkaProducer<>(setClientSaslConfig(setClientSslConfig(props)));
+        return new KafkaProducer<>(createClientSecurityConfig(props));
     }
 
     default <K, V> Producer<K, V> producer() {
@@ -160,7 +158,7 @@ public interface ClusterInstance {
         props.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + TestUtils.randomString(5));
         props.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-        return new KafkaConsumer<>(setClientSaslConfig(setClientSslConfig(props)));
+        return new KafkaConsumer<>(createClientSecurityConfig(props));
     }
 
     default <K, V> Consumer<K, V> consumer() {
@@ -185,7 +183,7 @@ public interface ClusterInstance {
         }
         props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + TestUtils.randomString(5));
         props.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-        return new KafkaShareConsumer<>(setClientSaslConfig(setClientSslConfig(props)), keyDeserializer, valueDeserializer);
+        return new KafkaShareConsumer<>(createClientSecurityConfig(props), keyDeserializer, valueDeserializer);
     }
 
     default Admin admin(Map<String, Object> configs, boolean usingBootstrapControllers) {
@@ -197,26 +195,10 @@ public interface ClusterInstance {
             props.putIfAbsent(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
             props.remove(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG);
         }
-        return Admin.create(setClientSaslConfig(setClientSslConfig(props)));
+        return Admin.create(createClientSecurityConfig(props));
     }
 
-    default Map<String, Object> setClientSaslConfig(Map<String, Object> configs) {
-        Map<String, Object> props = new HashMap<>(configs);
-        if (config().brokerSecurityProtocol() == SecurityProtocol.SASL_PLAINTEXT) {
-            props.putIfAbsent(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name);
-            props.putIfAbsent(SaslConfigs.SASL_MECHANISM, "PLAIN");
-            props.putIfAbsent(
-                SaslConfigs.SASL_JAAS_CONFIG,
-                String.format(
-                    "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";",
-                    JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD
-                )
-            );
-        }
-        return props;
-    }
-
-    Map<String, Object> setClientSslConfig(Map<String, Object> configs);
+    Map<String, Object> createClientSecurityConfig(Map<String, Object> configs);
 
     default Admin admin(Map<String, Object> configs) {
         return admin(configs, false);

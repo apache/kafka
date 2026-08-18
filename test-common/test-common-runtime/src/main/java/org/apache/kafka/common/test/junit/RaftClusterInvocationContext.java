@@ -183,10 +183,15 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         @Override
-        public Map<String, Object> setClientSslConfig(Map<String, Object> configs) {
+        public Map<String, Object> createClientSecurityConfig(Map<String, Object> configs) {
             Map<String, Object> props = new HashMap<>(configs);
-            if (config().brokerSecurityProtocol() == SecurityProtocol.SASL_SSL) {
-                props.putIfAbsent(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_SSL.name);
+            SecurityProtocol protocol = clusterConfig.brokerSecurityProtocol();
+            props.putIfAbsent(
+                CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
+                protocol.name
+            );
+            if (protocol == SecurityProtocol.SASL_PLAINTEXT ||
+                protocol == SecurityProtocol.SASL_SSL) {
                 props.putIfAbsent(SaslConfigs.SASL_MECHANISM, "PLAIN");
                 props.putIfAbsent(
                     SaslConfigs.SASL_JAAS_CONFIG,
@@ -195,12 +200,10 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                         JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD
                     )
                 );
-                if (clusterTestKit.sslManager() != null) {
-                    props.putAll(clusterTestKit.sslManager().createClientSslConfig());
-                    props.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "");
-                }
-            } else if (config().brokerSecurityProtocol() == SecurityProtocol.SSL) {
-                props.putIfAbsent(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SSL.name);
+            }
+
+            if (protocol == SecurityProtocol.SSL ||
+                protocol == SecurityProtocol.SASL_SSL) {
                 if (clusterTestKit.sslManager() != null) {
                     props.putAll(clusterTestKit.sslManager().createClientSslConfig());
                     props.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "");

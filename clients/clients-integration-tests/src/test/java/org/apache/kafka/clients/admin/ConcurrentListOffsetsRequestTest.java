@@ -76,7 +76,7 @@ public class ConcurrentListOffsetsRequestTest {
                 "default.api.timeout.ms", TIMEOUT,
                 "request.timeout.ms", TIMEOUT,
                 CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
-        adminClient = KafkaAdminClient.createInternal(new AdminClientConfig(clusterInstance.setClientSaslConfig(props), true),
+        adminClient = KafkaAdminClient.createInternal(new AdminClientConfig(clusterInstance.createClientSecurityConfig(props), true),
                 null, new TestHostResolver());
 
         networkClient = TestUtils.fieldValue(adminClient, KafkaAdminClient.class, "client");
