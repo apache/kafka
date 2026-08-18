@@ -44,6 +44,6 @@ public final class RaftClientVotersSupplier implements Supplier<Set<Integer>> {
 
     @Override
     public Set<Integer> get() {
-        return Set.copyOf(raftClient.latestVoterSet().voterIds());
+        return raftClient.latestVoterSet().voterIds();
     }
 }
