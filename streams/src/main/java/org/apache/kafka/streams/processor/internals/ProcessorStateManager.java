@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.FixedOrderMap;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -37,7 +38,6 @@ import org.apache.kafka.streams.state.internals.LegacyCheckpointingStateStore;
 import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 import org.apache.kafka.streams.state.internals.WithRetentionPeriod;
-import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 import org.slf4j.Logger;
 
@@ -51,6 +51,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static java.lang.String.format;
@@ -135,22 +136,11 @@ public class ProcessorStateManager implements StateManager {
             this.commitCallback = commitCallback;
             this.recordConverter = recordConverter;
             this.offset = null;
-            this.retentionPeriod = extractRetentionPeriod(stateStore);
+            this.retentionPeriod = WithRetentionPeriod.resolveRetentionPeriod(stateStore);
         }
 
         private void setOffset(final Long offset) {
             this.offset = offset;
-        }
-
-        private static long extractRetentionPeriod(final StateStore stateStore) {
-            StateStore current = stateStore;
-            while (current instanceof WrappedStateStore) {
-                current = ((WrappedStateStore<?, ?, ?>) current).wrapped();
-            }
-            if (current instanceof WithRetentionPeriod) {
-                return ((WithRetentionPeriod) current).retentionPeriod();
-            }
-            return -1L;
         }
 
         // the offset is exposed to the changelog reader to determine if restoration is completed
@@ -207,6 +197,9 @@ public class ProcessorStateManager implements StateManager {
     private final StateDirectory stateDirectory;
     private final File baseDir;
     private final UpgradeFromValues upgradeFrom;
+    private final Time time;
+
+    private boolean startupTask = false;
 
     private TaskType taskType;
     private Logger log;
@@ -229,6 +222,7 @@ public class ProcessorStateManager implements StateManager {
                                  final boolean transactionalStateStoresEnabled,
                                  final LogContext logContext,
                                  final StateDirectory stateDirectory,
+                                 final Time time,
                                  final Map<String, String> storeToChangelogTopic,
                                  final Collection<TopicPartition> sourcePartitions,
                                  final UpgradeFromValues upgradeFrom) throws ProcessorStateException {
@@ -241,6 +235,7 @@ public class ProcessorStateManager implements StateManager {
         this.transactionalStateStoresEnabled = transactionalStateStoresEnabled;
         this.sourcePartitions = sourcePartitions;
         this.upgradeFrom = upgradeFrom;
+        this.time = time;
 
         this.baseDir = stateDirectory.getOrCreateDirectoryForTask(taskId);
         this.stateDirectory = stateDirectory;
@@ -259,9 +254,10 @@ public class ProcessorStateManager implements StateManager {
                                  final boolean transactionalStateStoresEnabled,
                                  final LogContext logContext,
                                  final StateDirectory stateDirectory,
+                                 final Time time,
                                  final Map<String, String> storeToChangelogTopic,
                                  final Collection<TopicPartition> sourcePartitions) throws ProcessorStateException {
-        this(taskId, taskType, eosEnabled, transactionalStateStoresEnabled, logContext, stateDirectory, storeToChangelogTopic, sourcePartitions, null);
+        this(taskId, taskType, eosEnabled, transactionalStateStoresEnabled, logContext, stateDirectory, time, storeToChangelogTopic, sourcePartitions, null);
     }
 
     /**
@@ -273,9 +269,13 @@ public class ProcessorStateManager implements StateManager {
                                                                final boolean eosEnabled,
                                                                final LogContext logContext,
                                                                final StateDirectory stateDirectory,
+                                                               final Time time,
                                                                final Map<String, String> storeToChangelogTopic,
                                                                final Set<TopicPartition> sourcePartitions) {
-        return new ProcessorStateManager(taskId, TaskType.STANDBY, eosEnabled, false, logContext, stateDirectory, storeToChangelogTopic, sourcePartitions);
+        final ProcessorStateManager stateManager =
+            new ProcessorStateManager(taskId, TaskType.STANDBY, eosEnabled, false, logContext, stateDirectory, time, storeToChangelogTopic, sourcePartitions);
+        stateManager.startupTask = true;
+        return stateManager;
     }
 
     void registerStateStores(final List<StateStore> allStores, final InternalProcessorContext<?, ?> processorContext) {
@@ -358,7 +358,7 @@ public class ProcessorStateManager implements StateManager {
         }
 
         try {
-            stateDirectory.updateTaskOffsets(taskId, changelogOffsets());
+            stateDirectory.updateTaskOffsets(taskId, persistentChangelogOffsets());
         } catch (final RuntimeException e) {
             throw new ProcessorStateException(format("%sError updating state directory offsets when creating the state manager",
                 logPrefix), e);
@@ -444,10 +444,18 @@ public class ProcessorStateManager implements StateManager {
 
     @Override
     public Map<TopicPartition, Long> changelogOffsets() {
+        return changelogOffsets(storeMetadata -> true);
+    }
+
+    private Map<TopicPartition, Long> persistentChangelogOffsets() {
+        return changelogOffsets(storeMetadata -> storeMetadata.stateStore.persistent());
+    }
+
+    private Map<TopicPartition, Long> changelogOffsets(final Predicate<StateStoreMetadata> storeFilter) {
         // return the current offsets for those logged stores
         final Map<TopicPartition, Long> changelogOffsets = new HashMap<>();
         for (final StateStoreMetadata storeMetadata : stores.values()) {
-            if (storeMetadata.changelogPartition != null) {
+            if (storeMetadata.changelogPartition != null && storeFilter.test(storeMetadata)) {
                 // for changelog whose offset is unknown, use 0L indicating earliest offset
                 // otherwise return the current offset + 1 as the next offset to fetch
                 changelogOffsets.put(
@@ -521,7 +529,7 @@ public class ProcessorStateManager implements StateManager {
                 storeMetadata.setEndOffset(optionalLag.getAsLong() + batchEndOffset);
             }
 
-            stateDirectory.updateTaskOffsets(taskId, changelogOffsets());
+            stateDirectory.updateTaskOffsets(taskId, persistentChangelogOffsets());
         }
     }
 
@@ -629,6 +637,14 @@ public class ProcessorStateManager implements StateManager {
         }
     }
 
+    long approximateNumUncommittedBytes() {
+        long total = 0;
+        for (final StateStoreMetadata metadata : stores.values()) {
+            total += metadata.stateStore.approximateNumUncommittedBytes();
+        }
+        return total;
+    }
+
     /**
      * {@link StateStore#close() Close} all stores (even in case of failure).
      * Log all exceptions and re-throw the first exception that occurred at the end.
@@ -676,6 +692,13 @@ public class ProcessorStateManager implements StateManager {
             }
 
             stores.clear();
+
+            // Refresh the task directory's modification time so the state directory cleaner does
+            // not treat the just-released directory as obsolete before it can be reassigned.
+            if (!startupTask && baseDir.exists() && !baseDir.setLastModified(time.milliseconds())) {
+                log.warn("{}Failed to update modification time of state directory {} for task {}",
+                    logPrefix, baseDir, taskId);
+            }
         }
 
         LegacyCheckpointingStateStore.maybeDowngradeOffsets(logPrefix, upgradeFrom, stateDirectory, taskId, allOffsets);
@@ -730,7 +753,7 @@ public class ProcessorStateManager implements StateManager {
             }
         }
 
-        stateDirectory.updateTaskOffsets(taskId, changelogOffsets());
+        stateDirectory.updateTaskOffsets(taskId, persistentChangelogOffsets());
     }
 
     // Commit a sentinel value when the changelog offset is not yet initialized/known

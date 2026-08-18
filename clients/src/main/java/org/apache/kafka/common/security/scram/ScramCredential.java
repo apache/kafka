@@ -14,13 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.security.scram;
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 /**
  * SCRAM credential class that encapsulates the credential data persisted for each user that is
  * accessible to the server. See <a href="https://tools.ietf.org/html/rfc5802#section-5">RFC rfc5802</a>
  * for details.
  */
+@InterfaceAudience.Public
 public class ScramCredential {
 
     private final byte[] salt;

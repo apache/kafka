@@ -23,11 +23,13 @@ import org.apache.kafka.common.message.{StreamsGroupHeartbeatRequestData, Stream
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterFeature, ClusterTest, ClusterTestDefaults, Type}
-import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
-import org.apache.kafka.common.errors.UnsupportedVersionException
+import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
+import org.apache.kafka.coordinator.group.api.streams.assignor.{GroupAssignment, GroupSpec, MemberAssignment, TaskAssignor, TopologyDescriber}
+import org.apache.kafka.common.errors.{InvalidConfigurationException, UnsupportedVersionException}
 import org.apache.kafka.server.common.Feature
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertNull, assertThrows, assertTrue}
 
+import java.util.concurrent.ExecutionException
 import scala.jdk.CollectionConverters._
 
 object StreamsGroupHeartbeatRequestTest {
@@ -707,6 +709,10 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       assertEquals(60_000, streamsGroupHeartbeatResponse1.taskOffsetIntervalMs(), "Member 1 should pickup task.offset.interval.ms initially")
       assertEquals(60_000, streamsGroupHeartbeatResponse2.taskOffsetIntervalMs(), "Member 2 should pickup task.offset.interval.ms initially")
 
+      // Verify both members picked up `acceptable.recovery.lag`
+      assertEquals(10_000, streamsGroupHeartbeatResponse1.acceptableRecoveryLag(), "Member 1 should pickup acceptable.recovery.lag initially")
+      assertEquals(10_000, streamsGroupHeartbeatResponse2.acceptableRecoveryLag(), "Member 2 should pickup acceptable.recovery.lag initially")
+
       // Both members continue to send heartbeats with their assigned tasks
       TestUtils.waitUntilTrue(() => {
         streamsGroupHeartbeatResponse1 = streamsGroupHeartbeat(
@@ -761,6 +767,10 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       assertEquals(60_000, streamsGroupHeartbeatResponse1.taskOffsetIntervalMs(), "Member 1 should pickup task.offset.interval.ms initially")
       assertEquals(60_000, streamsGroupHeartbeatResponse2.taskOffsetIntervalMs(), "Member 2 should pickup task.offset.interval.ms initially")
 
+      // Verify both members picked up `acceptable.recovery.lag`
+      assertEquals(10_000, streamsGroupHeartbeatResponse1.acceptableRecoveryLag(), "Member 1 should pickup acceptable.recovery.lag initially")
+      assertEquals(10_000, streamsGroupHeartbeatResponse2.acceptableRecoveryLag(), "Member 2 should pickup acceptable.recovery.lag initially")
+
       // Change streams.num.standby.replicas = 1
       val groupConfigResource = new ConfigResource(ConfigResource.Type.GROUP, groupId)
       val alterConfigOp = new AlterConfigOp(
@@ -780,6 +790,16 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       val configChanges2 = Map(groupConfigResource2 -> List(alterConfigOp2).asJavaCollection).asJava
       val options2 = new org.apache.kafka.clients.admin.AlterConfigsOptions()
       admin.incrementalAlterConfigs(configChanges2, options2).all().get()
+
+      // Change streams.acceptable.recovery.lag = 5000
+      val groupConfigResource3 = new ConfigResource(ConfigResource.Type.GROUP, groupId)
+      val alterConfigOp3 = new AlterConfigOp(
+        new ConfigEntry("streams.acceptable.recovery.lag", "5000"),
+        AlterConfigOp.OpType.SET
+      )
+      val configChanges3 = Map(groupConfigResource3 -> List(alterConfigOp3).asJavaCollection).asJava
+      val options3 = new org.apache.kafka.clients.admin.AlterConfigsOptions()
+      admin.incrementalAlterConfigs(configChanges3, options3).all().get()
 
       // Send heartbeats to trigger rebalance after config change
       TestUtils.waitUntilTrue(() => {
@@ -846,6 +866,209 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
           streamsGroupHeartbeatResponse2.taskOffsetIntervalMs() == 45_000
       }, "Member 2 did not pick up updated task.offset.interval.ms within the timeout period.")
 
+      // Verify both members picked up change of `acceptable.recovery.lag`
+      assertEquals(5_000, streamsGroupHeartbeatResponse1.acceptableRecoveryLag(), "Member 1 should pickup acceptable.recovery.lag change")
+      assertEquals(5_000, streamsGroupHeartbeatResponse2.acceptableRecoveryLag(), "Member 2 should pickup acceptable.recovery.lag change")
+
+    } finally {
+      admin.close()
+    }
+  }
+
+  @ClusterTest
+  def testAlterRackAwareAssignmentTagsGroupConfig(): Unit = {
+    val admin = cluster.admin()
+    val groupId = "test-group"
+
+    try {
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
+      )
+
+      val groupConfigResource = new ConfigResource(ConfigResource.Type.GROUP, groupId)
+
+      // Valid case: a list of distinct client tag keys is accepted.
+      val validAlterOp = new AlterConfigOp(
+        new ConfigEntry(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,cluster"),
+        AlterConfigOp.OpType.SET
+      )
+      admin.incrementalAlterConfigs(
+        Map(groupConfigResource -> List(validAlterOp).asJavaCollection).asJava
+      ).all().get()
+
+      // Verify the config was persisted. Group config propagation is asynchronous, so wait for it.
+      TestUtils.waitUntilTrue(() => {
+        val describedConfigs = admin.describeConfigs(List(groupConfigResource).asJava).all().get()
+        val rackAwareTags = describedConfigs.get(groupConfigResource).get(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG)
+        rackAwareTags != null && rackAwareTags.value() == "zone,cluster"
+      }, s"${GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG} was not updated to the expected value within the timeout period.")
+
+      // Invalid case: an empty tag key (here an empty element between commas) is rejected with INVALID_CONFIG.
+      val invalidAlterOp = new AlterConfigOp(
+        new ConfigEntry(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,,cluster"),
+        AlterConfigOp.OpType.SET
+      )
+      val executionException = assertThrows(classOf[ExecutionException], () =>
+        admin.incrementalAlterConfigs(
+          Map(groupConfigResource -> List(invalidAlterOp).asJavaCollection).asJava
+        ).all().get()
+      )
+      assertTrue(executionException.getCause.isInstanceOf[InvalidConfigurationException],
+        s"Expected InvalidConfigurationException but got ${executionException.getCause}")
+
+      // The invalid alter is rejected at validation time, so the previously persisted valid value is unchanged.
+      val describedConfigsAfter = admin.describeConfigs(List(groupConfigResource).asJava).all().get()
+      assertEquals("zone,cluster",
+        describedConfigsAfter.get(groupConfigResource).get(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG).value())
+    } finally {
+      admin.close()
+    }
+  }
+
+  @ClusterTest
+  def testAlterStreamsAssignorNameGroupConfig(): Unit = {
+    val admin = cluster.admin()
+    val groupId = "test-group"
+
+    try {
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
+      )
+
+      val groupConfigResource = new ConfigResource(ConfigResource.Type.GROUP, groupId)
+
+      // The config is unset by default, so it falls back to the broker's default assignor, which is
+      // the name of the first assignor of group.streams.assignors.
+      assertEquals("sticky", admin.describeConfigs(List(groupConfigResource).asJava).all().get()
+        .get(groupConfigResource).get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG).value())
+
+      // A name that is not registered on the broker is rejected with INVALID_CONFIG.
+      val invalidAlterOp = new AlterConfigOp(
+        new ConfigEntry(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, "does-not-exist"),
+        AlterConfigOp.OpType.SET
+      )
+      val executionException = assertThrows(classOf[ExecutionException], () =>
+        admin.incrementalAlterConfigs(
+          Map(groupConfigResource -> List(invalidAlterOp).asJavaCollection).asJava
+        ).all().get()
+      )
+      assertTrue(executionException.getCause.isInstanceOf[InvalidConfigurationException],
+        s"Expected InvalidConfigurationException but got ${executionException.getCause}")
+      assertTrue(executionException.getCause.getMessage.contains("'does-not-exist' is not a registered task assignor"),
+        s"Unexpected error message: ${executionException.getCause.getMessage}")
+    } finally {
+      admin.close()
+    }
+  }
+
+  @ClusterTest(
+    serverProperties = Array(
+      // The class name has to be spelled out because annotation values must be compile-time constants.
+      new ClusterConfigProperty(
+        key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG,
+        value = "sticky,kafka.server.CustomStreamsTaskAssignor"
+      )
+    )
+  )
+  def testAlterStreamsAssignorNameGroupConfigWithCustomAssignor(): Unit = {
+    val admin = cluster.admin()
+    val groupId = "test-group"
+
+    try {
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
+      )
+
+      val groupConfigResource = new ConfigResource(ConfigResource.Type.GROUP, groupId)
+
+      // The config is unset, so it falls back to the broker's default assignor, which is the first
+      // entry of group.streams.assignors.
+      assertEquals("sticky", admin.describeConfigs(List(groupConfigResource).asJava).all().get()
+        .get(groupConfigResource).get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG).value())
+
+      // A custom assignor registered on the broker is selected by the name it reports, moving the group
+      // off the default. Group config propagation is asynchronous, so wait for it.
+      val validAlterOp = new AlterConfigOp(
+        new ConfigEntry(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, CustomStreamsTaskAssignor.NAME),
+        AlterConfigOp.OpType.SET
+      )
+      admin.incrementalAlterConfigs(
+        Map(groupConfigResource -> List(validAlterOp).asJavaCollection).asJava
+      ).all().get()
+
+      TestUtils.waitUntilTrue(() => {
+        val describedConfigs = admin.describeConfigs(List(groupConfigResource).asJava).all().get()
+        val assignorName = describedConfigs.get(groupConfigResource).get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG)
+        assignorName != null && assignorName.value() == CustomStreamsTaskAssignor.NAME
+      }, s"${GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG} was not updated to the expected value within the timeout period.")
+
+      // The custom assignor's class name is not a valid selector; only its name() is.
+      val classNameAlterOp = new AlterConfigOp(
+        new ConfigEntry(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, classOf[CustomStreamsTaskAssignor].getName),
+        AlterConfigOp.OpType.SET
+      )
+      val executionException = assertThrows(classOf[ExecutionException], () =>
+        admin.incrementalAlterConfigs(
+          Map(groupConfigResource -> List(classNameAlterOp).asJavaCollection).asJava
+        ).all().get()
+      )
+      assertTrue(executionException.getCause.isInstanceOf[InvalidConfigurationException],
+        s"Expected InvalidConfigurationException but got ${executionException.getCause}")
+
+      // The alter is rejected at validation time, so the group keeps the assignor it had selected.
+      assertEquals(CustomStreamsTaskAssignor.NAME, admin.describeConfigs(List(groupConfigResource).asJava).all().get()
+        .get(groupConfigResource).get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG).value())
+
+      // Deleting the config returns the group to the broker's default assignor.
+      val deleteAlterOp = new AlterConfigOp(
+        new ConfigEntry(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG, ""),
+        AlterConfigOp.OpType.DELETE
+      )
+      admin.incrementalAlterConfigs(
+        Map(groupConfigResource -> List(deleteAlterOp).asJavaCollection).asJava
+      ).all().get()
+
+      TestUtils.waitUntilTrue(() => {
+        val describedConfigs = admin.describeConfigs(List(groupConfigResource).asJava).all().get()
+        describedConfigs.get(groupConfigResource).get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG).value() == "sticky"
+      }, s"${GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG} was not unset within the timeout period.")
+    } finally {
+      admin.close()
+    }
+  }
+
+  @ClusterTest(
+    serverProperties = Array(
+      // The class name has to be spelled out because annotation values must be compile-time constants.
+      new ClusterConfigProperty(
+        key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNORS_CONFIG,
+        value = "kafka.server.CustomStreamsTaskAssignor"
+      )
+    )
+  )
+  def testDescribeStreamsAssignorNameGroupConfigFallsBackToAssignorName(): Unit = {
+    val admin = cluster.admin()
+    val groupId = "test-group"
+
+    try {
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
+      )
+
+      val groupConfigResource = new ConfigResource(ConfigResource.Type.GROUP, groupId)
+
+      // The default assignor is registered by class name, but the group config selects assignors by
+      // name, so the fallback is the assignor's name and not the configured class name.
+      assertEquals(CustomStreamsTaskAssignor.NAME, admin.describeConfigs(List(groupConfigResource).asJava).all().get()
+        .get(groupConfigResource).get(GroupConfig.STREAMS_ASSIGNOR_NAME_CONFIG).value())
     } finally {
       admin.close()
     }
@@ -1131,6 +1354,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         .setStandbyTasks(List.empty.asJava)
         .setWarmupTasks(List.empty.asJava)
         .setTaskOffsetIntervalMs(60_000)
+        .setAcceptableRecoveryLag(10_000)
 
       assertEquals(expectedRejoinResponse, rejoinResponse)
     } finally {
@@ -1182,4 +1406,18 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
           ).asJava)
       ).asJava)
   }
+}
+
+object CustomStreamsTaskAssignor {
+  val NAME = "custom"
+}
+
+/**
+ * Registered on the broker only so that a group can select it by name; it never computes an assignment.
+ */
+class CustomStreamsTaskAssignor extends TaskAssignor {
+  override def name(): String = CustomStreamsTaskAssignor.NAME
+
+  override def assign(groupSpec: GroupSpec, topologyDescriber: TopologyDescriber): GroupAssignment =
+    new GroupAssignment(java.util.Map.of[String, MemberAssignment]())
 }

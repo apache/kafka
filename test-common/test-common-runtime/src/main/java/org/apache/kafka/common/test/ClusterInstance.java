@@ -259,6 +259,10 @@ public interface ClusterInstance {
 
     void startBroker(int brokerId);
 
+    void restartBroker(int brokerId, Map<String, Object> propOverrides);
+
+    void restartBrokersWithSwappedClientListenerPorts(int brokerId1, int brokerId2);
+
     //---------------------------[wait]---------------------------//
 
     default void waitTopicDeletion(String topic) throws InterruptedException {

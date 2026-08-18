@@ -20,19 +20,19 @@ package kafka.network
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import com.fasterxml.jackson.databind.node.{BooleanNode, DoubleNode, JsonNodeFactory, LongNode, NullNode, ObjectNode, TextNode}
+import java.util.Optional
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.network.{ClientInformation, ListenerName, NetworkSend}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.network.{Request, RequestConvertToJson}
+import org.apache.kafka.network.{Request, RequestConvertToJson, SendResponse}
 import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
 
-import scala.jdk.OptionConverters.RichOption
 
 class RequestConvertToJsonTest {
 
@@ -71,7 +71,7 @@ class RequestConvertToJsonTest {
     val req = request(alterIsrRequest)
     val send = new NetworkSend(req.context.connectionId, alterIsrRequest.toSend(req.header))
     val headerLog = RequestConvertToJson.requestHeaderNode(req.header)
-    val res = new RequestChannel.SendResponse(req, send, Some(headerLog), None)
+    val res = new SendResponse(req, send, Optional.of(headerLog))
 
     val totalTimeMs = 1
     val requestQueueTimeMs = 2
@@ -84,7 +84,7 @@ class RequestConvertToJsonTest {
     val messageConversionsTimeMs = 9
 
     val expectedNode = RequestConvertToJson.requestDesc(req.header, req.requestLog, req.isForwarded).asInstanceOf[ObjectNode]
-    expectedNode.set("response", res.responseLog.getOrElse(NullNode.getInstance()))
+    expectedNode.set("response", res.responseLog.orElse(NullNode.getInstance()))
     expectedNode.set("connection", new TextNode(req.context.connectionId))
     expectedNode.set("totalTimeMs", new DoubleNode(totalTimeMs))
     expectedNode.set("requestQueueTimeMs", new DoubleNode(requestQueueTimeMs))
@@ -100,7 +100,7 @@ class RequestConvertToJsonTest {
     expectedNode.set("temporaryMemoryBytes", new LongNode(temporaryMemoryBytes))
     expectedNode.set("messageConversionsTime", new DoubleNode(messageConversionsTimeMs))
 
-    val actualNode = RequestConvertToJson.requestDescMetrics(req.header, req.requestLog, res.responseLog.toJava, req.context, req.session, req.isForwarded,
+    val actualNode = RequestConvertToJson.requestDescMetrics(req.header, req.requestLog, res.responseLog, req.context, req.session, req.isForwarded,
       totalTimeMs, requestQueueTimeMs, apiLocalTimeMs, apiRemoteTimeMs, apiThrottleTimeMs, responseQueueTimeMs,
       responseSendTimeMs, temporaryMemoryBytes, messageConversionsTimeMs).asInstanceOf[ObjectNode]
 

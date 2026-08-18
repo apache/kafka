@@ -34,6 +34,7 @@ import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.immutable.ImmutableNavigableSet;
+import org.apache.kafka.server.authorizer.internals.CidrUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -511,7 +512,7 @@ public class StandardAuthorizerData {
             return null;
         }
         // Check if the host matches. If it doesn't, return no result (null).
-        if (!acl.host().equals(WILDCARD) && !acl.host().equals(host)) {
+        if (!acl.host().equals(WILDCARD) && !acl.host().equals(host) && !CidrUtils.isInRange(host, acl.host())) {
             return null;
         }
         // Check if the operation field matches. Here we hit a slight complication.

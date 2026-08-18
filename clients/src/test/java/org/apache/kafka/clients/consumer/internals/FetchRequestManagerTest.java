@@ -78,13 +78,14 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.BytesDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 import org.apache.kafka.test.DelayedReceive;
 import org.apache.kafka.test.MockSelector;
 import org.apache.kafka.test.TestUtils;
@@ -147,6 +148,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -277,6 +280,45 @@ public class FetchRequestManagerTest {
             assertEquals(offset, record.offset());
             offset += 1;
         }
+    }
+
+    /**
+     * A fetch response that carries no records must still wake up a thread blocked on the fetch buffer.
+     */
+    @Test
+    public void testEmptyFetchResponseWakesUpBuffer() throws InterruptedException {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        // Establish an incremental fetch session with a non-empty response first, then consume the records
+        // and the resulting wakeup so the buffer below starts empty.
+        LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> partitions = new LinkedHashMap<>();
+        partitions.put(tidp0, new FetchResponseData.PartitionData()
+                .setPartitionIndex(tp0.partition())
+                .setHighWatermark(100)
+                .setRecords(records));
+        client.prepareResponse(FetchResponse.of(Errors.NONE, 0, 123, partitions, List.of()));
+        assertEquals(1, sendFetches());
+        networkClientDelegate.poll(time.timer(0));
+        fetchRecords();
+        fetcher.fetchBuffer.awaitWakeup(time.timer(0));
+
+        // A consumer thread blocked waiting for data on the empty buffer.
+        Thread blockedOnBuffer = new Thread(() -> fetcher.fetchBuffer.awaitWakeup(time.timer(3_600_000L)));
+        blockedOnBuffer.setDaemon(true);
+        blockedOnBuffer.start();
+
+        // An empty incremental fetch response (same session, no partition data) must wake the thread blocked on the buffer.
+        client.prepareResponse(FetchResponse.of(Errors.NONE, 0, 123, new LinkedHashMap<>(), List.of()));
+        assertEquals(1, sendFetches());
+        networkClientDelegate.poll(time.timer(0));
+
+        // On a successful run the blocked thread gets unblocked with the response above so this join completes promptly.
+        // This timeout only caps how long we wait before declaring the wakeup missing (failure).
+        blockedOnBuffer.join(2_000);
+        assertFalse(blockedOnBuffer.isAlive(), "Empty fetch response did not wake the thread blocked on the fetch buffer");
     }
 
     @Test
@@ -966,7 +1008,7 @@ public class FetchRequestManagerTest {
         assignFromUser(singleton(tp0));
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
-        DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
+        DataOutputStream out = new DataOutputStream(new SingleByteBufferOutputStream(buffer));
 
         byte magic = RecordBatch.MAGIC_VALUE_V1;
         byte[] key = "foo".getBytes();
@@ -1057,7 +1099,7 @@ public class FetchRequestManagerTest {
         buildFetcher();
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
-        ByteBufferOutputStream out = new ByteBufferOutputStream(buffer);
+        ByteBufferOutputStream out = new SingleByteBufferOutputStream(buffer);
 
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(out,
                 DefaultRecordBatch.CURRENT_MAGIC_VALUE,
@@ -1320,7 +1362,7 @@ public class FetchRequestManagerTest {
     public void testFetchDuringEagerRebalance() {
         buildFetcher();
 
-        subscriptions.subscribe(singleton(topicName), Optional.empty());
+        subscriptions.subscribe(singleton(topicName));
         subscriptions.assignFromSubscribed(singleton(tp0));
         subscriptions.seek(tp0, 0);
 
@@ -1344,7 +1386,7 @@ public class FetchRequestManagerTest {
     public void testFetchDuringCooperativeRebalance() {
         buildFetcher();
 
-        subscriptions.subscribe(singleton(topicName), Optional.empty());
+        subscriptions.subscribe(singleton(topicName));
         subscriptions.assignFromSubscribed(singleton(tp0));
         subscriptions.seek(tp0, 0);
 
@@ -1563,6 +1605,19 @@ public class FetchRequestManagerTest {
         assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
     }
 
+    @Test
+    public void testRecordLatencyOnFetchResponseLevelError() {
+        // Latency is recorded on response-level errors (e.g. FETCH_SESSION_TOPIC_ID_ERROR) since the round-trip completed.
+        buildFetcher();
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        assertEquals(1, sendFetches());
+        client.prepareResponse(fetchResponseWithTopLevelError(tidp0, Errors.FETCH_SESSION_TOPIC_ID_ERROR, 0));
+        networkClientDelegate.poll(time.timer(0));
+        verify(metricsManager).recordLatency(anyString(), anyLong());
+    }
+
     @ParameterizedTest
     @MethodSource("handleFetchResponseErrorSupplier")
     public void testHandleFetchResponseError(Errors error,
@@ -1761,6 +1816,45 @@ public class FetchRequestManagerTest {
     }
 
     @Test
+    public void testFetchResponseWithUnexpectedPartitionIsIgnored() {
+        buildFetcher();
+
+        // Only tp0 is assigned and seeked; tp1 is not part of this fetch session.
+        // When the response includes an unexpected partition (tp1), FetchSessionHandler
+        // rejects the entire response, so tp0 records are also not returned.
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        assertEquals(1, sendFetches());
+        networkClientDelegate.poll(time.timer(0));
+        assertEquals(1, client.inFlightRequestCount());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        // Respond to the in-flight request with a response that includes an unexpected
+        // partition (tp1) that is not part of the fetch session.
+        Map<TopicIdPartition, FetchResponseData.PartitionData> partitions = new LinkedHashMap<>();
+        partitions.put(tidp0, new FetchResponseData.PartitionData()
+                .setPartitionIndex(tp0.partition())
+                .setHighWatermark(100L)
+                .setLogStartOffset(0)
+                .setRecords(records));
+        partitions.put(tidp1, new FetchResponseData.PartitionData()
+                .setPartitionIndex(tp1.partition())
+                .setHighWatermark(100L)
+                .setLogStartOffset(0)
+                .setRecords(records));
+        client.respond(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions), List.of()));
+        networkClientDelegate.poll(time.timer(0));
+
+        // The in-flight request has completed, but FetchSessionHandler rejected the whole
+        // response because of the unexpected partition (tp1), so nothing is buffered or
+        // returned to the consumer.
+        assertEquals(0, client.inFlightRequestCount());
+        assertFalse(fetcher.hasCompletedFetches());
+        assertTrue(fetchRecords().isEmpty());
+    }
+
+    @Test
     public void testCompletedFetchRemoval() {
         // Ensure the removal of completed fetches that cause an Exception if and only if they contain empty records.
         buildFetcher(AutoOffsetResetStrategy.NONE, new ByteArrayDeserializer(),
@@ -1906,7 +2000,7 @@ public class FetchRequestManagerTest {
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 1000, 1000, 64 * 1024, 64 * 1024, 1000, 10 * 1000, 127 * 1000,
                 time, true, new ApiVersions(), metricsManager.throttleTimeSensor(), new LogContext(),
-                MetadataRecoveryStrategy.NONE);
+                MetadataRecoveryStrategy.NONE, false);
 
         ApiVersionsResponse apiVersionsResponse = TestUtils.defaultApiVersionsResponse(
                 400, ApiMessageType.ListenerType.BROKER);
@@ -4118,7 +4212,7 @@ public class FetchRequestManagerTest {
         client = new MockClient(time, metadata);
         metrics = new Metrics(metricConfig, time);
         metricsRegistry = new FetchMetricsRegistry(metricConfig.tags().keySet(), "consumer" + groupId);
-        metricsManager = new FetchMetricsManager(metrics, metricsRegistry);
+        metricsManager = spy(new FetchMetricsManager(metrics, metricsRegistry));
         backgroundEventHandler = mock(BackgroundEventHandler.class);
 
         Properties properties = new Properties();

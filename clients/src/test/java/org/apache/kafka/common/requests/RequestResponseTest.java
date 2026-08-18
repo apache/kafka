@@ -36,6 +36,7 @@ import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.message.AddOffsetsToTxnRequestData;
 import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopic;
@@ -234,12 +235,16 @@ import org.apache.kafka.common.message.StreamsGroupDescribeRequestData;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.UnregisterBrokerRequestData;
 import org.apache.kafka.common.message.UnregisterBrokerResponseData;
+import org.apache.kafka.common.message.UnregisterControllerRequestData;
+import org.apache.kafka.common.message.UnregisterControllerResponseData;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.message.UpdateRaftVoterRequestData;
@@ -317,6 +322,7 @@ import static org.apache.kafka.common.protocol.ApiKeys.PRODUCE;
 import static org.apache.kafka.common.protocol.ApiKeys.SASL_AUTHENTICATE;
 import static org.apache.kafka.common.protocol.ApiKeys.SYNC_GROUP;
 import static org.apache.kafka.common.protocol.ApiKeys.UNREGISTER_BROKER;
+import static org.apache.kafka.common.protocol.ApiKeys.UNREGISTER_CONTROLLER;
 import static org.apache.kafka.common.requests.EndTxnRequest.LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -345,6 +351,8 @@ public class RequestResponseTest {
         toSkip.put(ELECT_LEADERS, List.of((short) 0));
         // UnregisterBroker v0 contains the error message in the response
         toSkip.put(UNREGISTER_BROKER, List.of((short) 0));
+        // UnregisterController v0 contains the error message in the response
+        toSkip.put(UNREGISTER_CONTROLLER, List.of((short) 0));
 
         for (ApiKeys apikey : ApiKeys.values()) {
             for (short version : apikey.allVersions()) {
@@ -353,6 +361,61 @@ public class RequestResponseTest {
                 checkRequest(request);
                 checkErrorResponse(request, unknownServerException);
                 checkResponse(getResponse(apikey, version), version);
+            }
+        }
+    }
+
+    @Test
+    public void testClientThrottlesResponsesWithThrottleTime() {
+        Map<ApiKeys, Short> postKip219Version = Map.ofEntries(
+            Map.entry(ApiKeys.PRODUCE, (short) 6),
+            Map.entry(ApiKeys.FETCH, (short) 8),
+            Map.entry(ApiKeys.LIST_OFFSETS, (short) 3),
+            Map.entry(ApiKeys.METADATA, (short) 6),
+            Map.entry(ApiKeys.OFFSET_COMMIT, (short) 4),
+            Map.entry(ApiKeys.OFFSET_FETCH, (short) 4),
+            Map.entry(ApiKeys.FIND_COORDINATOR, (short) 2),
+            Map.entry(ApiKeys.JOIN_GROUP, (short) 3),
+            Map.entry(ApiKeys.HEARTBEAT, (short) 2),
+            Map.entry(ApiKeys.LEAVE_GROUP, (short) 2),
+            Map.entry(ApiKeys.SYNC_GROUP, (short) 2),
+            Map.entry(ApiKeys.DESCRIBE_GROUPS, (short) 2),
+            Map.entry(ApiKeys.LIST_GROUPS, (short) 2),
+            Map.entry(ApiKeys.API_VERSIONS, (short) 2),
+            Map.entry(ApiKeys.CREATE_TOPICS, (short) 3),
+            Map.entry(ApiKeys.DELETE_TOPICS, (short) 2),
+            Map.entry(ApiKeys.DELETE_RECORDS, (short) 1),
+            Map.entry(ApiKeys.INIT_PRODUCER_ID, (short) 1),
+            Map.entry(ApiKeys.ADD_PARTITIONS_TO_TXN, (short) 1),
+            Map.entry(ApiKeys.ADD_OFFSETS_TO_TXN, (short) 1),
+            Map.entry(ApiKeys.END_TXN, (short) 1),
+            Map.entry(ApiKeys.TXN_OFFSET_COMMIT, (short) 1),
+            Map.entry(ApiKeys.DESCRIBE_ACLS, (short) 1),
+            Map.entry(ApiKeys.CREATE_ACLS, (short) 1),
+            Map.entry(ApiKeys.DELETE_ACLS, (short) 1),
+            Map.entry(ApiKeys.DESCRIBE_CONFIGS, (short) 2),
+            Map.entry(ApiKeys.ALTER_CONFIGS, (short) 1),
+            Map.entry(ApiKeys.ALTER_REPLICA_LOG_DIRS, (short) 1),
+            Map.entry(ApiKeys.DESCRIBE_LOG_DIRS, (short) 1),
+            Map.entry(ApiKeys.CREATE_PARTITIONS, (short) 1),
+            Map.entry(ApiKeys.CREATE_DELEGATION_TOKEN, (short) 1),
+            Map.entry(ApiKeys.RENEW_DELEGATION_TOKEN, (short) 1),
+            Map.entry(ApiKeys.EXPIRE_DELEGATION_TOKEN, (short) 1),
+            Map.entry(ApiKeys.DESCRIBE_DELEGATION_TOKEN, (short) 1),
+            Map.entry(ApiKeys.DELETE_GROUPS, (short) 1)
+        );
+
+        for (ApiKeys apiKey : ApiKeys.values()) {
+            for (short version : apiKey.allVersions()) {
+                boolean responseHasThrottleTime =
+                    apiKey.messageType.responseSchemas()[version].get("throttle_time_ms") != null;
+                short firstPostKip219Version = postKip219Version.getOrDefault(apiKey, apiKey.oldestVersion());
+                boolean shouldClientThrottle = responseHasThrottleTime &&
+                    version >= firstPostKip219Version;
+                assertEquals(shouldClientThrottle, getResponse(apiKey, version).shouldClientThrottle(version),
+                    "Unexpected shouldClientThrottle result for " + apiKey + " version " + version +
+                        ": responseHasThrottleTime=" + responseHasThrottleTime +
+                        ", firstPostKip219Version=" + firstPostKip219Version);
             }
         }
     }
@@ -683,8 +746,8 @@ public class RequestResponseTest {
 
     @Test
     public void testCreateTopicRequestV3FailsIfNoPartitionsOrReplicas() {
-        final UnsupportedVersionException exception = assertThrows(
-            UnsupportedVersionException.class, () -> {
+        final UnsupportedProtocolFieldException exception = assertThrows(
+            UnsupportedProtocolFieldException.class, () -> {
                 CreateTopicsRequestData data = new CreateTopicsRequestData()
                     .setTimeoutMs(123)
                     .setValidateOnly(false);
@@ -699,8 +762,18 @@ public class RequestResponseTest {
 
                 new Builder(data).build((short) 3);
             });
-        assertTrue(exception.getMessage().contains("supported in CreateTopicRequest version 4+"));
-        assertTrue(exception.getMessage().contains("[foo, bar]"));
+        assertTrue(exception.getMessage().contains("does not support [default partitions/replication for topics [foo,bar]] in CREATE_TOPICS API version 3"));
+    }
+
+    @Test
+    public void testDeleteGroupsResponseV3PreservesErrorMessage() {
+        DeleteGroupsResponse response = createDeleteGroupsResponse();
+        short version = ApiKeys.DELETE_GROUPS.latestVersion();
+        DeleteGroupsResponse parsed = DeleteGroupsResponse.parse(response.serialize(version), version);
+        DeletableGroupResult failed = parsed.data().results().find("failed-group");
+        assertNotNull(failed);
+        assertEquals(Errors.GROUP_DELETION_FAILED.code(), failed.errorCode());
+        assertEquals("plugin offline", failed.errorMessage());
     }
 
     @Test
@@ -861,16 +934,33 @@ public class RequestResponseTest {
         UnregisterBrokerRequest request = new UnregisterBrokerRequest.Builder(
             new UnregisterBrokerRequestData()
         ).build((short) 0);
-        String customerErrorMessage = "customer error message";
+        String customErrorMessage = "custom error message";
 
         UnregisterBrokerResponse response = request.getErrorResponse(
             0,
-            new RuntimeException(customerErrorMessage)
+            new RuntimeException(customErrorMessage)
         );
 
         assertEquals(0, response.throttleTimeMs());
         assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), response.data().errorCode());
-        assertEquals(customerErrorMessage, response.data().errorMessage());
+        assertEquals(customErrorMessage, response.data().errorMessage());
+    }
+
+    @Test
+    public void testUnregisterControllerResponseWithUnknownServerError() {
+        UnregisterControllerRequest request = new UnregisterControllerRequest.Builder(
+            new UnregisterControllerRequestData()
+        ).build((short) 0);
+        String customErrorMessage = "custom error message";
+
+        UnregisterControllerResponse response = request.getErrorResponse(
+            0,
+            new RuntimeException(customErrorMessage)
+        );
+
+        assertEquals(0, response.throttleTimeMs());
+        assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), response.data().errorCode());
+        assertEquals(customErrorMessage, response.data().errorMessage());
     }
 
     private ApiVersionsResponse defaultApiVersionsResponse() {
@@ -1076,6 +1166,8 @@ public class RequestResponseTest {
             case DESCRIBE_SHARE_GROUP_OFFSETS: return createDescribeShareGroupOffsetsRequest(version);
             case ALTER_SHARE_GROUP_OFFSETS: return createAlterShareGroupOffsetsRequest(version);
             case DELETE_SHARE_GROUP_OFFSETS: return createDeleteShareGroupOffsetsRequest(version);
+            case STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE: return createStreamsGroupTopologyDescriptionUpdateRequest(version);
+            case UNREGISTER_CONTROLLER: return createUnregisterControllerRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1166,11 +1258,13 @@ public class RequestResponseTest {
             case WRITE_SHARE_GROUP_STATE: return createWriteShareGroupStateResponse();
             case DELETE_SHARE_GROUP_STATE: return createDeleteShareGroupStateResponse();
             case READ_SHARE_GROUP_STATE_SUMMARY: return createReadShareGroupStateSummaryResponse();
-            case STREAMS_GROUP_HEARTBEAT: return createStreamsGroupHeartbeatResponse();
-            case STREAMS_GROUP_DESCRIBE: return createStreamsGroupDescribeResponse();
+            case STREAMS_GROUP_HEARTBEAT: return createStreamsGroupHeartbeatResponse(version);
+            case STREAMS_GROUP_DESCRIBE: return createStreamsGroupDescribeResponse(version);
             case DESCRIBE_SHARE_GROUP_OFFSETS: return createDescribeShareGroupOffsetsResponse();
             case ALTER_SHARE_GROUP_OFFSETS: return createAlterShareGroupOffsetsResponse();
             case DELETE_SHARE_GROUP_OFFSETS: return createDeleteShareGroupOffsetsResponse();
+            case STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE: return createStreamsGroupTopologyDescriptionUpdateResponse();
+            case UNREGISTER_CONTROLLER: return createUnregisterControllerResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -2286,6 +2380,10 @@ public class RequestResponseTest {
         result.add(new DeletableGroupResult()
                        .setGroupId("test-group")
                        .setErrorCode(Errors.NONE.code()));
+        result.add(new DeletableGroupResult()
+                       .setGroupId("failed-group")
+                       .setErrorCode(Errors.GROUP_DELETION_FAILED.code())
+                       .setErrorMessage("plugin offline"));
         return new DeleteGroupsResponse(
             new DeleteGroupsResponseData()
                 .setResults(result)
@@ -2857,7 +2955,7 @@ public class RequestResponseTest {
         }
 
         if (version >= 6) {
-            return TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(data, true, true).build(version);
+            return TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(data, true).build(version);
         } else {
             return TxnOffsetCommitRequest.Builder.forTopicNames(data, version >= 5).build(version);
         }
@@ -3556,6 +3654,15 @@ public class RequestResponseTest {
         return new UnregisterBrokerResponse(new UnregisterBrokerResponseData());
     }
 
+    private UnregisterControllerRequest createUnregisterControllerRequest(short version) {
+        UnregisterControllerRequestData data = new UnregisterControllerRequestData().setControllerId(1);
+        return new UnregisterControllerRequest.Builder(data).build(version);
+    }
+
+    private UnregisterControllerResponse createUnregisterControllerResponse() {
+        return new UnregisterControllerResponse(new UnregisterControllerResponseData());
+    }
+
     private DescribeTransactionsRequest createDescribeTransactionsRequest(short version) {
         DescribeTransactionsRequestData data = new DescribeTransactionsRequestData()
             .setTransactionalIds(asList("t1", "t2", "t3"));
@@ -3857,20 +3964,42 @@ public class RequestResponseTest {
     }
 
     private AbstractRequest createStreamsGroupDescribeRequest(final short version) {
-        return new StreamsGroupDescribeRequest.Builder(new StreamsGroupDescribeRequestData()
+        StreamsGroupDescribeRequestData data = new StreamsGroupDescribeRequestData()
             .setGroupIds(Collections.singletonList("group"))
-            .setIncludeAuthorizedOperations(false)).build(version);
+            .setIncludeAuthorizedOperations(false);
+        if (version >= 1) {
+            data.setIncludeTopologyDescription(true);
+        }
+        return new StreamsGroupDescribeRequest.Builder(data).build(version);
     }
 
     private AbstractRequest createStreamsGroupHeartbeatRequest(final short version) {
         return new StreamsGroupHeartbeatRequest.Builder(new StreamsGroupHeartbeatRequestData()).build(version);
     }
 
-    private AbstractResponse createStreamsGroupDescribeResponse() {
-        StreamsGroupDescribeResponseData data = new StreamsGroupDescribeResponseData()
-            .setGroups(Collections.singletonList(
+    private AbstractResponse createStreamsGroupDescribeResponse(final short version) {
+        StreamsGroupDescribeResponseData.DescribedGroup group =
+            new StreamsGroupDescribeResponseData.DescribedGroup()
+                .setGroupId("group")
+                .setErrorCode((short) 0)
+                .setErrorMessage(Errors.forCode((short) 0).message())
+                .setGroupState("EMPTY")
+                .setGroupEpoch(0)
+                .setAssignmentEpoch(0)
+                .setMembers(new ArrayList<>(0))
+                .setTopology(null);
+        if (version >= 1) {
+            group.setTopologyDescription(new StreamsGroupDescribeResponseData.TopologyDescription()
+                .setSubtopologies(new ArrayList<>(0))
+                .setGlobalStores(new ArrayList<>(0)));
+            group.setTopologyDescriptionStatus(StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_AVAILABLE);
+        }
+        List<StreamsGroupDescribeResponseData.DescribedGroup> groups = new ArrayList<>();
+        groups.add(group);
+        if (version >= 1) {
+            StreamsGroupDescribeResponseData.DescribedGroup notStoredGroup =
                 new StreamsGroupDescribeResponseData.DescribedGroup()
-                    .setGroupId("group")
+                    .setGroupId("group-without-description")
                     .setErrorCode((short) 0)
                     .setErrorMessage(Errors.forCode((short) 0).message())
                     .setGroupState("EMPTY")
@@ -3878,13 +4007,82 @@ public class RequestResponseTest {
                     .setAssignmentEpoch(0)
                     .setMembers(new ArrayList<>(0))
                     .setTopology(null)
-            ))
+                    .setTopologyDescription(null)
+                    .setTopologyDescriptionStatus(StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_NOT_STORED);
+            groups.add(notStoredGroup);
+        }
+        StreamsGroupDescribeResponseData data = new StreamsGroupDescribeResponseData()
+            .setGroups(groups)
             .setThrottleTimeMs(1000);
         return new StreamsGroupDescribeResponse(data);
     }
 
-    private AbstractResponse createStreamsGroupHeartbeatResponse() {
-        return new StreamsGroupHeartbeatResponse(new StreamsGroupHeartbeatResponseData());
+    private AbstractResponse createStreamsGroupHeartbeatResponse(final short version) {
+        StreamsGroupHeartbeatResponseData data = new StreamsGroupHeartbeatResponseData();
+        if (version >= 1) {
+            data.setTopologyDescriptionRequired(true);
+        }
+        return new StreamsGroupHeartbeatResponse(data);
+    }
+
+    private AbstractRequest createStreamsGroupTopologyDescriptionUpdateRequest(final short version) {
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode sourceNode =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode()
+                .setName("KSTREAM-SOURCE-0000000000")
+                .setNodeType((byte) 1)
+                .setSourceTopics(List.of("input-topic"))
+                .setSuccessors(List.of("KSTREAM-PROCESSOR-0000000001"));
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode processorNode =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode()
+                .setName("KSTREAM-PROCESSOR-0000000001")
+                .setNodeType((byte) 2)
+                .setStores(List.of("store-1"))
+                .setSuccessors(List.of("KSTREAM-SINK-0000000002"));
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode sinkNode =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode()
+                .setName("KSTREAM-SINK-0000000002")
+                .setNodeType((byte) 3)
+                .setSinkTopic("output-topic");
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode dynamicSinkNode =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode()
+                .setName("KSTREAM-SINK-0000000005")
+                .setNodeType((byte) 3)
+                .setSinkTopic(null);
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionSubtopology subtopology =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionSubtopology()
+                .setSubtopologyId("0")
+                .setNodes(List.of(sourceNode, processorNode, sinkNode, dynamicSinkNode));
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode globalSource =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode()
+                .setName("KSTREAM-GLOBAL-SOURCE-0000000003")
+                .setNodeType((byte) 1)
+                .setSourceTopics(List.of("global-topic"));
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode globalProcessor =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode()
+                .setName("KTABLE-SOURCE-0000000004")
+                .setNodeType((byte) 2)
+                .setStores(List.of("global-store"));
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionGlobalStore globalStore =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionGlobalStore()
+                .setSource(globalSource)
+                .setProcessor(globalProcessor);
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription topology =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription()
+                .setSubtopologies(List.of(subtopology))
+                .setGlobalStores(List.of(globalStore));
+        return new StreamsGroupTopologyDescriptionUpdateRequest.Builder(
+            new StreamsGroupTopologyDescriptionUpdateRequestData()
+                .setGroupId("test-group")
+                .setMemberId("test-member")
+                .setTopologyEpoch(1)
+                .setTopologyDescription(topology)
+        ).build(version);
+    }
+
+    private AbstractResponse createStreamsGroupTopologyDescriptionUpdateResponse() {
+        return new StreamsGroupTopologyDescriptionUpdateResponse(
+            new StreamsGroupTopologyDescriptionUpdateResponseData()
+        );
     }
 
     @Test
@@ -4017,5 +4215,25 @@ public class RequestResponseTest {
                     .setResourceTypes(List.of(t.id(), ConfigResource.Type.CLIENT_METRICS.id()));
                 assertThrows(UnsupportedVersionException.class, () -> new ListConfigResourcesRequest.Builder(data).build((short) 0));
             });
+    }
+
+    @Test
+    public void testStreamsGroupDescribeRequestV0RejectsIncludeTopologyDescription() {
+        StreamsGroupDescribeRequestData data = new StreamsGroupDescribeRequestData()
+            .setGroupIds(List.of("g1"))
+            .setIncludeTopologyDescription(true);
+        StreamsGroupDescribeRequest request = new StreamsGroupDescribeRequest.Builder(data).build((short) 0);
+        assertThrows(UnsupportedVersionException.class, () -> request.serialize());
+    }
+
+    @Test
+    public void testStreamsGroupDescribeResponseV0RejectsTopologyDescriptionFields() {
+        StreamsGroupDescribeResponseData data = new StreamsGroupDescribeResponseData()
+            .setGroups(List.of(new StreamsGroupDescribeResponseData.DescribedGroup()
+                .setGroupId("g1")
+                .setTopologyDescription(new StreamsGroupDescribeResponseData.TopologyDescription())
+                .setTopologyDescriptionStatus(StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_AVAILABLE)));
+        StreamsGroupDescribeResponse response = new StreamsGroupDescribeResponse(data);
+        assertThrows(UnsupportedVersionException.class, () -> response.serialize((short) 0));
     }
 }

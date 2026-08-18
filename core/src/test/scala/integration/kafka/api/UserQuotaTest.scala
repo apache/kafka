@@ -14,10 +14,10 @@
 
 package kafka.api
 
-import kafka.security.JaasTestUtils
 import kafka.server.KafkaBroker
 import kafka.utils.TestUtils
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.security.JaasTestUtils
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 class UserQuotaTest extends BaseQuotaTest with SaslSetup {

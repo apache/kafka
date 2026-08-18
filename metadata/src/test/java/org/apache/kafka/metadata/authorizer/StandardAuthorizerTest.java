@@ -727,4 +727,214 @@ public class StandardAuthorizerTest {
         // StandardAuthorizer has 4 metrics
         assertEquals(5, metrics.metrics().size());
     }
+
+    @Test
+    public void testAclWithCidrHost() throws Exception {
+        StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
+
+        StandardAcl cidrAcl = new StandardAcl(
+            TOPIC, "test-topic", LITERAL, "User:bob",
+            "192.168.1.0/24", READ, ALLOW);
+        StandardAclWithId aclWithId = withId(cidrAcl);
+        authorizer.addAcl(aclWithId.id(), aclWithId.acl());
+
+        // Boundary IPs inside the /24 range
+        for (String ip : List.of("192.168.1.0", "192.168.1.1", "192.168.1.128", "192.168.1.255")) {
+            assertEquals(List.of(ALLOWED),
+                authorizer.authorize(
+                    new MockAuthorizableRequestContext.Builder()
+                        .setPrincipal(new KafkaPrincipal(USER_TYPE, "bob"))
+                        .setClientAddress(InetAddress.getByName(ip))
+                        .build(),
+                    List.of(newAction(READ, TOPIC, "test-topic"))),
+                "IP " + ip + " should be allowed within 192.168.1.0/24");
+        }
+
+        // IPs just outside the range
+        for (String ip : List.of("192.168.0.255", "192.168.2.0")) {
+            assertEquals(List.of(DENIED),
+                authorizer.authorize(
+                    new MockAuthorizableRequestContext.Builder()
+                        .setPrincipal(new KafkaPrincipal(USER_TYPE, "bob"))
+                        .setClientAddress(InetAddress.getByName(ip))
+                        .build(),
+                    List.of(newAction(READ, TOPIC, "test-topic"))),
+                "IP " + ip + " should be denied outside 192.168.1.0/24");
+        }
+    }
+
+    @Test
+    public void testAclWithIpv6CidrHost() throws Exception {
+        StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
+
+        StandardAcl cidrAcl = new StandardAcl(
+            TOPIC, "test-topic", LITERAL, "User:bob",
+            "2001:db8::/120", READ, ALLOW);
+        StandardAclWithId aclWithId = withId(cidrAcl);
+        authorizer.addAcl(aclWithId.id(), aclWithId.acl());
+
+        // Boundary IPs inside the /120 range
+        for (String ip : List.of("2001:db8::0", "2001:db8::1", "2001:db8::80", "2001:db8::ff")) {
+            assertEquals(List.of(ALLOWED),
+                authorizer.authorize(
+                    new MockAuthorizableRequestContext.Builder()
+                        .setPrincipal(new KafkaPrincipal(USER_TYPE, "bob"))
+                        .setClientAddress(InetAddress.getByName(ip))
+                        .build(),
+                    List.of(newAction(READ, TOPIC, "test-topic"))),
+                "IP " + ip + " should be allowed within 2001:db8::/120");
+        }
+
+        // IPs just outside the range
+        for (String ip : List.of("2001:db8::100", "2001:db7::1")) {
+            assertEquals(List.of(DENIED),
+                authorizer.authorize(
+                    new MockAuthorizableRequestContext.Builder()
+                        .setPrincipal(new KafkaPrincipal(USER_TYPE, "bob"))
+                        .setClientAddress(InetAddress.getByName(ip))
+                        .build(),
+                    List.of(newAction(READ, TOPIC, "test-topic"))),
+                "IP " + ip + " should be denied outside 2001:db8::/120");
+        }
+    }
+
+    @Test
+    public void testOverlappingCidrDenyNarrowAllowWide() throws Exception {
+        StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
+
+        StandardAclWithId allowAcl = withId(new StandardAcl(
+            TOPIC, "foo", LITERAL, "User:alice", "10.0.0.0/8", READ, ALLOW));
+        StandardAclWithId denyAcl = withId(new StandardAcl(
+            TOPIC, "foo", LITERAL, "User:alice", "10.0.1.0/24", READ, DENY));
+        authorizer.addAcl(allowAcl.id(), allowAcl.acl());
+        authorizer.addAcl(denyAcl.id(), denyAcl.acl());
+
+        AuthorizableRequestContext aliceInDenyRange = new MockAuthorizableRequestContext.Builder()
+            .setPrincipal(new KafkaPrincipal(USER_TYPE, "alice"))
+            .setClientAddress(InetAddress.getByName("10.0.1.5"))
+            .build();
+        assertEquals(List.of(DENIED),
+            authorizer.authorize(aliceInDenyRange, List.of(newAction(READ, TOPIC, "foo"))),
+            "Client in overlapping DENY /24 inside ALLOW /8 must be denied");
+
+        AuthorizableRequestContext aliceOutsideDenyRange = new MockAuthorizableRequestContext.Builder()
+            .setPrincipal(new KafkaPrincipal(USER_TYPE, "alice"))
+            .setClientAddress(InetAddress.getByName("10.0.2.1"))
+            .build();
+        assertEquals(List.of(ALLOWED),
+            authorizer.authorize(aliceOutsideDenyRange, List.of(newAction(READ, TOPIC, "foo"))),
+            "Client in ALLOW /8 but outside DENY /24 must be allowed");
+    }
+
+    @Test
+    public void testOverlappingCidrAllowNarrowDenyWide() throws Exception {
+        StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
+
+        StandardAclWithId denyAcl = withId(new StandardAcl(
+            TOPIC, "foo", LITERAL, "User:alice", "10.0.0.0/8", READ, DENY));
+        StandardAclWithId allowAcl = withId(new StandardAcl(
+            TOPIC, "foo", LITERAL, "User:alice", "10.0.1.0/24", READ, ALLOW));
+        authorizer.addAcl(denyAcl.id(), denyAcl.acl());
+        authorizer.addAcl(allowAcl.id(), allowAcl.acl());
+
+        AuthorizableRequestContext aliceInBothRanges = new MockAuthorizableRequestContext.Builder()
+            .setPrincipal(new KafkaPrincipal(USER_TYPE, "alice"))
+            .setClientAddress(InetAddress.getByName("10.0.1.5"))
+            .build();
+        assertEquals(List.of(DENIED),
+            authorizer.authorize(aliceInBothRanges, List.of(newAction(READ, TOPIC, "foo"))),
+            "Narrow ALLOW /24 cannot override broad DENY /8 — DENY always wins");
+
+        AuthorizableRequestContext aliceOnlyInDenyRange = new MockAuthorizableRequestContext.Builder()
+            .setPrincipal(new KafkaPrincipal(USER_TYPE, "alice"))
+            .setClientAddress(InetAddress.getByName("10.0.2.1"))
+            .build();
+        assertEquals(List.of(DENIED),
+            authorizer.authorize(aliceOnlyInDenyRange, List.of(newAction(READ, TOPIC, "foo"))),
+            "Client in DENY /8 range must be denied");
+    }
+
+    @Test
+    public void testOverlappingCidrWithWildcardAllow() throws Exception {
+        StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
+
+        StandardAclWithId allowAcl = withId(new StandardAcl(
+            TOPIC, "foo", LITERAL, "User:alice", "*", READ, ALLOW));
+        StandardAclWithId denyAcl = withId(new StandardAcl(
+            TOPIC, "foo", LITERAL, "User:alice", "10.0.1.0/24", READ, DENY));
+        authorizer.addAcl(allowAcl.id(), allowAcl.acl());
+        authorizer.addAcl(denyAcl.id(), denyAcl.acl());
+
+        AuthorizableRequestContext aliceInDenyRange = new MockAuthorizableRequestContext.Builder()
+            .setPrincipal(new KafkaPrincipal(USER_TYPE, "alice"))
+            .setClientAddress(InetAddress.getByName("10.0.1.100"))
+            .build();
+        assertEquals(List.of(DENIED),
+            authorizer.authorize(aliceInDenyRange, List.of(newAction(READ, TOPIC, "foo"))),
+            "DENY CIDR must override wildcard ALLOW");
+
+        AuthorizableRequestContext aliceOutsideDenyRange = new MockAuthorizableRequestContext.Builder()
+            .setPrincipal(new KafkaPrincipal(USER_TYPE, "alice"))
+            .setClientAddress(InetAddress.getByName("10.0.2.100"))
+            .build();
+        assertEquals(List.of(ALLOWED),
+            authorizer.authorize(aliceOutsideDenyRange, List.of(newAction(READ, TOPIC, "foo"))),
+            "Client outside DENY CIDR with wildcard ALLOW must be allowed");
+    }
+
+    @Test
+    public void testOverlappingCidrSamePermissionBothAllow() throws Exception {
+        StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
+
+        StandardAclWithId broadAllow = withId(new StandardAcl(
+            TOPIC, "foo", LITERAL, "User:alice", "10.0.0.0/8", READ, ALLOW));
+        StandardAclWithId narrowAllow = withId(new StandardAcl(
+            TOPIC, "foo", LITERAL, "User:alice", "10.0.1.0/24", READ, ALLOW));
+        authorizer.addAcl(broadAllow.id(), broadAllow.acl());
+        authorizer.addAcl(narrowAllow.id(), narrowAllow.acl());
+
+        AuthorizableRequestContext aliceInBothRanges = new MockAuthorizableRequestContext.Builder()
+            .setPrincipal(new KafkaPrincipal(USER_TYPE, "alice"))
+            .setClientAddress(InetAddress.getByName("10.0.1.5"))
+            .build();
+        assertEquals(List.of(ALLOWED),
+            authorizer.authorize(aliceInBothRanges, List.of(newAction(READ, TOPIC, "foo"))),
+            "Overlapping ALLOW CIDRs should both result in ALLOWED");
+
+        AuthorizableRequestContext aliceInBroadOnly = new MockAuthorizableRequestContext.Builder()
+            .setPrincipal(new KafkaPrincipal(USER_TYPE, "alice"))
+            .setClientAddress(InetAddress.getByName("10.0.2.1"))
+            .build();
+        assertEquals(List.of(ALLOWED),
+            authorizer.authorize(aliceInBroadOnly, List.of(newAction(READ, TOPIC, "foo"))),
+            "Client in only the broad ALLOW /8 should be allowed");
+    }
+
+    @Test
+    public void testAuthorizeByResourceTypeWithCidrHost() throws Exception {
+        StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
+
+        StandardAclWithId cidrAcl = withId(new StandardAcl(
+            TOPIC, "test-topic", LITERAL, "User:bob",
+            "192.168.1.0/24", WRITE, ALLOW));
+        authorizer.addAcl(cidrAcl.id(), cidrAcl.acl());
+
+        // Client within the CIDR range should be allowed
+        AuthorizableRequestContext bobInRange = new MockAuthorizableRequestContext.Builder()
+            .setPrincipal(new KafkaPrincipal(USER_TYPE, "bob"))
+            .setClientAddress(InetAddress.getByName("192.168.1.50"))
+            .build();
+        assertEquals(ALLOWED,
+            authorizer.authorizeByResourceType(bobInRange, WRITE, TOPIC),
+            "Client within CIDR range should be allowed by authorizeByResourceType");
+
+        // Client outside the CIDR range should be denied
+        AuthorizableRequestContext bobOutOfRange = new MockAuthorizableRequestContext.Builder()
+            .setPrincipal(new KafkaPrincipal(USER_TYPE, "bob"))
+            .setClientAddress(InetAddress.getByName("10.0.0.1"))
+            .build();
+        assertEquals(DENIED,
+            authorizer.authorizeByResourceType(bobOutOfRange, WRITE, TOPIC),
+            "Client outside CIDR range should be denied by authorizeByResourceType");
+    }
 }

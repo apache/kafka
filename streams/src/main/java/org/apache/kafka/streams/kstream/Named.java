@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.errors.TopologyException;
 
 import java.util.Objects;
 
+@InterfaceAudience.Public
 public class Named implements NamedOperation<Named> {
 
     private static final int MAX_NAME_LENGTH = 249;

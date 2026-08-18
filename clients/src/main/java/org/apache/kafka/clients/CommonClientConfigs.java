@@ -60,6 +60,16 @@ public class CommonClientConfigs {
                                                        + "resolve each bootstrap address into a list of canonical names. After "
                                                        + "the bootstrap phase, this behaves the same as <code>use_all_dns_ips</code>.";
 
+    public static final String BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG = "bootstrap.resolve.timeout.ms";
+    public static final long DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS = 0L;
+    public static final String BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC = "Selects the client's bootstrap DNS resolution mode." +
+        " When set to <code>0</code> (the default), DNS is resolved synchronously during client construction; any" +
+        " failure surfaces as <code>ConfigException</code> and no client instance is created. When set to a positive" +
+        " value, DNS is resolved asynchronously and this is the maximum amount of time the client will spend" +
+        " retrying resolution before failing with an unrecoverable <code>BootstrapResolutionException</code> from" +
+        " subsequent API calls (the client must then be closed and re-created after fixing the underlying DNS or" +
+        " <code>bootstrap.servers</code> configuration issue).";
+
     public static final String METADATA_MAX_AGE_CONFIG = "metadata.max.age.ms";
     public static final String METADATA_MAX_AGE_DOC = "The period of time in milliseconds after which we force a refresh of metadata even if we haven't seen any partition leadership changes to proactively discover any new brokers or partitions.";
 
@@ -196,13 +206,19 @@ public class CommonClientConfigs {
                                                           + "For consumers using a non-null <code>group.instance.id</code> which reach this timeout, partitions will not be immediately reassigned. "
                                                           + "Instead, the consumer will stop sending heartbeats and partitions will be reassigned "
                                                           + "after expiration of the session timeout (defined by the client config <code>session.timeout.ms</code> if using the Classic rebalance protocol, or by the broker config <code>group.consumer.session.timeout.ms</code> if using the Consumer protocol). "
-                                                          + "This mirrors the behavior of a static consumer which has shutdown.";
+                                                          + "This mirrors the behavior of a static consumer which has shutdown. "
+                                                          + "In the Classic consumer, <code>connections.max.idle.ms</code> should be set to a value greater than or equal to this timeout "
+                                                          + "to avoid closing the connection to the group coordinator during an ongoing rebalance. "
+                                                          + "This is particularly important in large groups, where a rebalance may take longer to complete "
+                                                          + "while the coordinator waits for all members to rejoin.";
 
     public static final String REBALANCE_TIMEOUT_MS_CONFIG = "rebalance.timeout.ms";
     public static final String REBALANCE_TIMEOUT_MS_DOC = "The maximum allowed time for each worker to join the group "
                                                           + "once a rebalance has begun. This is basically a limit on the amount of time needed for all tasks to "
                                                           + "flush any pending data and commit offsets. If the timeout is exceeded, then the worker will be removed "
-                                                          + "from the group, which will cause offset commit failures.";
+                                                          + "from the group, which will cause offset commit failures. "
+                                                          + "<code>connections.max.idle.ms</code> should be set to a value greater than or equal to this timeout "
+                                                          + "to avoid closing the connection to the group coordinator during an ongoing rebalance.";
 
     public static final String SESSION_TIMEOUT_MS_CONFIG = "session.timeout.ms";
     public static final String SESSION_TIMEOUT_MS_DOC = "The timeout used to detect client failures when using "

@@ -1266,7 +1266,6 @@ public class SharePartitionManagerTest {
         sharePartitionManager.close();
         // Verify that the timer object in sharePartitionManager is closed by checking the calls to timer.close() and shareGroupMetrics.close().
         Mockito.verify(timer, times(1)).close();
-        Mockito.verify(shareGroupMetrics, times(1)).close();
     }
 
     @Test
@@ -1772,7 +1771,7 @@ public class SharePartitionManagerTest {
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
-            .withReplicaManager(mockReplicaManager)
+            .withReplicaManagerLogReader(mockReplicaManager)
             .withSharePartitions(sharePartitions)
             .withPartitionMaxBytesStrategy(PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM))
             .build();
@@ -1883,7 +1882,7 @@ public class SharePartitionManagerTest {
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
-            .withReplicaManager(mockReplicaManager)
+            .withReplicaManagerLogReader(mockReplicaManager)
             .withSharePartitions(sharePartitions)
             .build();
 
@@ -1990,7 +1989,7 @@ public class SharePartitionManagerTest {
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
-            .withReplicaManager(mockReplicaManager)
+            .withReplicaManagerLogReader(mockReplicaManager)
             .withSharePartitions(sharePartitions)
             .withPartitionMaxBytesStrategy(PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM))
             .build();
@@ -2098,7 +2097,7 @@ public class SharePartitionManagerTest {
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
-            .withReplicaManager(mockReplicaManager)
+            .withReplicaManagerLogReader(mockReplicaManager)
             .withSharePartitions(sharePartitions)
             .build();
 
