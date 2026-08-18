@@ -5800,6 +5800,7 @@ org.apache.kafka.streams.state.internals.RocksDBMigratingSessionStoreWithHeaders
 - shouldHandleToggleOfEnablingBloomFilters
 - shouldHandleTombstoneRecords
 - shouldMatchPositionAfterPut
+- shouldMatchPositionAfterPutAll
 - shouldMigrateExistingPositionFromFile
 - shouldMigrateFromDefaultToHeadersAwareColumnFamily
 - shouldNotAllowOpenIteratorsWhenUsingAutoManagedIterators
@@ -5905,6 +5906,7 @@ org.apache.kafka.streams.state.internals.RocksDBMigratingWindowStoreWithHeadersT
 - shouldHandleTombstoneRecords
 - shouldIterateOverBothColumnFamiliesInUpgradeMode
 - shouldMatchPositionAfterPut
+- shouldMatchPositionAfterPutAll
 - shouldMigrateExistingPositionFromFile
 - shouldMigrateFromDefaultColumnFamilyWhenLegacyDataExists
 - shouldNotAllowOpenIteratorsWhenUsingAutoManagedIterators
@@ -6090,6 +6092,7 @@ org.apache.kafka.streams.state.internals.RocksDBStoreTest:
 - shouldHandleToggleOfEnablingBloomFilters
 - shouldHandleTombstoneRecords
 - shouldMatchPositionAfterPut
+- shouldMatchPositionAfterPutAll
 - shouldMigrateExistingPositionFromFile
 - shouldNotAllowOpenIteratorsWhenUsingAutoManagedIterators
 - shouldNotIncludeDeletedFromRangeResult
@@ -6627,6 +6630,7 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedStoreTest:
 - shouldHandleToggleOfEnablingBloomFilters
 - shouldHandleTombstoneRecords
 - shouldMatchPositionAfterPut
+- shouldMatchPositionAfterPutAll
 - shouldMigrateDataFromDefaultToTimestampColumnFamily
 - shouldMigrateExistingPositionFromFile
 - shouldNotAllowOpenIteratorsWhenUsingAutoManagedIterators
@@ -6736,6 +6740,7 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedStoreWithHeadersTest:
 - shouldHandleToggleOfEnablingBloomFilters
 - shouldHandleTombstoneRecords
 - shouldMatchPositionAfterPut
+- shouldMatchPositionAfterPutAll
 - shouldMigrateExistingPositionFromFile
 - shouldMigrateFromPlainToHeadersAwareColumnFamily
 - shouldMigrateFromTimestampedToHeadersAwareColumnFamily
