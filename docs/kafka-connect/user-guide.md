@@ -1,6 +1,6 @@
 ---
 title: User Guide
-description: User Guide
+description: Guide to running, configuring, and managing Kafka Connect workers and connectors.
 weight: 2
 tags: ['kafka', 'docs']
 aliases: 
@@ -26,16 +26,17 @@ type: docs
 -->
 
 
-The [quickstart](../getting-started/quickstart) provides a brief example of how to run a standalone version of Kafka Connect. This section describes how to configure, run, and manage Kafka Connect in more detail.
+The [quickstart](../../getting-started/quickstart) provides a brief example of how to run a standalone version of Kafka Connect. This section describes how to configure, run, and manage Kafka Connect in more detail.
 
 ## Running Kafka Connect
 
 Kafka Connect currently supports two modes of execution: standalone (single process) and distributed.
 
 In standalone mode all work is performed in a single process. This configuration is simpler to setup and get started with and may be useful in situations where only one worker makes sense (e.g. collecting log files), but it does not benefit from some of the features of Kafka Connect such as fault tolerance. You can start a standalone process with the following command:
-    
-    
-    $ bin/connect-standalone.sh config/connect-standalone.properties [connector1.properties connector2.json …]
+
+```bash
+$ bin/connect-standalone.sh config/connect-standalone.properties [connector1.properties connector2.json …]
+```
 
 The first parameter is the configuration for the worker. This includes settings such as the Kafka connection parameters, serialization format, and how frequently to commit offsets. The provided example should work well with a local cluster running with the default configuration provided by `config/server.properties`. It will require tweaking to use with a different configuration or production deployment. All workers (both standalone and distributed) require a few configs:
 
@@ -59,11 +60,12 @@ Client configuration overrides can be configured individually per connector by u
 The remaining parameters are connector configuration files. Each file may either be a Java Properties file or a JSON file containing an object with the same structure as the request body of either the `POST /connectors` endpoint or the `PUT /connectors/{name}/config` endpoint (see the [OpenAPI documentation](/43/generated/connect_rest.yaml)). You may include as many as you want, but all will execute within the same process (on different threads). You can also choose not to specify any connector configuration files on the command line, and instead use the REST API to create connectors at runtime after your standalone worker starts.
 
 Distributed mode handles automatic balancing of work, allows you to scale up (or down) dynamically, and offers fault tolerance both in the active tasks and for configuration and offset commit data. Execution is very similar to standalone mode:
-    
-    
-    $ bin/connect-distributed.sh config/connect-distributed.properties
 
-The difference is in the class which is started and the configuration parameters which change how the Kafka Connect process decides where to store configurations, how to assign work, and where to store offsets and task statues. In the distributed mode, Kafka Connect stores the offsets, configs and task statuses in Kafka topics. It is recommended to manually create the topics for offset, configs and statuses in order to achieve the desired the number of partitions and replication factors. If the topics are not yet created when starting Kafka Connect, the topics will be auto created with default number of partitions and replication factor, which may not be best suited for its usage.
+```bash
+$ bin/connect-distributed.sh config/connect-distributed.properties
+```
+
+The difference is in the class which is started and the configuration parameters which change how the Kafka Connect process decides where to store configurations, how to assign work, and where to store offsets and task statuses. In the distributed mode, Kafka Connect stores the offsets, configs and task statuses in Kafka topics. It is recommended to manually create the topics for offset, configs and statuses to achieve the desired number of partitions and replication factors. If the topics are not yet created when starting Kafka Connect, the topics will be auto created with default number of partitions and replication factor, which may not be best suited for its usage.
 
 In particular, the following configuration parameters, in addition to the common settings mentioned above, are critical to set before starting your cluster:
 
@@ -116,10 +118,11 @@ A transformation chain can be specified in the connector configuration.
 For example, lets take the built-in file source connector and use a transformation to add a static field.
 
 Throughout the example we'll use schemaless JSON data format. To use schemaless format, we changed the following two lines in `connect-standalone.properties` from true to false:
-    
-    
-    key.converter.schemas.enable
-    value.converter.schemas.enable
+
+```properties
+key.converter.schemas.enable
+value.converter.schemas.enable
+```
 
 The file source connector reads each line as a String. We will wrap each line in a Map and then add a second field to identify the origin of the event. To do this, we use two transformations:
 
@@ -129,35 +132,38 @@ The file source connector reads each line as a String. We will wrap each line in
 
 
 After adding the transformations, `connect-file-source.properties` file looks as following:
-    
-    
-    name=local-file-source
-    connector.class=FileStreamSource
-    tasks.max=1
-    file=test.txt
-    topic=connect-test
-    transforms=MakeMap, InsertSource
-    transforms.MakeMap.type=org.apache.kafka.connect.transforms.HoistField$Value
-    transforms.MakeMap.field=line
-    transforms.InsertSource.type=org.apache.kafka.connect.transforms.InsertField$Value
-    transforms.InsertSource.static.field=data_source
-    transforms.InsertSource.static.value=test-file-source
+
+```properties
+name=local-file-source
+connector.class=FileStreamSource
+tasks.max=1
+file=test.txt
+topic=connect-test
+transforms=MakeMap, InsertSource
+transforms.MakeMap.type=org.apache.kafka.connect.transforms.HoistField$Value
+transforms.MakeMap.field=line
+transforms.InsertSource.type=org.apache.kafka.connect.transforms.InsertField$Value
+transforms.InsertSource.static.field=data_source
+transforms.InsertSource.static.value=test-file-source
+```
 
 All the lines starting with `transforms` were added for the transformations. You can see the two transformations we created: "InsertSource" and "MakeMap" are aliases that we chose to give the transformations. The transformation types are based on the list of built-in transformations you can see below. Each transformation type has additional configuration: HoistField requires a configuration called "field", which is the name of the field in the map that will include the original String from the file. InsertField transformation lets us specify the field name and the value that we are adding.
 
 When we ran the file source connector on my sample file without the transformations, and then read them using `kafka-console-consumer.sh`, the results were:
-    
-    
-    "foo"
-    "bar"
-    "hello world"
+
+```text
+"foo"
+"bar"
+"hello world"
+```
 
 We then create a new file connector, this time after adding the transformations to the configuration file. This time, the results will be:
-    
-    
-    {"line":"foo","data_source":"test-file-source"}
-    {"line":"bar","data_source":"test-file-source"}
-    {"line":"hello world","data_source":"test-file-source"}
+
+```json
+{"line":"foo","data_source":"test-file-source"}
+{"line":"bar","data_source":"test-file-source"}
+{"line":"hello world","data_source":"test-file-source"}
+```
 
 You can see that the lines we've read are now part of a JSON map, and there is an extra field with the static value we specified. This is just one example of what you can do with transformations.
 
@@ -210,34 +216,36 @@ For example, suppose you have a source connector which produces messages to many
 
 
 To do this we need first to filter out the records destined for the topic 'foo'. The Filter transformation removes records from further processing, and can use the TopicNameMatches predicate to apply the transformation only to records in topics which match a certain regular expression. TopicNameMatches's only configuration property is `pattern` which is a Java regular expression for matching against the topic name. The configuration would look like this:
-    
-    
-    transforms=Filter
-    transforms.Filter.type=org.apache.kafka.connect.transforms.Filter
-    transforms.Filter.predicate=IsFoo
-    
-    predicates=IsFoo
-    predicates.IsFoo.type=org.apache.kafka.connect.transforms.predicates.TopicNameMatches
-    predicates.IsFoo.pattern=foo
+
+```properties
+transforms=Filter
+transforms.Filter.type=org.apache.kafka.connect.transforms.Filter
+transforms.Filter.predicate=IsFoo
+
+predicates=IsFoo
+predicates.IsFoo.type=org.apache.kafka.connect.transforms.predicates.TopicNameMatches
+predicates.IsFoo.pattern=foo
+```
 
 Next we need to apply ExtractField only when the topic name of the record is not 'bar'. We can't just use TopicNameMatches directly, because that would apply the transformation to matching topic names, not topic names which do _not_ match. The transformation's implicit `negate` config properties allows us to invert the set of records which a predicate matches. Adding the configuration for this to the previous example we arrive at:
-    
-    
-    transforms=Filter,Extract
-    transforms.Filter.type=org.apache.kafka.connect.transforms.Filter
-    transforms.Filter.predicate=IsFoo
-    
-    transforms.Extract.type=org.apache.kafka.connect.transforms.ExtractField$Key
-    transforms.Extract.field=other_field
-    transforms.Extract.predicate=IsBar
-    transforms.Extract.negate=true
-    
-    predicates=IsFoo,IsBar
-    predicates.IsFoo.type=org.apache.kafka.connect.transforms.predicates.TopicNameMatches
-    predicates.IsFoo.pattern=foo
-    
-    predicates.IsBar.type=org.apache.kafka.connect.transforms.predicates.TopicNameMatches
-    predicates.IsBar.pattern=bar
+
+```properties
+transforms=Filter,Extract
+transforms.Filter.type=org.apache.kafka.connect.transforms.Filter
+transforms.Filter.predicate=IsFoo
+
+transforms.Extract.type=org.apache.kafka.connect.transforms.ExtractField$Key
+transforms.Extract.field=other_field
+transforms.Extract.predicate=IsBar
+transforms.Extract.negate=true
+
+predicates=IsFoo,IsBar
+predicates.IsFoo.type=org.apache.kafka.connect.transforms.predicates.TopicNameMatches
+predicates.IsFoo.pattern=foo
+
+predicates.IsBar.type=org.apache.kafka.connect.transforms.predicates.TopicNameMatches
+predicates.IsBar.pattern=bar
+```
 
 Kafka Connect includes the following predicates:
 
@@ -254,9 +262,10 @@ Details on how to configure each predicate are listed below:
 ## REST API
 
 Since Kafka Connect is intended to be run as a service, it also provides a REST API for managing connectors. This REST API is available in both standalone and distributed mode. The REST API server can be configured using the `listeners` configuration option. This field should contain a list of listeners in the following format: `protocol://host:port,protocol2://host2:port2`. Currently supported protocols are `http` and `https`. For example:
-    
-    
-    listeners=http://localhost:8080,https://localhost:8443
+
+```properties
+listeners=http://localhost:8080,https://localhost:8443
+```
 
 By default, if no `listeners` are specified, the REST server runs on port 8083 using the HTTP protocol. When using HTTPS, the configuration has to include the SSL configuration. By default, it will use the `ssl.*` settings. In case it is needed to use different configuration for the REST API than for connecting to Kafka brokers, the fields can be prefixed with `listeners.https`. When using the prefix, only the prefixed options will be used and the `ssl.*` options without the prefix will be ignored. Following fields can be used to configure HTTPS for the REST API:
 
@@ -306,42 +315,46 @@ The following are the currently supported REST API endpoints:
     * `GET /connectors/{name}/offsets` \- get the current offsets for a connector
     * `DELETE /connectors/{name}/offsets` \- reset the offsets for a connector. The connector must exist and must be in the stopped state (see `PUT /connectors/{name}/stop`)
     * `PATCH /connectors/{name}/offsets` \- alter the offsets for a connector. The connector must exist and must be in the stopped state (see `PUT /connectors/{name}/stop`). The request body should be a JSON object containing a JSON array `offsets` field, similar to the response body of the `GET /connectors/{name}/offsets` endpoint. An example request body for the `FileStreamSourceConnector`: 
-          
+
+      ```json
+      {
+        "offsets": [
           {
-            "offsets": [
-              {
-                "partition": {
-                  "filename": "test.txt"
-                },
-                "offset": {
-                  "position": 30
-                }
-              }
-            ]
+            "partition": {
+              "filename": "test.txt"
+            },
+            "offset": {
+              "position": 30
+            }
           }
+        ]
+      }
+      ```
 
 An example request body for the `FileStreamSinkConnector`: 
-          
-          {
-            "offsets": [
-              {
-                "partition": {
-                  "kafka_topic": "test",
-                  "kafka_partition": 0
-                },
-                "offset": {
-                  "kafka_offset": 5
-                }
-              },
-              {
-                "partition": {
-                  "kafka_topic": "test",
-                  "kafka_partition": 1
-                },
-                "offset": null
-              }
-            ]
-          }
+
+```json
+{
+  "offsets": [
+    {
+      "partition": {
+        "kafka_topic": "test",
+        "kafka_partition": 0
+      },
+      "offset": {
+        "kafka_offset": 5
+      }
+    },
+    {
+      "partition": {
+        "kafka_topic": "test",
+        "kafka_partition": 1
+      },
+      "offset": null
+    }
+  ]
+}
+```
 
 The "offset" field may be null to reset the offset for a specific partition (applicable to both source and sink connectors). Note that the request body format depends on the connector implementation in the case of source connectors, whereas there is a common format across all sink connectors.
 
@@ -361,9 +374,10 @@ The following is a supported REST request at the top-level (root) endpoint:
 
 
 The `admin.listeners` configuration can be used to configure admin REST APIs on Kafka Connect's REST API server. Similar to the `listeners` configuration, this field should contain a list of listeners in the following format: `protocol://host:port,protocol2://host2:port2`. Currently supported protocols are `http` and `https`. For example:
-    
-    
-    admin.listeners=http://localhost:8080,https://localhost:8443
+
+```properties
+admin.listeners=http://localhost:8080,https://localhost:8443
+```
 
 By default, if `admin.listeners` is not configured, the admin REST APIs will be available on the regular listeners.
 
@@ -388,36 +402,38 @@ To report errors within a connector's converter, transforms, or within the sink 
 To report errors within a connector's converter, transforms, or within the sink connector itself to a dead letter queue topic, set `errors.deadletterqueue.topic.name`, and optionally `errors.deadletterqueue.context.headers.enable=true`.
 
 By default connectors exhibit "fail fast" behavior immediately upon an error or exception. This is equivalent to adding the following configuration properties with their defaults to a connector configuration:
-    
-    
-    # disable retries on failure
-    errors.retry.timeout=0
-    
-    # do not log the error and their contexts
-    errors.log.enable=false
-    
-    # do not record errors in a dead letter queue topic
-    errors.deadletterqueue.topic.name=
-    
-    # Fail on first error
-    errors.tolerance=none
+
+```properties
+# disable retries on failure
+errors.retry.timeout=0
+
+# do not log the error and their contexts
+errors.log.enable=false
+
+# do not record errors in a dead letter queue topic
+errors.deadletterqueue.topic.name=
+
+# Fail on first error
+errors.tolerance=none
+```
 
 These and other related connector configuration properties can be changed to provide different behavior. For example, the following configuration properties can be added to a connector configuration to setup error handling with multiple retries, logging to the application logs and the `my-connector-errors` Kafka topic, and tolerating all errors by reporting them rather than failing the connector task:
-    
-    
-    # retry for at most 10 minutes times waiting up to 30 seconds between consecutive failures
-    errors.retry.timeout=600000
-    errors.retry.delay.max.ms=30000
-    
-    # log error context along with application logs, but do not include configs and messages
-    errors.log.enable=true
-    errors.log.include.messages=false
-    
-    # produce error context into the Kafka topic
-    errors.deadletterqueue.topic.name=my-connector-errors
-    
-    # Tolerate all errors.
-    errors.tolerance=all
+
+```properties
+# retry for at most 10 minutes times waiting up to 30 seconds between consecutive failures
+errors.retry.timeout=600000
+errors.retry.delay.max.ms=30000
+
+# log error context along with application logs, but do not include configs and messages
+errors.log.enable=true
+errors.log.include.messages=false
+
+# produce error context into the Kafka topic
+errors.deadletterqueue.topic.name=my-connector-errors
+
+# Tolerate all errors.
+errors.tolerance=all
+```
 
 ## Exactly-once support
 
@@ -425,7 +441,7 @@ Kafka Connect is capable of providing exactly-once semantics for sink connectors
 
 ### Sink connectors
 
-If a sink connector supports exactly-once semantics, to enable exactly-once at the Connect worker level, you must ensure its consumer group is configured to ignore records in aborted transactions. You can do this by setting the worker property `consumer.isolation.level` to `read_committed` or, if running a version of Kafka Connect that supports it, using a connector client config override policy that allows the `consumer.override.isolation.level` property to be set to `read_committed` in individual connector configs. There are no additional ACL requirements.
+If a sink connector supports exactly-once semantics, to enable exactly-once at the Connect worker level, you must ensure its consumer group is configured to ignore records in aborted transactions. You can do this by setting the worker property `consumer.isolation.level` to `read_committed` or, if running a version of Kafka Connect that supports it, using a connector client config override policy that allows the `consumer.override.isolation.level` property to be set to `read_committed` in individual connector configs.
 
 ### Source connectors
 
@@ -434,220 +450,6 @@ If a source connector supports exactly-once semantics, you must configure your C
 #### Worker configuration
 
 For new Connect clusters, set the `exactly.once.source.support` property to `enabled` in the worker config for each node in the cluster. For existing clusters, two rolling upgrades are necessary. During the first upgrade, the `exactly.once.source.support` property should be set to `preparing`, and during the second, it should be set to `enabled`.
-
-#### ACL requirements
-
-With exactly-once source support enabled, or with `exactly.once.source.support` set to `preparing`, the principal for each Connect worker will require the following ACLs:  
-  
-<table>  
-<tr>  
-<th>
-
-Operation
-</th>  
-<th>
-
-Resource Type
-</th>  
-<th>
-
-Resource Name
-</th>  
-<th>
-
-Note
-</th> </tr>  
-<tr>  
-<td>
-
-Write
-</td>  
-<td>
-
-TransactionalId
-</td>  
-<td>
-
-`connect-cluster-${groupId}`, where `${groupId}` is the `group.id` of the cluster
-</td>  
-<td>
-
-
-</td> </tr>  
-<tr>  
-<td>
-
-Describe
-</td>  
-<td>
-
-TransactionalId
-</td>  
-<td>
-
-`connect-cluster-${groupId}`, where `${groupId}` is the `group.id` of the cluster
-</td>  
-<td>
-
-
-</td> </tr>  
-<tr>  
-<td>
-
-IdempotentWrite
-</td>  
-<td>
-
-Cluster
-</td>  
-<td>
-
-ID of the Kafka cluster that hosts the worker's config topic
-</td>  
-<td>
-
-The IdempotentWrite ACL has been deprecated as of 2.8 and will only be necessary for Connect clusters running on pre-2.8 Kafka clusters
-</td> </tr> </table>
-
-And with exactly-once source enabled (but not if `exactly.once.source.support` is set to `preparing`), the principal for each individual connector will require the following ACLs:  
-  
-<table>  
-<tr>  
-<th>
-
-Operation
-</th>  
-<th>
-
-Resource Type
-</th>  
-<th>
-
-Resource Name
-</th>  
-<th>
-
-Note
-</th> </tr>  
-<tr>  
-<td>
-
-Write
-</td>  
-<td>
-
-TransactionalId
-</td>  
-<td>
-
-`${groupId}-${connector}-${taskId}`, for each task that the connector will create, where `${groupId}` is the `group.id` of the Connect cluster, `${connector}` is the name of the connector, and `${taskId}` is the ID of the task (starting from zero)
-</td>  
-<td>
-
-A wildcard prefix of `${groupId}-${connector}*` can be used for convenience if there is no risk of conflict with other transactional IDs or if conflicts are acceptable to the user.
-</td> </tr>  
-<tr>  
-<td>
-
-Describe
-</td>  
-<td>
-
-TransactionalId
-</td>  
-<td>
-
-`${groupId}-${connector}-${taskId}`, for each task that the connector will create, where `${groupId}` is the `group.id` of the Connect cluster, `${connector}` is the name of the connector, and `${taskId}` is the ID of the task (starting from zero)
-</td>  
-<td>
-
-A wildcard prefix of `${groupId}-${connector}*` can be used for convenience if there is no risk of conflict with other transactional IDs or if conflicts are acceptable to the user.
-</td> </tr>  
-<tr>  
-<td>
-
-Write
-</td>  
-<td>
-
-Topic
-</td>  
-<td>
-
-Offsets topic used by the connector, which is either the value of the `offsets.storage.topic` property in the connector’s configuration if provided, or the value of the `offsets.storage.topic` property in the worker’s configuration if not.
-</td>  
-<td>
-
-
-</td> </tr>  
-<tr>  
-<td>
-
-Read
-</td>  
-<td>
-
-Topic
-</td>  
-<td>
-
-Offsets topic used by the connector, which is either the value of the `offsets.storage.topic` property in the connector’s configuration if provided, or the value of the `offsets.storage.topic` property in the worker’s configuration if not.
-</td>  
-<td>
-
-
-</td> </tr>  
-<tr>  
-<td>
-
-Describe
-</td>  
-<td>
-
-Topic
-</td>  
-<td>
-
-Offsets topic used by the connector, which is either the value of the `offsets.storage.topic` property in the connector’s configuration if provided, or the value of the `offsets.storage.topic` property in the worker’s configuration if not.
-</td>  
-<td>
-
-
-</td> </tr>  
-<tr>  
-<td>
-
-Create
-</td>  
-<td>
-
-Topic
-</td>  
-<td>
-
-Offsets topic used by the connector, which is either the value of the `offsets.storage.topic` property in the connector’s configuration if provided, or the value of the `offsets.storage.topic` property in the worker’s configuration if not.
-</td>  
-<td>
-
-Only necessary if the offsets topic for the connector does not exist yet
-</td> </tr>  
-<tr>  
-<td>
-
-IdempotentWrite
-</td>  
-<td>
-
-Cluster
-</td>  
-<td>
-
-ID of the Kafka cluster that the source connector writes to
-</td>  
-<td>
-
-The IdempotentWrite ACL has been deprecated as of 2.8 and will only be necessary for Connect clusters running on pre-2.8 Kafka clusters
-</td> </tr> </table>
 
 ## Plugin Discovery
 
@@ -703,13 +505,200 @@ In order for a plugin to be compatible, it must appear as a line in a manifest c
 
 
 For example, if you only have one connector with the fully-qualified name `com.example.MySinkConnector`, then only one manifest file must be added to resources in `META-INF/services/org.apache.kafka.connect.sink.SinkConnector`, and the contents should be similar to the following:
-    
-    
-    # license header or comment
-    com.example.MySinkConnector
+
+```text
+# license header or comment
+com.example.MySinkConnector
+```
 
 You should then verify that your manifests are correct by using the verification steps with a pre-release artifact. If the verification succeeds, you can then release the plugin normally, and operators can upgrade to the compatible version.
 
 ## Security
 
 It's important to understand the security concerns inherent to Connect. First, Connect allows running custom plugins. These plugins can run arbitrary code, so you must trust them before installing them in your Connect clusters. By default, the REST API is unsecured and allows anyone that can access it to start and stop connectors. You should only directly expose the REST API to trusted users, otherwise it's easy to gain arbitrary code execution on Connect workers. By default, connectors can also override the configurations of the Kafka clients that Connect uses internally. Since Kafka 4.2.0, it's recommended to set `connector.client.config.override.policy` to `Allowlist`, this will be the default from Kafka 5.0.0, and explicitly only allow configurations that you need to override. Keep in mind that configurations that can load classes such as `sasl.jaas.config` or `sasl.login.class` should only be allowed if only trusted users can access the REST API as they, by design, enable executing code on the Connect worker.
+
+### ACL requirements
+
+The principal for each Connect worker requires the following ACLs:
+
+<table>
+<tr>
+<th>Operation</th>
+<th>Resource Type</th>
+<th>Resource Name</th>
+<th>Note</th>
+</tr>
+<tr><td>Read</td><td>Group</td><td>
+
+`group.id` of the Connect cluster
+</td><td> </td></tr>
+<tr><td>Read</td><td>Topic</td><td>
+
+`config.storage.topic` of the Connect cluster
+</td><td> </td></tr>
+<tr><td>Write</td><td>Topic</td><td>
+
+`config.storage.topic` of the Connect cluster
+</td><td> </td></tr>
+<tr><td>Create</td><td>Topic</td><td>
+
+`config.storage.topic` of the Connect cluster
+</td><td>Only necessary if the config topic for Connect does not exist yet</td></tr>
+<tr><td>Read</td><td>Topic</td><td>
+
+`offset.storage.topic` of the Connect cluster
+</td><td> </td></tr>
+<tr><td>Write</td><td>Topic</td><td>
+
+`offset.storage.topic` of the Connect cluster
+</td><td> </td></tr>
+<tr><td>Create</td><td>Topic</td><td>
+
+`offset.storage.topic` of the Connect cluster
+</td><td>Only necessary if the offsets topic for Connect does not exist yet</td></tr>
+<tr><td>Read</td><td>Topic</td><td>
+
+`status.storage.topic` of the Connect cluster
+</td><td> </td></tr>
+<tr><td>Write</td><td>Topic</td><td>
+
+`status.storage.topic` of the Connect cluster
+</td><td> </td></tr>
+<tr><td>Create</td><td>Topic</td><td>
+
+`status.storage.topic` of the Connect cluster
+</td><td>Only necessary if the status topic for Connect does not exist yet</td></tr>
+<tr><td>Write</td><td>TransactionalId</td><td>
+
+`connect-cluster-${groupId}`
+
+where `${groupId}` is the `group.id` of the cluster
+</td><td>
+
+Only necessary if [exactly-once support](#exactly-once-support) is enabled
+or if `exactly.once.source.support` is set to `preparing`.
+</td> </tr>
+<tr><td>Describe</td><td>TransactionalId</td><td>
+
+`connect-cluster-${groupId}`
+
+where `${groupId}` is the `group.id` of the cluster
+</td><td>
+
+Only necessary if [exactly-once support](#exactly-once-support) is enabled
+or if `exactly.once.source.support` is set to `preparing`.
+</td> </tr>
+<tr><td>IdempotentWrite</td><td>Cluster</td><td>ID of the Kafka cluster that hosts the worker's config topic</td>  <td>
+
+Only necessary if [exactly-once support](#exactly-once-support) is enabled
+or if `exactly.once.source.support` is set to `preparing`.
+
+The IdempotentWrite ACL has been deprecated as of 2.8 and will only be necessary for Connect clusters running on pre-2.8 Kafka clusters
+</td> </tr>
+</table>
+
+To support Source connectors, the principal for each individual connector will require the following ACLs:
+
+<table>
+<tr>
+<th>Operation</th>
+<th>Resource Type</th>
+<th>Resource Name</th>
+<th>Note</th>
+</tr>
+<tr><td>Write</td><td>Topic</td><td>topic(s) used as the destination</td><td> </td></tr>
+<tr><td>Create</td><td>Topic</td><td>topic(s) used as the destination</td><td>
+
+Only necessary if `topic.creation.enable` is `true` and the topic(s) do not exist yet
+</td></tr>
+<tr><td>Describe</td><td>Topic</td>
+<td>
+
+Offsets topic used by the connector
+
+This is the value of the `offsets.storage.topic` property in the connector’s configuration if provided,
+
+or the value of the `offset.storage.topic` property in the worker’s configuration if not.
+</td>
+<td>
+
+Only necessary if [exactly-once support](#exactly-once-support) is enabled.
+</td> </tr>
+<tr><td>Write</td><td>TransactionalId</td><td>
+
+`${groupId}-${connector}-${taskId}`
+
+for each task that the connector will create, where
+
+`${groupId}` is the `group.id` of the Connect cluster
+
+`${connector}` is the name of the connector
+
+`${taskId}` is the ID of the task (starting from zero)
+</td><td>
+
+Only necessary if [exactly-once support](#exactly-once-support) is enabled.
+
+A wildcard prefix of `${groupId}-${connector}*` can be used for convenience if there is no risk of conflict with other transactional IDs or if conflicts are acceptable to the user.
+</td></tr>
+<tr><td>Describe</td><td>TransactionalId</td><td>
+
+`${groupId}-${connector}-${taskId}`
+
+for each task that the connector will create, where
+
+`${groupId}` is the `group.id` of the Connect cluster
+
+`${connector}` is the name of the connector
+
+`${taskId}` is the ID of the task (starting from zero)
+</td>
+<td>
+
+Only necessary if [exactly-once support](#exactly-once-support) is enabled.
+
+A wildcard prefix of `${groupId}-${connector}*` can be used for convenience if there is no risk of conflict with other transactional IDs or if conflicts are acceptable to the user.
+</td></tr>
+<tr><td>IdempotentWrite</td><td>Cluster</td><td>ID of the Kafka cluster that hosts the worker's config topic</td>  <td>
+
+Only necessary if [exactly-once support](#exactly-once-support) is enabled.
+
+The IdempotentWrite ACL has been deprecated as of 2.8 and will only be necessary for Connect clusters running on pre-2.8 Kafka clusters
+</td> </tr>
+</table>
+
+To support Sink connectors, the principal for each individual connector will require the following ACLs:
+
+<table>
+<tr>
+<th>Operation</th>
+<th>Resource Type</th>
+<th>Resource Name</th>
+<th>Note</th>
+</tr>
+<tr><td>Read</td><td>Group</td><td>
+
+`connect-${connector}`
+
+where `${connector}` is
+
+the name of the connector
+
+or the value of `consumer.group.id` if present in the Connect configuration,
+
+or the value of `consumer.override.group.id` if present in the Connector configuration
+</td><td> </td></tr>
+<tr><td>Read</td><td>Topic</td><td>sink topic(s) that the connector will consume from</td><td>
+
+These will be identified by the `topics` or `topics.regex` option of the connector
+</td></tr>
+<tr><td>Write</td><td>Topic</td><td>
+
+`errors.deadletterqueue.topic.name` of the connector
+</td><td>
+
+Only necessary if `errors.deadletterqueue.topic.name` is set to a non-empty value
+</td></tr>
+</table>
+
+Some connectors make additional use of Kafka topics that is not managed by the Kafka Connect framework (for example, change data capture connectors may use additional topics to store schema history). Refer to Connector documentation for details of any additional ACLs that are required. These can be added to the principal for the individual connector.

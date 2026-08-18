@@ -35,7 +35,7 @@ import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopi
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataResponse;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.server.common.FinalizedFeatures;
@@ -518,6 +518,10 @@ public class KRaftMetadataCache implements MetadataCache {
         if (kraftVersionLevel > 0) {
             finalizedFeatures.put(KRaftVersion.FEATURE_NAME, kraftVersionLevel);
         }
-        return new FinalizedFeatures(image.features().metadataVersionOrThrow(), finalizedFeatures, image.highestOffsetAndEpoch().offset());
+        return FinalizedFeatures.of(
+            image.features().metadataVersionOrThrow(),
+            finalizedFeatures,
+            image.highestOffsetAndEpoch().offset()
+        );
     }
 }

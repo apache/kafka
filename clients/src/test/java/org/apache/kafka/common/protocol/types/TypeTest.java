@@ -17,8 +17,8 @@
 package org.apache.kafka.common.protocol.types;
 
 import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 
 import org.junit.jupiter.api.Test;
 

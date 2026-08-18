@@ -18,8 +18,8 @@ package org.apache.kafka.coordinator.share;
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.record.internal.Records;
 
 import java.util.Optional;
 import java.util.OptionalInt;

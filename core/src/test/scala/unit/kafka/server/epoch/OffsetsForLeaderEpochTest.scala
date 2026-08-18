@@ -16,9 +16,8 @@
   */
 package kafka.server.epoch
 
-import java.io.File
-import kafka.log.LogManager
-import kafka.server.QuotaFactory.QuotaManagers
+import org.apache.kafka.server.quota.QuotaFactory
+import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
 import kafka.server._
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
@@ -26,16 +25,17 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetFo
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{EpochEndOffset, OffsetForLeaderTopicResult}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.RecordBatch
+import org.apache.kafka.common.record.internal.RecordBatch
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.metadata.KRaftMetadataCache
 import org.apache.kafka.server.common.{KRaftVersion, OffsetAndEpoch}
-import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{LogDirFailureChannel, UnifiedLog}
+import org.apache.kafka.server.util.{MockAlterPartitionManager, MockTime}
+import org.apache.kafka.storage.internals.log.{LogDirFailureChannel, LogManager, UnifiedLog}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.Mockito.{mock, when}
 
+import java.util
 import java.util.Optional
 import scala.jdk.CollectionConverters._
 
@@ -43,7 +43,7 @@ class OffsetsForLeaderEpochTest {
   private val config = TestUtils.createBrokerConfigs(1).map(KafkaConfig.fromProps).head
   private val time = new MockTime
   private val metrics = new Metrics
-  private val alterIsrManager = TestUtils.createAlterIsrManager()
+  private val alterIsrManager = new MockAlterPartitionManager()
   private val tp = new TopicPartition("topic", 1)
   private var replicaManager: ReplicaManager = _
   private var quotaManager: QuotaManagers = _
@@ -64,7 +64,7 @@ class OffsetsForLeaderEpochTest {
     val mockLog: UnifiedLog = mock(classOf[UnifiedLog])
     val logManager: LogManager = mock(classOf[LogManager])
     when(mockLog.endOffsetForEpoch(epochRequested)).thenReturn(Optional.of(offsetAndEpoch))
-    when(logManager.liveLogDirs).thenReturn(Array.empty[File])
+    when(logManager.liveLogDirs).thenReturn(util.List.of)
 
     // create a replica manager with 1 partition that has 1 replica
     replicaManager = new ReplicaManager(
@@ -93,7 +93,7 @@ class OffsetsForLeaderEpochTest {
   @Test
   def shouldReturnNoLeaderForPartitionIfThrown(): Unit = {
     val logManager: LogManager = mock(classOf[LogManager])
-    when(logManager.liveLogDirs).thenReturn(Array.empty[File])
+    when(logManager.liveLogDirs).thenReturn(util.List.of)
 
     //create a replica manager with 1 partition that has 0 replica
     replicaManager = new ReplicaManager(
@@ -124,7 +124,7 @@ class OffsetsForLeaderEpochTest {
   @Test
   def shouldReturnUnknownTopicOrPartitionIfThrown(): Unit = {
     val logManager: LogManager = mock(classOf[LogManager])
-    when(logManager.liveLogDirs).thenReturn(Array.empty[File])
+    when(logManager.liveLogDirs).thenReturn(util.List.of)
 
     //create a replica manager with 0 partition
     replicaManager = new ReplicaManager(

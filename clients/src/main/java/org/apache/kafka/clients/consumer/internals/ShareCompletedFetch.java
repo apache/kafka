@@ -27,15 +27,15 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.message.ShareFetchResponseData;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.CloseableIterator;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -75,6 +75,7 @@ public class ShareCompletedFetch {
     private KafkaException cachedRecordException = null;
     private boolean isConsumed = false;
     private boolean initialized = false;
+    private ShareInFlightBatch<?, ?> deliveredBatch;
     private final List<OffsetAndDeliveryCount> acquiredRecordList;
     private ListIterator<OffsetAndDeliveryCount> acquiredRecordIterator;
     private OffsetAndDeliveryCount nextAcquired;
@@ -137,6 +138,22 @@ public class ShareCompletedFetch {
     }
 
     /**
+     * Track the batch that carries records delivered to the application so we can tell when their acknowledgements
+     * are still outstanding. We only advance to a new batch once the previous one has been drained of its
+     * in-flight records and its acknowledgements have been taken by the background thread to be sent.
+     */
+    void trackDeliveredBatch(ShareInFlightBatch<?, ?> inFlightBatch) {
+        if (deliveredBatch == null || (deliveredBatch.numRecords() == 0 && !deliveredBatch.hasRenewals())) {
+            deliveredBatch = inFlightBatch;
+        }
+    }
+
+    public boolean hasPendingAcknowledgements() {
+        // Records being renewed are removed and readded to the in-flight set as the renewals are confirmed.
+        return deliveredBatch != null && (deliveredBatch.numRecords() > 0 || deliveredBatch.hasRenewals());
+    }
+
+    /**
      * Draining a {@link ShareCompletedFetch} will signal that the data has been consumed and the underlying resources
      * are closed. This is somewhat analogous to {@link Closeable#close() closing}, though no error will result if a
      * caller invokes {@link #fetchRecords(Deserializers, int, boolean)}; an empty {@link List list} will be
@@ -177,9 +194,10 @@ public class ShareCompletedFetch {
                                                  final boolean checkCrcs) {
         // Creating an empty ShareInFlightBatch
         ShareInFlightBatch<K, V> inFlightBatch = new ShareInFlightBatch<>(nodeId, partition, acquisitionLockTimeoutMs);
+        trackDeliveredBatch(inFlightBatch);
 
         if (cachedBatchException != null) {
-            // If the event that a CRC check fails, reject the entire record batch because it is corrupt.
+            // In the event that a CRC check fails, reject the entire record batch because it is corrupt.
             Set<Long> offsets = rejectRecordBatch(inFlightBatch, currentBatch);
             inFlightBatch.setException(new ShareInFlightBatchException(cachedBatchException, offsets));
             cachedBatchException = null;
@@ -249,7 +267,7 @@ public class ShareCompletedFetch {
             }
         } catch (CorruptRecordException e) {
             if (inFlightBatch.isEmpty()) {
-                // If the event that a CRC check fails, reject the entire record batch because it is corrupt.
+                // In the event that a CRC check fails, reject the entire record batch because it is corrupt.
                 Set<Long> offsets = rejectRecordBatch(inFlightBatch, currentBatch);
                 inFlightBatch.setException(new ShareInFlightBatchException(e, offsets));
             } else {
@@ -280,27 +298,32 @@ public class ShareCompletedFetch {
     }
 
     private <K, V> Set<Long> rejectRecordBatch(final ShareInFlightBatch<K, V> inFlightBatch,
-                                          final RecordBatch currentBatch) {
+                                               final RecordBatch currentBatch) {
         // Rewind the acquiredRecordIterator to the start, so we are in a known state
         acquiredRecordIterator = acquiredRecordList.listIterator();
 
-        OffsetAndDeliveryCount nextAcquired = nextAcquiredRecord();
+        OffsetAndDeliveryCount acquired = nextAcquiredRecord();
         Set<Long> offsets = new HashSet<>();
         for (long offset = currentBatch.baseOffset(); offset <= currentBatch.lastOffset(); offset++) {
-            if (nextAcquired == null) {
+            while (acquired != null && acquired.offset < offset) {
+                acquired = nextAcquiredRecord();
+            }
+
+            if (acquired == null) {
                 // No more acquired records, so we are done
                 break;
-            } else if (offset == nextAcquired.offset) {
+            } else if (offset == acquired.offset) {
                 // It's acquired, so we reject it
                 inFlightBatch.addAcknowledgement(offset, AcknowledgeType.REJECT);
                 offsets.add(offset);
-            } else if (offset < nextAcquired.offset) {
+            } else {
                 // It's not acquired, so we skip it
                 continue;
             }
 
-            nextAcquired = nextAcquiredRecord();
+            acquired = nextAcquiredRecord();
         }
+        this.nextAcquired = acquired;
         return offsets;
     }
 

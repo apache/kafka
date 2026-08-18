@@ -25,13 +25,13 @@ import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.requests.TransactionResult;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.TransactionVersion;
@@ -119,7 +119,7 @@ public class CoordinatorRuntimeTest {
                 .withTime(timer.time())
                 .withTimer(timer)
                 .withLoader(loader)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(supplier)
@@ -192,7 +192,7 @@ public class CoordinatorRuntimeTest {
                 .withTime(timer.time())
                 .withTimer(timer)
                 .withLoader(loader)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(supplier)
@@ -245,7 +245,7 @@ public class CoordinatorRuntimeTest {
                 .withTime(timer.time())
                 .withTimer(timer)
                 .withLoader(loader)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorShardBuilderSupplier(supplier)
@@ -302,7 +302,7 @@ public class CoordinatorRuntimeTest {
                 .withTime(timer.time())
                 .withTimer(timer)
                 .withLoader(loader)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorShardBuilderSupplier(supplier)
@@ -375,7 +375,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -432,7 +432,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -489,7 +489,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -534,7 +534,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
@@ -585,7 +585,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -641,7 +641,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withWriteTimeout(Duration.ofMillis(30))
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -669,7 +669,7 @@ public class CoordinatorRuntimeTest {
         CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
 
         // Write #1.
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(List.of("record1"), "response1")
         );
 
@@ -682,12 +682,11 @@ public class CoordinatorRuntimeTest {
             (short) 50,
             10,
             TransactionResult.COMMIT,
-            TransactionVersion.TV_1.featureLevel(),
-            DEFAULT_WRITE_TIMEOUT
+            TransactionVersion.TV_1.featureLevel()
         );
 
         // Write #2 but without any records.
-        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(List.of(), "response2")
         );
 
@@ -731,7 +730,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -753,7 +752,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(List.of(0L), ctx.coordinator.snapshotRegistry().epochsList());
 
         // Write #1.
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, DEFAULT_WRITE_TIMEOUT,
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(List.of("record1", "record2"), "response1")
         );
 
@@ -774,7 +773,7 @@ public class CoordinatorRuntimeTest {
         ), writer.entries(TP));
 
         // Write #2.
-        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, DEFAULT_WRITE_TIMEOUT,
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(List.of("record3"), "response2"));
 
         // Verify that the write is not committed yet.
@@ -795,7 +794,7 @@ public class CoordinatorRuntimeTest {
         ), writer.entries(TP));
 
         // Write #3 but without any records.
-        CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP, DEFAULT_WRITE_TIMEOUT,
+        CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP,
             state -> new CoordinatorResult<>(List.of(), "response3"));
 
         // Verify that the write is not committed yet.
@@ -838,7 +837,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(List.of(3L), ctx.coordinator.snapshotRegistry().epochsList());
 
         // Write #4 but without records.
-        CompletableFuture<String> write4 = runtime.scheduleWriteOperation("write#4", TP, DEFAULT_WRITE_TIMEOUT,
+        CompletableFuture<String> write4 = runtime.scheduleWriteOperation("write#4", TP,
             state -> new CoordinatorResult<>(List.of(), "response4"));
 
         // It is completed immediately because the state is fully committed.
@@ -854,7 +853,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
@@ -868,7 +867,7 @@ public class CoordinatorRuntimeTest {
 
         // Scheduling a write fails with a NotCoordinatorException because the coordinator
         // does not exist.
-        CompletableFuture<String> write = runtime.scheduleWriteOperation("write", TP, DEFAULT_WRITE_TIMEOUT,
+        CompletableFuture<String> write = runtime.scheduleWriteOperation("write", TP,
             state -> new CoordinatorResult<>(List.of(), "response1"));
         assertFutureThrows(NotCoordinatorException.class, write);
     }
@@ -880,7 +879,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
@@ -897,7 +896,7 @@ public class CoordinatorRuntimeTest {
 
         // Scheduling a write that fails when the operation is called. The exception
         // is used to complete the future.
-        CompletableFuture<String> write = runtime.scheduleWriteOperation("write", TP, DEFAULT_WRITE_TIMEOUT, state -> {
+        CompletableFuture<String> write = runtime.scheduleWriteOperation("write", TP, state -> {
             throw new KafkaException("error");
         });
         assertFutureThrows(KafkaException.class, write);
@@ -910,7 +909,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
@@ -952,7 +951,7 @@ public class CoordinatorRuntimeTest {
         );
 
         // Write. It should fail.
-        CompletableFuture<String> write = runtime.scheduleWriteOperation("write", TP, DEFAULT_WRITE_TIMEOUT,
+        CompletableFuture<String> write = runtime.scheduleWriteOperation("write", TP,
             state -> new CoordinatorResult<>(List.of("record1", "record2"), "response1"));
         assertFutureThrows(IllegalArgumentException.class, write);
 
@@ -972,7 +971,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -994,7 +993,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(List.of(0L), ctx.coordinator.snapshotRegistry().epochsList());
 
         // Write #1. It should succeed and be applied to the coordinator.
-        runtime.scheduleWriteOperation("write#1", TP, DEFAULT_WRITE_TIMEOUT,
+        runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(List.of("record1", "record2"), "response1"));
 
         // Verify that the state has been updated.
@@ -1005,7 +1004,7 @@ public class CoordinatorRuntimeTest {
 
         // Write #2. It should fail because the writer is configured to only
         // accept 1 write.
-        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, DEFAULT_WRITE_TIMEOUT,
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(List.of("record3", "record4", "record5"), "response2"));
         assertFutureThrows(KafkaException.class, write2);
 
@@ -1026,7 +1025,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -1048,10 +1047,10 @@ public class CoordinatorRuntimeTest {
         assertEquals(List.of(0L), ctx.coordinator.snapshotRegistry().epochsList());
 
         // Write #1. We should get a TimeoutException because the HWM will not advance.
-        CompletableFuture<String> timedOutWrite = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(3),
+        CompletableFuture<String> timedOutWrite = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(List.of("record1", "record2"), "response1"));
 
-        timer.advanceClock(4);
+        timer.advanceClock(DEFAULT_WRITE_TIMEOUT.toMillis() + 1);
 
         assertFutureThrows(org.apache.kafka.common.errors.TimeoutException.class, timedOutWrite);
     }
@@ -1065,7 +1064,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -1088,7 +1087,7 @@ public class CoordinatorRuntimeTest {
 
         // Writes.
         AtomicInteger cnt = new AtomicInteger(0);
-        List<CompletableFuture<List<String>>> writes = runtime.scheduleWriteAllOperation("write", DEFAULT_WRITE_TIMEOUT, state -> {
+        List<CompletableFuture<List<String>>> writes = runtime.scheduleWriteAllOperation("write", state -> {
             int counter = cnt.getAndIncrement();
             return new CoordinatorResult<>(
                 List.of("record#" + counter),
@@ -1138,7 +1137,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -1176,7 +1175,6 @@ public class CoordinatorRuntimeTest {
             "transactional-id",
             100L,
             (short) 50,
-            Duration.ofMillis(5000),
             state -> new CoordinatorResult<>(List.of("record1", "record2"), "response"),
             TXN_OFFSET_COMMIT_LATEST_VERSION
         );
@@ -1235,7 +1233,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -1260,7 +1258,7 @@ public class CoordinatorRuntimeTest {
             100L,
             (short) 50,
             TXN_OFFSET_COMMIT_LATEST_VERSION
-        )).thenReturn(FutureUtils.failedFuture(Errors.NOT_ENOUGH_REPLICAS.exception()));
+        )).thenReturn(CompletableFuture.failedFuture(Errors.NOT_ENOUGH_REPLICAS.exception()));
 
         // Schedule a transactional write.
         CompletableFuture<String> future = runtime.scheduleTransactionalWriteOperation(
@@ -1269,7 +1267,6 @@ public class CoordinatorRuntimeTest {
             "transactional-id",
             100L,
             (short) 50,
-            Duration.ofMillis(5000),
             state -> new CoordinatorResult<>(List.of("record1", "record2"), "response"),
             TXN_OFFSET_COMMIT_LATEST_VERSION
         );
@@ -1299,7 +1296,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -1328,7 +1325,6 @@ public class CoordinatorRuntimeTest {
             "transactional-id",
             100L,
             transactionalEpoch,
-            DEFAULT_WRITE_TIMEOUT,
             state -> new CoordinatorResult<>(List.of("record1", "record2"), "response1"),
             TXN_OFFSET_COMMIT_LATEST_VERSION
         );
@@ -1363,8 +1359,7 @@ public class CoordinatorRuntimeTest {
             markerEpoch,
             10,
             result,
-            transactionVersion,
-            DEFAULT_WRITE_TIMEOUT
+            transactionVersion
         );
 
         // Verify that the completion is not committed yet.
@@ -1428,7 +1423,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -1458,8 +1453,7 @@ public class CoordinatorRuntimeTest {
             (short) 5,
             10,
             TransactionResult.COMMIT,
-            TransactionVersion.TV_1.featureLevel(),
-            Duration.ofMillis(3)
+            TransactionVersion.TV_1.featureLevel()
         );
 
         // Verify that the state has been updated.
@@ -1468,7 +1462,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(List.of(0L, 1L), ctx.coordinator.snapshotRegistry().epochsList());
 
         // Advance clock to timeout Complete #1.
-        timer.advanceClock(4);
+        timer.advanceClock(DEFAULT_WRITE_TIMEOUT.toMillis() + 1);
 
         assertFutureThrows(org.apache.kafka.common.errors.TimeoutException.class, timedOutCompletion);
 
@@ -1491,7 +1485,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -1519,7 +1513,6 @@ public class CoordinatorRuntimeTest {
             "transactional-id",
             100L,
             (short) 5,
-            DEFAULT_WRITE_TIMEOUT,
             state -> new CoordinatorResult<>(List.of("record1", "record2"), "response1"),
             TXN_OFFSET_COMMIT_LATEST_VERSION
         );
@@ -1539,8 +1532,7 @@ public class CoordinatorRuntimeTest {
             (short) 5,
             10,
             TransactionResult.COMMIT,
-            TransactionVersion.TV_1.featureLevel(),
-            DEFAULT_WRITE_TIMEOUT
+            TransactionVersion.TV_1.featureLevel()
         );
         assertFutureThrows(KafkaException.class, complete1);
 
@@ -1560,7 +1552,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -1607,7 +1599,6 @@ public class CoordinatorRuntimeTest {
             "transactional-id",
             100L,
             (short) 5,
-            DEFAULT_WRITE_TIMEOUT,
             state -> new CoordinatorResult<>(List.of("record1", "record2"), "response1"),
             TXN_OFFSET_COMMIT_LATEST_VERSION
         );
@@ -1631,8 +1622,7 @@ public class CoordinatorRuntimeTest {
             (short) 5,
             10,
             TransactionResult.COMMIT,
-            TransactionVersion.TV_1.featureLevel(),
-            DEFAULT_WRITE_TIMEOUT
+            TransactionVersion.TV_1.featureLevel()
         );
         assertFutureThrows(IllegalArgumentException.class, complete1);
 
@@ -1662,7 +1652,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -1690,7 +1680,6 @@ public class CoordinatorRuntimeTest {
             "transactional-id",
             100L,
             transactionalEpoch,
-            DEFAULT_WRITE_TIMEOUT,
             state -> new CoordinatorResult<>(List.of("record1", "record2"), "response1"),
             TXN_OFFSET_COMMIT_LATEST_VERSION
         );
@@ -1711,8 +1700,7 @@ public class CoordinatorRuntimeTest {
             markerEpoch,
             10,
             TransactionResult.COMMIT,
-            transactionVersion,
-            DEFAULT_WRITE_TIMEOUT
+            transactionVersion
         );
 
         // Verify that InvalidProducerEpochException is thrown.
@@ -1749,7 +1737,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -1770,11 +1758,11 @@ public class CoordinatorRuntimeTest {
         assertEquals(0, ctx.coordinator.lastCommittedOffset());
 
         // Write #1.
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, DEFAULT_WRITE_TIMEOUT,
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(List.of("record1", "record2"), "response1"));
 
         // Write #2.
-        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, DEFAULT_WRITE_TIMEOUT,
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(List.of("record3", "record4"), "response2"));
 
         // Commit write #1.
@@ -1809,7 +1797,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
@@ -1836,7 +1824,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -1857,11 +1845,11 @@ public class CoordinatorRuntimeTest {
         assertEquals(0, ctx.coordinator.lastCommittedOffset());
 
         // Write #1.
-        runtime.scheduleWriteOperation("write#1", TP, DEFAULT_WRITE_TIMEOUT,
+        runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(List.of("record1", "record2"), "response1"));
 
         // Write #2.
-        runtime.scheduleWriteOperation("write#2", TP, DEFAULT_WRITE_TIMEOUT,
+        runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(List.of("record3", "record4"), "response2"));
 
         // Commit write #1.
@@ -1884,7 +1872,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -1906,11 +1894,11 @@ public class CoordinatorRuntimeTest {
         runtime.scheduleLoadOperation(coordinator2, 10);
 
         // Writes
-        runtime.scheduleWriteOperation("write#0", coordinator0, DEFAULT_WRITE_TIMEOUT,
+        runtime.scheduleWriteOperation("write#0", coordinator0,
             state -> new CoordinatorResult<>(List.of("record0"), "response0"));
-        runtime.scheduleWriteOperation("write#1", coordinator1, DEFAULT_WRITE_TIMEOUT,
+        runtime.scheduleWriteOperation("write#1", coordinator1,
             state -> new CoordinatorResult<>(List.of("record1"), "response1"));
-        runtime.scheduleWriteOperation("write#2", coordinator2, DEFAULT_WRITE_TIMEOUT,
+        runtime.scheduleWriteOperation("write#2", coordinator2,
             state -> new CoordinatorResult<>(List.of("record2"), "response2"));
 
         // Commit writes.
@@ -1940,7 +1928,7 @@ public class CoordinatorRuntimeTest {
                 .withTime(timer.time())
                 .withTimer(timer)
                 .withLoader(loader)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
@@ -1960,11 +1948,11 @@ public class CoordinatorRuntimeTest {
         assertEquals(0, ctx.coordinator.lastCommittedOffset());
 
         // Write #1.
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, DEFAULT_WRITE_TIMEOUT,
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(List.of("record1", "record2"), "response1"));
 
         // Write #2.
-        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, DEFAULT_WRITE_TIMEOUT,
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(List.of("record3", "record4"), "response2"));
 
         // Writes are inflight.
@@ -1999,6 +1987,188 @@ public class CoordinatorRuntimeTest {
     }
 
     @Test
+    public void testScheduleWriteOpWhenClosed() throws Exception {
+        MockTimer timer = new MockTimer();
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(new MockPartitionWriter())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withExecutorService(mock(ExecutorService.class))
+                .withCachedBufferMaxBytesSupplier(() -> CACHED_BUFFER_MAX_BYTES)
+                .build();
+
+        // Close the runtime.
+        runtime.close();
+
+        // Scheduling a write after close returns a failed future instead of throwing.
+        CompletableFuture<String> future = runtime.scheduleWriteOperation("write", TP,
+            state -> new CoordinatorResult<>(List.of(), "response"));
+        assertFutureThrows(NotCoordinatorException.class, future);
+    }
+
+    @Test
+    public void testScheduleReadOpWhenClosed() throws Exception {
+        MockTimer timer = new MockTimer();
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(new MockPartitionWriter())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withExecutorService(mock(ExecutorService.class))
+                .withCachedBufferMaxBytesSupplier(() -> CACHED_BUFFER_MAX_BYTES)
+                .build();
+
+        // Close the runtime.
+        runtime.close();
+
+        // Scheduling a read after close returns a failed future instead of throwing.
+        CompletableFuture<String> future = runtime.scheduleReadOperation("read", TP,
+            (state, offset) -> "response");
+        assertFutureThrows(NotCoordinatorException.class, future);
+    }
+
+    @Test
+    public void testScheduleTransactionalWriteOpWhenClosed() throws Exception {
+        MockTimer timer = new MockTimer();
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(new MockPartitionWriter())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withExecutorService(mock(ExecutorService.class))
+                .withCachedBufferMaxBytesSupplier(() -> CACHED_BUFFER_MAX_BYTES)
+                .build();
+
+        // Close the runtime.
+        runtime.close();
+
+        // Scheduling a transactional write after close returns a failed future instead of throwing.
+        CompletableFuture<String> future = runtime.scheduleTransactionalWriteOperation(
+            "txn-write",
+            TP,
+            "transactional-id",
+            100L,
+            (short) 50,
+            state -> new CoordinatorResult<>(List.of(), "response"),
+            TXN_OFFSET_COMMIT_LATEST_VERSION
+        );
+        assertFutureThrows(NotCoordinatorException.class, future);
+    }
+
+    @Test
+    public void testScheduleTransactionCompletionWhenClosed() throws Exception {
+        MockTimer timer = new MockTimer();
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(new MockPartitionWriter())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withExecutorService(mock(ExecutorService.class))
+                .withCachedBufferMaxBytesSupplier(() -> CACHED_BUFFER_MAX_BYTES)
+                .build();
+
+        // Close the runtime.
+        runtime.close();
+
+        // Scheduling a transaction completion after close returns a failed future instead of throwing.
+        CompletableFuture<Void> future = runtime.scheduleTransactionCompletion(
+            "txn-completion",
+            TP,
+            100L,
+            (short) 50,
+            10,
+            TransactionResult.COMMIT,
+            (short) 1
+        );
+        assertFutureThrows(NotCoordinatorException.class, future);
+    }
+
+    @Test
+    public void testScheduleWriteAllOpWhenClosed() throws Exception {
+        MockTimer timer = new MockTimer();
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(new MockPartitionWriter())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withExecutorService(mock(ExecutorService.class))
+                .withCachedBufferMaxBytesSupplier(() -> CACHED_BUFFER_MAX_BYTES)
+                .build();
+
+        // Close the runtime.
+        runtime.close();
+
+        // Scheduling a write all operation after close returns an empty list instead of throwing.
+        List<CompletableFuture<String>> futures = runtime.scheduleWriteAllOperation("write-all",
+            state -> new CoordinatorResult<>(List.of(), "response"));
+        assertEquals(List.of(), futures);
+    }
+
+    @Test
+    public void testScheduleReadAllOpWhenClosed() throws Exception {
+        MockTimer timer = new MockTimer();
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(new MockPartitionWriter())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withExecutorService(mock(ExecutorService.class))
+                .withCachedBufferMaxBytesSupplier(() -> CACHED_BUFFER_MAX_BYTES)
+                .build();
+
+        // Close the runtime.
+        runtime.close();
+
+        // Scheduling a read all operation after close returns an empty list instead of throwing.
+        List<CompletableFuture<String>> futures = runtime.scheduleReadAllOperation("read-all",
+            (state, offset) -> "response");
+        assertEquals(List.of(), futures);
+    }
+
+    @Test
     public void testOnMetadataUpdate() {
         TopicPartition tp0 = new TopicPartition("__consumer_offsets", 0);
         TopicPartition tp1 = new TopicPartition("__consumer_offsets", 1);
@@ -2014,7 +2184,7 @@ public class CoordinatorRuntimeTest {
                 .withTime(timer.time())
                 .withTimer(timer)
                 .withLoader(loader)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(supplier)
@@ -2059,7 +2229,11 @@ public class CoordinatorRuntimeTest {
         verify(coordinator0).onLoaded(CoordinatorMetadataImage.EMPTY);
 
         // Publish a new image.
-        CoordinatorMetadataDelta delta = new KRaftCoordinatorMetadataDelta(new MetadataDelta(MetadataImage.EMPTY));
+        CoordinatorMetadataDelta delta = new KRaftCoordinatorMetadataDelta(
+            new MetadataDelta.Builder()
+                .setImage(MetadataImage.EMPTY)
+                .build()
+        );
         CoordinatorMetadataImage newImage = CoordinatorMetadataImage.EMPTY;
         runtime.onMetadataUpdate(delta, newImage);
 
@@ -2079,7 +2253,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(Duration.ofMillis(30))
+                .withWriteTimeout(Duration.ofMillis(30))
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
@@ -2137,7 +2311,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(processor)
                 .withPartitionWriter(new MockPartitionWriter())
@@ -2214,7 +2388,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(processor)
                 .withPartitionWriter(new MockPartitionWriter())
@@ -2288,7 +2462,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
@@ -2350,7 +2524,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
@@ -2426,7 +2600,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
@@ -2471,7 +2645,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
@@ -2524,7 +2698,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
@@ -2583,7 +2757,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(loader)
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -2656,7 +2830,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader(
                     new CoordinatorLoader.LoadSummary(
                         startTimeMs,
@@ -2715,7 +2889,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(Time.SYSTEM)
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader(
                     new CoordinatorLoader.LoadSummary(
                         1000,
@@ -2775,7 +2949,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(Time.SYSTEM)
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader(
                     new CoordinatorLoader.LoadSummary(
                         1000,
@@ -2829,7 +3003,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(processor)
                 .withPartitionWriter(writer)
@@ -2849,13 +3023,13 @@ public class CoordinatorRuntimeTest {
         processor.poll();
 
         // Write #1.
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, DEFAULT_WRITE_TIMEOUT,
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(List.of("record1"), "response1")
         );
         processor.poll();
 
         // Write #2.
-        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, DEFAULT_WRITE_TIMEOUT,
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(List.of("record2"), "response2")
         );
         processor.poll();
@@ -2905,7 +3079,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withWriteTimeout(Duration.ofMillis(30))
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -2922,7 +3096,7 @@ public class CoordinatorRuntimeTest {
         runtime.scheduleLoadOperation(TP, 10);
 
         // Write #1.
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(List.of("record1"), "response1")
         );
 
@@ -2935,17 +3109,16 @@ public class CoordinatorRuntimeTest {
             (short) 50,
             10,
             TransactionResult.COMMIT,
-            TransactionVersion.TV_1.featureLevel(),
-            DEFAULT_WRITE_TIMEOUT
+            TransactionVersion.TV_1.featureLevel()
         );
 
         // Write #2 but without any records.
-        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(List.of(), "response2")
         );
 
         // Write #3, also without any records. Should complete together with write #2.
-        CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP,
             state -> new CoordinatorResult<>(List.of(), "response3")
         );
 
@@ -2985,7 +3158,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(processor)
                 .withPartitionWriter(writer)
@@ -3005,13 +3178,13 @@ public class CoordinatorRuntimeTest {
         processor.poll();
 
         // Write#1.
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("Write#1", TP, DEFAULT_WRITE_TIMEOUT,
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("Write#1", TP,
             state -> new CoordinatorResult<>(List.of("record1"), "response1")
         );
         processor.poll();
 
         // Write#2.
-        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("Write#2", TP, DEFAULT_WRITE_TIMEOUT,
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("Write#2", TP,
             state -> new CoordinatorResult<>(List.of("record2"), "response2")
         );
         processor.poll();
@@ -3061,7 +3234,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(processor)
                 .withPartitionWriter(writer)
@@ -3088,8 +3261,7 @@ public class CoordinatorRuntimeTest {
             (short) 50,
             1,
             TransactionResult.COMMIT,
-            TransactionVersion.TV_1.featureLevel(),
-            DEFAULT_WRITE_TIMEOUT
+            TransactionVersion.TV_1.featureLevel()
         );
         processor.poll();
 
@@ -3133,7 +3305,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -3164,7 +3336,7 @@ public class CoordinatorRuntimeTest {
         }
 
         // Write #1.
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, DEFAULT_WRITE_TIMEOUT,
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(records, "response1")
         );
 
@@ -3187,7 +3359,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(mockWriter)
@@ -3212,7 +3384,7 @@ public class CoordinatorRuntimeTest {
         List<String> largeRecords = List.of("A".repeat(100 * 1024 * 1024));
 
         // Write #1.
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, DEFAULT_WRITE_TIMEOUT,
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(largeRecords, "response1", null, true, false)
         );
 
@@ -3236,7 +3408,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(mockWriter)
@@ -3261,7 +3433,7 @@ public class CoordinatorRuntimeTest {
         List<String> records = List.of("A".repeat(INITIAL_BUFFER_SIZE + 1024));
 
         // Write #1.
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, DEFAULT_WRITE_TIMEOUT,
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(records, "response1")
         );
 
@@ -3276,6 +3448,7 @@ public class CoordinatorRuntimeTest {
         assertTrue(ctx.bufferSupplier.get(1).capacity() > INITIAL_BUFFER_SIZE);
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testBufferShrinkWhenCachedBufferMaxBytesReducedBelowBatchSize() {
         MockTimer timer = new MockTimer();
@@ -3289,7 +3462,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(mockWriter)
@@ -3313,7 +3486,7 @@ public class CoordinatorRuntimeTest {
         List<String> records = List.of("A".repeat(INITIAL_BUFFER_SIZE + 1024));
 
         // Write #1.
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, DEFAULT_WRITE_TIMEOUT,
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(records, "response1")
         );
 
@@ -3333,7 +3506,7 @@ public class CoordinatorRuntimeTest {
         when(maxBufferSizeSupplierMock.get()).thenReturn(batchSize - 66);
 
         // Write #2.
-        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, DEFAULT_WRITE_TIMEOUT,
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(records, "response2")
         );
         assertFalse(write2.isCompletedExceptionally());
@@ -3343,7 +3516,7 @@ public class CoordinatorRuntimeTest {
         verify(runtimeMetrics, times(1)).recordBufferCacheDiscarded();
 
         // Write #3.
-        CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP, DEFAULT_WRITE_TIMEOUT,
+        CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP,
             state -> new CoordinatorResult<>(records, "response3")
         );
         assertFalse(write3.isCompletedExceptionally());
@@ -3362,7 +3535,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withWriteTimeout(Duration.ofMillis(30))
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -3398,7 +3571,7 @@ public class CoordinatorRuntimeTest {
         }).collect(Collectors.toList());
 
         // Write #1 with two records.
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(records.subList(0, 2), "response1")
         );
 
@@ -3419,7 +3592,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(List.of(), writer.entries(TP));
 
         // Write #2 with one record.
-        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(records.subList(2, 3), "response2")
         );
 
@@ -3439,7 +3612,7 @@ public class CoordinatorRuntimeTest {
 
         // Write #3 with one record. This one cannot go into the existing batch
         // so the existing batch should be flushed and a new one should be created.
-        CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP,
             state -> new CoordinatorResult<>(records.subList(3, 4), "response3")
         );
 
@@ -3498,7 +3671,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withWriteTimeout(Duration.ofMillis(30))
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -3534,7 +3707,7 @@ public class CoordinatorRuntimeTest {
         }).collect(Collectors.toList());
 
         // Write all the records.
-        CompletableFuture<String> write = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(records, "response1")
         );
 
@@ -3551,7 +3724,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withWriteTimeout(Duration.ofMillis(30))
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -3587,15 +3760,15 @@ public class CoordinatorRuntimeTest {
         }).collect(Collectors.toList());
 
         // Write #1.
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(records.subList(0, 1), "response1"));
 
         // Write #2.
-        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(records.subList(1, 2), "response2"));
 
         // Write #3.
-        CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP,
             state -> new CoordinatorResult<>(records.subList(2, 3), "response3"));
 
         // Verify the state.
@@ -3611,7 +3784,7 @@ public class CoordinatorRuntimeTest {
 
         // Write #4. This write cannot make it in the current batch. So the current batch
         // is flushed. It will fail. So we expect all writes to fail.
-        CompletableFuture<String> write4 = runtime.scheduleWriteOperation("write#4", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write4 = runtime.scheduleWriteOperation("write#4", TP,
             state -> new CoordinatorResult<>(records.subList(3, 4), "response4"));
 
         // Verify the futures.
@@ -3638,7 +3811,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withWriteTimeout(Duration.ofMillis(30))
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -3700,7 +3873,7 @@ public class CoordinatorRuntimeTest {
         }).collect(Collectors.toList());
 
         // Write #1.
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(records.subList(0, 1), "response1"));
 
         // Verify the state.
@@ -3713,7 +3886,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(List.of(), writer.entries(TP));
 
         // Write #2. It should fail.
-        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(records.subList(1, 2), "response2"));
 
         // Verify the futures.
@@ -3737,7 +3910,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withWriteTimeout(Duration.ofMillis(30))
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -3761,7 +3934,7 @@ public class CoordinatorRuntimeTest {
         assertNull(ctx.currentBatch);
 
         // Write #1 with one record.
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(List.of("record#1"), "response1")
         );
 
@@ -3783,7 +3956,6 @@ public class CoordinatorRuntimeTest {
             "transactional-id",
             100L,
             (short) 50,
-            Duration.ofMillis(20),
             state -> new CoordinatorResult<>(List.of("record#2"), "response2"),
             TXN_OFFSET_COMMIT_LATEST_VERSION
         );
@@ -3804,7 +3976,7 @@ public class CoordinatorRuntimeTest {
         ), writer.entries(TP));
 
         // Write #3 with one record.
-        CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP,
             state -> new CoordinatorResult<>(List.of("record#3"), "response3")
         );
 
@@ -3831,8 +4003,7 @@ public class CoordinatorRuntimeTest {
             (short) 50,
             10,
             TransactionResult.COMMIT,
-            TransactionVersion.TV_1.featureLevel(),
-            DEFAULT_WRITE_TIMEOUT
+            TransactionVersion.TV_1.featureLevel()
         );
 
         // Verify that the completion is not committed yet.
@@ -3873,7 +4044,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withWriteTimeout(Duration.ofMillis(30))
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(processor)
                 .withPartitionWriter(writer)
@@ -3900,12 +4071,12 @@ public class CoordinatorRuntimeTest {
         assertNull(ctx.currentBatch);
 
         // Write #1.
-        runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(20),
+        runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(List.of("record1", "record2"), "response1")
         );
 
         // Write #2.
-        runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(20),
+        runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(List.of("record3"), "response2")
         );
 
@@ -3982,7 +4153,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withWriteTimeout(Duration.ofMillis(30))
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(processor)
                 .withPartitionWriter(writer)
@@ -4021,22 +4192,22 @@ public class CoordinatorRuntimeTest {
         }).collect(Collectors.toList());
 
         // Write #1.
-        runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(20),
+        runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(records.subList(0, 1), "response1")
         );
 
         // Write #2.
-        runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(20),
+        runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(records.subList(1, 2), "response2")
         );
 
         // Write #3.
-        runtime.scheduleWriteOperation("write#3", TP, Duration.ofMillis(20),
+        runtime.scheduleWriteOperation("write#3", TP,
             state -> new CoordinatorResult<>(records.subList(2, 3), "response3")
         );
 
         // Write #4.
-        runtime.scheduleWriteOperation("write#4", TP, Duration.ofMillis(20),
+        runtime.scheduleWriteOperation("write#4", TP,
             state -> new CoordinatorResult<>(records.subList(3, 4), "response4")
         );
 
@@ -4063,7 +4234,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(List.of(), writer.entries(TP));
 
         // Write #5.
-        runtime.scheduleWriteOperation("write#5", TP, Duration.ofMillis(20),
+        runtime.scheduleWriteOperation("write#5", TP,
             state -> new CoordinatorResult<>(records.subList(4, 5), "response5")
         );
 
@@ -4172,7 +4343,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withWriteTimeout(Duration.ofMillis(30))
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(processor)
                 .withPartitionWriter(writer)
@@ -4199,7 +4370,7 @@ public class CoordinatorRuntimeTest {
         assertNull(ctx.currentBatch);
 
         // Write #1.
-        runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(20),
+        runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(List.of("record1"), "response1")
         );
 
@@ -4210,13 +4381,12 @@ public class CoordinatorRuntimeTest {
             "transactional-id",
             100L,
             (short) 50,
-            Duration.ofMillis(20),
             state -> new CoordinatorResult<>(List.of("record2"), "response2"),
             TXN_OFFSET_COMMIT_LATEST_VERSION
         );
 
         // Write #3.
-        runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(20),
+        runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(List.of("record3"), "response3")
         );
 
@@ -4334,7 +4504,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withWriteTimeout(Duration.ofMillis(30))
                 .withLoader(loader)
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -4374,20 +4544,20 @@ public class CoordinatorRuntimeTest {
         }).collect(Collectors.toList());
 
         // Write #1.
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(records.subList(0, 1), "response1"));
 
         // Write #2.
-        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(records.subList(1, 2), "response2"));
 
         // Write #3.
-        CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP,
             state -> new CoordinatorResult<>(records.subList(2, 3), "response3"));
 
         // Write #4. This write cannot make it in the current batch. So the current batch
         // is flushed. It will fail. So we expect all writes to fail.
-        CompletableFuture<String> write4 = runtime.scheduleWriteOperation("write#4", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write4 = runtime.scheduleWriteOperation("write#4", TP,
             state -> new CoordinatorResult<>(records.subList(3, 4), "response4"));
 
         // Verify the futures.
@@ -4450,7 +4620,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withWriteTimeout(Duration.ofMillis(30))
                 .withLoader(loader)
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -4473,7 +4643,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(List.of(2L), ctx.coordinator.snapshotRegistry().epochsList());
 
         // Schedule a write operation that does not generate any records.
-        CompletableFuture<String> write = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(List.of(), "response1"));
 
         // The write operation should not be done.
@@ -4500,7 +4670,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withWriteTimeout(Duration.ofMillis(30))
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -4537,14 +4707,14 @@ public class CoordinatorRuntimeTest {
 
         // Let's try to write all the records atomically (the default) to ensure
         // that it fails.
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(records, "write#1")
         );
 
         assertFutureThrows(RecordTooLargeException.class, write1);
 
         // Let's try to write the same records non-atomically.
-        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(records, "write#2", null, true, false)
         );
 
@@ -4610,7 +4780,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withWriteTimeout(Duration.ofMillis(30))
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -4651,7 +4821,7 @@ public class CoordinatorRuntimeTest {
         String record = new String(payload);
 
         // Let's write the first three records.
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(records, "write#1", null, true, false)
         );
 
@@ -4670,7 +4840,7 @@ public class CoordinatorRuntimeTest {
         // pending batch, allocate a new batch, and put the record into it.
         // Note that the batch will fail only when the batch is written because the
         // MemoryBatchBuilder always accept one record.
-        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(List.of(record), "write#2", null, true, false)
         );
 
@@ -4707,7 +4877,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withWriteTimeout(Duration.ofMillis(30))
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -4743,15 +4913,15 @@ public class CoordinatorRuntimeTest {
         }).collect(Collectors.toList());
 
         // Write #1.
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(records.subList(0, 1), "response1", null, true, false));
 
         // Write #2.
-        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(records.subList(1, 2), "response2", null, true, false));
 
         // Write #3.
-        CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP,
             state -> new CoordinatorResult<>(records.subList(2, 3), "response3", null, true, false));
 
         // Verify the state.
@@ -4767,7 +4937,7 @@ public class CoordinatorRuntimeTest {
 
         // Write #4. This write cannot make it in the current batch. So the current batch
         // is flushed. It will fail. So we expect all writes to fail.
-        CompletableFuture<String> write4 = runtime.scheduleWriteOperation("write#4", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write4 = runtime.scheduleWriteOperation("write#4", TP,
             state -> new CoordinatorResult<>(records.subList(3, 4), "response4", null, true, false));
 
         // Verify the futures.
@@ -4795,7 +4965,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withWriteTimeout(Duration.ofMillis(30))
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -4817,7 +4987,7 @@ public class CoordinatorRuntimeTest {
 
         // Write #1, which fails.
         serializer.throwOnNextOperation();
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(List.of("1"), "response1"));
 
         // Write #1 should fail and leave an empty batch.
@@ -4825,7 +4995,7 @@ public class CoordinatorRuntimeTest {
         assertNotNull(ctx.currentBatch);
 
         // Write #2, with no records.
-        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(List.of(), "response2"));
 
         // Write #2 should not be attached to the empty batch.
@@ -4843,8 +5013,7 @@ public class CoordinatorRuntimeTest {
             (short) 50,
             10,
             TransactionResult.COMMIT,
-            TransactionVersion.TV_1.featureLevel(),
-            DEFAULT_WRITE_TIMEOUT
+            TransactionVersion.TV_1.featureLevel()
         );
 
         // Verify that the completion is not committed yet.
@@ -4867,7 +5036,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withWriteTimeout(Duration.ofMillis(30))
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -4901,7 +5070,7 @@ public class CoordinatorRuntimeTest {
 
         // Write #1 with two records.
         long firstBatchTimestamp = timer.time().milliseconds();
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(50),
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(records.subList(0, 2), "response1")
         );
 
@@ -4909,7 +5078,7 @@ public class CoordinatorRuntimeTest {
         assertNotNull(ctx.currentBatch);
 
         // Write #2 with one record.
-        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(50),
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(records.subList(2, 3), "response2")
         );
 
@@ -4920,7 +5089,7 @@ public class CoordinatorRuntimeTest {
         // Write #3 with one record. This one cannot go into the existing batch
         // so the existing batch should be flushed and a new one should be created.
         long secondBatchTimestamp = timer.time().milliseconds();
-        CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP, Duration.ofMillis(50),
+        CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP,
             state -> new CoordinatorResult<>(records.subList(3, 4), "response3")
         );
 
@@ -4981,7 +5150,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withWriteTimeout(Duration.ofMillis(30))
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -5015,7 +5184,7 @@ public class CoordinatorRuntimeTest {
 
         // Write #1 with two records.
         long firstBatchTimestamp = timer.time().milliseconds();
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(50),
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(records.subList(0, 2), "response1")
         );
 
@@ -5023,7 +5192,7 @@ public class CoordinatorRuntimeTest {
         assertNotNull(ctx.currentBatch);
 
         // Write #2 with one record.
-        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(50),
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(records.subList(2, 3), "response2")
         );
 
@@ -5034,7 +5203,7 @@ public class CoordinatorRuntimeTest {
         // Write #3 with one record. This one cannot go into the existing batch
         // so the existing batch should be flushed and a new one should be created.
         long secondBatchTimestamp = timer.time().milliseconds();
-        CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP, Duration.ofMillis(50),
+        CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP,
             state -> new CoordinatorResult<>(records.subList(3, 4), "response3")
         );
 
@@ -5092,7 +5261,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withWriteTimeout(Duration.ofMillis(30))
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -5125,7 +5294,7 @@ public class CoordinatorRuntimeTest {
 
         // Write #1 with the small records, batch will be about half full
         long firstBatchTimestamp = timer.time().milliseconds();
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(50),
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(records, "response1")
         );
 
@@ -5141,7 +5310,7 @@ public class CoordinatorRuntimeTest {
         // Write #2 with the large record. This record is too large to go into the previous batch
         // uncompressed but fits in a new buffer, so we should flush the previous batch and allocate
         // a new one.
-        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(50),
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(largeRecord, "response2")
         );
 
@@ -5179,7 +5348,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withWriteTimeout(Duration.ofMillis(30))
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -5212,7 +5381,7 @@ public class CoordinatorRuntimeTest {
 
         // Write #1 with the small records, batch will be about half full
         long firstBatchTimestamp = timer.time().milliseconds();
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(50),
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(records, "response1")
         );
 
@@ -5230,7 +5399,7 @@ public class CoordinatorRuntimeTest {
         // previous batch and successfully allocate a new batch for this record. The new batch
         // will also trigger an immediate flush.
         long secondBatchTimestamp = timer.time().milliseconds();
-        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(50),
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(largeRecord, "response2")
         );
 
@@ -5266,7 +5435,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withWriteTimeout(Duration.ofMillis(30))
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -5299,7 +5468,7 @@ public class CoordinatorRuntimeTest {
 
         // Write #1 with the small records, batch will be about half full
         long firstBatchTimestamp = timer.time().milliseconds();
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(50),
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(records, "response1")
         );
 
@@ -5320,7 +5489,7 @@ public class CoordinatorRuntimeTest {
         // Write #2 with the large record. This record is too large to go into the previous batch
         // and is not compressible so it should be flushed. It is also too large to fit in a new batch
         // so the write should fail with RecordTooLargeException
-        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(50),
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(largeRecord, "response2")
         );
 
@@ -5359,7 +5528,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(writeTimeout)
+                .withWriteTimeout(writeTimeout)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(processor)
                 .withPartitionWriter(writer)
@@ -5379,15 +5548,15 @@ public class CoordinatorRuntimeTest {
         processor.poll();
 
         // write#1 will be committed and update the high watermark. Record time spent in purgatory.
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, writeTimeout,
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(List.of("record1"), "response1")
         );
         // write#2 will time out sitting in the purgatory. Record time spent in purgatory.
-        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, writeTimeout,
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(List.of("record2"), "response2")
         );
         // write#3 will error while appending. Does not spend time in purgatory.
-        CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP, writeTimeout,
+        CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP,
             state -> {
                 throw new KafkaException("write#3 failed.");
             });
@@ -5447,7 +5616,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(writeTimeout)
+                .withWriteTimeout(writeTimeout)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(processor)
                 .withPartitionWriter(writer)
@@ -5467,7 +5636,7 @@ public class CoordinatorRuntimeTest {
         processor.poll();
 
         // write#1 will be committed and update the high watermark. Record time spent in purgatory.
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, writeTimeout,
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(List.of("record1"), "response1")
         );
 
@@ -5516,7 +5685,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(writeTimeout)
+                .withWriteTimeout(writeTimeout)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(processor)
                 .withPartitionWriter(writer)
@@ -5543,8 +5712,7 @@ public class CoordinatorRuntimeTest {
             (short) 50,
             1,
             TransactionResult.COMMIT,
-            TransactionVersion.TV_1.featureLevel(),
-            writeTimeout
+            TransactionVersion.TV_1.featureLevel()
         );
         processor.poll();
 
@@ -5597,7 +5765,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withDefaultWriteTimeOut(writeTimeout)
+                .withWriteTimeout(writeTimeout)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(processor)
                 .withPartitionWriter(writer)
@@ -5617,7 +5785,7 @@ public class CoordinatorRuntimeTest {
         processor.poll();
 
         // Schedule a write which schedules an async tasks.
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, writeTimeout,
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> {
                 state.executor().schedule(
                     "write#1#task",
@@ -5680,7 +5848,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(clockTimer.time())
                 .withTimer(schedulerTimer)
-                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withWriteTimeout(Duration.ofMillis(30))
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -5702,7 +5870,7 @@ public class CoordinatorRuntimeTest {
         assertNull(ctx.currentBatch);
 
         // Write #1.
-        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
             state -> new CoordinatorResult<>(List.of("record1"), "response1")
         );
         assertFalse(write1.isDone());
@@ -5720,7 +5888,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(2, schedulerTimer.size());
 
         // Write #2.
-        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(20),
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
             state -> new CoordinatorResult<>(List.of("record2"), "response2")
         );
 

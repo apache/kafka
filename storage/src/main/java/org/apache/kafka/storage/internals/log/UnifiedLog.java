@@ -30,22 +30,22 @@ import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.internals.Topic;
+import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.message.DescribeProducersResponseData;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.FileRecords;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MutableRecordBatch;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.RecordValidationStats;
-import org.apache.kafka.common.record.RecordVersion;
-import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MutableRecordBatch;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordVersion;
+import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.PrimitiveRef;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.common.utils.internals.PrimitiveRef;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.RequestLocal;
 import org.apache.kafka.server.common.TransactionVersion;
@@ -71,7 +71,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -83,6 +82,7 @@ import java.util.OptionalLong;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -122,6 +122,7 @@ public class UnifiedLog implements AutoCloseable {
     /* A lock that guards all modifications to the log */
     private final Object lock = new Object();
     private final Map<String, Map<String, String>> metricNames = new HashMap<>();
+    private final AtomicInteger retentionSizeInPercentValue = new AtomicInteger(0);
 
     // localLog The LocalLog instance containing non-empty log segments recovered from disk
     private final LocalLog localLog;
@@ -715,10 +716,29 @@ public class UnifiedLog implements AutoCloseable {
         metricsGroup.newGauge(LogMetricNames.LOG_START_OFFSET, this::logStartOffset, tags);
         metricsGroup.newGauge(LogMetricNames.LOG_END_OFFSET, this::logEndOffset, tags);
         metricsGroup.newGauge(LogMetricNames.SIZE, this::size, tags);
+        metricsGroup.newGauge(LogMetricNames.RETENTION_SIZE_IN_PERCENT, retentionSizeInPercentValue::get, tags);
         metricNames.put(LogMetricNames.NUM_LOG_SEGMENTS, tags);
         metricNames.put(LogMetricNames.LOG_START_OFFSET, tags);
         metricNames.put(LogMetricNames.LOG_END_OFFSET, tags);
         metricNames.put(LogMetricNames.SIZE, tags);
+        metricNames.put(LogMetricNames.RETENTION_SIZE_IN_PERCENT, tags);
+    }
+
+    /**
+     * Calculates the partition size as a percentage of the configured retention size.
+     * This metric is only meaningful for non-tiered topics with size-based retention configured.
+     *
+     * @return The partition size as a percentage of retention.bytes, or 0 if:
+     *         - Remote storage is enabled with remote copy enabled (metric handled by RemoteLogManager)
+     *         - Retention size is not configured (0 or negative)
+     */
+    // Visible for testing
+    int calculateRetentionSizeInPercent() {
+        long retentionSize = localRetentionSize(config(), remoteLogEnabledAndRemoteCopyEnabled());
+        if (!remoteLogEnabledAndRemoteCopyEnabled() && retentionSize > 0) {
+            return (int) ((size() * 100) / retentionSize);
+        }
+        return 0;
     }
 
     public void removeExpiredProducers(long currentTimeMs) {
@@ -937,7 +957,7 @@ public class UnifiedLog implements AutoCloseable {
             localLog.checkIfMemoryMappedBufferClosed();
             producerExpireCheck.cancel(true);
             maybeHandleIOException(
-                    () -> "Error while renaming dir for " + topicPartition() + " in dir " + dir().getParent(),
+                    () -> "Error while taking producer state snapshot for " + topicPartition() + " in dir " + dir().getParent(),
                     () -> {
                         // We take a snapshot at the last written offset to hopefully avoid the need to scan the log
                         // after restarting and to ensure that we cannot inadvertently hit the upgrade optimization
@@ -1160,7 +1180,7 @@ public class UnifiedLog implements AutoCloseable {
                                             // to be consistent with pre-compression bytesRejectedRate recording
                                             brokerTopicStats.topicStats(topicPartition().topic()).bytesRejectedRate().mark(records.sizeInBytes());
                                             brokerTopicStats.allTopicsStats().bytesRejectedRate().mark(records.sizeInBytes());
-                                            throw new RecordTooLargeException("Message batch size is " + batch.sizeInBytes() + " bytes in append to" +
+                                            throw new RecordTooLargeException("Message batch size is " + batch.sizeInBytes() + " bytes in append to " +
                                                     "partition " + topicPartition() + " which exceeds the maximum configured size of " + config().maxMessageSize() + ".");
                                         }
                                     });
@@ -1568,7 +1588,7 @@ public class UnifiedLog implements AutoCloseable {
 
         return new LogAppendInfo(firstOffset, lastOffset, lastLeaderEpochOpt, maxTimestamp,
                 RecordBatch.NO_TIMESTAMP, logStartOffset, RecordValidationStats.EMPTY, sourceCompression,
-                validBytesCount, lastOffsetOfFirstBatch, Collections.emptyList(), LeaderHwChange.NONE);
+                validBytesCount, lastOffsetOfFirstBatch, List.of(), LeaderHwChange.NONE);
     }
 
     /**
@@ -1945,25 +1965,34 @@ public class UnifiedLog implements AutoCloseable {
      * not deletion is enabled, delete any local log segments that are before the log start offset
      */
     public int deleteOldSegments() throws IOException {
-        if (config().delete) {
-            return deleteLogStartOffsetBreachedSegments() +
-                    deleteRetentionSizeBreachedSegments() +
-                    deleteRetentionMsBreachedSegments();
-        } else if (config().compact) {
-            return deleteLogStartOffsetBreachedSegments();
-        } else {
-            // If cleanup.policy is empty and remote storage is enabled, the local log segments will 
-            // be cleaned based on the values of log.local.retention.bytes and log.local.retention.ms
-            if (remoteLogEnabledAndRemoteCopyEnabled()) {
-                return deleteLogStartOffsetBreachedSegments() +
+        int deletedSegments;
+        try {
+            if (config().delete) {
+                deletedSegments = deleteLogStartOffsetBreachedSegments() +
                         deleteRetentionSizeBreachedSegments() +
                         deleteRetentionMsBreachedSegments();
+            } else if (config().compact) {
+                deletedSegments = deleteLogStartOffsetBreachedSegments();
             } else {
-                // If cleanup.policy is empty and remote storage is disabled, we should not delete any local log segments 
-                // unless the log start offset advances through deleteRecords
-                return deleteLogStartOffsetBreachedSegments();
+                // If cleanup.policy is empty and remote storage is enabled, the local log segments will 
+                // be cleaned based on the values of log.local.retention.bytes and log.local.retention.ms
+                if (remoteLogEnabledAndRemoteCopyEnabled()) {
+                    deletedSegments = deleteLogStartOffsetBreachedSegments() +
+                            deleteRetentionSizeBreachedSegments() +
+                            deleteRetentionMsBreachedSegments();
+                } else {
+                    // If cleanup.policy is empty and remote storage is disabled, we should not delete any local log segments 
+                    // unless the log start offset advances through deleteRecords
+                    deletedSegments = deleteLogStartOffsetBreachedSegments();
+                }
             }
+        } finally {
+            // Calculate retentionSizeInPercent in finally block to ensure the metric is updated
+            // even when log deletion encounters errors. This also saves CPU cycles by only
+            // calculating when the log-cleaner thread runs.
+            retentionSizeInPercentValue.set(calculateRetentionSizeInPercent());
         }
+        return deletedSegments;
     }
 
     public interface DeletionCondition {
@@ -2122,7 +2151,7 @@ public class UnifiedLog implements AutoCloseable {
             long maxOffsetInMessages = appendInfo.lastOffset();
 
             if (segment.shouldRoll(new RollParams(config().maxSegmentMs(), config().segmentSize(), appendInfo.maxTimestamp(), appendInfo.lastOffset(), messagesSize, now))) {
-                logger.debug("Rolling new log segment (log_size = {}/{}}, " +
+                logger.debug("Rolling new log segment (log_size = {}/{}, " +
                           "offset_index_size = {}/{}, " +
                           "time_index_size = {}/{}, " +
                           "inactive_time_ms = {}/{}).",
@@ -2292,7 +2321,7 @@ public class UnifiedLog implements AutoCloseable {
     // visible for testing
     public void flushProducerStateSnapshot(Path snapshot) {
         maybeHandleIOException(
-                () -> "Error while deleting producer state snapshot " + snapshot + " for " + topicPartition() + " in dir " + dir().getParent(),
+                () -> "Error while flushing producer state snapshot " + snapshot + " for " + topicPartition() + " in dir " + dir().getParent(),
                 () -> {
                     Utils.flushFileIfExists(snapshot);
                     return null;
@@ -2752,7 +2781,7 @@ public class UnifiedLog implements AutoCloseable {
         return LogSegments.sizeInBytes(segments);
     }
 
-    public static TopicPartition parseTopicPartitionName(File dir) throws IOException {
+    public static TopicPartition parseTopicPartitionName(File dir) {
         return LocalLog.parseTopicPartitionName(dir);
     }
 }

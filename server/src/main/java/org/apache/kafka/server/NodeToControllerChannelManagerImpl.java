@@ -18,6 +18,7 @@
 package org.apache.kafka.server;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.BootstrapConfiguration;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.ManualMetadataUpdater;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
@@ -32,13 +33,12 @@ import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.security.JaasContext;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.common.ControllerRequestCompletionHandler;
 import org.apache.kafka.server.common.NodeToControllerChannelManager;
 import org.apache.kafka.server.config.AbstractKafkaConfig;
-import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 
 import org.slf4j.Logger;
@@ -82,7 +82,7 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
                 buildNetworkClient(controllerInformation),
                 manualMetadataUpdater,
                 controllerNodeProvider,
-                config,
+                config.controllerSocketTimeoutMs(),
                 time,
                 threadName,
                 retryTimeoutMs
@@ -113,6 +113,7 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
                 channelBuilder,
                 logContext
         );
+
         return new NetworkClient(
                 selector,
                 manualMetadataUpdater,
@@ -122,14 +123,16 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
                 50,
                 Selectable.USE_DEFAULT_BUFFER_SIZE,
                 Selectable.USE_DEFAULT_BUFFER_SIZE,
-                Math.min(Integer.MAX_VALUE, (int) Math.min(config.getInt(ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG), retryTimeoutMs)), // request timeout should not exceed the provided retry timeout
+                Math.min(Integer.MAX_VALUE, (int) Math.min(config.controllerSocketTimeoutMs(), retryTimeoutMs)), // request timeout should not exceed the provided retry timeout
                 config.getLong(ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
                 config.getLong(ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
                 time,
                 true,
                 apiVersions,
                 logContext,
-                MetadataRecoveryStrategy.NONE
+                MetadataRecoveryStrategy.NONE,
+                BootstrapConfiguration.DISABLED,
+                false
         );
     }
 

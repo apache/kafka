@@ -17,6 +17,7 @@
 package kafka.server;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.BootstrapConfiguration;
 import org.apache.kafka.clients.ManualMetadataUpdater;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.NetworkClient;
@@ -28,8 +29,8 @@ import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.security.JaasContext;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import java.util.Map;
 
@@ -85,7 +86,9 @@ public class NetworkUtils {
             true,
             new ApiVersions(),
             logContext,
-            MetadataRecoveryStrategy.NONE
+            MetadataRecoveryStrategy.NONE,
+            BootstrapConfiguration.DISABLED,
+            false
         );
     }
 }

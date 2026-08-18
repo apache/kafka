@@ -19,12 +19,12 @@ package org.apache.kafka.metadata.util;
 
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
-import org.apache.kafka.common.record.FileRecords;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.FileLogInputStream.FileChannelRecordBatch;
+import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
@@ -58,7 +58,6 @@ public final class SnapshotFileReader implements AutoCloseable {
     private final CompletableFuture<Void> caughtUpFuture;
     private FileRecords fileRecords;
     private Iterator<FileChannelRecordBatch> batchIterator;
-    private final MetadataRecordSerde serde = new MetadataRecordSerde();
     private long lastOffset = -1L;
     private volatile OptionalLong highWaterMark = OptionalLong.empty();
 
@@ -130,8 +129,7 @@ public final class SnapshotFileReader implements AutoCloseable {
     private void handleControlBatch(FileChannelRecordBatch batch) {
         for (Record record : batch) {
             try {
-                short typeId = ControlRecordType.parseTypeId(record.key());
-                ControlRecordType type = ControlRecordType.fromTypeId(typeId);
+                ControlRecordType type = ControlRecordType.parse(record.key());
                 switch (type) {
                     case LEADER_CHANGE:
                         LeaderChangeMessage message = new LeaderChangeMessage();
@@ -156,7 +154,7 @@ public final class SnapshotFileReader implements AutoCloseable {
         for (Record record : batch) {
             ByteBufferAccessor accessor = new ByteBufferAccessor(record.value());
             try {
-                ApiMessageAndVersion messageAndVersion = serde.read(accessor, record.valueSize());
+                ApiMessageAndVersion messageAndVersion = MetadataRecordSerde.INSTANCE.read(accessor, record.valueSize());
                 messages.add(messageAndVersion);
             } catch (Throwable e) {
                 log.error("unable to read metadata record at offset {}", record.offset(), e);

@@ -55,7 +55,7 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.metadata.LeaderAndIsr;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.test.TestUtils;
@@ -119,7 +119,7 @@ public class TopicCommandTest {
         TopicCommand.PartitionDescription partitionDescription = new TopicCommand.PartitionDescription("test-topic",
                 new TopicPartitionInfo(0, new Node(1, "localhost", 9091), replicas,
                         List.of(new Node(1, "localhost", 9091))),
-                null, false,
+                null,
                 new PartitionReassignment(replicaIds, List.of(2), List.of())
         );
 
@@ -1115,7 +1115,7 @@ public class TopicCommandTest {
                                         broker.metadataCache().getLeaderAndIsr(testTopicName, 0).orElseGet(null));
                                 return partitionState.map(s -> FetchRequest.isValidBrokerId(s.leader())).orElse(false);
                             }
-                    ), CLUSTER_WAIT_MS, String.format("Meta data propogation fail in %s ms", CLUSTER_WAIT_MS));
+                    ), CLUSTER_WAIT_MS, String.format("Metadata propagation fail in %s ms", CLUSTER_WAIT_MS));
 
             String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--under-replicated-partitions"));
             String[] rows = output.split(System.lineSeparator());
@@ -1220,7 +1220,7 @@ public class TopicCommandTest {
             ToolsTestUtils.removeReplicationThrottleForPartitions(adminClient, brokerIds, Set.of(tp));
             TestUtils.waitForCondition(
                     () -> adminClient.listPartitionReassignments().reassignments().get().isEmpty(),
-                    CLUSTER_WAIT_MS,  String.format("reassignmet not finished after %s ms", CLUSTER_WAIT_MS)
+                    CLUSTER_WAIT_MS,  String.format("reassignment not finished after %s ms", CLUSTER_WAIT_MS)
             );
         }
     }

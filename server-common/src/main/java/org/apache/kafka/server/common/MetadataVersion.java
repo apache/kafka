@@ -120,6 +120,19 @@ public enum MetadataVersion {
     // Enables "streams" groups by default for new clusters (KIP-1071).
     IBP_4_2_IV1(29, "4.2", "IV1", false),
 
+    // Enables support for cordoned log dirs
+    // BrokerRegistrationChangeRecord and RegisterBrokerRecord are updated
+    IBP_4_3_IV0(30, "4.3", "IV0", true),
+
+    // IBP_4_4_IV0 enables dead-letter queue support for share groups (KIP-1191).
+    IBP_4_4_IV0(31, "4.4", "IV0", false),
+
+    // Add support for CIDR-based ACL host patterns (KIP-1276).
+    IBP_4_4_IV1(32, "4.4", "IV1", true),
+
+    // Add support for controller unregistration (KIP-1312).
+    IBP_4_4_IV2(33, "4.4", "IV2", true);
+
     //
     // NOTE: MetadataVersions after this point are unstable and may be changed.
     // If users attempt to use an unstable MetadataVersion, they will get an error unless
@@ -127,12 +140,8 @@ public enum MetadataVersion {
     // Please move this comment when updating the LATEST_PRODUCTION constant.
     //
 
-    // New version for the Kafka 4.3.0 release.
-    IBP_4_3_IV0(30, "4.3", "IV0", false);
-
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
-    //   Change expected message in org.apache.kafka.tools.FeatureCommandTest in multiple places (search for "Change expected message")
     public static final String FEATURE_NAME = "metadata.version";
 
     /**
@@ -148,7 +157,7 @@ public enum MetadataVersion {
      * <strong>Think carefully before you update this value. ONCE A METADATA VERSION IS PRODUCTION,
      * IT CANNOT BE CHANGED.</strong>
      */
-    public static final MetadataVersion LATEST_PRODUCTION = IBP_4_2_IV1;
+    public static final MetadataVersion LATEST_PRODUCTION = IBP_4_4_IV2;
     // If you change the value above please also update
     // LATEST_STABLE_METADATA_VERSION version in tests/kafkatest/version.py
 
@@ -208,12 +217,23 @@ public enum MetadataVersion {
         return this.isAtLeast(IBP_4_0_IV1);
     }
 
+    public boolean isCidrAclSupported() {
+        return this.isAtLeast(IBP_4_4_IV1);
+    }
+
     public boolean isMigrationSupported() {
         return this.isAtLeast(MetadataVersion.IBP_3_4_IV0);
     }
 
+    public boolean isCordonedLogDirsSupported() {
+        return this.isAtLeast(MetadataVersion.IBP_4_3_IV0);
+    }
+
     public short registerBrokerRecordVersion() {
-        if (isDirectoryAssignmentSupported()) {
+        if (isCordonedLogDirsSupported()) {
+            // new cordonedLogDirs field
+            return (short) 4;
+        } else if (isDirectoryAssignmentSupported()) {
             // new logDirs field
             return (short) 3;
         } else if (isMigrationSupported()) {
@@ -235,6 +255,10 @@ public enum MetadataVersion {
 
     public boolean isControllerRegistrationSupported() {
         return this.isAtLeast(MetadataVersion.IBP_3_7_IV0);
+    }
+
+    public boolean isControllerUnregistrationSupported() {
+        return this.isAtLeast(MetadataVersion.IBP_4_4_IV2);
     }
 
     public short partitionChangeRecordVersion() {

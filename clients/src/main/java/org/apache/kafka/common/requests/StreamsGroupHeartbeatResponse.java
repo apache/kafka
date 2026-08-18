@@ -59,7 +59,7 @@ public class StreamsGroupHeartbeatResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return Collections.singletonMap(Errors.forCode(data.errorCode()), 1);
+        return Map.of(Errors.forCode(data.errorCode()), 1);
     }
 
     @Override
@@ -83,7 +83,8 @@ public class StreamsGroupHeartbeatResponse extends AbstractResponse {
         INCORRECTLY_PARTITIONED_TOPICS((byte) 2, "One or more topics expected to be copartitioned are not copartitioned."),
         MISSING_INTERNAL_TOPICS((byte) 3, "One or more internal topics are missing."),
         SHUTDOWN_APPLICATION((byte) 4, "A client requested the shutdown of the whole application."),
-        ASSIGNMENT_DELAYED((byte) 5, "The assignment was delayed by the coordinator.");
+        ASSIGNMENT_DELAYED((byte) 5, "The assignment was delayed by the coordinator."),
+        MISSING_CLIENT_TAGS((byte) 6, "One or more required client tags for rack-aware standby task assignment are missing.");
 
         private static final Map<Byte, Status> CODE_TO_STATUS;
 

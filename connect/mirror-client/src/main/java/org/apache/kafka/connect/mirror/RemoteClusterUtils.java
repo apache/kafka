@@ -21,12 +21,13 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
-
+import java.util.regex.Pattern;
 
 /**
  * Convenience tool for multi-cluster environments. Wraps {@link MirrorClient}
@@ -39,6 +40,7 @@ import java.util.concurrent.TimeoutException;
  * </pre>
  * @see MirrorClientConfig for additional properties used by the internal MirrorClient.
  */
+@InterfaceAudience.Public
 public final class RemoteClusterUtils {
 
     // utility class
@@ -98,6 +100,22 @@ public final class RemoteClusterUtils {
             throws InterruptedException, TimeoutException {
         try (MirrorClient client = new MirrorClient(properties)) {
             return client.remoteConsumerOffsets(consumerGroupId, remoteClusterAlias, timeout);
+        }
+    }
+
+    /**
+     * Translates remote consumer groups' offsets into corresponding local offsets. Topics are automatically
+     *  renamed according to the configured {@link ReplicationPolicy}.
+     *  @param properties Map of properties to instantiate a {@link MirrorClient}
+     *  @param remoteClusterAlias The alias of the remote cluster
+     *  @param consumerGroupPattern The regex pattern specifying the consumer groups to translate offsets for
+     *  @param timeout The maximum time to block when consuming from the checkpoints topic
+     *  @throws IllegalArgumentException If any of the arguments are null
+     */
+    public static Map<String, Map<TopicPartition, OffsetAndMetadata>> translateOffsets(Map<String, Object> properties,
+            String remoteClusterAlias, Pattern consumerGroupPattern, Duration timeout) {
+        try (MirrorClient client = new MirrorClient(properties)) {
+            return client.remoteConsumerOffsets(consumerGroupPattern, remoteClusterAlias, timeout);
         }
     }
 }

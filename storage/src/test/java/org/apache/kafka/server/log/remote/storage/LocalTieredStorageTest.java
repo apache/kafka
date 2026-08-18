@@ -20,12 +20,12 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.common.record.FileRecords;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.storage.internals.log.LogFileUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -91,7 +91,7 @@ public final class LocalTieredStorageTest {
         Map<String, Object> config = new HashMap<>();
         config.put(LocalTieredStorage.STORAGE_DIR_CONFIG, storageDir);
         config.put(LocalTieredStorage.DELETE_ON_CLOSE_CONFIG, "true");
-        config.put(LocalTieredStorage.BROKER_ID, 1);
+        config.put(LocalTieredStorage.NODE_ID, 1);
         config.putAll(extraConfig);
 
         tieredStorage.configure(config);

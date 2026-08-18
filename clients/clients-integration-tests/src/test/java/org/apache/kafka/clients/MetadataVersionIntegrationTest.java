@@ -17,7 +17,6 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.clients.admin.FeatureUpdate;
-import org.apache.kafka.clients.admin.UpdateFeaturesOptions;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTests;
@@ -47,8 +46,7 @@ public class MetadataVersionIntegrationTest {
             // Update to new version
             short updateVersion = MetadataVersion.IBP_3_7_IV1.featureLevel();
             var updateResult = admin.updateFeatures(
-                    Map.of("metadata.version", new FeatureUpdate(updateVersion, FeatureUpdate.UpgradeType.UPGRADE)),
-                    new UpdateFeaturesOptions());
+                    Map.of("metadata.version", new FeatureUpdate(updateVersion, FeatureUpdate.UpgradeType.UPGRADE)));
             updateResult.all().get();
 
             // Verify that new version is visible on broker
@@ -69,8 +67,7 @@ public class MetadataVersionIntegrationTest {
         try (var admin = clusterInstance.admin()) {
             short updateVersion = MetadataVersion.IBP_3_9_IV0.featureLevel();
             var updateResult = admin.updateFeatures(
-                    Map.of("metadata.version", new FeatureUpdate(updateVersion, FeatureUpdate.UpgradeType.UPGRADE)),
-                    new UpdateFeaturesOptions());
+                    Map.of("metadata.version", new FeatureUpdate(updateVersion, FeatureUpdate.UpgradeType.UPGRADE)));
             updateResult.all().get();
         }
     }

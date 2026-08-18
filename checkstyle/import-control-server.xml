@@ -31,7 +31,7 @@
   <allow pkg="java.security" />
   <allow pkg="javax.net.ssl" />
   <allow pkg="javax.security" />
-  <allow pkg="net.jqwik.api" />
+  <allow pkg="org.apache.commons.validator.routines" />
 
   <!-- no one depends on the server -->
   <disallow pkg="kafka" />
@@ -82,12 +82,16 @@
   <allow pkg="org.apache.kafka.raft" />
 
   <subpackage name="server">
+    <allow class="kafka.server.KafkaBroker" />
+    <allow class="kafka.server.BrokerServer" />
     <allow pkg="javax.crypto" />
+    <allow class="org.apache.kafka.controller.ReplicationControlManager" />
     <allow pkg="org.apache.kafka.server" />
     <allow pkg="org.apache.kafka.image" />
     <allow pkg="org.apache.kafka.network" />
     <allow pkg="org.apache.kafka.storage.internals.log" />
     <allow pkg="org.apache.kafka.storage.internals.checkpoint" />
+    <allow pkg="org.apache.kafka.snapshot" />
     <allow pkg="org.apache.logging.log4j" />
     <subpackage name="metrics">
       <allow class="org.apache.kafka.server.authorizer.AuthorizableRequestContext" />
@@ -105,14 +109,20 @@
   </subpackage>
 
   <subpackage name="security">
+    <allow pkg="org.apache.commons" />
+    <allow pkg="org.apache.directory" />
     <allow pkg="org.apache.kafka.common.resource" />
     <allow pkg="org.apache.kafka.network" />
     <allow pkg="org.apache.kafka.server" />
     <allow pkg="org.apache.kafka.server.authorizer" />
+    <allow class="org.apache.kafka.controller.MockAclMutator" />
+    <allow pkg="org.apache.mina.core.service" />
   </subpackage>
 
   <subpackage name="network">
     <allow pkg="com.fasterxml.jackson" />
+    <allow pkg="org.apache.kafka.network.metrics" />
+    <allow pkg="org.apache.kafka.server" />
   </subpackage>
 
 </import-control>

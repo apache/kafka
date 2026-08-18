@@ -144,11 +144,7 @@ public interface Task {
      */
     void updateInputPartitions(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> allTopologyNodesToSourceTopics);
 
-    /**
-     * @param enforceCheckpoint if true the task would always execute the checkpoint;
-     *                          otherwise it may skip if the state has not advanced much
-     */
-    void maybeCheckpoint(final boolean enforceCheckpoint);
+    void maybeCheckpoint();
 
     void markChangelogAsCorrupted(final Collection<TopicPartition> partitions);
 
@@ -187,6 +183,16 @@ public interface Task {
     default void recordProcessBatchTime(final long processBatchTime) {
     }
 
+    /**
+     * Record terminal-node e2e latency for everything buffered since the last flush against a single
+     * wall-clock time. Must be called on every path that can forward to a terminal node -- the end of
+     * a processing batch, punctuation, and flushing the caches -- with a clock read taken after that
+     * work completed, so the processing delay is part of the measured latency.
+     * No-op for tasks that do not forward to terminal nodes.
+     */
+    default void maybeFlushTerminalE2ELatency(final long endMs) {
+    }
+
     default void recordProcessTimeRatioAndBufferSize(final long allTaskProcessMs, final long now) {
     }
 
@@ -217,7 +223,11 @@ public interface Task {
 
     void clearTaskTimeout();
 
-    void recordRestoration(final Time time, final long numRecords, final boolean initRemaining);
+    /**
+     * {@code numRecords} feeds restore-total/restore-rate; {@code numOffsets} feeds the offset-based
+     * remaining-records metric (or initialises it when {@code initRemaining} is true).
+     */
+    void recordRestoration(final Time time, final long numRecords, final long numOffsets, final boolean initRemaining);
 
     // task status inquiry
 
@@ -241,6 +251,10 @@ public interface Task {
     }
 
     boolean commitNeeded();
+
+    default long approximateNumUncommittedBytes() {
+        return 0;
+    }
 
     default boolean commitRequested() {
         return false;

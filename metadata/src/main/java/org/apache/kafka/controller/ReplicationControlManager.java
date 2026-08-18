@@ -78,7 +78,7 @@ import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.requests.ApiError;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
@@ -627,7 +627,8 @@ public class ReplicationControlManager {
     ControllerResult<CreateTopicsResponseData> createTopics(
         ControllerRequestContext context,
         CreateTopicsRequestData request,
-        Set<String> describable
+        Set<String> describable,
+        boolean forwarded
     ) {
         Map<String, ApiError> topicErrors = new HashMap<>();
         List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
@@ -657,7 +658,7 @@ public class ReplicationControlManager {
             List<ApiMessageAndVersion> configRecords;
             if (keyToOps != null) {
                 ControllerResult<ApiError> configResult =
-                    configurationControl.incrementalAlterConfig(configResource, keyToOps, true);
+                    configurationControl.incrementalAlterConfig(configResource, keyToOps, true, forwarded);
                 if (configResult.response().isFailure()) {
                     topicErrors.put(topic.name(), configResult.response());
                     continue;
@@ -1133,9 +1134,9 @@ public class ReplicationControlManager {
                     partitionId,
                     new LeaderAcceptor(clusterControl, partition),
                     featureControl.metadataVersionOrThrow(),
-                    getTopicEffectiveMinIsr(topic.name)
-                )
-                    .setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled());
+                    getTopicEffectiveMinIsr(topic.name),
+                    featureControl.isElrFeatureEnabled()
+                );
                 if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name())) {
                     builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
                 }
@@ -1210,7 +1211,7 @@ public class ReplicationControlManager {
     }
 
     /**
-     * Validates that a batch of topics will create less than {@value MAX_PARTITIONS_PER_BATCH}. Exceeding this number of topics per batch
+     * Validates that a batch of topics will create at most {@value MAX_PARTITIONS_PER_BATCH}. Exceeding this number of topics per batch
      * has led to out-of-memory exceptions. We use this validation to fail earlier to avoid allocating the memory.
      * Validates an upper bound number of partitions. The actual number may be smaller if some topics are misconfigured.
      *
@@ -1219,7 +1220,7 @@ public class ReplicationControlManager {
      * @throws PolicyViolationException if total number of partitions exceeds {@value MAX_PARTITIONS_PER_BATCH}.
      */
     static void validateTotalNumberOfPartitions(CreateTopicsRequestData request, int defaultNumPartitions) {
-        int totalPartitions = 0;
+        long totalPartitions = 0;
         for (CreatableTopic topic: request.topics()) {
             if (topic.assignments().isEmpty()) {
                 if (topic.numPartitions() == -1) {
@@ -1230,10 +1231,9 @@ public class ReplicationControlManager {
             } else {
                 totalPartitions += topic.assignments().size();
             }
-
-        }
-        if (totalPartitions > MAX_PARTITIONS_PER_BATCH) {
-            throw new PolicyViolationException("Excessively large number of partitions per request.");
+            if (totalPartitions > MAX_PARTITIONS_PER_BATCH) {
+                throw new PolicyViolationException("Excessively large number of partitions per request.");
+            }
         }
     }
 
@@ -1267,14 +1267,14 @@ public class ReplicationControlManager {
         // this case to give the leader an opportunity to find the new controller.
         if (partitionData.leaderEpoch() > partition.leaderEpoch) {
             log.debug("Rejecting AlterPartition request from node {} for {}-{} because " +
-                    "the current leader epoch is {}, which is greater than the local value {}. {}",
+                    "the current leader epoch is {}, which is lower than the request value {}. {}",
                 brokerId, topic.name, partitionId, partition.leaderEpoch, partitionData.leaderEpoch(),
                 logPartitionChangeInfo(partition, partitionData.newIsrWithEpochs()));
             return NOT_CONTROLLER;
         }
         if (partitionData.partitionEpoch() > partition.partitionEpoch) {
             log.debug("Rejecting AlterPartition request from node {} for {}-{} because " +
-                    "the current partition epoch is {}, which is greater than the local value {}. {}",
+                    "the current partition epoch is {}, which is lower than the request value {}. {}",
                 brokerId, topic.name, partitionId, partition.partitionEpoch, partitionData.partitionEpoch(),
                 logPartitionChangeInfo(partition, partitionData.newIsrWithEpochs()));
             return NOT_CONTROLLER;
@@ -1531,6 +1531,35 @@ public class ReplicationControlManager {
         }
     }
 
+    /**
+     * Generates the appropriate record to handle a list of directories that are cordoned.
+     *
+     * @param brokerId     The broker id.
+     * @param brokerEpoch  The broker epoch.
+     * @param cordonedDirs The list of directories that are cordoned.
+     * @param records      The record list to append to.
+     */
+    void handleDirectoriesCordoned(
+            int brokerId,
+            long brokerEpoch,
+            List<Uuid> cordonedDirs,
+            List<ApiMessageAndVersion> records
+    ) {
+        // cordonedDirs is null until a broker has caught up with the latest metadata, so just ignore
+        if (cordonedDirs == null) return;
+        BrokerRegistration registration = clusterControl.registration(brokerId);
+        boolean cordonedDirsChanged = registration.cordonedDirChanged(cordonedDirs);
+        if (cordonedDirsChanged) {
+            records.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
+                    setBrokerId(brokerId).setBrokerEpoch(brokerEpoch).
+                    setCordonedLogDirs(cordonedDirs),
+                    (short) 3));
+            if (log.isDebugEnabled()) {
+                log.debug("Directories {} in broker {} marked cordoned", cordonedDirs, brokerId);
+            }
+        }
+    }
+
     ControllerResult<ElectLeadersResponseData> electLeaders(ElectLeadersRequestData request) {
         ElectionType electionType = electionType(request.electionType());
         List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
@@ -1619,10 +1648,10 @@ public class ReplicationControlManager {
             partitionId,
             new LeaderAcceptor(clusterControl, partition),
             featureControl.metadataVersionOrThrow(),
-            getTopicEffectiveMinIsr(topic)
+            getTopicEffectiveMinIsr(topic),
+            featureControl.isElrFeatureEnabled()
         )
             .setElection(election)
-            .setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled())
             .setDefaultDirProvider(clusterDescriber)
             .build();
         if (record.isEmpty()) {
@@ -1666,6 +1695,9 @@ public class ReplicationControlManager {
             request.currentMetadataOffset());
         if (featureControl.metadataVersionOrThrow().isDirectoryAssignmentSupported()) {
             handleDirectoriesOffline(brokerId, brokerEpoch, request.offlineLogDirs(), records);
+        }
+        if (featureControl.metadataVersionOrThrow().isCordonedLogDirsSupported()) {
+            handleDirectoriesCordoned(brokerId, brokerEpoch, request.cordonedLogDirs(), records);
         }
         boolean isCaughtUp = request.currentMetadataOffset() >= registerBrokerRecordOffset;
         BrokerHeartbeatReply reply = new BrokerHeartbeatReply(isCaughtUp,
@@ -1783,10 +1815,10 @@ public class ReplicationControlManager {
                 topicPartition.partitionId(),
                 new LeaderAcceptor(clusterControl, partition),
                 featureControl.metadataVersionOrThrow(),
-                getTopicEffectiveMinIsr(topic.name)
+                getTopicEffectiveMinIsr(topic.name),
+                featureControl.isElrFeatureEnabled()
             )
                 .setElection(PartitionChangeBuilder.Election.PREFERRED)
-                .setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled())
                 .setDefaultDirProvider(clusterDescriber)
                 .build().ifPresent(records::add);
         }
@@ -1983,6 +2015,10 @@ public class ReplicationControlManager {
                     "assignment includes broker " + brokerId + ", but no such broker is " +
                     "registered.");
             }
+            if (!clusterControl.brokerRegistrations().get(brokerId).hasUncordonedDirs()) {
+                throw new InvalidReplicaAssignmentException("The manual partition " +
+                    "assignment includes broker " + brokerId + ", but all its log directories are cordoned.");
+            }
             if (brokerId.equals(prevBrokerId)) {
                 throw new InvalidReplicaAssignmentException("The manual partition " +
                     "assignment includes the broker " + prevBrokerId + " more than " +
@@ -2061,9 +2097,9 @@ public class ReplicationControlManager {
                 topicIdPart.partitionId(),
                 new LeaderAcceptor(clusterControl, partition, isAcceptableLeader),
                 featureControl.metadataVersionOrThrow(),
-                getTopicEffectiveMinIsr(topic.name)
+                getTopicEffectiveMinIsr(topic.name),
+                featureControl.isElrFeatureEnabled()
             );
-            builder.setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled());
             if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
                 builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
             }
@@ -2181,9 +2217,9 @@ public class ReplicationControlManager {
             tp.partitionId(),
             new LeaderAcceptor(clusterControl, part),
             featureControl.metadataVersionOrThrow(),
-            getTopicEffectiveMinIsr(topicName)
+            getTopicEffectiveMinIsr(topicName),
+            featureControl.isElrFeatureEnabled()
         );
-        builder.setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled());
         if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicName)) {
             builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
         }
@@ -2247,9 +2283,9 @@ public class ReplicationControlManager {
             tp.partitionId(),
             new LeaderAcceptor(clusterControl, part),
             featureControl.metadataVersionOrThrow(),
-            getTopicEffectiveMinIsr(topics.get(tp.topicId()).name)
+            getTopicEffectiveMinIsr(topics.get(tp.topicId()).name),
+            featureControl.isElrFeatureEnabled()
         );
-        builder.setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled());
         if (!reassignment.replicas().equals(currentReplicas)) {
             builder.setTargetReplicas(reassignment.replicas());
         }
@@ -2330,7 +2366,8 @@ public class ReplicationControlManager {
                                     partitionIndex,
                                     new LeaderAcceptor(clusterControl, partitionRegistration),
                                     featureControl.metadataVersionOrThrow(),
-                                    getTopicEffectiveMinIsr(topicName)
+                                    getTopicEffectiveMinIsr(topicName),
+                                    featureControl.isElrFeatureEnabled()
                             )
                                     .setDirectory(brokerId, dirId)
                                     .setDefaultDirProvider(clusterDescriber)

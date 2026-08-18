@@ -23,15 +23,17 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.RecordBatch
+import org.apache.kafka.common.record.internal.RecordBatch
 import org.apache.kafka.common.requests.{RequestHeader, TransactionResult, WriteTxnMarkersRequest, WriteTxnMarkersResponse}
 import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.common.utils.internals.LogContext
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.{Node, TopicPartition}
-import org.apache.kafka.coordinator.transaction.{TransactionMetadata, TransactionState}
+import org.apache.kafka.coordinator.transaction.{CoordinatorEpochAndTxnMetadata, TransactionMetadata, TransactionState}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{MetadataVersion, TransactionVersion}
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
-import org.apache.kafka.server.util.RequestAndCompletionHandler
+import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -86,9 +88,9 @@ class TransactionMarkerChannelManagerTest {
     when(txnStateManager.partitionFor(transactionalId2))
       .thenReturn(txnTopicPartition2)
     when(txnStateManager.getTransactionState(ArgumentMatchers.eq(transactionalId1)))
-      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))))
+      .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))))
     when(txnStateManager.getTransactionState(ArgumentMatchers.eq(transactionalId2)))
-      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata2))))
+      .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata2))))
     when(metadataCache.metadataVersion())
       .thenReturn(MetadataVersion.latestProduction())
   }
@@ -220,7 +222,7 @@ class TransactionMarkerChannelManagerTest {
       // COORDINATOR_LOAD_IN_PROGRESS
       Left(Errors.COORDINATOR_LOAD_IN_PROGRESS),
       // "Newly loaded" transaction state with the new epoch.
-      Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch2, txnMetadata2)))
+      Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch2, txnMetadata2)))
     )
 
     clientResponses.foreach { clientResponse =>
@@ -251,7 +253,7 @@ class TransactionMarkerChannelManagerTest {
 
         // Now drain and complete the marker from the new epoch.
         when(txnStateManager.getTransactionState(ArgumentMatchers.eq(transactionalId2)))
-          .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch2, txnMetadata2))))
+          .thenReturn(Right(Some(new CoordinatorEpochAndTxnMetadata(coordinatorEpoch2, txnMetadata2))))
         val requests2 = channelManager.generateRequests().asScala
         assertEquals(1, requests2.size)
         requests2.head.handler.onComplete(successfulClientResponse)
@@ -625,6 +627,35 @@ class TransactionMarkerChannelManagerTest {
     assertEquals(1, metrics.count { case (k, _) =>
       k.getMBeanName == "kafka.coordinator.transaction:type=TransactionMarkerChannelManager,name=LogAppendRetryQueueSize"
     })
+  }
+
+  @Test
+  def shouldEnableApiVersionDiscoveryInFactoryMethod(): Unit = {
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
+    val metrics = new Metrics()
+    val logContext = new LogContext()
+    try {
+      val channelManager = TransactionMarkerChannelManager(
+        config,
+        metrics,
+        metadataCache,
+        txnStateManager,
+        time,
+        logContext
+      )
+      try {
+        val field = classOf[InterBrokerSendThread].getDeclaredField("networkClient")
+        field.setAccessible(true)
+        val client = field.get(channelManager).asInstanceOf[NetworkClient]
+        assertTrue(client.discoverBrokerVersions(),
+          "TransactionMarkerChannelManager should enable API version discovery to " +
+            "ensure compatibility during rolling upgrades")
+      } finally {
+        channelManager.shutdown()
+      }
+    } finally {
+      metrics.close()
+    }
   }
 
   /**

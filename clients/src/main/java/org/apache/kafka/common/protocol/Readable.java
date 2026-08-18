@@ -19,7 +19,7 @@ package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.types.RawTaggedField;
-import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;

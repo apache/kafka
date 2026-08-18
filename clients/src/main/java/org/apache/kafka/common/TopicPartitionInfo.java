@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -25,6 +27,7 @@ import java.util.stream.Collectors;
 /**
  * A class containing leadership, replicas and ISR information for a topic partition.
  */
+@InterfaceAudience.Public
 public class TopicPartitionInfo {
     private final int partition;
     private final Node leader;
@@ -37,7 +40,7 @@ public class TopicPartitionInfo {
      * Create an instance of this class with the provided parameters.
      *
      * @param partition the partition id
-     * @param leader the leader of the partition or {@link Node#noNode()} if there is none.
+     * @param leader the leader of the partition or null if there is none.
      * @param replicas the replicas of the partition in the same order as the replica assignment (the preferred replica
      *                 is the head of the list)
      * @param isr the in-sync replicas

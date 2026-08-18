@@ -16,8 +16,11 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.StateStore;
@@ -33,6 +36,7 @@ import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,7 +68,7 @@ public class CachingKeyValueStore
     private Thread streamThread;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
     private final Position position;
-    private final boolean timestampedSchema;
+    private final CacheType cacheType;
 
     @FunctionalInterface
     public interface CacheQueryHandler {
@@ -88,10 +92,10 @@ public class CachingKeyValueStore
         );
 
 
-    CachingKeyValueStore(final KeyValueStore<Bytes, byte[]> underlying, final boolean timestampedSchema) {
+    CachingKeyValueStore(final KeyValueStore<Bytes, byte[]> underlying, final CacheType cacheType) {
         super(underlying);
         position = Position.emptyPosition();
-        this.timestampedSchema = timestampedSchema;
+        this.cacheType = cacheType;
     }
 
     @Override
@@ -128,7 +132,6 @@ public class CachingKeyValueStore
     public <R> QueryResult<R> query(final Query<R> query,
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
-
         final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
         final QueryResult<R> result;
 
@@ -186,7 +189,7 @@ public class CachingKeyValueStore
                 final LRUCacheEntry lruCacheEntry = internalContext.cache().get(cacheName, key);
                 if (lruCacheEntry != null) {
                     final byte[] rawValue;
-                    if (timestampedSchema && !WrappedStateStore.isTimestamped(wrapped()) && !StoreQueryUtils.isAdapter(wrapped())) {
+                    if (cacheType == CacheType.TIMESTAMPED_KEY_VALUE_STORE && !WrappedStateStore.isTimestamped(wrapped()) && !StoreQueryUtils.isAdapter(wrapped())) {
                         rawValue = ValueAndTimestampDeserializer.rawValue(lruCacheEntry.value());
                     } else {
                         rawValue = lruCacheEntry.value();
@@ -295,7 +298,7 @@ public class CachingKeyValueStore
         lock.writeLock().lock();
         try {
             validateStoreOpen();
-            final byte[] v = getInternal(key);
+            final byte[] v = getInternal(key, wrapped());
             if (v == null) {
                 putInternal(key, value);
             }
@@ -334,109 +337,165 @@ public class CachingKeyValueStore
     }
 
     private byte[] deleteInternal(final Bytes key) {
-        final byte[] v = getInternal(key);
+        final byte[] v = getInternal(key, wrapped());
         putInternal(key, null);
         return v;
     }
 
     @Override
     public byte[] get(final Bytes key) {
+        return getInternal(key, wrapped());
+    }
+
+    private byte[] getInternal(final Bytes key, final ReadOnlyKeyValueStore<Bytes, byte[]> underlying) {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
-        final Lock theLock;
-        if (Thread.currentThread().equals(streamThread)) {
-            theLock = lock.writeLock();
-        } else {
-            theLock = lock.readLock();
-        }
+        final Lock theLock = Thread.currentThread().equals(streamThread) ? lock.writeLock() : lock.readLock();
         theLock.lock();
         try {
             validateStoreOpen();
-            return getInternal(key);
+            LRUCacheEntry entry = null;
+            if (internalContext.cache() != null) {
+                entry = internalContext.cache().get(cacheName, key);
+            }
+            if (entry == null) {
+                final byte[] rawValue = underlying.get(key);
+                if (rawValue == null) {
+                    return null;
+                }
+                // only update the cache if this call is on the streamThread
+                // as we don't want other threads to trigger an eviction/flush
+                if (Thread.currentThread().equals(streamThread)) {
+                    internalContext.cache().put(cacheName, key, new LRUCacheEntry(rawValue));
+                }
+                return rawValue;
+            } else {
+                return entry.value();
+            }
         } finally {
             theLock.unlock();
-        }
-    }
-
-    private byte[] getInternal(final Bytes key) {
-        LRUCacheEntry entry = null;
-        if (internalContext.cache() != null) {
-            entry = internalContext.cache().get(cacheName, key);
-        }
-        if (entry == null) {
-            final byte[] rawValue = wrapped().get(key);
-            if (rawValue == null) {
-                return null;
-            }
-            // only update the cache if this call is on the streamThread
-            // as we don't want other threads to trigger an eviction/flush
-            if (Thread.currentThread().equals(streamThread)) {
-                internalContext.cache().put(cacheName, key, new LRUCacheEntry(rawValue));
-            }
-            return rawValue;
-        } else {
-            return entry.value();
         }
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                                  final Bytes to) {
-        if (Objects.nonNull(from) && Objects.nonNull(to) && from.compareTo(to) > 0) {
-            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
-                "This may be due to range arguments set in the wrong order, " +
-                "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                "Note that the built-in numerical serdes do not follow this for negative numbers");
-            return KeyValueIterators.emptyIterator();
-        }
-
-        validateStoreOpen();
-        final KeyValueIterator<Bytes, byte[]> storeIterator = wrapped().range(from, to);
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = internalContext.cache().range(cacheName, from, to);
-        return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator, true);
+        return rangeInternal(from, to, wrapped(), true);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from,
                                                         final Bytes to) {
-        if (Objects.nonNull(from) && Objects.nonNull(to) && from.compareTo(to) > 0) {
+        return rangeInternal(from, to, wrapped(), false);
+    }
+
+    private KeyValueIterator<Bytes, byte[]> rangeInternal(final Bytes from,
+                                                          final Bytes to,
+                                                          final ReadOnlyKeyValueStore<Bytes, byte[]> underlying,
+                                                          final boolean forward) {
+        if (from != null && to != null && from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
                 "This may be due to range arguments set in the wrong order, " +
                 "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
                 "Note that the built-in numerical serdes do not follow this for negative numbers");
             return KeyValueIterators.emptyIterator();
         }
-
         validateStoreOpen();
-        final KeyValueIterator<Bytes, byte[]> storeIterator = wrapped().reverseRange(from, to);
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = internalContext.cache().reverseRange(cacheName, from, to);
-        return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator, false);
+        final KeyValueIterator<Bytes, byte[]> storeIterator = forward ? underlying.range(from, to) : underlying.reverseRange(from, to);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = forward ?
+            internalContext.cache().range(cacheName, from, to) :
+            internalContext.cache().reverseRange(cacheName, from, to);
+        return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator, forward);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
+        return allInternal(wrapped(), true);
+    }
+
+    @Override
+    public KeyValueIterator<Bytes, byte[]> reverseAll() {
+        return allInternal(wrapped(), false);
+    }
+
+    private KeyValueIterator<Bytes, byte[]> allInternal(final ReadOnlyKeyValueStore<Bytes, byte[]> underlying,
+                                                        final boolean forward) {
         validateStoreOpen();
-        final KeyValueIterator<Bytes, byte[]> storeIterator = wrapped().all();
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = internalContext.cache().all(cacheName);
-        return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator, true);
+        final KeyValueIterator<Bytes, byte[]> storeIterator = forward ? underlying.all() : underlying.reverseAll();
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = forward ?
+            internalContext.cache().all(cacheName) :
+            internalContext.cache().reverseAll(cacheName);
+        return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator, forward);
     }
 
     @Override
     public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix, final PS prefixKeySerializer) {
+        return prefixScanInternal(prefix, prefixKeySerializer, wrapped());
+    }
+
+    private <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScanInternal(final P prefix,
+                                                                                              final PS prefixKeySerializer,
+                                                                                              final ReadOnlyKeyValueStore<Bytes, byte[]> underlying) {
         validateStoreOpen();
-        final KeyValueIterator<Bytes, byte[]> storeIterator = wrapped().prefixScan(prefix, prefixKeySerializer);
+        final KeyValueIterator<Bytes, byte[]> storeIterator = underlying.prefixScan(prefix, prefixKeySerializer);
+        // headers aren't needed because the prefix already arrives serialized
         final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
-        final Bytes to = Bytes.increment(from);
+        final Bytes to = ByteUtils.increment(from);
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = internalContext.cache().range(cacheName, from, to, false);
         return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator, true);
     }
 
     @Override
-    public KeyValueIterator<Bytes, byte[]> reverseAll() {
-        validateStoreOpen();
-        final KeyValueIterator<Bytes, byte[]> storeIterator = wrapped().reverseAll();
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = internalContext.cache().reverseAll(cacheName);
-        return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator, false);
+    public ReadOnlyKeyValueStore<Bytes, byte[]> readOnly(final IsolationLevel isolationLevel) {
+        Objects.requireNonNull(isolationLevel, "isolationLevel cannot be null");
+        if (isolationLevel == IsolationLevel.READ_COMMITTED) {
+            return wrapped().readOnly(isolationLevel);
+        }
+        return new ReadOnlyView(wrapped().readOnly(isolationLevel));
+    }
+
+    private final class ReadOnlyView implements ReadOnlyKeyValueStore<Bytes, byte[]> {
+
+        private final ReadOnlyKeyValueStore<Bytes, byte[]> underlying;
+
+        ReadOnlyView(final ReadOnlyKeyValueStore<Bytes, byte[]> underlying) {
+            this.underlying = underlying;
+        }
+
+        @Override
+        public byte[] get(final Bytes key) {
+            return getInternal(key, underlying);
+        }
+
+        @Override
+        public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
+            return rangeInternal(from, to, underlying, true);
+        }
+
+        @Override
+        public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from, final Bytes to) {
+            return rangeInternal(from, to, underlying, false);
+        }
+
+        @Override
+        public KeyValueIterator<Bytes, byte[]> all() {
+            return allInternal(underlying, true);
+        }
+
+        @Override
+        public KeyValueIterator<Bytes, byte[]> reverseAll() {
+            return allInternal(underlying, false);
+        }
+
+        @Override
+        public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix, final PS prefixKeySerializer) {
+            return prefixScanInternal(prefix, prefixKeySerializer, underlying);
+        }
+
+        @Override
+        public long approximateNumEntries() {
+            return underlying.approximateNumEntries();
+        }
     }
 
     @Override
@@ -452,13 +511,13 @@ public class CachingKeyValueStore
     }
 
     @Override
-    public void flush() {
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
         validateStoreOpen();
         lock.writeLock().lock();
         try {
             validateStoreOpen();
             internalContext.cache().flush(cacheName);
-            wrapped().flush();
+            wrapped().commit(changelogOffsets);
         } finally {
             lock.writeLock().unlock();
         }
@@ -504,5 +563,11 @@ public class CachingKeyValueStore
         } finally {
             lock.writeLock().unlock();
         }
+    }
+
+    public enum CacheType {
+        KEY_VALUE_STORE,
+        TIMESTAMPED_KEY_VALUE_STORE,
+        TIMESTAMPED_KEY_VALUE_STORE_WITH_HEADERS
     }
 }

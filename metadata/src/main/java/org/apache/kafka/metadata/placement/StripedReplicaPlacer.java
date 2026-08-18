@@ -404,7 +404,7 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
 
     private static void throwInvalidReplicationFactorIfZero(int numUnfenced) {
         if (numUnfenced == 0) {
-            throw new InvalidReplicationFactorException("All brokers are currently fenced.");
+            throw new InvalidReplicationFactorException("All brokers are currently fenced, or have all their log directories cordoned.");
         }
     }
 
@@ -412,7 +412,7 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
         if (replicationFactor > numTotalBrokers) {
             throw new InvalidReplicationFactorException("The target replication factor " +
                     "of " + replicationFactor + " cannot be reached because only " +
-                    numTotalBrokers + " broker(s) are registered.");
+                    numTotalBrokers + " broker(s) are registered or some brokers have all their log directories cordoned.");
         }
     }
 

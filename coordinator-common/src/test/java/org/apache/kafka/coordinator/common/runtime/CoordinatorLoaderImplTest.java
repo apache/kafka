@@ -19,12 +19,12 @@ package org.apache.kafka.coordinator.common.runtime;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.EndTransactionMarker;
-import org.apache.kafka.common.record.FileRecords;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.EndTransactionMarker;
+import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -41,7 +41,6 @@ import org.mockito.invocation.InvocationOnMock;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -139,7 +138,7 @@ class CoordinatorLoaderImplTest {
             when(log.logStartOffset()).thenReturn(0L);
             when(log.highWatermark()).thenReturn(0L);
 
-            FetchDataInfo readResult1 = logReadResult(0, Arrays.asList(
+            FetchDataInfo readResult1 = logReadResult(0, List.of(
                 new SimpleRecord("k1".getBytes(), "v1".getBytes()),
                 new SimpleRecord("k2".getBytes(), "v2".getBytes())
             ));
@@ -147,7 +146,7 @@ class CoordinatorLoaderImplTest {
             when(log.read(0L, 1000, FetchIsolation.LOG_END, true))
                 .thenReturn(readResult1);
 
-            FetchDataInfo readResult2 = logReadResult(2, Arrays.asList(
+            FetchDataInfo readResult2 = logReadResult(2, List.of(
                 new SimpleRecord("k3".getBytes(), "v3".getBytes()),
                 new SimpleRecord("k4".getBytes(), "v4".getBytes()),
                 new SimpleRecord("k5".getBytes(), "v5".getBytes())
@@ -156,7 +155,7 @@ class CoordinatorLoaderImplTest {
             when(log.read(2L, 1000, FetchIsolation.LOG_END, true))
                 .thenReturn(readResult2);
 
-            FetchDataInfo readResult3 = logReadResult(5, 100L, (short) 5, Arrays.asList(
+            FetchDataInfo readResult3 = logReadResult(5, 100L, (short) 5, List.of(
                 new SimpleRecord("k6".getBytes(), "v6".getBytes()),
                 new SimpleRecord("k7".getBytes(), "v7".getBytes())
             ));
@@ -225,7 +224,7 @@ class CoordinatorLoaderImplTest {
         )) {
             when(log.logStartOffset()).thenReturn(0L);
 
-            FetchDataInfo readResult = logReadResult(0, Arrays.asList(
+            FetchDataInfo readResult = logReadResult(0, List.of(
                 new SimpleRecord("k1".getBytes(), "v1".getBytes()),
                 new SimpleRecord("k2".getBytes(), "v2".getBytes())
             ));
@@ -271,7 +270,7 @@ class CoordinatorLoaderImplTest {
         )) {
             when(log.logStartOffset()).thenReturn(0L);
 
-            FetchDataInfo readResult = logReadResult(0, Arrays.asList(
+            FetchDataInfo readResult = logReadResult(0, List.of(
                 new SimpleRecord("k1".getBytes(), "v1".getBytes()),
                 new SimpleRecord("k2".getBytes(), "v2".getBytes())
             ));
@@ -308,7 +307,7 @@ class CoordinatorLoaderImplTest {
         )) {
             when(log.logStartOffset()).thenReturn(0L);
 
-            FetchDataInfo readResult = logReadResult(0, Arrays.asList(
+            FetchDataInfo readResult = logReadResult(0, List.of(
                 new SimpleRecord("k1".getBytes(), "v1".getBytes()),
                 new SimpleRecord("k2".getBytes(), "v2".getBytes())
             ));
@@ -378,7 +377,7 @@ class CoordinatorLoaderImplTest {
             long startTimeMs = time.milliseconds();
             when(log.logStartOffset()).thenReturn(0L);
 
-            FetchDataInfo readResult1 = logReadResult(0, Arrays.asList(
+            FetchDataInfo readResult1 = logReadResult(0, List.of(
                 new SimpleRecord("k1".getBytes(), "v1".getBytes()),
                 new SimpleRecord("k2".getBytes(), "v2".getBytes())
             ));
@@ -389,7 +388,7 @@ class CoordinatorLoaderImplTest {
                     return readResult1;
                 });
 
-            FetchDataInfo readResult2 = logReadResult(2, Arrays.asList(
+            FetchDataInfo readResult2 = logReadResult(2, List.of(
                 new SimpleRecord("k3".getBytes(), "v3".getBytes()),
                 new SimpleRecord("k4".getBytes(), "v4".getBytes()),
                 new SimpleRecord("k5".getBytes(), "v5".getBytes())
@@ -426,7 +425,7 @@ class CoordinatorLoaderImplTest {
             when(log.logStartOffset()).thenReturn(0L);
             when(log.highWatermark()).thenReturn(0L, 0L, 2L);
 
-            FetchDataInfo readResult1 = logReadResult(0, Arrays.asList(
+            FetchDataInfo readResult1 = logReadResult(0, List.of(
                 new SimpleRecord("k1".getBytes(), "v1".getBytes()),
                 new SimpleRecord("k2".getBytes(), "v2".getBytes())
             ));
@@ -434,7 +433,7 @@ class CoordinatorLoaderImplTest {
             when(log.read(0L, 1000, FetchIsolation.LOG_END, true))
                     .thenReturn(readResult1);
 
-            FetchDataInfo readResult2 = logReadResult(2, Arrays.asList(
+            FetchDataInfo readResult2 = logReadResult(2, List.of(
                 new SimpleRecord("k3".getBytes(), "v3".getBytes()),
                 new SimpleRecord("k4".getBytes(), "v4".getBytes()),
                 new SimpleRecord("k5".getBytes(), "v5".getBytes())
@@ -443,7 +442,7 @@ class CoordinatorLoaderImplTest {
             when(log.read(2L, 1000, FetchIsolation.LOG_END, true))
                 .thenReturn(readResult2);
 
-            FetchDataInfo readResult3 = logReadResult(5, Arrays.asList(
+            FetchDataInfo readResult3 = logReadResult(5, List.of(
                 new SimpleRecord("k6".getBytes(), "v6".getBytes()),
                 new SimpleRecord("k7".getBytes(), "v7".getBytes())
             ));
@@ -517,7 +516,7 @@ class CoordinatorLoaderImplTest {
             when(log.logStartOffset()).thenReturn(0L);
             when(log.highWatermark()).thenReturn(5L, 7L, 7L);
 
-            FetchDataInfo readResult1 = logReadResult(0, Arrays.asList(
+            FetchDataInfo readResult1 = logReadResult(0, List.of(
                 new SimpleRecord("k1".getBytes(), "v1".getBytes()),
                 new SimpleRecord("k2".getBytes(), "v2".getBytes())
             ));
@@ -525,7 +524,7 @@ class CoordinatorLoaderImplTest {
             when(log.read(0L, 1000, FetchIsolation.LOG_END, true))
                 .thenReturn(readResult1);
 
-            FetchDataInfo readResult2 = logReadResult(2, Arrays.asList(
+            FetchDataInfo readResult2 = logReadResult(2, List.of(
                 new SimpleRecord("k3".getBytes(), "v3".getBytes()),
                 new SimpleRecord("k4".getBytes(), "v4".getBytes()),
                 new SimpleRecord("k5".getBytes(), "v5".getBytes())
@@ -534,7 +533,7 @@ class CoordinatorLoaderImplTest {
             when(log.read(2L, 1000, FetchIsolation.LOG_END, true))
                 .thenReturn(readResult2);
 
-            FetchDataInfo readResult3 = logReadResult(5, Arrays.asList(
+            FetchDataInfo readResult3 = logReadResult(5, List.of(
                 new SimpleRecord("k6".getBytes(), "v6".getBytes()),
                 new SimpleRecord("k7".getBytes(), "v7".getBytes())
             ));
@@ -582,7 +581,7 @@ class CoordinatorLoaderImplTest {
             when(log.logStartOffset()).thenReturn(0L);
             when(log.highWatermark()).thenReturn(7L);
 
-            FetchDataInfo readResult1 = logReadResult(0, Arrays.asList(
+            FetchDataInfo readResult1 = logReadResult(0, List.of(
                 new SimpleRecord("k1".getBytes(), "v1".getBytes()),
                 new SimpleRecord("k2".getBytes(), "v2".getBytes())
             ));
@@ -590,7 +589,7 @@ class CoordinatorLoaderImplTest {
             when(log.read(0L, 1000, FetchIsolation.LOG_END, true))
                 .thenReturn(readResult1);
 
-            FetchDataInfo readResult2 = logReadResult(2, Arrays.asList(
+            FetchDataInfo readResult2 = logReadResult(2, List.of(
                 new SimpleRecord("k3".getBytes(), "v3".getBytes()),
                 new SimpleRecord("k4".getBytes(), "v4".getBytes()),
                 new SimpleRecord("k5".getBytes(), "v5".getBytes())
@@ -599,14 +598,14 @@ class CoordinatorLoaderImplTest {
             when(log.read(2L, 1000, FetchIsolation.LOG_END, true))
                 .thenReturn(readResult2);
 
-            FetchDataInfo readResult3 = logReadResult(5, Arrays.asList(
+            FetchDataInfo readResult3 = logReadResult(5, List.of(
                 new SimpleRecord("k6".getBytes(), "v6".getBytes())
             ));
 
             when(log.read(5L, 1000, FetchIsolation.LOG_END, true))
                 .thenReturn(readResult3);
 
-            FetchDataInfo readResult4 = logReadResult(6, Arrays.asList(
+            FetchDataInfo readResult4 = logReadResult(6, List.of(
                 new SimpleRecord("k7".getBytes(), "v7".getBytes())
             ));
 
@@ -656,7 +655,7 @@ class CoordinatorLoaderImplTest {
             when(log.highWatermark()).thenReturn(0L);
             when(partitionLogEndOffsetSupplier.apply(tp)).thenReturn(Optional.of(5L)).thenReturn(Optional.of(-1L));
 
-            FetchDataInfo readResult1 = logReadResult(0, Arrays.asList(
+            FetchDataInfo readResult1 = logReadResult(0, List.of(
                 new SimpleRecord("k1".getBytes(), "v1".getBytes()),
                 new SimpleRecord("k2".getBytes(), "v2".getBytes())
             ));
@@ -664,7 +663,7 @@ class CoordinatorLoaderImplTest {
             when(log.read(0L, 1000, FetchIsolation.LOG_END, true))
                 .thenReturn(readResult1);
 
-            FetchDataInfo readResult2 = logReadResult(2, Arrays.asList(
+            FetchDataInfo readResult2 = logReadResult(2, List.of(
                 new SimpleRecord("k3".getBytes(), "v3".getBytes()),
                 new SimpleRecord("k4".getBytes(), "v4".getBytes()),
                 new SimpleRecord("k5".getBytes(), "v5".getBytes())

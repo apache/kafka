@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.processor;
 
-
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.KeyValue;
 
 import java.util.Collection;
@@ -28,6 +28,7 @@ import java.util.Collection;
  * It is expected that implementations of this class will not call the {@link StateRestoreCallback#restore(byte[],
  * byte[])} method.
  */
+@InterfaceAudience.Public
 public interface BatchingStateRestoreCallback extends StateRestoreCallback {
 
     /**
@@ -39,7 +40,7 @@ public interface BatchingStateRestoreCallback extends StateRestoreCallback {
     void restoreAll(Collection<KeyValue<byte[], byte[]>> records);
 
     @Override
-    default void restore(byte[] key, byte[] value) {
+    default void restore(final byte[] key, final byte[] value) {
         throw new UnsupportedOperationException();
     }
 }

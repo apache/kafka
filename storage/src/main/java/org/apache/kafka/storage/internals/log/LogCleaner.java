@@ -17,12 +17,10 @@
 package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.KafkaStorageException;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.config.BrokerReconfigurable;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.util.ShutdownableThread;
@@ -35,12 +33,12 @@ import java.io.File;
 import java.io.IOException;
 import java.security.DigestException;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -95,7 +93,7 @@ import java.util.stream.IntStream;
  *    tombstone deletion.</li>
  * </ol>
  */
-public class LogCleaner implements BrokerReconfigurable {
+public class LogCleaner {
     private static final Logger LOG = LoggerFactory.getLogger(LogCleaner.class);
 
     public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
@@ -140,7 +138,7 @@ public class LogCleaner implements BrokerReconfigurable {
     private final ConcurrentMap<TopicPartition, UnifiedLog> logs;
     private final LogDirFailureChannel logDirFailureChannel;
     private final Time time;
-    private final List<CleanerThread> cleaners = new ArrayList<>();
+    private final List<CleanerThread> cleaners = new CopyOnWriteArrayList<>();
 
     /**
      * Log cleaner configuration which may be dynamically updated.
@@ -249,10 +247,6 @@ public class LogCleaner implements BrokerReconfigurable {
         cleanerManager.removeMetrics();
     }
 
-    /**
-     * @return A set of configs that is reconfigurable in LogCleaner
-     */
-    @Override
     public Set<String> reconfigurableConfigs() {
         return RECONFIGURABLE_CONFIGS;
     }
@@ -260,11 +254,10 @@ public class LogCleaner implements BrokerReconfigurable {
     /**
      * Validate the new cleaner threads num is reasonable.
      *
-     * @param newConfig A submitted new AbstractConfig instance that contains new cleaner config
+     * @param newConfig the submitted cleaner config
      */
-    @Override
-    public void validateReconfiguration(AbstractConfig newConfig) {
-        int numThreads = new CleanerConfig(newConfig).numThreads;
+    public void validateReconfiguration(CleanerConfig newConfig) {
+        int numThreads = newConfig.numThreads;
         int currentThreads = config.numThreads;
         if (numThreads < 1)
             throw new ConfigException("Log cleaner threads should be at least 1");
@@ -286,12 +279,11 @@ public class LogCleaner implements BrokerReconfigurable {
      * @param oldConfig the old log cleaner config
      * @param newConfig the new log cleaner config reconfigured
      */
-    @Override
-    public void reconfigure(AbstractConfig oldConfig, AbstractConfig newConfig) {
-        config = new CleanerConfig(newConfig);
+    public void reconfigure(CleanerConfig oldConfig, CleanerConfig newConfig) {
+        config = newConfig;
 
         double maxIoBytesPerSecond = config.maxIoBytesPerSecond;
-        if (maxIoBytesPerSecond != oldConfig.getDouble(CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP)) {
+        if (maxIoBytesPerSecond != oldConfig.maxIoBytesPerSecond) {
             LOG.info("Updating logCleanerIoMaxBytesPerSecond: {}", maxIoBytesPerSecond);
             throttler.updateDesiredRatePerSec(maxIoBytesPerSecond);
         }

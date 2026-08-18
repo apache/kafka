@@ -42,9 +42,9 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
@@ -129,6 +129,7 @@ import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.closeTo;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.is;
@@ -307,6 +308,16 @@ public class StreamTaskTest {
         final Class<? extends DeserializationExceptionHandler> deserializationExceptionHandler,
         final Class<? extends ProcessingExceptionHandler> processingExceptionHandler,
         final Class<? extends TimestampExtractor> timestampExtractor) {
+        return createConfig(eosConfig, enforcedProcessingValue, deserializationExceptionHandler, processingExceptionHandler, timestampExtractor, false);
+    }
+
+    private static StreamsConfig createConfig(
+        final String eosConfig,
+        final String enforcedProcessingValue,
+        final Class<? extends DeserializationExceptionHandler> deserializationExceptionHandler,
+        final Class<? extends ProcessingExceptionHandler> processingExceptionHandler,
+        final Class<? extends TimestampExtractor> timestampExtractor,
+        final boolean transactionalStateStores) {
         final String canonicalPath;
         try {
             canonicalPath = BASE_DIR.getCanonicalPath();
@@ -324,7 +335,8 @@ public class StreamTaskTest {
             mkEntry(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, enforcedProcessingValue),
             mkEntry(StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, deserializationExceptionHandler.getName()),
             mkEntry(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, processingExceptionHandler.getName()),
-            mkEntry(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, timestampExtractor.getName())
+            mkEntry(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, timestampExtractor.getName()),
+            mkEntry(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, String.valueOf(transactionalStateStores))
         )));
     }
 
@@ -386,6 +398,8 @@ public class StreamTaskTest {
         verify(stateDirectory, never()).lock(any());
     }
 
+    // Covers the non-transactional case: without transactional state stores, a dirty close under
+    // EOS may have left uncommitted data on disk, so the state directory must be wiped.
     @Test
     public void shouldAttemptToDeleteStateDirectoryWhenCloseDirtyAndEosEnabled() {
         when(stateManager.taskId()).thenReturn(taskId);
@@ -413,6 +427,35 @@ public class StreamTaskTest {
         inOrder.verify(stateManager).close();
         inOrder.verify(stateManager).baseDir();
         inOrder.verify(stateDirectory).unlock(taskId);
+    }
+
+    @Test
+    public void shouldNotWipeStateDirectoryWhenCloseDirtyAndEosEnabledWithTransactionalStateStores() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        when(stateManager.hasCorruptedStores()).thenReturn(false);
+        // Clean up state directory created as part of setup
+        stateDirectory.close();
+        stateDirectory = mock(StateDirectory.class);
+
+        when(stateDirectory.lock(taskId)).thenReturn(true);
+
+        final StreamsConfig config = createConfig(
+            StreamsConfig.EXACTLY_ONCE_V2,
+            "100",
+            LogAndFailExceptionHandler.class,
+            LogAndFailProcessingExceptionHandler.class,
+            FailOnInvalidTimestamp.class,
+            true);
+
+        task = createStatefulTask(config, true, stateManager);
+        task.suspend();
+        task.closeDirty();
+        task = null;
+
+        // With transactional state stores, the state dir should NOT be wiped on dirty close
+        // unless stores are specifically marked as corrupted.
+        verify(stateManager, never()).baseDir();
     }
 
     @Test
@@ -562,7 +605,6 @@ public class StreamTaskTest {
         stateDirectory.close();
         stateDirectory = mock(StateDirectory.class);
         when(stateDirectory.lock(taskId)).thenReturn(true);
-        when(stateManager.changelogOffsets()).thenReturn(singletonMap(changelogPartition, 10L));
 
         task = createStatefulTask(createConfig("100"), true);
 
@@ -809,6 +851,8 @@ public class StreamTaskTest {
         // e2e latency = 10
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(0, 0L)));
         task.process(10L);
+        // flush terminal e2e for the batch, as TaskExecutor.processTask does
+        task.maybeFlushTerminalE2ELatency(10L);
 
         assertThat(sourceAvg.metricValue(), equalTo(10.0));
         assertThat(sourceMin.metricValue(), equalTo(10.0));
@@ -823,6 +867,7 @@ public class StreamTaskTest {
         // e2e latency = 15
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(1, 0L)));
         task.process(15L);
+        task.maybeFlushTerminalE2ELatency(15L);
 
         assertThat(sourceAvg.metricValue(), equalTo(12.5));
         assertThat(sourceMin.metricValue(), equalTo(10.0));
@@ -837,6 +882,7 @@ public class StreamTaskTest {
         // e2e latency = 23
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(2, 0L)));
         task.process(23L);
+        task.maybeFlushTerminalE2ELatency(23L);
 
         assertThat(sourceAvg.metricValue(), equalTo(16.0));
         assertThat(sourceMin.metricValue(), equalTo(10.0));
@@ -851,6 +897,7 @@ public class StreamTaskTest {
         // e2e latency = 5
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(3, 0L)));
         task.process(5L);
+        task.maybeFlushTerminalE2ELatency(5L);
 
         assertThat(sourceAvg.metricValue(), equalTo(13.25));
         assertThat(sourceMin.metricValue(), equalTo(5.0));
@@ -860,6 +907,225 @@ public class StreamTaskTest {
         assertThat(terminalAvg.metricValue(), equalTo(16.5));
         assertThat(terminalMin.metricValue(), equalTo(10.0));
         assertThat(terminalMax.metricValue(), equalTo(23.0));
+    }
+
+    @Test
+    public void shouldIncludeProcessingDelayInTerminalNodeE2ELatency() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        time = new MockTime(0L, 0L, 0L);
+        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
+
+        final long processingDelay = 5L;
+
+        // A source node that simulates processing work by advancing wall-clock time before forwarding
+        final MockSourceNode<Integer, Integer> delayingSourceNode = new MockSourceNode<>(intDeserializer, intDeserializer) {
+            InternalProcessorContext<Integer, Integer> context;
+
+            @Override
+            public void init(final InternalProcessorContext<Integer, Integer> context) {
+                this.context = context;
+                super.init(context);
+            }
+
+            @Override
+            public void process(final Record<Integer, Integer> record) {
+                time.sleep(processingDelay);
+                context.forward(record);
+            }
+        };
+
+        task = createStatelessTaskWithForwardingTopology(delayingSourceNode);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        final String sourceNodeName = delayingSourceNode.name();
+        final String terminalNodeName = processorStreamTime.name();
+
+        final Metric sourceMax = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), sourceNodeName);
+        final Metric terminalMax = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), terminalNodeName);
+
+        // record (timestamp 0) is observed by the source node at wall-clock time 10
+        time.sleep(10L);
+        task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(0, 0L)));
+        task.process(time.milliseconds());
+        // the source advanced the clock while processing, so the batch-end flush time includes the delay
+        task.maybeFlushTerminalE2ELatency(time.milliseconds());
+
+        // source node measures only consumption latency (record timestamp -> source observed it)
+        assertThat(sourceMax.metricValue(), equalTo(10.0));
+        // terminal node measures full end-to-end latency, including the processing delay
+        assertThat(terminalMax.metricValue(), equalTo(10.0 + processingDelay));
+    }
+
+    @Test
+    public void shouldReconstructTerminalE2ELatencyForBatchWithSkewedTimestamps() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        time = new MockTime(0L, 0L, 0L);
+        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
+
+        // Source node that forwards every record to the terminal node.
+        final MockSourceNode<Integer, Integer> forwardingSourceNode = new MockSourceNode<>(intDeserializer, intDeserializer) {
+            InternalProcessorContext<Integer, Integer> context;
+
+            @Override
+            public void init(final InternalProcessorContext<Integer, Integer> context) {
+                this.context = context;
+                super.init(context);
+            }
+
+            @Override
+            public void process(final Record<Integer, Integer> record) {
+                context.forward(record);
+            }
+        };
+
+        task = createStatelessTaskWithForwardingTopology(forwardingSourceNode);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        final String terminalNodeName = processorStreamTime.name();
+        final Metric terminalAvg = getProcessorMetric("record-e2e-latency", "%s-avg", task.id().toString(), terminalNodeName);
+        final Metric terminalMin = getProcessorMetric("record-e2e-latency", "%s-min", task.id().toString(), terminalNodeName);
+        final Metric terminalMax = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), terminalNodeName);
+
+        // five records with skewed timestamps (= offsets) reach the terminal node in one batch
+        final long[] timestamps = {100L, 450L, 480L, 490L, 500L};
+        for (int i = 0; i < timestamps.length; i++) {
+            task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(i, timestamps[i])));
+            task.process(1000L);
+        }
+
+        // batch completes at 1000; true latencies [900,550,520,510,500] -> max 900, min 500, avg 596
+        task.maybeFlushTerminalE2ELatency(1000L);
+
+        assertThat(terminalMax.metricValue(), equalTo(900.0));
+        assertThat(terminalMin.metricValue(), equalTo(500.0));
+        assertThat((double) terminalAvg.metricValue(), closeTo(596.0, 1e-9));
+    }
+
+    @Test
+    public void shouldReconstructTerminalE2ELatencyForBatchOfTwoRecords() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        time = new MockTime(0L, 0L, 0L);
+        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
+
+        final MockSourceNode<Integer, Integer> forwardingSourceNode = new MockSourceNode<>(intDeserializer, intDeserializer) {
+            InternalProcessorContext<Integer, Integer> context;
+
+            @Override
+            public void init(final InternalProcessorContext<Integer, Integer> context) {
+                this.context = context;
+                super.init(context);
+            }
+
+            @Override
+            public void process(final Record<Integer, Integer> record) {
+                context.forward(record);
+            }
+        };
+
+        task = createStatelessTaskWithForwardingTopology(forwardingSourceNode);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        final String terminalNodeName = processorStreamTime.name();
+        final Metric terminalAvg = getProcessorMetric("record-e2e-latency", "%s-avg", task.id().toString(), terminalNodeName);
+        final Metric terminalMin = getProcessorMetric("record-e2e-latency", "%s-min", task.id().toString(), terminalNodeName);
+        final Metric terminalMax = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), terminalNodeName);
+
+        // exactly two records reach the terminal node, so both are emitted exactly and no interior
+        // filler sample is needed to make the count-weighted average exact
+        final long[] timestamps = {100L, 400L};
+        for (int i = 0; i < timestamps.length; i++) {
+            task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(i, timestamps[i])));
+            task.process(1000L);
+        }
+
+        // batch completes at 1000; true latencies [900,600] -> max 900, min 600, avg 750
+        task.maybeFlushTerminalE2ELatency(1000L);
+
+        assertThat(terminalMax.metricValue(), equalTo(900.0));
+        assertThat(terminalMin.metricValue(), equalTo(600.0));
+        assertThat((double) terminalAvg.metricValue(), closeTo(750.0, 1e-9));
+    }
+
+    @Test
+    public void shouldIncludePunctuatorDelayInTerminalNodeE2ELatency() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        time = new MockTime(0L, 0L, 0L);
+        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
+
+        final long punctuatorDelay = 7L;
+
+        // A node whose punctuator simulates work by advancing wall-clock time before forwarding
+        final AtomicReference<InternalProcessorContext<Integer, Integer>> nodeContext = new AtomicReference<>();
+        final MockProcessorNode<Integer, Integer, Integer, Integer> punctuatingNode = new MockProcessorNode<>(10L) {
+            @Override
+            public void init(final InternalProcessorContext<Integer, Integer> context) {
+                super.init(context);
+                nodeContext.set(context);
+            }
+        };
+
+        task = createStatelessTaskWithPunctuatingTopology(punctuatingNode);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        final Metric terminalMax = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), processorStreamTime.name());
+
+        // punctuation fires at wall-clock time 20 and forwards a record with timestamp 0
+        time.sleep(20L);
+        task.punctuate(punctuatingNode, time.milliseconds(), PunctuationType.WALL_CLOCK_TIME, timestamp -> {
+            time.sleep(punctuatorDelay);
+            nodeContext.get().forward(new Record<>(1, 1, 0L));
+        });
+
+        // the latency must include the time the punctuator itself spent before forwarding
+        assertThat(terminalMax.metricValue(), equalTo(20.0 + punctuatorDelay));
+    }
+
+    @Test
+    public void shouldFlushPendingTerminalE2ELatencyOnTaskFlush() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        time = new MockTime(0L, 0L, 0L);
+        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
+
+        final MockSourceNode<Integer, Integer> forwardingSourceNode = new MockSourceNode<>(intDeserializer, intDeserializer) {
+            InternalProcessorContext<Integer, Integer> context;
+
+            @Override
+            public void init(final InternalProcessorContext<Integer, Integer> context) {
+                this.context = context;
+                super.init(context);
+            }
+
+            @Override
+            public void process(final Record<Integer, Integer> record) {
+                context.forward(record);
+            }
+        };
+
+        task = createStatelessTaskWithForwardingTopology(forwardingSourceNode);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        final Metric terminalMax = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), processorStreamTime.name());
+
+        // a record reaches the terminal node but the batch-end flush has not run yet
+        time.sleep(10L);
+        task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(0, 0L)));
+        task.process(time.milliseconds());
+
+        // flushing the caches can emit to terminal nodes, so flush() must drain what is buffered
+        time.sleep(5L);
+        task.flush();
+
+        assertThat(terminalMax.metricValue(), equalTo(15.0));
     }
 
     @Test
@@ -876,21 +1142,37 @@ public class StreamTaskTest {
         assertThat(rateMetric.metricValue(), equalTo(0.0));
         assertThat(remainMetric.metricValue(), equalTo(0.0));
 
-        task.recordRestoration(time, 100L, true);
+        // remaining-records is initialized from the offset range
+        task.recordRestoration(time, 0L, 100L, true);
 
         assertThat(remainMetric.metricValue(), equalTo(100.0));
 
-        task.recordRestoration(time, 25L, false);
+        // restore-total counts records; remaining-records is decremented by offset slots (which may differ)
+        task.recordRestoration(time, 25L, 30L, false);
 
         assertThat(totalMetric.metricValue(), equalTo(25.0));
-        assertThat(rateMetric.metricValue(), not(0.0));
-        assertThat(remainMetric.metricValue(), equalTo(75.0));
+        // the rate measures restored records per second, not restore batches per second; with no time
+        // elapsed the rate window is (metrics.num.samples - 1) * metrics.sample.window.ms == 30s
+        assertEquals(
+            25.0 / 30.0,
+            ((Number) rateMetric.metricValue()).doubleValue(),
+            0.0001d,
+            "restore-rate must measure restored records per second, not restore batches per second; "
+                + "counting batches would give 1/30 == 0.03333 (KAFKA-20877)"
+        );
+        assertThat(remainMetric.metricValue(), equalTo(70.0));
 
-        task.recordRestoration(time, 50L, false);
+        task.recordRestoration(time, 50L, 55L, false);
 
         assertThat(totalMetric.metricValue(), equalTo(75.0));
-        assertThat(rateMetric.metricValue(), not(0.0));
-        assertThat(remainMetric.metricValue(), equalTo(25.0));
+        assertEquals(
+            75.0 / 30.0,
+            ((Number) rateMetric.metricValue()).doubleValue(),
+            0.0001d,
+            "restore-rate must measure restored records per second, not restore batches per second; "
+                + "counting batches would give 2/30 == 0.06666 (KAFKA-20877)"
+        );
+        assertThat(remainMetric.metricValue(), equalTo(15.0));
     }
 
     @Test
@@ -1981,79 +2263,6 @@ public class StreamTaskTest {
         verify(recordCollector).offsets();
     }
 
-    @Test
-    public void shouldNotCheckpointOffsetsAgainOnCommitIfSnapshotNotChangedMuch() {
-        when(stateManager.taskId()).thenReturn(taskId);
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        final Long offset = 543L;
-
-        when(recordCollector.offsets()).thenReturn(singletonMap(changelogPartition, offset));
-        when(stateManager.changelogOffsets())
-            .thenReturn(singletonMap(changelogPartition, 10L)) // restoration checkpoint
-            .thenReturn(singletonMap(changelogPartition, 10L))
-            .thenReturn(singletonMap(changelogPartition, 20L));
-
-        task = createStatefulTask(createConfig("100"), true);
-
-        task.initializeIfNeeded();
-        task.completeRestoration(noOpResetter -> { }); // should checkpoint
-
-        task.prepareCommit(true);
-        task.postCommit(true); // should checkpoint
-
-        task.prepareCommit(true);
-        task.postCommit(false); // should not checkpoint
-
-        assertThat("Map was empty", task.highWaterMark().size() == 2);
-
-        verify(stateManager, times(2)).checkpoint();
-    }
-
-    @Test
-    public void shouldCheckpointOffsetsOnCommitIfSnapshotMuchChanged() {
-        when(stateManager.taskId()).thenReturn(taskId);
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        final Long offset = 543L;
-
-        when(recordCollector.offsets()).thenReturn(singletonMap(changelogPartition, offset));
-        when(stateManager.changelogOffsets())
-            .thenReturn(singletonMap(changelogPartition, 0L))
-            .thenReturn(singletonMap(changelogPartition, 10L))
-            .thenReturn(singletonMap(changelogPartition, 12000L));
-
-        task = createStatefulTask(createConfig("100"), true);
-
-        task.initializeIfNeeded();
-        task.completeRestoration(noOpResetter -> { }); // should checkpoint
-        task.prepareCommit(true);
-        task.postCommit(true); // should checkpoint
-
-        task.prepareCommit(true);
-        task.postCommit(false); // should checkpoint since the offset delta is greater than the threshold
-
-        assertThat("Map was empty", task.highWaterMark().size() == 2);
-
-        verify(stateManager, times(3)).checkpoint();
-    }
-
-    @Test
-    public void shouldNotCheckpointOffsetsOnCommitIfEosIsEnabled() {
-        when(stateManager.taskId()).thenReturn(taskId);
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createStatefulTask(createConfig(StreamsConfig.EXACTLY_ONCE_V2, "100"), true);
-
-        task.initializeIfNeeded();
-        task.completeRestoration(noOpResetter -> { });
-        task.prepareCommit(true);
-        task.postCommit(false);
-        final File checkpointFile = new File(
-            stateDirectory.getOrCreateDirectoryForTask(taskId),
-            StateManagerUtil.CHECKPOINT_FILE_NAME
-        );
-
-        assertFalse(checkpointFile.exists());
-    }
-
     @SuppressWarnings("unchecked")
     @Test
     public void shouldThrowIllegalStateExceptionIfCurrentNodeIsNotNullWhenPunctuateCalled() {
@@ -2251,60 +2460,22 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldSkipCheckpointingSuspendedCreatedTask() {
+    public void shouldCommitForSuspendedTask() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createStatefulTask(createConfig("100"), true);
-        task.suspend();
-        task.postCommit(true);
-
-        verify(stateManager, never()).checkpoint();
-    }
-
-    @Test
-    public void shouldCheckpointForSuspendedTask() {
-        when(stateManager.taskId()).thenReturn(taskId);
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        when(stateManager.changelogOffsets()).thenReturn(singletonMap(partition1, 1L));
 
         task = createStatefulTask(createConfig("100"), true);
         task.initializeIfNeeded();
         task.suspend();
         task.postCommit(true);
 
-        verify(stateManager).checkpoint();
+        verify(stateManager).commit();
     }
 
     @Test
-    public void shouldNotCheckpointForSuspendedRunningTaskWithSmallProgress() {
+    public void shouldCommitForSuspendedRunningTaskWithLargeProgress() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        when(stateManager.changelogOffsets())
-                .thenReturn(singletonMap(partition1, 0L)) // restoration checkpoint
-                .thenReturn(singletonMap(partition1, 1L))
-                .thenReturn(singletonMap(partition1, 2L));
-
-        task = createStatefulTask(createConfig("100"), true);
-        task.initializeIfNeeded();
-        task.completeRestoration(noOpResetter -> { });
-
-        task.prepareCommit(true);
-        task.postCommit(false);
-
-        task.suspend();
-        task.postCommit(false);
-
-        verify(stateManager).checkpoint();
-    }
-
-    @Test
-    public void shouldCheckpointForSuspendedRunningTaskWithLargeProgress() {
-        when(stateManager.taskId()).thenReturn(taskId);
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        when(stateManager.changelogOffsets())
-                .thenReturn(singletonMap(partition1, 0L))
-                .thenReturn(singletonMap(partition1, 12000L))
-                .thenReturn(singletonMap(partition1, 24000L));
 
         task = createStatefulTask(createConfig("100"), true);
         task.initializeIfNeeded();
@@ -2316,17 +2487,14 @@ public class StreamTaskTest {
         task.suspend();
         task.postCommit(false); // should checkpoint since the offset delta is greater than the threshold
 
-        verify(stateManager, times(3)).checkpoint();
+        verify(stateManager, times(3)).commit();
     }
 
     @Test
-    public void shouldCheckpointWhileUpdateSnapshotWithTheConsumedOffsetsForSuspendedRunningTask() {
+    public void shouldCommitWhileUpdateSnapshotWithTheConsumedOffsetsForSuspendedRunningTask() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         final Map<TopicPartition, Long> checkpointableOffsets = singletonMap(partition1, 1L);
-        when(stateManager.changelogOffsets())
-                .thenReturn(Collections.emptyMap()) // restoration checkpoint
-                .thenReturn(checkpointableOffsets);
         when(recordCollector.offsets()).thenReturn(checkpointableOffsets);
 
         task = createStatefulTask(createConfig(), true);
@@ -2340,7 +2508,7 @@ public class StreamTaskTest {
         task.suspend();
         task.postCommit(true); // should checkpoint
 
-        verify(stateManager, times(2)).checkpoint();
+        verify(stateManager, times(2)).commit();
         verify(stateManager, times(2)).updateChangelogOffsets(checkpointableOffsets);
         verify(recordCollector, times(2)).offsets();
     }
@@ -2364,7 +2532,7 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldNotCheckpointOnCloseCreated() {
+    public void shouldNotCommitOnCloseCreated() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         final MetricName metricName = setupCloseTaskMetric();
@@ -2381,12 +2549,11 @@ public class StreamTaskTest {
         final double expectedCloseTaskMetric = 1.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
-        verify(stateManager, never()).flush();
-        verify(stateManager, never()).checkpoint();
+        verify(stateManager, never()).commit();
     }
 
     @Test
-    public void shouldCheckpointOnCloseRestoringIfNoProgress() {
+    public void shouldCommitOnCloseRestoringIfNoProgress() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createOptimizedStatefulTask(createConfig("100"), consumer);
@@ -2400,56 +2567,28 @@ public class StreamTaskTest {
 
         assertEquals(Task.State.CLOSED, task.state());
 
-        verify(stateManager, times(2)).flush();
-        verify(stateManager, times(2)).checkpoint();
+        verify(stateManager, times(2)).commit();
     }
 
     @Test
-    public void shouldAlwaysCheckpointStateIfEnforced() {
+    public void shouldAlwaysCommitStateIfEnforced() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createOptimizedStatefulTask(createConfig("100"), consumer);
 
         task.initializeIfNeeded();
-        task.maybeCheckpoint(true);
+        task.maybeCheckpoint();
 
-        verify(stateManager).flush();
-        verify(stateManager).checkpoint();
+        verify(stateManager).commit();
     }
 
     @Test
-    public void shouldOnlyCheckpointStateWithBigAdvanceIfNotEnforced() {
-        when(stateManager.taskId()).thenReturn(taskId);
-        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        when(stateManager.changelogOffsets())
-                .thenReturn(Collections.singletonMap(partition1, 50L))
-                .thenReturn(Collections.singletonMap(partition1, 11000L))
-                .thenReturn(Collections.singletonMap(partition1, 12000L));
-
-        task = createOptimizedStatefulTask(createConfig("100"), consumer);
-        task.initializeIfNeeded();
-
-        task.maybeCheckpoint(false);  // this should not checkpoint
-        assertTrue(task.offsetSnapshotSinceLastFlush.isEmpty());
-        task.maybeCheckpoint(false);  // this should checkpoint
-        assertEquals(Collections.singletonMap(partition1, 11000L), task.offsetSnapshotSinceLastFlush);
-        task.maybeCheckpoint(false);  // this should not checkpoint
-        assertEquals(Collections.singletonMap(partition1, 11000L), task.offsetSnapshotSinceLastFlush);
-
-        verify(stateManager).flush();
-        verify(stateManager).checkpoint();
-    }
-
-    @Test
-    public void shouldCheckpointOffsetsOnPostCommit() {
+    public void shouldCommitOffsetsOnPostCommit() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         final long offset = 543L;
 
         when(recordCollector.offsets()).thenReturn(singletonMap(changelogPartition, offset));
-        when(stateManager.changelogOffsets())
-                .thenReturn(singletonMap(partition1, offset + 10000L)) // restoration checkpoint
-                .thenReturn(singletonMap(partition1, offset + 12000L));
 
         task = createOptimizedStatefulTask(createConfig(), consumer);
         task.initializeIfNeeded();
@@ -2469,7 +2608,7 @@ public class StreamTaskTest {
 
         assertEquals(SUSPENDED, task.state());
 
-        verify(stateManager).checkpoint();
+        verify(stateManager, times(2)).commit();
     }
 
     @Test
@@ -2478,7 +2617,6 @@ public class StreamTaskTest {
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         final long offset = 543L;
 
-        when(stateManager.changelogOffsets()).thenReturn(singletonMap(changelogPartition, offset));
         doThrow(new ProcessorStateException("KABOOM!")).when(stateManager).close();
         final MetricName metricName = setupCloseTaskMetric();
 
@@ -2501,7 +2639,7 @@ public class StreamTaskTest {
         final double expectedCloseTaskMetric = 0.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
-        verify(stateManager, times(2)).checkpoint();
+        verify(stateManager, times(2)).commit();
         verify(stateManager).close();
     }
 
@@ -2530,18 +2668,16 @@ public class StreamTaskTest {
         final double expectedCloseTaskMetric = 0.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
-        verify(stateManager).flush();
-        verify(stateManager).checkpoint();
+        verify(stateManager).commit();
         verify(stateManager, never()).close();
     }
 
     @Test
-    public void shouldThrowOnCloseCleanCheckpointError() {
+    public void shouldThrowOnCloseCleanCommitError() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         final long offset = 54300L;
-        doThrow(new ProcessorStateException("KABOOM!")).when(stateManager).checkpoint();
-        when(stateManager.changelogOffsets()).thenReturn(singletonMap(partition1, offset));
+        doThrow(new ProcessorStateException("KABOOM!")).when(stateManager).commit();
         final MetricName metricName = setupCloseTaskMetric();
 
         task = createOptimizedStatefulTask(createConfig("100"), consumer);
@@ -3034,27 +3170,59 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldCheckpointAfterRestorationWhenAtLeastOnceEnabled() {
+    public void shouldCommitAfterRestorationWhenAtLeastOnceEnabled() {
         final ProcessorStateManager processorStateManager = mockStateManager();
         recordCollector = mock(RecordCollectorImpl.class);
 
         task = createStatefulTask(createConfig(AT_LEAST_ONCE, "100"), true, processorStateManager);
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
-        verify(processorStateManager).checkpoint();
+        verify(processorStateManager).commit();
     }
 
     @Test
-    public void shouldNotCheckpointAfterRestorationWhenExactlyOnceEnabled() {
+    public void shouldNotCommitAfterRestorationWhenExactlyOnceEnabled() {
         final ProcessorStateManager processorStateManager = mockStateManager();
         recordCollector = mock(RecordCollectorImpl.class);
 
         task = createStatefulTask(createConfig(EXACTLY_ONCE_V2, "100"), true, processorStateManager);
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
-        verify(processorStateManager, never()).checkpoint();
+        verify(processorStateManager, never()).commit();
         verify(processorStateManager, never()).changelogOffsets();
         verify(recordCollector, never()).offsets();
+    }
+
+    @Test
+    public void shouldNotCheckpointOnPostCommitInRunningStateWithEosAndNotEnforced() {
+        final ProcessorStateManager processorStateManager = mockStateManager();
+        recordCollector = mock(RecordCollectorImpl.class);
+
+        task = createStatefulTask(createConfig(EXACTLY_ONCE_V2, "100"), true, processorStateManager);
+        task.initializeIfNeeded();
+        // completeRestoration does not call commit() under EOS (verified by shouldNotCommitAfterRestorationWhenExactlyOnceEnabled)
+        task.completeRestoration(noOpResetter -> { });
+        task.postCommit(false);
+        // total commit() invocations should remain 0
+        verify(processorStateManager, never()).commit();
+    }
+
+    @Test
+    public void shouldCheckpointOnPostCommitInRunningStateWithEosAndTransactionalStateStores() {
+        final ProcessorStateManager processorStateManager = mockStateManager();
+        recordCollector = mock(RecordCollectorImpl.class);
+
+        task = createStatefulTask(
+            createConfig(EXACTLY_ONCE_V2, "100", LogAndFailExceptionHandler.class, LogAndFailProcessingExceptionHandler.class, FailOnInvalidTimestamp.class, true),
+            true,
+            processorStateManager
+        );
+        task.initializeIfNeeded();
+        // completeRestoration does not call commit() under EOS
+        task.completeRestoration(noOpResetter -> { });
+        task.postCommit(false);
+        // transactionalStateStoresEnabled=true triggers maybeCheckpoint() on postCommit even under EOS
+        verify(processorStateManager).commit();
     }
 
     @Test
@@ -3505,6 +3673,44 @@ public class StreamTaskTest {
         );
 
         sourceNode.addChild(processorStreamTime);
+
+        final StreamsConfig config = createConfig();
+
+        final InternalProcessorContext<?, ?> context = new ProcessorContextImpl(
+            taskId,
+            config,
+            stateManager,
+            streamsMetrics,
+            null
+        );
+
+        return new StreamTask(
+            taskId,
+            singleton(partition1),
+            topology,
+            consumer,
+            new TopologyConfig(null,  config, new Properties()).getTaskConfig(),
+            new StreamsMetricsImpl(metrics, "test", time),
+            stateDirectory,
+            cache,
+            time,
+            stateManager,
+            recordCollector,
+            context,
+            logContext,
+            false
+        );
+    }
+
+    private StreamTask createStatelessTaskWithPunctuatingTopology(final ProcessorNode<Integer, Integer, Integer, Integer> punctuatingNode) {
+        // wire up the children before building the topology so that only the leaf is registered as terminal
+        source1.addChild(punctuatingNode);
+        punctuatingNode.addChild(processorStreamTime);
+
+        final ProcessorTopology topology = withSources(
+            asList(source1, punctuatingNode, processorStreamTime),
+            singletonMap(topic1, source1)
+        );
 
         final StreamsConfig config = createConfig();
 

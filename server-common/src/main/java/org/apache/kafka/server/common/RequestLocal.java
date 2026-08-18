@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.server.common;
 
-import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
 
 import java.util.Objects;
 

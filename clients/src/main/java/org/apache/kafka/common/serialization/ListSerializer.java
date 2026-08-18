@@ -18,7 +18,10 @@ package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
@@ -35,6 +38,7 @@ import java.util.Map;
 
 import static org.apache.kafka.common.serialization.Serdes.ListSerde.SerializationStrategy;
 
+@InterfaceAudience.Public
 public class ListSerializer<Inner> implements Serializer<List<Inner>> {
 
     final Logger log = LoggerFactory.getLogger(ListSerializer.class);
@@ -107,6 +111,11 @@ public class ListSerializer<Inner> implements Serializer<List<Inner>> {
 
     @Override
     public byte[] serialize(String topic, List<Inner> data) {
+        return serialize(topic, new RecordHeaders(), data);
+    }
+
+    @Override
+    public byte[] serialize(String topic, Headers headers, List<Inner> data) {
         if (data == null) {
             return null;
         }
@@ -125,7 +134,7 @@ public class ListSerializer<Inner> implements Serializer<List<Inner>> {
                         out.writeInt(Serdes.ListSerde.NULL_ENTRY_VALUE);
                     }
                 } else {
-                    final byte[] bytes = inner.serialize(topic, entry);
+                    final byte[] bytes = inner.serialize(topic, headers, entry);
                     if (serStrategy == SerializationStrategy.VARIABLE_SIZE) {
                         out.writeInt(bytes.length);
                     }

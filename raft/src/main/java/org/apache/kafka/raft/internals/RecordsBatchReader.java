@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.raft.internals;
 
-import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.record.internal.Records;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.server.common.serialization.RecordSerde;
@@ -108,7 +108,14 @@ public final class RecordsBatchReader<T> implements BatchReader<T> {
     ) {
         return new RecordsBatchReader<>(
             baseOffset,
-            new RecordsIterator<>(records, serde, bufferSupplier, maxBatchSize, doCrcValidation, logContext),
+            new RecordsIterator<>(
+                records,
+                RecordsDecodingStrategy.dataAndControl(serde),
+                bufferSupplier,
+                maxBatchSize,
+                doCrcValidation,
+                logContext
+            ),
             closeListener
         );
     }

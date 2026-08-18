@@ -17,7 +17,9 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsRequestFormatter;
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientAssertionRequestFormatter;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientSecretRequestFormatter;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 import org.apache.kafka.common.utils.Utils;
 
@@ -43,14 +45,15 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_
  *         If the value of <code>sasl.oauthbearer.token.endpoint.url</code> is set to a value that starts with the
  *         <code>file</code> protocol (e.g. <code>file:/tmp/path/to/a/static-jwt.json</code>), an instance of
  *         {@link FileJwtRetriever} will be used as the underlying {@link JwtRetriever}. Otherwise, the URL is
- *         assumed to be an HTTP/HTTPS-based URL, and an instance of {@link ClientCredentialsRequestFormatter} will
- *         be created and used.
+ *         assumed to be an HTTP/HTTPS-based URL, and an instance of {@link ClientAssertionRequestFormatter} or
+ *         {@link ClientSecretRequestFormatter} will be created and used.
  *     </li>
  * </ul>
  *
  * The configuration required by the individual {@code JwtRetriever} classes will likely differ. Please refer to the
  * official Apache Kafka documentation for more information on these, and related configuration.
  */
+@InterfaceAudience.Public
 public class DefaultJwtRetriever implements JwtRetriever {
 
     private static final Logger LOG = LoggerFactory.getLogger(DefaultJwtRetriever.class);

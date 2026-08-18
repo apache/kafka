@@ -32,9 +32,9 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -50,6 +50,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
 import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult.EMPTY;
 import static org.apache.kafka.clients.consumer.internals.RequestState.RETRY_BACKOFF_JITTER;
 
@@ -77,32 +78,40 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         static class LastSentFields {
 
             private StreamsRebalanceData.Assignment assignment = null;
+            private Map<StreamsRebalanceData.TaskId, Long> taskOffsets = null;
+            private Map<StreamsRebalanceData.TaskId, Long> taskEndOffsets = null;
 
             LastSentFields() {
             }
 
             void reset() {
                 assignment = null;
+                taskOffsets = null;
+                taskEndOffsets = null;
             }
         }
 
         private final StreamsMembershipManager membershipManager;
         private final int rebalanceTimeoutMs;
         private final StreamsRebalanceData streamsRebalanceData;
+        private final Time time;
         private final LastSentFields lastSentFields = new LastSentFields();
         private int endpointInformationEpoch = -1;
-
+        private long lastTaskOffsetIntervalTs = -1;
 
         public HeartbeatState(final StreamsRebalanceData streamsRebalanceData,
                               final StreamsMembershipManager membershipManager,
-                              final int rebalanceTimeoutMs) {
+                              final int rebalanceTimeoutMs,
+                              final Time time) {
             this.membershipManager = membershipManager;
             this.streamsRebalanceData = streamsRebalanceData;
             this.rebalanceTimeoutMs = rebalanceTimeoutMs;
+            this.time = time;
         }
 
         public void reset() {
             lastSentFields.reset();
+            lastTaskOffsetIntervalTs = -1L;
         }
 
         public int endpointInformationEpoch() {
@@ -136,6 +145,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                         .setPort(userEndpoint.port())
                     );
                 });
+                streamsRebalanceData.rackId().ifPresent(data::setRackId);
                 data.setClientTags(streamsRebalanceData.clientTags().entrySet().stream()
                     .map(entry -> new StreamsGroupHeartbeatRequestData.KeyValue()
                         .setKey(entry.getKey())
@@ -145,17 +155,92 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 data.setActiveTasks(fromStreamsToHeartbeatRequest(Set.of()));
                 data.setStandbyTasks(fromStreamsToHeartbeatRequest(Set.of()));
                 data.setWarmupTasks(fromStreamsToHeartbeatRequest(Set.of()));
+                // call both methods only once, as they invoke an expensive `supplier`
+                final Map<StreamsRebalanceData.TaskId, Long> taskOffsetSum = streamsRebalanceData.taskOffsetSum();
+                final Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSum = streamsRebalanceData.taskEndOffsetSum();
+                data.setTaskOffsets(convertToList(taskOffsetSum));
+                data.setTaskEndOffsets(convertToList(taskEndOffsetSum));
+                // Record what we sent so the first non-joining heartbeat does not redundantly resend unchanged offsets.
+                lastSentFields.taskOffsets = taskOffsetSum;
+                lastSentFields.taskEndOffsets = taskEndOffsetSum;
+                lastTaskOffsetIntervalTs = time.milliseconds();
             } else {
-                StreamsRebalanceData.Assignment reconciledAssignment = streamsRebalanceData.reconciledAssignment();
-                if (!reconciledAssignment.equals(lastSentFields.assignment)) {
+                final StreamsRebalanceData.Assignment reconciledAssignment = streamsRebalanceData.reconciledAssignment();
+                final boolean assignmentChanged = !reconciledAssignment.equals(lastSentFields.assignment);
+
+                if (assignmentChanged) {
                     data.setActiveTasks(fromStreamsToHeartbeatRequest(reconciledAssignment.activeTasks()));
                     data.setStandbyTasks(fromStreamsToHeartbeatRequest(reconciledAssignment.standbyTasks()));
                     data.setWarmupTasks(fromStreamsToHeartbeatRequest(reconciledAssignment.warmupTasks()));
                     lastSentFields.assignment = reconciledAssignment;
                 }
+
+                // call both method only once, as they invoke an expensive `supplier`
+                final Map<StreamsRebalanceData.TaskId, Long> taskOffsetSum = streamsRebalanceData.taskOffsetSum();
+                final Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSum = streamsRebalanceData.taskEndOffsetSum();
+
+                final long now = time.milliseconds();
+                if (assignmentChanged
+                    || taskOffsetIntervalPassed(now)
+                    || hasAtLeastOneHotWarmupTask(reconciledAssignment.warmupTasks(), taskOffsetSum, taskEndOffsetSum)
+                ) {
+                    // Task offsets and end-offsets are reported independently. A null field means "unchanged since the
+                    // last heartbeat", so we send each one only when its value actually changed and leave it null
+                    // otherwise. reset() clears the snapshot on any error/disconnect, forcing a full resend afterward.
+                    if (!taskOffsetSum.equals(lastSentFields.taskOffsets)) {
+                        data.setTaskOffsets(convertToList(taskOffsetSum));
+                        lastSentFields.taskOffsets = taskOffsetSum;
+                        lastTaskOffsetIntervalTs = now;
+                    }
+                    if (!taskEndOffsetSum.equals(lastSentFields.taskEndOffsets)) {
+                        data.setTaskEndOffsets(convertToList(taskEndOffsetSum));
+                        lastSentFields.taskEndOffsets = taskEndOffsetSum;
+                        lastTaskOffsetIntervalTs = now;
+                    }
+                }
             }
             data.setShutdownApplication(streamsRebalanceData.shutdownRequested());
             return data;
+        }
+
+        private static List<StreamsGroupHeartbeatRequestData.TaskOffset> convertToList(Map<StreamsRebalanceData.TaskId, Long> offsetsMap) {
+            return offsetsMap.entrySet().stream().map(
+                    entry -> new StreamsGroupHeartbeatRequestData.TaskOffset()
+                        .setSubtopologyId(entry.getKey().subtopologyId())
+                        .setPartition(entry.getKey().partitionId())
+                        .setOffset(entry.getValue()))
+                .collect(Collectors.toList());
+        }
+
+        private boolean taskOffsetIntervalPassed(final long now) {
+            return lastTaskOffsetIntervalTs + streamsRebalanceData.taskOffsetIntervalMs() <= now;
+        }
+
+        private boolean hasAtLeastOneHotWarmupTask(
+            final Set<StreamsRebalanceData.TaskId> warmupTasks,
+            final Map<StreamsRebalanceData.TaskId, Long> taskOffsetSum,
+            final Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSum
+        ) {
+            if (warmupTasks.isEmpty()) {
+                return false;
+            }
+
+            final long acceptableRecoveryLag = streamsRebalanceData.acceptableRecoveryLag();
+
+            return warmupTasks.stream()
+                .anyMatch(taskId -> {
+                    final Long offset = taskOffsetSum.get(taskId);
+                    final Long endOffset = taskEndOffsetSum.get(taskId);
+
+                    // offset and endOffset might not be known,
+                    // or be capped at MAX_VALUE due to overflow
+                    if (offset == null || offset == Long.MAX_VALUE
+                        || endOffset == null || endOffset == Long.MAX_VALUE) {
+                        return false;
+                    }
+
+                    return endOffset - offset <= acceptableRecoveryLag;
+                });
         }
 
         private static List<StreamsGroupHeartbeatRequestData.TaskIds> fromStreamsToHeartbeatRequest(final Set<StreamsRebalanceData.TaskId> tasks) {
@@ -291,6 +376,8 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
     private final StreamsRebalanceData streamsRebalanceData;
 
+    private String lastMissingClientTagsDetail = null;
+
     /**
      * Timer for tracking the time since the last consumer poll.  If the timer expires, the consumer will stop
      * sending heartbeat until the next poll.
@@ -325,7 +412,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         this.maxPollIntervalMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
-        this.heartbeatState = new HeartbeatState(streamsRebalanceData, membershipManager, maxPollIntervalMs);
+        this.heartbeatState = new HeartbeatState(streamsRebalanceData, membershipManager, maxPollIntervalMs, time);
         this.heartbeatRequestState = new HeartbeatRequestState(
             logContext,
             time,
@@ -383,6 +470,13 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             heartbeatState.reset();
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), Collections.singletonList(leaveHeartbeat));
         }
+        if (membershipManager.state() == MemberState.LEAVING && shouldSkipLeaveHeartbeat()) {
+            logger.info("Dynamic member {} skipping leave heartbeat (operation=REMAIN_IN_GROUP). " +
+                "The broker will remove the member from the group via session timeout.",
+                membershipManager.memberId());
+            membershipManager.onHeartbeatRequestSkipped();
+            return EMPTY;
+        }
         if (shouldHeartbeatBeforeIntervalExpires() || heartbeatRequestState.canSendRequest(currentTimeMs)) {
             NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequestAndHandleResponse(currentTimeMs);
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), Collections.singletonList(request));
@@ -410,7 +504,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
      */
     @Override
     public NetworkClientDelegate.PollResult pollOnClose(long currentTimeMs) {
-        if (membershipManager.isLeavingGroup()) {
+        if (membershipManager.isLeavingGroup() && !shouldSkipLeaveHeartbeat()) {
             NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequestAndLogResponse(currentTimeMs);
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), List.of(request));
         }
@@ -457,7 +551,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
     /**
      * A heartbeat should be sent without waiting for the heartbeat interval to expire if:
-     * - the member is leaving the group
+     * - the member should send a leave heartbeat (see {@link #shouldSendLeaveHeartbeat()})
      * or
      * - the member is joining the group or acknowledging the assignment and for both cases there is no heartbeat request
      *   in flight.
@@ -465,10 +559,39 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
      * @return true if a heartbeat should be sent before the interval expires, false otherwise
      */
     private boolean shouldHeartbeatBeforeIntervalExpires() {
-        return membershipManager.state() == MemberState.LEAVING
-            ||
-            (membershipManager.state() == MemberState.JOINING || membershipManager.state() == MemberState.ACKNOWLEDGING)
+        return shouldSendLeaveHeartbeat()
+            || (membershipManager.state() == MemberState.JOINING || membershipManager.state() == MemberState.ACKNOWLEDGING)
                 && !heartbeatRequestState.requestInFlight();
+    }
+
+    /**
+     * Returns whether a leave group heartbeat should be sent. The leave heartbeat is skipped only
+     * when the member is dynamic (no group instance ID) and the operation is
+     * {@link org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation#REMAIN_IN_GROUP}.
+     * Static members always send the leave heartbeat (with epoch -2) so the broker holds the
+     * assignment until the session timeout.
+     *
+     * @return true if a leave heartbeat should be sent, false otherwise
+     */
+    private boolean shouldSendLeaveHeartbeat() {
+        if (shouldSkipLeaveHeartbeat()) {
+            logger.debug("Member {} skipping leave heartbeat (operation={}, static={}).",
+                membershipManager.memberId(),
+                membershipManager.leaveGroupOperation(),
+                membershipManager.groupInstanceId().isPresent());
+            return false;
+        }
+        return membershipManager.state() == MemberState.LEAVING;
+    }
+
+    /**
+     * Returns true if the leave heartbeat should be skipped: only when the member is dynamic
+     * (no group instance ID) and the operation is REMAIN_IN_GROUP. Static members always send
+     * a leave heartbeat (with epoch -2) so the broker can hold the assignment.
+     */
+    private boolean shouldSkipLeaveHeartbeat() {
+        return REMAIN_IN_GROUP == membershipManager.leaveGroupOperation()
+            && membershipManager.groupInstanceId().isEmpty();
     }
 
     private void maybePropagateCoordinatorFatalErrorEvent() {
@@ -529,24 +652,74 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         heartbeatRequestState.updateHeartbeatIntervalMs(data.heartbeatIntervalMs());
         heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
         heartbeatState.setEndpointInformationEpoch(data.endpointInformationEpoch());
-        streamsRebalanceData.setHeartbeatIntervalMs(data.heartbeatIntervalMs());
+        // A leaving member's response carries no group configuration (the fields hold protocol defaults), so do not
+        // log or store it while shutting down. Normal responses have memberEpoch >= 0; leave responses use the
+        // negative leave sentinels (fenced members take the error path instead). Log only when a value changes, to
+        // avoid repeating it on every heartbeat: this fires on first receipt (values start unset) and on any later change.
+        if (data.memberEpoch() >= 0) {
+            if (data.heartbeatIntervalMs() != streamsRebalanceData.heartbeatIntervalMs()
+                    || data.taskOffsetIntervalMs() != streamsRebalanceData.taskOffsetIntervalMs()
+                    || data.acceptableRecoveryLag() != streamsRebalanceData.acceptableRecoveryLag()) {
+                logger.info("Received Streams group configuration from the group coordinator: "
+                        + "heartbeatIntervalMs={}, taskOffsetIntervalMs={}, acceptableRecoveryLag={}",
+                    describeConfig(data.heartbeatIntervalMs(), 1),
+                    describeConfig(data.taskOffsetIntervalMs(), 1),
+                    describeConfig(data.acceptableRecoveryLag(), 0));
+            }
+            streamsRebalanceData.setHeartbeatIntervalMs(data.heartbeatIntervalMs());
+            streamsRebalanceData.setTaskOffsetIntervalMs(data.taskOffsetIntervalMs());
+            streamsRebalanceData.setAcceptableRecoveryLag(data.acceptableRecoveryLag());
+        }
+
+        if (data.topologyDescriptionRequired() && streamsRebalanceData.wireTopologyDescription() != null) {
+            logger.info("Broker requested topology description push");
+            streamsRebalanceData.setTopologyPushRequired(true);
+        }
 
         if (data.partitionsByUserEndpoint() != null) {
             streamsRebalanceData.setPartitionsByHost(convertHostInfoMap(data));
         }
 
-        List<StreamsGroupHeartbeatResponseData.Status> statuses = data.status();
-        if (statuses != null) {
-            streamsRebalanceData.setStatuses(statuses);
-            if (!statuses.isEmpty()) {
-                String statusDetails = statuses.stream()
-                    .map(status -> "(" + status.statusCode() + ") " + status.statusDetail())
-                    .collect(Collectors.joining(", "));
-                logger.warn("Membership is in the following statuses: {}", statusDetails);
-            }
-        }
+        maybeLogStatuses(data.status());
 
         membershipManager.onHeartbeatSuccess(response);
+    }
+
+    private void maybeLogStatuses(final List<StreamsGroupHeartbeatResponseData.Status> statuses) {
+        if (statuses == null) {
+            return;
+        }
+        streamsRebalanceData.setStatuses(statuses);
+        // The broker recomputes and returns the full set of statuses on every heartbeat, so a response without a
+        // MISSING_CLIENT_TAGS status means the condition no longer holds.
+        boolean hasMissingClientTagsStatus = false;
+        List<String> statusesToLog = new ArrayList<>();
+        for (StreamsGroupHeartbeatResponseData.Status status : statuses) {
+            if (status.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_CLIENT_TAGS.code()) {
+                hasMissingClientTagsStatus = true;
+                if (!status.statusDetail().equals(lastMissingClientTagsDetail)) {
+                    lastMissingClientTagsDetail = status.statusDetail();
+                    statusesToLog.add("(" + status.statusCode() + ") " + status.statusDetail());
+                }
+            } else {
+                statusesToLog.add("(" + status.statusCode() + ") " + status.statusDetail());
+            }
+        }
+        // Reset the de-duplication marker once the MISSING_CLIENT_TAGS status clears, so that a later recurrence
+        // (even with the same detail) is logged again rather than silently suppressed.
+        if (!hasMissingClientTagsStatus) {
+            lastMissingClientTagsDetail = null;
+        }
+        if (!statusesToLog.isEmpty()) {
+            logger.warn("Membership is in the following statuses: {}", String.join(", ", statusesToLog));
+        }
+    }
+
+    // Renders a coordinator-provided config value for logging, or a note when the broker did not provide it. An older
+    // broker leaves these at their protocol defaults (intervals 0, acceptableRecoveryLag -1); a value below minValid
+    // means "not provided".
+    private static String describeConfig(final long value, final long minValid) {
+        return value < minValid ? "not provided (older broker)" : Long.toString(value);
     }
 
     private void onErrorResponse(final StreamsGroupHeartbeatResponse response, final long currentTimeMs) {
@@ -611,7 +784,15 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             case STREAMS_INVALID_TOPOLOGY:
             case STREAMS_INVALID_TOPOLOGY_EPOCH:
             case STREAMS_TOPOLOGY_FENCED:
+            case UNRELEASED_INSTANCE_ID:
                 logger.error("StreamsGroupHeartbeatRequest failed due to {}: {}", error, errorMessage);
+                handleFatalFailure(error.exception(errorMessage));
+                break;
+
+            case FENCED_INSTANCE_ID:
+                logger.error("StreamsGroupHeartbeatRequest failed because instance id {} is fenced: {}. " +
+                        "Check for another Streams instance using the same group instance id.",
+                    membershipManager.groupInstanceId().get(), errorMessage);
                 handleFatalFailure(error.exception(errorMessage));
                 break;
 
@@ -625,6 +806,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 membershipManager.onFenced();
                 // Skip backoff so that a next HB to rejoin is sent as soon as the fenced member releases its assignment
                 heartbeatRequestState.reset();
+                streamsRebalanceData.setTopologyPushRequired(false);
                 break;
 
             case UNKNOWN_MEMBER_ID:
@@ -637,6 +819,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 membershipManager.onFenced();
                 // Skip backoff so that a next HB to rejoin is sent as soon as the fenced member releases its assignment
                 heartbeatRequestState.reset();
+                streamsRebalanceData.setTopologyPushRequired(false);
                 break;
 
             case UNSUPPORTED_VERSION:
@@ -696,8 +879,18 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             List<TopicPartition> activeTopicPartitions = getTopicPartitionList(endpoint.activePartitions());
             List<TopicPartition> standbyTopicPartitions = getTopicPartitionList(endpoint.standbyPartitions());
             StreamsGroupHeartbeatResponseData.Endpoint userEndpoint = endpoint.userEndpoint();
-            StreamsRebalanceData.EndpointPartitions endpointPartitions = new StreamsRebalanceData.EndpointPartitions(activeTopicPartitions, standbyTopicPartitions);
-            partitionsByHost.put(new StreamsRebalanceData.HostInfo(userEndpoint.host(), userEndpoint.port()), endpointPartitions);
+            StreamsRebalanceData.HostInfo hostInfo = new StreamsRebalanceData.HostInfo(userEndpoint.host(), userEndpoint.port());
+            partitionsByHost.merge(
+                hostInfo,
+                new StreamsRebalanceData.EndpointPartitions(activeTopicPartitions, standbyTopicPartitions),
+                (existing, newPartitions) -> {
+                    List<TopicPartition> mergedActive = new ArrayList<>(existing.activePartitions());
+                    mergedActive.addAll(newPartitions.activePartitions());
+                    List<TopicPartition> mergedStandby = new ArrayList<>(existing.standbyPartitions());
+                    mergedStandby.addAll(newPartitions.standbyPartitions());
+                    return new StreamsRebalanceData.EndpointPartitions(mergedActive, mergedStandby);
+                }
+            );
         });
         return partitionsByHost;
     }
@@ -706,7 +899,8 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         return topicPartitions.stream()
                 .flatMap(partition ->
                         partition.partitions().stream().map(partitionId -> new TopicPartition(partition.topic(), partitionId)))
-                .collect(Collectors.toList());
+                // toUnmodifiableList rather than toList, so that List.copyOf in EndpointPartitions is a no-op
+                .collect(Collectors.toUnmodifiableList());
     }
 
 }

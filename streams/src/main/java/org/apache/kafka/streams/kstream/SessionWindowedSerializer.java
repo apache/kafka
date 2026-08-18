@@ -16,7 +16,11 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
@@ -29,6 +33,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
+@InterfaceAudience.Public
+@SuppressKafkaInternalApiUsage("KIP-1265: implements internal WindowedSerializer — pending KIP review to promote the parent or refactor the Streams windowed-serializer hierarchy")
 public class SessionWindowedSerializer<T> implements WindowedSerializer<T> {
 
     /**
@@ -87,13 +93,18 @@ public class SessionWindowedSerializer<T> implements WindowedSerializer<T> {
 
     @Override
     public byte[] serialize(final String topic, final Windowed<T> data) {
+        return serialize(topic, new RecordHeaders(), data);
+    }
+
+    @Override
+    public byte[] serialize(final String topic, final Headers headers, final Windowed<T> data) {
         WindowedSerdes.verifyInnerSerializerNotNull(inner, this);
 
         if (data == null) {
             return null;
         }
         // for either key or value, their schema is the same hence we will just use session key schema
-        return SessionKeySchema.toBinary(data, inner, topic);
+        return SessionKeySchema.toBinary(data, inner, headers, topic);
     }
 
     @Override
@@ -105,9 +116,14 @@ public class SessionWindowedSerializer<T> implements WindowedSerializer<T> {
 
     @Override
     public byte[] serializeBaseKey(final String topic, final Windowed<T> data) {
+        return serializeBaseKey(topic, new RecordHeaders(), data);
+    }
+
+    @Override
+    public byte[] serializeBaseKey(final String topic, final Headers headers, final Windowed<T> data) {
         WindowedSerdes.verifyInnerSerializerNotNull(inner, this);
 
-        return inner.serialize(topic, data.key());
+        return inner.serialize(topic, headers, data.key());
     }
 
     // Only for testing

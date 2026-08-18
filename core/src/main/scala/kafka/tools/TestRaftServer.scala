@@ -24,7 +24,7 @@ import joptsimple.{OptionException, OptionSpec}
 import kafka.network.SocketServer
 import kafka.raft.KafkaRaftManager
 import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, KafkaRequestHandlerPoolFactory}
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.Logging
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing
@@ -33,7 +33,8 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ObjectSerializationCache, Writable}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
-import org.apache.kafka.common.utils.{Exit, Time, Utils}
+import org.apache.kafka.common.utils.internals.Exit
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
 import org.apache.kafka.raft.errors.NotLeaderException
 import org.apache.kafka.raft.{Batch, BatchReader, Endpoints, KRaftConfigs, LeaderAndEpoch, QuorumConfig, RaftClient, RaftManager}
@@ -42,11 +43,9 @@ import org.apache.kafka.server.SimpleApiVersionManager
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.fault.ProcessTerminatingFaultHandler
-import org.apache.kafka.server.metrics.DefaultExternalKRaftMetrics
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils, ShutdownableThread}
 import org.apache.kafka.snapshot.SnapshotReader
 
-import java.util.Optional
 import scala.jdk.CollectionConverters._
 
 /**
@@ -84,7 +83,7 @@ class TestRaftServer(
     val apiVersionManager = new SimpleApiVersionManager(
       ListenerType.CONTROLLER,
       true,
-      () => FinalizedFeatures.fromKRaftVersion(MetadataVersion.MINIMUM_VERSION))
+      () => FinalizedFeatures.fromMetadataVersion(MetadataVersion.MINIMUM_VERSION))
     socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
 
     val endpoints = Endpoints.fromInetSocketAddresses(
@@ -105,7 +104,7 @@ class TestRaftServer(
       topicId,
       time,
       metrics,
-      new DefaultExternalKRaftMetrics(Optional.empty, Optional.empty),
+      _ => {},
       Some(threadNamePrefix),
       CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig.voters)),
       QuorumConfig.parseBootstrapServers(config.quorumConfig.bootstrapServers),
@@ -143,13 +142,13 @@ class TestRaftServer(
 
   def shutdown(): Unit = {
     if (raftManager != null)
-      CoreUtils.swallow(raftManager.shutdown(), this)
+      Utils.swallow(this.logger.underlying, () => raftManager.shutdown())
     if (workloadGenerator != null)
-      CoreUtils.swallow(workloadGenerator.shutdown(), this)
+      Utils.swallow(this.logger.underlying, () => workloadGenerator.shutdown())
     if (dataPlaneRequestHandlerPool != null)
-      CoreUtils.swallow(dataPlaneRequestHandlerPool.shutdown(), this)
+      Utils.swallow(this.logger.underlying, () => dataPlaneRequestHandlerPool.shutdown())
     if (socketServer != null)
-      CoreUtils.swallow(socketServer.shutdown(), this)
+      Utils.swallow(this.logger.underlying, () => socketServer.shutdown())
     Utils.closeQuietly(metrics, "metrics")
     shutdownLatch.countDown()
   }
@@ -198,6 +197,11 @@ class TestRaftServer(
 
     override def handleLoadSnapshot(reader: SnapshotReader[Array[Byte]]): Unit = {
       eventQueue.offer(HandleSnapshot(reader))
+    }
+
+    override def handleLoadBootstrap(reader: SnapshotReader[Array[Byte]]): Unit = {
+      // TestRaftServer does not process bootstrap snapshots.
+      reader.close()
     }
 
     override def initiateShutdown(): Boolean = {

@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -75,6 +76,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -166,6 +168,7 @@ public class MeteredVersionedKeyValueStoreTest {
         when(keySerde.serializer()).thenReturn(keySerializer);
         when(valueSerde.serializer()).thenReturn(valueSerializer);
         when(valueSerde.deserializer()).thenReturn(valueDeserializer);
+        when(context.headers()).thenReturn(new RecordHeaders());
 
         store.close();
         store = new MeteredVersionedKeyValueStore<>(
@@ -179,8 +182,10 @@ public class MeteredVersionedKeyValueStoreTest {
 
         store.put(KEY, VALUE, TIMESTAMP);
 
-        verify(keySerializer).serialize(changelogTopicName, KEY);
-        verify(valueSerializer).serialize(changelogTopicName, VALUE);
+        verify(keySerializer).serialize(changelogTopicName, new RecordHeaders(), KEY);
+        verify(valueSerializer).serialize(changelogTopicName, new RecordHeaders(), VALUE);
+        verify(keySerializer, never()).serialize(changelogTopicName, KEY);
+        verify(valueSerializer, never()).serialize(changelogTopicName, VALUE);
     }
 
     @Test
@@ -224,11 +229,11 @@ public class MeteredVersionedKeyValueStoreTest {
     }
 
     @Test
-    public void shouldDelegateAndRecordMetricsOnFlush() {
-        store.flush();
+    public void shouldDelegateAndRecordMetricsOnCommit() {
+        store.commit(Map.of());
 
-        verify(inner).flush();
-        assertThat((Double) getMetric("flush-rate").metricValue(), greaterThan(0.0));
+        verify(inner).commit(Map.of());
+        assertThat((Double) getMetric("commit-rate").metricValue(), greaterThan(0.0));
     }
 
     @Test

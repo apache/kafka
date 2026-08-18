@@ -46,9 +46,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -124,8 +125,9 @@ public class StandbyTaskEOSIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldSurviveWithOneTaskAsStandby() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldSurviveWithOneTaskAsStandby(final boolean transactionalStateStores) throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             inputTopic,
             Collections.singletonList(
@@ -144,8 +146,8 @@ public class StandbyTaskEOSIntegrationTest {
 
         final CountDownLatch instanceLatch = new CountDownLatch(1);
 
-        streamInstanceOne = buildStreamWithDirtyStateDir(stateDirPath + "/" + appId + "-1/", instanceLatch);
-        streamInstanceTwo = buildStreamWithDirtyStateDir(stateDirPath + "/" + appId + "-2/", instanceLatch);
+        streamInstanceOne = buildStreamWithDirtyStateDir(stateDirPath + "/" + appId + "-1/", instanceLatch, transactionalStateStores);
+        streamInstanceTwo = buildStreamWithDirtyStateDir(stateDirPath + "/" + appId + "-2/", instanceLatch, transactionalStateStores);
 
         startApplicationAndWaitUntilRunning(asList(streamInstanceOne, streamInstanceTwo), Duration.ofSeconds(60));
 
@@ -160,12 +162,13 @@ public class StandbyTaskEOSIntegrationTest {
     }
 
     private KafkaStreams buildStreamWithDirtyStateDir(final String stateDirPath,
-                                                      final CountDownLatch recordProcessLatch) throws Exception {
+                                                      final CountDownLatch recordProcessLatch,
+                                                      final boolean transactionalStateStores) throws Exception {
 
         final StreamsBuilder builder = new StreamsBuilder();
         final TaskId taskId = new TaskId(0, 0);
 
-        final Properties props = props(stateDirPath);
+        final Properties props = props(stateDirPath, transactionalStateStores);
 
         final StateDirectory stateDirectory = new StateDirectory(
             new StreamsConfig(props), new MockTime(), true, false);
@@ -186,8 +189,9 @@ public class StandbyTaskEOSIntegrationTest {
         return new KafkaStreams(builder.build(), props);
     }
 
-    @Test
-    public void shouldWipeOutStandbyStateDirectoryIfCheckpointIsMissing() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldWipeOutStandbyStateDirectoryIfCheckpointIsMissing(final boolean transactionalStateStores) throws Exception {
         final long time = System.currentTimeMillis();
         final String base = TestUtils.tempDirectory(appId).getPath();
 
@@ -205,8 +209,8 @@ public class StandbyTaskEOSIntegrationTest {
             10L + time
         );
 
-        streamInstanceOne = buildWithDeduplicationTopology(base + "-1");
-        streamInstanceTwo = buildWithDeduplicationTopology(base + "-2");
+        streamInstanceOne = buildWithDeduplicationTopology(base + "-1", transactionalStateStores);
+        streamInstanceTwo = buildWithDeduplicationTopology(base + "-2", transactionalStateStores);
 
         // start first instance and wait for processing
         startApplicationAndWaitUntilRunning(streamInstanceOne);
@@ -273,7 +277,7 @@ public class StandbyTaskEOSIntegrationTest {
             2
         );
 
-        streamInstanceOneRecovery = buildWithDeduplicationTopology(base + "-1");
+        streamInstanceOneRecovery = buildWithDeduplicationTopology(base + "-1", transactionalStateStores);
 
         // "restart" first client and wait for standby recovery
         // (could actually also be active, but it does not matter as long as we enable "state stores"
@@ -321,7 +325,8 @@ public class StandbyTaskEOSIntegrationTest {
         );
     }
 
-    private KafkaStreams buildWithDeduplicationTopology(final String stateDirPath) {
+    private KafkaStreams buildWithDeduplicationTopology(final String stateDirPath,
+                                                        final boolean transactionalStateStores) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         builder.addStateStore(Stores.keyValueStoreBuilder(
@@ -358,7 +363,6 @@ public class StandbyTaskEOSIntegrationTest {
                         }
 
                         store.put(key, value);
-                        store.flush();
 
                         if (key == KEY_1) {
                             // after error injection, we need to avoid a consecutive error after rebalancing
@@ -373,11 +377,11 @@ public class StandbyTaskEOSIntegrationTest {
             )
             .to(outputTopic);
 
-        return new KafkaStreams(builder.build(), props(stateDirPath));
+        return new KafkaStreams(builder.build(), props(stateDirPath, transactionalStateStores));
     }
 
 
-    private Properties props(final String stateDirPath) {
+    private Properties props(final String stateDirPath, final boolean transactionalStateStores) {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -385,6 +389,10 @@ public class StandbyTaskEOSIntegrationTest {
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, stateDirPath);
         streamsConfiguration.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        if (transactionalStateStores) {
+            // Transactional state stores are only supported under exactly-once, which is already enabled above.
+            streamsConfiguration.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
+        }
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -74,7 +75,7 @@ import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrappingStoreBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer;
 
@@ -1279,7 +1280,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final StreamPartitioner<KO, SubscriptionWrapper<K>> subscriptionSinkPartitioner =
                 tableJoinedInternal.otherPartitioner() == null
                         ? null
-                        : (topic, key, val, numPartitions) -> getPartition.apply(tableJoinedInternal.otherPartitioner().partitions(topic, key, null, numPartitions));
+                        : new SubscriptionSinkPartitioner<>(tableJoinedInternal.otherPartitioner(), getPartition);
 
         final StreamSinkNode<KO, SubscriptionWrapper<K>> subscriptionSink = new StreamSinkNode<>(
             renamed.suffixWithOrElseGet("-subscription-registration-sink", builder, SINK_NAME),
@@ -1319,7 +1320,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         builder.addGraphNode(subscriptionSource, subscriptionReceiveNode);
 
         final KTableValueGetterSupplier<KO, VO> foreignKeyValueGetter = ((KTableImpl<KO, ?, VO>) foreignKeyTable).valueGetterSupplier();
-        final ProcessorToStateConnectorNode<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>> subscriptionJoinNode =
+        final ProcessorToStateConnectorNode<CombinedKey<KO, K>, Change<ValueTimestampHeaders<SubscriptionWrapper<K>>>> subscriptionJoinNode =
             new ProcessorToStateConnectorNode<>(
                 new ProcessorParameters<>(
                     new SubscriptionJoinProcessorSupplier<>(
@@ -1345,16 +1346,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final String finalRepartitionTopicName = renamed.suffixWithOrElseGet("-subscription-response", builder, SUBSCRIPTION_RESPONSE) + TOPIC_SUFFIX;
         builder.internalTopologyBuilder.addInternalTopic(finalRepartitionTopicName, InternalTopicProperties.empty());
 
-        final StreamPartitioner<K, SubscriptionResponseWrapper<VO>> defaultForeignResponseSinkPartitioner =
-                (topic, key, subscriptionResponseWrapper, numPartitions) -> {
-                    final Integer partition = subscriptionResponseWrapper.primaryPartition();
-                    return partition == null ? Optional.empty() : Optional.of(Collections.singleton(partition));
-                };
+        final StreamPartitioner<K, SubscriptionResponseWrapper<VO>> defaultForeignResponseSinkPartitioner = new DefaultForeignResponseSinkPartitioner<>();
 
         final StreamPartitioner<K, SubscriptionResponseWrapper<VO>> foreignResponseSinkPartitioner =
                 tableJoinedInternal.partitioner() == null
                         ? defaultForeignResponseSinkPartitioner
-                        : (topic, key, val, numPartitions) -> getPartition.apply(tableJoinedInternal.partitioner().partitions(topic, key, null, numPartitions));
+                        : new ForeignResponseSinkPartitioner<>(tableJoinedInternal.partitioner(), getPartition);
 
         final StreamSinkNode<K, SubscriptionResponseWrapper<VO>> foreignResponseSink =
             new StreamSinkNode<>(
@@ -1436,6 +1433,80 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                                 final MaterializedInternal<?, ?, KeyValueStore<Bytes, byte[]>> materializedInternal) {
         if (materializedInternal != null) {
             tableNode.setOutputVersioned(materializedInternal.storeSupplier() instanceof VersionedBytesStoreSupplier);
+        }
+    }
+
+    private static class SubscriptionSinkPartitioner<K, KO> implements StreamPartitioner<KO, SubscriptionWrapper<K>> {
+        private final StreamPartitioner<KO, Void> otherPartitioner;
+        private final Function<Optional<Set<Integer>>, Optional<Set<Integer>>> getPartition;
+
+        private SubscriptionSinkPartitioner(
+            final StreamPartitioner<KO, Void> otherPartitioner,
+            final Function<Optional<Set<Integer>>, Optional<Set<Integer>>> getPartition
+        ) {
+            this.otherPartitioner = otherPartitioner;
+            this.getPartition = getPartition;
+        }
+
+        @SuppressWarnings("removal")
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final KO key, final SubscriptionWrapper<K> value, final int numPartitions) {
+            throw new UnsupportedOperationException("This method is deprecated and should not be called.");
+        }
+
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic,
+                                                 final KO key,
+                                                 final SubscriptionWrapper<K> value,
+                                                 final Headers headers,
+                                                 final int numPartitions) {
+            return getPartition.apply(otherPartitioner.partitions(topic, key, null, headers, numPartitions));
+        }
+    }
+
+    private static class ForeignResponseSinkPartitioner<K, VO> implements StreamPartitioner<K, SubscriptionResponseWrapper<VO>> {
+        private final StreamPartitioner<K, Void> partitioner;
+        private final Function<Optional<Set<Integer>>, Optional<Set<Integer>>> getPartition;
+
+        private ForeignResponseSinkPartitioner(
+            final StreamPartitioner<K, Void> partitioner,
+            final Function<Optional<Set<Integer>>, Optional<Set<Integer>>> getPartition
+        ) {
+            this.partitioner = partitioner;
+            this.getPartition = getPartition;
+        }
+
+        @SuppressWarnings("removal")
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final K key, final SubscriptionResponseWrapper<VO> value, final int numPartitions) {
+            throw new UnsupportedOperationException("This method is deprecated and should not be called.");
+        }
+
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic,
+                                                 final K key,
+                                                 final SubscriptionResponseWrapper<VO> value,
+                                                 final Headers headers,
+                                                 final int numPartitions) {
+            return getPartition.apply(partitioner.partitions(topic, key, null, headers, numPartitions));
+        }
+    }
+
+    private static class DefaultForeignResponseSinkPartitioner<K, VO> implements StreamPartitioner<K, SubscriptionResponseWrapper<VO>> {
+        @SuppressWarnings("removal")
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final K key, final SubscriptionResponseWrapper<VO> value, final int numPartitions) {
+            throw new UnsupportedOperationException("This method is deprecated and should not be called.");
+        }
+
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic,
+                                                 final K key,
+                                                 final SubscriptionResponseWrapper<VO> value,
+                                                 final Headers headers,
+                                                 final int numPartitions) {
+            final Integer partition = value.primaryPartition();
+            return partition == null ? Optional.empty() : Optional.of(Collections.singleton(partition));
         }
     }
 }

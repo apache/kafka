@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Utils;
@@ -28,6 +31,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
+@InterfaceAudience.Public
 public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
 
     /**
@@ -70,6 +74,11 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
 
     @Override
     public Windowed<T> deserialize(final String topic, final byte[] data) {
+        return deserialize(topic, new RecordHeaders(), data);
+    }
+
+    @Override
+    public Windowed<T> deserialize(final String topic, final Headers headers, final byte[] data) {
         WindowedSerdes.verifyInnerDeserializerNotNull(inner, this);
 
         if (data == null || data.length == 0) {
@@ -78,11 +87,11 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
 
         // toStoreKeyBinary was used to serialize the data.
         if (this.isChangelogTopic) {
-            return WindowKeySchema.fromStoreKey(data, windowSize, inner, topic);
+            return WindowKeySchema.fromStoreKey(data, windowSize, inner, headers, topic);
         }
 
         // toBinary was used to serialize the data
-        return WindowKeySchema.from(data, windowSize, inner, topic);
+        return WindowKeySchema.from(data, windowSize, inner, headers, topic);
     }
 
     @Override

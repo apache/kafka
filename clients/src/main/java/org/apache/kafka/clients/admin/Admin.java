@@ -29,6 +29,7 @@ import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.FeatureUpdateFailedException;
@@ -122,6 +123,7 @@ import java.util.Set;
  * version required.
  * <p>
  */
+@InterfaceAudience.Public
 public interface Admin extends AutoCloseable {
 
     /**
@@ -1544,6 +1546,19 @@ public interface Admin extends AutoCloseable {
     DescribeFeaturesResult describeFeatures(DescribeFeaturesOptions options);
 
     /**
+     * Applies specified updates to finalized features.
+     * <p>
+     * This is a convenience method for {@link #updateFeatures(Map, UpdateFeaturesOptions)} with default options.
+     * See the overload for more details.
+     *
+     * @param featureUpdates the map of finalized feature name to {@link FeatureUpdate}
+     * @return the {@link UpdateFeaturesResult} containing the result
+     */
+    default UpdateFeaturesResult updateFeatures(Map<String, FeatureUpdate> featureUpdates) {
+        return updateFeatures(featureUpdates, new UpdateFeaturesOptions());
+    }
+
+    /**
      * Applies specified updates to finalized features. This operation is not transactional so some
      * updates may succeed while the rest may fail.
      * <p>
@@ -1666,6 +1681,48 @@ public interface Admin extends AutoCloseable {
      */
     @InterfaceStability.Unstable
     UnregisterBrokerResult unregisterBroker(int brokerId, UnregisterBrokerOptions options);
+
+    /**
+     * Unregister a controller.
+     *
+     * This is a convenience method for {@link #unregisterController(int, UnregisterControllerOptions)}
+     *
+     * @param controllerId  the controller id to unregister.
+     *
+     * @return the {@link UnregisterControllerResult} containing the result
+     */
+    @InterfaceStability.Unstable
+    default UnregisterControllerResult unregisterController(int controllerId) {
+        return unregisterController(controllerId, new UnregisterControllerOptions());
+    }
+
+    /**
+     * Unregister a controller.
+     *
+     * The following exceptions can be anticipated when calling {@code get()} on the future from the
+     * returned {@link UnregisterControllerResult}:
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *   If the request timed out before the unregister operation could finish.</li>
+     *   <li>{@link org.apache.kafka.common.errors.UnsupportedVersionException}
+     *   If the software is too old to support the unregistration API.</li>
+     *   <li>{@link org.apache.kafka.common.errors.ControllerIdNotRegisteredException}
+     *   If the requested controller id is not currently registered.</li>
+     *   <li>{@link org.apache.kafka.common.errors.NotControllerException}
+     *   If the request does not arrive at the active controller.</li>
+     *   <li>{@link org.apache.kafka.common.errors.InvalidRequestException}
+     *   If the request tries to unregister the current active controller id.</li>
+     *
+     * </ul>
+     * <p>
+     *
+     * @param controllerId  the controller id to unregister.
+     * @param options       the options to use.
+     *
+     * @return the {@link UnregisterControllerResult} containing the result
+     */
+    @InterfaceStability.Unstable
+    UnregisterControllerResult unregisterController(int controllerId, UnregisterControllerOptions options);
 
     /**
      * Describe producer state on a set of topic partitions. See
@@ -1911,6 +1968,10 @@ public interface Admin extends AutoCloseable {
      * will fail with {@link InconsistentClusterIdException}.
      * If not provided, the cluster id check is skipped.
      *
+     * <p> Note: Since 4.2.0, if {@code controller.quorum.auto.join.enable} is set to true the controller
+     * must be shutdown before removing the controller from the voter set to prevent the removed
+     * controller from automatically joining again.
+     *
      * @param voterId           The node ID of the voter.
      * @param voterDirectoryId  The directory ID of the voter.
      * @param options           Additional options for the operation, including optional cluster ID.
@@ -2145,5 +2206,5 @@ public interface Admin extends AutoCloseable {
      * @return The TerminateTransactionResult.
      */
     TerminateTransactionResult forceTerminateTransaction(String transactionalId, 
-                                                        TerminateTransactionOptions options);
+                                                         TerminateTransactionOptions options);
 }

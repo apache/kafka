@@ -216,7 +216,8 @@ public class CreateTopicsRequestWithPolicyTest {
                 admin,
                 true,
                 InvalidReplicationFactorException.class,
-                "Unable to replicate the partition 4 time(s): The target replication factor of 4 cannot be reached because only 3 broker(s) are registered."
+                "Unable to replicate the partition 4 time(s): The target replication factor of 4 cannot be "
+                    + "reached because only 3 broker(s) are registered or some brokers have all their log directories cordoned."
             );
 
             validateErrorCreateTopicsRequests(

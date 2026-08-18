@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
@@ -27,8 +28,10 @@ import java.util.Collection;
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
+@InterfaceAudience.Public
 public class DescribeStreamsGroupsOptions extends AbstractOptions<DescribeStreamsGroupsOptions> {
     private boolean includeAuthorizedOperations;
+    private boolean includeTopologyDescription;
 
     public DescribeStreamsGroupsOptions includeAuthorizedOperations(boolean includeAuthorizedOperations) {
         this.includeAuthorizedOperations = includeAuthorizedOperations;
@@ -37,5 +40,19 @@ public class DescribeStreamsGroupsOptions extends AbstractOptions<DescribeStream
 
     public boolean includeAuthorizedOperations() {
         return includeAuthorizedOperations;
+    }
+
+    /**
+     * Whether to include the full topology description, as recorded by the broker's topology description plugin, in the
+     * response. Requesting a topology description against a broker that does not support it fails with
+     * {@link org.apache.kafka.common.errors.UnsupportedVersionException}.
+     */
+    public DescribeStreamsGroupsOptions includeTopologyDescription(boolean includeTopologyDescription) {
+        this.includeTopologyDescription = includeTopologyDescription;
+        return this;
+    }
+
+    public boolean includeTopologyDescription() {
+        return includeTopologyDescription;
     }
 }

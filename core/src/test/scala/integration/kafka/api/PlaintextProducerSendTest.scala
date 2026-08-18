@@ -17,6 +17,7 @@
 
 package kafka.api
 
+import java.util
 import java.util.{Locale, Properties}
 import java.util.concurrent.{ExecutionException, Future, TimeUnit}
 import kafka.utils.{TestInfoUtils, TestUtils}
@@ -24,7 +25,8 @@ import org.apache.kafka.clients.consumer.GroupProtocol
 import org.apache.kafka.clients.producer.{BufferExhaustedException, KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{InvalidTimestampException, RecordTooLargeException, SerializationException, TimeoutException}
-import org.apache.kafka.common.record.{DefaultRecord, DefaultRecordBatch, Records, TimestampType}
+import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.common.record.internal.{DefaultRecord, DefaultRecordBatch, Records}
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions._
@@ -170,14 +172,26 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     assertEquals("Partition 10 of topic topic with partition count 4 is not present in metadata after 500 ms.", exception.getCause.getMessage)
   }
 
+  /**
+   * Test error message received when partitionsFor fails waiting on metadata for a topic that does not exist.
+   * No need to run this for both rebalance protocols.
+   */
+  @ParameterizedTest(name = "groupProtocol={0}.autoCreateTopicsEnabled={1}")
+  @MethodSource(Array("protocolAndAutoCreateTopicProviders"))
+  def testPartitionsForTimeoutErrorWhenTopicDoesNotExist(groupProtocol: String, autoCreateTopicsEnabled: String): Unit = {
+    val producer = createProducer(maxBlockMs = 500)
+
+    val exception = assertThrows(classOf[TimeoutException], () => producer.partitionsFor("unexisting-topic"))
+    assertEquals("Topic unexisting-topic not present in metadata after 500 ms.", exception.getMessage)
+  }
+
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("timestampConfigProvider"))
   def testSendWithInvalidBeforeAndAfterTimestamp(groupProtocol: String, messageTimeStampConfig: String, recordTimestamp: Long): Unit = {
-    val topicProps = new Properties()
     // set the TopicConfig for timestamp validation to have 1 minute threshold. Note that recordTimestamp has 5 minutes diff
     val oneMinuteInMs: Long = 1 * 60 * 60 * 1000L
-    topicProps.setProperty(messageTimeStampConfig, oneMinuteInMs.toString)
-    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2, topicConfig = topicProps)
+    val topicConfigs = util.Map.of(messageTimeStampConfig, oneMinuteInMs.toString)
+    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2, topicConfig = topicConfigs)
 
     val producer = createProducer()
     try {
@@ -202,11 +216,9 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("timestampConfigProvider"))
   def testValidBeforeAndAfterTimestampsAtThreshold(groupProtocol: String, messageTimeStampConfig: String, recordTimestamp: Long): Unit = {
-    val topicProps = new Properties()
-
     // set the TopicConfig for timestamp validation to be the same as the record timestamp
-    topicProps.setProperty(messageTimeStampConfig, recordTimestamp.toString)
-    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2, topicConfig = topicProps)
+    val topicConfigs = util.Map.of(messageTimeStampConfig, recordTimestamp.toString)
+    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2, topicConfig = topicConfigs)
 
     val producer = createProducer()
 
@@ -222,12 +234,10 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("timestampConfigProvider"))
   def testValidBeforeAndAfterTimestampsWithinThreshold(groupProtocol: String, messageTimeStampConfig: String, recordTimestamp: Long): Unit = {
-    val topicProps = new Properties()
-
     // set the TopicConfig for timestamp validation to have 10 minute threshold. Note that recordTimestamp has 5 minutes diff
     val tenMinutesInMs: Long = 10 * 60 * 60 * 1000L
-    topicProps.setProperty(messageTimeStampConfig, tenMinutesInMs.toString)
-    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2, topicConfig = topicProps)
+    val topicConfigs = util.Map.of(messageTimeStampConfig, tenMinutesInMs.toString)
+    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2, topicConfig = topicConfigs)
 
     val producer = createProducer()
 

@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
@@ -64,13 +65,18 @@ public class SubscriptionResponseWrapperSerde<VRight> implements Serde<Subscript
 
         @Override
         public byte[] serialize(final String topic, final SubscriptionResponseWrapper<V> data) {
+            throw new UnsupportedOperationException("SubscriptionResponseWrapperSerializer requires the headers-aware version of serialize");
+        }
+
+        @Override
+        public byte[] serialize(final String topic, final Headers headers, final SubscriptionResponseWrapper<V> data) {
             //{1-bit-isHashNull}{7-bits-version}{Optional-16-byte-Hash}{n-bytes serialized data}
 
             if (data.version() < 0) {
                 throw new UnsupportedVersionException("SubscriptionResponseWrapper version cannot be negative");
             }
 
-            final byte[] serializedData = data.foreignValue() == null ? null : serializer.serialize(topic, data.foreignValue());
+            final byte[] serializedData = data.foreignValue() == null ? null : serializer.serialize(topic, headers, data.foreignValue());
             final int serializedDataLength = serializedData == null ? 0 : serializedData.length;
             final long[] originalHash = data.originalValueHash();
             final int hashLength = originalHash == null ? 0 : 2 * Long.BYTES;
@@ -111,6 +117,11 @@ public class SubscriptionResponseWrapperSerde<VRight> implements Serde<Subscript
 
         @Override
         public SubscriptionResponseWrapper<V> deserialize(final String topic, final byte[] data) {
+            throw new UnsupportedOperationException("SubscriptionResponseWrapperSerializer requires the headers-aware version of deserialize");
+        }
+
+        @Override
+        public SubscriptionResponseWrapper<V> deserialize(final String topic, final Headers headers, final byte[] data) {
             //{1-bit-isHashNull}{7-bits-version}{Optional-16-byte-Hash}{n-bytes serialized data}
 
             final ByteBuffer buf = ByteBuffer.wrap(data);
@@ -134,7 +145,7 @@ public class SubscriptionResponseWrapperSerde<VRight> implements Serde<Subscript
                 final byte[] serializedValue;
                 serializedValue = new byte[data.length - lengthSum];
                 buf.get(serializedValue, 0, serializedValue.length);
-                value = deserializer.deserialize(topic, serializedValue);
+                value = deserializer.deserialize(topic, headers, serializedValue);
             } else {
                 value = null;
             }

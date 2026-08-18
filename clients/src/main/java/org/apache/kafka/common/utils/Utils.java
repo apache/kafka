@@ -20,6 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.network.TransferableChannel;
+import org.apache.kafka.common.utils.internals.OperatingSystem;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,6 +36,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.lang.management.ManagementFactory;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
@@ -92,6 +94,9 @@ import java.util.regex.Pattern;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
 
 public final class Utils {
 
@@ -590,6 +595,9 @@ public final class Utils {
         if (bytes < 0) {
             return String.valueOf(bytes);
         }
+        if (bytes == 0) {
+            return "0 " + BYTE_SCALE_SUFFIXES[0];
+        }
         double asDouble = (double) bytes;
         int ordinal = (int) Math.floor(Math.log(asDouble) / Math.log(1024.0));
         double scale = Math.pow(1024.0, ordinal);
@@ -898,25 +906,6 @@ public final class Utils {
     }
 
     /**
-     * Returns an empty list if the provided list is null, otherwise returns the list itself.
-     * <p>
-     * This method is useful for avoiding {@code NullPointerException} when working with potentially null lists.
-     *
-     * @param other the list to check for null
-     * @return an empty list if the provided list is null, otherwise the original list
-     */
-    public static <T> List<T> safe(List<T> other) {
-        return other == null ? Collections.emptyList() : other;
-    }
-
-   /**
-    * Get the ClassLoader which loaded Kafka.
-    */
-    public static ClassLoader getKafkaClassLoader() {
-        return Utils.class.getClassLoader();
-    }
-
-    /**
      * Get the Context ClassLoader on this thread or, if not present, the ClassLoader that
      * loaded Kafka.
      * <p>
@@ -925,7 +914,7 @@ public final class Utils {
     public static ClassLoader getContextOrKafkaClassLoader() {
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
         if (cl == null)
-            return getKafkaClassLoader();
+            return Utils.class.getClassLoader();
         else
             return cl;
     }
@@ -1035,14 +1024,26 @@ public final class Utils {
         void run() throws Throwable;
     }
 
-    public static void swallow(final Logger log, final Level level, final String what, final SwallowAction code) {
-        swallow(log, level, what, code, null);
+    public static void swallow(final SwallowAction code) {
+        swallow(log, Level.WARN, "Exception while execution the action", code, null);
+    }
+
+    public static void swallow(final Logger log, final SwallowAction code) {
+        swallow(log, Level.WARN, "Exception while execution the action", code, null);
+    }
+
+    public static void swallow(final Logger log, final Level level, final SwallowAction code) {
+        swallow(log, level, "Exception while execution the action", code, null);
+    }
+
+    public static void swallow(final Logger log, final Level level, final String errorMessage, final SwallowAction code) {
+        swallow(log, level, errorMessage, code, null);
     }
 
     /**
      * Run the supplied code. If an exception is thrown, it is swallowed and registered to the firstException parameter.
      */
-    public static void swallow(final Logger log, final Level level, final String what, final SwallowAction code,
+    public static void swallow(final Logger log, final Level level, final String errorMessage, final SwallowAction code,
                                final AtomicReference<Throwable> firstException) {
         if (code != null) {
             try {
@@ -1050,20 +1051,20 @@ public final class Utils {
             } catch (Throwable t) {
                 switch (level) {
                     case INFO:
-                        log.info(what, t);
+                        log.info(errorMessage, t);
                         break;
                     case DEBUG:
-                        log.debug(what, t);
+                        log.debug(errorMessage, t);
                         break;
                     case ERROR:
-                        log.error(what, t);
+                        log.error(errorMessage, t);
                         break;
                     case TRACE:
-                        log.trace(what, t);
+                        log.trace(errorMessage, t);
                         break;
                     case WARN:
                     default:
-                        log.warn(what, t);
+                        log.warn(errorMessage, t);
                 }
                 if (firstException != null)
                     firstException.compareAndSet(null, t);
@@ -1721,6 +1722,34 @@ public final class Utils {
         ConfigDef all = new ConfigDef();
         configDefs.forEach(configDef -> configDef.configKeys().values().forEach(all::define));
         return all;
+    }
+
+    /**
+     * Register the given mbean with the platform mbean server,
+     * unregistering any mbean that was there before. Note,
+     * this method will not throw an exception if the registration
+     * fails (since there is nothing you can do, and it isn't fatal),
+     * instead it just returns false indicating the registration failed.
+     *
+     * @param mbean The object to register as a mbean
+     * @param name  The name to register this mbean with
+     * @return true if the registration succeeded
+     */
+    public static boolean registerMBean(Object mbean, String name) {
+        try {
+            MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
+            synchronized (mbs) {
+                ObjectName objName = new ObjectName(name);
+                if (mbs.isRegistered(objName)) {
+                    mbs.unregisterMBean(objName);
+                }
+                mbs.registerMBean(mbean, objName);
+                return true;
+            }
+        } catch (Exception e) {
+            log.error("Failed to register Mbean with name {}", name, e);
+            return false;
+        }
     }
 
     /**

@@ -18,11 +18,11 @@
 package org.apache.kafka.common.compress;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.ByteBufferInputStream;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
-import org.apache.kafka.common.utils.ChunkedBytesStream;
+import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.ByteBufferInputStream;
+import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.internals.ChunkedBytesStream;
 
 import com.github.luben.zstd.BufferPool;
 import com.github.luben.zstd.RecyclingBufferPool;
@@ -36,7 +36,7 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.Objects;
 
-import static org.apache.kafka.common.record.CompressionType.ZSTD;
+import static org.apache.kafka.common.record.internal.CompressionType.ZSTD;
 
 public class ZstdCompression implements Compression {
 

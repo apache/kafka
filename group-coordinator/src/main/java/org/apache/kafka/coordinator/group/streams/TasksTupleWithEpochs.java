@@ -18,6 +18,8 @@ package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentValue;
 
+import org.slf4j.Logger;
+
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -67,6 +69,13 @@ public record TasksTupleWithEpochs(Map<String, Map<Integer, Integer>> activeTask
     }
 
     /**
+     * @return standby and warm-up tasks merged, since warm-up tasks are executed as standby tasks on the client.
+     */
+    public Map<String, Set<Integer>> standbyAndWarmupTasks() {
+        return mergeTasks(standbyTasks, warmupTasks);
+    }
+
+    /**
      * Merges this task tuple with another task tuple.
      * For overlapping active tasks, epochs from the other tuple take precedence.
      *
@@ -102,13 +111,15 @@ public record TasksTupleWithEpochs(Map<String, Map<Integer, Integer>> activeTask
      * @return The TasksTupleWithEpochs
      */
     public static TasksTupleWithEpochs fromCurrentAssignmentRecord(
+        Logger log,
+        String groupId,
         List<StreamsGroupCurrentMemberAssignmentValue.TaskIds> activeTasks,
         List<StreamsGroupCurrentMemberAssignmentValue.TaskIds> standbyTasks,
         List<StreamsGroupCurrentMemberAssignmentValue.TaskIds> warmupTasks,
         int memberEpoch
     ) {
         return new TasksTupleWithEpochs(
-            parseActiveTasksWithEpochs(activeTasks, memberEpoch),
+            parseActiveTasksWithEpochs(log, groupId, activeTasks, memberEpoch),
             parseSimpleTasks(standbyTasks),
             parseSimpleTasks(warmupTasks)
         );
@@ -125,6 +136,8 @@ public record TasksTupleWithEpochs(Map<String, Map<Integer, Integer>> activeTask
     }
 
     private static Map<String, Map<Integer, Integer>> parseActiveTasksWithEpochs(
+        Logger log,
+        String groupId,
         List<StreamsGroupCurrentMemberAssignmentValue.TaskIds> taskIdsList,
         int memberEpoch
     ) {
@@ -137,19 +150,16 @@ public record TasksTupleWithEpochs(Map<String, Map<Integer, Integer>> activeTask
 
             Map<Integer, Integer> partitionsWithEpochs = new HashMap<>();
 
-            if (epochs != null && !epochs.isEmpty()) {
-                if (epochs.size() != partitions.size()) {
-                    throw new IllegalStateException(
-                        "Assignment epochs must be provided for all partitions. " +
-                        "Subtopology " + subtopologyId + " has " + partitions.size() +
-                        " partitions but " + epochs.size() + " epochs"
-                    );
-                }
-
+            if (epochs != null && epochs.size() == partitions.size()) {
                 for (int i = 0; i < partitions.size(); i++) {
                     partitionsWithEpochs.put(partitions.get(i), epochs.get(i));
                 }
             } else {
+                if (epochs != null) {
+                    log.error("[GroupId {}] Size of assignment epochs {} is not equal to partitions {} for subtopology {}. " +
+                            "Using default epoch {} for all partitions.",
+                        groupId, epochs.size(), partitions.size(), subtopologyId, memberEpoch);
+                }
                 // Legacy record without epochs: use member epoch as default
                 for (Integer partition : partitions) {
                     partitionsWithEpochs.put(partition, memberEpoch);

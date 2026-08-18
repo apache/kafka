@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -37,7 +39,6 @@ import org.rocksdb.WriteBatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -46,7 +47,7 @@ import java.util.Optional;
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 
-public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Segment> implements SegmentedBytesStore {
+public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Segment> implements SegmentedBytesStore, WithRetentionPeriod {
     private static final Logger LOG = LoggerFactory.getLogger(AbstractDualSchemaRocksDBSegmentedBytesStore.class);
 
     private final String name;
@@ -60,7 +61,9 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     protected long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
     protected boolean consistencyEnabled = false;
     protected Position position;
-    protected OffsetCheckpoint positionCheckpoint;
+    // Position of writes staged in the current transaction; merged into the committed position on commit().
+    private Position pendingPosition = Position.emptyPosition();
+    private boolean transactional;
     private volatile boolean open;
 
     AbstractDualSchemaRocksDBSegmentedBytesStore(final String name,
@@ -76,37 +79,34 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     }
 
     @Override
+    public long retentionPeriod() {
+        return retentionPeriod;
+    }
+
+    @Override
     public KeyValueIterator<Bytes, byte[]> all() {
-
-        final long actualFrom = getActualFrom(0, baseKeySchema instanceof PrefixedWindowKeySchemas.TimeFirstWindowKeySchema);
-
-        final List<S> searchSpace = segments.allSegments(true);
-        final Bytes from = baseKeySchema.lowerRange(null, actualFrom);
-        final Bytes to = baseKeySchema.upperRange(null, Long.MAX_VALUE);
-
-        return new SegmentIterator<>(
-                searchSpace.iterator(),
-                baseKeySchema.hasNextCondition(null, null, actualFrom, Long.MAX_VALUE, true),
-                from,
-                to,
-                true);
+        return all(true, null);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> backwardAll() {
+        return all(false, null);
+    }
 
+    KeyValueIterator<Bytes, byte[]> all(final boolean forward, final IsolationLevel isolationLevel) {
         final long actualFrom = getActualFrom(0, baseKeySchema instanceof PrefixedWindowKeySchemas.TimeFirstWindowKeySchema);
 
-        final List<S> searchSpace = segments.allSegments(false);
+        final List<S> searchSpace = segments.allSegments(forward);
         final Bytes from = baseKeySchema.lowerRange(null, actualFrom);
         final Bytes to = baseKeySchema.upperRange(null, Long.MAX_VALUE);
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
-                baseKeySchema.hasNextCondition(null, null, actualFrom, Long.MAX_VALUE, false),
+                baseKeySchema.hasNextCondition(null, null, actualFrom, Long.MAX_VALUE, forward),
                 from,
                 to,
-                false);
+                forward,
+                isolationLevel);
     }
 
     @Override
@@ -189,11 +189,12 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
         final S segment = segments.getOrCreateSegmentIfLive(segmentId, internalProcessorContext, observedStreamTime);
 
         if (segment == null) {
-            expiredRecordSensor.record(1.0d, internalProcessorContext.currentSystemTimeMs());
+            expiredRecordSensor.record();
             LOG.warn("Skipping record for expired segment.");
         } else {
             synchronized (position) {
-                StoreQueryUtils.updatePosition(position, internalProcessorContext);
+                // Transactional puts stage their position too, so READ_COMMITTED never sees a position ahead of the data.
+                StoreQueryUtils.updatePosition(transactional ? pendingPosition : position, internalProcessorContext);
 
                 // Put to index first so that if put to base failed, when we iterate index, we will
                 // find no base value. If put to base first but putting to index fails, when we iterate
@@ -210,6 +211,10 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
 
     @Override
     public byte[] get(final Bytes rawKey) {
+        return get(rawKey, null);
+    }
+
+    byte[] get(final Bytes rawKey, final IsolationLevel isolationLevel) {
         final long timestampFromRawKey = baseKeySchema.segmentTimestamp(rawKey);
         // check if timestamp is expired
 
@@ -231,7 +236,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
         if (segment == null) {
             return null;
         }
-        return segment.get(rawKey);
+        // Live read for the vanilla path; interactive queries read through the segment's isolation view.
+        return isolationLevel == null ? segment.get(rawKey) : segment.readOnly(isolationLevel).get(rawKey);
     }
 
     @Override
@@ -253,18 +259,16 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
             metrics
         );
 
-        final File positionCheckpointFile = new File(stateStoreContext.stateDir(), name() + ".position");
-        this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
-        this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
-        segments.setPosition(this.position);
-
         segments.openExisting(internalProcessorContext, observedStreamTime);
+        this.position = segments.position;
+        this.pendingPosition = Position.emptyPosition();
+        StoreQueryUtils.maybeMigrateExistingPositionFile(stateStoreContext.stateDir(), name(), this.position);
 
         // register and possibly restore the state from the logs
         stateStoreContext.register(
             root,
             (RecordBatchingStateRestoreCallback) this::restoreAllInternal,
-            () -> StoreQueryUtils.checkpointPosition(positionCheckpoint, position)
+            segments::writePosition
         );
 
         open = true;
@@ -274,17 +278,52 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
             IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
             false
         );
+
+        transactional = StreamsConfig.InternalConfig.getBoolean(
+            stateStoreContext.appConfigs(),
+            StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG,
+            false
+        );
     }
 
     @Override
-    public void flush() {
-        segments.flush();
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+        synchronized (position) {
+            if (transactional) {
+                // Publish the staged position atomically with the segment-buffer flush below.
+                position.merge(pendingPosition);
+                pendingPosition = Position.emptyPosition();
+            }
+            segments.commit(changelogOffsets);
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    public boolean managesOffsets() {
+        return segments.managesOffsets();
+    }
+
+    @Override
+    public Long committedOffset(final TopicPartition partition) {
+        return segments.committedOffset(partition);
+    }
+
+    @Override
+    public long approximateNumUncommittedBytes() {
+        long total = 0;
+        for (final S segment : segments.allSegments(true)) {
+            total += segment.approximateNumUncommittedBytes();
+        }
+        return total;
     }
 
     @Override
     public void close() {
         open = false;
         segments.close();
+        // The segments discard their uncommitted writes on close; drop the staged position to match.
+        pendingPosition = Position.emptyPosition();
     }
 
     @Override
@@ -323,6 +362,21 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
 
     @Override
     public Position getPosition() {
+        // Include staged writes so the owner's view (and READ_UNCOMMITTED queries) stays consistent.
+        if (transactional) {
+            synchronized (position) {
+                return position.copy().merge(pendingPosition);
+            }
+        }
+        return position;
+    }
+
+    Position getCommittedPosition() {
+        if (transactional) {
+            synchronized (position) {
+                return position.copy();
+            }
+        }
         return position;
     }
 

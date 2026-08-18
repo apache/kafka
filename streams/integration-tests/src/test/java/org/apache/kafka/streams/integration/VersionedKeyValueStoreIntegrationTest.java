@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
@@ -62,6 +63,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -124,8 +127,9 @@ public class VersionedKeyValueStoreIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldPutGetAndDelete() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldPutGetAndDelete(final boolean transactionalStateStores) throws Exception {
         // build topology and start app
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
 
@@ -141,7 +145,7 @@ public class VersionedKeyValueStoreIntegrationTest {
             .process(() -> new VersionedStoreContentCheckerProcessor(true), STORE_NAME)
             .to(outputStream, Produced.with(Serdes.Integer(), Serdes.Integer()));
 
-        final Properties props = props();
+        final Properties props = props(transactionalStateStores);
         kafkaStreams = new KafkaStreams(streamsBuilder.build(), props);
         kafkaStreams.start();
 
@@ -207,8 +211,9 @@ public class VersionedKeyValueStoreIntegrationTest {
         assertThat(changelogTopicConfig.getProperty("min.compaction.lag.ms"), equalTo(Long.toString(HISTORY_RETENTION + 24 * 60 * 60 * 1000L)));
     }
 
-    @Test
-    public void shouldRestore() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldRestore(final boolean transactionalStateStores) throws Exception {
         // build topology and start app
         StreamsBuilder streamsBuilder = new StreamsBuilder();
 
@@ -224,7 +229,7 @@ public class VersionedKeyValueStoreIntegrationTest {
             .process(() -> new VersionedStoreContentCheckerProcessor(true), STORE_NAME)
             .to(outputStream, Produced.with(Serdes.Integer(), Serdes.Integer()));
 
-        final Properties props = props();
+        final Properties props = props(transactionalStateStores);
         kafkaStreams = new KafkaStreams(streamsBuilder.build(), props);
         kafkaStreams.start();
 
@@ -427,6 +432,10 @@ public class VersionedKeyValueStoreIntegrationTest {
     }
 
     private Properties props() {
+        return props(false);
+    }
+
+    private Properties props(final boolean transactionalStateStores) {
         final String safeTestName = safeUniqueTestName(testInfo);
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
@@ -434,6 +443,11 @@ public class VersionedKeyValueStoreIntegrationTest {
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        if (transactionalStateStores) {
+            // Transactional state stores are only supported under exactly-once.
+            streamsConfiguration.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
+            streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        }
         return streamsConfiguration;
     }
 
@@ -821,7 +835,7 @@ public class VersionedKeyValueStoreIntegrationTest {
             }
 
             @Override
-            public void flush() {
+            public void commit(final Map<TopicPartition, Long> changelogOffsets) {
                 // do nothing
             }
 

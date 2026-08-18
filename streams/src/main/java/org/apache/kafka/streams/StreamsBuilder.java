@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -62,14 +64,17 @@ import java.util.regex.Pattern;
  * @see KTable
  * @see GlobalKTable
  */
+@InterfaceAudience.Public
 public class StreamsBuilder {
 
     /** The actual topology that is constructed by this StreamsBuilder. */
     protected final Topology topology;
 
     /** The topology's internal builder. */
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected field exposes internal InternalTopologyBuilder for subclass access — pending KIP review to promote the type or refactor")
     protected final InternalTopologyBuilder internalTopologyBuilder;
 
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected field exposes internal InternalStreamsBuilder for subclass access — pending KIP review to promote the type or refactor")
     protected final InternalStreamsBuilder internalStreamsBuilder;
 
     public StreamsBuilder() {
@@ -577,16 +582,28 @@ public class StreamsBuilder {
     /**
      * Returns the {@link Topology} that represents the specified processing logic.
      * Note that using this method means no optimizations are performed.
+     * To enable topology optimizations, use {@link #build(Properties)} instead and pass
+     * a {@link Properties} object with {@code topology.optimization} set to
+     * {@link StreamsConfig#OPTIMIZE}.
      *
      * @return the {@link Topology} that represents the specified processing logic
      */
     public synchronized Topology build() {
         return build(null);
     }
-    
+
     /**
      * Returns the {@link Topology} that represents the specified processing logic and accepts
      * a {@link Properties} instance used to indicate whether to optimize topology or not.
+     * <p>
+     * To enable topology optimizations, two steps are required:
+     * <ol>
+     *   <li>Set {@code topology.optimization} to {@link StreamsConfig#OPTIMIZE} in the
+     *       provided {@link Properties}.</li>
+     *   <li>Pass that same {@link Properties} object to this method.</li>
+     * </ol>
+     * If {@code topology.optimization} is not set to {@link StreamsConfig#OPTIMIZE} in
+     * {@code props}, no optimizations will be applied even if this method is called.
      *
      * @param props the {@link Properties} used for building possibly optimized topology
      * @return the {@link Topology} that represents the specified processing logic

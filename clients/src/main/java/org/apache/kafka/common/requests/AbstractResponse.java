@@ -26,7 +26,6 @@ import org.apache.kafka.common.protocol.SendBuilder;
 
 import java.nio.ByteBuffer;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -65,7 +64,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
     public abstract Map<Errors, Integer> errorCounts();
 
     protected static Map<Errors, Integer> errorCounts(Errors error) {
-        return Collections.singletonMap(error, 1);
+        return Map.of(error, 1);
     }
 
     protected static Map<Errors, Integer> errorCounts(Stream<Errors> errors) {
@@ -291,6 +290,10 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return AlterShareGroupOffsetsResponse.parse(readable, version);
             case DELETE_SHARE_GROUP_OFFSETS:
                 return DeleteShareGroupOffsetsResponse.parse(readable, version);
+            case STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE:
+                return StreamsGroupTopologyDescriptionUpdateResponse.parse(readable, version);
+            case UNREGISTER_CONTROLLER:
+                return UnregisterControllerResponse.parse(readable, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));
@@ -303,7 +306,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
      * quota violation, sends out responses before throttling.
      */
     public boolean shouldClientThrottle(short version) {
-        return false;
+        return apiKey.messageType.responseSchemas()[version].get("throttle_time_ms") != null;
     }
 
     public ApiKeys apiKey() {

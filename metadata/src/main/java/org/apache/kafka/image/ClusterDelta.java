@@ -24,6 +24,7 @@ import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterControllerRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
+import org.apache.kafka.common.metadata.UnregisterControllerRecord;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
 import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
@@ -96,6 +97,10 @@ public final class ClusterDelta {
         changedControllers.put(controller.id(), Optional.of(controller));
     }
 
+    public void replay(UnregisterControllerRecord record) {
+        changedControllers.put(record.controllerId(), Optional.empty());
+    }
+
     private BrokerRegistration getBrokerOrThrow(int brokerId, long epoch, String action) {
         BrokerRegistration broker = broker(brokerId);
         if (broker == null) {
@@ -115,6 +120,7 @@ public final class ClusterDelta {
         changedBrokers.put(record.id(), Optional.of(curRegistration.cloneWith(
             BrokerRegistrationFencingChange.FENCE.asBoolean(),
             Optional.empty(),
+            Optional.empty(),
             Optional.empty()
         )));
     }
@@ -123,6 +129,7 @@ public final class ClusterDelta {
         BrokerRegistration curRegistration = getBrokerOrThrow(record.id(), record.epoch(), "unfence");
         changedBrokers.put(record.id(), Optional.of(curRegistration.cloneWith(
             BrokerRegistrationFencingChange.UNFENCE.asBoolean(),
+            Optional.empty(),
             Optional.empty(),
             Optional.empty()
         )));
@@ -140,10 +147,12 @@ public final class ClusterDelta {
                 () -> new IllegalStateException(String.format("Unable to replay %s: unknown " +
                     "value for inControlledShutdown field: %d", record, record.inControlledShutdown())));
         Optional<List<Uuid>> directoriesChange = Optional.ofNullable(record.logDirs()).filter(list -> !list.isEmpty());
+        Optional<List<Uuid>> cordonedDirectoriesChange = Optional.ofNullable(record.cordonedLogDirs());
         BrokerRegistration nextRegistration = curRegistration.cloneWith(
             fencingChange.asBoolean(),
             inControlledShutdownChange.asBoolean(),
-            directoriesChange
+            directoriesChange,
+            cordonedDirectoriesChange
         );
         if (!curRegistration.equals(nextRegistration)) {
             changedBrokers.put(record.brokerId(), Optional.of(nextRegistration));

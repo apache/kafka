@@ -16,18 +16,21 @@
  */
 package kafka.server
 
+import kafka.cluster.Partition
+
 import java.net.InetAddress
 import java.util
 import java.util.concurrent.{CompletableFuture, Executors, LinkedBlockingQueue, TimeUnit}
 import java.util.{Optional, Properties}
-import kafka.server.QuotaFactory.QuotaManagers
+import org.apache.kafka.server.quota.QuotaFactory
+import org.apache.kafka.server.quota.QuotaFactory.QuotaManagers
 import kafka.utils.TestUtils.waitUntilTrue
-import kafka.utils.{CoreUtils, Logging, TestUtils}
+import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.common
 import org.apache.kafka.common.metadata.{FeatureLevelRecord, PartitionChangeRecord, PartitionRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.SimpleRecord
+import org.apache.kafka.common.record.internal.SimpleRecord
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.requests.{FetchRequest, ProduceResponse}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
@@ -38,8 +41,11 @@ import org.apache.kafka.metadata.{KRaftMetadataCache, LeaderAndIsr, LeaderRecove
 import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.metadata.storage.Formatter
 import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
+import org.apache.kafka.server.HostedPartition
 import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion, TopicIdPartition}
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.server.partition.AlterPartitionManager
+import org.apache.kafka.server.quota.ReplicationQuotaManager
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
 import org.apache.kafka.server.util.{MockTime, ShutdownableThread}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel}
@@ -68,14 +74,14 @@ class ReplicaManagerConcurrencyTest extends Logging {
 
   @AfterEach
   def cleanup(): Unit = {
-    CoreUtils.swallow(tasks.foreach(_.shutdown()), this)
-    CoreUtils.swallow(executor.shutdownNow(), this)
-    CoreUtils.swallow(executor.awaitTermination(5, TimeUnit.SECONDS), this)
-    CoreUtils.swallow(channel.shutdown(), this)
-    CoreUtils.swallow(replicaManager.shutdown(checkpointHW = false), this)
-    CoreUtils.swallow(quotaManagers.shutdown(), this)
+    Utils.swallow(this.logger.underlying, () => tasks.foreach(_.shutdown()))
+    Utils.swallow(this.logger.underlying, () => executor.shutdownNow())
+    Utils.swallow(this.logger.underlying, () => executor.awaitTermination(5, TimeUnit.SECONDS))
+    Utils.swallow(this.logger.underlying, () => channel.shutdown())
+    Utils.swallow(this.logger.underlying, () => replicaManager.shutdown(checkpointHW = false))
+    Utils.swallow(this.logger.underlying, () => quotaManagers.shutdown())
     Utils.closeQuietly(metrics, "metrics")
-    CoreUtils.swallow(time.scheduler.shutdown(), this)
+    Utils.swallow(this.logger.underlying, () => time.scheduler.shutdown())
   }
 
   @Test
@@ -107,7 +113,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
 
     waitUntilTrue(() => {
       replicaManager.getPartition(topicPartition) match {
-        case HostedPartition.Online(partition) => partition.isLeader
+        case online: HostedPartition.Online[Partition] => online.partition.isLeader
         case _ => false
       }
     }, "Timed out waiting for partition to initialize")
@@ -293,10 +299,14 @@ class ReplicaManagerConcurrencyTest extends Logging {
       val future = new CompletableFuture[ProduceResponse.PartitionResponse]()
       val topicIdPartition: common.TopicIdPartition = replicaManager.topicIdPartition(topicPartition)
 
-      def produceCallback(results: collection.Map[common.TopicIdPartition, ProduceResponse.PartitionResponse]): Unit = {
+      def produceCallback(results: util.Map[common.TopicIdPartition, ProduceResponse.PartitionResponse]): Unit = {
         try {
           assertEquals(1, results.size)
-          val (topicPartition, result) = results.head
+
+          val entry = results.entrySet().iterator().next()
+          val topicPartition = entry.getKey
+          val result = entry.getValue
+
           assertEquals(topicIdPartition, topicPartition)
           assertEquals(Errors.NONE, result.error)
           future.complete(result)
@@ -481,6 +491,10 @@ class ReplicaManagerConcurrencyTest extends Logging {
     ): CompletableFuture[LeaderAndIsr] = {
       channel.alterIsr(topicPartition, leaderAndIsr)
     }
+
+    override def start(): Unit = {}
+
+    override def shutdown(): Unit = {}
   }
 
   private def registration(

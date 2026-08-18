@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.common.compress;
 
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.internals.SingleByteBufferOutputStream;
 
 import org.junit.jupiter.api.Test;
 
@@ -40,7 +41,7 @@ public class SnappyCompressionTest {
         byte[] data = String.join("", Collections.nCopies(256, "data")).getBytes(StandardCharsets.UTF_8);
 
         for (byte magic : Arrays.asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2)) {
-            ByteBufferOutputStream bufferStream = new ByteBufferOutputStream(4);
+            ByteBufferOutputStream bufferStream = new SingleByteBufferOutputStream(4);
             try (OutputStream out = compression.wrapForOutput(bufferStream, magic)) {
                 out.write(data);
                 out.flush();

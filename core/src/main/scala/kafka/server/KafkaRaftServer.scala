@@ -17,14 +17,16 @@
 package kafka.server
 
 import java.io.File
+import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
-import kafka.utils.{CoreUtils, Logging, Mx4jLoader}
+import kafka.utils.{Logging, Mx4jLoader}
 import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.utils.{AppInfoParser, Time}
+import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.internals.AppInfoParser
 import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.metadata.KafkaConfigSchema
-import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
+import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.{REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble}
 import org.apache.kafka.raft.QuorumConfig
@@ -103,7 +105,7 @@ class KafkaRaftServer(
     // stops the raft client early on, which would disrupt broker shutdown.
     broker.foreach(_.shutdown())
     controller.foreach(_.shutdown())
-    CoreUtils.swallow(AppInfoParser.unregisterAppInfo(Server.MetricsPrefix, config.brokerId.toString, metrics), this)
+    Utils.swallow(this.logger.underlying, () => AppInfoParser.unregisterAppInfo(Server.MetricsPrefix, config.brokerId.toString, metrics))
   }
 
   override def awaitShutdown(): Unit = {
@@ -181,8 +183,7 @@ object KafkaRaftServer {
     }
 
     // Load the BootstrapMetadata.
-    val bootstrapDirectory = new BootstrapDirectory(config.metadataLogDir)
-    val bootstrapMetadata = bootstrapDirectory.read()
+    val bootstrapMetadata = BootstrapMetadata.fromDirectory(Path.of(config.metadataLogDir))
     (metaPropsEnsemble, bootstrapMetadata)
   }
 

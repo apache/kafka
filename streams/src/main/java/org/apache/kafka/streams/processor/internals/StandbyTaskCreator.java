@@ -18,8 +18,10 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
@@ -40,6 +42,7 @@ class StandbyTaskCreator {
     private final StreamsConfig applicationConfig;
     private final StreamsMetricsImpl streamsMetrics;
     private final StateDirectory stateDirectory;
+    private final Time time;
     private final ThreadCache dummyCache;
     private final Logger log;
     private final Sensor createTaskSensor;
@@ -48,12 +51,14 @@ class StandbyTaskCreator {
                        final StreamsConfig applicationConfig,
                        final StreamsMetricsImpl streamsMetrics,
                        final StateDirectory stateDirectory,
+                       final Time time,
                        final String threadId,
                        final LogContext logContext) {
         this.topologyMetadata = topologyMetadata;
         this.applicationConfig = applicationConfig;
         this.streamsMetrics = streamsMetrics;
         this.stateDirectory = stateDirectory;
+        this.time = time;
         this.log = logContext.logger(getClass());
 
         createTaskSensor = ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
@@ -65,9 +70,11 @@ class StandbyTaskCreator {
         );
     }
 
-    // TODO: convert to StandbyTask when we remove TaskManager#StateMachineTask with mocks
-    Collection<Task> createTasks(final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
-        final List<Task> createdTasks = new ArrayList<>();
+    Collection<StandbyTask> createTasks(final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
+        final List<StandbyTask> createdTasks = new ArrayList<>();
+
+        final String upgradeFromStr = applicationConfig.getString(StreamsConfig.UPGRADE_FROM_CONFIG);
+        final UpgradeFromValues upgradeFrom = upgradeFromStr != null ? UpgradeFromValues.fromString(upgradeFromStr) : null;
 
         for (final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions : tasksToBeCreated.entrySet()) {
             final TaskId taskId = newTaskAndPartitions.getKey();
@@ -79,10 +86,13 @@ class StandbyTaskCreator {
                     taskId,
                     Task.TaskType.STANDBY,
                     eosEnabled(applicationConfig),
+                    applicationConfig.getBoolean(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG),
                     getLogContext(taskId),
                     stateDirectory,
+                    time,
                     topology.storeToChangelogTopic(),
-                    partitions);
+                    partitions,
+                    upgradeFrom);
 
                 final InternalProcessorContext<?, ?> context = new ProcessorContextImpl(
                     taskId,

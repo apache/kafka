@@ -1,6 +1,6 @@
 ---
 title: Monitoring
-description: Monitoring
+description: Kafka metrics and JMX monitoring for brokers, clients, and components.
 weight: 7
 tags: ['kafka', 'docs']
 aliases: 
@@ -990,6 +990,19 @@ The size of a partition on disk, measured in bytes.
 <tr>  
 <td>
 
+Partition size as a percentage of retention bytes limit
+</td>  
+<td>
+
+kafka.log:type=Log,name=RetentionSizeInPercent,topic=([-.\w]+),partition=([0-9]+)
+</td>  
+<td>
+
+The partition size expressed as a percentage of the configured retention.bytes limit. Returns 0 for topics with tiered storage enabled (where the metric is reported by RemoteLogManager) or when retention bytes is unlimited. May exceed 100% if retention cleanup is delayed.
+</td> </tr>  
+<tr>  
+<td>
+
 Number of log segments in a partition
 </td>  
 <td>
@@ -1331,6 +1344,214 @@ kafka.server:type=group-coordinator-metrics,name=streams-group-rebalance-count
 <td>
 
 Total number of Streams Group Rebalances
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Set Success Rate
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-set-success-rate
+</td>  
+<td>
+
+The rate of successful setTopology plugin calls (driven by client topology-description pushes)
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Set Success Count
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-set-success-count
+</td>  
+<td>
+
+The total number of successful setTopology plugin calls
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Set Error Rate
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-set-error-rate
+</td>  
+<td>
+
+The rate of failed setTopology plugin calls
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Set Error Count
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-set-error-count
+</td>  
+<td>
+
+The total number of failed setTopology plugin calls
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Get Success Rate
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-get-success-rate
+</td>  
+<td>
+
+The rate of successful getTopology plugin calls (driven by describe requests)
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Get Success Count
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-get-success-count
+</td>  
+<td>
+
+The total number of successful getTopology plugin calls
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Get Error Rate
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-get-error-rate
+</td>  
+<td>
+
+The rate of failed getTopology plugin calls
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Get Error Count
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-get-error-count
+</td>  
+<td>
+
+The total number of failed getTopology plugin calls
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Delete Success Rate
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-delete-success-rate
+</td>  
+<td>
+
+The rate of successful deleteTopology plugin calls (driven by group deletion and cleanup)
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Delete Success Count
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-delete-success-count
+</td>  
+<td>
+
+The total number of successful deleteTopology plugin calls
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Delete Error Rate
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-delete-error-rate
+</td>  
+<td>
+
+The rate of failed deleteTopology plugin calls
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Delete Error Count
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-delete-error-count
+</td>  
+<td>
+
+The total number of failed deleteTopology plugin calls
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Cleanup Cycle Rate
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-cleanup-cycle-rate
+</td>  
+<td>
+
+The rate of periodic topology-description cleanup cycles run by the coordinator
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Cleanup Cycle Count
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-cleanup-cycle-count
+</td>  
+<td>
+
+The total number of periodic topology-description cleanup cycles run by the coordinator
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Cleanup Eligible Rate
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-cleanup-eligible-rate
+</td>  
+<td>
+
+The rate of groups found eligible for plugin-state deletion by the cleanup scan
+</td> </tr>  
+<tr>  
+<td>
+
+Topology Description Cleanup Eligible Count
+</td>  
+<td>
+
+kafka.server:type=group-coordinator-metrics,name=streams-group-topology-description-cleanup-eligible-count
+</td>  
+<td>
+
+The total number of groups found eligible for plugin-state deletion by the cleanup scan
 </td> </tr>  
 <tr>  
 <td>
@@ -1832,6 +2053,32 @@ The time to read data from remote storage by a broker
 <td>
 
 kafka.log.remote:type=RemoteLogManager,name=RemoteLogReaderFetchRateAndTimeMs
+</td> </tr>  
+<tr>  
+<td>
+
+Retention Size In Percent
+</td>  
+<td>
+
+Total partition size (local + remote) as a percentage of the configured retention.bytes limit. Available for tiered storage topics. May exceed 100% if retention cleanup is delayed. Returns 0 when retention bytes is unlimited.
+</td>  
+<td>
+
+kafka.log.remote:type=RemoteLogManager,name=RetentionSizeInPercent,topic=([-.\w]+),partition=([0-9]+)
+</td> </tr>  
+<tr>  
+<td>
+
+Local Retention Size In Percent
+</td>  
+<td>
+
+Local log size as a percentage of the configured local.retention.bytes limit. Available for tiered storage topics. Helps operators monitor pressure on local disks independently of remote storage. May exceed 100% if retention cleanup is delayed. Returns 0 when local retention bytes is unlimited.
+</td>  
+<td>
+
+kafka.log.remote:type=RemoteLogManager,name=LocalRetentionSizeInPercent,topic=([-.\w]+),partition=([0-9]+)
 </td> </tr>  
 <tr>  
 <td>
@@ -3407,8 +3654,218 @@ The total time the Consumer spent committing offsets in nanoseconds (for AOS).
 </td>  
 <td>
 
-kafka.consumer:type=consumer-metrics,client-id=([-.\w]+)
-</td> </tr> </table>
+kafka.consumer:type=consumer-metrics,client-id=([-.\w]+) 
+</td> </tr>
+<tr>
+<td>
+
+application-event-queue-size
+</td>
+<td>
+
+The current number of events in the queue to send from the application thread to the background thread (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+<tr>
+<td>
+
+application-event-queue-time-avg
+</td>
+<td>
+
+The average time, in ms, that application events are taking to be dequeued (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+<tr>
+<td>
+
+application-event-queue-time-max
+</td>
+<td>
+
+The maximum time, in ms, that application events are taking to be dequeued (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+<tr>
+<td>
+
+application-event-queue-processing-time-avg
+</td>
+<td>
+
+The average time, in ms, that the background thread took to process all available application events (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+<tr>
+<td>
+
+application-event-queue-processing-time-max
+</td>
+<td>
+
+The maximum time, in ms, that the background thread took to process all available application events (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+<tr>
+<td>
+
+application-events-expired-count
+</td>
+<td>
+
+The current number of expired application events (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+<tr>
+<td>
+
+background-event-queue-size
+</td>
+<td>
+
+The current number of events in the queue to send from the background thread to the application thread (consumer protocol).
+</td>
+
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+<tr>
+<td>
+
+background-event-queue-time-avg
+</td>
+<td>
+
+The average time, in ms, that background events are taking to be dequeued (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+<tr>
+<td>
+
+background-event-queue-time-max
+</td>
+<td>
+
+The maximum time, in ms, that background events are taking to be dequeued (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+<tr>
+<td>
+
+background-event-queue-processing-time-avg
+</td>
+<td>
+
+The average time, in ms, that the consumer took to process all available background events (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+<tr>
+<td>
+
+background-event-queue-processing-time-max
+</td>
+<td>
+
+The maximum time, in ms, that the consumer took to process all available background events (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+<tr>
+<td>
+
+time-between-network-thread-poll-max
+</td>
+<td>
+
+The maximum delay, in ms,between invocations of poll in the network thread (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td> </tr>
+<tr>
+<td>
+
+time-between-network-thread-poll-avg
+</td>
+<td>
+
+The average delay, in ms, between invocations of poll in the network thread (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td> </tr>
+<tr>
+<td>
+
+unsent-requests-queue-size
+</td>
+<td>
+
+The current number of unsent requests in the background thread (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+<tr>
+<td>
+
+unsent-requests-queue-time-max
+</td>
+<td>
+
+The maximum time, in ms, that a request remained unsent in the background thread (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+<tr>
+<td>
+
+unsent-requests-queue-time-avg
+</td>
+<td>
+
+The average time, in ms, that requests are taking to be sent in the background thread (consumer protocol).
+</td>
+<td>
+
+kafka.consumer:type=consumer-metrics,client-id=([-\.\w]+)
+</td></tr>
+</table>
 
 ### Consumer Group Metrics  
   
@@ -3845,9 +4302,10 @@ A Kafka Streams instance contains all the producer and consumer metrics as well 
 Note that the metrics have a 4-layer hierarchy. At the top level there are client-level metrics for each started Kafka Streams client. Each client has stream threads, with their own metrics. Each stream thread has tasks, with their own metrics. Each task has a number of processor nodes, with their own metrics. Each task also has a number of state stores and record caches, all with their own metrics. 
 
 Use the following configuration option to specify which metrics you want collected: 
-    
-    
-    metrics.recording.level="info"
+
+```properties
+metrics.recording.level="info"
+```
 
 ### Client Metrics
 
@@ -4802,7 +5260,7 @@ kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)
 
 ### Processor Node Metrics
 
-The following metrics are only available on certain types of nodes, i.e., the process-* metrics are only available for source processor nodes, the `suppression-emit-*` metrics are only available for suppression operation nodes, `emit-final-*` metrics are only available for windowed aggregations nodes, and the `record-e2e-latency-*` metrics are only available for source processor nodes and terminal nodes (nodes without successor nodes). All the metrics have a recording level of `debug`, except for the `record-e2e-latency-*` metrics which have a recording level of `info`:   
+The following metrics are only available on certain types of nodes, i.e., the process-* metrics are only available for source processor nodes, the `suppression-emit-*` metrics are only available for suppression operation nodes, `emit-final-*` metrics are only available for windowed aggregations nodes, and the `record-e2e-latency-*` metrics are only available for source processor nodes and terminal nodes (nodes without successor nodes). At terminal nodes every record processed in the same batch is attributed a single completion time taken at the end of that batch, so these values are upper bounds on the true per-record latency, biased upwards by at most the duration of the batch; in particular `record-e2e-latency-min` is not a lower bound on any individual record. All the metrics have a recording level of `debug`, except for the `record-e2e-latency-*` metrics which have a recording level of `info`:   
 <table>  
 <tr>  
 <th>
@@ -5041,7 +5499,7 @@ kafka.streams:type=stream-topic-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),pr
 
 ### State Store Metrics
 
-All the following metrics have a recording level of `debug`, except for the `record-e2e-latency-*` metrics which have a recording level `trace` and `num-open-iterators` which has recording level `info`. Note that the `store-scope` value is specified in `StoreSupplier#metricsScope()` for user's customized state stores; for built-in state stores, currently we have: 
+All the following metrics have a recording level of `debug`, except for the `record-e2e-latency-*` metrics which have a recording level `trace` and `num-open-iterators` and `num-keys` which have recording level `info`. Note that the `store-scope` value is specified in `StoreSupplier#metricsScope()` for user's customized state stores; for built-in state stores, currently we have: 
 
   * `in-memory-state`
   * `in-memory-lru-state`
@@ -5277,25 +5735,51 @@ kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[s
 <tr>  
 <td>
 
-flush-latency-avg
-</td>  
+flush-latency-avg (deprecated)
+</td>
 <td>
 
-The average flush execution time in ns.
-</td>  
+The average flush execution time in ns. Deprecated: use commit-latency-avg instead.
+</td>
 <td>
 
 kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)
-</td> </tr>  
-<tr>  
+</td> </tr>
+<tr>
 <td>
 
-flush-latency-max
-</td>  
+flush-latency-max (deprecated)
+</td>
 <td>
 
-The maximum flush execution time in ns.
-</td>  
+The maximum flush execution time in ns. Deprecated: use commit-latency-max instead.
+</td>
+<td>
+
+kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)
+</td> </tr>
+<tr>
+<td>
+
+commit-latency-avg
+</td>
+<td>
+
+The average commit execution time in ns.
+</td>
+<td>
+
+kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)
+</td> </tr>
+<tr>
+<td>
+
+commit-latency-max
+</td>
+<td>
+
+The maximum commit execution time in ns.
+</td>
 <td>
 
 kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)
@@ -5433,17 +5917,30 @@ kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[s
 <tr>  
 <td>
 
-flush-rate
-</td>  
+flush-rate (deprecated)
+</td>
 <td>
 
-The average flush rate for this store.
-</td>  
+The average flush rate for this store. Deprecated: use commit-rate instead.
+</td>
 <td>
 
 kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)
-</td> </tr>  
-<tr>  
+</td> </tr>
+<tr>
+<td>
+
+commit-rate
+</td>
+<td>
+
+The average commit rate for this store.
+</td>
+<td>
+
+kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)
+</td> </tr>
+<tr>
 <td>
 
 restore-rate
@@ -5555,6 +6052,19 @@ num-open-iterators
 <td>
 
 The current number of iterators on the store that have been created, but not yet closed.
+</td>  
+<td>
+
+kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)
+</td> </tr>  
+<tr>  
+<td>
+
+num-keys
+</td>  
+<td>
+
+The current number of keys in the in-memory state store. Only reported for in-memory state stores; not available for RocksDB-backed stores.
 </td>  
 <td>
 

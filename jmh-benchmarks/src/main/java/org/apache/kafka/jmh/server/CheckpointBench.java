@@ -17,22 +17,22 @@
 package org.apache.kafka.jmh.server;
 
 import kafka.cluster.Partition;
-import kafka.log.LogManager;
-import kafka.server.AlterPartitionManager;
 import kafka.server.KafkaConfig;
-import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
+import kafka.server.builders.LogManagerBuilder;
 import kafka.server.builders.ReplicaManagerBuilder;
-import kafka.utils.TestUtils;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.jmh.util.BenchmarkConfigUtils;
 import org.apache.kafka.metadata.KRaftMetadataCache;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.metadata.MockConfigRepository;
-import org.apache.kafka.server.config.ServerLogConfigs;
+import org.apache.kafka.server.partition.AlterPartitionManager;
+import org.apache.kafka.server.quota.QuotaFactory;
 import org.apache.kafka.server.util.KafkaScheduler;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.server.util.Scheduler;
@@ -40,8 +40,10 @@ import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
+import org.apache.kafka.storage.internals.log.LogManager;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
+import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Level;
@@ -56,6 +58,7 @@ import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -63,7 +66,6 @@ import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 import scala.Option;
-import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.server.common.KRaftVersion.KRAFT_VERSION_1;
 
@@ -98,19 +100,33 @@ public class CheckpointBench {
 
 
     @Setup(Level.Trial)
-    public void setup() {
+    public void setup() throws IOException {
         this.scheduler = new KafkaScheduler(1, true, "scheduler-thread");
-        this.brokerProperties = KafkaConfig.fromProps(TestUtils.createBrokerConfig(
-                0, true, true, 9092, Option.empty(), Option.empty(),
-                Option.empty(), true, false, 0, false, 0, false, 0, Option.empty(), 1, true, 1,
-                (short) 1, false));
+        Properties configs = BenchmarkConfigUtils.createDummyBrokerConfig();
+        this.brokerProperties = KafkaConfig.fromProps(configs);
         this.metrics = new Metrics();
         this.time = new MockTime();
         this.failureChannel = new LogDirFailureChannel(brokerProperties.logDirs().size());
         final List<File> files = brokerProperties.logDirs().stream().map(File::new).toList();
-        this.logManager = TestUtils.createLogManager(CollectionConverters.asScala(files),
-                new LogConfig(new Properties()), new MockConfigRepository(), new CleanerConfig(1, 4 * 1024 * 1024L, 0.9d,
-                        1024 * 1024, 32 * 1024 * 1024, Double.MAX_VALUE, 15 * 1000, true), time, 4, false, Option.empty(), false, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT);
+        this.logManager = new LogManagerBuilder().
+            setLogDirs(files).
+            setInitialOfflineDirs(List.of()).
+            setConfigRepository(new MockConfigRepository()).
+            setInitialDefaultConfig(new LogConfig(new Properties())).
+            setCleanerConfig(new CleanerConfig(1, 4 * 1024 * 1024L, 0.9d,
+                1024 * 1024, 32 * 1024 * 1024, Double.MAX_VALUE, 15 * 1000, true)).
+            setRecoveryThreadsPerDataDir(1).
+            setFlushCheckMs(1000L).
+            setFlushRecoveryOffsetCheckpointMs(10000L).
+            setFlushStartOffsetCheckpointMs(10000L).
+            setRetentionCheckMs(1000L).
+            setProducerStateManagerConfig(60000, false).
+            setScheduler(scheduler).
+            setBrokerTopicStats(new BrokerTopicStats(false)).
+            setLogDirFailureChannel(failureChannel).
+            setTime(Time.SYSTEM).
+            build();
+
         scheduler.startup();
         final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
         final MetadataCache metadataCache =
@@ -120,7 +136,7 @@ public class CheckpointBench {
                         this.metrics,
                         this.time, "", "");
 
-        this.alterPartitionManager = TestUtils.createAlterIsrManager();
+        this.alterPartitionManager = Mockito.mock(AlterPartitionManager.class);
         this.replicaManager = new ReplicaManagerBuilder().
             setConfig(brokerProperties).
             setMetrics(metrics).
@@ -158,7 +174,7 @@ public class CheckpointBench {
         this.metrics.close();
         this.scheduler.shutdown();
         this.quotaManagers.shutdown();
-        for (File dir : CollectionConverters.asJavaCollection(logManager.liveLogDirs())) {
+        for (File dir : logManager.liveLogDirs()) {
             Utils.delete(dir);
         }
     }

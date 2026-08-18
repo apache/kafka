@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -43,6 +46,7 @@ import org.apache.kafka.streams.query.ResultOrder;
 import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils.QueryHandler;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
@@ -76,6 +80,8 @@ public class MeteredKeyValueStore<K, V>
     extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, K, V>
     implements KeyValueStore<K, V>, MeteredStateStore {
 
+    private static final Serializer<byte[]> BYTE_ARRAY_SERIALIZER = new ByteArraySerializer();
+
     final Serde<K> keySerde;
     final Serde<V> valueSerde;
     StateSerdes<K, V> serdes;
@@ -83,14 +89,14 @@ public class MeteredKeyValueStore<K, V>
     private final String metricsScope;
     protected final Time time;
     protected Sensor putSensor;
-    private Sensor putIfAbsentSensor;
+    protected Sensor putIfAbsentSensor;
     protected Sensor getSensor;
     protected Sensor deleteSensor;
-    private Sensor putAllSensor;
-    private Sensor allSensor;
-    private Sensor rangeSensor;
-    private Sensor prefixScanSensor;
-    private Sensor flushSensor;
+    protected Sensor putAllSensor;
+    protected Sensor allSensor;
+    protected Sensor rangeSensor;
+    protected Sensor prefixScanSensor;
+    private Sensor commitSensor;
     private Sensor e2eLatencySensor;
     protected Sensor iteratorDurationSensor;
     protected InternalProcessorContext<?, ?> internalContext;
@@ -102,8 +108,7 @@ public class MeteredKeyValueStore<K, V>
     protected NavigableSet<MeteredIterator> openIterators = new ConcurrentSkipListSet<>(Comparator.comparingLong(MeteredIterator::startTimestamp));
 
 
-    @SuppressWarnings("rawtypes")
-    private final Map<Class, QueryHandler> queryHandlers =
+    private final Map<Class<?>, QueryHandler<?>> queryHandlers =
         mkMap(
             mkEntry(
                 RangeQuery.class,
@@ -115,11 +120,13 @@ public class MeteredKeyValueStore<K, V>
             )
         );
 
-    MeteredKeyValueStore(final KeyValueStore<Bytes, byte[]> inner,
-                         final String metricsScope,
-                         final Time time,
-                         final Serde<K> keySerde,
-                         final Serde<V> valueSerde) {
+    MeteredKeyValueStore(
+        final KeyValueStore<Bytes, byte[]> inner,
+        final String metricsScope,
+        final Time time,
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde
+    ) {
         super(inner);
         this.metricsScope = metricsScope;
         this.time = time != null ? time : Time.SYSTEM;
@@ -128,9 +135,8 @@ public class MeteredKeyValueStore<K, V>
     }
 
     @Override
-    public void init(final StateStoreContext stateStoreContext,
-                     final StateStore root) {
-        internalContext = stateStoreContext instanceof InternalProcessorContext ? (InternalProcessorContext<?, ?>) stateStoreContext : null;
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+        internalContext = (InternalProcessorContext<?, ?>) stateStoreContext;
         taskId = stateStoreContext.taskId();
         initStoreSerde(stateStoreContext);
         streamsMetrics = (StreamsMetricsImpl) stateStoreContext.metrics();
@@ -142,6 +148,7 @@ public class MeteredKeyValueStore<K, V>
         super.init(stateStoreContext, root);
     }
 
+    @SuppressWarnings("deprecation")
     private void registerMetrics() {
         putSensor = StateStoreMetrics.putSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         putIfAbsentSensor = StateStoreMetrics.putIfAbsentSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
@@ -150,13 +157,25 @@ public class MeteredKeyValueStore<K, V>
         allSensor = StateStoreMetrics.allSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         rangeSensor = StateStoreMetrics.rangeSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         prefixScanSensor = StateStoreMetrics.prefixScanSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
-        flushSensor = StateStoreMetrics.flushSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        // flush metrics ar deprecated per KIP-1035 and will be removed in the next major release.
+        // Here we just register the sensor without recording
+        StateStoreMetrics.flushSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        commitSensor = StateStoreMetrics.commitSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         deleteSensor = StateStoreMetrics.deleteSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         iteratorDurationSensor = StateStoreMetrics.iteratorDurationSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
-        StateStoreMetrics.addNumOpenIteratorsGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
-                (config, now) -> numOpenIterators.sum());
-        StateStoreMetrics.addOldestOpenIteratorGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
+        StateStoreMetrics.addNumOpenIteratorsGauge(
+            taskId.toString(),
+            metricsScope,
+            name(),
+            streamsMetrics,
+            (config, now) -> numOpenIterators.sum()
+        );
+        StateStoreMetrics.addOldestOpenIteratorGauge(
+            taskId.toString(),
+            metricsScope,
+            name(),
+            streamsMetrics,
             (config, now) -> {
                 try {
                     final Iterator<MeteredIterator> iter = openIterators.iterator();
@@ -164,7 +183,20 @@ public class MeteredKeyValueStore<K, V>
                 } catch (final NoSuchElementException e) {
                     return 0L;
                 }
-            });
+            }
+        );
+        if (!persistent()) {
+            StateStoreMetrics.addNumKeysGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
+                    (config, now) -> {
+                        final InMemoryKeyValueStore inMemoryStore = findInner(InMemoryKeyValueStore.class);
+                        return inMemoryStore != null ? inMemoryStore.approximateNumEntries() : -1L;
+                    }
+            );
+        }
+        StateStoreMetrics.addUncommittedBytesGauge(
+            taskId.toString(), metricsScope, name(), streamsMetrics,
+            (config, now) -> wrapped().approximateNumUncommittedBytes()
+        );
     }
 
     @Override
@@ -180,56 +212,64 @@ public class MeteredKeyValueStore<K, V>
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
         serdes = StoreSerdeInitializer.prepareStoreSerde(
-            context, storeName, changelogTopic, keySerde, valueSerde, this::prepareValueSerdeForStore);
+            context,
+            storeName,
+            changelogTopic,
+            keySerde,
+            valueSerde,
+            this::prepareValueSerdeForStore
+        );
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public boolean setFlushListener(final CacheFlushListener<K, V> listener,
-                                    final boolean sendOldValues) {
+    public boolean setFlushListener(final CacheFlushListener<K, V> listener, final boolean sendOldValues) {
         final KeyValueStore<Bytes, byte[]> wrapped = wrapped();
         if (wrapped instanceof CachedStateStore) {
             return ((CachedStateStore<byte[], byte[]>) wrapped).setFlushListener(
-                record -> listener.apply(
-                    record.withKey(serdes.keyFrom(record.key()))
-                        .withValue(new Change<>(
-                            record.value().newValue != null ? serdes.valueFrom(record.value().newValue) : null,
-                            record.value().oldValue != null ? serdes.valueFrom(record.value().oldValue) : null,
-                            record.value().isLatest
-                        ))
-                ),
-                sendOldValues);
+                record -> {
+                    final Change<byte[]> change = record.value();
+                    listener.apply(
+                        record
+                            .withKey(serdes.keyFrom(record.key(), record.headers()))
+                            .withValue(new Change<>(
+                                change.newValue != null ? serdes.valueFrom(change.newValue, record.headers()) : null,
+                                change.oldValue != null ? serdes.valueFrom(change.oldValue, record.headers()) : null,
+                                change.isLatest
+                            ))
+                    );
+                },
+                sendOldValues
+            );
         }
         return false;
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public <R> QueryResult<R> query(final Query<R> query,
-                                    final PositionBound positionBound,
-                                    final QueryConfig config) {
-
+    public <R> QueryResult<R> query(
+        final Query<R> query,
+        final PositionBound positionBound,
+        final QueryConfig config
+    ) {
         final long start = time.nanoseconds();
         final QueryResult<R> result;
 
-        final QueryHandler handler = queryHandlers.get(query.getClass());
+        final QueryHandler<?> handler = queryHandlers.get(query.getClass());
         if (handler == null) {
             result = wrapped().query(query, positionBound, config);
             if (config.isCollectExecutionInfo()) {
-                result.addExecutionInfo(
-                    "Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
+                result.addExecutionInfo("Handled in " + getClass() + " in " + (time.nanoseconds() - start) + "ns");
             }
         } else {
-            result = (QueryResult<R>) handler.apply(
+            result = ((QueryHandler<R>) handler).apply(
                 query,
                 positionBound,
                 config,
                 this
             );
             if (config.isCollectExecutionInfo()) {
-                result.addExecutionInfo(
-                    "Handled in " + getClass() + " with serdes "
-                        + serdes + " in " + (time.nanoseconds() - start) + "ns");
+                result.addExecutionInfo("Handled in " + getClass() + " with serdes " + serdes + " in " + (time.nanoseconds() - start) + "ns");
             }
         }
         return result;
@@ -250,8 +290,8 @@ public class MeteredKeyValueStore<K, V>
         RangeQuery<Bytes, byte[]> rawRangeQuery;
         final ResultOrder order = typedQuery.resultOrder();
         rawRangeQuery = RangeQuery.withRange(
-                keyBytes(typedQuery.getLowerBound().orElse(null)),
-                keyBytes(typedQuery.getUpperBound().orElse(null))
+            serializeKey(typedQuery.getLowerBound().orElse(null)),
+            serializeKey(typedQuery.getUpperBound().orElse(null))
         );
         if (order.equals(ResultOrder.DESCENDING)) {
             rawRangeQuery = rawRangeQuery.withDescendingKeys();
@@ -263,10 +303,9 @@ public class MeteredKeyValueStore<K, V>
             wrapped().query(rawRangeQuery, positionBound, config);
         if (rawResult.isSuccess()) {
             final KeyValueIterator<Bytes, byte[]> iterator = rawResult.getResult();
-            final KeyValueIterator<K, V> resultIterator = new MeteredKeyValueTimestampedIterator(
+            final KeyValueIterator<K, V> resultIterator = new MeteredKeyValueStoreIterator(
                 iterator,
-                getSensor,
-                StoreQueryUtils.deserializeValue(serdes, wrapped())
+                getSensor
             );
             final QueryResult<KeyValueIterator<K, V>> typedQueryResult =
                 InternalQueryResultUtil.copyAndSubstituteDeserializedResult(
@@ -288,7 +327,7 @@ public class MeteredKeyValueStore<K, V>
         final QueryResult<R> result;
         final KeyQuery<K, V> typedKeyQuery = (KeyQuery<K, V>) query;
         final KeyQuery<Bytes, byte[]> rawKeyQuery =
-            KeyQuery.withKey(keyBytes(typedKeyQuery.getKey()));
+            KeyQuery.withKey(serializeKey(typedKeyQuery.getKey()));
         final QueryResult<byte[]> rawResult =
             wrapped().query(rawKeyQuery, positionBound, config);
         if (rawResult.isSuccess()) {
@@ -307,8 +346,12 @@ public class MeteredKeyValueStore<K, V>
     @Override
     public V get(final K key) {
         Objects.requireNonNull(key, "key cannot be null");
+        return getInternal(wrapped(), key);
+    }
+
+    private V getInternal(final ReadOnlyKeyValueStore<Bytes, byte[]> store, final K key) {
         try {
-            return maybeMeasureLatency(() -> outerValue(wrapped().get(keyBytes(key))), time, getSensor);
+            return maybeMeasureLatency(() -> deserializeValue(store.get(serializeKey(key))), time, getSensor);
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key);
             throw new ProcessorStateException(message, e);
@@ -320,7 +363,7 @@ public class MeteredKeyValueStore<K, V>
                     final V value) {
         Objects.requireNonNull(key, "key cannot be null");
         try {
-            maybeMeasureLatency(() -> wrapped().put(keyBytes(key), serdes.rawValue(value)), time, putSensor);
+            maybeMeasureLatency(() -> wrapped().put(serializeKey(key), serializeValue(value)), time, putSensor);
             maybeRecordE2ELatency();
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key, value);
@@ -333,7 +376,7 @@ public class MeteredKeyValueStore<K, V>
                          final V value) {
         Objects.requireNonNull(key, "key cannot be null");
         final V currentValue = maybeMeasureLatency(
-            () -> outerValue(wrapped().putIfAbsent(keyBytes(key), serdes.rawValue(value))),
+            () -> deserializeValue(wrapped().putIfAbsent(serializeKey(key), serializeValue(value))),
             time,
             putIfAbsentSensor
         );
@@ -351,7 +394,7 @@ public class MeteredKeyValueStore<K, V>
     public V delete(final K key) {
         Objects.requireNonNull(key, "key cannot be null");
         try {
-            return maybeMeasureLatency(() -> outerValue(wrapped().delete(keyBytes(key))), time, deleteSensor);
+            return maybeMeasureLatency(() -> deserializeValue(wrapped().delete(serializeKey(key))), time, deleteSensor);
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key);
             throw new ProcessorStateException(message, e);
@@ -362,49 +405,121 @@ public class MeteredKeyValueStore<K, V>
     public <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScan(final P prefix, final PS prefixKeySerializer) {
         Objects.requireNonNull(prefix, "prefix cannot be null");
         Objects.requireNonNull(prefixKeySerializer, "prefixKeySerializer cannot be null");
-        return new MeteredKeyValueIterator(wrapped().prefixScan(prefix, prefixKeySerializer), prefixScanSensor);
+        return prefixScanInternal(wrapped(), prefix, prefixKeySerializer);
+    }
+
+    private <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScanInternal(
+        final ReadOnlyKeyValueStore<Bytes, byte[]> store, final P prefix, final PS prefixKeySerializer
+    ) {
+        final byte[] keyBytes = prefixKeySerializer.serialize(null, internalContext.headers(), prefix);
+        return meteredKeyValueIterator(store.prefixScan(keyBytes, BYTE_ARRAY_SERIALIZER), prefixScanSensor);
     }
 
     @Override
-    public KeyValueIterator<K, V> range(final K from,
-                                        final K to) {
-        final byte[] serFrom = from == null ? null : serdes.rawKey(from);
-        final byte[] serTo = to == null ? null : serdes.rawKey(to);
-        return new MeteredKeyValueIterator(
-            wrapped().range(Bytes.wrap(serFrom), Bytes.wrap(serTo)),
-            rangeSensor
-        );
+    public KeyValueIterator<K, V> range(final K from, final K to) {
+        return rangeInternal(wrapped(), from, to);
+    }
+
+    private KeyValueIterator<K, V> rangeInternal(
+        final ReadOnlyKeyValueStore<Bytes, byte[]> store, final K from, final K to
+    ) {
+        return meteredKeyValueIterator(store.range(serializeKey(from), serializeKey(to)), rangeSensor);
     }
 
     @Override
-    public KeyValueIterator<K, V> reverseRange(final K from,
-                                               final K to) {
-        final byte[] serFrom = from == null ? null : serdes.rawKey(from);
-        final byte[] serTo = to == null ? null : serdes.rawKey(to);
-        return new MeteredKeyValueIterator(
-            wrapped().reverseRange(Bytes.wrap(serFrom), Bytes.wrap(serTo)),
-            rangeSensor
-        );
+    public KeyValueIterator<K, V> reverseRange(final K from, final K to) {
+        return reverseRangeInternal(wrapped(), from, to);
+    }
+
+    private KeyValueIterator<K, V> reverseRangeInternal(
+        final ReadOnlyKeyValueStore<Bytes, byte[]> store, final K from, final K to
+    ) {
+        return meteredKeyValueIterator(store.reverseRange(serializeKey(from), serializeKey(to)), rangeSensor);
     }
 
     @Override
     public KeyValueIterator<K, V> all() {
-        return new MeteredKeyValueIterator(wrapped().all(), allSensor);
+        return allInternal(wrapped());
+    }
+
+    private KeyValueIterator<K, V> allInternal(final ReadOnlyKeyValueStore<Bytes, byte[]> store) {
+        return meteredKeyValueIterator(store.all(), allSensor);
     }
 
     @Override
     public KeyValueIterator<K, V> reverseAll() {
-        return new MeteredKeyValueIterator(wrapped().reverseAll(), allSensor);
+        return reverseAllInternal(wrapped());
+    }
+
+    private KeyValueIterator<K, V> reverseAllInternal(final ReadOnlyKeyValueStore<Bytes, byte[]> store) {
+        return meteredKeyValueIterator(store.reverseAll(), allSensor);
+    }
+
+    private KeyValueIterator<K, V> meteredKeyValueIterator(final KeyValueIterator<Bytes, byte[]> iter, final Sensor sensor) {
+        return new MeteredKeyValueStoreIterator(iter, sensor);
     }
 
     @Override
-    public void flush() {
-        maybeMeasureLatency(super::flush, time, flushSensor);
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+        maybeMeasureLatency(() -> super.commit(changelogOffsets), time, commitSensor);
     }
 
     @Override
     public long approximateNumEntries() {
         return wrapped().approximateNumEntries();
+    }
+
+    @Override
+    public ReadOnlyKeyValueStore<K, V> readOnly(final IsolationLevel isolationLevel) {
+        Objects.requireNonNull(isolationLevel, "isolationLevel cannot be null");
+        return new ReadOnlyView(wrapped().readOnly(isolationLevel));
+    }
+
+    private final class ReadOnlyView implements ReadOnlyKeyValueStore<K, V> {
+
+        private final ReadOnlyKeyValueStore<Bytes, byte[]> underlying;
+
+        ReadOnlyView(final ReadOnlyKeyValueStore<Bytes, byte[]> underlying) {
+            this.underlying = underlying;
+        }
+
+        @Override
+        public V get(final K key) {
+            Objects.requireNonNull(key, "key cannot be null");
+            return getInternal(underlying, key);
+        }
+
+        @Override
+        public KeyValueIterator<K, V> range(final K from, final K to) {
+            return rangeInternal(underlying, from, to);
+        }
+
+        @Override
+        public KeyValueIterator<K, V> reverseRange(final K from, final K to) {
+            return reverseRangeInternal(underlying, from, to);
+        }
+
+        @Override
+        public KeyValueIterator<K, V> all() {
+            return allInternal(underlying);
+        }
+
+        @Override
+        public KeyValueIterator<K, V> reverseAll() {
+            return reverseAllInternal(underlying);
+        }
+
+        @Override
+        public <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScan(final P prefix, final PS prefixKeySerializer) {
+            Objects.requireNonNull(prefix, "prefix cannot be null");
+            Objects.requireNonNull(prefixKeySerializer, "prefixKeySerializer cannot be null");
+            return prefixScanInternal(underlying, prefix, prefixKeySerializer);
+        }
+
+        @Override
+        public long approximateNumEntries() {
+            return underlying.approximateNumEntries();
+        }
     }
 
     @Override
@@ -416,25 +531,31 @@ public class MeteredKeyValueStore<K, V>
         }
     }
 
-    protected V outerValue(final byte[] value) {
-        return value != null ? serdes.valueFrom(value) : null;
+    protected Bytes serializeKey(final K key) {
+        return Bytes.wrap(serdes.rawKey(key, internalContext.headers()));
     }
 
-    protected Bytes keyBytes(final K key) {
-        return Bytes.wrap(serdes.rawKey(key));
+    protected K deserializeKey(final byte[] rawKey) {
+        return serdes.keyFrom(rawKey, internalContext.headers());
+    }
+
+    protected byte[] serializeValue(final V value) {
+        return value != null ? serdes.rawValue(value, internalContext.headers()) : null;
+    }
+
+    protected V deserializeValue(final byte[] rawValue) {
+        return rawValue != null ? serdes.valueFrom(rawValue, internalContext.headers()) : null;
     }
 
     private List<KeyValue<Bytes, byte[]>> innerEntries(final List<KeyValue<K, V>> from) {
         final List<KeyValue<Bytes, byte[]>> byteEntries = new ArrayList<>();
         for (final KeyValue<K, V> entry : from) {
-            byteEntries.add(KeyValue.pair(Bytes.wrap(serdes.rawKey(entry.key)), serdes.rawValue(entry.value)));
+            byteEntries.add(KeyValue.pair(serializeKey(entry.key), serializeValue(entry.value)));
         }
         return byteEntries;
     }
 
     protected void maybeRecordE2ELatency() {
-        // Context is null if the provided context isn't an implementation of InternalProcessorContext.
-        // In that case, we _can't_ get the current timestamp, so we don't record anything.
         if (e2eLatencySensor.shouldRecord() && internalContext != null) {
             final long currentTime = time.milliseconds();
             final long e2eLatency =  currentTime - internalContext.recordContext().timestamp();
@@ -442,15 +563,15 @@ public class MeteredKeyValueStore<K, V>
         }
     }
 
-    private class MeteredKeyValueIterator implements KeyValueIterator<K, V>, MeteredIterator {
+    private class MeteredKeyValueStoreIterator implements KeyValueIterator<K, V>, MeteredIterator {
 
         private final KeyValueIterator<Bytes, byte[]> iter;
         private final Sensor sensor;
         private final long startNs;
         private final long startTimestamp;
 
-        private MeteredKeyValueIterator(final KeyValueIterator<Bytes, byte[]> iter,
-                                        final Sensor sensor) {
+        private MeteredKeyValueStoreIterator(final KeyValueIterator<Bytes, byte[]> iter,
+                                             final Sensor sensor) {
             this.iter = iter;
             this.sensor = sensor;
             this.startTimestamp = time.milliseconds();
@@ -473,8 +594,11 @@ public class MeteredKeyValueStore<K, V>
         public KeyValue<K, V> next() {
             final KeyValue<Bytes, byte[]> keyValue = iter.next();
             return KeyValue.pair(
-                serdes.keyFrom(keyValue.key.get()),
-                outerValue(keyValue.value));
+                // note: `MeteredKeyValueStoreIterator` is also use on the IQ code path,
+                // and that fine: `internalContext.headers()` will return `new RecordHeaders()`
+                // what make sense as for IQ there is no "record context" at hand.
+                deserializeKey(keyValue.key.get()),
+                deserializeValue(keyValue.value));
         }
 
         @Override
@@ -492,66 +616,10 @@ public class MeteredKeyValueStore<K, V>
 
         @Override
         public K peekNextKey() {
-            return serdes.keyFrom(iter.peekNextKey().get());
-        }
-    }
-
-    private class MeteredKeyValueTimestampedIterator implements KeyValueIterator<K, V>, MeteredIterator {
-
-        private final KeyValueIterator<Bytes, byte[]> iter;
-        private final Sensor sensor;
-        private final long startNs;
-        private final long startTimestamp;
-        private final Function<byte[], V> valueDeserializer;
-
-        private MeteredKeyValueTimestampedIterator(
-            final KeyValueIterator<Bytes, byte[]> iter,
-            final Sensor sensor,
-            final Function<byte[], V> valueDeserializer
-        ) {
-            this.iter = iter;
-            this.sensor = sensor;
-            this.valueDeserializer = valueDeserializer;
-            this.startTimestamp = time.milliseconds();
-            this.startNs = time.nanoseconds();
-            numOpenIterators.increment();
-            openIterators.add(this);
-        }
-
-        @Override
-        public long startTimestamp() {
-            return startTimestamp;
-        }
-
-        @Override
-        public boolean hasNext() {
-            return iter.hasNext();
-        }
-
-        @Override
-        public KeyValue<K, V> next() {
-            final KeyValue<Bytes, byte[]> keyValue = iter.next();
-            return KeyValue.pair(
-                    serdes.keyFrom(keyValue.key.get()),
-                    valueDeserializer.apply(keyValue.value));
-        }
-
-        @Override
-        public void close() {
-            try {
-                iter.close();
-            } finally {
-                final long duration = time.nanoseconds() - startNs;
-                sensor.record(duration);
-                iteratorDurationSensor.record(duration);
-                numOpenIterators.decrement();
-                openIterators.remove(this);
-            }
-        }
-
-        @Override
-        public K peekNextKey() {
-            return serdes.keyFrom(iter.peekNextKey().get());
+            // note: `MeteredKeyValueStoreIterator` is also use on the IQ code path,
+            // and that fine: `internalContext.headers()` will return `new RecordHeaders()`
+            // what make sense as for IQ there is no "record context" at hand.
+            return deserializeKey(iter.peekNextKey().get());
         }
     }
 }

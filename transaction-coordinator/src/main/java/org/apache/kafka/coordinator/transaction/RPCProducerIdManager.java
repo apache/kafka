@@ -60,6 +60,7 @@ public class RPCProducerIdManager implements ProducerIdManager {
     final AtomicReference<ProducerIdsBlock> nextProducerIdBlock = new AtomicReference<>(null);
     final AtomicReference<ProducerIdsBlock> currentProducerIdBlock = new AtomicReference<>(ProducerIdsBlock.EMPTY);
     private final AtomicBoolean requestInFlight = new AtomicBoolean(false);
+
     private final AtomicLong backoffDeadlineMs = new AtomicLong(NO_RETRY);
 
     public RPCProducerIdManager(int brokerId,
@@ -99,7 +100,7 @@ public class RPCProducerIdManager implements ProducerIdManager {
                     throw Errors.COORDINATOR_LOAD_IN_PROGRESS.exception("Producer ID block is full. Waiting for next block");
                 } else {
                     currentProducerIdBlock.set(block);
-                    requestInFlight.set(false);
+                    clearRequestInFlight(NO_RETRY);
                     iteration++;
                 }
             }
@@ -108,16 +109,27 @@ public class RPCProducerIdManager implements ProducerIdManager {
     }
 
     private void maybeRequestNextBlock() {
-        var retryTimestamp = backoffDeadlineMs.get();
-        if (retryTimestamp == NO_RETRY || time.milliseconds() >= retryTimestamp) {
-            // Send a request only if we reached the retry deadline, or if no deadline was set.
-            if (nextProducerIdBlock.get() == null &&
-                    requestInFlight.compareAndSet(false, true)) {
-                sendRequest();
-                // Reset backoff after a successful send.
-                backoffDeadlineMs.set(NO_RETRY);
-            }
+        if (nextProducerIdBlock.get() != null) {
+            return;
         }
+
+        // KAFKA-20114 - Acquire requestInFlight before reading backoffDeadlineMs. The response handler
+        // updates backoffDeadlineMs before clearing requestInFlight, so a successful CAS
+        // after that clear observes the updated backoff and avoids a premature retry.
+        if (!requestInFlight.compareAndSet(false, true)) {
+            return;
+        }
+
+        var retryTimestamp = backoffDeadlineMs.get();
+        var now = time.milliseconds();
+
+        // Don't send a request if there is a retry deadline and the deadline has not passed yet.
+        if (retryTimestamp != NO_RETRY && now < retryTimestamp) {
+            requestInFlight.set(false);
+            return;
+        }
+
+        sendRequest();
     }
 
     protected void sendRequest() {
@@ -136,7 +148,7 @@ public class RPCProducerIdManager implements ProducerIdManager {
             @Override
             public void onTimeout() {
                 log.warn("{} Timed out when requesting AllocateProducerIds from the controller.", logPrefix);
-                requestInFlight.set(false);
+                clearRequestInFlight(NO_RETRY);
             }
         });
     }
@@ -144,8 +156,7 @@ public class RPCProducerIdManager implements ProducerIdManager {
     private void handleUnsuccessfulResponse() {
         // There is no need to compare and set because only one thread
         // handles the AllocateProducerIds response.
-        backoffDeadlineMs.set(time.milliseconds() + RETRY_BACKOFF_MS);
-        requestInFlight.set(false);
+        clearRequestInFlight(time.milliseconds() + RETRY_BACKOFF_MS);
     }
 
     protected void handleAllocateProducerIdsResponse(ClientResponse clientResponse) {
@@ -197,5 +208,12 @@ public class RPCProducerIdManager implements ProducerIdManager {
             return true;
         }
         return false;
+    }
+    
+    private void clearRequestInFlight(long newBackoffDeadlineMs) {
+        // KAFKA-20114 - Update the backoff before clearing requestInFlight. maybeRequestNextBlock
+        // relies on this ordering when it acquires requestInFlight before reading the deadline.
+        backoffDeadlineMs.set(newBackoffDeadlineMs);
+        requestInFlight.set(false);
     }
 }

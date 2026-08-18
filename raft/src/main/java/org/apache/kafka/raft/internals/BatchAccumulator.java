@@ -24,8 +24,8 @@ import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MutableRecordBatch;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MutableRecordBatch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
@@ -140,7 +140,7 @@ public class BatchAccumulator<T> implements Closeable {
             long lastOffset = nextOffset + records.size() - 1;
             maybeCompleteDrain();
 
-            BatchBuilder<T> batch = null;
+            BatchBuilder<T> batch;
             batch = maybeAllocateBatch(records, serializationCache);
             if (batch == null) {
                 throw new BufferAllocationException("Append failed because we failed to allocate memory to write the batch");
@@ -576,7 +576,7 @@ public class BatchAccumulator<T> implements Closeable {
             this.pool = pool;
             this.initialBuffer = initialBuffer;
 
-            validateContruction();
+            validateConstruction();
         }
 
         private CompletedBatch(
@@ -593,10 +593,10 @@ public class BatchAccumulator<T> implements Closeable {
             this.pool = pool;
             this.initialBuffer = initialBuffer;
 
-            validateContruction();
+            validateConstruction();
         }
 
-        private void validateContruction() {
+        private void validateConstruction() {
             Objects.requireNonNull(data.firstBatch(), "Expected memory records to contain one batch");
 
             if (numRecords <= 0) {

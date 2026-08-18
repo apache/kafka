@@ -25,6 +25,7 @@ import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.EmitStrategy.StrategyType;
@@ -82,18 +83,23 @@ public class TimeWindowedKStreamImplTest {
 
     public static Stream<Arguments> data() {
         return Stream.of(
-            Arguments.of(StrategyType.ON_WINDOW_UPDATE, true),
-            Arguments.of(StrategyType.ON_WINDOW_UPDATE, false),
-            Arguments.of(StrategyType.ON_WINDOW_CLOSE, true),
-            Arguments.of(StrategyType.ON_WINDOW_CLOSE, false)
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, true, false),
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, true, true),
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, false, false),
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, false, true),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, true, false),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, true, true),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, false, false),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, false, true)
         );
     }
 
-    public void setup(final StrategyType inputType, final boolean inputWithCache) {
+    public void setup(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) {
         type = inputType;
         withCache = inputWithCache;
         emitFinal = type.equals(StrategyType.ON_WINDOW_CLOSE);
         emitStrategy = StrategyType.forType(type);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
         final KStream<String, String> stream = builder.stream(TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
         windowedStream = stream.groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
             .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(500L)));
@@ -101,8 +107,8 @@ public class TimeWindowedKStreamImplTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldCountWindowed(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    public void shouldCountWindowed(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputWithCache, withHeaders);
         final MockApiProcessorSupplier<Windowed<String>, Long, Void, Void> supplier = new MockApiProcessorSupplier<>();
         windowedStream
             .emitStrategy(emitStrategy)
@@ -110,7 +116,7 @@ public class TimeWindowedKStreamImplTest {
             .toStream()
             .process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             processData(driver);
         }
         final ArrayList<KeyValueTimestamp<Windowed<String>, Long>> processed = supplier.theCapturedProcessor().processed();
@@ -141,8 +147,8 @@ public class TimeWindowedKStreamImplTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldReduceWindowed(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    public void shouldReduceWindowed(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputWithCache, withHeaders);
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         windowedStream
             .emitStrategy(emitStrategy)
@@ -150,7 +156,7 @@ public class TimeWindowedKStreamImplTest {
             .toStream()
             .process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             processData(driver);
         }
 
@@ -181,8 +187,8 @@ public class TimeWindowedKStreamImplTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldAggregateWindowed(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    public void shouldAggregateWindowed(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputWithCache, withHeaders);
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         windowedStream
             .emitStrategy(emitStrategy)
@@ -193,7 +199,7 @@ public class TimeWindowedKStreamImplTest {
             .toStream()
             .process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             processData(driver);
         }
 
@@ -225,8 +231,8 @@ public class TimeWindowedKStreamImplTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldMaterializeCount(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    public void shouldMaterializeCount(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputWithCache, withHeaders);
         windowedStream
             .emitStrategy(emitStrategy)
             .count(
@@ -234,7 +240,7 @@ public class TimeWindowedKStreamImplTest {
                     .withKeySerde(Serdes.String())
                     .withValueSerde(Serdes.Long())));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             processData(driver);
             {
                 final WindowStore<String, Long> windowStore = driver.getWindowStore("count-store");
@@ -292,15 +298,15 @@ public class TimeWindowedKStreamImplTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldMaterializeReduced(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    public void shouldMaterializeReduced(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputWithCache, withHeaders);
         windowedStream.reduce(
             MockReducer.STRING_ADDER,
             setMaterializedCache(Materialized.<String, String, WindowStore<Bytes, byte[]>>as("reduced")
                 .withKeySerde(Serdes.String())
                 .withValueSerde(Serdes.String())));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             processData(driver);
             {
                 final WindowStore<String, String> windowStore = driver.getWindowStore("reduced");
@@ -344,8 +350,8 @@ public class TimeWindowedKStreamImplTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldMaterializeAggregated(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    public void shouldMaterializeAggregated(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputWithCache, withHeaders);
         windowedStream.aggregate(
             MockInitializer.STRING_INIT,
             MockAggregator.TOSTRING_ADDER,
@@ -353,7 +359,7 @@ public class TimeWindowedKStreamImplTest {
                 .withKeySerde(Serdes.String())
                 .withValueSerde(Serdes.String())));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build()).withConfig(props).build()) {
             processData(driver);
             {
                 final WindowStore<String, String> windowStore = driver.getWindowStore("aggregated");
@@ -396,29 +402,29 @@ public class TimeWindowedKStreamImplTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldThrowNullPointerOnAggregateIfInitializerIsNull(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    public void shouldThrowNullPointerOnAggregateIfInitializerIsNull(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputWithCache, withHeaders);
         assertThrows(NullPointerException.class, () -> windowedStream.aggregate(null, MockAggregator.TOSTRING_ADDER));
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldThrowNullPointerOnAggregateIfAggregatorIsNull(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    public void shouldThrowNullPointerOnAggregateIfAggregatorIsNull(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputWithCache, withHeaders);
         assertThrows(NullPointerException.class, () -> windowedStream.aggregate(MockInitializer.STRING_INIT, null));
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldThrowNullPointerOnReduceIfReducerIsNull(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    public void shouldThrowNullPointerOnReduceIfReducerIsNull(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputWithCache, withHeaders);
         assertThrows(NullPointerException.class, () -> windowedStream.reduce(null));
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldThrowNullPointerOnMaterializedAggregateIfInitializerIsNull(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    public void shouldThrowNullPointerOnMaterializedAggregateIfInitializerIsNull(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputWithCache, withHeaders);
         assertThrows(NullPointerException.class, () -> windowedStream.aggregate(
             null,
             MockAggregator.TOSTRING_ADDER,
@@ -427,8 +433,8 @@ public class TimeWindowedKStreamImplTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldThrowNullPointerOnMaterializedAggregateIfAggregatorIsNull(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    public void shouldThrowNullPointerOnMaterializedAggregateIfAggregatorIsNull(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputWithCache, withHeaders);
         assertThrows(NullPointerException.class, () -> windowedStream.aggregate(
             MockInitializer.STRING_INIT,
             null,
@@ -438,8 +444,8 @@ public class TimeWindowedKStreamImplTest {
     @SuppressWarnings("unchecked")
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldThrowNullPointerOnMaterializedAggregateIfMaterializedIsNull(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    public void shouldThrowNullPointerOnMaterializedAggregateIfMaterializedIsNull(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputWithCache, withHeaders);
         assertThrows(NullPointerException.class, () -> windowedStream.aggregate(
             MockInitializer.STRING_INIT,
             MockAggregator.TOSTRING_ADDER,
@@ -448,8 +454,8 @@ public class TimeWindowedKStreamImplTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldThrowNullPointerOnMaterializedReduceIfReducerIsNull(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    public void shouldThrowNullPointerOnMaterializedReduceIfReducerIsNull(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputWithCache, withHeaders);
         assertThrows(NullPointerException.class, () -> windowedStream.reduce(
             null,
             setMaterializedCache(Materialized.as("store"))));
@@ -458,8 +464,8 @@ public class TimeWindowedKStreamImplTest {
     @ParameterizedTest
     @MethodSource("data")
     @SuppressWarnings("unchecked")
-    public void shouldThrowNullPointerOnMaterializedReduceIfMaterializedIsNull(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    public void shouldThrowNullPointerOnMaterializedReduceIfMaterializedIsNull(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputWithCache, withHeaders);
         assertThrows(NullPointerException.class, () -> windowedStream.reduce(
             MockReducer.STRING_ADDER,
             (Materialized) null));
@@ -467,8 +473,8 @@ public class TimeWindowedKStreamImplTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldThrowNullPointerOnMaterializedReduceIfNamedIsNull(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    public void shouldThrowNullPointerOnMaterializedReduceIfNamedIsNull(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputWithCache, withHeaders);
         assertThrows(NullPointerException.class, () -> windowedStream.reduce(
             MockReducer.STRING_ADDER,
             (Named) null));
@@ -476,8 +482,8 @@ public class TimeWindowedKStreamImplTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldThrowNullPointerOnCountIfMaterializedIsNull(final StrategyType inputType, final boolean inputWithCache) {
-        setup(inputType, inputWithCache);
+    public void shouldThrowNullPointerOnCountIfMaterializedIsNull(final StrategyType inputType, final boolean inputWithCache, final boolean withHeaders) {
+        setup(inputType, inputWithCache, withHeaders);
         assertThrows(NullPointerException.class, () -> windowedStream.count((Materialized<String, Long, WindowStore<Bytes, byte[]>>) null));
     }
 

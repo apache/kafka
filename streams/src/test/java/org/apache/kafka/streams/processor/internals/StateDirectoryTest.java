@@ -17,18 +17,16 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.TestUtils;
@@ -36,6 +34,7 @@ import org.apache.kafka.test.TestUtils;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -73,6 +72,7 @@ import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.processor.internals.StateDirectory.LOCK_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateDirectory.PROCESS_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.toTaskDirString;
@@ -80,7 +80,6 @@ import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.endsWith;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -603,7 +602,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldNotDeleteAppDirWhenCleanUpIfNotEmpty() throws IOException {
+    public void shouldWarnWhenUnexpectedFilesRemainDuringClean() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
         final File taskDirectory = directory.getOrCreateDirectoryForTask(taskId);
         final File testFile = new File(taskDirectory, "testFile");
@@ -617,9 +616,10 @@ public class StateDirectoryTest {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
             // call StateDirectory#clean
             directory.clean();
+            assertTrue(appDir.exists());
             assertThat(
                 appender.getMessages(),
-                hasItem(endsWith(String.format("Failed to delete state store directory of %s for it is not empty", appDir.getAbsolutePath())))
+                hasItem(containsString("unexpected files remain"))
             );
         }
     }
@@ -855,113 +855,229 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldNotInitializeStandbyTasksWhenNoLocalState() {
+    public void shouldNotInitializeStartupStateWhenNoLocalState() {
         final TaskId taskId = new TaskId(0, 0);
-        initializeStartupTasks(new TaskId(0, 0), false);
+        initializeStartupStores(new TaskId(0, 0), false);
         assertFalse(directory.hasStartupTasks());
-        assertNull(directory.removeStartupTask(taskId));
+        assertFalse(directory.removeStartupState(taskId));
         assertFalse(directory.hasStartupTasks());
     }
 
     @Test
-    public void shouldInitializeStandbyTasksForLocalState() {
+    public void shouldInitializeStartupStateForLocalState() {
         final TaskId taskId = new TaskId(0, 0);
-        initializeStartupTasks(new TaskId(0, 0), true);
+        initializeStartupStores(new TaskId(0, 0), true);
         assertTrue(directory.hasStartupTasks());
-        assertNotNull(directory.removeStartupTask(taskId));
+        assertTrue(directory.removeStartupState(taskId));
         assertFalse(directory.hasStartupTasks());
-        assertNull(directory.removeStartupTask(taskId));
+        assertFalse(directory.removeStartupState(taskId));
     }
 
     @Test
-    public void shouldNotAssignStartupTasksWeDontHave() {
+    public void shouldNotAssignStartupStateWeDontHave() {
         final TaskId taskId = new TaskId(0, 0);
-        initializeStartupTasks(taskId, false);
-        final Task task = directory.removeStartupTask(taskId);
-        assertNull(task);
-    }
-
-    private class FakeStreamThread extends Thread {
-        private final TaskId taskId;
-        private final AtomicReference<Task> result;
-
-        private FakeStreamThread(final TaskId taskId, final AtomicReference<Task> result) {
-            this.taskId = taskId;
-            this.result = result;
-        }
-
-        @Override
-        public void run() {
-            result.set(directory.removeStartupTask(taskId));
-        }
+        initializeStartupStores(taskId, false);
+        assertFalse(directory.removeStartupState(taskId));
     }
 
     @Test
-    public void shouldAssignStartupTaskToStreamThread() throws InterruptedException {
+    public void shouldNotHoldLockAfterInitializeStartupStores() {
         final TaskId taskId = new TaskId(0, 0);
+        initializeStartupStores(taskId, true);
 
-        initializeStartupTasks(taskId, true);
-
-        // main thread owns the newly initialized tasks
-        assertThat(directory.lockOwner(taskId), is(Thread.currentThread()));
-
-        // spawn off a "fake" StreamThread, so we can verify the lock was updated to the correct thread
-        final AtomicReference<Task> result = new AtomicReference<>();
-        final Thread streamThread = new FakeStreamThread(taskId, result);
-        streamThread.start();
-        streamThread.join();
-        final Task task = result.get();
-
-        assertNotNull(task);
-        assertThat(task, instanceOf(StandbyTask.class));
-
-        // verify the owner of the task directory lock has been shifted over to our assigned StreamThread
-        assertThat(directory.lockOwner(taskId), is(instanceOf(FakeStreamThread.class)));
-    }
-
-    @Test
-    public void shouldUnlockStartupTasksOnClose() {
-        final TaskId taskId = new TaskId(0, 0);
-        initializeStartupTasks(taskId, true);
-
-        assertEquals(Thread.currentThread(), directory.lockOwner(taskId));
-        directory.closeStartupTasks();
+        assertTrue(directory.hasStartupTasks());
         assertNull(directory.lockOwner(taskId));
     }
 
     @Test
-    public void shouldCloseStartupTasksOnDirectoryClose() {
-        final StateStore store = initializeStartupTasks(new TaskId(0, 0), true);
+    public void shouldUnlockStartupStateOnClose() {
+        final TaskId taskId = new TaskId(0, 0);
+        initializeStartupStores(taskId, true);
+
+        assertNull(directory.lockOwner(taskId));
+        directory.close();
+        assertNull(directory.lockOwner(taskId));
+    }
+
+    @Test
+    public void shouldCloseStartupStateOnAutoCleanUp() {
+        // we need to set this because the auto-cleanup uses the last-modified time from the filesystem,
+        // which can't be mocked
+        time.setCurrentTimeMs(System.currentTimeMillis());
+        final TaskId taskId = new TaskId(0, 0);
+
+        final StateStore store = initializeStartupStores(taskId, true);
 
         assertTrue(directory.hasStartupTasks());
-        assertTrue(store.isOpen());
+        assertFalse(store.isOpen());
 
-        directory.close();
+        time.sleep(10000);
+        // We need to manually unlock the task because the cleanup process only
+        // cleans tasks that are no-longer owned by the current thread
+        directory.unlock(taskId);
+
+        directory.cleanRemovedTasks(1000);
 
         assertFalse(directory.hasStartupTasks());
         assertFalse(store.isOpen());
     }
 
     @Test
-    public void shouldNotCloseStartupTasksOnAutoCleanUp() {
-        // we need to set this because the auto-cleanup uses the last-modified time from the filesystem,
-        // which can't be mocked
-        time.setCurrentTimeMs(System.currentTimeMillis());
+    public void shouldCleanupStateDirectoriesWhenLastModifiedIsLessThanNowMinusMaxDirAge() {
+        final TaskId task0 = new TaskId(0, 0);
+        final TaskId task1 = new TaskId(1, 0);
+        final TaskId task2 = new TaskId(2, 0);
 
-        final StateStore store = initializeStartupTasks(new TaskId(0, 0), true);
+        final int dirMaxAgeMs = 60000;
+        final long outdatedModifiedTime = time.milliseconds() - dirMaxAgeMs - 1000;
 
-        assertTrue(directory.hasStartupTasks());
-        assertTrue(store.isOpen());
+        assertTrue(new File(directory.getOrCreateDirectoryForTask(task0), "store").mkdir());
+        assertTrue(new File(directory.getOrCreateDirectoryForTask(task1), "store").mkdir());
+        assertTrue(new File(directory.getOrCreateDirectoryForTask(task2), "store").mkdir());
 
-        time.sleep(10000);
+        final File dir0File = new File(appDir, toTaskDirString(task0));
+        dir0File.setLastModified(outdatedModifiedTime);
+        final File dir1File = new File(appDir, toTaskDirString(task1));
+        dir1File.setLastModified(outdatedModifiedTime);
+        final File dir2File = new File(appDir, toTaskDirString(task2));
 
-        directory.cleanRemovedTasks(1000);
+        final TaskDirectory dir0 = new TaskDirectory(dir0File, null);
+        final TaskDirectory dir1 = new TaskDirectory(dir1File, null);
+        final TaskDirectory dir2 = new TaskDirectory(dir2File, null);
 
-        assertTrue(directory.hasStartupTasks());
-        assertTrue(store.isOpen());
+        List<TaskDirectory> files = directory.listAllTaskDirectories();
+        assertEquals(Set.of(dir0, dir1, dir2), new HashSet<>(files));
+        files = directory.listNonEmptyTaskDirectories();
+        assertEquals(Set.of(dir0, dir1, dir2), new HashSet<>(files));
+
+        directory.cleanOutdatedDirsOnStartup(dirMaxAgeMs);
+
+        files = directory.listAllTaskDirectories();
+        assertEquals(Set.of(dir2), new HashSet<>(files));
+        files = directory.listNonEmptyTaskDirectories();
+        assertEquals(Set.of(dir2), new HashSet<>(files));
     }
 
-    private StateStore initializeStartupTasks(final TaskId taskId, final boolean createTaskDir) {
+    @Test
+    public void shouldRetainAppDirAndNotWarnWhenOnlyProcessFileRemainsDuringClean() throws IOException {
+        // GIVEN
+        final File stateDir = TestUtils.tempDirectory();
+        final StateDirectory stateDirectory = new StateDirectory(
+                new StreamsConfig(new Properties() {
+                    {
+                        put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+                        put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+                        put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
+                    }
+                }),
+                time,
+                true,
+                false);
+
+        final File appStateDir = new File(stateDir, applicationId);
+        final File processFile = new File(appStateDir, PROCESS_FILE_NAME);
+        processFile.createNewFile();
+        stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 0));
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
+            appender.setClassLogger(StateDirectory.class, Level.DEBUG);
+
+            // WHEN
+            stateDirectory.clean();
+
+            // THEN
+            assertTrue(processFile.exists());
+            assertTrue(appStateDir.exists());
+
+            final List<String> messages = appender.getMessages();
+            final boolean hasWarnLog = messages.stream()
+                    .anyMatch(msg -> msg.contains("Failed to fully clean up state store directory")
+                                        || msg.contains("Failed to delete state store directory"));
+            assertFalse(hasWarnLog);
+        }
+    }
+
+    @Test
+    public void shouldRetainAppDirAndNotWarnWhenOnlyLockFileRemainsDuringClean() throws IOException {
+        // GIVEN
+        final File stateDir = TestUtils.tempDirectory();
+        final StateDirectory stateDirectory = new StateDirectory(
+                new StreamsConfig(new Properties() {
+                    {
+                        put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+                        put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+                        put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
+                    }
+                }),
+                time,
+                true,
+                false);
+
+        final File appStateDir = new File(stateDir, applicationId);
+        final File lockFile = new File(appStateDir, LOCK_FILE_NAME);
+        lockFile.createNewFile();
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
+            appender.setClassLogger(StateDirectory.class, Level.DEBUG);
+
+            // WHEN
+            stateDirectory.clean();
+
+            // THEN
+            assertTrue(lockFile.exists());
+            assertTrue(appStateDir.exists());
+
+            final List<String> messages = appender.getMessages();
+            final boolean hasWarnLog = messages.stream()
+                    .anyMatch(msg -> msg.contains("Failed to fully clean up state store directory")
+                                        || msg.contains("Failed to delete state store directory"));
+            assertFalse(hasWarnLog);
+        }
+    }
+
+    @Test
+    public void shouldRetainAppDirAndNotWarnWhenOnlyExpectedMetadataFilesRemainDuringClean() throws IOException {
+        // GIVEN
+        final File stateDir = TestUtils.tempDirectory();
+        final StateDirectory stateDirectory = new StateDirectory(
+                new StreamsConfig(new Properties() {
+                    {
+                        put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+                        put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+                        put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
+                    }
+                }),
+                time,
+                true,
+                false);
+
+        final File appStateDir = new File(stateDir, applicationId);
+        final File processFile = new File(appStateDir, PROCESS_FILE_NAME);
+        final File lockFile = new File(appStateDir, LOCK_FILE_NAME);
+        processFile.createNewFile();
+        lockFile.createNewFile();
+        stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 0));
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
+            appender.setClassLogger(StateDirectory.class, Level.DEBUG);
+
+            // WHEN
+            stateDirectory.clean();
+
+            // THEN
+            assertTrue(processFile.exists());
+            assertTrue(lockFile.exists());
+            assertTrue(appStateDir.exists());
+
+            final List<String> messages = appender.getMessages();
+            final boolean hasWarnLog = messages.stream()
+                    .anyMatch(msg -> msg.contains("Failed to fully clean up state store directory")
+                                        || msg.contains("Failed to delete state store directory"));
+            assertFalse(hasWarnLog);
+        }
+    }
+
+    private StateStore initializeStartupStores(final TaskId taskId, final boolean createTaskDir) {
         directory.initializeProcessId();
         final TopologyMetadata metadata = Mockito.mock(TopologyMetadata.class);
         final TopologyConfig topologyConfig = new TopologyConfig(config);
@@ -987,7 +1103,7 @@ public class StateDirectoryTest {
         Mockito.when(metadata.buildSubtopology(ArgumentMatchers.any())).thenReturn(processorTopology);
         Mockito.when(metadata.taskConfig(ArgumentMatchers.any())).thenReturn(topologyConfig.getTaskConfig());
 
-        directory.initializeStartupTasks(metadata, new StreamsMetricsImpl(new Metrics(), "test", time), new LogContext("test"));
+        directory.initializeStartupStores(metadata, new LogContext("test"), null);
 
         return store;
     }

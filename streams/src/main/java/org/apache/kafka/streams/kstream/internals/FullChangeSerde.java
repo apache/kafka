@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
@@ -44,27 +45,27 @@ public final class FullChangeSerde<T> {
         return inner;
     }
 
-    public Change<byte[]> serializeParts(final String topic, final Change<T> data) {
+    public Change<byte[]> serializeParts(final String topic, final Headers headers, final Change<T> data) {
         if (data == null) {
             return null;
         }
         final Serializer<T> innerSerializer = innerSerde().serializer();
-        final byte[] oldBytes = data.oldValue == null ? null : innerSerializer.serialize(topic, data.oldValue);
-        final byte[] newBytes = data.newValue == null ? null : innerSerializer.serialize(topic, data.newValue);
+        final byte[] oldBytes = data.oldValue == null ? null : innerSerializer.serialize(topic, headers, data.oldValue);
+        final byte[] newBytes = data.newValue == null ? null : innerSerializer.serialize(topic, headers, data.newValue);
         return new Change<>(newBytes, oldBytes);
     }
 
 
-    public Change<T> deserializeParts(final String topic, final Change<byte[]> serialChange) {
+    public Change<T> deserializeParts(final String topic, final Headers headers, final Change<byte[]> serialChange) {
         if (serialChange == null) {
             return null;
         }
         final Deserializer<T> innerDeserializer = innerSerde().deserializer();
 
         final T oldValue =
-            serialChange.oldValue == null ? null : innerDeserializer.deserialize(topic, serialChange.oldValue);
+            serialChange.oldValue == null ? null : innerDeserializer.deserialize(topic, headers, serialChange.oldValue);
         final T newValue =
-            serialChange.newValue == null ? null : innerDeserializer.deserialize(topic, serialChange.newValue);
+            serialChange.newValue == null ? null : innerDeserializer.deserialize(topic, headers, serialChange.newValue);
 
         return new Change<>(newValue, oldValue);
     }

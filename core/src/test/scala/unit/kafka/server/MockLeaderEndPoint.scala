@@ -20,7 +20,7 @@ package kafka.server
 import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochRequestData}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record._
+import org.apache.kafka.common.record.internal._
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.server.common.OffsetAndEpoch
@@ -140,7 +140,9 @@ class MockLeaderEndPoint(sourceBroker: BrokerEndPoint = new BrokerEndPoint(1, "l
     checkLeaderEpochAndThrow(leaderEpoch, leaderState)
     leaderState.earliestPendingUploadOffset match {
       case -1L => new OffsetAndEpoch(-1L, -1)
-      case _ => new OffsetAndEpoch(math.max(leaderState.earliestPendingUploadOffset, leaderState.logStartOffset), leaderState.leaderEpoch)
+      case _ => new OffsetAndEpoch(
+        math.max(leaderState.earliestPendingUploadOffset, math.max(leaderState.localLogStartOffset, leaderState.logStartOffset)),
+        leaderState.leaderEpoch)
     }
   }
 

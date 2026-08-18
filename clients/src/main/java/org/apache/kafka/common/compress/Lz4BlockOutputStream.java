@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.common.compress;
 
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 
 import net.jpountz.lz4.LZ4Compressor;
 import net.jpountz.lz4.LZ4Factory;

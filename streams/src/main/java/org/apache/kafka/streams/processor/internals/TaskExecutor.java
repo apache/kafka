@@ -21,8 +21,8 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
@@ -68,7 +68,7 @@ public class TaskExecutor {
         int totalProcessed = 0;
         Task lastProcessed = null;
 
-        for (final Task task : tasks.activeTasks()) {
+        for (final StreamTask task : tasks.activeInitializedTasks()) {
             final long now = time.milliseconds();
             try {
                 if (executionMetadata.canProcessTask(task, now)) {
@@ -124,6 +124,8 @@ public class TaskExecutor {
         } finally {
             now = time.milliseconds();
             task.recordProcessBatchTime(now - then);
+            // record terminal e2e latency for the batch against this single end-of-batch time
+            task.maybeFlushTerminalE2ELatency(now);
         }
         return processed;
     }
@@ -136,7 +138,7 @@ public class TaskExecutor {
      * @param consumedOffsetsAndMetadata an empty map that will be filled in with the prepared offsets
      * @return number of committed offsets, or -1 if we are in the middle of a rebalance and cannot commit
      */
-    int commitTasksAndMaybeUpdateCommittableOffsets(final Collection<Task> tasksToCommit,
+    int commitTasksAndMaybeUpdateCommittableOffsets(final Collection<? extends Task> tasksToCommit,
                                                     final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadata) {
         int committed = 0;
         for (final Task task : tasksToCommit) {
@@ -233,12 +235,10 @@ public class TaskExecutor {
 
     private void updateTaskCommitMetadata(final Map<TopicPartition, OffsetAndMetadata> allOffsets) {
         if (!allOffsets.isEmpty()) {
-            for (final Task task : tasks.activeTasks()) {
-                if (task instanceof StreamTask) {
-                    for (final TopicPartition topicPartition : task.inputPartitions()) {
-                        if (allOffsets.containsKey(topicPartition)) {
-                            ((StreamTask) task).updateCommittedOffsets(topicPartition, allOffsets.get(topicPartition).offset());
-                        }
+            for (final StreamTask task : tasks.activeInitializedTasks()) {
+                for (final TopicPartition topicPartition : task.inputPartitions()) {
+                    if (allOffsets.containsKey(topicPartition)) {
+                        task.updateCommittedOffsets(topicPartition, allOffsets.get(topicPartition).offset());
                     }
                 }
             }
@@ -261,7 +261,7 @@ public class TaskExecutor {
     int punctuate() {
         int punctuated = 0;
 
-        for (final Task task : tasks.activeTasks()) {
+        for (final StreamTask task : tasks.activeInitializedTasks()) {
             try {
                 if (executionMetadata.canPunctuateTask(task)) {
                     if (task.maybePunctuateStreamTime()) {

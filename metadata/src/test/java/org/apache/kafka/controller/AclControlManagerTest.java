@@ -27,6 +27,7 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotControllerException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.common.resource.PatternType;
@@ -34,7 +35,7 @@ import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.test.api.Flaky;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.authorizer.AclMutator;
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer;
@@ -49,6 +50,7 @@ import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.authorizer.AuthorizerServerInfo;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.mutable.BoundedListTooLongException;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
@@ -88,30 +90,30 @@ public class AclControlManagerTest {
     public void testValidateNewAcl() {
         AclControlManager.validateNewAcl(new AclBinding(
             new ResourcePattern(TOPIC, "*", LITERAL),
-            new AccessControlEntry("User:*", "*", ALTER, ALLOW)));
+            new AccessControlEntry("User:*", "*", ALTER, ALLOW)), false);
         assertEquals("Invalid patternType UNKNOWN",
             assertThrows(InvalidRequestException.class, () ->
                 AclControlManager.validateNewAcl(new AclBinding(
                     new ResourcePattern(TOPIC, "*", PatternType.UNKNOWN),
-                    new AccessControlEntry("User:*", "*", ALTER, ALLOW)))).
+                    new AccessControlEntry("User:*", "*", ALTER, ALLOW)), false)).
                 getMessage());
         assertEquals("Invalid resourceType UNKNOWN",
             assertThrows(InvalidRequestException.class, () ->
                 AclControlManager.validateNewAcl(new AclBinding(
                     new ResourcePattern(ResourceType.UNKNOWN, "*", LITERAL),
-                    new AccessControlEntry("User:*", "*", ALTER, ALLOW)))).
+                    new AccessControlEntry("User:*", "*", ALTER, ALLOW)), false)).
                 getMessage());
         assertEquals("Invalid operation UNKNOWN",
             assertThrows(InvalidRequestException.class, () ->
                 AclControlManager.validateNewAcl(new AclBinding(
                     new ResourcePattern(TOPIC, "*", LITERAL),
-                    new AccessControlEntry("User:*", "*", AclOperation.UNKNOWN, ALLOW)))).
+                    new AccessControlEntry("User:*", "*", AclOperation.UNKNOWN, ALLOW)), false)).
                 getMessage());
         assertEquals("Invalid permissionType UNKNOWN",
             assertThrows(InvalidRequestException.class, () ->
                 AclControlManager.validateNewAcl(new AclBinding(
                     new ResourcePattern(TOPIC, "*", LITERAL),
-                    new AccessControlEntry("User:*", "*", ALTER, AclPermissionType.UNKNOWN)))).
+                    new AccessControlEntry("User:*", "*", ALTER, AclPermissionType.UNKNOWN)), false)).
                 getMessage());
     }
 
@@ -125,7 +127,7 @@ public class AclControlManagerTest {
             assertThrows(InvalidRequestException.class, () ->
                 AclControlManager.validateNewAcl(new AclBinding(
                     new ResourcePattern(TOPIC, "*", LITERAL),
-                    new AccessControlEntry("invalid", "*", ALTER, ALLOW)))).
+                    new AccessControlEntry("invalid", "*", ALTER, ALLOW)), false)).
                 getMessage());
     }
 
@@ -139,7 +141,7 @@ public class AclControlManagerTest {
             assertThrows(InvalidRequestException.class, () ->
                 AclControlManager.validateNewAcl(new AclBinding(
                     new ResourcePattern(TOPIC, "*", LITERAL),
-                    new AccessControlEntry("", "*", ALTER, ALLOW)))).
+                    new AccessControlEntry("", "*", ALTER, ALLOW)), false)).
                         getMessage());
     }
 
@@ -291,7 +293,7 @@ public class AclControlManagerTest {
             new ResourcePattern(TOPIC, "*", PatternType.UNKNOWN),
             new AccessControlEntry("User:*", "*", ALTER, ALLOW)));
 
-        ControllerResult<List<AclCreateResult>> createResult = manager.createAcls(toCreate);
+        ControllerResult<List<AclCreateResult>> createResult = manager.createAcls(toCreate, MetadataVersion.IBP_4_0_IV0);
 
         List<AclCreateResult> expectedResults = new ArrayList<>();
         for (int i = 0; i < 3; i++) {
@@ -346,12 +348,12 @@ public class AclControlManagerTest {
         AclBinding aclBinding = new AclBinding(new ResourcePattern(TOPIC, "topic-1", LITERAL),
                 new AccessControlEntry("User:user", "10.0.0.1", AclOperation.ALL, ALLOW));
 
-        ControllerResult<List<AclCreateResult>> createResult = manager.createAcls(List.of(aclBinding, aclBinding));
+        ControllerResult<List<AclCreateResult>> createResult = manager.createAcls(List.of(aclBinding, aclBinding), MetadataVersion.IBP_4_0_IV0);
         RecordTestUtils.replayAll(manager, createResult.records());
         assertEquals(1, createResult.records().size());
         assertEquals(1, manager.idToAcl().size());
 
-        createResult = manager.createAcls(List.of(aclBinding));
+        createResult = manager.createAcls(List.of(aclBinding), MetadataVersion.IBP_4_0_IV0);
         assertEquals(0, createResult.records().size());
         assertEquals(1, manager.idToAcl().size());
     }
@@ -363,7 +365,7 @@ public class AclControlManagerTest {
         AclBinding aclBinding = new AclBinding(new ResourcePattern(TOPIC, "topic-1", LITERAL),
                 new AccessControlEntry("User:user", "10.0.0.1", AclOperation.ALL, ALLOW));
 
-        ControllerResult<List<AclCreateResult>> createResult = manager.createAcls(List.of(aclBinding));
+        ControllerResult<List<AclCreateResult>> createResult = manager.createAcls(List.of(aclBinding), MetadataVersion.IBP_4_0_IV0);
         RecordTestUtils.replayAll(manager, createResult.records());
         Uuid id = ((AccessControlEntryRecord) createResult.records().get(0).message()).id();
         assertEquals(1, createResult.records().size());
@@ -413,13 +415,13 @@ public class AclControlManagerTest {
                 secondCreate.add(acl.toBinding());
             }
         }
-        ControllerResult<List<AclCreateResult>> firstCreateResult = manager.createAcls(firstCreate);
+        ControllerResult<List<AclCreateResult>> firstCreateResult = manager.createAcls(firstCreate, MetadataVersion.IBP_4_0_IV0);
         assertEquals((MAX_RECORDS_PER_USER_OP / 2) + 1, firstCreateResult.response().size());
         for (AclCreateResult result : firstCreateResult.response()) {
             assertTrue(result.exception().isEmpty());
         }
 
-        ControllerResult<List<AclCreateResult>> secondCreateResult = manager.createAcls(secondCreate);
+        ControllerResult<List<AclCreateResult>> secondCreateResult = manager.createAcls(secondCreate, MetadataVersion.IBP_4_0_IV0);
         assertEquals((MAX_RECORDS_PER_USER_OP / 2) + 1, secondCreateResult.response().size());
         for (AclCreateResult result : secondCreateResult.response()) {
             assertTrue(result.exception().isEmpty());
@@ -439,5 +441,98 @@ public class AclControlManagerTest {
         Exception exception = assertThrows(InvalidRequestException.class, () -> manager.deleteAcls(filters));
         assertEquals(BoundedListTooLongException.class, exception.getCause().getClass());
         assertEquals("Cannot remove more than " + MAX_RECORDS_PER_USER_OP + " acls in a single delete operation.", exception.getCause().getMessage());
+    }
+
+    @Test
+    public void testValidateHostPatternValid() {
+        // Wildcard
+        AclControlManager.validateHostPattern("*", false);
+        AclControlManager.validateHostPattern("*", true);
+
+        // Plain IPv4 addresses
+        AclControlManager.validateHostPattern("192.168.1.1", false);
+        AclControlManager.validateHostPattern("127.0.0.1", true);
+
+        // Plain IPv6 addresses
+        AclControlManager.validateHostPattern("2001:db8::1", false);
+        AclControlManager.validateHostPattern("::1", true);
+
+        // Hostnames (no slash, so validateHostPattern accepts them as literal hosts)
+        AclControlManager.validateHostPattern("example.com", false);
+        AclControlManager.validateHostPattern("example.com", true);
+    }
+
+    @Test
+    public void testValidateHostPatternInvalid() {
+        // Null or empty
+        assertThrows(InvalidRequestException.class, () ->
+            AclControlManager.validateHostPattern(null, true));
+        assertThrows(InvalidRequestException.class, () ->
+            AclControlManager.validateHostPattern("", true));
+
+        // Invalid CIDR wraps CidrUtils.validate() IllegalArgumentException into InvalidRequestException
+        InvalidRequestException e = assertThrows(InvalidRequestException.class, () ->
+            AclControlManager.validateHostPattern("192.168.0.0/33", true));
+        assertTrue(e.getMessage().contains("Invalid CIDR notation"));
+
+        // Hostname with path is not a valid CIDR
+        e = assertThrows(InvalidRequestException.class, () ->
+            AclControlManager.validateHostPattern("example.com/test", true));
+        assertTrue(e.getMessage().contains("Invalid CIDR notation"));
+    }
+
+    @Test
+    public void testValidateHostPatternCidrNotSupported() {
+        // CIDR patterns should be rejected when cidrSupported is false
+        UnsupportedVersionException e = assertThrows(UnsupportedVersionException.class, () ->
+            AclControlManager.validateHostPattern("192.168.0.0/24", false));
+        assertTrue(e.getMessage().contains("CIDR-based ACL host patterns require metadata version"));
+
+        e = assertThrows(UnsupportedVersionException.class, () ->
+            AclControlManager.validateHostPattern("2001:db8::/32", false));
+        assertTrue(e.getMessage().contains("CIDR-based ACL host patterns require metadata version"));
+    }
+
+    @Test
+    public void testCreateAclWithCidrHosts() {
+        AclControlManager manager = new AclControlManager.Builder().build();
+
+        // Valid CIDR with supported version
+        assertAclCreateSucceeds(manager, "192.168.0.0/24", MetadataVersion.IBP_4_4_IV1);
+        assertAclCreateSucceeds(manager, "2001:db8::/32", MetadataVersion.IBP_4_4_IV1);
+
+        // Regular hosts with older version
+        assertAclCreateSucceeds(manager, "192.168.0.1", MetadataVersion.IBP_4_0_IV0);
+        assertAclCreateSucceeds(manager, "*", MetadataVersion.IBP_4_0_IV0);
+
+        // Invalid CIDR notation
+        assertAclCreateFails(manager, "192.168.0.0/33", MetadataVersion.IBP_4_4_IV1,
+            InvalidRequestException.class, "Invalid CIDR notation");
+
+        // Valid CIDR with unsupported version
+        assertAclCreateFails(manager, "192.168.0.0/24", MetadataVersion.IBP_4_0_IV0,
+            UnsupportedVersionException.class, "CIDR-based ACL host patterns require metadata version");
+    }
+
+    private static void assertAclCreateSucceeds(AclControlManager manager, String host, MetadataVersion version) {
+        AclBinding acl = new AclBinding(
+            new ResourcePattern(TOPIC, "topic-" + host, LITERAL),
+            new AccessControlEntry("User:test", host, ALTER, ALLOW));
+        ControllerResult<List<AclCreateResult>> result = manager.createAcls(List.of(acl), version);
+        assertEquals(1, result.response().size());
+        assertFalse(result.response().get(0).exception().isPresent(),
+            "Expected success for host=" + host + " version=" + version);
+    }
+
+    private static void assertAclCreateFails(AclControlManager manager, String host, MetadataVersion version,
+                                              Class<? extends Exception> exClass, String messageContains) {
+        AclBinding acl = new AclBinding(
+            new ResourcePattern(TOPIC, "topic-" + host, LITERAL),
+            new AccessControlEntry("User:test", host, ALTER, ALLOW));
+        ControllerResult<List<AclCreateResult>> result = manager.createAcls(List.of(acl), version);
+        assertEquals(1, result.response().size());
+        assertTrue(result.response().get(0).exception().isPresent());
+        assertTrue(exClass.isInstance(result.response().get(0).exception().get()));
+        assertTrue(result.response().get(0).exception().get().getMessage().contains(messageContains));
     }
 }

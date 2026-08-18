@@ -50,6 +50,7 @@ import scala.jdk.CollectionConverters._
  * @tparam K Type of keys
  * @tparam V Type of values
  */
+@deprecated("Use `org.apache.kafka.streams.kstream.BranchedKStream` instead", "4.3.0")
 class BranchedKStream[K, V](val inner: BranchedKStreamJ[K, V]) {
 
   /**

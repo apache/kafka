@@ -31,7 +31,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.DeleteRecordsRequest;
 import org.apache.kafka.common.requests.DeleteRecordsResponse;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -73,7 +73,7 @@ public final class DeleteRecordsHandler extends Batched<TopicPartition, DeletedR
 
     public static PartitionLeaderStrategy.PartitionLeaderFuture<DeletedRecords> newFuture(
             Collection<TopicPartition> topicPartitions,
-            Map<TopicPartition, Integer> partitionLeaderCache
+            PartitionLeaderCache partitionLeaderCache
     ) {
         return new PartitionLeaderStrategy.PartitionLeaderFuture<>(new HashSet<>(topicPartitions), partitionLeaderCache);
     }

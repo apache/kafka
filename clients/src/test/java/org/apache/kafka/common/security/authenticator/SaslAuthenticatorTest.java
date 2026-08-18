@@ -93,11 +93,11 @@ import org.apache.kafka.common.security.scram.internals.ScramFormatter;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.common.utils.internals.SecurityUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -178,6 +178,7 @@ public class SaslAuthenticatorTest {
         saslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
         credentialCache = new CredentialCache();
         TestLogin.loginCount.set(0);
+        CountingKafkaPrincipalBuilder.buildCount = 0;
     }
 
     @AfterEach
@@ -215,6 +216,31 @@ public class SaslAuthenticatorTest {
 
         server = createEchoServer(securityProtocol);
         checkAuthenticationAndReauthentication(securityProtocol, node);
+    }
+
+    @Test
+    public void testPrincipalBuiltOncePerAuthentication() throws Exception {
+        String node = "0";
+        time = new MockTime();
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
+        configureMechanisms("PLAIN", Collections.singletonList("PLAIN"));
+        saslServerConfigs.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
+                CountingKafkaPrincipalBuilder.class);
+
+        server = createEchoServer(securityProtocol);
+        createClientConnection(securityProtocol, node);
+        checkClientConnection(node);
+        server.selector().channels().get(0).principal();
+        server.selector().channels().get(0).principal();
+        assertEquals(1, CountingKafkaPrincipalBuilder.buildCount,
+                "Principal should be built only once for repeated access on a connection");
+
+        time.sleep((long) (CONNECTIONS_MAX_REAUTH_MS_VALUE * 1.1));
+        checkClientConnection(node);
+        server.verifyReauthenticationMetrics(1, 0);
+        server.selector().channels().get(0).principal();
+        assertEquals(2, CountingKafkaPrincipalBuilder.buildCount,
+                "A successful re-authentication should build and cache a new principal");
     }
 
     /**
@@ -2761,6 +2787,27 @@ public class SaslAuthenticatorTest {
 
         static KafkaPrincipal saslSslPrincipal(String saslPrincipal, String sslPrincipal) {
             return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, saslPrincipal + ":" + sslPrincipal);
+        }
+
+        @Override
+        public byte[] serialize(KafkaPrincipal principal) {
+            return new byte[0];
+        }
+
+        @Override
+        public KafkaPrincipal deserialize(byte[] bytes) {
+            return null;
+        }
+    }
+
+    public static class CountingKafkaPrincipalBuilder implements KafkaPrincipalBuilder {
+        private static int buildCount;
+
+        @Override
+        public KafkaPrincipal build(AuthenticationContext context) {
+            SaslAuthenticationContext saslContext = (SaslAuthenticationContext) context;
+            buildCount++;
+            return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, saslContext.server().getAuthorizationID());
         }
 
         @Override

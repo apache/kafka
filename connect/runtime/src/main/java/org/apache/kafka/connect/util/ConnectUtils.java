@@ -18,7 +18,7 @@ package org.apache.kafka.connect.util;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.InvalidRecordException;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;

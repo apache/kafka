@@ -20,23 +20,27 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
+import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
+import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
+import org.apache.kafka.common.errors.RecordBatchTooLargeException;
+import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.AbstractRecords;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.EndTransactionMarker;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.AbstractRecords;
+import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.EndTransactionMarker;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.TransactionResult;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.deferred.DeferredEvent;
 import org.apache.kafka.deferred.DeferredEventQueue;
 import org.apache.kafka.server.common.TransactionVersion;
@@ -50,8 +54,6 @@ import org.slf4j.Logger;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -60,7 +62,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
@@ -113,7 +114,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private CoordinatorShardBuilderSupplier<S, U> coordinatorShardBuilderSupplier;
         private Time time = Time.SYSTEM;
         private Timer timer;
-        private Duration defaultWriteTimeout;
+        private Duration writeTimeout;
         private CoordinatorRuntimeMetrics runtimeMetrics;
         private CoordinatorMetrics coordinatorMetrics;
         private Serializer<U> serializer;
@@ -162,8 +163,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             return this;
         }
 
-        public Builder<S, U> withDefaultWriteTimeOut(Duration defaultWriteTimeout) {
-            this.defaultWriteTimeout = defaultWriteTimeout;
+        public Builder<S, U> withWriteTimeout(Duration writeTimeout) {
+            this.writeTimeout = writeTimeout;
             return this;
         }
 
@@ -246,7 +247,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 coordinatorShardBuilderSupplier,
                 time,
                 timer,
-                defaultWriteTimeout,
+                writeTimeout,
                 runtimeMetrics,
                 coordinatorMetrics,
                 serializer,
@@ -316,163 +317,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     }
 
     /**
-     * The EventBasedCoordinatorTimer implements the CoordinatorTimer interface and provides an event based
-     * timer which turns timeouts of a regular {@link Timer} into {@link CoordinatorWriteEvent} events which
-     * are executed by the {@link CoordinatorEventProcessor} used by this coordinator runtime. This is done
-     * to ensure that the timer respects the threading model of the coordinator runtime.
-     *
-     * The {@link CoordinatorWriteEvent} events pushed by the coordinator timer wraps the
-     * {@link TimeoutOperation} operations scheduled by the coordinators.
-     *
-     * It also keeps track of all the scheduled {@link TimerTask}. This allows timeout operations to be
-     * cancelled or rescheduled. When a timer is cancelled or overridden, the previous timer is guaranteed to
-     * not be executed even if it already expired and got pushed to the event processor.
-     *
-     * When a timer fails with an unexpected exception, the timer is rescheduled with a backoff.
-     */
-    class EventBasedCoordinatorTimer implements CoordinatorTimer<Void, U> {
-        /**
-         * The logger.
-         */
-        final Logger log;
-
-        /**
-         * The topic partition.
-         */
-        final TopicPartition tp;
-
-        /**
-         * The scheduled timers keyed by their key.
-         */
-        final Map<String, TimerTask> tasks = new HashMap<>();
-
-        EventBasedCoordinatorTimer(TopicPartition tp, LogContext logContext) {
-            this.tp = tp;
-            this.log = logContext.logger(EventBasedCoordinatorTimer.class);
-        }
-
-        @Override
-        public void schedule(
-            String key,
-            long delay,
-            TimeUnit unit,
-            boolean retry,
-            TimeoutOperation<Void, U> operation
-        ) {
-            schedule(key, delay, unit, retry, 500, operation);
-        }
-
-        @Override
-        public void schedule(
-            String key,
-            long delay,
-            TimeUnit unit,
-            boolean retry,
-            long retryBackoff,
-            TimeoutOperation<Void, U> operation
-        ) {
-            // The TimerTask wraps the TimeoutOperation into a CoordinatorWriteEvent. When the TimerTask
-            // expires, the event is pushed to the queue of the coordinator runtime to be executed. This
-            // ensures that the threading model of the runtime is respected.
-            TimerTask task = new TimerTask(unit.toMillis(delay)) {
-                @Override
-                public void run() {
-                    String eventName = "Timeout(tp=" + tp + ", key=" + key + ")";
-                    CoordinatorWriteEvent<Void> event = new CoordinatorWriteEvent<>(eventName, tp, defaultWriteTimeout, coordinator -> {
-                        log.debug("Executing write event {} for timer {}.", eventName, key);
-
-                        // If the task is different, it means that the timer has been
-                        // cancelled while the event was waiting to be processed.
-                        if (!tasks.remove(key, this)) {
-                            throw new RejectedExecutionException("Timer " + key + " was overridden or cancelled");
-                        }
-
-                        // Execute the timeout operation.
-                        return operation.generateRecords();
-                    });
-
-                    // If the write event fails, it is rescheduled with a small backoff except if retry
-                    // is disabled or if the error is fatal.
-                    event.future.exceptionally(ex -> {
-                        if (ex instanceof RejectedExecutionException) {
-                            log.debug("The write event {} for the timer {} was not executed because it was " +
-                                "cancelled or overridden.", event.name, key);
-                            return null;
-                        }
-
-                        if (ex instanceof NotCoordinatorException || ex instanceof CoordinatorLoadInProgressException) {
-                            log.debug("The write event {} for the timer {} failed due to {}. Ignoring it because " +
-                                "the coordinator is not active.", event.name, key, ex.getMessage());
-                            return null;
-                        }
-
-                        if (retry) {
-                            log.info("The write event {} for the timer {} failed due to {}. Rescheduling it. ",
-                                event.name, key, ex.getMessage());
-                            schedule(key, retryBackoff, TimeUnit.MILLISECONDS, true, retryBackoff, operation);
-                        } else {
-                            log.error("The write event {} for the timer {} failed due to {}. Ignoring it. ",
-                                event.name, key, ex.getMessage(), ex);
-                        }
-
-                        return null;
-                    });
-
-                    log.debug("Scheduling write event {} for timer {}.", event.name, key);
-                    try {
-                        enqueueLast(event);
-                    } catch (NotCoordinatorException ex) {
-                        log.info("Failed to enqueue write event {} for timer {} because the runtime is closed. Ignoring it.",
-                            event.name, key);
-                    }
-                }
-            };
-
-            log.debug("Registering timer {} with delay of {}ms.", key, unit.toMillis(delay));
-            TimerTask prevTask = tasks.put(key, task);
-            if (prevTask != null) prevTask.cancel();
-
-            timer.add(task);
-        }
-
-        @Override
-        public void scheduleIfAbsent(
-            String key,
-            long delay,
-            TimeUnit unit,
-            boolean retry,
-            TimeoutOperation<Void, U> operation
-        ) {
-            if (!tasks.containsKey(key)) {
-                schedule(key, delay, unit, retry, 500, operation);
-            }
-        }
-
-        @Override
-        public void cancel(String key) {
-            TimerTask prevTask = tasks.remove(key);
-            if (prevTask != null) prevTask.cancel();
-        }
-
-        @Override
-        public boolean isScheduled(String key) {
-            return tasks.containsKey(key);
-        }
-
-        public void cancelAll() {
-            Iterator<Map.Entry<String, TimerTask>> iterator = tasks.entrySet().iterator();
-            while (iterator.hasNext()) {
-                iterator.next().getValue().cancel();
-                iterator.remove();
-            }
-        }
-
-        public int size() {
-            return tasks.size();
-        }
-    }
-
-    /**
      * A simple container class to hold all the attributes
      * related to a pending batch.
      */
@@ -505,6 +349,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         final MemoryRecordsBuilder builder;
 
         /**
+         * The maximum size of the batch in bytes.
+         */
+        final int maxBatchSize;
+
+        /**
          * The timer used to enforce the append linger time if
          * it is non-zero.
          */
@@ -528,6 +377,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             VerificationGuard verificationGuard,
             ByteBuffer buffer,
             MemoryRecordsBuilder builder,
+            int maxBatchSize,
             Optional<TimerTask> lingerTimeoutTask
         ) {
             this.baseOffset = baseOffset;
@@ -536,6 +386,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             this.verificationGuard = verificationGuard;
             this.buffer = buffer;
             this.builder = builder;
+            this.maxBatchSize = maxBatchSize;
             this.lingerTimeoutTask = lingerTimeoutTask;
             this.deferredEvents = new DeferredEventCollection(log);
         }
@@ -570,12 +421,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         /**
          * The coordinator timer.
          */
-        final EventBasedCoordinatorTimer timer;
+        final CoordinatorTimerImpl<U> timer;
 
         /**
          * The coordinator executor.
          */
-        final CoordinatorExecutorImpl<S, U> executor;
+        final CoordinatorExecutorImpl<U> executor;
 
         /**
          * The current state.
@@ -639,13 +490,23 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             this.state = CoordinatorState.INITIAL;
             this.epoch = -1;
             this.deferredEventQueue = new DeferredEventQueue(logContext);
-            this.timer = new EventBasedCoordinatorTimer(tp, logContext);
+            this.timer = new CoordinatorTimerImpl<>(
+                logContext,
+                CoordinatorRuntime.this.timer,
+                (operationName, operation) -> scheduleWriteOperation(
+                    operationName,
+                    tp,
+                    coordinator -> operation.generate()
+                )
+            );
             this.executor = new CoordinatorExecutorImpl<>(
                 logContext,
-                tp,
-                CoordinatorRuntime.this,
                 executorService,
-                defaultWriteTimeout
+                (operationName, operation) -> scheduleWriteOperation(
+                    operationName,
+                    tp,
+                    coordinator -> operation.generate()
+                )
             );
             this.bufferSupplier = new BufferSupplier.GrowableBufferSupplier();
             this.cachedBufferSize = new AtomicLong(0);
@@ -722,7 +583,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             loader.load(tp, coordinator).whenComplete((summary, exception) -> {
                 scheduleInternalOperation("CompleteLoad(tp=" + tp + ", epoch=" + epoch + ")", tp, () -> {
                     CoordinatorContext context = coordinators.get(tp);
-                    if (context != null)  {
+                    if (context != null) {
                         if (context.state != CoordinatorState.LOADING) {
                             log.info("Ignored load completion from {} because context is in {} state.",
                                 context.tp, context.state);
@@ -806,12 +667,20 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
          */
         private void enqueueAdaptiveFlush(int expectedBatchEpoch) {
             enqueueLast(new CoordinatorInternalEvent("FlushBatch", tp, () -> {
-                withActiveContextOrThrow(tp, context -> {
+                withActiveContext(tp, context -> {
                     // The batch could have already been flushed because it reached the maximum
                     // batch size or a transactional write came in. When this happens, we want
                     // to avoid flushing the next batch early.
                     if (context.currentBatch != null && context.batchEpoch == expectedBatchEpoch) {
-                        context.flushCurrentBatch();
+                        try {
+                            context.flushCurrentBatch();
+                        } catch (Throwable t) {
+                            // The failure has already been logged by flushCurrentBatch. We log it
+                            // here too, rather than rely on that, so a failure is always traced on
+                            // the flush path, and we do not propagate it to avoid it being re-logged
+                            // at ERROR by the CoordinatorInternalEvent.
+                            log.debug("Failed to flush the pending records to {}: {}.", tp, t.getMessage());
+                        }
                     }
                 });
             }));
@@ -871,7 +740,23 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     // Free up the current batch.
                     freeCurrentBatch();
                 } catch (Throwable t) {
-                    log.error("Writing records to {} failed due to: {}.", tp, t.getMessage(), t);
+                    if (t instanceof NotCoordinatorException) {
+                        // Thrown above when the state machine is out of sync; it is already logged there.
+                    } else if (t instanceof NotLeaderOrFollowerException) {
+                        log.debug("Failed to write records to {} because this broker is no longer the " +
+                            "leader of the partition.", tp, t);
+                    } else if (t instanceof InvalidProducerEpochException) {
+                        log.debug("Failed to write records to {} because the producer {} with epoch {} has been fenced.",
+                            tp, currentBatch.builder.producerId(), currentBatch.builder.producerEpoch(), t);
+                    } else if (t instanceof RecordTooLargeException || t instanceof RecordBatchTooLargeException) {
+                        log.error("Failed to write a batch of {} record(s) to {} because it is " +
+                            "larger than the maximum batch size of {} bytes. This usually means " +
+                            "that a single record is too large. Consider increasing the maximum " +
+                            "batch size.", currentBatch.builder.numRecords(), tp, currentBatch.maxBatchSize, t);
+                    } else {
+                        log.error("Failed to write records to {} due to an unexpected error: {}.",
+                            tp, t.getMessage(), t);
+                    }
                     failCurrentBatch(t);
                     // We rethrow the exception for the caller to handle it too.
                     throw t;
@@ -948,7 +833,17 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                                 // to ensure that the linger time is respected.
                                 enqueueFirst(new CoordinatorInternalEvent("FlushBatch", tp, () -> {
                                     if (this.isCancelled()) return;
-                                    withActiveContextOrThrow(tp, CoordinatorContext::flushCurrentBatch);
+                                    withActiveContext(tp, context -> {
+                                        try {
+                                            context.flushCurrentBatch();
+                                        } catch (Throwable t) {
+                                            // The failure has already been logged by flushCurrentBatch. We log it
+                                            // here too, rather than rely on that, so a failure is always traced on
+                                            // the flush path, and we do not propagate it to avoid it being re-logged
+                                            // at ERROR by the CoordinatorInternalEvent.
+                                            log.debug("Failed to flush the pending records to {}: {}.", tp, t.getMessage());
+                                        }
+                                    });
                                 }));
                             }
                         });
@@ -970,15 +865,16 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     verificationGuard,
                     buffer,
                     builder,
+                    maxBatchSize,
                     lingerTimeoutTask
                 );
             }
         }
 
         /**
-         * Completes the given event once all pending writes are completed. 
+         * Completes the given event once all pending writes are completed.
          *
-         * @param event             The event to complete once all pending 
+         * @param event             The event to complete once all pending
          *                          writes are completed.
          */
         private void waitForPendingWrites(DeferredEvent event) {
@@ -1202,6 +1098,19 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
 
                 deferredEventQueue.add(offset, DeferredEventCollection.of(log, event));
             } catch (Throwable t) {
+                if (t instanceof NotLeaderOrFollowerException) {
+                    log.debug("Failed to write the transaction marker to {} because this broker is " +
+                        "no longer the leader of the partition.", tp, t);
+                } else if (t instanceof InvalidProducerEpochException) {
+                    log.debug("Failed to write the transaction marker to {} because the producer {} " +
+                        "with epoch {} has been fenced.", tp, producerId, producerEpoch, t);
+                } else if (t instanceof RecordTooLargeException || t instanceof RecordBatchTooLargeException) {
+                    log.error("Failed to write the transaction marker to {} because it is too large " +
+                        "to be persisted. Consider increasing the maximum batch size.", tp, t);
+                } else {
+                    log.error("Failed to write the transaction marker to {} due to an unexpected " +
+                        "error: {}.", tp, t.getMessage(), t);
+                }
                 coordinator.revertLastWrittenOffset(prevLastWrittenOffset);
                 event.complete(t);
             }
@@ -1227,58 +1136,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             String name = event.toString();
             scheduleInternalOperation("OperationTimeout(name=" + name + ", tp=" + tp + ")", tp,
                 () -> event.complete(new TimeoutException(name + " timed out after " + delayMs + "ms")));
-        }
-    }
-
-    /**
-     * A collection of {@link DeferredEvent}. When completed, completes all the events in the collection
-     * and logs any exceptions thrown.
-     */
-    static class DeferredEventCollection implements DeferredEvent {
-        /**
-         * The logger.
-         */
-        private final Logger log;
-
-        /**
-         * The list of events.
-         */
-        private final List<DeferredEvent> events = new ArrayList<>();
-
-        public DeferredEventCollection(Logger log) {
-            this.log = log;
-        }
-
-        @Override
-        public void complete(Throwable t) {
-            for (DeferredEvent event : events) {
-                try {
-                    event.complete(t);
-                } catch (Throwable e) {
-                    log.error("Completion of event {} failed due to {}.", event, e.getMessage(), e);
-                }
-            }
-        }
-
-        public boolean add(DeferredEvent event) {
-            return events.add(event);
-        }
-
-        public int size() {
-            return events.size();
-        }
-
-        @Override
-        public String toString() {
-            return "DeferredEventCollection(events=" + events + ")";
-        }
-
-        public static DeferredEventCollection of(Logger log, DeferredEvent... deferredEvents) {
-            DeferredEventCollection collection = new DeferredEventCollection(log);
-            for (DeferredEvent deferredEvent : deferredEvents) {
-                collection.add(deferredEvent);
-            }
-            return collection;
         }
     }
 
@@ -2016,7 +1873,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     /**
      * The write operation timeout
      */
-    private final Duration defaultWriteTimeout;
+    private final Duration writeTimeout;
 
     /**
      * The coordinators keyed by topic partition.
@@ -2103,7 +1960,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @param coordinatorShardBuilderSupplier   The coordinator builder.
      * @param time                              The system time.
      * @param timer                             The system timer.
-     * @param defaultWriteTimeout               The write operation timeout.
+     * @param writeTimeout                      The write operation timeout.
      * @param runtimeMetrics                    The runtime metrics.
      * @param coordinatorMetrics                The coordinator metrics.
      * @param serializer                        The serializer.
@@ -2122,7 +1979,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         CoordinatorShardBuilderSupplier<S, U> coordinatorShardBuilderSupplier,
         Time time,
         Timer timer,
-        Duration defaultWriteTimeout,
+        Duration writeTimeout,
         CoordinatorRuntimeMetrics runtimeMetrics,
         CoordinatorMetrics coordinatorMetrics,
         Serializer<U> serializer,
@@ -2135,7 +1992,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         this.log = logContext.logger(CoordinatorRuntime.class);
         this.time = time;
         this.timer = timer;
-        this.defaultWriteTimeout = defaultWriteTimeout;
+        this.writeTimeout = writeTimeout;
         this.coordinators = new ConcurrentHashMap<>();
         this.processor = processor;
         this.partitionWriter = partitionWriter;
@@ -2246,11 +2103,36 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     }
 
     /**
+     * Calls the provided function with the context of the partition if the coordinator
+     * is active and does nothing otherwise. Unlike {@link #withActiveContextOrThrow}, it
+     * does not throw when the coordinator does not exist or is not active. The context
+     * lock is acquired before calling the function and released afterwards.
+     *
+     * @param tp    The topic partition.
+     * @param func  The function that will receive the context.
+     */
+    private void withActiveContext(
+        TopicPartition tp,
+        Consumer<CoordinatorContext> func
+    ) {
+        CoordinatorContext context = coordinators.get(tp);
+        if (context != null) {
+            try {
+                context.lock.lock();
+                if (context.state == CoordinatorState.ACTIVE) {
+                    func.accept(context);
+                }
+            } finally {
+                context.lock.unlock();
+            }
+        }
+    }
+
+    /**
      * Schedules a write operation.
      *
      * @param name      The name of the write operation.
      * @param tp        The address of the coordinator (aka its topic-partitions).
-     * @param timeout   The write operation timeout.
      * @param op        The write operation.
      *
      * @return A future that will be completed with the result of the write operation
@@ -2261,21 +2143,23 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     public <T> CompletableFuture<T> scheduleWriteOperation(
         String name,
         TopicPartition tp,
-        Duration timeout,
         CoordinatorWriteOperation<S, T, U> op
     ) {
-        throwIfNotRunning();
-        log.debug("Scheduled execution of write operation {}.", name);
-        CoordinatorWriteEvent<T> event = new CoordinatorWriteEvent<>(name, tp, timeout, op);
-        enqueueLast(event);
-        return event.future;
+        try {
+            throwIfNotRunning();
+            log.debug("Scheduled execution of write operation {}.", name);
+            CoordinatorWriteEvent<T> event = new CoordinatorWriteEvent<>(name, tp, writeTimeout, op);
+            enqueueLast(event);
+            return event.future;
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
+        }
     }
 
     /**
      * Schedule a write operation for each coordinator.
      *
      * @param name      The name of the write operation.
-     * @param timeout   The write operation timeout.
      * @param op        The write operation.
      *
      * @return A list of futures where each future will be completed with the result of the write operation
@@ -2285,15 +2169,13 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      */
     public <T> List<CompletableFuture<T>> scheduleWriteAllOperation(
         String name,
-        Duration timeout,
         CoordinatorWriteOperation<S, T, U> op
     ) {
-        throwIfNotRunning();
         log.debug("Scheduled execution of write all operation {}.", name);
         return coordinators
             .keySet()
             .stream()
-            .map(tp -> scheduleWriteOperation(name, tp, timeout, op))
+            .map(tp -> scheduleWriteOperation(name, tp, op))
             .collect(Collectors.toList());
     }
 
@@ -2305,7 +2187,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @param transactionalId   The transactional id.
      * @param producerId        The producer id.
      * @param producerEpoch     The producer epoch.
-     * @param timeout           The write operation timeout.
      * @param op                The write operation.
      * @param apiVersion        The Version of the Txn_Offset_Commit request
      *
@@ -2320,32 +2201,35 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         String transactionalId,
         long producerId,
         short producerEpoch,
-        Duration timeout,
         CoordinatorWriteOperation<S, T, U> op,
         int apiVersion
     ) {
-        throwIfNotRunning();
-        log.debug("Scheduled execution of transactional write operation {}.", name);
-        return partitionWriter.maybeStartTransactionVerification(
-            tp,
-            transactionalId,
-            producerId,
-            producerEpoch,
-            apiVersion
-        ).thenCompose(verificationGuard -> {
-            CoordinatorWriteEvent<T> event = new CoordinatorWriteEvent<>(
-                name,
+        try {
+            throwIfNotRunning();
+            log.debug("Scheduled execution of transactional write operation {}.", name);
+            return partitionWriter.maybeStartTransactionVerification(
                 tp,
                 transactionalId,
                 producerId,
                 producerEpoch,
-                verificationGuard,
-                timeout,
-                op
-            );
-            enqueueLast(event);
-            return event.future;
-        });
+                apiVersion
+            ).thenCompose(verificationGuard -> {
+                CoordinatorWriteEvent<T> event = new CoordinatorWriteEvent<>(
+                    name,
+                    tp,
+                    transactionalId,
+                    producerId,
+                    producerEpoch,
+                    verificationGuard,
+                    writeTimeout,
+                    op
+                );
+                enqueueLast(event);
+                return event.future;
+            });
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
+        }
     }
 
     /**
@@ -2369,24 +2253,27 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         short producerEpoch,
         int coordinatorEpoch,
         TransactionResult result,
-        short transactionVersion,
-        Duration timeout
+        short transactionVersion
     ) {
-        throwIfNotRunning();
-        log.debug("Scheduled execution of transaction completion for {} with producer id={}, producer epoch={}, " +
-            "coordinator epoch={}, transaction version={} and transaction result={}.", tp, producerId, producerEpoch, coordinatorEpoch, transactionVersion, result);
-        CoordinatorCompleteTransactionEvent event = new CoordinatorCompleteTransactionEvent(
-            name,
-            tp,
-            producerId,
-            producerEpoch,
-            coordinatorEpoch,
-            result,
-            transactionVersion,
-            timeout
-        );
-        enqueueLast(event);
-        return event.future;
+        try {
+            throwIfNotRunning();
+            log.debug("Scheduled execution of transaction completion for {} with producer id={}, producer epoch={}, " +
+                "coordinator epoch={}, transaction version={} and transaction result={}.", tp, producerId, producerEpoch, coordinatorEpoch, transactionVersion, result);
+            CoordinatorCompleteTransactionEvent event = new CoordinatorCompleteTransactionEvent(
+                name,
+                tp,
+                producerId,
+                producerEpoch,
+                coordinatorEpoch,
+                result,
+                transactionVersion,
+                writeTimeout
+            );
+            enqueueLast(event);
+            return event.future;
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
+        }
     }
 
     /**
@@ -2406,11 +2293,15 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         TopicPartition tp,
         CoordinatorReadOperation<S, T> op
     ) {
-        throwIfNotRunning();
-        log.debug("Scheduled execution of read operation {}.", name);
-        CoordinatorReadEvent<T> event = new CoordinatorReadEvent<>(name, tp, op);
-        enqueueLast(event);
-        return event.future;
+        try {
+            throwIfNotRunning();
+            log.debug("Scheduled execution of read operation {}.", name);
+            CoordinatorReadEvent<T> event = new CoordinatorReadEvent<>(name, tp, op);
+            enqueueLast(event);
+            return event.future;
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
+        }
     }
 
     /**
@@ -2428,7 +2319,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         String name,
         CoordinatorReadOperation<S, T> op
     ) {
-        throwIfNotRunning();
         log.debug("Scheduled execution of read all operation {}.", name);
         return coordinators
             .keySet()

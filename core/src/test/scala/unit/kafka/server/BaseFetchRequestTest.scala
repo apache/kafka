@@ -21,7 +21,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, RecordM
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.message.FetchResponseData
-import org.apache.kafka.common.record.Record
+import org.apache.kafka.common.record.internal.Record
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.server.config.ServerConfigs
@@ -85,9 +85,9 @@ class BaseFetchRequestTest extends BaseRequestTest {
 
   protected def createTopics(numTopics: Int, numPartitions: Int, configs: Map[String, String] = Map.empty): Map[TopicPartition, Int] = {
     val topics = (0 until numTopics).map(t => s"topic$t")
-    val topicConfig = new Properties
-    topicConfig.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, 2.toString)
-    configs.foreach { case (k, v) => topicConfig.setProperty(k, v) }
+    val topicConfig = new util.HashMap[String, String]()
+    topicConfig.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, 2.toString)
+    configs.foreach { case (k, v) => topicConfig.put(k, v) }
     topics.flatMap { topic =>
       val partitionToLeader = createTopic(topic, numPartitions = numPartitions, replicationFactor = 2,
         topicConfig = topicConfig)

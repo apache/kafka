@@ -24,8 +24,8 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.NoBatchedFindCoordinatorsException;
 import org.apache.kafka.common.requests.OffsetFetchRequest.NoBatchedOffsetFetchRequestException;
-import org.apache.kafka.common.utils.ExponentialBackoff;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.ExponentialBackoff;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -115,8 +115,13 @@ public class AdminApiDriver<K, V> {
         // metadata. For all cached keys, they can proceed straight to the fulfillment map.
         // Note that the cache is only used on the initial calls, and any errors that result
         // in additional lookups use the full set of lookup keys.
-        retryLookup(future.uncachedLookupKeys());
-        future.cachedKeyBrokerIdMapping().forEach((key, brokerId) -> fulfillmentMap.put(new FulfillmentScope(brokerId), key));
+        future.cachedKeyBrokerIdMapping().forEach((key, brokerId) -> {
+            if (AdminApiFuture.UNKNOWN_BROKER_ID.equals(brokerId)) {
+                unmap(key);
+            } else {
+                fulfillmentMap.put(new FulfillmentScope(brokerId), key);
+            }
+        });
     }
 
     /**
@@ -181,6 +186,33 @@ public class AdminApiDriver<K, V> {
 
     private void retryLookup(Collection<K> keys) {
         keys.forEach(this::unmap);
+    }
+
+    /**
+     * Send the keys of a fulfillment request back to the Lookup stage. This is invoked when a
+     * fulfillment request cannot be routed because its target broker is no longer present in the
+     * cluster metadata, for example when a stale entry in the partition leader cache pointed at a
+     * broker that has since left the cluster. Re-running the lookup gives us a chance to discover
+     * the current leader. Without this, such a request would remain unassignable until the request
+     * deadline expires.
+     *
+     * <p>This is a no-op for lookup strategies that target a fixed broker (i.e. the lookup scope
+     * carries a destination broker id, as with {@link StaticBrokerStrategy}), since {@link #unmap}
+     * would simply remap the keys straight back to the same fulfillment broker without making any
+     * progress. In that case this returns {@code false} and the request is left untouched, so the
+     * caller can leave it pending rather than retrying in a loop and exhausting the retry budget.
+     *
+     * @return true if the keys were moved back to the Lookup stage, false if no lookup is possible
+     */
+    public boolean maybeRetryLookup(long currentTimeMs, RequestSpec<K> spec) {
+        boolean canLookup = spec.keys.stream()
+            .anyMatch(key -> handler.lookupStrategy().lookupScope(key).destinationBrokerId().isEmpty());
+        if (!canLookup) {
+            return false;
+        }
+        clearInflightRequest(currentTimeMs, spec);
+        retryLookup(spec.keys);
+        return true;
     }
 
     /**

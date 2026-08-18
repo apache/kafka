@@ -22,11 +22,11 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.Isolation;
 import org.apache.kafka.raft.LogAppendInfo;
 import org.apache.kafka.raft.LogFetchInfo;
@@ -72,7 +72,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
@@ -118,14 +117,19 @@ public class KafkaRaftLog implements RaftLog {
     }
 
     @Override
-    public LogFetchInfo read(long startOffset, Isolation readIsolation) {
+    public LogFetchInfo read(long startOffset, Isolation readIsolation, int maxTotalBatchBytes) {
         FetchIsolation isolation = switch (readIsolation) {
             case COMMITTED -> FetchIsolation.HIGH_WATERMARK;
             case UNCOMMITTED -> FetchIsolation.LOG_END;
         };
 
         try {
-            FetchDataInfo fetchInfo = log.read(startOffset, config.internalMaxFetchSizeInBytes(), isolation, true);
+            FetchDataInfo fetchInfo = log.read(
+                startOffset,
+                maxTotalBatchBytes,
+                isolation,
+                true
+            );
             return new LogFetchInfo(
                     fetchInfo.records,
                     new LogOffsetMetadata(
@@ -359,7 +363,12 @@ public class KafkaRaftLog implements RaftLog {
           fetches from this offset, the returned batch will start at offset (X - M), and the
           follower will be unable to append it since (X - M) < (X).
          */
-        long baseOffset = read(snapshotId.offset(), Isolation.COMMITTED).startOffsetMetadata.offset();
+        long baseOffset = read(
+            snapshotId.offset(),
+            Isolation.COMMITTED,
+            1 // maxTotalBatchBytes - ensures that we only fetch one batch.
+        ).startOffsetMetadata.offset();
+
         if (snapshotId.offset() != baseOffset) {
             throw new IllegalArgumentException(
                     "Cannot create snapshot at offset (" + snapshotId.offset() + ") because it is not batch aligned. " +
@@ -554,10 +563,10 @@ public class KafkaRaftLog implements RaftLog {
         }
 
         boolean didClean = false;
-        List<OffsetAndEpoch> epoches = new ArrayList<>(snapshots.keySet());
-        for (int i = 0; i < epoches.size() - 1; i++) {
-            OffsetAndEpoch epoch = epoches.get(i);
-            OffsetAndEpoch nextEpoch = epoches.get(i + 1);
+        List<OffsetAndEpoch> epochs = new ArrayList<>(snapshots.keySet());
+        for (int i = 0; i < epochs.size() - 1; i++) {
+            OffsetAndEpoch epoch = epochs.get(i);
+            OffsetAndEpoch nextEpoch = epochs.get(i + 1);
             Optional<SnapshotDeletionReason> reason = predicate.apply(epoch);
             if (reason.isPresent()) {
                 boolean deleted = deleteBeforeSnapshot(nextEpoch, reason.get());
@@ -674,19 +683,19 @@ public class KafkaRaftLog implements RaftLog {
             Scheduler scheduler,
             MetadataLogConfig config,
             int nodeId) throws IOException {
-        Properties props = new Properties();
-        props.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, String.valueOf(config.internalMaxBatchSizeInBytes()));
+        Map<String, String> props = new HashMap<>();
+        props.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, String.valueOf(config.internalMaxBatchSizeInBytes()));
         if (config.internalSegmentBytes() != null) {
-            props.setProperty(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, String.valueOf(config.internalSegmentBytes()));
+            props.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, String.valueOf(config.internalSegmentBytes()));
         } else {
-            props.setProperty(TopicConfig.SEGMENT_BYTES_CONFIG, String.valueOf(config.logSegmentBytes()));
+            props.put(TopicConfig.SEGMENT_BYTES_CONFIG, String.valueOf(config.logSegmentBytes()));
         }
-        props.setProperty(TopicConfig.SEGMENT_MS_CONFIG, String.valueOf(config.logSegmentMillis()));
-        props.setProperty(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, String.valueOf(ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT));
+        props.put(TopicConfig.SEGMENT_MS_CONFIG, String.valueOf(config.logSegmentMillis()));
+        props.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, String.valueOf(ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT));
 
         // Disable time and byte retention when deleting segments
-        props.setProperty(TopicConfig.RETENTION_MS_CONFIG, "-1");
-        props.setProperty(TopicConfig.RETENTION_BYTES_CONFIG, "-1");
+        props.put(TopicConfig.RETENTION_MS_CONFIG, "-1");
+        props.put(TopicConfig.RETENTION_BYTES_CONFIG, "-1");
         LogConfig.validate(props);
         LogConfig defaultLogConfig = new LogConfig(props);
 
@@ -771,7 +780,7 @@ public class KafkaRaftLog implements RaftLog {
                 }
                 if (latestSnapshotId.isEmpty() || latestSnapshotId.get().offset() < log.logStartOffset()) {
                     throw new IllegalStateException("Inconsistent snapshot state: there must be a snapshot " +
-                            "at an offset larger then the current log start offset " + log.logStartOffset() +
+                            "at an offset larger than the current log start offset " + log.logStartOffset() +
                             ", but the latest snapshot is " + latestSnapshotId);
                 }
             }

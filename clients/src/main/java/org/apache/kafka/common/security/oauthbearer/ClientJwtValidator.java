@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.BasicOAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ClaimValidationUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
@@ -28,7 +29,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -58,6 +58,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CL
  * </ol>
  */
 
+@InterfaceAudience.Public
 public class ClientJwtValidator implements JwtValidator {
 
     private static final Logger log = LoggerFactory.getLogger(ClientJwtValidator.class);
@@ -107,11 +108,11 @@ public class ClientJwtValidator implements JwtValidator {
         Collection<String> scopeRawCollection;
 
         if (scopeRaw instanceof String)
-            scopeRawCollection = Collections.singletonList((String) scopeRaw);
+            scopeRawCollection = List.of((String) scopeRaw);
         else if (scopeRaw instanceof Collection)
             scopeRawCollection = (Collection<String>) scopeRaw;
         else
-            scopeRawCollection = Collections.emptySet();
+            scopeRawCollection = Set.of();
 
         Number expirationRaw = (Number) getClaim(payload, EXPIRATION_CLAIM_NAME);
         String subRaw = (String) getClaim(payload, subClaimName);

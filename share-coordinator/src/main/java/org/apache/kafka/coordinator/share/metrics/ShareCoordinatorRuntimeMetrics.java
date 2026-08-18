@@ -26,6 +26,6 @@ public class ShareCoordinatorRuntimeMetrics extends CoordinatorRuntimeMetricsImp
     public static final String METRICS_GROUP = "share-coordinator-metrics";
 
     public ShareCoordinatorRuntimeMetrics(Metrics metrics) {
-        super(metrics, METRICS_GROUP);
+        super(metrics, METRICS_GROUP, false);
     }
 }

@@ -17,11 +17,12 @@
 package org.apache.kafka.coordinator.group.streams.topics;
 
 import org.apache.kafka.common.errors.StreamsInvalidTopologyException;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.TopicInfo;
 
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
@@ -34,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RepartitionTopicsTest {
 
-    private static final LogContext LOG_CONTEXT = new LogContext();
+    private static final Logger LOG = LoggerFactory.getLogger(RepartitionTopicsTest.class);
     private static final String SOURCE_TOPIC_NAME1 = "source1";
     private static final String SOURCE_TOPIC_NAME2 = "source2";
     private static final TopicInfo REPARTITION_TOPIC1 = new TopicInfo().setName("repartition1").setPartitions(4);
@@ -56,7 +57,7 @@ public class RepartitionTopicsTest {
             .setRepartitionSourceTopics(List.of(REPARTITION_TOPIC1));
         final List<Subtopology> subtopologies = List.of(subtopology1, subtopology2);
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
-            LOG_CONTEXT,
+            LOG,
             subtopologies,
             RepartitionTopicsTest::sourceTopicPartitionCounts
         );
@@ -81,7 +82,7 @@ public class RepartitionTopicsTest {
         final Function<String, OptionalInt> topicPartitionCountProvider =
             s -> Objects.equals(s, SOURCE_TOPIC_NAME1) ? OptionalInt.empty() : sourceTopicPartitionCounts(s);
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
-            LOG_CONTEXT,
+            LOG,
             List.of(subtopology1, subtopology2),
             topicPartitionCountProvider
         );
@@ -99,7 +100,7 @@ public class RepartitionTopicsTest {
             .setRepartitionSourceTopics(List.of(REPARTITION_TOPIC_WITHOUT_PARTITION_COUNT))
             .setRepartitionSinkTopics(List.of(REPARTITION_TOPIC_WITHOUT_PARTITION_COUNT.name()));
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
-            LOG_CONTEXT,
+            LOG,
             List.of(subtopology1),
             RepartitionTopicsTest::sourceTopicPartitionCounts
         );
@@ -118,7 +119,7 @@ public class RepartitionTopicsTest {
             .setSubtopologyId("subtopology1")
             .setRepartitionSourceTopics(List.of(REPARTITION_TOPIC_WITHOUT_PARTITION_COUNT));
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
-            LOG_CONTEXT,
+            LOG,
             List.of(subtopology1),
             RepartitionTopicsTest::sourceTopicPartitionCounts
         );
@@ -142,7 +143,7 @@ public class RepartitionTopicsTest {
             .setSubtopologyId("subtopologyWithoutPartitionCount")
             .setRepartitionSourceTopics(List.of(REPARTITION_TOPIC1, REPARTITION_TOPIC_WITHOUT_PARTITION_COUNT));
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
-            LOG_CONTEXT,
+            LOG,
             List.of(subtopology, subtopologyWithoutPartitionCount),
             RepartitionTopicsTest::sourceTopicPartitionCounts
         );
@@ -168,7 +169,7 @@ public class RepartitionTopicsTest {
             .setRepartitionSourceTopics(List.of(REPARTITION_TOPIC_WITHOUT_PARTITION_COUNT))
             .setRepartitionSinkTopics(List.of(REPARTITION_TOPIC1.name()));
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
-            LOG_CONTEXT,
+            LOG,
             List.of(subtopology, subtopologyWithoutPartitionCount),
             RepartitionTopicsTest::sourceTopicPartitionCounts
         );
@@ -190,7 +191,7 @@ public class RepartitionTopicsTest {
             .setSubtopologyId("subtopology0")
             .setSourceTopics(List.of(SOURCE_TOPIC_NAME1));
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
-            LOG_CONTEXT,
+            LOG,
             List.of(subtopology),
             RepartitionTopicsTest::sourceTopicPartitionCounts
         );

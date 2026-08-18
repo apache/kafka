@@ -16,24 +16,32 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.SessionStoreWithHeaders;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.VersionedRecord;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends WrappedStateStore<T, K, V> {
     static final String ERROR_MESSAGE = "This method may only be called by Kafka Streams";
@@ -49,21 +57,32 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
     }
 
     @Override
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+        throw new UnsupportedOperationException(ERROR_MESSAGE);
+    }
+
+    @Override
     public void close() {
         throw new UnsupportedOperationException(ERROR_MESSAGE);
     }
 
     static StateStore wrapWithReadWriteStore(final StateStore store) {
-        if (store instanceof TimestampedKeyValueStore) {
+        if (store instanceof TimestampedKeyValueStoreWithHeaders) {
+            return new TimestampedKeyValueStoreReadWriteDecoratorWithHeaders<>((TimestampedKeyValueStoreWithHeaders<?, ?>) store);
+        } else if (store instanceof TimestampedKeyValueStore) {
             return new TimestampedKeyValueStoreReadWriteDecorator<>((TimestampedKeyValueStore<?, ?>) store);
         } else if (store instanceof VersionedKeyValueStore) {
             return new VersionedKeyValueStoreReadWriteDecorator<>((VersionedKeyValueStore<?, ?>) store);
         } else if (store instanceof KeyValueStore) {
             return new KeyValueStoreReadWriteDecorator<>((KeyValueStore<?, ?>) store);
+        } else if (store instanceof TimestampedWindowStoreWithHeaders) {
+            return new TimestampedWindowStoreWithHeadersReadWriteDecorator<>((TimestampedWindowStoreWithHeaders<?, ?>) store);
         } else if (store instanceof TimestampedWindowStore) {
             return new TimestampedWindowStoreReadWriteDecorator<>((TimestampedWindowStore<?, ?>) store);
         } else if (store instanceof WindowStore) {
             return new WindowStoreReadWriteDecorator<>((WindowStore<?, ?>) store);
+        } else if (store instanceof SessionStoreWithHeaders) {
+            return new SessionStoreWithHeadersReadWriteDecorator<>((SessionStoreWithHeaders<?, ?>) store);
         } else if (store instanceof SessionStore) {
             return new SessionStoreReadWriteDecorator<>((SessionStore<?, ?>) store);
         } else {
@@ -261,6 +280,24 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
         }
     }
 
+    static class TimestampedWindowStoreWithHeadersReadWriteDecorator<K, V>
+        extends WindowStoreReadWriteDecorator<K, ValueTimestampHeaders<V>>
+        implements TimestampedWindowStoreWithHeaders<K, V> {
+
+        TimestampedWindowStoreWithHeadersReadWriteDecorator(final TimestampedWindowStoreWithHeaders<K, V> inner) {
+            super(inner);
+        }
+    }
+
+    static class SessionStoreWithHeadersReadWriteDecorator<K, AGG>
+        extends SessionStoreReadWriteDecorator<K, AggregationWithHeaders<AGG>>
+        implements SessionStoreWithHeaders<K, AGG> {
+
+        SessionStoreWithHeadersReadWriteDecorator(final SessionStoreWithHeaders<K, AGG> inner) {
+            super(inner);
+        }
+    }
+
     static class SessionStoreReadWriteDecorator<K, AGG>
         extends AbstractReadWriteDecorator<SessionStore<K, AGG>, K, AGG>
         implements SessionStore<K, AGG> {
@@ -291,6 +328,70 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
         }
 
         @Override
+        public AGG fetchSession(final K key,
+                                final Instant sessionStartTime,
+                                final Instant sessionEndTime) {
+            return wrapped().fetchSession(key, sessionStartTime, sessionEndTime);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K keyFrom,
+                                                                       final K keyTo,
+                                                                       final Instant earliestSessionEndTime,
+                                                                       final Instant latestSessionStartTime) {
+
+            return wrapped().backwardFindSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom,
+                                                               final K keyTo,
+                                                               final Instant earliestSessionEndTime,
+                                                               final Instant latestSessionStartTime) {
+            return wrapped().findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AGG> backwardFetch(final K key) {
+            return wrapped().backwardFetch(key);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AGG> backwardFetch(final K keyFrom,
+                                                                final K keyTo) {
+            return wrapped().backwardFetch(keyFrom, keyTo);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K key,
+                                                                       final long earliestSessionEndTime,
+                                                                       final long latestSessionStartTime) {
+            return wrapped().backwardFindSessions(key, earliestSessionEndTime, latestSessionStartTime);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K keyFrom,
+                                                                       final K keyTo,
+                                                                       final long earliestSessionEndTime,
+                                                                       final long latestSessionStartTime) {
+            return wrapped().backwardFindSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K key,
+                                                                       final Instant earliestSessionEndTime,
+                                                                       final Instant latestSessionStartTime) {
+            return wrapped().backwardFindSessions(key, earliestSessionEndTime, latestSessionStartTime);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AGG> findSessions(final K key,
+                                                               final Instant earliestSessionEndTime,
+                                                               final Instant latestSessionStartTime) {
+            return wrapped().findSessions(key, earliestSessionEndTime, latestSessionStartTime);
+        }
+
+        @Override
         public void remove(final Windowed<K> sessionKey) {
             wrapped().remove(sessionKey);
         }
@@ -317,6 +418,15 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
         public KeyValueIterator<Windowed<K>, AGG> fetch(final K keyFrom,
                                                         final K keyTo) {
             return wrapped().fetch(keyFrom, keyTo);
+        }
+    }
+
+    static class TimestampedKeyValueStoreReadWriteDecoratorWithHeaders<K, V>
+        extends KeyValueStoreReadWriteDecorator<K, ValueTimestampHeaders<V>>
+        implements TimestampedKeyValueStoreWithHeaders<K, V> {
+
+        TimestampedKeyValueStoreReadWriteDecoratorWithHeaders(final TimestampedKeyValueStoreWithHeaders<K, V> inner) {
+            super(inner);
         }
     }
 }

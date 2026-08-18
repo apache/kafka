@@ -21,7 +21,7 @@ import org.apache.kafka.common.message.PushTelemetryResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 
 import java.nio.ByteBuffer;
@@ -85,10 +85,10 @@ public class PushTelemetryRequest extends AbstractRequest {
         return OTLP_CONTENT_TYPE;
     }
 
-    public ByteBuffer metricsData() {
+    public ByteBuffer metricsData(int maxDecompressedBytes) {
         CompressionType cType = CompressionType.forId(this.data.compressionType());
         return (cType == CompressionType.NONE) ?
-            this.data.metrics() : ClientTelemetryUtils.decompress(this.data.metrics(), cType);
+            this.data.metrics() : ClientTelemetryUtils.decompress(this.data.metrics(), cType, maxDecompressedBytes);
     }
 
     public static PushTelemetryRequest parse(Readable readable, short version) {

@@ -60,6 +60,14 @@ public class CommonClientConfigs {
                                                        + "resolve each bootstrap address into a list of canonical names. After "
                                                        + "the bootstrap phase, this behaves the same as <code>use_all_dns_ips</code>.";
 
+    public static final String BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG = "bootstrap.resolve.timeout.ms";
+    public static final long DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS = 2 * 60 * 1000L;
+    public static final String BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC = "Maximum amount of time clients can spend trying to" +
+        " resolve DNS for the bootstrap server address. If the resolution cannot be completed within this timeframe, a " +
+        "<code>BootstrapResolutionException</code> will be thrown. This failure is unrecoverable — the exception is" +
+        " re-thrown on every subsequent API call, so the client must be closed and re-created after fixing the" +
+        " underlying DNS or <code>bootstrap.servers</code> configuration issue.";
+
     public static final String METADATA_MAX_AGE_CONFIG = "metadata.max.age.ms";
     public static final String METADATA_MAX_AGE_DOC = "The period of time in milliseconds after which we force a refresh of metadata even if we haven't seen any partition leadership changes to proactively discover any new brokers or partitions.";
 
@@ -196,13 +204,19 @@ public class CommonClientConfigs {
                                                           + "For consumers using a non-null <code>group.instance.id</code> which reach this timeout, partitions will not be immediately reassigned. "
                                                           + "Instead, the consumer will stop sending heartbeats and partitions will be reassigned "
                                                           + "after expiration of the session timeout (defined by the client config <code>session.timeout.ms</code> if using the Classic rebalance protocol, or by the broker config <code>group.consumer.session.timeout.ms</code> if using the Consumer protocol). "
-                                                          + "This mirrors the behavior of a static consumer which has shutdown.";
+                                                          + "This mirrors the behavior of a static consumer which has shutdown. "
+                                                          + "In the Classic consumer, <code>connections.max.idle.ms</code> should be set to a value greater than or equal to this timeout "
+                                                          + "to avoid closing the connection to the group coordinator during an ongoing rebalance. "
+                                                          + "This is particularly important in large groups, where a rebalance may take longer to complete "
+                                                          + "while the coordinator waits for all members to rejoin.";
 
     public static final String REBALANCE_TIMEOUT_MS_CONFIG = "rebalance.timeout.ms";
     public static final String REBALANCE_TIMEOUT_MS_DOC = "The maximum allowed time for each worker to join the group "
                                                           + "once a rebalance has begun. This is basically a limit on the amount of time needed for all tasks to "
                                                           + "flush any pending data and commit offsets. If the timeout is exceeded, then the worker will be removed "
-                                                          + "from the group, which will cause offset commit failures.";
+                                                          + "from the group, which will cause offset commit failures. "
+                                                          + "<code>connections.max.idle.ms</code> should be set to a value greater than or equal to this timeout "
+                                                          + "to avoid closing the connection to the group coordinator during an ongoing rebalance.";
 
     public static final String SESSION_TIMEOUT_MS_CONFIG = "session.timeout.ms";
     public static final String SESSION_TIMEOUT_MS_DOC = "The timeout used to detect client failures when using "
@@ -246,6 +260,12 @@ public class CommonClientConfigs {
             "<code>metadata.recovery.strategy=rebootstrap</code> is unable to obtain metadata from any of the brokers in the last known " +
             "metadata for this interval, client repeats the bootstrap process using <code>bootstrap.servers</code> configuration.";
     public static final long DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS = 300 * 1000;
+
+    public static final String METADATA_CLUSTER_CHECK_ENABLE_CONFIG = "metadata.cluster.check.enable";
+    public static final String METADATA_CLUSTER_CHECK_ENABLE_DOC = "Whether the client should send cluster and node information " +
+            "when connecting to a broker to enable it to check for a misrouted connection. This configuration is ignored if " +
+            "rebootstrapping is disabled by setting the configuration <code>metadata.recovery.strategy=none</code>. If the client " +
+            "is connecting to a broker older than Apache Kafka 4.4, no checking is performed and this configuration has no effect.";
 
     /**
      * Postprocess the configuration so that exponential backoff is disabled when reconnect backoff

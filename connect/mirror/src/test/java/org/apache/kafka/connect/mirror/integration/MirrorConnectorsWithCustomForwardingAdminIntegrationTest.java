@@ -40,7 +40,6 @@ import org.apache.kafka.server.config.ServerConfigs;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collection;
@@ -62,7 +61,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests MM2 is using provided ForwardingAdmin to create/alter topics, partitions and ACLs.
  */
-@Tag("integration")
 public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends MirrorConnectorsIntegrationBaseTest {
 
     private static final int TOPIC_ACL_SYNC_DURATION_MS = 30_000;

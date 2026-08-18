@@ -23,7 +23,7 @@
   "fields": [
     { "name": "Topics", "type": "[]TopicRequest", "versions": "0+",
       "about": "The topics to list producers for.", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
+      { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
         "about": "The topic name." },
       { "name": "PartitionIndexes", "type": "[]int32", "versions": "0+",
         "about": "The indexes of the partitions to list producers for." }

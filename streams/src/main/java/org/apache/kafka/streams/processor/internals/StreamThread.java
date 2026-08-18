@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation;
@@ -47,16 +48,16 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.GroupProtocol;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.TaskMetadata;
 import org.apache.kafka.streams.ThreadMetadata;
+import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
@@ -97,11 +98,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.DEFAULT;
 import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.LEAVE_GROUP;
 import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.streamsProtocolEnabled;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.adminClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.consumerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.restoreConsumerClientId;
@@ -328,6 +332,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private final Sensor commitRatioSensor;
     private final Sensor failedStreamThreadSensor;
 
+    private volatile long maxUncommittedBytesPerThread;
     private final long logSummaryIntervalMs; // the count summary log output time interval
     private long lastLogSummaryMs = -1L;
     private long totalRecordsProcessedSinceLastSummary = 0L;
@@ -372,7 +377,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     // These are used to signal from outside the stream thread, but the variables themselves are internal to the thread
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
     private final AtomicReference<org.apache.kafka.streams.CloseOptions.GroupMembershipOperation> leaveGroupRequested =
-        new AtomicReference<>(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+        new AtomicReference<>(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.DEFAULT);
     private final AtomicLong lastShutdownWarningTimestamp = new AtomicLong(0L);
     private final boolean eosEnabled;
     private final boolean processingThreadsEnabled;
@@ -383,6 +388,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private final WindowedSum punctuateLatencyWindowedSum = new WindowedSum();
     private final WindowedSum runOnceLatencyWindowedSum = new WindowedSum();
     private final MetricConfig metricsConfig;
+    private final StreamsThreadMetricsDelegatingReporter metricsReporter;
 
     private boolean latencyWindowsInitialized = false;
 
@@ -403,6 +409,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                                       final Time time,
                                       final StreamsMetadataState streamsMetadataState,
                                       final long cacheSizeBytes,
+                                      final long maxUncommittedBytesPerThread,
                                       final StateDirectory stateDirectory,
                                       final StateRestoreListener userStateRestoreListener,
                                       final StandbyUpdateListener userStandbyUpdateListener,
@@ -460,6 +467,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             config,
             streamsMetrics,
             stateDirectory,
+            time,
             threadId,
             logContext);
 
@@ -508,13 +516,21 @@ public class StreamThread extends Thread implements ProcessingThread {
             consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
         }
 
-        final MainConsumerSetup mainConsumerSetup = setupMainConsumer(topologyMetadata, config, clientSupplier, processId, consumerConfigs);
+        final MainConsumerSetup mainConsumerSetup = setupMainConsumer(
+            topologyMetadata,
+            config,
+            clientSupplier,
+            processId,
+            consumerConfigs,
+            taskManager::taskOffsetSumSnapshot,
+            taskManager::taskEndOffsetSumSnapshot
+        );
 
         taskManager.setMainConsumer(mainConsumerSetup.mainConsumer);
         referenceContainer.mainConsumer = mainConsumerSetup.mainConsumer;
 
-        final StreamsThreadMetricsDelegatingReporter reporter = new StreamsThreadMetricsDelegatingReporter(mainConsumerSetup.mainConsumer, threadId, Optional.of(stateUpdaterId));
-        streamsMetrics.metricsRegistry().addReporter(reporter);
+        final StreamsThreadMetricsDelegatingReporter metricsReporter = new StreamsThreadMetricsDelegatingReporter(mainConsumerSetup.mainConsumer, threadId, Optional.of(stateUpdaterId));
+        streamsMetrics.metricsRegistry().addReporter(metricsReporter);
 
         final StreamThread streamThread = new StreamThread(
             time,
@@ -538,7 +554,9 @@ public class StreamThread extends Thread implements ProcessingThread {
             streamsUncaughtExceptionHandler,
             cache::resize,
             mainConsumerSetup.streamsRebalanceData,
-            streamsMetadataState
+            streamsMetadataState,
+            metricsReporter,
+            maxUncommittedBytesPerThread
         );
 
         return streamThread.updateThreadMetadata(adminClientId(clientId));
@@ -548,8 +566,10 @@ public class StreamThread extends Thread implements ProcessingThread {
                                                        final StreamsConfig config,
                                                        final KafkaClientSupplier clientSupplier,
                                                        final UUID processId,
-                                                       final Map<String, Object> consumerConfigs) {
-        if (config.getString(StreamsConfig.GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.STREAMS.name)) {
+                                                       final Map<String, Object> consumerConfigs,
+                                                       final Supplier<Map<StreamsRebalanceData.TaskId, Long>> taskOffsetSum,
+                                                       final Supplier<Map<StreamsRebalanceData.TaskId, Long>> taskEndOffsetSum) {
+        if (streamsProtocolEnabled(config)) {
             if (topologyMetadata.hasNamedTopologies()) {
                 throw new IllegalStateException("Named topologies and the STREAMS protocol cannot be used at the same time.");
             }
@@ -558,7 +578,10 @@ public class StreamThread extends Thread implements ProcessingThread {
                     processId,
                     config,
                     parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)),
-                    topologyMetadata
+                    parseRackId((String) config.originals().get(CommonClientConfigs.CLIENT_RACK_CONFIG)),
+                    topologyMetadata,
+                    taskOffsetSum,
+                    taskEndOffsetSum
                 )
             );
             final ByteArrayDeserializer keyDeserializer = new ByteArrayDeserializer();
@@ -671,20 +694,45 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
     }
 
-    private static StreamsRebalanceData initStreamsRebalanceData(final UUID processId,
+    private static Optional<String> parseRackId(final String rackId) {
+        if (rackId == null || rackId.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(rackId);
+    }
+
+    // visible for testing
+    static StreamsRebalanceData initStreamsRebalanceData(final UUID processId,
                                                                  final StreamsConfig config,
                                                                  final Optional<StreamsRebalanceData.HostInfo> endpoint,
-                                                                 final TopologyMetadata topologyMetadata) {
+                                                                 final Optional<String> rackId,
+                                                                 final TopologyMetadata topologyMetadata,
+                                                                 final Supplier<Map<StreamsRebalanceData.TaskId, Long>> taskOffsetSum,
+                                                                 final Supplier<Map<StreamsRebalanceData.TaskId, Long>> taskEndOffsetSum) {
         final InternalTopologyBuilder internalTopologyBuilder = topologyMetadata.lookupBuilderForNamedTopology(null);
 
         final Map<String, StreamsRebalanceData.Subtopology> subtopologies = initBrokerTopology(config, internalTopologyBuilder);
 
-        return new StreamsRebalanceData(
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
             processId,
             endpoint,
+            rackId,
             subtopologies,
-            config.getClientTags()
+            config.getClientTags(),
+            taskOffsetSum,
+            taskEndOffsetSum
         );
+
+        if (config.getBoolean(StreamsConfig.TOPOLOGY_DESCRIPTION_PUSH_ENABLED_CONFIG)) {
+            final TopologyDescription description = internalTopologyBuilder.describe();
+            streamsRebalanceData.setWireTopologyDescription(
+                TopologyDescriptionConverter.toWire(
+                    description,
+                    internalTopologyBuilder::maybeDecorateInternalTopic)
+            );
+        }
+
+        return streamsRebalanceData;
     }
 
     private static Map<String, StreamsRebalanceData.Subtopology> initBrokerTopology(final StreamsConfig config,
@@ -775,9 +823,13 @@ public class StreamThread extends Thread implements ProcessingThread {
                         final BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler,
                         final java.util.function.Consumer<Long> cacheResizer,
                         final Optional<StreamsRebalanceData> streamsRebalanceData,
-                        final StreamsMetadataState streamsMetadataState
+                        final StreamsMetadataState streamsMetadataState,
+                        final StreamsThreadMetricsDelegatingReporter metricsReporter,
+                        final long maxUncommittedBytesPerThread
                         ) {
         super(threadId);
+        // explicitly non-daemon so the JVM doesn't exit while this thread is still processing
+        setDaemon(false);
         this.stateLock = new Object();
         this.adminClient = adminClient;
         this.streamsMetrics = streamsMetrics;
@@ -798,6 +850,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
         this.cacheResizer = cacheResizer;
         this.metricsConfig = streamsMetrics.metricsRegistry().config();
+        this.metricsReporter = metricsReporter;
 
         // The following sensors are created here but their references are not stored in this object, since within
         // this object they are not recorded. The sensors are created here so that the stream threads starts with all
@@ -869,6 +922,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         this.eosEnabled = eosEnabled(config);
         this.processingThreadsEnabled = InternalConfig.processingThreadsEnabled(config.originals());
         this.logSummaryIntervalMs = config.getLong(StreamsConfig.LOG_SUMMARY_INTERVAL_MS_CONFIG);
+        this.maxUncommittedBytesPerThread = maxUncommittedBytesPerThread;
 
         this.streamsRebalanceData = streamsRebalanceData;
         this.streamsMetadataState = streamsMetadataState;
@@ -916,6 +970,12 @@ public class StreamThread extends Thread implements ProcessingThread {
      * @throws StreamsException      if the store's change log does not contain the partition
      */
     boolean runLoop() {
+        // Populate the task-offset-sum snapshot before subscribing: subscribing triggers the join heartbeat,
+        // which must already carry the offset sums of tasks discovered in the local state directory, so that
+        // the broker-side sticky assignor can assign those tasks back to this client on a cold start. The sums
+        // are available this early because StateDirectory#initializeStartupStores runs during KafkaStreams#start,
+        // before any stream thread is started.
+        taskManager.maybeUpdateTaskOffsetSumSnapshot();
         subscribeConsumer();
 
         // if the thread is still in the middle of a rebalance, we should keep polling
@@ -956,7 +1016,13 @@ public class StreamThread extends Thread implements ProcessingThread {
                     // check if any active task got corrupted. We will trigger a rebalance in that case.
                     // once the task corruptions have been handled
                     final boolean enforceRebalance = taskManager.handleCorruption(e.corruptedTasks());
-                    if (enforceRebalance && eosEnabled) {
+                    // The corrupted tasks have already been recovered locally (closed dirty, revived and
+                    // scheduled for re-initialization with their input offsets reset). Under the classic
+                    // protocol we additionally enforce a rebalance so the assignor can temporarily move the
+                    // task to a standby while this client restores its state from scratch (KAFKA-12486).
+                    // Under the Streams group protocol (KIP-1071) assignment and warmup are driven by the
+                    // broker, so the client-side enforceRebalance is unsupported (it would only log a warning).
+                    if (enforceRebalance && eosEnabled && streamsRebalanceData.isEmpty()) {
                         log.info("Active task(s) got corrupted. Triggering a rebalance.");
                         mainConsumer.enforceRebalance("Active tasks corrupted");
                     }
@@ -987,7 +1053,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         return true;
     }
 
-    // visible for testing
+    // VisibleForTesting
     void maybeGetClientInstanceIds() {
         // we pass in a timeout of zero into each `clientInstanceId()` call
         // to just trigger the "get instance id" background RPC;
@@ -1055,13 +1121,16 @@ public class StreamThread extends Thread implements ProcessingThread {
         if (assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()) {
             final long now = time.milliseconds();
             final long lastLogged = lastShutdownWarningTimestamp.get();
-            if (now - lastLogged >= 10_000L) {
-                if (lastShutdownWarningTimestamp.compareAndSet(lastLogged, now)) {
-                    log.warn("Detected that shutdown was requested. " +
-                            "All clients in this app will now begin to shutdown");
+
+            if (now - lastLogged >= 10_000L && lastShutdownWarningTimestamp.compareAndSet(lastLogged, now)) {
+                log.warn("Detected that shutdown was requested. " +
+                        "All clients in this app will now begin to shutdown");
+                // The classic protocol propagates the shutdown request via an enforced rebalance,
+                // whereas the Streams protocol (KIP-1071) uses the group heartbeat.
+                if (streamsRebalanceData.isEmpty()) {
+                    mainConsumer.enforceRebalance("Shutdown requested");
                 }
             }
-            mainConsumer.enforceRebalance("Shutdown requested");
         }
     }
 
@@ -1179,6 +1248,10 @@ public class StreamThread extends Thread implements ProcessingThread {
             // Always handle status codes (e.g., MISSING_SOURCE_TOPICS, INCORRECTLY_PARTITIONED_TOPICS)
             // regardless of streamsGroupReady, as these may throw exceptions that need to be handled.
             handleStreamsRebalanceData();
+
+            // The group coordinator places tasks based on the offsets we report to it, so publish them on every
+            // iteration -- including the ones that return early below, where a task may well still be restoring.
+            taskManager.maybeUpdateTaskOffsetSumSnapshot();
 
             if (!streamsGroupReady) {
                 return;
@@ -1333,6 +1406,10 @@ public class StreamThread extends Thread implements ProcessingThread {
             // Always handle status codes (e.g., MISSING_SOURCE_TOPICS, INCORRECTLY_PARTITIONED_TOPICS)
             // regardless of streamsGroupReady, as these may throw exceptions that need to be handled.
             handleStreamsRebalanceData();
+
+            // The group coordinator places tasks based on the offsets we report to it, so publish them on every
+            // iteration -- including the ones that return early below, where a task may well still be restoring.
+            taskManager.maybeUpdateTaskOffsetSumSnapshot();
 
             if (!streamsGroupReady) {
                 return;
@@ -1600,7 +1677,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
             // TODO
             // This may be null if the task we are currently processing was part of a named topology that was just removed.
-            // After named topologies are removed, we can update `topologyMetadata.offsetResetStrateg()` so it
+            // After named topologies are removed, we can update `topologyMetadata.offsetResetStrategy()` so it
             // will not return null any longer, and we can remove this check
             if (offsetResetStrategy != null) {
                 if (offsetResetStrategy.isPresent()) {
@@ -1787,7 +1864,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     // visible for testing
     int maybeCommit() {
         final int committed;
-        if (now - lastCommitMs > commitTimeMs) {
+        if (now - lastCommitMs > commitTimeMs || shouldCommitDueToUncommittedBytes()) {
             if (log.isDebugEnabled()) {
                 log.debug("Committing all active tasks {} and standby tasks {} since {}ms has elapsed (commit interval is {}ms)",
                           taskManager.activeRunningTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);
@@ -1818,6 +1895,16 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
 
         return committed;
+    }
+
+    private boolean shouldCommitDueToUncommittedBytes() {
+        final long limit = maxUncommittedBytesPerThread;
+        if (limit <= 0) return false;
+        return taskManager.totalUncommittedBytes() > limit;
+    }
+
+    public void resizeMaxUncommittedBytes(final long maxUncommittedBytesPerThread) {
+        this.maxUncommittedBytesPerThread = maxUncommittedBytesPerThread;
     }
 
     /**
@@ -1877,8 +1964,22 @@ public class StreamThread extends Thread implements ProcessingThread {
             log.error("Failed to close changelog reader due to the following error:", e);
         }
         try {
-            final GroupMembershipOperation membershipOperation =
-                leaveGroupRequested.get() == org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP ? LEAVE_GROUP : REMAIN_IN_GROUP;
+            final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation streamsOperation = leaveGroupRequested.get();
+            final GroupMembershipOperation membershipOperation;
+            if (streamsOperation == org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP) {
+                membershipOperation = LEAVE_GROUP;
+            } else if (streamsOperation == org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP) {
+                membershipOperation = REMAIN_IN_GROUP;
+            } else {
+                // DEFAULT: adapt to the active protocol
+                if (streamsRebalanceData.isPresent()) {
+                    // Streams protocol: delegate to the consumer, which adapts to static vs dynamic
+                    membershipOperation = DEFAULT;
+                } else {
+                    // Classic protocol: remain in the group (preserves existing behavior)
+                    membershipOperation = REMAIN_IN_GROUP;
+                }
+            }
             mainConsumer.close(CloseOptions.groupMembershipOperation(membershipOperation));
         } catch (final Throwable e) {
             log.error("Failed to close consumer due to the following error:", e);
@@ -1891,6 +1992,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
         streamsMetrics.removeAllThreadLevelSensors(getName());
         streamsMetrics.removeAllThreadLevelMetrics(getName());
+        streamsMetrics.metricsRegistry().removeReporter(metricsReporter);
 
         setState(State.DEAD);
 
@@ -1923,7 +2025,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     }
 
     private void updateThreadMetadata(final Map<TaskId, Task> activeTasks,
-                                      final Map<TaskId, Task> standbyTasks) {
+                                      final Map<TaskId, StandbyTask> standbyTasks) {
         final Set<TaskMetadata> activeTasksMetadata = new HashSet<>();
         for (final Map.Entry<TaskId, Task> task : activeTasks.entrySet()) {
             activeTasksMetadata.add(new TaskMetadataImpl(
@@ -1935,7 +2037,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             ));
         }
         final Set<TaskMetadata> standbyTasksMetadata = new HashSet<>();
-        for (final Map.Entry<TaskId, Task> task : standbyTasks.entrySet()) {
+        for (final Map.Entry<TaskId, StandbyTask> task : standbyTasks.entrySet()) {
             standbyTasksMetadata.add(new TaskMetadataImpl(
                 task.getValue().id(),
                 task.getValue().inputPartitions(),
@@ -2064,6 +2166,17 @@ public class StreamThread extends Thread implements ProcessingThread {
         return taskManager;
     }
 
+    // VisibleForTesting
+    public boolean hasAnyTaskForTopology(final String topologyName) {
+        return taskManager.hasAnyTaskForTopology(topologyName);
+    }
+
+
+    // VisibleForTesting
+    public boolean areAllTasksRunningForTopology(final String topologyName) {
+        return taskManager.areAllTasksRunningForTopology(topologyName);
+    }
+    
     int currentNumIterations() {
         return numIterations;
     }
@@ -2086,6 +2199,10 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     Optional<StreamsRebalanceData> streamsRebalanceData() {
         return streamsRebalanceData;
+    }
+
+    StreamsMetricsImpl streamsMetrics() {
+        return streamsMetrics;
     }
 
     /**
@@ -2124,7 +2241,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         if (runOnceLatencyWindow > 0.0) {
             final double latencyWindow =
                 windowedSum.measure(metricsConfig, now);
-            ratioSensor.record(latencyWindow / runOnceLatencyWindow);
+            ratioSensor.record(latencyWindow / runOnceLatencyWindow, now);
         } else {
             ratioSensor.record(0.0, now);
         }

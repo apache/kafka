@@ -28,10 +28,8 @@ import java.util.{Optional, Properties}
 import java.util.concurrent._
 import javax.management.ObjectName
 import com.yammer.metrics.core.MetricName
-import kafka.admin.ConfigCommand
 import kafka.api.SaslSetup
-import kafka.network.{DataPlaneAcceptor, Processor, RequestChannel}
-import kafka.security.JaasTestUtils
+import kafka.network.{DataPlaneAcceptor, RequestChannel}
 import kafka.utils._
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -55,8 +53,9 @@ import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
-import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.network.{Processor, SocketServerConfigs}
 import org.apache.kafka.raft.MetadataLogConfig
+import org.apache.kafka.security.JaasTestUtils
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.metrics.{KafkaYammerMetrics, MetricConfigs}
 import org.apache.kafka.server.ReplicaState
@@ -237,7 +236,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     }
 
     val adminClient = adminClients.head
-    alterSslKeystoreUsingConfigCommand(sslProperties1, SecureExternal)
+    alterSslKeystore(sslProperties1, SecureExternal)
 
     val configDesc = TestUtils.tryUntilNoAssertionError() {
       val describeConfigsResult = describeConfig(adminClient)
@@ -314,7 +313,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     // 3. update password property using config provider
     updatedProps.put(configPrefix + SSL_KEYSTORE_PASSWORD_CONFIG, SslKeystorePasswordVal)
 
-    alterConfigsUsingConfigCommand(updatedProps)
+    alterConfigs(servers, adminClients.head, updatedProps, perBrokerConfig = true)
     waitForConfig(TestMetricsReporter.PollingIntervalProp, "1000")
     waitForConfig(configPrefix + SSL_TRUSTSTORE_TYPE_CONFIG, "JKS")
     waitForConfig(configPrefix + SSL_KEYSTORE_PASSWORD_CONFIG, "ServerPassword")
@@ -328,7 +327,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     // verify the update
     // 1. verify update not occurring if the value of property is same.
-    alterConfigsUsingConfigCommand(updatedProps)
+    alterConfigs(servers, adminClients.head, updatedProps, perBrokerConfig = true)
     waitForConfig(TestMetricsReporter.PollingIntervalProp, "1000")
     reporters.foreach { reporter =>
       reporter.verifyState(reconfigureCount = 0, deleteCount = 0, pollingInterval = 1000)
@@ -336,7 +335,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     // 2. verify update occurring if the value of property changed.
     updatedProps.put(TestMetricsReporter.PollingIntervalProp, PollingIntervalUpdateVal)
-    alterConfigsUsingConfigCommand(updatedProps)
+    alterConfigs(servers, adminClients.head, updatedProps, perBrokerConfig = true)
     waitForConfig(TestMetricsReporter.PollingIntervalProp, "2000")
     reporters.foreach { reporter =>
       reporter.verifyState(reconfigureCount = 1, deleteCount = 0, pollingInterval = 2000)
@@ -359,7 +358,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     verifyAuthenticationFailure(producer1)
 
     // Update broker keystore for external listener
-    alterSslKeystoreUsingConfigCommand(sslProperties2, SecureExternal)
+    alterSslKeystore(sslProperties2, SecureExternal)
 
     // New producer with old truststore should fail to connect
     val producer2 = ProducerBuilder().trustStoreProps(sslProperties1).maxRetries(0).build()
@@ -569,14 +568,13 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testConsecutiveConfigChange(groupProtocol: String): Unit = {
     val topic2 = "testtopic2"
-    val topicProps = new Properties
-    topicProps.put(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
-    TestUtils.createTopicWithAdmin(adminClients.head, topic2, servers, controllerServers, numPartitions = 1, replicationFactor = numServers, topicConfig = topicProps)
+    val topicConfigs = util.Map.of(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
+    TestUtils.createTopicWithAdmin(adminClients.head, topic2, servers, controllerServers, numPartitions = 1, replicationFactor = numServers, topicConfig = topicConfigs)
 
     def getLogOrThrow(tp: TopicPartition): UnifiedLog = {
       var (logOpt, found) = TestUtils.computeUntilTrue {
         servers.head.logManager.getLog(tp)
-      }(_.isDefined)
+      }(_.isPresent)
       assertTrue(found, "Log not found")
       logOpt.get
     }
@@ -654,7 +652,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     TestUtils.waitUntilTrue(() => servers.head.logManager.currentDefaultConfig == newLogConfig,
       "Config not updated in LogManager")
 
-    val log = servers.head.logManager.getLog(new TopicPartition(topic, 0)).getOrElse(throw new IllegalStateException("Log not found"))
+    val log = servers.head.logManager.getLog(new TopicPartition(topic, 0)).orElseThrow(() => new IllegalStateException("Log not found"))
     TestUtils.waitUntilTrue(() => log.config.segmentSize() == 1048576, "Existing topic config using defaults not updated")
     val KafkaConfigToLogConfigName: Map[String, String] =
       ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.asScala.map { case (k, v) => (v, k) }
@@ -671,7 +669,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     // Verify that overridden topic configs are not updated when broker default is updated
     val log2 = servers.head.logManager.getLog(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0))
-      .getOrElse(throw new IllegalStateException("Log not found"))
+      .orElseThrow(() => new IllegalStateException("Log not found"))
     assertFalse(log2.config.delete, "Overridden clean up policy should not be updated")
     assertEquals(BrokerCompressionType.PRODUCER, log2.config.compressionType)
 
@@ -723,7 +721,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       waitForConfigOnServer(server, ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, 1680000000.toString)
     }
     servers.foreach { server =>
-      val log = server.logManager.getLog(new TopicPartition(topic, 0)).getOrElse(throw new IllegalStateException("Log not found"))
+      val log = server.logManager.getLog(new TopicPartition(topic, 0)).orElseThrow(() => new IllegalStateException("Log not found"))
       // Verify default values for these two configurations are restored on all brokers
       TestUtils.waitUntilTrue(() => log.config.maxIndexSize == ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_DEFAULT && log.config.retentionMs == 1680000000L,
         "Existing topic config using defaults not updated")
@@ -886,7 +884,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
   private def isProcessorMetric(metricName: MetricName): Boolean = {
     val mbeanName = metricName.getMBeanName
-    mbeanName.contains(s"${Processor.NetworkProcessorMetricTag}=") || mbeanName.contains(s"${RequestChannel.ProcessorMetricTag}=")
+    mbeanName.contains(s"${Processor.NETWORK_PROCESSOR_METRIC_TAG}=") || mbeanName.contains(s"${RequestChannel.ProcessorMetricTag}=")
   }
 
   private def clearLeftOverProcessorMetrics(): Unit = {
@@ -901,13 +899,13 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     val numProcessors = servers.head.config.numNetworkThreads * 2 // 2 listeners
 
     val kafkaMetrics = servers.head.metrics.metrics().keySet.asScala
-      .filter(_.tags.containsKey(Processor.NetworkProcessorMetricTag))
-      .groupBy(_.tags.get(Processor.ListenerMetricTag))
+      .filter(_.tags.containsKey(Processor.NETWORK_PROCESSOR_METRIC_TAG))
+      .groupBy(_.tags.get(Processor.LISTENER_METRIC_TAG))
 
     assertEquals(2, kafkaMetrics.size) // 2 listeners
     // 2 threads per listener
-    assertEquals(2, kafkaMetrics("INTERNAL").groupBy(_.tags().get(Processor.NetworkProcessorMetricTag)).size)
-    assertEquals(2, kafkaMetrics("EXTERNAL").groupBy(_.tags().get(Processor.NetworkProcessorMetricTag)).size)
+    assertEquals(2, kafkaMetrics("INTERNAL").groupBy(_.tags().get(Processor.NETWORK_PROCESSOR_METRIC_TAG)).size)
+    assertEquals(2, kafkaMetrics("EXTERNAL").groupBy(_.tags().get(Processor.NETWORK_PROCESSOR_METRIC_TAG)).size)
 
     KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
       .filter(isProcessorMetric)
@@ -1081,7 +1079,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     val configPrefix = listenerPrefix(SecureExternal)
     val updatedProps = securityProps(sslProperties1, KEYSTORE_PROPS, configPrefix)
     updatedProps.put(TransactionLogConfig.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG, "false")
-    alterConfigsUsingConfigCommand(updatedProps)
+    alterConfigs(servers, adminClients.head, updatedProps, perBrokerConfig = true)
     verifyConfiguration(false)
 
     // Ensure it remains off after shutdown.
@@ -1093,7 +1091,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     // Turn verification back on.
     updatedProps.put(TransactionLogConfig.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG, "true")
-    alterConfigsUsingConfigCommand(updatedProps)
+    alterConfigs(servers, adminClients.head, updatedProps, perBrokerConfig = true)
     verifyConfiguration(true)
   }
 
@@ -1112,7 +1110,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     val newBroker = createBroker(kafkaConfig).asInstanceOf[BrokerServer]
     servers += newBroker
 
-    alterSslKeystoreUsingConfigCommand(sslProperties1, listenerPrefix(SecureExternal))
+    alterSslKeystore(sslProperties1, listenerPrefix(SecureExternal))
 
     // Add num.replica.fetchers to the cluster-level config.
     val clusterLevelProps = new Properties
@@ -1254,30 +1252,34 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       (s"$configPrefix$SSL_KEYSTORE_LOCATION_CONFIG", props.getProperty(SSL_KEYSTORE_LOCATION_CONFIG)), expectFailure)
   }
 
-  private def alterSslKeystoreUsingConfigCommand(props: Properties, listener: String): Unit = {
-    val configPrefix = listenerPrefix(listener)
-    val newProps = securityProps(props, KEYSTORE_PROPS, configPrefix)
-    alterConfigsUsingConfigCommand(newProps)
-    waitForConfig(s"$configPrefix$SSL_KEYSTORE_LOCATION_CONFIG", props.getProperty(SSL_KEYSTORE_LOCATION_CONFIG))
-  }
-
   private def alterConfigsOnServer(server: KafkaBroker, props: Properties): Unit = {
-val configEntries = props.asScala.map { case (k, v) => new AlterConfigOp(new ConfigEntry(k, v), OpType.SET) }.toList.asJava
-    val alterConfigs = new java.util.HashMap[ConfigResource, java.util.Collection[AlterConfigOp]]()
+    val configEntries = props.asScala.map { case (k, v) => new AlterConfigOp(new ConfigEntry(k, v), OpType.SET) }.toList.asJava
+    val alterConfigs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
     alterConfigs.put(new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString), configEntries)
     adminClients.head.incrementalAlterConfigs(alterConfigs)
     props.asScala.foreach { case (k, v) => waitForConfigOnServer(server, k, v) }
   }
 
   private def alterConfigs(servers: Seq[KafkaBroker], adminClient: Admin, props: Properties,
-                   perBrokerConfig: Boolean): AlterConfigsResult = {
+                           perBrokerConfig: Boolean): Unit = {
+    alterConfigsAsync(servers, adminClient, props, perBrokerConfig).all.get()
+    // Skip config-provider placeholders (e.g. "${file:...}"): the broker stores the resolved value,
+    // so waiting on the literal placeholder would never match. Callers using placeholders must wait
+    // on the resolved value themselves.
+    props.asScala.foreach { case (k, v) =>
+      if (!v.contains("${")) waitForConfig(k, v)
+    }
+  }
+
+  private def alterConfigsAsync(servers: Seq[KafkaBroker], adminClient: Admin, props: Properties,
+                                perBrokerConfig: Boolean): AlterConfigsResult = {
     val configEntries = props.asScala.map { case (k, v) => new AlterConfigOp(new ConfigEntry(k, v), OpType.SET) }.toList.asJava
     val configs = if (perBrokerConfig) {
-      val alterConfigs = new java.util.HashMap[ConfigResource, java.util.Collection[AlterConfigOp]]()
+      val alterConfigs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
       servers.foreach(server => alterConfigs.put(new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString), configEntries))
       alterConfigs
     } else {
-      val alterConfigs = new java.util.HashMap[ConfigResource, java.util.Collection[AlterConfigOp]]()
+      val alterConfigs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
       alterConfigs.put(new ConfigResource(ConfigResource.Type.BROKER, ""), configEntries)
       alterConfigs
     }
@@ -1285,7 +1287,7 @@ val configEntries = props.asScala.map { case (k, v) => new AlterConfigOp(new Con
   }
 
   private def reconfigureServers(newProps: Properties, perBrokerConfig: Boolean, aPropToVerify: (String, String), expectFailure: Boolean = false): Unit = {
-    val alterResult = alterConfigs(servers, adminClients.head, newProps, perBrokerConfig)
+    val alterResult = alterConfigsAsync(servers, adminClients.head, newProps, perBrokerConfig)
     if (expectFailure) {
       val oldProps = servers.head.config.values.asScala.filter { case (k, _) => newProps.containsKey(k) }
       val brokerResources = if (perBrokerConfig)
@@ -1387,21 +1389,6 @@ val configEntries = props.asScala.map { case (k, v) => new AlterConfigOp(new Con
       case _ => value.toString
     }
   }
-
-  private def alterConfigsUsingConfigCommand(props: Properties): Unit = {
-    val propsFile = tempPropertiesFile(clientProps(SecurityProtocol.SSL))
-
-    servers.foreach { server =>
-      val args = Array("--bootstrap-server", TestUtils.bootstrapServers(servers, new ListenerName(SecureInternal)),
-        "--command-config", propsFile.getAbsolutePath,
-        "--alter", "--add-config", props.asScala.map { case (k, v) => s"$k=$v" }.mkString(","),
-        "--entity-type", "brokers",
-        "--entity-name", server.config.brokerId.toString)
-      ConfigCommand.main(args)
-    }
-  }
-
-  private def tempPropertiesFile(properties: Properties): File = TestUtils.tempPropertiesFile(properties.asScala)
 
   private abstract class ClientBuilder[T] {
     protected var _bootstrapServers: Option[String] = None

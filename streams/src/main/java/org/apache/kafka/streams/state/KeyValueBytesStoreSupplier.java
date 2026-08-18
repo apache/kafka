@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.utils.Bytes;
 
 /**
@@ -28,6 +29,5 @@ import org.apache.kafka.common.utils.Bytes;
  *   <li>If the key does not exist, get operations should return null value bytes.</li>
  * </ol>
  */
-public interface KeyValueBytesStoreSupplier extends StoreSupplier<KeyValueStore<Bytes, byte[]>> {
-
-}
+@InterfaceAudience.Public
+public interface KeyValueBytesStoreSupplier extends StoreSupplier<KeyValueStore<Bytes, byte[]>> { }

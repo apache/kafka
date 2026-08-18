@@ -22,10 +22,13 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.CloseOptions;
+import org.apache.kafka.streams.CloseOptions.GroupMembershipOperation;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -383,7 +386,7 @@ public class IQv2IntegrationTest {
                         }
 
                         @Override
-                        public void flush() {
+                        public void commit(final Map<TopicPartition, Long> changelogOffsets) {
 
                         }
 
@@ -442,7 +445,7 @@ public class IQv2IntegrationTest {
 
         // Discard the basic streams and replace with test-specific topology
         if (kafkaStreams != null) {
-            kafkaStreams.close();
+            kafkaStreams.close(CloseOptions.groupMembershipOperation(GroupMembershipOperation.LEAVE_GROUP));
         }
         final String safeTestName = safeUniqueTestName(testInfo);
         this.groupProtocol = groupProtocol;
@@ -475,8 +478,6 @@ public class IQv2IntegrationTest {
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         config.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 100);
-        config.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 200);
-        config.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         config.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         config.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);

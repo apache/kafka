@@ -21,10 +21,10 @@ import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.TransactionCoordinatorFencedException;
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.EndTransactionMarker;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.EndTransactionMarker;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -127,9 +127,11 @@ public class ProducerAppendInfo {
             // In both cases, the transaction has already ended (currentTxnFirstOffset is empty).
             // We suppress the InvalidProducerEpochException and allow the duplicate marker to
             // be written to the log.
+            // In some buggy scenarios we may start transaction with MAX_VALUE.  We allow
+            // code to gracefully recover from that.
             if (transactionVersion >= 2 &&
                     producerEpoch == current &&
-                    updatedEntry.currentTxnFirstOffset().isEmpty()) {
+                    (updatedEntry.currentTxnFirstOffset().isEmpty() || producerEpoch == Short.MAX_VALUE)) {
                 log.info("Idempotent transaction marker retry detected for producer {} epoch {}. " +
                                 "Transaction already completed, allowing duplicate marker write.",
                         producerId, producerEpoch);
@@ -168,7 +170,7 @@ public class ProducerAppendInfo {
             if (appendFirstSeq != 0) {
                 if (updatedEntry.producerEpoch() != RecordBatch.NO_PRODUCER_EPOCH) {
                     throw new OutOfOrderSequenceException("Invalid sequence number for new epoch of producer " + producerId +
-                            "at offset " + offset + " in partition " + topicPartition + ": " + producerEpoch + " (request epoch), "
+                            " at offset " + offset + " in partition " + topicPartition + ": " + producerEpoch + " (request epoch), "
                             + appendFirstSeq + " (seq. number), " + updatedEntry.producerEpoch() + " (current producer epoch)");
                 }
             }

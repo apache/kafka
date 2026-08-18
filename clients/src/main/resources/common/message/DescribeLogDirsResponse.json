@@ -22,7 +22,8 @@
   // Version 2 is the first flexible version.
   // Version 3 adds the top-level ErrorCode field
   // Version 4 adds the TotalBytes and UsableBytes fields
-  "validVersions": "1-4",
+  // Version 5 adds IsCordoned field
+  "validVersions": "1-5",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
@@ -55,6 +56,9 @@
       },
       { "name": "UsableBytes", "type": "int64", "versions": "4+", "ignorable": true, "default": "-1",
         "about": "The usable size in bytes of the volume the log directory is in. This value does not include the size of data stored in remote storage."
+      },
+      { "name": "IsCordoned", "type": "bool", "versions": "5+", "ignorable": true, "default": false,
+        "about": "True if this log directory is cordoned."
       }
     ]}
   ]

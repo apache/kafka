@@ -17,7 +17,7 @@
 
 package org.apache.kafka.server.common;
 
-import org.apache.kafka.common.record.ControlRecordUtils;
+import org.apache.kafka.common.record.internal.ControlRecordUtils;
 
 import org.junit.jupiter.api.Test;
 

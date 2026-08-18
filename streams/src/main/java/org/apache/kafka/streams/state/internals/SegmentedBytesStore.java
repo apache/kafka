@@ -89,7 +89,7 @@ public interface SegmentedBytesStore extends StateStore {
     KeyValueIterator<Bytes, byte[]> backwardAll();
 
     /**
-     * Gets all the key-value pairs that belong to the windows within in the given time range.
+     * Gets all the key-value pairs that belong to the windows within the given time range.
      *
      * @param from the beginning of the time slot from which to search (inclusive)
      * @param to   the end of the time slot from which to search (inclusive)
@@ -108,14 +108,6 @@ public interface SegmentedBytesStore extends StateStore {
      * @param key   the segmented key to remove
      */
     void remove(Bytes key);
-
-    /**
-     * Remove all duplicated records with the provided key in the specified timestamp.
-     *
-     * @param key   the segmented key to remove
-     * @param timestamp  the timestamp to match
-     */
-    void remove(Bytes key, long timestamp);
 
     /**
      * Write a new value to the store with the provided key. The key
@@ -158,18 +150,6 @@ public interface SegmentedBytesStore extends StateStore {
          * @return      The key that represents the lower range to search for in the store
          */
         Bytes lowerRange(final Bytes key, final long from);
-
-        /**
-         * Given a record key and a time, construct a Segmented key to search when performing
-         * prefixed queries.
-         *
-         * @param key
-         * @param timestamp
-         * @return  The key that represents the prefixed Segmented key in bytes.
-         */
-        default Bytes toStoreBinaryKeyPrefix(final Bytes key, long timestamp) {
-            throw new UnsupportedOperationException();
-        }
 
         /**
          * Given a range of fixed size record keys and a time, construct a Segmented key that represents

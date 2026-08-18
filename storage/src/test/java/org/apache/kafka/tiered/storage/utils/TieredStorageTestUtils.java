@@ -16,18 +16,18 @@
  */
 package org.apache.kafka.tiered.storage.utils;
 
-import kafka.utils.TestUtils;
-
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.test.api.TestKitDefaults;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManager;
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorage;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
+import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 
 import org.junit.jupiter.api.Assertions;
@@ -157,11 +157,29 @@ public class TieredStorageTestUtils {
         // Set a small number of retry interval for retrying RemoteLogMetadataManager resources initialization to speed up the test
         overridingProps.setProperty(metadataConfigPrefix(testClassName, REMOTE_LOG_METADATA_INITIALIZATION_RETRY_INTERVAL_MS_PROP), RLMM_INIT_RETRY_INTERVAL_MS.toString());
         // Set 2 log dirs to make sure JBOD feature is working correctly
-        overridingProps.setProperty(ServerLogConfigs.LOG_DIRS_CONFIG, TestUtils.tempDir().getAbsolutePath() + "," + TestUtils.tempDir().getAbsolutePath());
+        overridingProps.setProperty(ServerLogConfigs.LOG_DIRS_CONFIG, TestUtils.tempDirectory().getAbsolutePath() + "," + TestUtils.tempDirectory().getAbsolutePath());
         // Disable unnecessary log cleaner
         overridingProps.setProperty(CleanerConfig.LOG_CLEANER_ENABLE_PROP, "false");
 
         return overridingProps;
+    }
+
+    public static Map<String, String> createServerPropsForRemoteStorage(
+            String testClassName, 
+            int brokerCount, 
+            int numRemoteLogMetadataPartitions
+    ) {
+        String storageDirPath = org.apache.kafka.test.TestUtils
+                .tempDirectory("kafka-remote-tier-" + testClassName).getAbsolutePath();
+        Properties tieredProps = createPropsForRemoteStorage(
+                testClassName, storageDirPath, brokerCount, numRemoteLogMetadataPartitions, new Properties());
+        Map<String, String> serverProps = new HashMap<>();
+        tieredProps.forEach((k, v) -> serverProps.put(k.toString(), v.toString()));
+        serverProps.put(
+                REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
+                TestKitDefaults.DEFAULT_BROKER_LISTENER_NAME
+        );
+        return serverProps;
     }
 
     public static Map<String, String> createTopicConfigForRemoteStorage(boolean enableRemoteStorage,

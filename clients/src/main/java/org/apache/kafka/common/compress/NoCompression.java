@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.common.compress;
 
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.ByteBufferInputStream;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.ByteBufferInputStream;
+import org.apache.kafka.common.utils.internals.ByteBufferOutputStream;
 
 import java.io.InputStream;
 import java.io.OutputStream;

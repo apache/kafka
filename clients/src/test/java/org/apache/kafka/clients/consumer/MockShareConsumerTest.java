@@ -22,9 +22,9 @@ import org.apache.kafka.common.record.TimestampType;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -34,7 +34,7 @@ public class MockShareConsumerTest {
 
     @Test
     public void testSimpleMock() {
-        consumer.subscribe(Collections.singleton("test"));
+        consumer.subscribe(Set.of("test"));
         assertEquals(0, consumer.poll(Duration.ZERO).count());
         ConsumerRecord<String, String> rec1 = new ConsumerRecord<>("test", 0, 0, 0L, TimestampType.CREATE_TIME,
                 0, 0, "key1", "value1", new RecordHeaders(), Optional.empty());

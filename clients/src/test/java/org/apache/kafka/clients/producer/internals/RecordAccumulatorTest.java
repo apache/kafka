@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.NodeApiVersions;
+import org.apache.kafka.clients.producer.BufferExhaustedException;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
@@ -28,25 +29,27 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.CompressionRatioEstimator;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.DefaultRecord;
-import org.apache.kafka.common.record.DefaultRecordBatch;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.MutableRecordBatch;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.CompressionRatioEstimator;
+import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.record.internal.DefaultRecord;
+import org.apache.kafka.common.record.internal.DefaultRecordBatch;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.MutableRecordBatch;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -84,6 +87,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -240,7 +244,7 @@ public class RecordAccumulatorTest {
             assertEquals(1, partitionBatches.size());
 
             ProducerBatch batch = partitionBatches.peekFirst();
-            assertTrue(batch.isWritable());
+            assertFalse(batch.isFull(), "batch should still accept appends");
             assertEquals(0, accum.ready(metadataCache, now).readyNodes.size(), "No partitions should be ready.");
         }
 
@@ -250,7 +254,7 @@ public class RecordAccumulatorTest {
         Deque<ProducerBatch> partitionBatches = accum.getDeque(tp1);
         assertEquals(2, partitionBatches.size());
         Iterator<ProducerBatch> partitionBatchesIterator = partitionBatches.iterator();
-        assertTrue(partitionBatchesIterator.next().isWritable());
+        assertTrue(partitionBatchesIterator.next().isFull(), "the first batch should no longer accept appends");
         assertEquals(Collections.singleton(node1), accum.ready(metadataCache, time.milliseconds()).readyNodes, "Our partition's leader should be ready");
 
         List<ProducerBatch> batches = accum.drain(metadataCache, Collections.singleton(node1), Integer.MAX_VALUE, 0).get(node1.id());
@@ -1303,7 +1307,7 @@ public class RecordAccumulatorTest {
         mockRandom = new AtomicInteger();
 
         // Create accumulator with partitioner config to enable adaptive partitioning.
-        RecordAccumulator.PartitionerConfig config = new RecordAccumulator.PartitionerConfig(true, 100);
+        RecordAccumulator.PartitionerConfig config = new RecordAccumulator.PartitionerConfig(true, 100, false, "");
         long totalSize = 1024 * 1024;
         int batchSize = 128;
         RecordAccumulator accum = new RecordAccumulator(logContext, batchSize, Compression.NONE, 0, 0L, 0L,
@@ -1311,8 +1315,8 @@ public class RecordAccumulatorTest {
                 new BufferPool(totalSize, batchSize, metrics, time, "producer-internal-metrics")) {
             @Override
             BuiltInPartitioner createBuiltInPartitioner(LogContext logContext, String topic,
-                                                                  int stickyBatchSize) {
-                return new SequentialPartitioner(logContext, topic, stickyBatchSize);
+                                                        int stickyBatchSize, boolean rackAware, String rack) {
+                return new SequentialPartitioner(logContext, topic, stickyBatchSize, rackAware, rack);
             }
         };
 
@@ -1556,6 +1560,53 @@ public class RecordAccumulatorTest {
         assertTrue(batches.get(node2.id()).isEmpty());
     }
 
+    @Test
+    public void testRetryPolicy() {
+        RecordAccumulator accum = createTestRecordAccumulator(1024, 10 * 1024, Compression.NONE, 0);
+        try {
+            long spent = time.milliseconds();            // a deadline that is up: reached, so no time is left
+            long open = time.milliseconds() + 1000;      // and one that is not
+
+            // The first pass may always run, whether or not there is time left.
+            accum.throwIfNoMoreRetriesAllowed(/* firstPass */ true, spent, false, topic);
+            accum.throwIfNoMoreRetriesAllowed(/* firstPass */ true, open, false, topic);
+
+            // So may a retry, while there is time left.
+            accum.throwIfNoMoreRetriesAllowed(/* firstPass */ false, open, false, topic);
+
+            // A retry that finds the deadline gone gives up, reporting the cause the pass before it hit.
+            TimeoutException timeout = assertThrows(TimeoutException.class,
+                    () -> accum.throwIfNoMoreRetriesAllowed(false, spent, false, topic));
+            // BufferExhaustedException extends TimeoutException, so assertThrows above would accept it too.
+            assertEquals(TimeoutException.class, timeout.getClass(),
+                    "the pass that gave up was not denied memory, so it must fail with TimeoutException");
+            assertTrue(timeout.getMessage().contains("kept retrying"),
+                    "the failure must be the TimeoutException throwIfNoMoreRetriesAllowed "
+                            + "raises when a retry finds the deadline gone, but was: " + timeout.getMessage());
+
+            KafkaMetric exhausted = metrics.metric(metrics.metricName("buffer-exhausted-total", "producer-metrics"));
+            assertEquals(0.0, (double) exhausted.metricValue(), "a timeout is not a buffer-exhausted drop");
+
+            // A pass the pool refused is the only one reported as exhaustion, and it is the incremental
+            // strategy's extension acquire that reaches this; pinned here because the policy decides it.
+            BufferExhaustedException denied = assertThrows(BufferExhaustedException.class,
+                    () -> accum.throwIfNoMoreRetriesAllowed(false, spent, true, topic));
+            assertTrue(denied.getMessage().contains("Failed to allocate memory for a record"),
+                    "a pass the pool refused must be reported as an exhausted-pool drop, but was: " + denied.getMessage());
+            assertEquals(1.0, (double) exhausted.metricValue(),
+                    "giving up on a pass the pool refused must count the dropped record");
+        } finally {
+            accum.close();
+        }
+    }
+
+    @Test
+    public void testAppendDeadline() {
+        assertEquals(Long.MAX_VALUE, RecordAccumulator.appendDeadlineMs(1000L, Long.MAX_VALUE));
+        assertEquals(1500L, RecordAccumulator.appendDeadlineMs(1000L, 500L));
+        assertEquals(1000L, RecordAccumulator.appendDeadlineMs(1000L, 0L));
+    }
+
     private int prepareSplitBatches(RecordAccumulator accum, long seed, int recordSize, int numRecords)
         throws InterruptedException {
         Random random = new Random();
@@ -1690,16 +1741,16 @@ public class RecordAccumulatorTest {
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName)) {
             @Override
             BuiltInPartitioner createBuiltInPartitioner(LogContext logContext, String topic,
-                                                        int stickyBatchSize) {
-                return new SequentialPartitioner(logContext, topic, stickyBatchSize);
+                                                        int stickyBatchSize, boolean rackAware, String rack) {
+                return new SequentialPartitioner(logContext, topic, stickyBatchSize, rackAware, rack);
             }
         };
     }
 
     private class SequentialPartitioner extends BuiltInPartitioner {
 
-        public SequentialPartitioner(LogContext logContext, String topic, int stickyBatchSize) {
-            super(logContext, topic, stickyBatchSize);
+        public SequentialPartitioner(LogContext logContext, String topic, int stickyBatchSize, boolean rackAware, String rack) {
+            super(logContext, topic, stickyBatchSize, rackAware, rack);
         }
 
         @Override

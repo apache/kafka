@@ -18,7 +18,6 @@ package kafka.server.share;
 
 import kafka.cluster.Partition;
 import kafka.server.ReplicaManager;
-import kafka.server.ReplicaQuota;
 import kafka.server.share.SharePartitionManager.SharePartitionListener;
 
 import org.apache.kafka.clients.consumer.AcknowledgeType;
@@ -43,18 +42,21 @@ import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.record.FileRecords;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.Records;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
-import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollection;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
 import org.apache.kafka.server.common.ShareVersion;
 import org.apache.kafka.server.purgatory.DelayedOperationKey;
 import org.apache.kafka.server.purgatory.DelayedOperationPurgatory;
+import org.apache.kafka.server.quota.ReplicaQuota;
 import org.apache.kafka.server.share.CachedSharePartition;
 import org.apache.kafka.server.share.ErroneousAndValidPartitionData;
 import org.apache.kafka.server.share.SharePartitionKey;
@@ -62,6 +64,8 @@ import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.context.FinalContext;
 import org.apache.kafka.server.share.context.ShareFetchContext;
 import org.apache.kafka.server.share.context.ShareSessionContext;
+import org.apache.kafka.server.share.dlq.NoOpShareGroupDLQManager;
+import org.apache.kafka.server.share.dlq.ShareGroupDLQManager;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchKey;
 import org.apache.kafka.server.share.fetch.PartitionMaxBytesStrategy;
@@ -75,8 +79,8 @@ import org.apache.kafka.server.share.session.ShareSessionCache;
 import org.apache.kafka.server.share.session.ShareSessionKey;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchParams;
-import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.server.util.ServerTestUtils;
 import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
@@ -111,6 +115,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import scala.Tuple2;
 import scala.collection.Seq;
@@ -171,7 +176,7 @@ public class SharePartitionManagerTest {
     @BeforeEach
     public void setUp() {
         time = new MockTime();
-        kafka.utils.TestUtils.clearYammerMetrics();
+        ServerTestUtils.clearYammerMetrics();
         brokerTopicStats = new BrokerTopicStats();
         mockReplicaManager = mock(ReplicaManager.class);
         Partition partition = mockPartition();
@@ -1261,7 +1266,6 @@ public class SharePartitionManagerTest {
         sharePartitionManager.close();
         // Verify that the timer object in sharePartitionManager is closed by checking the calls to timer.close() and shareGroupMetrics.close().
         Mockito.verify(timer, times(1)).close();
-        Mockito.verify(shareGroupMetrics, times(1)).close();
     }
 
     @Test
@@ -1276,7 +1280,7 @@ public class SharePartitionManagerTest {
         SharePartition sp1 = mock(SharePartition.class);
         SharePartition sp2 = mock(SharePartition.class);
         when(sp1.releaseAcquiredRecords(ArgumentMatchers.eq(memberId))).thenReturn(CompletableFuture.completedFuture(null));
-        when(sp2.releaseAcquiredRecords(ArgumentMatchers.eq(memberId))).thenReturn(FutureUtils.failedFuture(
+        when(sp2.releaseAcquiredRecords(ArgumentMatchers.eq(memberId))).thenReturn(CompletableFuture.failedFuture(
                 new InvalidRecordStateException("Unable to release acquired records for the batch")
         ));
 
@@ -1635,7 +1639,7 @@ public class SharePartitionManagerTest {
 
         TopicIdPartition tp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         SharePartition sp = mock(SharePartition.class);
-        when(sp.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(FutureUtils.failedFuture(
+        when(sp.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(CompletableFuture.failedFuture(
                 new InvalidRequestException("Member is not the owner of batch record")
         ));
         SharePartitionCache partitionCache = new SharePartitionCache();
@@ -1767,7 +1771,7 @@ public class SharePartitionManagerTest {
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
-            .withReplicaManager(mockReplicaManager)
+            .withReplicaManagerLogReader(mockReplicaManager)
             .withSharePartitions(sharePartitions)
             .withPartitionMaxBytesStrategy(PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM))
             .build();
@@ -1878,7 +1882,7 @@ public class SharePartitionManagerTest {
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
-            .withReplicaManager(mockReplicaManager)
+            .withReplicaManagerLogReader(mockReplicaManager)
             .withSharePartitions(sharePartitions)
             .build();
 
@@ -1985,7 +1989,7 @@ public class SharePartitionManagerTest {
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
-            .withReplicaManager(mockReplicaManager)
+            .withReplicaManagerLogReader(mockReplicaManager)
             .withSharePartitions(sharePartitions)
             .withPartitionMaxBytesStrategy(PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM))
             .build();
@@ -2093,7 +2097,7 @@ public class SharePartitionManagerTest {
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
-            .withReplicaManager(mockReplicaManager)
+            .withReplicaManagerLogReader(mockReplicaManager)
             .withSharePartitions(sharePartitions)
             .build();
 
@@ -2352,7 +2356,7 @@ public class SharePartitionManagerTest {
             .build();
 
         // Return LeaderNotAvailableException to simulate initialization failure.
-        when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new LeaderNotAvailableException("Leader not available")));
+        when(sp0.maybeInitialize()).thenReturn(CompletableFuture.failedFuture(new LeaderNotAvailableException("Leader not available")));
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
             sharePartitionManager.fetchMessages(groupId, memberId, FETCH_PARAMS, BATCH_OPTIMIZED, 0,
                 MAX_FETCH_RECORDS, BATCH_SIZE, topicIdPartitions);
@@ -2369,7 +2373,7 @@ public class SharePartitionManagerTest {
         assertEquals(1, partitionCache.size());
 
         // Return IllegalStateException to simulate initialization failure.
-        when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new IllegalStateException("Illegal state")));
+        when(sp0.maybeInitialize()).thenReturn(CompletableFuture.failedFuture(new IllegalStateException("Illegal state")));
         future = sharePartitionManager.fetchMessages(groupId, memberId, FETCH_PARAMS, BATCH_OPTIMIZED, 0,
             MAX_FETCH_RECORDS, BATCH_SIZE, topicIdPartitions);
         TestUtils.waitForCondition(
@@ -2383,7 +2387,7 @@ public class SharePartitionManagerTest {
         // The last exception removes the share partition from the cache hence re-add the share partition to cache.
         partitionCache.put(new SharePartitionKey(groupId, tp0), sp0);
         // Return CoordinatorNotAvailableException to simulate initialization failure.
-        when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new CoordinatorNotAvailableException("Coordinator not available")));
+        when(sp0.maybeInitialize()).thenReturn(CompletableFuture.failedFuture(new CoordinatorNotAvailableException("Coordinator not available")));
         future = sharePartitionManager.fetchMessages(groupId, memberId, FETCH_PARAMS, BATCH_OPTIMIZED, 0,
             MAX_FETCH_RECORDS, BATCH_SIZE, topicIdPartitions);
         TestUtils.waitForCondition(
@@ -2397,7 +2401,7 @@ public class SharePartitionManagerTest {
         // The last exception removes the share partition from the cache hence re-add the share partition to cache.
         partitionCache.put(new SharePartitionKey(groupId, tp0), sp0);
         // Return InvalidRequestException to simulate initialization failure.
-        when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new InvalidRequestException("Invalid request")));
+        when(sp0.maybeInitialize()).thenReturn(CompletableFuture.failedFuture(new InvalidRequestException("Invalid request")));
         future = sharePartitionManager.fetchMessages(groupId, memberId, FETCH_PARAMS, BATCH_OPTIMIZED, 0,
             MAX_FETCH_RECORDS, BATCH_SIZE, topicIdPartitions);
         TestUtils.waitForCondition(
@@ -2411,7 +2415,7 @@ public class SharePartitionManagerTest {
         // The last exception removes the share partition from the cache hence re-add the share partition to cache.
         partitionCache.put(new SharePartitionKey(groupId, tp0), sp0);
         // Return FencedStateEpochException to simulate initialization failure.
-        when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new FencedStateEpochException("Fenced state epoch")));
+        when(sp0.maybeInitialize()).thenReturn(CompletableFuture.failedFuture(new FencedStateEpochException("Fenced state epoch")));
         future = sharePartitionManager.fetchMessages(groupId, memberId, FETCH_PARAMS, BATCH_OPTIMIZED, 0,
             MAX_FETCH_RECORDS, BATCH_SIZE, topicIdPartitions);
         TestUtils.waitForCondition(
@@ -2425,7 +2429,7 @@ public class SharePartitionManagerTest {
         // The last exception removes the share partition from the cache hence re-add the share partition to cache.
         partitionCache.put(new SharePartitionKey(groupId, tp0), sp0);
         // Return NotLeaderOrFollowerException to simulate initialization failure.
-        when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new NotLeaderOrFollowerException("Not leader or follower")));
+        when(sp0.maybeInitialize()).thenReturn(CompletableFuture.failedFuture(new NotLeaderOrFollowerException("Not leader or follower")));
         future = sharePartitionManager.fetchMessages(groupId, memberId, FETCH_PARAMS, BATCH_OPTIMIZED, 0,
             MAX_FETCH_RECORDS, BATCH_SIZE, topicIdPartitions);
         TestUtils.waitForCondition(
@@ -2439,7 +2443,7 @@ public class SharePartitionManagerTest {
         // The last exception removes the share partition from the cache hence re-add the share partition to cache.
         partitionCache.put(new SharePartitionKey(groupId, tp0), sp0);
         // Return RuntimeException to simulate initialization failure.
-        when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new RuntimeException("Runtime exception")));
+        when(sp0.maybeInitialize()).thenReturn(CompletableFuture.failedFuture(new RuntimeException("Runtime exception")));
         future = sharePartitionManager.fetchMessages(groupId, memberId, FETCH_PARAMS, BATCH_OPTIMIZED, 0,
             MAX_FETCH_RECORDS, BATCH_SIZE, topicIdPartitions);
         TestUtils.waitForCondition(
@@ -2783,7 +2787,9 @@ public class SharePartitionManagerTest {
         SharePartitionCache partitionCache = new SharePartitionCache();
         ReplicaManager mockReplicaManager = mock(ReplicaManager.class);
 
-        SharePartitionListener partitionListener = new SharePartitionListener(sharePartitionKey, mockReplicaManager, partitionCache);
+        SharePartitionListener partitionListener = new SharePartitionListener(sharePartitionKey,
+            new ReplicaManagerPartitionMetadataProvider(mockReplicaManager),
+            mockReplicaManager::completeDelayedShareFetchRequest, partitionCache);
         testSharePartitionListener(sharePartitionKey, partitionCache, mockReplicaManager, partitionListener::onFailed);
     }
 
@@ -2794,7 +2800,9 @@ public class SharePartitionManagerTest {
         SharePartitionCache partitionCache = new SharePartitionCache();
         ReplicaManager mockReplicaManager = mock(ReplicaManager.class);
 
-        SharePartitionListener partitionListener = new SharePartitionListener(sharePartitionKey, mockReplicaManager, partitionCache);
+        SharePartitionListener partitionListener = new SharePartitionListener(sharePartitionKey,
+            new ReplicaManagerPartitionMetadataProvider(mockReplicaManager),
+            mockReplicaManager::completeDelayedShareFetchRequest, partitionCache);
         testSharePartitionListener(sharePartitionKey, partitionCache, mockReplicaManager, partitionListener::onDeleted);
     }
 
@@ -2805,7 +2813,9 @@ public class SharePartitionManagerTest {
         SharePartitionCache partitionCache = new SharePartitionCache();
         ReplicaManager mockReplicaManager = mock(ReplicaManager.class);
 
-        SharePartitionListener partitionListener = new SharePartitionListener(sharePartitionKey, mockReplicaManager, partitionCache);
+        SharePartitionListener partitionListener = new SharePartitionListener(sharePartitionKey,
+            new ReplicaManagerPartitionMetadataProvider(mockReplicaManager),
+            mockReplicaManager::completeDelayedShareFetchRequest, partitionCache);
         testSharePartitionListener(sharePartitionKey, partitionCache, mockReplicaManager, partitionListener::onBecomingFollower);
     }
 
@@ -2924,7 +2934,7 @@ public class SharePartitionManagerTest {
             .withPartitionCache(partitionCache)
             .build();
         assertEquals(4, partitionCache.size());
-        sharePartitionManager.onShareVersionToggle(ShareVersion.SV_0, false);
+        sharePartitionManager.onShareVersionToggle(ShareVersion.SV_0);
         // Because we are toggling to a share version which does not support share groups, the cache inside share partitions must be cleared.
         assertEquals(0, partitionCache.size());
         //Check if all share partitions have been fenced.
@@ -2932,24 +2942,6 @@ public class SharePartitionManagerTest {
         Mockito.verify(sp1).markFenced();
         Mockito.verify(sp2).markFenced();
         Mockito.verify(sp3).markFenced();
-    }
-
-    @Test
-    public void testOnShareVersionToggleWhenEnabledFromConfig() {
-        SharePartition sp0 = mock(SharePartition.class);
-        // Mock the share partitions corresponding to the topic partitions.
-        SharePartitionCache partitionCache = new SharePartitionCache();
-        partitionCache.put(
-            new SharePartitionKey("grp", new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))), sp0
-        );
-        sharePartitionManager = SharePartitionManagerBuilder.builder()
-            .withPartitionCache(partitionCache)
-            .build();
-        assertEquals(1, partitionCache.size());
-        sharePartitionManager.onShareVersionToggle(ShareVersion.SV_0, true);
-        // Though share version is toggled to off, but it's enabled from config, hence the cache should not be cleared.
-        assertEquals(1, partitionCache.size());
-        Mockito.verify(sp0, times(0)).markFenced();
     }
 
     @Test
@@ -3024,7 +3016,7 @@ public class SharePartitionManagerTest {
         assertEquals(1, partitionCache.size());
 
         // Clean up share session and partition cache.
-        sharePartitionManager.onShareVersionToggle(ShareVersion.SV_0, false);
+        sharePartitionManager.onShareVersionToggle(ShareVersion.SV_0);
         assertEquals(0, cache.size());
         assertEquals(0, partitionCache.size());
 
@@ -3203,10 +3195,18 @@ public class SharePartitionManagerTest {
     }
 
     static Seq<Tuple2<TopicIdPartition, LogReadResult>> buildLogReadResult(List<TopicIdPartition> topicIdPartitions) {
+        return buildLogReadResult(topicIdPartitions, MemoryRecords.withRecords(
+            Compression.NONE, new SimpleRecord("test-key".getBytes(), "test-value".getBytes())));
+    }
+
+    static Seq<Tuple2<TopicIdPartition, LogReadResult>> buildEmptyLogReadResult(List<TopicIdPartition> topicIdPartitions) {
+        return buildLogReadResult(topicIdPartitions, MemoryRecords.EMPTY);
+    }
+
+    static Seq<Tuple2<TopicIdPartition, LogReadResult>> buildLogReadResult(List<TopicIdPartition> topicIdPartitions, Records records) {
         List<Tuple2<TopicIdPartition, LogReadResult>> logReadResults = new ArrayList<>();
         topicIdPartitions.forEach(topicIdPartition -> logReadResults.add(new Tuple2<>(topicIdPartition, new LogReadResult(
-            new FetchDataInfo(new LogOffsetMetadata(0, 0, 0), MemoryRecords.withRecords(
-                    Compression.NONE, new SimpleRecord("test-key".getBytes(), "test-value".getBytes()))),
+            new FetchDataInfo(new LogOffsetMetadata(0, 0, 0), records),
             Optional.empty(),
             -1L,
             -1L,
@@ -3255,6 +3255,8 @@ public class SharePartitionManagerTest {
         private Timer timer = new MockTimer();
         private ShareGroupMetrics shareGroupMetrics = new ShareGroupMetrics(time);
         private BrokerTopicStats brokerTopicStats;
+        private Supplier<Boolean> shareGroupDlqEnableSupplier = () -> false;
+        private ShareGroupDLQManager shareGroupDLQManager = new NoOpShareGroupDLQManager();
 
         private SharePartitionManagerBuilder withReplicaManager(ReplicaManager replicaManager) {
             this.replicaManager = replicaManager;
@@ -3291,12 +3293,25 @@ public class SharePartitionManagerTest {
             return this;
         }
 
+        private SharePartitionManagerBuilder withShareGroupDlqEnableSupplier(Supplier<Boolean> shareGroupDlqEnableSupplier) {
+            this.shareGroupDlqEnableSupplier = shareGroupDlqEnableSupplier;
+            return this;
+        }
+
+        private SharePartitionManagerBuilder withShareGroupDlqManager(ShareGroupDLQManager shareGroupDLQManager) {
+            this.shareGroupDLQManager = shareGroupDLQManager;
+            return this;
+        }
+
         public static SharePartitionManagerBuilder builder() {
             return new SharePartitionManagerBuilder();
         }
 
         public SharePartitionManager build() {
             return new SharePartitionManager(replicaManager,
+                new ReplicaManagerLogReader(replicaManager),
+                new ReplicaManagerPartitionMetadataProvider(replicaManager),
+                replicaManager::completeDelayedShareFetchRequest,
                 time,
                 cache,
                 partitionCache,
@@ -3306,9 +3321,11 @@ public class SharePartitionManagerTest {
                 MAX_IN_FLIGHT_MESSAGES,
                 REMOTE_FETCH_MAX_WAIT_MS,
                 persister,
-                mock(GroupConfigManager.class),
+                new ShareGroupConfigProvider(mock(GroupConfigManager.class)),
                 shareGroupMetrics,
-                brokerTopicStats
+                brokerTopicStats,
+                shareGroupDlqEnableSupplier,
+                shareGroupDLQManager
             );
         }
     }

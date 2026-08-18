@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.IntegerSerializer;
@@ -25,12 +26,13 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverBuilder;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
@@ -43,6 +45,7 @@ import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
@@ -64,6 +67,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 
@@ -208,7 +212,10 @@ public class CachingPersistentWindowStoreTest {
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000L);
 
         final Instant initialWallClockTime = Instant.ofEpochMilli(0L);
-        final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), streamsConfiguration, initialWallClockTime);
+        final TopologyTestDriver driver = new TopologyTestDriverBuilder(builder.build())
+            .withConfig(streamsConfiguration)
+            .withInitialWallClockTime(initialWallClockTime)
+            .build();
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(TOPIC,
             new StringSerializer(),
@@ -286,7 +293,7 @@ public class CachingPersistentWindowStoreTest {
         assertEquals(Position.emptyPosition(), cachingStore.getPosition());
         assertEquals(Position.emptyPosition(), underlyingStore.getPosition());
 
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
 
         assertEquals(
             Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 2L))))),
@@ -630,7 +637,7 @@ public class CachingPersistentWindowStoreTest {
         final Windowed<String> windowedKey =
             new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
         assertEquals("a", cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
     }
@@ -648,23 +655,23 @@ public class CachingPersistentWindowStoreTest {
             new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
         assertEquals("b", cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
         cacheListener.forwarded.clear();
         cachingStore.put(bytesKey("1"), bytesValue("c"), DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
         assertEquals("c", cacheListener.forwarded.get(windowedKey).newValue);
         assertEquals("b", cacheListener.forwarded.get(windowedKey).oldValue);
         cachingStore.put(bytesKey("1"), null, DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
         assertNull(cacheListener.forwarded.get(windowedKey).newValue);
         assertEquals("c", cacheListener.forwarded.get(windowedKey).oldValue);
         cacheListener.forwarded.clear();
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("1"), null, DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
         assertNull(cacheListener.forwarded.get(windowedKey));
         cacheListener.forwarded.clear();
     }
@@ -675,22 +682,22 @@ public class CachingPersistentWindowStoreTest {
             new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
         assertEquals("b", cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
         cachingStore.put(bytesKey("1"), bytesValue("c"), DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
         assertEquals("c", cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
         cachingStore.put(bytesKey("1"), null, DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
         assertNull(cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
         cacheListener.forwarded.clear();
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("1"), null, DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
         assertNull(cacheListener.forwarded.get(windowedKey));
         cacheListener.forwarded.clear();
     }
@@ -704,7 +711,7 @@ public class CachingPersistentWindowStoreTest {
     @Test
     public void shouldTakeValueFromCacheIfSameTimestampFlushedToRocks() {
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
         cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP);
 
         try (final WindowStoreIterator<byte[]> fetch =
@@ -1030,7 +1037,8 @@ public class CachingPersistentWindowStoreTest {
             assertThat(
                 messages,
                 hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
-                    " This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
+                    " This may be due to range arguments set in the wrong order, " +
+                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
                     " Note that the built-in numerical serdes do not follow this for negative numbers")
             );
         }
@@ -1067,6 +1075,177 @@ public class CachingPersistentWindowStoreTest {
         assertThrows(RuntimeException.class, cachingStore::close);
         inOrder.verify(cache).flush(CACHE_NAMESPACE);
         inOrder.verify(cache).close(CACHE_NAMESPACE);
+    }
+
+    @Test
+    public void shouldReadCommittedBypassesCache() {
+        cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
+
+        // cache-only entry invisible under READ_COMMITTED
+        try (final WindowStoreIterator<byte[]> it =
+                 cachingStore.readOnly(IsolationLevel.READ_COMMITTED)
+                     .fetch(bytesKey("a"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP))) {
+            assertFalse(it.hasNext());
+        }
+
+        cachingStore.commit(Map.of());
+
+        // after flush to store it is visible
+        try (final WindowStoreIterator<byte[]> it =
+                 cachingStore.readOnly(IsolationLevel.READ_COMMITTED)
+                     .fetch(bytesKey("a"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP))) {
+            assertTrue(it.hasNext());
+        }
+    }
+
+    @Test
+    public void shouldReadUncommittedViewFetchPointInTime() {
+        // keyA in store, keyB in cache
+        cachingStore.put(bytesKey("a"), bytesValue("store"), DEFAULT_TIMESTAMP);
+        cachingStore.commit(Map.of());
+        cachingStore.put(bytesKey("b"), bytesValue("cache"), DEFAULT_TIMESTAMP);
+
+        final ReadOnlyWindowStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        assertArrayEquals(bytesValue("store"), view.fetch(bytesKey("a"), DEFAULT_TIMESTAMP));
+        assertArrayEquals(bytesValue("cache"), view.fetch(bytesKey("b"), DEFAULT_TIMESTAMP));
+    }
+
+    @Test
+    public void shouldReadUncommittedViewFetchSingleKeyMergesCacheAndStore() {
+        // keyA at two timestamps: DEFAULT in store, DEFAULT+20 in cache
+        cachingStore.put(bytesKey("a"), bytesValue("1"), DEFAULT_TIMESTAMP);
+        cachingStore.commit(Map.of());
+        cachingStore.put(bytesKey("a"), bytesValue("2"), DEFAULT_TIMESTAMP + 20);
+
+        final ReadOnlyWindowStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        try (final WindowStoreIterator<byte[]> it =
+                 view.fetch(bytesKey("a"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP + 20))) {
+            verifyKeyValue(it.next(), DEFAULT_TIMESTAMP, "1");
+            verifyKeyValue(it.next(), DEFAULT_TIMESTAMP + 20, "2");
+            assertFalse(it.hasNext());
+        }
+    }
+
+    @Test
+    public void shouldReadUncommittedViewBackwardFetchSingleKeyMergesCacheAndStore() {
+        cachingStore.put(bytesKey("a"), bytesValue("1"), DEFAULT_TIMESTAMP);
+        cachingStore.commit(Map.of());
+        cachingStore.put(bytesKey("a"), bytesValue("2"), DEFAULT_TIMESTAMP + 20);
+
+        final ReadOnlyWindowStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        try (final WindowStoreIterator<byte[]> it =
+                 view.backwardFetch(bytesKey("a"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP + 20))) {
+            verifyKeyValue(it.next(), DEFAULT_TIMESTAMP + 20, "2");
+            verifyKeyValue(it.next(), DEFAULT_TIMESTAMP, "1");
+            assertFalse(it.hasNext());
+        }
+    }
+
+    @Test
+    public void shouldReadUncommittedViewFetchRangeMergesCacheAndStore() {
+        // keyA in store, keyB in cache, both at DEFAULT_TIMESTAMP
+        cachingStore.put(bytesKey("a"), bytesValue("1"), DEFAULT_TIMESTAMP);
+        cachingStore.commit(Map.of());
+        cachingStore.put(bytesKey("b"), bytesValue("2"), DEFAULT_TIMESTAMP);
+
+        final ReadOnlyWindowStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final List<KeyValue<Windowed<Bytes>, byte[]>> results = toListAndCloseIterator(
+            view.fetch(bytesKey("a"), bytesKey("b"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP)));
+        assertEquals(2, results.size());
+        assertEquals(bytesKey("a"), results.get(0).key.key());
+        assertEquals(bytesKey("b"), results.get(1).key.key());
+    }
+
+    @Test
+    public void shouldReadUncommittedViewBackwardFetchRangeMergesCacheAndStore() {
+        cachingStore.put(bytesKey("a"), bytesValue("1"), DEFAULT_TIMESTAMP);
+        cachingStore.commit(Map.of());
+        cachingStore.put(bytesKey("b"), bytesValue("2"), DEFAULT_TIMESTAMP);
+
+        final ReadOnlyWindowStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final List<KeyValue<Windowed<Bytes>, byte[]>> results = toListAndCloseIterator(
+            view.backwardFetch(bytesKey("a"), bytesKey("b"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP)));
+        assertEquals(2, results.size());
+        assertEquals(bytesKey("b"), results.get(0).key.key());
+        assertEquals(bytesKey("a"), results.get(1).key.key());
+    }
+
+    @Test
+    public void shouldReadUncommittedViewFetchAllMergesCacheAndStore() {
+        cachingStore.put(bytesKey("a"), bytesValue("1"), DEFAULT_TIMESTAMP);
+        cachingStore.commit(Map.of());
+        cachingStore.put(bytesKey("b"), bytesValue("2"), DEFAULT_TIMESTAMP);
+
+        final ReadOnlyWindowStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final List<KeyValue<Windowed<Bytes>, byte[]>> results = toListAndCloseIterator(
+            view.fetchAll(ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP)));
+        assertEquals(2, results.size());
+    }
+
+    @Test
+    public void shouldReadUncommittedViewBackwardFetchAllMergesCacheAndStore() {
+        cachingStore.put(bytesKey("a"), bytesValue("1"), DEFAULT_TIMESTAMP);
+        cachingStore.commit(Map.of());
+        cachingStore.put(bytesKey("b"), bytesValue("2"), DEFAULT_TIMESTAMP);
+
+        final ReadOnlyWindowStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final List<KeyValue<Windowed<Bytes>, byte[]>> results = toListAndCloseIterator(
+            view.backwardFetchAll(ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP)));
+        assertEquals(2, results.size());
+    }
+
+    @Test
+    public void shouldReadUncommittedViewAllMergesCacheAndStore() {
+        cachingStore.put(bytesKey("a"), bytesValue("1"), DEFAULT_TIMESTAMP);
+        cachingStore.commit(Map.of());
+        cachingStore.put(bytesKey("b"), bytesValue("2"), DEFAULT_TIMESTAMP);
+
+        final ReadOnlyWindowStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final List<KeyValue<Windowed<Bytes>, byte[]>> results = toListAndCloseIterator(view.all());
+        assertEquals(2, results.size());
+    }
+
+    @Test
+    public void shouldReadUncommittedViewBackwardAllMergesCacheAndStore() {
+        cachingStore.put(bytesKey("a"), bytesValue("1"), DEFAULT_TIMESTAMP);
+        cachingStore.commit(Map.of());
+        cachingStore.put(bytesKey("b"), bytesValue("2"), DEFAULT_TIMESTAMP);
+
+        final ReadOnlyWindowStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final List<KeyValue<Windowed<Bytes>, byte[]>> results = toListAndCloseIterator(view.backwardAll());
+        assertEquals(2, results.size());
+        assertEquals(bytesKey("b"), results.get(0).key.key());
+        assertEquals(bytesKey("a"), results.get(1).key.key());
+    }
+
+    @Test
+    public void shouldThrowNpeOnNullIsolationLevel() {
+        assertThrows(NullPointerException.class, () -> cachingStore.readOnly(null));
+    }
+
+    @Test
+    public void shouldThrowNpeOnNullInstantInViewFetch() {
+        final ReadOnlyWindowStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        assertThrows(NullPointerException.class, () -> view.fetch(bytesKey("a"), null, ofEpochMilli(0)));
+    }
+
+    @Test
+    public void shouldReadUncommittedViewOnNonPersistentUnderlying() {
+        final WindowStore<Bytes, byte[]> inMemoryUnderlying = new InMemoryWindowStore(
+            "in-memory-store", 100L, WINDOW_SIZE, false, "metrics-scope");
+        final CachingWindowStore nonPersistentCachingStore = new CachingWindowStore(
+            inMemoryUnderlying, WINDOW_SIZE, SEGMENT_INTERVAL);
+        nonPersistentCachingStore.init(context, nonPersistentCachingStore);
+
+        nonPersistentCachingStore.put(bytesKey("a"), bytesValue("1"), DEFAULT_TIMESTAMP);
+        nonPersistentCachingStore.commit(Map.of());
+        nonPersistentCachingStore.put(bytesKey("b"), bytesValue("2"), DEFAULT_TIMESTAMP);
+
+        final ReadOnlyWindowStore<Bytes, byte[]> view = nonPersistentCachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final List<KeyValue<Windowed<Bytes>, byte[]>> results = toListAndCloseIterator(view.all());
+        assertEquals(2, results.size());
+
+        nonPersistentCachingStore.close();
     }
 
     @SuppressWarnings("unchecked")

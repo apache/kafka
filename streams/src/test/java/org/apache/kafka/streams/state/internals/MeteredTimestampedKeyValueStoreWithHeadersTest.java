@@ -1,0 +1,979 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.streams.state.internals;
+
+import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.KafkaMetricsContext;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.MetricsContext;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.query.KeyQuery;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.ResultOrder;
+import org.apache.kafka.streams.query.TimestampedKeyWithHeadersQuery;
+import org.apache.kafka.streams.query.TimestampedRangeQuery;
+import org.apache.kafka.streams.query.TimestampedRangeWithHeadersQuery;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyRecordIterator;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
+import org.apache.kafka.test.KeyValueIteratorStub;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+
+import java.io.Closeable;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
+public class MeteredTimestampedKeyValueStoreWithHeadersTest {
+    private static final String APPLICATION_ID = "test-app";
+    private static final String STORE_NAME = "store-name";
+    private static final String STORE_TYPE = "scope";
+    private static final String STORE_LEVEL_GROUP = "stream-state-metrics";
+    private static final String CHANGELOG_TOPIC = "changelog-topic-name";
+    private static final String THREAD_ID_TAG_KEY = "thread-id";
+    private static final String KEY = "key";
+    private static final Bytes KEY_BYTES = Bytes.wrap(KEY.getBytes());
+    private static final RecordHeaders HEADERS = makeHeaders();
+    private static final ValueTimestampHeaders<String> VALUE_TIMESTAMP_HEADERS =
+        ValueTimestampHeaders.make("value", 97L, HEADERS);
+    private static final byte[] VALUE_TIMESTAMP_HEADERS_BYTES = serializeValueTimestampHeaders(VALUE_TIMESTAMP_HEADERS);
+    private static final byte[] NEGATIVE_TIMESTAMP_VALUE_TIMESTAMP_HEADERS_BYTES =
+        serializeValueTimestampHeaders(ValueTimestampHeaders.make("value", -1L, HEADERS));
+    private final String threadId = Thread.currentThread().getName();
+    private final TaskId taskId = new TaskId(0, 0, "My-Topology");
+    @Mock
+    private KeyValueStore<Bytes, byte[]> inner;
+    @Mock
+    private InternalProcessorContext<?, ?> context;
+    private MockTime mockTime;
+
+    private static final Map<String, Object> CONFIGS =
+        mkMap(mkEntry(StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE, APPLICATION_ID));
+
+    private MeteredTimestampedKeyValueStoreWithHeaders<String, String> metered;
+    private final KeyValue<Bytes, byte[]> byteKeyValueTimestampHeadersPair = KeyValue.pair(KEY_BYTES,
+        VALUE_TIMESTAMP_HEADERS_BYTES
+    );
+    private final Metrics metrics = new Metrics();
+    private Map<String, String> tags;
+    private Deserializer<String> keyDeserializer;
+
+    private void setUpWithoutContext() {
+        mockTime = new MockTime();
+        metered = new MeteredTimestampedKeyValueStoreWithHeaders<>(
+            inner,
+            "scope",
+            mockTime,
+            Serdes.String(),
+            new ValueTimestampHeadersSerde<>(Serdes.String())
+        );
+        metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
+        tags = mkMap(
+            mkEntry(THREAD_ID_TAG_KEY, threadId),
+            mkEntry("task-id", taskId.toString()),
+            mkEntry(STORE_TYPE + "-state-id", STORE_NAME)
+        );
+    }
+
+    private void setUp() {
+        setUpWithoutContext();
+        when(context.applicationId()).thenReturn(APPLICATION_ID);
+        when(context.metrics())
+            .thenReturn(new StreamsMetricsImpl(metrics, "test", mockTime));
+        when(context.taskId()).thenReturn(taskId);
+        when(context.changelogFor(STORE_NAME)).thenReturn(CHANGELOG_TOPIC);
+        when(inner.name()).thenReturn(STORE_NAME);
+        when(context.appConfigs()).thenReturn(CONFIGS);
+        lenient().when(context.recordContext()).thenReturn(new org.apache.kafka.streams.processor.internals.ProcessorRecordContext(
+            0L, 0L, 0, "topic", new org.apache.kafka.common.header.internals.RecordHeaders()));
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private void setUpWithExpectSerdes() {
+        setUp();
+        when(context.keySerde()).thenReturn((Serde) Serdes.String());
+        when(context.valueSerde()).thenReturn((Serde) Serdes.Long());
+    }
+
+    private void init() {
+        metered.init(context, metered);
+    }
+
+    // --- skipCache propagation: the TimestampedKeyWithHeadersQuery handler must forward isSkipCache()
+    //     onto the raw KeyQuery it builds, otherwise the caching layer never sees it. ---
+
+    @Test
+    public void shouldPropagateSkipCacheForTimestampedKeyWithHeadersQuery() {
+        setUp();
+        init();
+        assertTrue(forwardedRawKeyQuery(TimestampedKeyWithHeadersQuery.withKey(KEY).skipCache()).isSkipCache());
+    }
+
+    @Test
+    public void shouldNotSkipCacheForTimestampedKeyWithHeadersQueryByDefault() {
+        setUp();
+        init();
+        assertFalse(forwardedRawKeyQuery(TimestampedKeyWithHeadersQuery.withKey(KEY)).isSkipCache());
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private KeyQuery<?, ?> forwardedRawKeyQuery(final Query<?> query) {
+        when(inner.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) QueryResult.forResult(null));
+        metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+        final ArgumentCaptor<KeyQuery> captor = ArgumentCaptor.forClass(KeyQuery.class);
+        verify(inner).query(captor.capture(), any(PositionBound.class), any(QueryConfig.class));
+        return captor.getValue();
+    }
+
+    @Test
+    public void shouldDelegateInit() {
+        setUp();
+        final MeteredTimestampedKeyValueStoreWithHeaders<String, String> outer = new MeteredTimestampedKeyValueStoreWithHeaders<>(
+            inner,
+            STORE_TYPE,
+            new MockTime(),
+            Serdes.String(),
+            new ValueTimestampHeadersSerde<>(Serdes.String())
+        );
+        doNothing().when(inner).init(context, outer);
+        outer.init(context, outer);
+    }
+
+    @Test
+    public void shouldPassChangelogTopicNameToStateStoreSerde() {
+        setUp();
+        doShouldPassChangelogTopicNameToStateStoreSerde(CHANGELOG_TOPIC);
+    }
+
+    @Test
+    public void shouldPassDefaultChangelogTopicNameToStateStoreSerdeIfLoggingDisabled() {
+        setUp();
+        final String defaultChangelogTopicName = ProcessorStateManager.storeChangelogTopic(APPLICATION_ID, STORE_NAME, taskId.topologyName());
+        when(context.changelogFor(STORE_NAME)).thenReturn(null);
+        doShouldPassChangelogTopicNameToStateStoreSerde(defaultChangelogTopicName);
+    }
+
+    @Test
+    public void testMetrics() {
+        setUp();
+        init();
+        final JmxReporter reporter = new JmxReporter();
+        final MetricsContext metricsContext = new KafkaMetricsContext("kafka.streams");
+        reporter.contextChange(metricsContext);
+
+        metrics.addReporter(reporter);
+        assertTrue(reporter.containsMbean(String.format(
+            "kafka.streams:type=%s,%s=%s,task-id=%s,%s-state-id=%s",
+            STORE_LEVEL_GROUP,
+            THREAD_ID_TAG_KEY,
+            threadId,
+            taskId,
+            STORE_TYPE,
+            STORE_NAME
+        )));
+    }
+
+    @Test
+    public void shouldWriteBytesToInnerStoreAndRecordPutMetric() {
+        setUp();
+        doNothing().when(inner).put(any(Bytes.class), any(byte[].class));
+        init();
+
+        metered.put(KEY, VALUE_TIMESTAMP_HEADERS);
+
+        final KafkaMetric metric = metric("put-rate");
+        assertTrue((Double) metric.metricValue() > 0);
+    }
+
+    @Test
+    public void shouldGetBytesFromInnerStoreAndReturnGetMetric() {
+        setUp();
+        when(inner.get(any(Bytes.class))).thenReturn(VALUE_TIMESTAMP_HEADERS_BYTES);
+        init();
+
+        assertEquals(VALUE_TIMESTAMP_HEADERS, metered.get(KEY));
+
+        final KafkaMetric metric = metric("get-rate");
+        assertTrue((Double) metric.metricValue() > 0);
+    }
+
+    @Test
+    public void shouldPutIfAbsentAndRecordPutIfAbsentMetric() {
+        setUp();
+        when(inner.putIfAbsent(any(Bytes.class), any(byte[].class))).thenReturn(null);
+        init();
+
+        metered.putIfAbsent(KEY, VALUE_TIMESTAMP_HEADERS);
+
+        final KafkaMetric metric = metric("put-if-absent-rate");
+        assertTrue((Double) metric.metricValue() > 0);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldPutAllToInnerStoreAndRecordPutAllMetric() {
+        setUp();
+        doNothing().when(inner).putAll(any(List.class));
+        init();
+
+        metered.putAll(Collections.singletonList(KeyValue.pair(KEY, VALUE_TIMESTAMP_HEADERS)));
+
+        final KafkaMetric metric = metric("put-all-rate");
+        assertTrue((Double) metric.metricValue() > 0);
+    }
+
+    @Test
+    public void shouldDeleteFromInnerStoreAndRecordDeleteMetric() {
+        setUp();
+        when(inner.delete(any(Bytes.class))).thenReturn(VALUE_TIMESTAMP_HEADERS_BYTES);
+        init();
+
+        metered.delete(KEY);
+
+        final KafkaMetric metric = metric("delete-rate");
+        assertTrue((Double) metric.metricValue() > 0);
+    }
+
+    @Test
+    public void shouldGetRangeFromInnerStoreAndRecordRangeMetric() {
+        setUp();
+        when(inner.range(any(Bytes.class), any(Bytes.class))).thenReturn(
+            new KeyValueIteratorStub<>(Collections.singletonList(byteKeyValueTimestampHeadersPair).iterator()));
+        init();
+
+        try (final KeyValueIterator<String, ValueTimestampHeaders<String>> iterator = metered.range(KEY, KEY)) {
+            assertEquals(VALUE_TIMESTAMP_HEADERS, iterator.next().value);
+            assertFalse(iterator.hasNext());
+        }
+
+        final KafkaMetric metric = metric("range-rate");
+        assertTrue((Double) metric.metricValue() > 0);
+    }
+
+    @Test
+    public void shouldPropagateLowerBoundAndDescendingOrderForTimestampedRangeWithHeadersQuery() {
+        setUp();
+        init();
+        final RangeQuery<?, ?> rawQuery = forwardedRawRangeQuery(
+            TimestampedRangeWithHeadersQuery.<String, String>withLowerBound("a").withDescendingKeys());
+        assertEquals(ResultOrder.DESCENDING, rawQuery.resultOrder());
+        assertEquals(Bytes.wrap("a".getBytes()), rawQuery.getLowerBound().get());
+        assertFalse(rawQuery.getUpperBound().isPresent());
+    }
+
+    @Test
+    public void shouldPropagateUpperBoundAndAscendingOrderForTimestampedRangeWithHeadersQuery() {
+        setUp();
+        init();
+        final RangeQuery<?, ?> rawQuery = forwardedRawRangeQuery(
+            TimestampedRangeWithHeadersQuery.<String, String>withUpperBound("z").withAscendingKeys());
+        assertEquals(ResultOrder.ASCENDING, rawQuery.resultOrder());
+        assertFalse(rawQuery.getLowerBound().isPresent());
+        assertEquals(Bytes.wrap("z".getBytes()), rawQuery.getUpperBound().get());
+    }
+
+    @Test
+    public void shouldPropagateNoBoundsAndAnyOrderForTimestampedRangeWithHeadersQuery() {
+        setUp();
+        init();
+        final RangeQuery<?, ?> rawQuery = forwardedRawRangeQuery(
+            TimestampedRangeWithHeadersQuery.withNoBounds());
+        assertEquals(ResultOrder.ANY, rawQuery.resultOrder());
+        assertFalse(rawQuery.getLowerBound().isPresent());
+        assertFalse(rawQuery.getUpperBound().isPresent());
+    }
+
+    @Test
+    public void shouldPropagateBothBoundsAndAnyOrderForTimestampedRangeWithHeadersQuery() {
+        setUp();
+        init();
+        final RangeQuery<?, ?> rawQuery = forwardedRawRangeQuery(
+            TimestampedRangeWithHeadersQuery.withRange("a", "z"));
+        assertEquals(ResultOrder.ANY, rawQuery.resultOrder());
+        assertEquals(Bytes.wrap("a".getBytes()), rawQuery.getLowerBound().get());
+        assertEquals(Bytes.wrap("z".getBytes()), rawQuery.getUpperBound().get());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldPropagateFailureForTimestampedRangeWithHeadersQuery() {
+        setUp();
+        init();
+        final QueryResult<KeyValueIterator<Bytes, byte[]>> rawFailure =
+                QueryResult.forFailure(FailureReason.NOT_UP_TO_BOUND, "not yet caught up");
+        when(inner.query(any(), any(PositionBound.class), any(QueryConfig.class))).thenReturn((QueryResult) rawFailure);
+
+        final QueryResult<ReadOnlyRecordIterator<String, String>> result = metered.query(
+                TimestampedRangeWithHeadersQuery.withNoBounds(), PositionBound.unbounded(), new QueryConfig(false));
+
+        assertFalse(result.isSuccess());
+        assertEquals(FailureReason.NOT_UP_TO_BOUND, result.getFailureReason());
+    }
+
+    // The num-open-iterators gauge is tracked by every metered iterator this store returns from query().
+    // Each query type is served by a different iterator class, so each needs its own 0->1->0 guard:
+    //   - TimestampedRangeWithHeadersQuery -> MeteredTimestampedKeyValueStoreWithHeadersReadOnlyRecordIterator
+    //   - RangeQuery / TimestampedRangeQuery -> MeteredTimestampedKeyValueStoreWithHeadersQueryIterator
+    // (the all()/range() KeyValueIterator path is covered separately by shouldTrackOpenIteratorsMetric).
+
+    @Test
+    public void shouldTrackOpenIteratorsMetricForTimestampedRangeWithHeadersQuery() throws IOException {
+        assertQueryTracksOpenIteratorsMetric(TimestampedRangeWithHeadersQuery.withNoBounds());
+    }
+
+    @Test
+    public void shouldTrackOpenIteratorsMetricForRangeQuery() throws IOException {
+        assertQueryTracksOpenIteratorsMetric(RangeQuery.withNoBounds());
+    }
+
+    @Test
+    public void shouldTrackOpenIteratorsMetricForTimestampedRangeQuery() throws IOException {
+        assertQueryTracksOpenIteratorsMetric(TimestampedRangeQuery.withNoBounds());
+    }
+
+    @SuppressWarnings("unchecked")
+    private void assertQueryTracksOpenIteratorsMetric(final Query<?> query) throws IOException {
+        setUp();
+        when(inner.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+                .thenReturn((QueryResult) QueryResult.forResult(KeyValueIterators.emptyIterator()));
+        init();
+
+        final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
+        assertEquals(0L, (Long) openIteratorsMetric.metricValue());
+
+        // The result iterator type differs per query (ReadOnlyRecordIterator vs KeyValueIterator); both are
+        // Closeable, which is all this gauge check needs.
+        try (Closeable iterator = (Closeable) metered.query(
+                query, PositionBound.unbounded(), new QueryConfig(false)).getResult()) {
+            assertEquals(1L, (Long) openIteratorsMetric.metricValue());
+        }
+
+        assertEquals(0L, (Long) openIteratorsMetric.metricValue());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldDecrementOpenIteratorsTwiceWhenClosedTwiceForTimestampedRangeWithHeadersQuery() {
+        // Documents current behavior: close() is not idempotent, so a caller that (incorrectly) closes
+        // twice double-decrements the gauge. This is a misuse path, not a supported usage pattern.
+        setUp();
+        when(inner.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+                .thenReturn((QueryResult) QueryResult.forResult(KeyValueIterators.emptyIterator()));
+        init();
+
+        final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
+        final QueryResult<ReadOnlyRecordIterator<String, String>> result = metered.query(
+                TimestampedRangeWithHeadersQuery.withNoBounds(), PositionBound.unbounded(), new QueryConfig(false));
+        final ReadOnlyRecordIterator<String, String> iterator = result.getResult();
+
+        iterator.close();
+        assertEquals(0L, (Long) openIteratorsMetric.metricValue());
+        iterator.close();
+        assertEquals(-1L, (Long) openIteratorsMetric.metricValue(), "A second close() double-decrements the gauge");
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldLeaveIteratorOpenWhenNextThrowsAndNotClosedForTimestampedRangeWithHeadersQuery() {
+        // Documents current behavior: an entry with a negative stored timestamp makes next() throw
+        // instead of returning, and that throw does not close the iterator. A caller that catches the
+        // exception without closing (in violation of the class's contract) leaks the open-iterator count.
+        setUp();
+        final KeyValue<Bytes, byte[]> negativeTimestampEntry =
+                KeyValue.pair(KEY_BYTES, NEGATIVE_TIMESTAMP_VALUE_TIMESTAMP_HEADERS_BYTES);
+        when(inner.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+                .thenReturn((QueryResult) QueryResult.forResult(
+                        new KeyValueIteratorStub<>(List.of(negativeTimestampEntry).iterator())));
+        init();
+
+        final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
+        final QueryResult<ReadOnlyRecordIterator<String, String>> result = metered.query(
+                TimestampedRangeWithHeadersQuery.withNoBounds(), PositionBound.unbounded(), new QueryConfig(false));
+        final ReadOnlyRecordIterator<String, String> iterator = result.getResult();
+
+        assertThrows(StreamsException.class, iterator::next);
+        assertEquals(1L, (Long) openIteratorsMetric.metricValue(),
+                "An uncaught/unclosed iterator after next() throws must remain open");
+
+        iterator.close();
+        assertEquals(0L, (Long) openIteratorsMetric.metricValue());
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private RangeQuery<?, ?> forwardedRawRangeQuery(final Query<?> query) {
+        when(inner.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) QueryResult.forResult(
+                new KeyValueIteratorStub<>(List.<KeyValue<Bytes, byte[]>>of().iterator())));
+        metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+        final ArgumentCaptor<RangeQuery> captor = ArgumentCaptor.forClass(RangeQuery.class);
+        verify(inner).query(captor.capture(), any(PositionBound.class), any(QueryConfig.class));
+        return captor.getValue();
+    }
+
+    @Test
+    public void shouldGetAllFromInnerStoreAndRecordAllMetric() {
+        setUp();
+        when(inner.all())
+            .thenReturn(new KeyValueIteratorStub<>(Collections.singletonList(byteKeyValueTimestampHeadersPair).iterator()));
+        init();
+
+        try (final KeyValueIterator<String, ValueTimestampHeaders<String>> iterator = metered.all()) {
+            assertEquals(VALUE_TIMESTAMP_HEADERS, iterator.next().value);
+            assertFalse(iterator.hasNext());
+        }
+
+        final KafkaMetric metric = metric(new MetricName("all-rate", STORE_LEVEL_GROUP, "", tags));
+        assertTrue((Double) metric.metricValue() > 0);
+    }
+
+    @Test
+    public void shouldCommitInnerWhenCommitTimeRecords() {
+        setUp();
+        doNothing().when(inner).commit(Map.of());
+        init();
+
+        metered.commit(Map.of());
+
+        final KafkaMetric commitMetric = metric("commit-rate");
+        assertTrue((Double) commitMetric.metricValue() > 0);
+    }
+
+    private interface CachedKeyValueStore extends KeyValueStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> { }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldSetFlushListenerOnWrappedCachingStore() {
+        setUpWithoutContext();
+        final CachedKeyValueStore cachedKeyValueStore = mock(CachedKeyValueStore.class);
+
+        when(cachedKeyValueStore.setFlushListener(any(CacheFlushListener.class), eq(false))).thenReturn(true);
+
+        metered = new MeteredTimestampedKeyValueStoreWithHeaders<>(
+            cachedKeyValueStore,
+            STORE_TYPE,
+            new MockTime(),
+            Serdes.String(),
+            new ValueTimestampHeadersSerde<>(Serdes.String()));
+        assertTrue(metered.setFlushListener(null, false));
+    }
+
+    @Test
+    public void shouldNotSetFlushListenerOnWrappedNoneCachingStore() {
+        setUpWithoutContext();
+        assertFalse(metered.setFlushListener(null, false));
+    }
+
+    @Test
+    public void shouldNotThrowExceptionIfSerdesCorrectlySetFromProcessorContext() {
+        setUpWithExpectSerdes();
+        final MeteredTimestampedKeyValueStoreWithHeaders<String, Long> store = new MeteredTimestampedKeyValueStoreWithHeaders<>(
+            inner,
+            STORE_TYPE,
+            new MockTime(),
+            null,
+            null
+        );
+        store.init(context, inner);
+
+        try {
+            store.put("key", ValueTimestampHeaders.make(42L, 60000, new RecordHeaders()));
+        } catch (final StreamsException exception) {
+            if (exception.getCause() instanceof ClassCastException) {
+                throw new AssertionError(
+                    "Serdes are not correctly set from processor context.", exception);
+            } else {
+                throw exception;
+            }
+        }
+    }
+
+    @Test
+    public void shouldNotThrowExceptionIfSerdesCorrectlySetFromConstructorParameters() {
+        setUp();
+        final MeteredTimestampedKeyValueStoreWithHeaders<String, Long> store = new MeteredTimestampedKeyValueStoreWithHeaders<>(
+            inner,
+            STORE_TYPE,
+            new MockTime(),
+            Serdes.String(),
+            new ValueTimestampHeadersSerde<>(Serdes.Long())
+        );
+        store.init(context, inner);
+
+        try {
+            store.put("key", ValueTimestampHeaders.make(42L, 60000, new RecordHeaders()));
+        } catch (final StreamsException exception) {
+            if (exception.getCause() instanceof ClassCastException) {
+                fail("Serdes are not correctly set from constructor parameters.");
+            }
+            throw exception;
+        }
+    }
+
+    @SuppressWarnings("unused")
+    @Test
+    public void shouldTrackOpenIteratorsMetric() {
+        setUp();
+        when(inner.all()).thenReturn(KeyValueIterators.emptyIterator());
+        init();
+
+        final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
+        assertNotNull(openIteratorsMetric);
+
+        assertEquals(0L, (Long) openIteratorsMetric.metricValue());
+
+        try (final KeyValueIterator<String, ValueTimestampHeaders<String>> unused = metered.all()) {
+            assertEquals(1L, (Long) openIteratorsMetric.metricValue());
+        }
+
+        assertEquals(0L, (Long) openIteratorsMetric.metricValue());
+    }
+
+    @SuppressWarnings("unused")
+    @Test
+    public void shouldTimeIteratorDuration() {
+        setUp();
+        when(inner.all()).thenReturn(KeyValueIterators.emptyIterator());
+        init();
+
+        final KafkaMetric iteratorDurationAvgMetric = metric("iterator-duration-avg");
+        final KafkaMetric iteratorDurationMaxMetric = metric("iterator-duration-max");
+        assertNotNull(iteratorDurationAvgMetric);
+        assertNotNull(iteratorDurationMaxMetric);
+
+        assertEquals(Double.NaN, (Double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(Double.NaN, (Double) iteratorDurationMaxMetric.metricValue());
+
+        try (final KeyValueIterator<String, ValueTimestampHeaders<String>> unused = metered.all()) {
+            // nothing to do, just close immediately
+            mockTime.sleep(2);
+        }
+
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMaxMetric.metricValue());
+
+        try (final KeyValueIterator<String, ValueTimestampHeaders<String>> iterator = metered.all()) {
+            // nothing to do, just close immediately
+            mockTime.sleep(3);
+        }
+
+        assertEquals(2.5 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(3.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMaxMetric.metricValue());
+    }
+
+    // The above shouldTimeIteratorDuration goes through metered.all() -> the KeyValueIterator sibling.
+    // This pins the same close()-path recording for the ReadOnlyRecordIterator that backs
+    // TimestampedRangeWithHeadersQuery, whose close() records both the operation sensor (get) and the
+    // iterator-duration sensor. All three Metered*WithHeaders ReadOnlyRecordIterators now share that
+    // close() via AbstractMeteredIterator, so this also guards the shared lifecycle.
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldTimeIteratorDurationForTimestampedRangeWithHeadersQuery() {
+        setUp();
+        when(inner.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+                .thenReturn(
+                    (QueryResult) QueryResult.forResult(KeyValueIterators.emptyIterator()),
+                    (QueryResult) QueryResult.forResult(KeyValueIterators.emptyIterator()));
+        init();
+
+        final KafkaMetric iteratorDurationAvgMetric = metric("iterator-duration-avg");
+        final KafkaMetric iteratorDurationMaxMetric = metric("iterator-duration-max");
+        final KafkaMetric getLatencyAvgMetric = metric("get-latency-avg");
+        assertNotNull(iteratorDurationAvgMetric);
+        assertNotNull(iteratorDurationMaxMetric);
+        assertNotNull(getLatencyAvgMetric);
+        assertEquals(Double.NaN, (Double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(Double.NaN, (Double) iteratorDurationMaxMetric.metricValue());
+
+        // Two samples (2ms then 3ms) so avg (2.5ms) and max (3ms) differ -- one sample would leave them
+        // identical and not actually pin avg. Mirrors the sibling shouldTimeIteratorDuration above.
+        try (ReadOnlyRecordIterator<String, String> iterator = metered.query(
+                TimestampedRangeWithHeadersQuery.<String, String>withNoBounds(), PositionBound.unbounded(), new QueryConfig(false)).getResult()) {
+            mockTime.sleep(2);
+        }
+
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMaxMetric.metricValue());
+
+        try (ReadOnlyRecordIterator<String, String> iterator = metered.query(
+                TimestampedRangeWithHeadersQuery.<String, String>withNoBounds(), PositionBound.unbounded(), new QueryConfig(false)).getResult()) {
+            mockTime.sleep(3);
+        }
+
+        assertEquals(2.5 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(3.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMaxMetric.metricValue());
+        // getSensor is recorded only from the iterator's close() on this path, so the two samples
+        // (2ms, 3ms) average to exactly 2.5ms.
+        assertEquals(2.5 * TimeUnit.MILLISECONDS.toNanos(1), (double) getLatencyAvgMetric.metricValue());
+    }
+
+    @SuppressWarnings("unused")
+    @Test
+    public void shouldTrackOldestOpenIteratorTimestamp() {
+        setUp();
+        when(inner.all()).thenReturn(KeyValueIterators.emptyIterator());
+        init();
+
+        final KafkaMetric oldestIteratorTimestampMetric = metric("oldest-iterator-open-since-ms");
+        assertNotNull(oldestIteratorTimestampMetric);
+
+        KeyValueIterator<String, ValueTimestampHeaders<String>> second = null;
+        final long secondTimestamp;
+        try {
+            try (final KeyValueIterator<String, ValueTimestampHeaders<String>> unused = metered.all()) {
+
+                final long oldestTimestamp = mockTime.milliseconds();
+                assertEquals(oldestTimestamp, (Long) oldestIteratorTimestampMetric.metricValue());
+                mockTime.sleep(100);
+
+                // open a second iterator before closing the first to test that we still produce the first iterator's timestamp
+                second = metered.all();
+                secondTimestamp = mockTime.milliseconds();
+                assertEquals(oldestTimestamp, (Long) oldestIteratorTimestampMetric.metricValue());
+                mockTime.sleep(100);
+            }
+
+            // now that the first iterator is closed, check that the timestamp has advanced to the still open second iterator
+            assertEquals(secondTimestamp, (Long) oldestIteratorTimestampMetric.metricValue());
+        } finally {
+            if (second != null) {
+                second.close();
+            }
+        }
+        // now that all iterators are closed, the metric should be zero
+        assertEquals(0L, (Long) oldestIteratorTimestampMetric.metricValue());
+    }
+
+    private static RecordHeaders makeHeaders() {
+        final RecordHeaders headers = new RecordHeaders();
+        headers.add("header-key", "header-value".getBytes());
+        return headers;
+    }
+
+    private static byte[] serializeValueTimestampHeaders(final ValueTimestampHeaders<String> valueTimestampHeaders) {
+        final ValueTimestampHeadersSerializer<String> serializer = new ValueTimestampHeadersSerializer<>(Serdes.String().serializer());
+        return serializer.serialize("topic", valueTimestampHeaders);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void doShouldPassChangelogTopicNameToStateStoreSerde(final String topic) {
+        final Serde<String> keySerde = mock(Serde.class);
+        final Serializer<String> keySerializer = mock(Serializer.class);
+        final Serde<ValueTimestampHeaders<String>> valueSerde = mock(Serde.class);
+        final Deserializer<ValueTimestampHeaders<String>> valueDeserializer = mock(Deserializer.class);
+        final Serializer<ValueTimestampHeaders<String>> valueSerializer = mock(Serializer.class);
+        when(keySerde.serializer()).thenReturn(keySerializer);
+        lenient().when(keySerializer.serialize(eq(topic), any(RecordHeaders.class), eq(KEY))).thenReturn(KEY.getBytes());
+        when(valueSerde.deserializer()).thenReturn(valueDeserializer);
+        lenient().when(valueDeserializer.deserialize(eq(topic), any(RecordHeaders.class), any(byte[].class))).thenReturn(VALUE_TIMESTAMP_HEADERS);
+        when(valueSerde.serializer()).thenReturn(valueSerializer);
+        lenient().when(valueSerializer.serialize(eq(topic), any(RecordHeaders.class), eq(VALUE_TIMESTAMP_HEADERS))).thenReturn(VALUE_TIMESTAMP_HEADERS_BYTES);
+        when(context.headers()).thenReturn(new RecordHeaders());
+        when(inner.get(any(Bytes.class))).thenReturn(VALUE_TIMESTAMP_HEADERS_BYTES);
+        metered = new MeteredTimestampedKeyValueStoreWithHeaders<>(
+            inner,
+            STORE_TYPE,
+            new MockTime(),
+            keySerde,
+            valueSerde
+        );
+        metered.init(context, metered);
+
+        metered.get(KEY);
+        metered.put(KEY, VALUE_TIMESTAMP_HEADERS);
+    }
+
+    private KafkaMetric metric(final String name) {
+        return this.metrics.metric(new MetricName(name, STORE_LEVEL_GROUP, "", tags));
+    }
+
+    private KafkaMetric metric(final MetricName metricName) {
+        return this.metrics.metric(metricName);
+    }
+
+    @SuppressWarnings("unchecked")
+    private MeteredTimestampedKeyValueStoreWithHeaders<String, String> createStoreWithMockSerdes() {
+        final Serde<String> keySerde = mock(Serde.class);
+        final Serializer<String> keySerializer = mock(Serializer.class);
+        keyDeserializer = mock(Deserializer.class);
+        final Serde<ValueTimestampHeaders<String>> valueSerde = mock(Serde.class);
+        final Deserializer<ValueTimestampHeaders<String>> valueDeserializer = mock(Deserializer.class);
+
+        lenient().when(keySerde.deserializer()).thenReturn(keyDeserializer);
+        lenient().when(keySerde.serializer()).thenReturn(keySerializer);
+        lenient().when(valueSerde.deserializer()).thenReturn(valueDeserializer);
+
+        lenient().when(keySerializer.serialize(any(), any(RecordHeaders.class), any())).thenReturn(KEY.getBytes());
+
+        lenient().when(valueDeserializer.deserialize(any(), any(RecordHeaders.class), eq(VALUE_TIMESTAMP_HEADERS_BYTES)))
+            .thenReturn(VALUE_TIMESTAMP_HEADERS);
+
+        lenient().when(keyDeserializer.deserialize(any(), eq(HEADERS), eq(KEY.getBytes())))
+            .thenReturn(KEY);
+
+        final MeteredTimestampedKeyValueStoreWithHeaders<String, String> mockStore = new MeteredTimestampedKeyValueStoreWithHeaders<>(
+            inner,
+            STORE_TYPE,
+            new MockTime(),
+            keySerde,
+            valueSerde
+        );
+        when(context.headers()).thenReturn(new RecordHeaders());
+        mockStore.init(context, mockStore);
+        return mockStore;
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldUseHeadersFromValueToDeserializeKeyInRange() {
+        setUp();
+
+        final KeyValue<Bytes, byte[]> testData = KeyValue.pair(KEY_BYTES, VALUE_TIMESTAMP_HEADERS_BYTES);
+        when(inner.range(any(Bytes.class), any(Bytes.class)))
+            .thenReturn(new KeyValueIteratorStub<>(List.of(testData).iterator()));
+
+        metered = createStoreWithMockSerdes();
+
+        final KeyValueIterator<String, ValueTimestampHeaders<String>> iterator = metered.range("a", "z");
+
+        assertTrue(iterator.hasNext());
+        assertEquals(KEY, iterator.peekNextKey());
+        final KeyValue<String, ValueTimestampHeaders<String>> result = iterator.next();
+
+        assertEquals(KEY, result.key);
+        assertEquals(VALUE_TIMESTAMP_HEADERS, result.value);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        // The critical verification: key deserializer must have been called with HEADERS (not empty headers)
+        verify(keyDeserializer).deserialize(any(), eq(HEADERS), eq(KEY.getBytes()));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldUseHeadersFromValueToDeserializeKeyInReverseRange() {
+        setUp();
+
+        final KeyValue<Bytes, byte[]> testData = KeyValue.pair(KEY_BYTES, VALUE_TIMESTAMP_HEADERS_BYTES);
+        when(inner.reverseRange(any(Bytes.class), any(Bytes.class)))
+            .thenReturn(new KeyValueIteratorStub<>(List.of(testData).iterator()));
+
+        metered = createStoreWithMockSerdes();
+
+        final KeyValueIterator<String, ValueTimestampHeaders<String>> iterator = metered.reverseRange("a", "z");
+
+        assertTrue(iterator.hasNext());
+        assertEquals(KEY, iterator.peekNextKey());
+        final KeyValue<String, ValueTimestampHeaders<String>> result = iterator.next();
+
+        assertEquals(KEY, result.key);
+        assertEquals(VALUE_TIMESTAMP_HEADERS, result.value);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        // The critical verification: key deserializer must have been called with HEADERS (not empty headers)
+        verify(keyDeserializer).deserialize(any(), eq(HEADERS), eq(KEY.getBytes()));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldUseHeadersFromValueToDeserializeKeyInAll() {
+        setUp();
+
+        final KeyValue<Bytes, byte[]> testData = KeyValue.pair(KEY_BYTES, VALUE_TIMESTAMP_HEADERS_BYTES);
+        when(inner.all())
+            .thenReturn(new KeyValueIteratorStub<>(List.of(testData).iterator()));
+
+        metered = createStoreWithMockSerdes();
+
+        final KeyValueIterator<String, ValueTimestampHeaders<String>> iterator = metered.all();
+
+        assertTrue(iterator.hasNext());
+        assertEquals(KEY, iterator.peekNextKey());
+        final KeyValue<String, ValueTimestampHeaders<String>> result = iterator.next();
+
+        assertEquals(KEY, result.key);
+        assertEquals(VALUE_TIMESTAMP_HEADERS, result.value);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        // The critical verification: key deserializer must have been called with HEADERS (not empty headers)
+        verify(keyDeserializer).deserialize(any(), eq(HEADERS), eq(KEY.getBytes()));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldUseHeadersFromValueToDeserializeKeyInReverseAll() {
+        setUp();
+
+        final KeyValue<Bytes, byte[]> testData = KeyValue.pair(KEY_BYTES, VALUE_TIMESTAMP_HEADERS_BYTES);
+        when(inner.reverseAll())
+            .thenReturn(new KeyValueIteratorStub<>(List.of(testData).iterator()));
+
+        metered = createStoreWithMockSerdes();
+
+        final KeyValueIterator<String, ValueTimestampHeaders<String>> iterator = metered.reverseAll();
+
+        assertTrue(iterator.hasNext());
+        assertEquals(KEY, iterator.peekNextKey());
+        final KeyValue<String, ValueTimestampHeaders<String>> result = iterator.next();
+
+        assertEquals(KEY, result.key);
+        assertEquals(VALUE_TIMESTAMP_HEADERS, result.value);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        // The critical verification: key deserializer must have been called with HEADERS (not empty headers)
+        verify(keyDeserializer).deserialize(any(), eq(HEADERS), eq(KEY.getBytes()));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldUseHeadersFromValueToDeserializeKeyInPrefixScan() {
+        setUp();
+
+        final KeyValue<Bytes, byte[]> testData = KeyValue.pair(KEY_BYTES, VALUE_TIMESTAMP_HEADERS_BYTES);
+        when(inner.prefixScan(any(), any()))
+            .thenReturn(new KeyValueIteratorStub<>(List.of(testData).iterator()));
+
+        metered = createStoreWithMockSerdes();
+
+        final KeyValueIterator<String, ValueTimestampHeaders<String>> iterator = metered.prefixScan("prefix", Serdes.String().serializer());
+
+        assertTrue(iterator.hasNext());
+        assertEquals(KEY, iterator.peekNextKey());
+        final KeyValue<String, ValueTimestampHeaders<String>> result = iterator.next();
+
+        assertEquals(KEY, result.key);
+        assertEquals(VALUE_TIMESTAMP_HEADERS, result.value);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        // The critical verification: key deserializer must have been called with HEADERS (not empty headers)
+        verify(keyDeserializer).deserialize(any(), eq(HEADERS), eq(KEY.getBytes()));
+    }
+
+    @Test
+    public void shouldReturnRightEntriesForHeaderDependentSerdeInPrefixScan() {
+        setUp();
+        reset(inner);
+        final ThreadCache cache = new ThreadCache(new LogContext("testCache"), 1024L, context.metrics());
+        when(context.cache()).thenReturn(cache);
+        when(context.headers()).thenReturn(HEADERS);
+
+        final InMemoryKeyValueStore inMemoryStore = new InMemoryKeyValueStore(STORE_NAME);
+
+        final Serializer<String> headerDependentSerializer = new Serializer<>() {
+            @Override
+            public byte[] serialize(final String topic, final String data) {
+                return serialize(topic, null, data);
+            }
+
+            @Override
+            public byte[] serialize(final String topic, final Headers headers, final String data) {
+                final byte[] bytes = data.getBytes(StandardCharsets.UTF_8);
+                final byte[] result = new byte[bytes.length + 1];
+                result[0] = headers == null ? (byte) 1 : (byte) 2;
+                System.arraycopy(bytes, 0, result, 1, bytes.length);
+                return result;
+            }
+        };
+
+        final MeteredTimestampedKeyValueStoreWithHeaders<String, String> store = new MeteredTimestampedKeyValueStoreWithHeaders<>(
+            new CachingKeyValueStoreWithHeaders(inMemoryStore),
+            "scope",
+            new MockTime(),
+            Serdes.serdeFrom(headerDependentSerializer, Serdes.String().deserializer()),
+            new ValueTimestampHeadersSerde<>(Serdes.String())
+        );
+
+        store.init(context, store);
+
+        store.put("key1", ValueTimestampHeaders.make("value1", 100L, HEADERS));
+        store.put("key2", ValueTimestampHeaders.make("value2", 100L, HEADERS));
+
+        // 1. Test default prefixScan
+        try (final KeyValueIterator<String, ValueTimestampHeaders<String>> iterator = store.prefixScan("key", headerDependentSerializer)) {
+            assertTrue(iterator.hasNext());
+            assertTrue(iterator.next().key.endsWith("key1"));
+            assertTrue(iterator.hasNext());
+            assertTrue(iterator.next().key.endsWith("key2"));
+        }
+
+        // 2. Test readOnly prefixScan
+        try (final KeyValueIterator<String, ValueTimestampHeaders<String>> iterator = store.readOnly(IsolationLevel.READ_UNCOMMITTED).prefixScan("key", headerDependentSerializer)) {
+            assertTrue(iterator.hasNext());
+            assertTrue(iterator.next().key.endsWith("key1"));
+            assertTrue(iterator.hasNext());
+            assertTrue(iterator.next().key.endsWith("key2"));
+        }
+    }
+}

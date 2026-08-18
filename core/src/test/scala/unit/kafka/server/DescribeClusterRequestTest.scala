@@ -24,6 +24,7 @@ import org.apache.kafka.common.requests.{DescribeClusterRequest, DescribeCluster
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.raft.KRaftConfigs
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.config.{ServerConfigs, ReplicationConfigs}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
@@ -38,7 +39,7 @@ class DescribeClusterRequestTest extends BaseRequestTest {
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1")
     properties.setProperty(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, "2")
-    properties.setProperty(ServerConfigs.BROKER_RACK_CONFIG, s"rack/${properties.getProperty(ServerConfigs.BROKER_ID_CONFIG)}")
+    properties.setProperty(ServerConfigs.BROKER_RACK_CONFIG, s"rack/${properties.getProperty(KRaftConfigs.NODE_ID_CONFIG)}")
   }
 
   @BeforeEach
@@ -62,7 +63,7 @@ class DescribeClusterRequestTest extends BaseRequestTest {
         .setBrokerId(server.config.brokerId)
         .setHost("localhost")
         .setPort(server.socketServer.boundPort(listenerName))
-        .setRack(server.config.rack.orNull)
+        .setRack(server.config.rack.orElse(null))
     }.toSet
 
     val expectedClusterId = brokers.last.clusterId

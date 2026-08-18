@@ -17,7 +17,7 @@
 package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.FileRecords;
+import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 
 import java.io.IOException;

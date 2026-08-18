@@ -21,18 +21,18 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.record.AbstractRecords;
-import org.apache.kafka.common.record.CompressionRatioEstimator;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.MutableRecordBatch;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.AbstractRecords;
+import org.apache.kafka.common.record.internal.CompressionRatioEstimator;
+import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.MutableRecordBatch;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.ProduceResponse;
-import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.ProducerIdAndEpoch;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,15 +49,15 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
-import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
-import static org.apache.kafka.common.record.RecordBatch.NO_TIMESTAMP;
+import static org.apache.kafka.common.record.internal.RecordBatch.MAGIC_VALUE_V2;
+import static org.apache.kafka.common.record.internal.RecordBatch.NO_TIMESTAMP;
 
 /**
  * A batch of records that is or will be sent.
  *
  * This class is not thread safe and external synchronization must be used when modifying it
  */
-public final class ProducerBatch {
+public class ProducerBatch {
 
     private static final Logger log = LoggerFactory.getLogger(ProducerBatch.class);
 
@@ -68,7 +68,7 @@ public final class ProducerBatch {
     final ProduceRequestResult produceFuture;
 
     private final List<Thunk> thunks = new ArrayList<>();
-    private final MemoryRecordsBuilder recordsBuilder;
+    protected final MemoryRecordsBuilder recordsBuilder;
     private final AtomicInteger attempts = new AtomicInteger(0);
     private final boolean isSplitBatch;
     private final AtomicReference<FinalState> finalState = new AtomicReference<>(null);
@@ -138,6 +138,25 @@ public final class ProducerBatch {
         return attempts == attemptsWhenLeaderLastChanged;
     }
 
+
+    /**
+     * Return this batch's buffer memory to the pool. The default single-buffer batch returns
+     * the pooled buffer at its initial capacity; {@link ChunkedProducerBatch} overrides this
+     * to return its remaining chunks (fully-unused chunks are released earlier, at close).
+     */
+    protected void deallocateBuffer(BufferPool pool) {
+        pool.deallocate(buffer(), initialCapacity());
+    }
+
+    /**
+     * Credit this batch's memory back to the pool when it is unexpectedly still inflight
+     * (KAFKA-19012): the buffer can't be touched (the network may still be reading it), so the
+     * default donates a fresh same-capacity buffer. {@link ChunkedProducerBatch} instead returns
+     * the actual chunks (safe — inflight bytes live in the separate flattened buffer).
+     */
+    protected void deallocateInflightBuffer(BufferPool pool) {
+        pool.deallocate(ByteBuffer.allocate(initialCapacity()));
+    }
 
     /**
      * Append the record to the current record set and return the relative offset within that record set
@@ -546,10 +565,6 @@ public final class ProducerBatch {
 
     public int initialCapacity() {
         return recordsBuilder.initialCapacity();
-    }
-
-    public boolean isWritable() {
-        return !recordsBuilder.isClosed();
     }
 
     public byte magic() {

@@ -23,14 +23,16 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.RequestUtils;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
+import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -102,6 +104,14 @@ public class AdminMetadataManager {
     private ApiException fatalException = null;
 
     /**
+     * If this is non-null, bootstrap DNS resolution permanently failed. Unlike
+     * {@link #fatalException}, this is never cleared so all subsequent API calls see it.
+     * Volatile because it is written by the I/O thread (via the network client) and read by
+     * both the I/O thread and the app thread (via {@link KafkaAdminClient#enqueue}).
+     */
+    private volatile BootstrapResolutionException bootstrapFatalException = null;
+
+    /**
      * The cluster with which the metadata was bootstrapped.
      */
     private Cluster bootstrapCluster;
@@ -149,6 +159,26 @@ public class AdminMetadataManager {
         }
 
         @Override
+        public void bootstrapFailed(org.apache.kafka.common.KafkaException exception) {
+            if (exception instanceof BootstrapResolutionException) {
+                AdminMetadataManager.this.recordBootstrapFatalException((BootstrapResolutionException) exception);
+            }
+        }
+
+        @Override
+        public boolean isBootstrapped() {
+            return bootstrapCluster != null;
+        }
+
+        @Override
+        public void bootstrap(List<InetSocketAddress> addresses) {
+            // The `now` argument is unused when the incoming cluster is bootstrap-configured
+            // (see AdminMetadataManager#update), so we pass 0 rather than plumbing a clock through
+            // the MetadataUpdater interface for a value that would be ignored.
+            AdminMetadataManager.this.update(Cluster.bootstrap(addresses), 0);
+        }
+
+        @Override
         public void close() {
         }
     }
@@ -181,6 +211,18 @@ public class AdminMetadataManager {
 
     public AdminMetadataUpdater updater() {
         return updater;
+    }
+
+    public boolean isBootstrapped() {
+        return bootstrapCluster != null;
+    }
+
+    public BootstrapResolutionException bootstrapFatalException() {
+        return bootstrapFatalException;
+    }
+
+    void recordBootstrapFatalException(BootstrapResolutionException exception) {
+        this.bootstrapFatalException = exception;
     }
 
     public boolean isReady() {

@@ -45,6 +45,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
  */
 public class StandbyTask extends AbstractTask implements Task {
     private final boolean eosEnabled;
+    private final boolean transactionalStateStoresEnabled;
     private final Sensor closeTaskSensor;
     private final Sensor updateSensor;
     private final StreamsMetricsImpl streamsMetrics;
@@ -86,6 +87,7 @@ public class StandbyTask extends AbstractTask implements Task {
         closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), streamsMetrics);
         updateSensor = TaskMetrics.updateSensor(Thread.currentThread().getName(), id.toString(), streamsMetrics);
         this.eosEnabled = config.eosEnabled;
+        this.transactionalStateStoresEnabled = config.transactionalStateStoresEnabled;
     }
 
     @Override
@@ -94,7 +96,7 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     @Override
-    public void recordRestoration(final Time time, final long numRecords, final boolean initRemaining) {
+    public void recordRestoration(final Time time, final long numRecords, final long numOffsets, final boolean initRemaining) {
         if (initRemaining) {
             throw new IllegalStateException("Standby task would not record remaining records to restore");
         }
@@ -110,11 +112,6 @@ public class StandbyTask extends AbstractTask implements Task {
     public void initializeIfNeeded() {
         if (state() == State.CREATED) {
             StateManagerUtil.registerStateStores(log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
-
-            // with and without EOS we would check for checkpointing at each commit during running,
-            // and the file may be deleted in which case we should checkpoint immediately,
-            // therefore we initialize the snapshot as empty
-            offsetSnapshotSinceLastFlush = Collections.emptyMap();
 
             // no topology needs initialized, we can transit to RUNNING
             // right after registered the stores
@@ -216,7 +213,7 @@ public class StandbyTask extends AbstractTask implements Task {
 
             case RUNNING:
             case SUSPENDED:
-                maybeCheckpoint(enforceCheckpoint);
+                maybeCheckpoint();
 
                 log.debug("Finalized commit for {} task", state());
 
@@ -276,6 +273,7 @@ public class StandbyTask extends AbstractTask implements Task {
                         logPrefix,
                         clean,
                         eosEnabled,
+                        transactionalStateStoresEnabled,
                         stateMgr,
                         stateDirectory,
                         TaskType.STANDBY
@@ -305,9 +303,7 @@ public class StandbyTask extends AbstractTask implements Task {
 
     @Override
     public boolean commitNeeded() {
-        // for standby tasks committing is the same as checkpointing,
-        // so we only need to commit if we want to checkpoint
-        return StateManagerUtil.checkpointNeeded(false, offsetSnapshotSinceLastFlush, stateMgr.changelogOffsets());
+        return true;
     }
 
     @Override

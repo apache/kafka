@@ -18,13 +18,15 @@ package kafka.server
 
 import java.util
 import java.util.concurrent.atomic.AtomicReference
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricsContext, MetricsReporter}
-import org.apache.kafka.server.config.ServerConfigs
+import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.metrics.MetricConfigs
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
+
+import java.io.File
 
 
 object KafkaMetricsReporterTest {
@@ -70,7 +72,6 @@ class KafkaMetricsReporterTest extends QuorumTestHarness {
     super.setUp(testInfo)
     val props = TestUtils.createBrokerConfig(1)
     props.setProperty(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, "kafka.server.KafkaMetricsReporterTest$MockMetricsReporter")
-    props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "1")
     config = KafkaConfig.fromProps(props)
     broker = createBroker(config, threadNamePrefix = Option(this.getClass.getName))
     broker.startup()
@@ -89,7 +90,7 @@ class KafkaMetricsReporterTest extends QuorumTestHarness {
   @AfterEach
   override def tearDown(): Unit = {
     broker.shutdown()
-    CoreUtils.delete(config.logDirs)
+    config.logDirs().forEach(f => Utils.delete(new File(f)))
     super.tearDown()
   }
 }

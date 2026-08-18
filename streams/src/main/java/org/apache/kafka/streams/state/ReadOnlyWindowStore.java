@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
 
@@ -33,6 +35,7 @@ import java.time.Instant;
  * @param <K> Type of keys
  * @param <V> Type of values
  */
+@InterfaceAudience.Public
 public interface ReadOnlyWindowStore<K, V> {
 
     /**
@@ -118,7 +121,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * @throws NullPointerException       if {@code null} is used for key.
      * @throws IllegalArgumentException   if duration is negative or can't be represented as {@code long milliseconds}
      */
-    default WindowStoreIterator<V> backwardFetch(K key, Instant timeFrom, Instant timeTo) throws IllegalArgumentException  {
+    default WindowStoreIterator<V> backwardFetch(final K key, final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException  {
         throw new UnsupportedOperationException();
     }
 
@@ -156,7 +159,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws IllegalArgumentException   if duration is negative or can't be represented as {@code long milliseconds}
      */
-    default KeyValueIterator<Windowed<K>, V> backwardFetch(K keyFrom, K keyTo, Instant timeFrom, Instant timeTo)
+    default KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom, final K keyTo, final Instant timeFrom, final Instant timeTo)
         throws IllegalArgumentException  {
         throw new UnsupportedOperationException();
     }
@@ -182,7 +185,7 @@ public interface ReadOnlyWindowStore<K, V> {
     }
 
     /**
-     * Gets all the key-value pairs that belong to the windows within in the given time range.
+     * Gets all the key-value pairs that belong to the windows within the given time range.
      *
      * @param timeFrom the beginning of the time slot from which to search (inclusive), where iteration starts.
      * @param timeTo   the end of the time slot from which to search (inclusive), where iteration ends.
@@ -194,7 +197,7 @@ public interface ReadOnlyWindowStore<K, V> {
     KeyValueIterator<Windowed<K>, V> fetchAll(Instant timeFrom, Instant timeTo) throws IllegalArgumentException;
 
     /**
-     * Gets all the key-value pairs that belong to the windows within in the given time range in backward order
+     * Gets all the key-value pairs that belong to the windows within the given time range in backward order
      * with respect to time (from end to beginning of time).
      *
      * @param timeFrom the beginning of the time slot from which to search (inclusive), where iteration ends.
@@ -204,7 +207,15 @@ public interface ReadOnlyWindowStore<K, V> {
      * @throws NullPointerException       if {@code null} is used for any key
      * @throws IllegalArgumentException   if duration is negative or can't be represented as {@code long milliseconds}
      */
-    default KeyValueIterator<Windowed<K>, V> backwardFetchAll(Instant timeFrom, Instant timeTo) throws IllegalArgumentException  {
+    default KeyValueIterator<Windowed<K>, V> backwardFetchAll(final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException  {
         throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Return a read-only view of this store bound to the given {@link IsolationLevel}.
+     * See {@link ReadOnlyKeyValueStore#readOnly(IsolationLevel)} for semantics.
+     */
+    default ReadOnlyWindowStore<K, V> readOnly(final IsolationLevel isolationLevel) {
+        return this;
     }
 }

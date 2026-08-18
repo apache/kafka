@@ -25,8 +25,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -67,7 +66,6 @@ import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -99,12 +97,21 @@ public abstract class AbstractWindowBytesStoreTest {
                                                        final boolean retainDuplicates,
                                                        final Serde<K> keySerde,
                                                        final Serde<V> valueSerde);
+    /** Overridden by subclasses to exercise the transactional (staged-write) code path. */
+    boolean transactional() {
+        return false;
+    }
+
     @BeforeEach
     protected void setup() {
-        
+
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, false, Serdes.Integer(), Serdes.String());
 
         recordCollector = new MockRecordCollector();
+        final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
+        if (transactional()) {
+            streamsConfig.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
+        }
         context = new InternalMockProcessorContext<>(
             baseDir,
             Serdes.String(),
@@ -113,7 +120,8 @@ public abstract class AbstractWindowBytesStoreTest {
             new ThreadCache(
                 new LogContext("testCache"),
                 0,
-                new MockStreamsMetrics(new Metrics())));
+                new MockStreamsMetrics(new Metrics())),
+            new StreamsConfig(streamsConfig));
         context.setTime(1L);
 
         windowStore.init(context, windowStore);
@@ -235,8 +243,8 @@ public abstract class AbstractWindowBytesStoreTest {
                 ofEpochMilli(defaultStartTime + 12L - WINDOW_SIZE),
                 ofEpochMilli(defaultStartTime + 12L + WINDOW_SIZE))));
 
-        // Flush the store and verify all current entries were properly flushed ...
-        windowStore.flush();
+        // Commit the store and verify all current entries were properly committed ...
+        windowStore.commit(Map.of());
 
         final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
         for (final ProducerRecord<Object, Object> record : recordCollector.collected()) {
@@ -627,8 +635,8 @@ public abstract class AbstractWindowBytesStoreTest {
             Set.of(),
             valuesToSetAndCloseIterator(windowStore.fetch(2, ofEpochMilli(defaultStartTime + 13L - WINDOW_SIZE), ofEpochMilli(defaultStartTime + 13L))));
 
-        // Flush the store and verify all current entries were properly flushed ...
-        windowStore.flush();
+        // Commit the store and verify all current entries were properly committed ...
+        windowStore.commit(Map.of());
 
         final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
         for (final ProducerRecord<Object, Object> record : recordCollector.collected()) {
@@ -737,8 +745,8 @@ public abstract class AbstractWindowBytesStoreTest {
             valuesToSetAndCloseIterator(windowStore.fetch(2, ofEpochMilli(defaultStartTime + 12L),
                 ofEpochMilli(defaultStartTime + 12L + WINDOW_SIZE))));
 
-        // Flush the store and verify all current entries were properly flushed ...
-        windowStore.flush();
+        // Commit the store and verify all current entries were properly committed ...
+        windowStore.commit(Map.of());
 
         final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
         for (final ProducerRecord<Object, Object> record : recordCollector.collected()) {
@@ -806,8 +814,8 @@ public abstract class AbstractWindowBytesStoreTest {
                 ofEpochMilli(defaultStartTime + 4L - WINDOW_SIZE),
                 ofEpochMilli(defaultStartTime + 4L + WINDOW_SIZE))));
 
-        // Flush the store and verify all current entries were properly flushed ...
-        windowStore.flush();
+        // Commit the store and verify all current entries were properly committed ...
+        windowStore.commit(Map.of());
 
         final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
         for (final ProducerRecord<Object, Object> record : recordCollector.collected()) {
@@ -997,8 +1005,6 @@ public abstract class AbstractWindowBytesStoreTest {
             new StreamsConfig(streamsConfig),
             recordCollector
         );
-        final Time time = Time.SYSTEM;
-        context.setSystemTimeMs(time.milliseconds());
         context.setTime(1L);
         windowStore.init(context, windowStore);
 
@@ -1034,7 +1040,16 @@ public abstract class AbstractWindowBytesStoreTest {
             )
         ));
         assertEquals(1.0, dropTotal.metricValue());
-        assertNotEquals(0.0, dropRate.metricValue());
+        // exactly one record was dropped, over the rate's default un-elapsed sampling window of
+        // (metrics.num.samples - 1) * metrics.sample.window.ms == 30s. The delta is generous because the
+        // window also grows by however long the store work takes between recording and reading the
+        // metric; it still separates one dropped record from none (0.0) and from two (0.06666).
+        assertEquals(
+            1.0 / 30.0,
+            ((Number) dropRate.metricValue()).doubleValue(),
+            0.005d,
+            "dropped-records-rate should reflect the single dropped record over the ~30s sampling window"
+        );
 
         windowStore.close();
     }
@@ -1163,7 +1178,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     <K> K extractStoreKey(final byte[] binaryKey,
                           final StateSerdes<K, ?> serdes) {
-        return WindowKeySchema.extractStoreKey(binaryKey, serdes);
+        return WindowKeySchema.extractStoreKey(binaryKey, new RecordHeaders(), serdes);
     }
 
     private Map<Integer, Set<String>> entriesByKey(final List<KeyValue<byte[], byte[]>> changeLog,

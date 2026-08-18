@@ -72,6 +72,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -92,6 +93,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
@@ -176,6 +178,21 @@ public class EosIntegrationTest {
             Arguments.of("classic", false),
             Arguments.of("streams", true),
             Arguments.of("streams", false)
+        );
+    }
+
+    // Adds a sparse "transactional state stores" (KIP-892) dimension on top of the group-protocol/
+    // processing-threads matrix. To avoid exploding the full matrix by 2, the transactional=true case
+    // is only exercised for a single, representative combination (classic protocol, processing threads
+    // disabled) while preserving all existing (transactional=false) coverage. Transactional state stores
+    // are an exactly-once-only feature; this test already runs under EXACTLY_ONCE_V2.
+    private static java.util.stream.Stream<Arguments> groupProtocolProcessingThreadsAndTransactionalParameters() {
+        return java.util.stream.Stream.of(
+            Arguments.of("classic", true, false),
+            Arguments.of("classic", false, false),
+            Arguments.of("streams", true, false),
+            Arguments.of("streams", false, false),
+            Arguments.of("classic", false, true)
         );
     }
 
@@ -498,8 +515,10 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("groupProtocolAndProcessingThreadsParameters")
-    public void shouldNotViolateEosIfOneTaskFailsWithState(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
+    @MethodSource("groupProtocolProcessingThreadsAndTransactionalParameters")
+    public void shouldNotViolateEosIfOneTaskFailsWithState(final String groupProtocol,
+                                                           final boolean processingThreadsEnabled,
+                                                           final boolean transactionalStateStores) throws Exception {
 
         // this test updates a store with 10 + 5 + 5 records per partition (running with 2 partitions)
         // the app is supposed to emit all 40 update records into the output topic
@@ -515,7 +534,7 @@ public class EosIntegrationTest {
 
         // We need more processing time under "with state" situation, so increasing the max.poll.interval.ms
         // to avoid unexpected rebalance during test, which will cause unexpected fail over triggered
-        try (final KafkaStreams streams = getKafkaStreams("dummy", true, "appDir", 2, groupProtocol, processingThreadsEnabled)) {
+        try (final KafkaStreams streams = getKafkaStreams("dummy", true, "appDir", 2, groupProtocol, processingThreadsEnabled, transactionalStateStores)) {
             startApplicationAndWaitUntilRunning(streams);
 
             final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
@@ -612,6 +631,77 @@ public class EosIntegrationTest {
                 "The state store content after recovery do not match what expected");
 
             assertThat("Should only get one uncaught exception from Streams.", hasUnexpectedError, is(false));
+        }
+    }
+
+    @Test
+    public void shouldBufferStateStoreWritesUntilCommitUnderEos() throws Exception {
+        // this test writes 10 + 3 + 7 records per key (running with 2 partitions, one key per partition)
+        //
+        // the first burst crosses the processor's commit boundary (value % 10 == 9) and is committed
+        // the second burst does not cross a commit boundary, so it is left staged in the transaction
+        // buffer: it must be visible to a READ_UNCOMMITTED reader but NOT to a READ_COMMITTED reader
+        // the third burst crosses the next commit boundary, flushing the buffer to the store: the
+        // READ_COMMITTED view must then reflect both staged bursts
+        //
+        // buffer/commit behaviour is independent of group protocol and processing-threads (see
+        // groupProtocolProcessingThreadsAndTransactionalParameters), so a single representative
+        // combination is sufficient here.
+        try (final KafkaStreams streams = getKafkaStreams("dummy", true, "appDir", 2, "classic", false, true)) {
+            startApplicationAndWaitUntilRunning(streams);
+
+            final List<KeyValue<Long, Long>> firstCommittedBurst = prepareData(0L, 10L, 0L, 1L);
+            writeInputData(firstCommittedBurst);
+
+            waitForCondition(
+                () -> commitRequested.get() == 2, MAX_WAIT_TIME_MS,
+                "StreamsTasks did not request commit for the first burst.");
+
+            final Set<KeyValue<Long, Long>> expectedAfterFirstCommit = getMaxPerKey(computeExpectedResult(firstCommittedBurst));
+
+            // context.commit() only requests a commit; the transaction buffer is flushed to the
+            // store asynchronously afterwards, so wait for the READ_COMMITTED view to catch up.
+            // This also guarantees the commit has fully completed before the staged burst below is
+            // written, so it cannot be swept into this same commit.
+            waitForStateStore(
+                streams, new HashSet<>(expectedAfterFirstCommit), IsolationLevel.READ_COMMITTED,
+                "The state store should reflect the first committed burst at READ_COMMITTED");
+            verifyStateStore(
+                streams, new HashSet<>(expectedAfterFirstCommit), IsolationLevel.READ_UNCOMMITTED,
+                "The state store should reflect the first committed burst at READ_UNCOMMITTED");
+
+            final List<KeyValue<Long, Long>> stagedBurst = prepareData(10L, 13L, 0L, 1L);
+            writeInputData(stagedBurst);
+
+            final List<KeyValue<Long, Long>> dataSoFar = new ArrayList<>(firstCommittedBurst);
+            dataSoFar.addAll(stagedBurst);
+
+            // the staged burst is visible in the output topic at READ_UNCOMMITTED ...
+            readResult(SINGLE_PARTITION_OUTPUT_TOPIC, dataSoFar.size(), null);
+
+            // ... and in the store at READ_UNCOMMITTED, but READ_COMMITTED must still only reflect
+            // the already-committed burst: this is the core buffering invariant under test
+            verifyStateStore(
+                streams, getMaxPerKey(computeExpectedResult(dataSoFar)), IsolationLevel.READ_UNCOMMITTED,
+                "The state store should reflect the staged burst at READ_UNCOMMITTED");
+            verifyStateStore(
+                streams, new HashSet<>(expectedAfterFirstCommit), IsolationLevel.READ_COMMITTED,
+                "The state store must not reflect the staged burst at READ_COMMITTED before commit");
+
+            // cross the next commit boundary, forcing the transaction buffer to flush to the store
+            final List<KeyValue<Long, Long>> secondCommittedBurst = prepareData(13L, 20L, 0L, 1L);
+            writeInputData(secondCommittedBurst);
+
+            waitForCondition(
+                () -> commitRequested.get() == 4, MAX_WAIT_TIME_MS,
+                "StreamsTasks did not request commit for the second burst.");
+
+            final List<KeyValue<Long, Long>> allData = new ArrayList<>(dataSoFar);
+            allData.addAll(secondCommittedBurst);
+
+            waitForStateStore(
+                streams, getMaxPerKey(computeExpectedResult(allData)), IsolationLevel.READ_COMMITTED,
+                "The state store should reflect the second committed burst at READ_COMMITTED");
         }
     }
 
@@ -772,12 +862,14 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("groupProtocolAndProcessingThreadsParameters")
-    public void shouldWriteLatestOffsetsToCheckpointOnShutdown(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
+    @MethodSource("groupProtocolProcessingThreadsAndTransactionalParameters")
+    public void shouldWriteLatestOffsetsToCheckpointOnShutdown(final String groupProtocol,
+                                                               final boolean processingThreadsEnabled,
+                                                               final boolean transactionalStateStores) throws Exception {
         final List<KeyValue<Long, Long>> writtenData = prepareData(0L, 10, 0L, 1L);
         final List<KeyValue<Long, Long>> expectedResult = computeExpectedResult(writtenData);
 
-        try (final KafkaStreams streams = getKafkaStreams("streams", true, "appDir", 1, groupProtocol, processingThreadsEnabled)) {
+        try (final KafkaStreams streams = getKafkaStreams("streams", true, "appDir", 1, groupProtocol, processingThreadsEnabled, transactionalStateStores)) {
             writeInputData(writtenData);
 
             startApplicationAndWaitUntilRunning(streams);
@@ -923,18 +1015,12 @@ public class EosIntegrationTest {
         kafkaStreams.close();
         waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.NOT_RUNNING, Duration.ofSeconds(60));
 
-        final File checkpointFile = Paths.get(
+        final File taskDir = Paths.get(
             streamsConfiguration.getProperty(StreamsConfig.STATE_DIR_CONFIG),
             streamsConfiguration.getProperty(StreamsConfig.APPLICATION_ID_CONFIG),
-            task00.toString(),
-            ".checkpoint"
+            task00.toString()
         ).toFile();
-        assertTrue(checkpointFile.exists());
-        final Map<TopicPartition, Long> checkpoints = new OffsetCheckpoint(checkpointFile).read();
-        assertEquals(
-            Long.valueOf(restoredOffsetsForPartition0.get()),
-            new ArrayList<>(checkpoints.values()).get(0)
-        );
+        assertTrue(taskDir.exists());
     }
 
 
@@ -1123,13 +1209,23 @@ public class EosIntegrationTest {
         return data;
     }
 
-    // the threads should no longer fail one thread one at a time
     private KafkaStreams getKafkaStreams(final String dummyHostName,
                                          final boolean withState,
                                          final String appDir,
                                          final int numberOfStreamsThreads,
                                          final String groupProtocol,
                                          final boolean processingThreadsEnabled) {
+        return getKafkaStreams(dummyHostName, withState, appDir, numberOfStreamsThreads, groupProtocol, processingThreadsEnabled, false);
+    }
+
+    // the threads should no longer fail one thread one at a time
+    private KafkaStreams getKafkaStreams(final String dummyHostName,
+                                         final boolean withState,
+                                         final String appDir,
+                                         final int numberOfStreamsThreads,
+                                         final String groupProtocol,
+                                         final boolean processingThreadsEnabled,
+                                         final boolean transactionalStateStores) {
         commitRequested = new AtomicInteger(0);
         errorInjected = new AtomicBoolean(false);
         stallInjected = new AtomicBoolean(false);
@@ -1200,7 +1296,6 @@ public class EosIntegrationTest {
                             sum += value;
                         }
                         state.put(key, sum);
-                        state.flush();
                     }
 
 
@@ -1238,6 +1333,11 @@ public class EosIntegrationTest {
         properties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, dummyHostName + ":2142");
         properties.put(InternalConfig.PROCESSING_THREADS_ENABLED, processingThreadsEnabled);
         properties.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
+        if (transactionalStateStores) {
+            // This test already runs under EXACTLY_ONCE_V2 (see PROCESSING_GUARANTEE_CONFIG above);
+            // transactional state stores are an exactly-once-only feature.
+            properties.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
+        }
 
         final Properties config = StreamsTestUtils.getStreamsConfig(
             applicationId,
@@ -1395,20 +1495,59 @@ public class EosIntegrationTest {
     private void verifyStateStore(final KafkaStreams streams,
                                   final Set<KeyValue<Long, Long>> expectedStoreContent,
                                   final String reason) {
-        final StateQueryRequest<KeyValueIterator<Long, Long>> request =
+        verifyStateStore(streams, expectedStoreContent, Optional.empty(), reason);
+    }
+
+    private void verifyStateStore(final KafkaStreams streams,
+                                  final Set<KeyValue<Long, Long>> expectedStoreContent,
+                                  final IsolationLevel isolationLevel,
+                                  final String reason) {
+        verifyStateStore(streams, expectedStoreContent, Optional.of(isolationLevel), reason);
+    }
+
+    private void verifyStateStore(final KafkaStreams streams,
+                                  final Set<KeyValue<Long, Long>> expectedStoreContent,
+                                  final Optional<IsolationLevel> isolationLevel,
+                                  final String reason) {
+        for (final KeyValue<Long, Long> actual : queryStateStore(streams, isolationLevel)) {
+            assertTrue(expectedStoreContent.remove(actual), reason);
+        }
+
+        assertTrue(expectedStoreContent.isEmpty(), reason);
+    }
+
+    private Set<KeyValue<Long, Long>> queryStateStore(final KafkaStreams streams,
+                                                       final Optional<IsolationLevel> isolationLevel) {
+        StateQueryRequest<KeyValueIterator<Long, Long>> request =
                 inStore(storeName).withQuery(RangeQuery.withNoBounds());
+        if (isolationLevel.isPresent()) {
+            request = request.withIsolationLevel(isolationLevel.get());
+        }
 
         final StateQueryResult<KeyValueIterator<Long, Long>> result =
                 IntegrationTestUtils.iqv2WaitForResult(streams, request);
 
+        final Set<KeyValue<Long, Long>> actualStoreContent = new HashSet<>();
         for (final QueryResult<KeyValueIterator<Long, Long>> partitionResult: result.getPartitionResults().values()) {
             try (final KeyValueIterator<Long, Long> it = partitionResult.getResult()) {
                 while (it.hasNext()) {
-                    assertTrue(expectedStoreContent.remove(it.next()), reason);
+                    actualStoreContent.add(it.next());
                 }
             }
         }
+        return actualStoreContent;
+    }
 
-        assertTrue(expectedStoreContent.isEmpty(), reason);
+    // Buffered writes are only flushed to the store when the Streams commit cycle completes, which
+    // happens asynchronously after context.commit() is requested. Poll until the READ_COMMITTED view
+    // catches up rather than asserting immediately.
+    private void waitForStateStore(final KafkaStreams streams,
+                                   final Set<KeyValue<Long, Long>> expectedStoreContent,
+                                   final IsolationLevel isolationLevel,
+                                   final String reason) throws Exception {
+        waitForCondition(
+            () -> queryStateStore(streams, Optional.of(isolationLevel)).equals(expectedStoreContent),
+            MAX_WAIT_TIME_MS,
+            reason);
     }
 }

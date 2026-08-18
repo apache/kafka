@@ -22,7 +22,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
-import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.internals.Exit;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -92,7 +92,7 @@ public class EndToEndLatencyTest {
                     .toArray(String[]::new);
         }
 
-        public ArgsBuilder withNegative(String param) {
+        public ArgsBuilder withMinusOne(String param) {
             return with(param, "-1");
         }
         
@@ -128,37 +128,39 @@ public class EndToEndLatencyTest {
     private void testInvalidNumRecords() {
         String expectedMsg = "Value for --num-records must be a positive integer.";
         assertInitializeInvalidOptionsExitCodeAndMsg(
-            ArgsBuilder.defaults().withNegative("--num-records").build(), expectedMsg);
+            ArgsBuilder.defaults().withZero("--num-records").build(), expectedMsg);
+        assertInitializeInvalidOptionsExitCodeAndMsg(
+            ArgsBuilder.defaults().withMinusOne("--num-records").build(), expectedMsg);
     }
 
     private void testInvalidRecordSize() {
         String expectedMsg = "Value for --record-size must be a non-negative integer.";
         assertInitializeInvalidOptionsExitCodeAndMsg(
-            ArgsBuilder.defaults().withNegative("--record-size").build(), expectedMsg);
+            ArgsBuilder.defaults().withMinusOne("--record-size").build(), expectedMsg);
     }
 
     private void testInvalidRecordKey() {
         String expectedMsg = "Value for --record-key-size must be a non-negative integer.";
         assertInitializeInvalidOptionsExitCodeAndMsg(
-            ArgsBuilder.defaults().withNegative("--record-key-size").build(), expectedMsg);
+            ArgsBuilder.defaults().withMinusOne("--record-key-size").build(), expectedMsg);
     }
 
     private void testInvalidNumHeaders() {
         String expectedMsg = "Value for --num-headers must be a non-negative integer.";
         assertInitializeInvalidOptionsExitCodeAndMsg(
-                ArgsBuilder.defaults().withNegative("--num-headers").build(), expectedMsg);
+                ArgsBuilder.defaults().withMinusOne("--num-headers").build(), expectedMsg);
     }
 
     private void testInvalidRecordHeaderKey() {
         String expectedMsg = "Value for --record-header-key-size must be a non-negative integer.";
         assertInitializeInvalidOptionsExitCodeAndMsg(
-            ArgsBuilder.defaults().withNegative("--record-header-key-size").build(), expectedMsg);
+            ArgsBuilder.defaults().withMinusOne("--record-header-key-size").build(), expectedMsg);
     }
 
     private void testInvalidRecordHeaderValue() {
-        String expectedMsg = "Value for --record-header-size must be a non-negative integer.";
+        String expectedMsg = "Value for --record-header-size must be a non-negative integer or -1 for null header value.";
         assertInitializeInvalidOptionsExitCodeAndMsg(
-            ArgsBuilder.defaults().withNegative("--record-header-size").build(), expectedMsg);
+            ArgsBuilder.defaults().with("--record-header-size", "-2").build(), expectedMsg);
     }
 
     private void testInvalidProducerAcks() {
@@ -168,13 +170,17 @@ public class EndToEndLatencyTest {
     }
 
     private void assertInitializeInvalidOptionsExitCodeAndMsg(String[] args, String expectedMsg) {
+        AtomicReference<Integer> exitStatus = new AtomicReference<>();
+        AtomicReference<String> exitMessage = new AtomicReference<>();
         Exit.setExitProcedure((exitCode, message) -> {
-            assertEquals(1, exitCode);
-            assertTrue(message.contains(expectedMsg));
+            exitStatus.set(exitCode);
+            exitMessage.set(message);
             throw new RuntimeException();
         });
         try {
-            assertThrows(RuntimeException.class, () -> EndToEndLatency.execute(args));
+            assertThrows(RuntimeException.class, () -> new EndToEndLatency.EndToEndLatencyCommandOptions(args));
+            assertEquals(Integer.valueOf(1), exitStatus.get());
+            assertEquals(expectedMsg, exitMessage.get());
         } finally {
             Exit.resetExitProcedure();
         }
@@ -320,14 +326,23 @@ public class EndToEndLatencyTest {
     }
 
     @Test
-    public void shouldPassWithNamedArgs() {
+    public void shouldAcceptValidNamedArgs() {
+        assertInitializeValidOptionsDoesNotExit(ArgsBuilder.defaults().build());
+    }
+
+    @Test
+    public void shouldAcceptMinusOneForRecordHeaderValueSize() {
+        assertInitializeValidOptionsDoesNotExit(ArgsBuilder.defaults().withMinusOne("--record-header-size").build());
+    }
+
+    private void assertInitializeValidOptionsDoesNotExit(String[] args) {
         AtomicReference<Integer> exitStatus = new AtomicReference<>();
         Exit.setExitProcedure((status, __) -> {
             exitStatus.set(status);
             throw new RuntimeException();
         });
         try {
-            assertDoesNotThrow(() -> new EndToEndLatency.EndToEndLatencyCommandOptions(ArgsBuilder.defaults().build()));
+            assertDoesNotThrow(() -> new EndToEndLatency.EndToEndLatencyCommandOptions(args));
             assertNull(exitStatus.get());
         } finally {
             Exit.resetExitProcedure();

@@ -16,22 +16,26 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
-import org.apache.kafka.coordinator.group.streams.assignor.AssignmentMemberSpec;
-import org.apache.kafka.coordinator.group.streams.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.streams.assignor.AssignmentConfigs;
+import org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignor;
+import org.apache.kafka.coordinator.group.api.streams.assignor.TaskAssignorException;
+import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
-import org.apache.kafka.coordinator.group.streams.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
-import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorException;
+import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndStateImpl;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -45,6 +49,11 @@ import java.util.stream.Collectors;
  * words, this class does not yield a tombstone for removed members.
  */
 public class TargetAssignmentBuilder {
+
+    /**
+     * The time.
+     */
+    private Time time;
 
     /**
      * The group ID.
@@ -63,12 +72,7 @@ public class TargetAssignmentBuilder {
     /**
      * The assignment configs.
      */
-    private final Map<String, String> assignmentConfigs;
-
-    /**
-     * The members which have been updated or deleted. A null value signals deleted members.
-     */
-    private final Map<String, StreamsGroupMember> updatedMembers = new HashMap<>();
+    private final AssignmentConfigs assignmentConfigs;
 
     /**
      * The members in the group.
@@ -91,9 +95,10 @@ public class TargetAssignmentBuilder {
     private ConfiguredTopology topology;
 
     /**
-     * The static members in the group.
+     * The latest per-task changelog offsets reported by each member, keyed by member ID. Transient (not persisted);
+     * fed to the assignor so it can estimate task lag.
      */
-    private Map<String, String> staticMembers = Map.of();
+    private Map<String, MemberTaskOffsets> taskOffsets = Map.of();
 
     /**
      * Constructs the object.
@@ -111,24 +116,42 @@ public class TargetAssignmentBuilder {
         this.groupId = Objects.requireNonNull(groupId);
         this.groupEpoch = groupEpoch;
         this.assignor = Objects.requireNonNull(assignor);
-        this.assignmentConfigs = Objects.requireNonNull(assignmentConfigs);
+        this.assignmentConfigs = AssignmentConfigsImpl.fromMap(Objects.requireNonNull(assignmentConfigs));
     }
 
-    static AssignmentMemberSpec createAssignmentMemberSpec(
+    static MemberMetadataAndStateImpl createMemberMetadataAndState(
         StreamsGroupMember member,
-        TasksTuple targetAssignment
+        MemberTaskOffsets taskOffsets
     ) {
-        return new AssignmentMemberSpec(
+        // Active, standby and warm-up tasks all reflect the tasks the member currently has, not the
+        // target assignment. Active tasks are stored with epochs; MemberAssignmentState exposes them
+        // without, so drop the epoch.
+        TasksTupleWithEpochs currentAssignment = member.assignedTasks();
+        Map<String, Set<Integer>> activeTasks = new HashMap<>();
+        currentAssignment.activeTasksWithEpochs().forEach((subtopologyId, partitionsWithEpochs) ->
+            activeTasks.put(subtopologyId, new HashSet<>(partitionsWithEpochs.keySet())));
+        return new MemberMetadataAndStateImpl(
             member.instanceId(),
             member.rackId(),
-            targetAssignment.activeTasks(),
-            targetAssignment.standbyTasks(),
-            targetAssignment.warmupTasks(),
             member.processId(),
             member.clientTags(),
-            Map.of(),
-            Map.of()
+            activeTasks,
+            currentAssignment.standbyTasks(),
+            currentAssignment.warmupTasks(),
+            taskOffsets.taskOffsets(),
+            taskOffsets.taskEndOffsets()
         );
+    }
+
+    /**
+     * Sets the time.
+     *
+     * @param time The time.
+     * @return This object.
+     */
+    public TargetAssignmentBuilder withTime(Time time) {
+        this.time = time;
+        return this;
     }
 
     /**
@@ -145,15 +168,15 @@ public class TargetAssignmentBuilder {
     }
 
     /**
-     * Adds all the existing static members.
+     * Adds the latest per-task changelog offsets reported by each member.
      *
-     * @param staticMembers The existing static members in the streams group.
+     * @param taskOffsets The reported task offsets/end-offsets keyed by member ID.
      * @return This object.
      */
-    public TargetAssignmentBuilder withStaticMembers(
-        Map<String, String> staticMembers
+    public TargetAssignmentBuilder withTaskOffsets(
+        Map<String, MemberTaskOffsets> taskOffsets
     ) {
-        this.staticMembers = staticMembers;
+        this.taskOffsets = taskOffsets;
         return this;
     }
 
@@ -196,34 +219,6 @@ public class TargetAssignmentBuilder {
         return this;
     }
 
-
-    /**
-     * Adds or updates a member. This is useful when the updated member is not yet materialized in memory.
-     *
-     * @param memberId The member ID.
-     * @param member   The member to add or update.
-     * @return This object.
-     */
-    public TargetAssignmentBuilder addOrUpdateMember(
-        String memberId,
-        StreamsGroupMember member
-    ) {
-        this.updatedMembers.put(memberId, member);
-        return this;
-    }
-
-    /**
-     * Removes a member. This is useful when the removed member is not yet materialized in memory.
-     *
-     * @param memberId The member ID.
-     * @return This object.
-     */
-    public TargetAssignmentBuilder removeMember(
-        String memberId
-    ) {
-        return addOrUpdateMember(memberId, null);
-    }
-
     /**
      * Builds the new target assignment.
      *
@@ -231,37 +226,13 @@ public class TargetAssignmentBuilder {
      * @throws TaskAssignorException if the target assignment cannot be computed.
      */
     public TargetAssignmentResult build() throws TaskAssignorException {
-        Map<String, AssignmentMemberSpec> memberSpecs = new HashMap<>();
+        Map<String, MemberMetadataAndStateImpl> memberMetadataMap = new HashMap<>();
 
-        // Prepare the member spec for all members.
-        members.forEach((memberId, member) -> memberSpecs.put(memberId, createAssignmentMemberSpec(
+        // Prepare the member metadata for all members.
+        members.forEach((memberId, member) -> memberMetadataMap.put(memberId, createMemberMetadataAndState(
             member,
-            targetAssignment.getOrDefault(memberId, org.apache.kafka.coordinator.group.streams.TasksTuple.EMPTY)
+            taskOffsets.getOrDefault(memberId, MemberTaskOffsets.EMPTY)
         )));
-
-        // Update the member spec if updated or deleted members.
-        updatedMembers.forEach((memberId, updatedMemberOrNull) -> {
-            if (updatedMemberOrNull == null) {
-                memberSpecs.remove(memberId);
-            } else {
-                org.apache.kafka.coordinator.group.streams.TasksTuple assignment = targetAssignment.getOrDefault(memberId,
-                    org.apache.kafka.coordinator.group.streams.TasksTuple.EMPTY);
-
-                // A new static member joins and needs to replace an existing departed one.
-                if (updatedMemberOrNull.instanceId().isPresent()) {
-                    String previousMemberId = staticMembers.get(updatedMemberOrNull.instanceId().get());
-                    if (previousMemberId != null && !previousMemberId.equals(memberId)) {
-                        assignment = targetAssignment.getOrDefault(previousMemberId,
-                            org.apache.kafka.coordinator.group.streams.TasksTuple.EMPTY);
-                    }
-                }
-
-                memberSpecs.put(memberId, createAssignmentMemberSpec(
-                    updatedMemberOrNull,
-                    assignment
-                ));
-            }
-        });
 
         // Compute the assignment.
         GroupAssignment newGroupAssignment;
@@ -271,14 +242,14 @@ public class TargetAssignmentBuilder {
             }
             newGroupAssignment = assignor.assign(
                 new GroupSpecImpl(
-                    Collections.unmodifiableMap(memberSpecs),
+                    memberMetadataMap,
                     assignmentConfigs
                 ),
                 new TopologyMetadata(metadataImage, topology.subtopologies().get())
             );
         } else {
             newGroupAssignment = new GroupAssignment(
-                memberSpecs.keySet().stream().collect(Collectors.toMap(x -> x, x -> MemberAssignment.empty())));
+                memberMetadataMap.keySet().stream().collect(Collectors.toMap(x -> x, x -> new MemberAssignment(Map.of(), Map.of()))));
         }
 
         // Compute delta from previous to new target assignment and create the
@@ -286,7 +257,7 @@ public class TargetAssignmentBuilder {
         List<CoordinatorRecord> records = new ArrayList<>();
         Map<String, org.apache.kafka.coordinator.group.streams.TasksTuple> newTargetAssignment = new HashMap<>();
 
-        memberSpecs.keySet().forEach(memberId -> {
+        memberMetadataMap.keySet().forEach(memberId -> {
             org.apache.kafka.coordinator.group.streams.TasksTuple oldMemberAssignment = targetAssignment.get(memberId);
             org.apache.kafka.coordinator.group.streams.TasksTuple newMemberAssignment = newMemberAssignment(newGroupAssignment, memberId);
 
@@ -313,7 +284,11 @@ public class TargetAssignmentBuilder {
         });
 
         // Bump the target assignment epoch.
-        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId, groupEpoch));
+        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(
+            groupId,
+            groupEpoch,
+            time.milliseconds()
+        ));
 
         return new TargetAssignmentResult(records, newTargetAssignment);
     }
@@ -324,14 +299,23 @@ public class TargetAssignmentBuilder {
     ) {
         MemberAssignment newMemberAssignment = newGroupAssignment.members().get(memberId);
         if (newMemberAssignment != null) {
+            // Copy the maps returned by the assignor so the server does not keep a reference to
+            // maps the assignor is free to mutate afterwards.
             return new TasksTuple(
-                newMemberAssignment.activeTasks(),
-                newMemberAssignment.standbyTasks(),
-                newMemberAssignment.warmupTasks()
+                copyTasks(newMemberAssignment.activeTasks()),
+                copyTasks(newMemberAssignment.standbyTasks()),
+                // Warm-up tasks are not assigned by the assignor; they are decided during reconciliation.
+                Map.of()
             );
         } else {
             return TasksTuple.EMPTY;
         }
+    }
+
+    private static Map<String, Set<Integer>> copyTasks(Map<String, Set<Integer>> tasks) {
+        Map<String, Set<Integer>> copy = new HashMap<>();
+        tasks.forEach((subtopologyId, partitions) -> copy.put(subtopologyId, new HashSet<>(partitions)));
+        return copy;
     }
 
     /**

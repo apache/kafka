@@ -16,16 +16,18 @@
  */
 package kafka.coordinator.group
 
-import kafka.server.{LogAppendResult, ReplicaManager}
+import kafka.server.ReplicaManager
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch, RecordValidationStats, SimpleRecord}
+import org.apache.kafka.common.record.internal.{CompressionType, ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter
+import org.apache.kafka.server.LogAppendResult
+import org.apache.kafka.server.LogAppendResult.LogAppendSummary
 import org.apache.kafka.server.common.TransactionVersion
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LogAppendInfo, LogConfig, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogAppendInfo, LogConfig, RecordValidationStats, VerificationGuard}
 import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
@@ -69,6 +71,56 @@ class CoordinatorPartitionWriterTest {
   }
 
   @Test
+  def testListenerAdapterPropagatesHighWatermarkUpdates(): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val updates = new util.ArrayList[Long]()
+    val adapter = new ListenerAdapter(new PartitionWriter.Listener {
+      override def onHighWatermarkUpdated(tp: TopicPartition, offset: Long): Unit = updates.add(offset)
+    })
+
+    adapter.onHighWatermarkUpdated(tp, 10L)
+    adapter.onHighWatermarkUpdated(tp, 20L)
+
+    assertEquals(util.List.of(10L, 20L), updates)
+  }
+
+  @Test
+  def testListenerAdapterStopsPropagatingAfterBecomingFollower(): Unit = {
+    assertHighWatermarkPropagationStops(_.onBecomingFollower(_))
+  }
+
+  @Test
+  def testListenerAdapterStopsPropagatingAfterFailed(): Unit = {
+    assertHighWatermarkPropagationStops(_.onFailed(_))
+  }
+
+  @Test
+  def testListenerAdapterStopsPropagatingAfterDeleted(): Unit = {
+    assertHighWatermarkPropagationStops(_.onDeleted(_))
+  }
+
+  /**
+   * Verifies that no high watermark update is propagated to the wrapped listener
+   * once the given transition has been signalled. Such updates are not safe to
+   * apply because the partition is no longer led by this broker.
+   */
+  private def assertHighWatermarkPropagationStops(
+    transition: (ListenerAdapter, TopicPartition) => Unit
+  ): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val updates = new util.ArrayList[Long]()
+    val adapter = new ListenerAdapter(new PartitionWriter.Listener {
+      override def onHighWatermarkUpdated(tp: TopicPartition, offset: Long): Unit = updates.add(offset)
+    })
+
+    adapter.onHighWatermarkUpdated(tp, 10L)
+    transition(adapter, tp)
+    adapter.onHighWatermarkUpdated(tp, 20L)
+
+    assertEquals(util.List.of(10L), updates)
+  }
+
+  @Test
   def testConfig(): Unit = {
     val tp = new TopicPartition("foo", 0)
     val replicaManager = mock(classOf[ReplicaManager])
@@ -107,8 +159,8 @@ class CoordinatorPartitionWriterTest {
       ArgumentMatchers.any(),
       ArgumentMatchers.eq(Map(tp -> VerificationGuard.SENTINEL)),
       ArgumentMatchers.eq(TransactionVersion.TV_UNKNOWN)
-    )).thenReturn(Map(new TopicIdPartition(topicId, tp) -> LogAppendResult(
-      new LogAppendInfo(
+    )).thenReturn(Map(new TopicIdPartition(topicId, tp) -> new LogAppendResult(
+      LogAppendSummary.fromAppendInfo(new LogAppendInfo(
         5L,
         10L,
         Optional.empty,
@@ -119,9 +171,9 @@ class CoordinatorPartitionWriterTest {
         CompressionType.NONE,
         100,
         10L
-      ),
-      Option.empty,
-      hasCustomErrorMessage = false
+      )),
+      Optional.empty(),
+      false
     )))
 
     // Test non-transactional records (regular coordinator records) - should use TV_UNKNOWN
@@ -169,8 +221,8 @@ class CoordinatorPartitionWriterTest {
       ArgumentMatchers.any(),
       ArgumentMatchers.eq(Map(tp -> VerificationGuard.SENTINEL)),
       ArgumentMatchers.eq(TransactionVersion.TV_2.featureLevel())
-    )).thenReturn(Map(new TopicIdPartition(topicId, tp) -> LogAppendResult(
-      new LogAppendInfo(
+    )).thenReturn(Map(new TopicIdPartition(topicId, tp) -> new LogAppendResult(
+      LogAppendSummary.fromAppendInfo(new LogAppendInfo(
         5L,
         10L,
         Optional.empty,
@@ -181,9 +233,9 @@ class CoordinatorPartitionWriterTest {
         CompressionType.NONE,
         100,
         10L
-      ),
-      Option.empty,
-      hasCustomErrorMessage = false
+      )),
+      Optional.empty(),
+      false
     )))
 
     // Test transactional records (transaction marker) - should use explicit transaction version
@@ -329,10 +381,10 @@ class CoordinatorPartitionWriterTest {
       ArgumentMatchers.any(),
       ArgumentMatchers.eq(Map(tp -> VerificationGuard.SENTINEL)),
       ArgumentMatchers.eq(TransactionVersion.TV_UNKNOWN)
-    )).thenReturn(Map(new TopicIdPartition(topicId, tp) -> LogAppendResult(
-      LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
-      Some(Errors.NOT_LEADER_OR_FOLLOWER.exception),
-      hasCustomErrorMessage = false
+    )).thenReturn(Map(new TopicIdPartition(topicId, tp) -> new LogAppendResult(
+      LogAppendSummary.fromAppendInfo(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO),
+      Optional.of(Errors.NOT_LEADER_OR_FOLLOWER.exception),
+      false
     )))
 
     val batch = MemoryRecords.withRecords(
@@ -350,6 +402,52 @@ class CoordinatorPartitionWriterTest {
       batch,
       TransactionVersion.TV_UNKNOWN
     ))
+  }
+
+  @Test
+  def testWriteRecordsWithFailureAndCustomErrorMessage(): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val topicId = Uuid.fromString("TbEp6-A4s3VPT1TwiI5COw")
+    val replicaManager = mock(classOf[ReplicaManager])
+    when(replicaManager.topicIdPartition(tp)).thenReturn(new TopicIdPartition(topicId, tp))
+
+    val partitionRecordWriter = new CoordinatorPartitionWriter(
+      replicaManager
+    )
+
+    val customMessage = "custom error message"
+
+    when(replicaManager.appendRecordsToLeader(
+      ArgumentMatchers.eq(1.toShort),
+      ArgumentMatchers.eq(true),
+      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.eq(Map(tp -> VerificationGuard.SENTINEL)),
+      ArgumentMatchers.eq(TransactionVersion.TV_UNKNOWN)
+    )).thenReturn(Map(new TopicIdPartition(topicId, tp) -> new LogAppendResult(
+      LogAppendSummary.fromAppendInfo(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO),
+      Optional.of(Errors.NOT_LEADER_OR_FOLLOWER.exception(customMessage)),
+      true
+    )))
+
+    val batch = MemoryRecords.withRecords(
+      Compression.NONE,
+      new SimpleRecord(
+        0L,
+        "foo".getBytes(Charset.defaultCharset()),
+        "bar".getBytes(Charset.defaultCharset())
+      )
+    )
+
+    val exception = assertThrows(classOf[NotLeaderOrFollowerException], () => partitionRecordWriter.append(
+      tp,
+      VerificationGuard.SENTINEL,
+      batch,
+      TransactionVersion.TV_UNKNOWN
+    ))
+    assertEquals(customMessage, exception.getMessage)
   }
 
   @Test

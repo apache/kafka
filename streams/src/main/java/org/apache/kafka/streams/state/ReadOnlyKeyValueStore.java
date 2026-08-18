@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 
@@ -32,6 +34,7 @@ import org.apache.kafka.streams.errors.InvalidStateStoreException;
  * @param <K> the key type
  * @param <V> the value type
  */
+@InterfaceAudience.Public
 public interface ReadOnlyKeyValueStore<K, V> {
 
     /**
@@ -72,7 +75,7 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * @return The iterator for this range, from key with the smallest bytes to the key with the largest bytes of keys.
      * @throws InvalidStateStoreException if the store is not initialized
      */
-    default KeyValueIterator<K, V> reverseRange(K from, K to) {
+    default KeyValueIterator<K, V> reverseRange(final K from, final K to) {
         throw new UnsupportedOperationException();
     }
 
@@ -119,7 +122,7 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * @return The iterator for keys having the specified prefix.
      * @throws InvalidStateStoreException if the store is not initialized
      */
-    default <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScan(P prefix, PS prefixKeySerializer) {
+    default <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScan(final P prefix, final PS prefixKeySerializer) {
         throw new UnsupportedOperationException();
     }
 
@@ -128,9 +131,40 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * <p>
      * The count is not guaranteed to be exact in order to accommodate stores
      * where an exact count is expensive to calculate.
+     * <p>
+     * The accuracy of the estimate depends on the backing store. In particular,
+     * stores backed by an LSM-tree (such as the default RocksDB-based stores) may
+     * report a count that includes duplicate writes and tombstones produced when
+     * the store is restored from its changelog topic, until the backing store
+     * compacts those records away. As a result, this method can return a value
+     * substantially larger than the number of live, unique keys, especially
+     * shortly after task initialization (for example, when called from
+     * {@link org.apache.kafka.streams.processor.api.Processor#init}).
+     * Callers that need an exact live-key count should iterate the store via
+     * {@link #all()} (or its variants) and count entries.
      *
      * @return an approximate count of key-value mappings in the store.
      * @throws InvalidStateStoreException if the store is not initialized
      */
     long approximateNumEntries();
+
+    /**
+     * Return a read-only view of this store bound to the given {@link IsolationLevel}.
+     * <p>
+     * For stores without a transaction buffer (i.e. when {@code enable.transactional.statestores}
+     * is {@code false}), the default implementation returns {@code this} — the isolation level has
+     * no observable effect. Transactional stores override this method to return a view that
+     * either consults the transaction buffer ({@code READ_UNCOMMITTED}) or reads directly from
+     * the underlying committed data ({@code READ_COMMITTED}).
+     * <p>
+     * Wrapping store implementations propagate {@code readOnly} to their inner store so that
+     * transformations such as serdes or metrics are applied on top of the isolation-level-aware
+     * view.
+     *
+     * @param isolationLevel the isolation level the returned view should use for reads.
+     * @return a read-only view of this store using the given isolation level.
+     */
+    default ReadOnlyKeyValueStore<K, V> readOnly(final IsolationLevel isolationLevel) {
+        return this;
+    }
 }

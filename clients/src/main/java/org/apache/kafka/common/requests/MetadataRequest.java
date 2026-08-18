@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.message.MetadataRequestData;
 import org.apache.kafka.common.message.MetadataRequestData.MetadataRequestTopic;
 import org.apache.kafka.common.message.MetadataResponseData;
@@ -26,7 +27,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -127,16 +127,13 @@ public class MetadataRequest extends AbstractRequest {
             if (version < 1)
                 throw new UnsupportedVersionException("MetadataRequest versions older than 1 are not supported.");
             if (!data.allowAutoTopicCreation() && version < 4)
-                throw new UnsupportedVersionException("MetadataRequest versions older than 4 don't support the " +
-                        "allowAutoTopicCreation field");
+                throw new UnsupportedProtocolFieldException("allowAutoTopicCreation", apiKey().name(), version, 4);
             if (data.topics() != null) {
                 data.topics().forEach(topic -> {
                     if (topic.name() == null && version < 12)
-                        throw new UnsupportedVersionException("MetadataRequest version " + version +
-                                " does not support null topic names.");
+                        throw new UnsupportedProtocolFieldException("null topic names", apiKey().name(), version, 12);
                     if (!Uuid.ZERO_UUID.equals(topic.topicId()) && version < 12)
-                        throw new UnsupportedVersionException("MetadataRequest version " + version +
-                            " does not support non-zero topic IDs.");
+                        throw new UnsupportedProtocolFieldException("non-zero topic IDs", apiKey().name(), version, 12);
                 });
             }
             return new MetadataRequest(data, version);
@@ -173,7 +170,7 @@ public class MetadataRequest extends AbstractRequest {
                     .setTopicId(topic.topicId())
                     .setErrorCode(error.code())
                     .setIsInternal(false)
-                    .setPartitions(Collections.emptyList()));
+                    .setPartitions(List.of()));
             }
         }
 
@@ -200,9 +197,9 @@ public class MetadataRequest extends AbstractRequest {
 
     public List<Uuid> topicIds() {
         if (isAllTopics())
-            return Collections.emptyList();
+            return List.of();
         else if (version() < 10)
-            return Collections.emptyList();
+            return List.of();
         else
             return data.topics()
                     .stream()

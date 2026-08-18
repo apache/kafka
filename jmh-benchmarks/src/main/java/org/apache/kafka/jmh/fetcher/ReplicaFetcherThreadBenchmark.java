@@ -18,20 +18,16 @@
 package org.apache.kafka.jmh.fetcher;
 
 import kafka.cluster.Partition;
-import kafka.log.LogManager;
 import kafka.server.BrokerBlockingSender;
 import kafka.server.FailedPartitions;
 import kafka.server.InitialFetchState;
 import kafka.server.KafkaConfig;
 import kafka.server.OffsetTruncationState;
-import kafka.server.QuotaFactory;
 import kafka.server.RemoteLeaderEndPoint;
 import kafka.server.ReplicaFetcherThread;
 import kafka.server.ReplicaManager;
-import kafka.server.ReplicaQuota;
 import kafka.server.builders.LogManagerBuilder;
 import kafka.server.builders.ReplicaManagerBuilder;
-import kafka.utils.TestUtils;
 
 import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.common.DirectoryId;
@@ -44,13 +40,14 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.BaseRecords;
-import org.apache.kafka.common.record.RecordsSend;
+import org.apache.kafka.common.record.internal.BaseRecords;
+import org.apache.kafka.common.record.internal.RecordsSend;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.jmh.util.BenchmarkConfigUtils;
 import org.apache.kafka.metadata.KRaftMetadataCache;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.MockConfigRepository;
@@ -58,6 +55,9 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.network.BrokerEndPoint;
+import org.apache.kafka.server.partition.AlterPartitionManager;
+import org.apache.kafka.server.quota.QuotaFactory;
+import org.apache.kafka.server.quota.ReplicaQuota;
 import org.apache.kafka.server.util.KafkaScheduler;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;
@@ -65,6 +65,7 @@ import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogAppendInfo;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
+import org.apache.kafka.storage.internals.log.LogManager;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import org.mockito.Mockito;
@@ -95,7 +96,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 
 import scala.Option;
-import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.server.common.KRaftVersion.KRAFT_VERSION_1;
 
@@ -120,10 +120,8 @@ public class ReplicaFetcherThreadBenchmark {
     @Setup(Level.Trial)
     public void setup() throws IOException {
         scheduler.startup();
-        KafkaConfig config =  KafkaConfig.fromProps(TestUtils.createBrokerConfig(
-            0, true, true, 9092, Option.empty(), Option.empty(),
-            Option.empty(), true, false, 0, false, 0, false, 0, Option.empty(), 1, true, 1,
-            (short) 1, false));
+        Properties configs = BenchmarkConfigUtils.createDummyBrokerConfig();
+        KafkaConfig config =  KafkaConfig.fromProps(configs);
         LogConfig logConfig = createLogConfig();
 
         BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
@@ -147,6 +145,7 @@ public class ReplicaFetcherThreadBenchmark {
             setTime(Time.SYSTEM).
             build();
 
+        AlterPartitionManager alterPartitionManager = Mockito.mock(AlterPartitionManager.class);
         replicaManager = new ReplicaManagerBuilder().
             setConfig(config).
             setMetrics(metrics).
@@ -157,7 +156,7 @@ public class ReplicaFetcherThreadBenchmark {
             setBrokerTopicStats(brokerTopicStats).
             setMetadataCache(new KRaftMetadataCache(config.nodeId(), () -> KRAFT_VERSION_1)).
             setLogDirFailureChannel(new LogDirFailureChannel(logDirs.size())).
-            setAlterPartitionManager(TestUtils.createAlterIsrManager()).
+            setAlterPartitionManager(alterPartitionManager).
             build();
 
         LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> initialFetched = new LinkedHashMap<>();
@@ -230,7 +229,7 @@ public class ReplicaFetcherThreadBenchmark {
         replicaManager.shutdown(false);
         logManager.shutdown(-1L);
         scheduler.shutdown();
-        for (File dir : CollectionConverters.asJava(logManager.liveLogDirs())) {
+        for (File dir : logManager.liveLogDirs()) {
             Utils.delete(dir);
         }
     }

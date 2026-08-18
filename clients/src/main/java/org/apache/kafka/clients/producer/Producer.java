@@ -23,6 +23,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 
@@ -37,6 +38,7 @@ import java.util.concurrent.Future;
  * @see KafkaProducer
  * @see MockProducer
  */
+@InterfaceAudience.Public
 public interface Producer<K, V> extends Closeable {
 
     /**
@@ -83,12 +85,12 @@ public interface Producer<K, V> extends Closeable {
     void completeTransaction(PreparedTxnState preparedTxnState) throws ProducerFencedException;
 
     /**
-     * @see KafkaProducer#registerMetricForSubscription(KafkaMetric) 
+     * See {@link KafkaProducer#registerMetricForSubscription(KafkaMetric)}
      */
     void registerMetricForSubscription(KafkaMetric metric);
 
     /**
-     * @see KafkaProducer#unregisterMetricFromSubscription(KafkaMetric) 
+     * See {@link KafkaProducer#unregisterMetricFromSubscription(KafkaMetric)}
      */
     void unregisterMetricFromSubscription(KafkaMetric metric);
 
@@ -118,7 +120,7 @@ public interface Producer<K, V> extends Closeable {
     Map<MetricName, ? extends Metric> metrics();
 
     /**
-     * See {@link KafkaProducer#clientInstanceId(Duration)}}
+     * See {@link KafkaProducer#clientInstanceId(Duration)}
      */
     Uuid clientInstanceId(Duration timeout);
 

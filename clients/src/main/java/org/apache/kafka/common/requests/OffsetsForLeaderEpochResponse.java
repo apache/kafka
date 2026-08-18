@@ -24,7 +24,7 @@ import org.apache.kafka.common.protocol.Readable;
 import java.util.EnumMap;
 import java.util.Map;
 
-import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
+import static org.apache.kafka.common.record.internal.RecordBatch.NO_PARTITION_LEADER_EPOCH;
 
 /**
  * Possible error codes:

@@ -130,13 +130,31 @@ public class MirrorSourceConnectorTest {
     public void testNoCycles() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
             new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter());
+        assertFalse(connector.shouldReplicateTopic("source.topic1"), "should not allow cycles");
         assertFalse(connector.shouldReplicateTopic("target.topic1"), "should not allow cycles");
         assertFalse(connector.shouldReplicateTopic("target.source.topic1"), "should not allow cycles");
         assertFalse(connector.shouldReplicateTopic("source.target.topic1"), "should not allow cycles");
         assertFalse(connector.shouldReplicateTopic("target.source.target.topic1"), "should not allow cycles");
         assertFalse(connector.shouldReplicateTopic("source.target.source.topic1"), "should not allow cycles");
         assertTrue(connector.shouldReplicateTopic("topic1"), "should allow anything else");
-        assertTrue(connector.shouldReplicateTopic("source.topic1"), "should allow anything else");
+        assertTrue(connector.shouldReplicateTopic("othersource.topic1"), "should allow anything else");
+        assertTrue(connector.shouldReplicateTopic("othertarget.topic1"), "should allow anything else");
+        assertTrue(connector.shouldReplicateTopic("other.another.topic1"), "should allow anything else");
+
+        final IdentityReplicationPolicy identityReplicationPolicy = new IdentityReplicationPolicy();
+        final HashMap<String, String> props = new HashMap<>();
+        props.put("source.cluster.alias", "source");
+        identityReplicationPolicy.configure(props);
+        connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+            identityReplicationPolicy, x -> true, x -> true);
+        assertTrue(connector.shouldReplicateTopic("source.topic1"), "should not consider this a cycle");
+        assertTrue(connector.shouldReplicateTopic("target.topic1"), "should not consider this a cycle");
+        assertTrue(connector.shouldReplicateTopic("target.source.topic1"), "should not consider this a cycle");
+        assertTrue(connector.shouldReplicateTopic("source.target.topic1"), "should not consider this a cycle");
+        assertTrue(connector.shouldReplicateTopic("topic1"), "should not consider this a cycle");
+        assertTrue(connector.shouldReplicateTopic("othersource.topic1"), "should not consider this a cycle");
+        assertTrue(connector.shouldReplicateTopic("othertarget.topic1"), "should not consider this a cycle");
+        assertTrue(connector.shouldReplicateTopic("other.another.topic1"), "should not consider this a cycle");
     }
 
     @Test
@@ -337,12 +355,14 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testNewTopicConfigs() throws Exception {
         Map<String, Object> filterConfig = new HashMap<>();
-        filterConfig.put(DefaultConfigPropertyFilter.CONFIG_PROPERTIES_EXCLUDE_CONFIG, "follower\\.replication\\.throttled\\.replicas, "
-                + "leader\\.replication\\.throttled\\.replicas, "
-                + "message\\.timestamp\\.difference\\.max\\.ms, "
-                + "message\\.timestamp\\.type, "
-                + "unclean\\.leader\\.election\\.enable, "
-                + "min\\.insync\\.replicas,"
+        filterConfig.put(DefaultConfigPropertyFilter.CONFIG_PROPERTIES_EXCLUDE_CONFIG, "follower.replication.throttled.replicas, "
+                + "leader.replication.throttled.replicas, "
+                + "message.timestamp.difference.max.ms, "
+                + "log.message.timestamp.before.max.ms, "
+                + "log.message.timestamp.after.max.ms, "
+                + "message.timestamp.type, "
+                + "unclean.leader.election.enable, "
+                + "min.insync.replicas,"
                 + "exclude_param.*");
         DefaultConfigPropertyFilter filter = new DefaultConfigPropertyFilter();
         filter.configure(filterConfig);
@@ -376,7 +396,6 @@ public class MirrorSourceConnectorTest {
         connector.createNewTopics(Set.of(topic), Map.of(topic, 1L));
         verify(connector).createNewTopics(any(), any());
     }
-
 
     @Test
     public void testMirrorSourceConnectorTaskConfig() {
