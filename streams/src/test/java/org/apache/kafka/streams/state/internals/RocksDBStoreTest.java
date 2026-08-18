@@ -530,6 +530,23 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
+    public void shouldMatchPositionAfterPutAll() {
+        rocksDBStore.init(context, rocksDBStore);
+
+        // Every entry in one putAll is processed under the same record context, so the per-entry
+        // updatePosition calls are idempotent: the position lands exactly where a single update at
+        // that offset would leave it, regardless of the batch size.
+        context.setRecordContext(new ProcessorRecordContext(0, 5, 0, "", new RecordHeaders()));
+        rocksDBStore.putAll(List.of(
+            KeyValue.pair(new Bytes(stringSerializer.serialize(null, "one")), stringSerializer.serialize(null, "A")),
+            KeyValue.pair(new Bytes(stringSerializer.serialize(null, "two")), stringSerializer.serialize(null, "B")),
+            KeyValue.pair(new Bytes(stringSerializer.serialize(null, "three")), stringSerializer.serialize(null, "C"))));
+
+        final Position expected = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 5L)))));
+        assertEquals(expected, rocksDBStore.getPosition());
+    }
+
+    @Test
     public void shouldReturnKeysWithGivenPrefix() {
         final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
         entries.add(new KeyValue<>(
