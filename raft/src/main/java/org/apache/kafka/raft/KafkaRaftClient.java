@@ -3189,13 +3189,14 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             return 0L;
         }
 
-        long timeUntilVoterChangeExpires = state
-            .changeVoterState()
-            .maybeExpirePendingOperation(
+        var changeVoterState = state.changeVoterState();
+        long timeUntilVoterChangeExpires = changeVoterState.hasPendingOperation() ?
+            changeVoterState.maybeExpirePendingOperation(
                 quorum.leaderAndEpoch(),
                 quorum.leaderEndpoints(),
                 currentTimeMs
-            );
+            ) :
+            Long.MAX_VALUE;
 
         long timeUntilFlush = maybeAppendBatches(
             state,

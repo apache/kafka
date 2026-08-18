@@ -203,12 +203,19 @@ public final class ChangeVoterHandlerState {
         }
     }
 
-    private void updateUncommittedVoterChangeMetric() {
-        kafkaRaftMetrics.updateUncommittedVoterChange(
-            addVoterHandlerState.isPresent() ||
+    /**
+     * Returns whether an add, remove, or update voter operation is currently pending.
+     *
+     * @return true if an operation is pending, false otherwise
+     */
+    public boolean hasPendingOperation() {
+        return addVoterHandlerState.isPresent() ||
             removeVoterHandlerState.isPresent() ||
-            updateVoterHandlerState.isPresent()
-        );
+            updateVoterHandlerState.isPresent();
+    }
+
+    private void updateUncommittedVoterChangeMetric() {
+        kafkaRaftMetrics.updateUncommittedVoterChange(hasPendingOperation());
     }
 
     /**

@@ -171,18 +171,6 @@ public final class UpdateVoterHandler {
             );
         }
 
-        // Check that the supported version range is valid
-        if (!validVersionRange(partitionState.lastKraftVersion(), supportedKraftVersions)) {
-            return CompletableFuture.completedFuture(
-                RaftUtil.updateVoterResponse(
-                    Errors.INVALID_REQUEST,
-                    requestListenerName,
-                    leaderState.leaderAndEpoch(),
-                    leaderState.leaderEndpoints()
-                )
-            );
-        }
-
         // Check that endpoints includes the default listener
         if (voterEndpoints.address(requestSender.listenerName()).isEmpty()) {
             return CompletableFuture.completedFuture(
@@ -325,6 +313,42 @@ public final class UpdateVoterHandler {
             return true;
         }
 
+        return completeUpdateVoter(leaderState, changeVoterState, current, currentTimeMs);
+    }
+
+    /**
+     * Validates the kraft.version range and current voter set, then applies the update, once the
+     * API_VERSIONS response has already been matched to a pending update voter operation.
+     *
+     * @return true always; matches the caller's return convention where only a failed API_VERSIONS
+     *         request itself (handled earlier) returns false
+     */
+    private boolean completeUpdateVoter(
+        LeaderState<?> leaderState,
+        ChangeVoterHandlerState changeVoterState,
+        UpdateVoterHandlerState current,
+        long currentTimeMs
+    ) {
+        var kraftVersion = partitionState.lastKraftVersion();
+        if (!validVersionRange(kraftVersion, current.supportedKraftVersions())) {
+            // Check that the supported version range is valid
+            logger.info(
+                "Aborting update voter operation for {} at {} since kraft.version range {} doesn't match {}",
+                current.voterKey(),
+                current.voterEndpoints(),
+                current.supportedKraftVersions(),
+                kraftVersion
+            );
+
+            changeVoterState.resetUpdateVoterHandlerState(
+                Errors.INVALID_REQUEST,
+                leaderState.leaderAndEpoch(),
+                leaderState.leaderEndpoints(),
+                Optional.empty()
+            );
+            return true;
+        }
+
         // Check that the leader has established a HWM and committed the current epoch
         Optional<Long> highWatermark = leaderState.highWatermark().map(LogOffsetMetadata::offset);
         if (highWatermark.isEmpty()) {
@@ -335,7 +359,6 @@ public final class UpdateVoterHandler {
 
         // Read the voter set from the log if the cluster supports kraft.version 1, otherwise from
         // the leader's in-memory voter set
-        KRaftVersion kraftVersion = partitionState.lastKraftVersion();
         final Optional<KRaftVersionUpgrade.Voters> inMemoryVoters;
         final Optional<VoterSet> voters;
         if (kraftVersion.isReconfigSupported()) {
@@ -411,10 +434,10 @@ public final class UpdateVoterHandler {
 
     private boolean validVersionRange(
         KRaftVersion finalizedVersion,
-        UpdateRaftVoterRequestData.KRaftVersionFeature supportedKraftVersions
+        SupportedVersionRange supportedKraftVersions
     ) {
-        return supportedKraftVersions.minSupportedVersion() <= finalizedVersion.featureLevel() &&
-            supportedKraftVersions.maxSupportedVersion() >= finalizedVersion.featureLevel();
+        return supportedKraftVersions.min() <= finalizedVersion.featureLevel() &&
+            supportedKraftVersions.max() >= finalizedVersion.featureLevel();
     }
 
     private Optional<VoterSet> updateVoters(
