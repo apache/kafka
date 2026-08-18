@@ -889,6 +889,9 @@ org.apache.kafka.storage.internals.log.UnifiedLogTest:
 - testRollSegmentThatAlreadyExists
 - testSegmentDeletionEnabledBeforeUploadToRemoteTierWhenLogStartOffsetMovedAhead
 - testSegmentDeletionWithHighWatermarkInitialization
+- testSegmentSizeCheckForNonReplicationOrigins
+- testSegmentSizeCheckInAppendAsFollower
+- testSegmentSizeCheckInAppendAsFollowerWithNonEmptySegment
 - testSizeBasedLogRoll
 - testSplitOnOffsetOverflow
 - testStaleProducerEpochReturnsRecoverableErrorForTV1Clients

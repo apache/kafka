@@ -492,10 +492,6 @@ kafka.api.SaslPlainSslEndToEndAuthorizationTest:
 - testProduceConsumeWithPrefixedAcls
 - testProduceConsumeWithWildcardAcls
 - testTwoConsumersWithDifferentSaslCredentials
-kafka.api.SaslPlaintextConsumerTest:
-- testClusterResourceListener
-- testCoordinatorFailover
-- testSimpleConsumption
 kafka.api.SaslScramSslEndToEndAuthorizationTest:
 - testAuthentications
 - testNoConsumeWithDescribeAclViaAssign

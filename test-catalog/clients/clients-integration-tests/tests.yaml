@@ -373,6 +373,13 @@ org.apache.kafka.clients.consumer.SaslPlainPlaintextConsumerTest:
 - testClassicConsumerClusterResourceListener
 - testClassicConsumerCoordinatorFailover
 - testClassicConsumerSimpleConsumption
+org.apache.kafka.clients.consumer.SaslPlaintextConsumerTest:
+- testAsyncConsumeCoordinatorFailover
+- testAsyncConsumerClusterResourceListener
+- testAsyncConsumerSimpleConsumption
+- testClassicConsumerClusterResourceListener
+- testClassicConsumerCoordinatorFailover
+- testClassicConsumerSimpleConsumption
 org.apache.kafka.clients.consumer.ShareConsumerCallbackTest:
 - testAcknowledgementCommitCallbackCallsShareConsumerDisallowed
 - testAcknowledgementCommitCallbackCallsShareConsumerWakeup

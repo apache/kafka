@@ -80,8 +80,10 @@ org.apache.kafka.coordinator.share.ShareCoordinatorShardTest:
 - testDeleteTopicIdNonExistentInMetadataImage
 - testInitializeNullMetadataImage
 - testInitializePartitionIdNonExistentInMetadataImage
+- testInitializeStateIdempotent
 - testInitializeStateInvalidRequestData
 - testInitializeStateInvalidStateEpochRequestData
+- testInitializeStateNotIdempotentWhenStartOffsetChanges
 - testInitializeStateSuccess
 - testInitializeTopicIdNonExistentInMetadataImage
 - testLastRedundantOffset
