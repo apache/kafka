@@ -2712,8 +2712,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                     (quorum.isUnattached() && !leaderEndpoints.isEmpty()))
         ) {
             // The request or response indicates the leader of the current epoch
-            // which are currently unknown, the replica has discovered more endpoints,
-            // or the replica is unattached but the has discovered endpoints for the leader.
+            // is currently unknown, the replica has discovered more endpoints,
+            // or the replica is unattached but has discovered endpoints for the leader.
             transitionToFollower(epoch, leaderId.getAsInt(), leaderEndpoints, currentTimeMs);
         }
     }

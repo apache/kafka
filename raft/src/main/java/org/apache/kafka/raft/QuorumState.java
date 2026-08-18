@@ -78,8 +78,8 @@ import java.util.Random;
  *                with an equal or larger epoch
  *
  * Follower transitions to:
- *    Unattached: After learning of a new election with a higher epoch, or after
- *                expiration of the fetch timeout
+ *    Unattached: After learning of a new election with a higher epoch; after
+ *                the expiration of the fetch timeout on observers only
  *    Follower:   After discovering a leader with a larger epoch
  *
  */
