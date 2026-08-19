@@ -196,6 +196,7 @@ public class ResetIntegrationTest {
         final String appId = generateAppId();
         final String[] parameters = new String[] {
             "--application-id", appId,
+            "--force",
             "--bootstrap-server", cluster.bootstrapServers(),
             "--input-topics", NON_EXISTING_TOPIC
         };

@@ -562,7 +562,6 @@ public class StreamsResetter {
     }
 
     private int maybeDeleteInternalTopics(final Admin adminClient, final StreamsResetterOptions options) {
-
         final List<String> inferredInternalTopics = allTopics.stream()
                 .filter(options::isInferredInternalTopic)
                 .collect(Collectors.toList());

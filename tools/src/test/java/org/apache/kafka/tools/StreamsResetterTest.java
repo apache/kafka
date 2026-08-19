@@ -446,8 +446,11 @@ public class StreamsResetterTest {
         when(describeResult.all()).thenReturn(future);
         when(adminClient.describeConsumerGroups(Set.of(groupId))).thenReturn(describeResult);
 
-        assertThrows(IllegalArgumentException.class,
+        final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> streamsResetter.validateApplicationIdExists(groupId, adminClient));
+
+        assertTrue(ex.getMessage().contains(groupId));
+        assertTrue(ex.getMessage().contains("--force"));
     }
 
     @Test
@@ -494,26 +497,6 @@ public class StreamsResetterTest {
                 () -> streamsResetter.validateApplicationIdExists(groupId, adminClient));
 
         streamsResetter.validateApplicationIdExists(existingGroupId, adminClient);
-    }
-
-    @Test
-    public void shouldFailWithTypoInApplicationId() throws Exception {
-        final String groupId = "my-ap";
-
-        final Admin adminClient = mock(Admin.class);
-        final DescribeConsumerGroupsResult describeResult = mock(DescribeConsumerGroupsResult.class);
-
-        final KafkaFutureImpl<Map<String, ConsumerGroupDescription>> future = new KafkaFutureImpl<>();
-        future.completeExceptionally(new GroupIdNotFoundException("Group " + groupId + " not found."));
-
-        when(describeResult.all()).thenReturn(future);
-        when(adminClient.describeConsumerGroups(Set.of(groupId))).thenReturn(describeResult);
-
-        final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> streamsResetter.validateApplicationIdExists(groupId, adminClient));
-
-        assertTrue(ex.getMessage().contains("my-ap"));
-        assertTrue(ex.getMessage().contains("--force"));
     }
 
     @Test
