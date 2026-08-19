@@ -700,25 +700,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         log.warn("Tried to flush an empty batch for {}.", tp);
                         // There should not be any deferred events attached to the batch. We fail
                         // the batch just in case. As a side effect, coordinator state is also
-                        // reverted. There are (at least) two cases to consider which can result in
-                        // revertible coordinator state changes:
-                        //  1. The previous failed write operation was non-replaying and updated
-                        //     coordinator state directly. We can't persist its records because they
-                        //     weren't added to the batch successfully, so we must revert the
-                        //     coordinator state changes to keep the coordinator state in sync with
-                        //     the log.
-                        //  2. The current write operation is non-replaying and has updated
-                        //     coordinator state directly. After this flush, it will append its
-                        //     records to the log. We must revert state changes due to case 1, which
-                        //     means we must also throw to avoid appending records to the log. We
-                        //     pick a retriable exception, so that a previous failed write operation
-                        //     doesn't cause a fatal error.
-                        //
-                        //  NB: The handling of empty batches is still not fully correct. If there
-                        //      is no attempt to flush the empty batch before appending new records,
-                        //      we end up keeping coordinator state changes from case 1 without
-                        //      corresponding records written to the log.
-                        throw Errors.COORDINATOR_NOT_AVAILABLE.exception();
+                        // reverted, but there should be no changes since the batch was empty.
+                        failCurrentBatch(new IllegalStateException("Record batch was empty"));
+                        return;
                     }
 
                     long flushStartMs = time.milliseconds();
