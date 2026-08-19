@@ -127,7 +127,7 @@ public class ProcessorRecordContextTest {
 
         // Locate headerCount's position within the real serialized bytes
         // timestamp(8) + offset(8) + topicLen(4) + "topic"(5) + partition(4)
-        final int headerCountOffset = 8 + 8 + 4 + "topic".getBytes().length + 4;
+        final int headerCountOffset = 8 + 8 + 4 + "topic".getBytes(UTF_8).length + 4;
         final int bytesAfterHeaderCount = serialized.length - (headerCountOffset + 4);
         final int maxPlausibleHeaderCount = bytesAfterHeaderCount / (2 * Integer.BYTES);
 
