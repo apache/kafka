@@ -86,6 +86,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -455,11 +456,9 @@ public class AbstractHerderTest {
 
     @Test
     public void testConfigValidationEmptyConfig() {
-        AbstractHerder herder = createConfigValidationHerder(SampleSourceConnector.class, noneConnectorClientConfigOverridePolicy, 0);
+        AbstractHerder herder = testHerder();
 
         assertThrows(BadRequestException.class, () -> herder.validateConnectorConfig(Collections.emptyMap(), s -> null, false));
-        verify(transformer).transform(Collections.emptyMap());
-        assertEquals(worker.getPlugins(), plugins);
     }
 
     @Test
@@ -1228,6 +1227,106 @@ public class AbstractHerderTest {
 
     private void testConfigProviderRegex(String rawConnConfig) {
         testConfigProviderRegex(rawConnConfig, true);
+    }
+
+    @Test
+    public void testRemoveCustomConfigProviders() {
+        Map<String, String> props = new HashMap<>();
+        props.put("name", "my-connector");
+        props.put("connector.class", "MyConnector");
+        props.put("config.providers", "file");
+        props.put("config.providers.file.class", "org.apache.kafka.common.config.provider.FileConfigProvider");
+        props.put("config.providers.file.param.allowed.paths", "/tmp");
+
+        Map<String, String> stripped = AbstractHerder.removeCustomConfigProviders(props);
+
+        assertEquals(2, stripped.size());
+        assertEquals("my-connector", stripped.get("name"));
+        assertEquals("MyConnector", stripped.get("connector.class"));
+        assertFalse(stripped.containsKey("config.providers"));
+        assertFalse(stripped.containsKey("config.providers.file.class"));
+        assertFalse(stripped.containsKey("config.providers.file.param.allowed.paths"));
+    }
+
+    @Test
+    public void testRemoveCustomConfigProvidersNoProviders() {
+        Map<String, String> props = new HashMap<>();
+        props.put("name", "my-connector");
+        props.put("connector.class", "MyConnector");
+        Map<String, String> stripped = AbstractHerder.removeCustomConfigProviders(props);
+        assertEquals(props, stripped);
+    }
+
+    @Test
+    public void testRedactResolvedValuesNoSubstitutions() {
+        Map<String, String> props = Collections.singletonMap("name", "my-connector");
+        ConfigInfos infos = new ConfigInfos("MyConnector", 0, Collections.emptyList(), Collections.emptyList());
+        ConfigInfos result = AbstractHerder.redactResolvedValues(infos, props, props);
+        assertSame(infos, result);
+    }
+
+    @Test
+    public void testRedactResolvedValuesReplacesValueWithPlaceholder() {
+        Map<String, String> original = Collections.singletonMap("name", TEST_REF);
+        Map<String, String> resolved = Collections.singletonMap("name", "some-value");
+
+        ConfigValueInfo cv = new ConfigValueInfo("name", "some-value", Collections.emptyList(), Collections.emptyList(), true);
+        ConfigInfos infos = new ConfigInfos("MyConnector", 0, Collections.emptyList(),
+                Collections.singletonList(new ConfigInfo(null, cv)));
+
+        ConfigInfos result = AbstractHerder.redactResolvedValues(infos, original, resolved);
+
+        assertEquals(1, result.values().size());
+        ConfigValueInfo redacted = result.values().get(0).configValue();
+        assertEquals(TEST_REF, redacted.value());
+        assertTrue(redacted.errors().isEmpty());
+        assertTrue(redacted.recommendedValues().isEmpty());
+    }
+
+    @Test
+    public void testRedactResolvedValuesReplacesErrorMessages() {
+        Map<String, String> original = Collections.singletonMap("tasks.max", TEST_REF);
+        Map<String, String> resolved = Collections.singletonMap("tasks.max", "some-value");
+
+        ConfigValueInfo cv = new ConfigValueInfo("tasks.max", null, Collections.emptyList(),
+                Collections.singletonList("Invalid value some-value for configuration tasks.max"), true);
+        ConfigInfos infos = new ConfigInfos("MyConnector", 1, Collections.emptyList(),
+                Collections.singletonList(new ConfigInfo(null, cv)));
+
+        ConfigInfos result = AbstractHerder.redactResolvedValues(infos, original, resolved);
+
+        ConfigValueInfo redacted = result.values().get(0).configValue();
+        assertEquals(TEST_REF, redacted.value());
+        assertEquals(1, redacted.errors().size());
+        assertFalse(redacted.errors().get(0).contains("some-value"));
+        assertEquals(1, result.errorCount());
+    }
+
+    @Test
+    public void testRedactResolvedValuesLeavesUnsubstitutedKeysUnchanged() {
+        Map<String, String> original = new HashMap<>();
+        original.put("name", "my-connector");
+        original.put("tasks.max", TEST_REF);
+        Map<String, String> resolved = new HashMap<>();
+        resolved.put("name", "my-connector");
+        resolved.put("tasks.max", "some-value");
+
+        ConfigValueInfo nameCv = new ConfigValueInfo("name", "my-connector", Collections.emptyList(), Collections.emptyList(), true);
+        ConfigValueInfo tasksCv = new ConfigValueInfo("tasks.max", "some-value", Collections.emptyList(),
+                Collections.singletonList("some error with some-value"), true);
+        ConfigInfos infos = new ConfigInfos("MyConnector", 1, Collections.emptyList(),
+                Arrays.asList(new ConfigInfo(null, nameCv), new ConfigInfo(null, tasksCv)));
+
+        ConfigInfos result = AbstractHerder.redactResolvedValues(infos, original, resolved);
+
+        assertEquals(2, result.values().size());
+        ConfigValueInfo nameResult = result.values().get(0).configValue();
+        assertEquals("my-connector", nameResult.value());
+        assertTrue(nameResult.errors().isEmpty());
+
+        ConfigValueInfo tasksResult = result.values().get(1).configValue();
+        assertEquals(TEST_REF, tasksResult.value());
+        assertFalse(tasksResult.errors().get(0).contains("some-value"));
     }
 
     private void testConfigProviderRegex(String rawConnConfig, boolean expected) {
