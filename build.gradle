@@ -3599,6 +3599,12 @@ project(':jmh-benchmarks') {
     archiveBaseName = 'kafka-jmh-benchmarks'
   }
 
+  // Benchmarks should not spend time formatting log messages. Exclude the (location-aware) log4j
+  // slf4j binding so slf4j falls back to its no-op provider.
+  configurations.all {
+    exclude group: 'org.apache.logging.log4j', module: 'log4j-slf4j-impl'
+  }
+
   dependencies {
     implementation(project(':core')) {
       // jmh requires jopt 4.x while `core` depends on 5.0, they are not binary compatible
@@ -3624,6 +3630,7 @@ project(':jmh-benchmarks') {
     implementation testFixtures(project(':clients'))
     implementation testFixtures(project(':server-common'))
     implementation testFixtures(project(':metadata'))
+    implementation testFixtures(project(':raft'))
 
     implementation libs.jmhCore
     annotationProcessor libs.jmhGeneratorAnnProcess

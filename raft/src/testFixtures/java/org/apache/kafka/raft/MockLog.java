@@ -51,7 +51,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 public class MockLog implements RaftLog {
@@ -69,6 +68,12 @@ public class MockLog implements RaftLog {
     private long firstUnflushedOffset = 0;
     private boolean flushedSinceLastChecked = false;
 
+    // Cumulative work counters used by the JMH raft benchmarks. They grow for the lifetime of the
+    // log; benchmarks read them as drainable deltas (see RaftClientBenchmarkContext).
+    private long flushCount = 0;
+    private long readCount = 0;
+    private long truncationCount = 0;
+
     public MockLog(
         TopicPartition topicPartition,
         Uuid topicId,
@@ -85,6 +90,7 @@ public class MockLog implements RaftLog {
             throw new IllegalArgumentException("Illegal attempt to truncate to offset " + offset +
                 " which is below the current high watermark " + highWatermark);
         }
+        truncationCount++;
 
         logger.debug("Truncating log to end offset {}", offset);
         batches.removeIf(entry -> entry.lastOffset() >= offset);
@@ -109,6 +115,7 @@ public class MockLog implements RaftLog {
                 flush(false);
 
                 truncated.set(true);
+                truncationCount++;
             }
         });
 
@@ -152,11 +159,10 @@ public class MockLog implements RaftLog {
             return endOffset().metadata();
         }
 
-        for (LogBatch batch : batches) {
-            if (batch.lastOffset() < offset)
-                continue;
-
-            for (LogEntry entry : batch.entries) {
+        // batches are contiguous and offset-ordered, so binary search straight to the batch that
+        // could hold this offset
+        for (int i = firstBatchEndingAtOrAfter(offset); i < batches.size(); i++) {
+            for (LogEntry entry : batches.get(i).entries) {
                 if (entry.offset == offset) {
                     return Optional.of(entry.metadata);
                 }
@@ -199,54 +205,48 @@ public class MockLog implements RaftLog {
 
     @Override
     public OffsetAndEpoch endOffsetForEpoch(int epoch) {
-        return lastOffsetAndEpochFiltered(epochStartOffset -> epochStartOffset.epoch <= epoch);
-    }
-
-    private OffsetAndEpoch lastOffsetAndEpochFiltered(Predicate<EpochStartOffset> predicate) {
-        int epochLowerBound = earliestSnapshotId().map(OffsetAndEpoch::epoch).orElse(0);
-        for (EpochStartOffset epochStartOffset : epochStartOffsets) {
-            if (!predicate.test(epochStartOffset)) {
-                return new OffsetAndEpoch(epochStartOffset.startOffset, epochLowerBound);
+        // epochStartOffsets is sorted by epoch, so binary search for the first entry that belongs to
+        // a strictly greater epoch (the upper bound).
+        int lo = 0;
+        int hi = epochStartOffsets.size();
+        while (lo < hi) {
+            int mid = (lo + hi) >>> 1;
+            if (epochStartOffsets.get(mid).epoch <= epoch) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
             }
-            epochLowerBound = epochStartOffset.epoch;
         }
 
-        return new OffsetAndEpoch(endOffset().offset(), lastFetchedEpoch());
-    }
+        if (lo == epochStartOffsets.size()) {
+            return new OffsetAndEpoch(endOffset().offset(), lastFetchedEpoch());
+        }
 
-    private Optional<LogEntry> lastEntry() {
-        if (batches.isEmpty())
-            return Optional.empty();
-        return Optional.of(batches.get(batches.size() - 1).last());
-    }
-
-    private Optional<LogEntry> firstEntry() {
-        if (batches.isEmpty())
-            return Optional.empty();
-        return Optional.of(batches.get(0).first());
+        int epochLowerBound = lo == 0
+            ? earliestSnapshotId().map(OffsetAndEpoch::epoch).orElse(0)
+            : epochStartOffsets.get(lo - 1).epoch;
+        return new OffsetAndEpoch(epochStartOffsets.get(lo).startOffset, epochLowerBound);
     }
 
     @Override
     public LogOffsetMetadata endOffset() {
-        long nextOffset = lastEntry()
-            .map(entry -> entry.offset + 1)
-            .orElse(
-                latestSnapshotId()
-                    .map(OffsetAndEpoch::offset)
-                    .orElse(0L)
-            );
+        long nextOffset;
+        if (!batches.isEmpty()) {
+            nextOffset = batches.get(batches.size() - 1).last().offset + 1;
+        } else {
+            Map.Entry<OffsetAndEpoch, MockRawSnapshotReader> latestSnapshot = snapshots.lastEntry();
+            nextOffset = latestSnapshot == null ? 0L : latestSnapshot.getKey().offset();
+        }
         return new LogOffsetMetadata(nextOffset, Optional.of(new MockOffsetMetadata(nextId)));
     }
 
     @Override
     public long startOffset() {
-        return firstEntry()
-            .map(entry -> entry.offset)
-            .orElse(
-                earliestSnapshotId()
-                    .map(OffsetAndEpoch::offset)
-                    .orElse(0L)
-            );
+        if (!batches.isEmpty()) {
+            return batches.get(0).first().offset;
+        }
+        Map.Entry<OffsetAndEpoch, MockRawSnapshotReader> earliestSnapshot = snapshots.firstEntry();
+        return earliestSnapshot == null ? 0L : earliestSnapshot.getKey().offset();
     }
 
     private List<LogEntry> buildEntries(RecordBatch batch, Function<Record, Long> offsetSupplier) {
@@ -363,6 +363,7 @@ public class MockLog implements RaftLog {
     @Override
     public void flush(boolean forceFlushActiveSegment) {
         flushedSinceLastChecked = true;
+        flushCount++;
         firstUnflushedOffset = endOffset().offset();
     }
 
@@ -382,6 +383,22 @@ public class MockLog implements RaftLog {
         boolean oldValue = flushedSinceLastChecked;
         flushedSinceLastChecked = false;
         return oldValue;
+    }
+
+    /**
+     * Cumulative number of {@link #flush(boolean)} calls since this log was created. Used as a
+     * proxy for disk I/Os by the JMH raft benchmarks.
+     */
+    public long flushCount() {
+        return flushCount;
+    }
+
+    public long readCount() {
+        return readCount;
+    }
+
+    public long truncationCount() {
+        return truncationCount;
     }
 
     /**
@@ -418,9 +435,28 @@ public class MockLog implements RaftLog {
         }
     }
 
+    // Returns the index of the first batch whose last offset is at least offset, or batches.size()
+    // if none qualifies. Batches are stored in offset order, so this binary search lets read() jump
+    // straight to the relevant batch instead of scanning from the start; without it, per-read cost
+    // grows with the log length.
+    private int firstBatchEndingAtOrAfter(long offset) {
+        int lo = 0;
+        int hi = batches.size();
+        while (lo < hi) {
+            int mid = (lo + hi) >>> 1;
+            if (batches.get(mid).lastOffset() < offset) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+        return lo;
+    }
+
     @Override
     public LogFetchInfo read(long startOffset, Isolation isolation, int maxTotalBatchBytes) {
         verifyOffsetInRange(startOffset);
+        readCount++;
 
         long maxOffset = isolation == Isolation.COMMITTED ? highWatermark.offset() : endOffset().offset();
         if (startOffset >= maxOffset) {
@@ -439,7 +475,8 @@ public class MockLog implements RaftLog {
             isolation
         );
 
-        for (LogBatch batch : batches) {
+        for (int i = firstBatchEndingAtOrAfter(startOffset); i < batches.size(); i++) {
+            LogBatch batch = batches.get(i);
             // Note that start offset is inclusive while max offset is exclusive. We only return
             // complete batches, so batches which end at an offset larger than the max offset are
             // filtered, which is effectively the same as having the consumer drop an incomplete
@@ -483,8 +520,17 @@ public class MockLog implements RaftLog {
     @Override
     public void initializeLeaderEpoch(int epoch) {
         long startOffset = endOffset().offset();
-        epochStartOffsets.removeIf(epochStartOffset ->
-            epochStartOffset.startOffset >= startOffset || epochStartOffset.epoch >= epoch);
+        // epochStartOffsets is non-decreasing in both epoch and startOffset, so the entries removed
+        // here (those with epoch or startOffset >= the new epoch's) are a suffix of the list: pop
+        // them from the tail rather than scanning the whole list.
+        for (int i = epochStartOffsets.size() - 1; i >= 0; i--) {
+            EpochStartOffset epochStartOffset = epochStartOffsets.get(i);
+            if (epochStartOffset.startOffset >= startOffset || epochStartOffset.epoch >= epoch) {
+                epochStartOffsets.remove(i);
+            } else {
+                break;
+            }
+        }
         epochStartOffsets.add(new EpochStartOffset(epoch, startOffset));
     }
 
