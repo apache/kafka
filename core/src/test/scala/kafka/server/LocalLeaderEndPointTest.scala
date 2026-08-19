@@ -29,6 +29,7 @@ import org.apache.kafka.common.metadata.{FeatureLevelRecord, PartitionChangeReco
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.internal.{MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
@@ -167,6 +168,25 @@ class LocalLeaderEndPointTest extends Logging {
     replicaManager.logManager.getLog(topicPartition).ifPresent(_.updateLocalLogStartOffset(3))
     assertEquals(new OffsetAndEpoch(0L, 0), endPoint.fetchEarliestOffset(topicPartition, 7))
     assertEquals(new OffsetAndEpoch(3L, 1), endPoint.fetchEarliestLocalOffset(topicPartition, 7))
+  }
+
+  @Test
+  def testFetchOffsetsReturnUndefinedEpochWhenEpochIsUnresolvable(): Unit = {
+    appendRecords(replicaManager, topicIdPartition, records)
+      .onFire(response => assertEquals(Errors.NONE, response.error))
+
+    val log = replicaManager.getPartitionOrException(topicPartition).localLogOrException
+    // Simulate a leader whose epoch cache cannot resolve an epoch for the queried offsets,
+    // e.g. after the cache was cleared on a full truncation.
+    log.leaderEpochCache().clearAndFlush()
+
+    assertEquals(new OffsetAndEpoch(0L, UNDEFINED_EPOCH), endPoint.fetchEarliestOffset(topicPartition, 0))
+    assertEquals(new OffsetAndEpoch(3L, UNDEFINED_EPOCH), endPoint.fetchLatestOffset(topicPartition, 0))
+    assertEquals(new OffsetAndEpoch(0L, UNDEFINED_EPOCH), endPoint.fetchEarliestLocalOffset(topicPartition, 0))
+
+    // The same contract applies to the earliest pending upload offset.
+    log.updateHighestOffsetInRemoteStorage(1)
+    assertEquals(new OffsetAndEpoch(2L, UNDEFINED_EPOCH), endPoint.fetchEarliestPendingUploadOffset(topicPartition, 0))
   }
 
   @Test
