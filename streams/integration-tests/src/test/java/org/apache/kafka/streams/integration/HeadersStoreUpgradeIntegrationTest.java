@@ -76,7 +76,6 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 @Tag("integration")
 public class HeadersStoreUpgradeIntegrationTest {
@@ -847,7 +846,6 @@ public class HeadersStoreUpgradeIntegrationTest {
                 }
 
                 final ValueTimestampHeaders<String> actual = result.get().value;
-                assertNotNull(actual, "Stored value should not be null");
                 assertEquals(value, actual.value(), "Value should match");
                 assertEquals(expectedTimestamp, actual.timestamp(), "Timestamp should be " + expectedTimestamp);
                 assertEquals(expectedHeaders, actual.headers(), "Headers should match");
@@ -1384,6 +1382,27 @@ public class HeadersStoreUpgradeIntegrationTest {
     private void verifySessionValueWithEmptyHeaders(final String key,
                                                     final String value,
                                                     final long timestamp) throws Exception {
+        verifySessionValue(key, value, timestamp, new RecordHeaders());
+    }
+
+    private void processSessionKeyValueWithHeadersAndVerify(final String key,
+                                                            final String value,
+                                                            final long timestamp,
+                                                            final Headers headers,
+                                                            final Headers expectedHeaders) throws Exception {
+        produce(key, value, timestamp, headers);
+        verifySessionValue(key, value, timestamp, expectedHeaders);
+    }
+
+    /**
+     * Verifies the aggregation stored for {@code key} in the session bounded by {@code timestamp},
+     * expecting {@code value} and {@code expectedHeaders}. Pass an empty {@link RecordHeaders} for
+     * sessions migrated without headers.
+     */
+    private void verifySessionValue(final String key,
+                                    final String value,
+                                    final long timestamp,
+                                    final Headers expectedHeaders) throws Exception {
         awaitStore(SESSION_STORE_NAME, QueryableStoreTypes.<String, String>sessionStoreWithHeaders(),
             store -> {
                 final Optional<KeyValue<Windowed<String>, AggregationWithHeaders<String>>> result =
@@ -1393,35 +1412,11 @@ public class HeadersStoreUpgradeIntegrationTest {
                 }
 
                 final AggregationWithHeaders<String> actual = result.get().value;
-                assertNotNull(actual, "Stored value should not be null");
                 assertEquals(value, actual.aggregation(), "Value should match");
-
-                // Verify headers exist but are empty (migrated from plain session store)
-                assertNotNull(actual.headers(), "Headers should not be null for migrated data");
-                assertEquals(0, actual.headers().toArray().length, "Headers should be empty for migrated data");
-
+                assertEquals(expectedHeaders, actual.headers(), "Headers should match");
                 return true;
             },
-            "Could not verify legacy session value with empty headers in time.");
-    }
-
-    private void processSessionKeyValueWithHeadersAndVerify(final String key,
-                                                            final String value,
-                                                            final long timestamp,
-                                                            final Headers headers,
-                                                            final Headers expectedHeaders) throws Exception {
-        produce(key, value, timestamp, headers);
-
-        awaitStore(SESSION_STORE_NAME, QueryableStoreTypes.<String, String>sessionStoreWithHeaders(),
-            store -> {
-                final Optional<KeyValue<Windowed<String>, AggregationWithHeaders<String>>> result =
-                    findSessionValue(store, key, timestamp);
-                return result.isPresent()
-                    && result.get().value != null
-                    && result.get().value.aggregation().equals(value)
-                    && result.get().value.headers().equals(expectedHeaders);
-            },
-            "Could not verify session value with headers in time.");
+            "Could not verify session value in time.");
     }
 
     private void setupAndPopulateSessionStoreWithHeaders(final Properties props) throws Exception {
