@@ -343,31 +343,79 @@ public class StreamsMetricsImplTest {
     }
 
     @Test
-    public void shouldNotRetainDuplicateSensorNamesWhenSensorIsRecreated() {
+    public void shouldRemoveSensorNameWhenSensorIsRemoved() {
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), CLIENT_ID, time);
 
         for (int i = 0; i < 5; i++) {
-            final Sensor recreated = streamsMetrics.topicLevelSensor(
+            final Sensor sensor = streamsMetrics.topicLevelSensor(
                 THREAD_ID1, TASK_ID1, NODE_ID1, TOPIC_ID1, SENSOR_NAME_1, RecordingLevel.INFO);
-            streamsMetrics.removeSensor(recreated);
+            streamsMetrics.removeSensor(sensor);
         }
 
-        final int retainedNames = streamsMetrics.topicLevelSensors().values().stream()
-            .mapToInt(Set::size)
-            .sum();
-        assertThat(retainedNames, is(1));
+        assertThat(streamsMetrics.topicLevelSensors().isEmpty(), is(true));
     }
 
     @Test
-    public void shouldNotRetainDuplicateClientLevelSensorNamesWhenSensorIsRecreated() {
+    public void shouldRemoveSensorNamesOfDistinctSensorsWhenTheyAreRemoved() {
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), CLIENT_ID, time);
 
         for (int i = 0; i < 5; i++) {
-            final Sensor recreated = streamsMetrics.clientLevelSensor(SENSOR_NAME_1, INFO_RECORDING_LEVEL);
-            streamsMetrics.removeSensor(recreated);
+            final Sensor sensor = streamsMetrics.topicLevelSensor(
+                THREAD_ID1, TASK_ID1, NODE_ID1, TOPIC_ID1 + i, SENSOR_NAME_1, RecordingLevel.INFO);
+            streamsMetrics.removeSensor(sensor);
         }
 
-        assertThat(streamsMetrics.clientLevelSensors().size(), is(1));
+        assertThat(streamsMetrics.topicLevelSensors().isEmpty(), is(true));
+    }
+
+    @Test
+    public void shouldRemoveSensorNameWhenTopicContainsSensorNameDelimiter() {
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), CLIENT_ID, time);
+
+        final Sensor sensor = streamsMetrics.topicLevelSensor(
+            THREAD_ID1, TASK_ID1, NODE_ID1, "topic.s.with.delimiter", SENSOR_NAME_1, RecordingLevel.INFO);
+        streamsMetrics.removeSensor(sensor);
+
+        assertThat(streamsMetrics.topicLevelSensors().isEmpty(), is(true));
+    }
+
+    @Test
+    public void shouldRemoveThreadLevelSensorNameWhenSensorIsRemoved() {
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), CLIENT_ID, time);
+
+        for (int i = 0; i < 5; i++) {
+            final Sensor sensor = streamsMetrics.threadLevelSensor(THREAD_ID1, SENSOR_NAME_1, RecordingLevel.INFO);
+            streamsMetrics.removeSensor(sensor);
+        }
+
+        assertThat(streamsMetrics.threadLevelSensors().isEmpty(), is(true));
+    }
+
+    @Test
+    public void shouldKeepRemainingSensorNamesOfTheSameEntity() {
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), CLIENT_ID, time);
+        final Sensor removed = streamsMetrics.topicLevelSensor(
+            THREAD_ID1, TASK_ID1, NODE_ID1, TOPIC_ID1, SENSOR_NAME_1, RecordingLevel.INFO);
+        final Sensor remaining = streamsMetrics.topicLevelSensor(
+            THREAD_ID1, TASK_ID1, NODE_ID1, TOPIC_ID1, SENSOR_NAME_2, RecordingLevel.INFO);
+
+        streamsMetrics.removeSensor(removed);
+
+        final Map<String, Set<String>> topicLevelSensors = streamsMetrics.topicLevelSensors();
+        assertThat(topicLevelSensors.size(), is(1));
+        assertThat(topicLevelSensors.values().iterator().next(), is(Set.of(remaining.name())));
+    }
+
+    @Test
+    public void shouldRemoveClientLevelSensorNameWhenSensorIsRemoved() {
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), CLIENT_ID, time);
+
+        for (int i = 0; i < 5; i++) {
+            final Sensor sensor = streamsMetrics.clientLevelSensor(SENSOR_NAME_1, INFO_RECORDING_LEVEL);
+            streamsMetrics.removeSensor(sensor);
+        }
+
+        assertThat(streamsMetrics.clientLevelSensors().isEmpty(), is(true));
     }
 
     @Test

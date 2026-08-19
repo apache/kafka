@@ -993,6 +993,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     @Override
     public void removeSensor(final Sensor sensor) {
         Objects.requireNonNull(sensor, "Sensor is null");
+        removeSensorName(sensor.name());
         metrics.removeSensor(sensor.name());
 
         final Sensor parent = parentSensors.remove(sensor);
@@ -1002,10 +1003,57 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
     /**
+     * Removes a sensor name from the bookkeeping collections used by the current
+     * individual-removal paths. Client-level names are handled directly; the
+     * per-entity paths use thread- and topic-level sensors. Other levels are
+     * removed in bulk, which drops the whole bookkeeping entry.
+     */
+    private void removeSensorName(final String fullSensorName) {
+        synchronized (clientLevelSensors) {
+            if (clientLevelSensors.remove(fullSensorName)) {
+                return;
+            }
+        }
+        final int index = fullSensorName.lastIndexOf(SENSOR_NAME_DELIMITER);
+        if (index < 0) {
+            return;
+        }
+        final String sensorPrefix = fullSensorName.substring(0, index);
+        if (!removeSensorName(threadLevelSensors, sensorPrefix, fullSensorName)) {
+            removeSensorName(topicLevelSensors, sensorPrefix, fullSensorName);
+        }
+    }
+
+    private boolean removeSensorName(final Map<String, Set<String>> sensors,
+                                     final String sensorPrefix,
+                                     final String fullSensorName) {
+        synchronized (sensors) {
+            final Set<String> sensorNames = sensors.get(sensorPrefix);
+            if (sensorNames == null || !sensorNames.remove(fullSensorName)) {
+                return false;
+            }
+            if (sensorNames.isEmpty()) {
+                sensors.remove(sensorPrefix);
+            }
+            return true;
+        }
+    }
+
+    /**
      * Visible for testing
      */
     Map<Sensor, Sensor> parentSensors() {
         return Collections.unmodifiableMap(parentSensors);
+    }
+
+    /**
+     * Visible for testing
+     */
+    Map<String, Set<String>> threadLevelSensors() {
+        synchronized (threadLevelSensors) {
+            return threadLevelSensors.entrySet().stream()
+                .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, e -> Set.copyOf(e.getValue())));
+        }
     }
 
     /**
