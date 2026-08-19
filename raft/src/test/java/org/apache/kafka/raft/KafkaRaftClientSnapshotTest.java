@@ -51,6 +51,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.raft.RaftClientTestContext.RaftProtocol.KIP_1186_PROTOCOL;
 import static org.apache.kafka.raft.RaftClientTestContext.RaftProtocol.KIP_853_PROTOCOL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -767,15 +768,14 @@ public final class KafkaRaftClientSnapshotTest {
         assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.forCode(response.errorCode()));
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = { false, true })
-    public void testFetchSnapshotRequestWithoutTopics(boolean withKip853Rpc) throws Exception {
+    @Test
+    public void testFetchSnapshotRequestWithoutTopics() throws Exception {
         int localId = randomReplicaId();
         Set<Integer> voters = Set.of(localId, localId + 1);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(3)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(KIP_1186_PROTOCOL)
             .build();
 
         context.unattachedToLeader();
@@ -784,15 +784,14 @@ public final class KafkaRaftClientSnapshotTest {
         context.assertSentFetchSnapshotResponse(Errors.INVALID_REQUEST);
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = { false, true })
-    public void testFetchSnapshotRequestWithoutPartitions(boolean withKip853Rpc) throws Exception {
+    @Test
+    public void testFetchSnapshotRequestWithoutPartitions() throws Exception {
         int localId = randomReplicaId();
         Set<Integer> voters = Set.of(localId, localId + 1);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(3)
-            .withKip853Rpc(withKip853Rpc)
+            .withRaftProtocol(KIP_1186_PROTOCOL)
             .build();
 
         context.unattachedToLeader();
