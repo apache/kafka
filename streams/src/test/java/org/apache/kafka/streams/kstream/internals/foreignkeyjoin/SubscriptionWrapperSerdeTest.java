@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -30,6 +31,7 @@ import org.apache.kafka.streams.state.internals.Murmur3;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -325,5 +327,23 @@ public class SubscriptionWrapperSerdeTest {
 
         verify(mockDeserializer).deserialize(TOPIC, HEADERS, primaryKey.getBytes());
         verify(mockDeserializer, never()).deserialize(TOPIC, primaryKey.getBytes());
+    }
+
+    @Test
+    public void shouldThrowWhenPrimaryKeyLengthIsNegative() {
+        final SubscriptionWrapperSerde<String> swSerde = new SubscriptionWrapperSerde<>(() -> TOPIC, Serdes.String());
+
+        // 18 total bytes: 1 version byte + 1 instruction byte + 16-byte hash.
+        // Deserializing computes primaryKeyLength = data.length(18) - lengthSum(18) - Integer.BYTES(4) = -4.
+        final ByteBuffer buf = ByteBuffer.allocate(2 + 2 * Long.BYTES);
+        buf.put(SubscriptionWrapper.VERSION_1);
+        buf.put(SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE.value());
+        buf.putLong(0L);
+        buf.putLong(0L);
+
+        assertThrows(
+            SerializationException.class,
+            () -> swSerde.deserializer().deserialize(null, HEADERS, buf.array())
+        );
     }
 }

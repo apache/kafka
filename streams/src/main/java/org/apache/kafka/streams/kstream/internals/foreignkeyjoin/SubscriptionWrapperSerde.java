@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -209,6 +210,9 @@ public class SubscriptionWrapperSerde<KLeft> extends WrappingNullableSerde<Subsc
                 primaryKeyLength = data.length - lengthSum - Integer.BYTES;
             } else {
                 primaryKeyLength = data.length - lengthSum;
+            }
+            if (primaryKeyLength < 0) {
+                throw new SerializationException();
             }
             final byte[] primaryKeyRaw = new byte[primaryKeyLength];
             buf.get(primaryKeyRaw, 0, primaryKeyLength);
