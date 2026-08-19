@@ -144,6 +144,7 @@ org.apache.kafka.connect.integration.ConnectorTopicsIntegrationTest:
 - testTopicTrackingIsDisabled
 - testTopicTrackingResetIsDisabled
 org.apache.kafka.connect.integration.ConnectorValidationIntegrationTest:
+- testConnectorDeclaredConfigProviderDoesNotContainResolvedValue
 - testConnectorHasAbstractConverter
 - testConnectorHasAbstractHeaderConverter
 - testConnectorHasConverterThatThrowsExceptionOnInstantiation
@@ -165,6 +166,7 @@ org.apache.kafka.connect.integration.ConnectorValidationIntegrationTest:
 - testConnectorHasMissingPredicateClass
 - testConnectorHasMissingTransformClass
 - testConnectorHasNegationForUndefinedPredicate
+- testMissingConnectorClassErrorDoesNotContainResolvedValue
 - testSinkConnectorDeadLetterQueueTopicInTopicsList
 - testSinkConnectorDeadLetterQueueTopicMatchesTopicsRegex
 - testSinkConnectorDefaultGroupIdConflictsWithWorkerGroupId
@@ -172,6 +174,9 @@ org.apache.kafka.connect.integration.ConnectorValidationIntegrationTest:
 - testSinkConnectorHasNeitherTopicsListNorTopicsRegex
 - testSinkConnectorOverriddenGroupIdConflictsWithWorkerGroupId
 - testSourceConnectorHasDuplicateTopicCreationGroups
+- testValidationErrorMessagesDoNotContainResolvedValueOnTypeMismatch
+- testValidationErrorMessagesDoNotContainResolvedValueOnValidatorRejection
+- testValidationResponseDoesNotContainResolvedValue
 org.apache.kafka.connect.integration.ErrorHandlingIntegrationTest:
 - testErrantRecordReporter
 - testSkipRetryAndDLQWithHeaders
@@ -311,6 +316,12 @@ org.apache.kafka.connect.runtime.AbstractHerderTest:
 - testHeaderConverterPluginConfig
 - testPauseConnector
 - testPredicatePluginConfig
+- testRedactResolvedValuesLeavesUnsubstitutedKeysUnchanged
+- testRedactResolvedValuesNoSubstitutions
+- testRedactResolvedValuesReplacesErrorMessages
+- testRedactResolvedValuesReplacesValueWithPlaceholder
+- testRemoveCustomConfigProviders
+- testRemoveCustomConfigProvidersNoProviders
 - testRepeatedConfigValidationOfInvalidVersionSurfacesAvailableVersions
 - testResumeConnector
 - testReverseTransformConfigs
