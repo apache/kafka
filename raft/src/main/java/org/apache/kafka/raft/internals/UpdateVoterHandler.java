@@ -313,17 +313,15 @@ public final class UpdateVoterHandler {
             return true;
         }
 
-        return completeUpdateVoter(leaderState, changeVoterState, current, currentTimeMs);
+        completeUpdateVoter(leaderState, changeVoterState, current, currentTimeMs);
+        return true;
     }
 
     /**
      * Validates the kraft.version range and current voter set, then applies the update, once the
      * API_VERSIONS response has already been matched to a pending update voter operation.
-     *
-     * @return true always; matches the caller's return convention where only a failed API_VERSIONS
-     *         request itself (handled earlier) returns false
      */
-    private boolean completeUpdateVoter(
+    private void completeUpdateVoter(
         LeaderState<?> leaderState,
         ChangeVoterHandlerState changeVoterState,
         UpdateVoterHandlerState current,
@@ -346,7 +344,7 @@ public final class UpdateVoterHandler {
                 leaderState.leaderEndpoints(),
                 Optional.empty()
             );
-            return true;
+            return;
         }
 
         // Check that the leader has established a HWM and committed the current epoch
@@ -398,7 +396,7 @@ public final class UpdateVoterHandler {
                 leaderState.leaderEndpoints(),
                 Optional.empty()
             );
-            return true;
+            return;
         }
 
         // Update the voter
@@ -419,7 +417,7 @@ public final class UpdateVoterHandler {
                 Optional.empty()
             );
 
-            return true;
+            return;
         }
 
         storeUpdatedVoters(
@@ -429,7 +427,7 @@ public final class UpdateVoterHandler {
             updatedVoters.get(),
             currentTimeMs
         );
-        return true;
+        return;
     }
 
     private boolean validVersionRange(
