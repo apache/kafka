@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 
-import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 
 public class ChangedDeserializer<T> implements Deserializer<Change<T>>, WrappingNullableDeserializer<Change<T>, Void, T> {
@@ -82,8 +82,8 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>>, Wrapping
             }
             case (byte) 2: {
                 final int newDataLength = ByteUtils.readVarint(buffer);
-                if (newDataLength < 0 || newDataLength > buffer.remaining() - ENCODING_FLAG_SIZE) {
-                    throw new BufferUnderflowException();
+                if (newDataLength < 0 || newDataLength > buffer.remaining()) {
+                    throw new SerializationException();
                 }
                 newData = new byte[newDataLength];
                 buffer.get(newData);
@@ -112,8 +112,8 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>>, Wrapping
             }
             case (byte) 5: {
                 final int newDataLength = ByteUtils.readVarint(buffer);
-                if (newDataLength < 0 || newDataLength > buffer.remaining() - IS_LATEST_FLAG_SIZE - ENCODING_FLAG_SIZE) {
-                    throw new BufferUnderflowException();
+                if (newDataLength < 0 || newDataLength > buffer.remaining()) {
+                    throw new SerializationException();
                 }
                 newData = new byte[newDataLength];
                 buffer.get(newData);

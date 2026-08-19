@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -29,7 +30,6 @@ import org.apache.kafka.streams.errors.StreamsException;
 
 import org.junit.jupiter.api.Test;
 
-import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.Map;
@@ -233,8 +233,9 @@ public class ChangedSerdeTest {
         buf.get(serialized);
 
         assertThrows(
-                BufferUnderflowException.class,
-                () -> CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, HEADERS, serialized));
+                SerializationException.class,
+                () -> CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, HEADERS, serialized)
+        );
     }
 
     @Test
@@ -252,8 +253,9 @@ public class ChangedSerdeTest {
         buf.get(serialized);
 
         assertThrows(
-                BufferUnderflowException.class,
-                () -> CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, HEADERS, serialized));
+            SerializationException.class,
+            () -> CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, HEADERS, serialized)
+        );
     }
 
     @Test
@@ -268,8 +270,9 @@ public class ChangedSerdeTest {
         buf.get(serialized);
 
         assertThrows(
-                BufferUnderflowException.class,
-                () -> CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, HEADERS, serialized));
+            SerializationException.class,
+            () -> CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, HEADERS, serialized)
+        );
     }
 
     @Test
@@ -284,7 +287,8 @@ public class ChangedSerdeTest {
         buf.get(serialized);
 
         assertThrows(
-                BufferUnderflowException.class,
-                () -> CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, HEADERS, serialized));
+            SerializationException.class,
+            () -> CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, HEADERS, serialized)
+        );
     }
 }
