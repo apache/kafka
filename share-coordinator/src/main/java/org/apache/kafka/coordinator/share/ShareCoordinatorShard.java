@@ -563,8 +563,9 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         InitializeShareGroupStateRequestData.PartitionData partitionData = topicData.partitions().get(0);
         SharePartitionKey key = SharePartitionKey.getInstance(request.groupId(), topicData.topicId(), partitionData.partition());
 
-        CoordinatorRecord record = generateInitializeStateRecord(partitionData, key);
-        // build successful response if record is correctly created
+        Integer currentStateEpoch = stateEpochMap.get(key);
+        ShareGroupOffset currentState = shareStateMap.get(key);
+
         InitializeShareGroupStateResponseData responseData = new InitializeShareGroupStateResponseData().setResults(
             List.of(InitializeShareGroupStateResponse.toResponseInitializeStateResult(key.topicId(),
                 List.of(InitializeShareGroupStateResponse.toResponsePartitionResult(
@@ -572,6 +573,13 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             ))
         );
 
+        if (currentStateEpoch != null && currentStateEpoch == partitionData.stateEpoch() &&
+                currentState != null && currentState.startOffset() == partitionData.startOffset()) {
+            log.debug("Duplicate initialize request {}. Treating as no-op.", request);
+            return new CoordinatorResult<>(List.of(), responseData);
+        }
+
+        CoordinatorRecord record = generateInitializeStateRecord(partitionData, key);
         return new CoordinatorResult<>(List.of(record), responseData);
     }
 
