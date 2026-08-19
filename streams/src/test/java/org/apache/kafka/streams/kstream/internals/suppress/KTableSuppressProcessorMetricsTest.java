@@ -35,7 +35,6 @@ import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
-import org.hamcrest.Matcher;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mockito;
@@ -50,9 +49,8 @@ import java.util.Properties;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecords;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.greaterThan;
-import static org.hamcrest.core.Is.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 @ExtendWith(MockitoExtension.class)
@@ -176,12 +174,12 @@ public class KTableSuppressProcessorMetricsTest {
         {
             final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
 
-            verifyMetric(metrics, evictionRateMetric, is(0.0));
-            verifyMetric(metrics, evictionTotalMetric, is(0.0));
-            verifyMetric(metrics, bufferSizeAvgMetric, is(21.5));
-            verifyMetric(metrics, bufferSizeMaxMetric, is(43.0));
-            verifyMetric(metrics, bufferCountAvgMetric, is(0.5));
-            verifyMetric(metrics, bufferCountMaxMetric, is(1.0));
+            verifyMetric(metrics, evictionRateMetric, 0.0);
+            verifyMetric(metrics, evictionTotalMetric, 0.0);
+            verifyMetric(metrics, bufferSizeAvgMetric, 21.5);
+            verifyMetric(metrics, bufferSizeMaxMetric, 43.0);
+            verifyMetric(metrics, bufferCountAvgMetric, 0.5);
+            verifyMetric(metrics, bufferCountMaxMetric, 1.0);
         }
 
         context.setRecordMetadata("", 0, 1L);
@@ -191,21 +189,22 @@ public class KTableSuppressProcessorMetricsTest {
         {
             final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
 
-            verifyMetric(metrics, evictionRateMetric, greaterThan(0.0));
-            verifyMetric(metrics, evictionTotalMetric, is(1.0));
-            verifyMetric(metrics, bufferSizeAvgMetric, is(41.0));
-            verifyMetric(metrics, bufferSizeMaxMetric, is(82.0));
-            verifyMetric(metrics, bufferCountAvgMetric, is(1.0));
-            verifyMetric(metrics, bufferCountMaxMetric, is(2.0));
+            assertEquals(evictionRateMetric.description(), metrics.get(evictionRateMetric).metricName().description());
+            assertTrue((double) metrics.get(evictionRateMetric).metricValue() > 0.0);
+
+            verifyMetric(metrics, evictionTotalMetric, 1.0);
+            verifyMetric(metrics, bufferSizeAvgMetric, 41.0);
+            verifyMetric(metrics, bufferSizeMaxMetric, 82.0);
+            verifyMetric(metrics, bufferCountAvgMetric, 1.0);
+            verifyMetric(metrics, bufferCountMaxMetric, 2.0);
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private static <T> void verifyMetric(final Map<MetricName, ? extends Metric> metrics,
-                                         final MetricName metricName,
-                                         final Matcher<T> matcher) {
-        assertThat(metrics.get(metricName).metricName().description(), is(metricName.description()));
-        assertThat((T) metrics.get(metricName).metricValue(), matcher);
+    private static void verifyMetric(final Map<MetricName, ? extends Metric> metrics,
+                                     final MetricName metricName,
+                                     final double expected) {
+        assertEquals(metricName.description(), metrics.get(metricName).metricName().description());
+        assertEquals(expected, metrics.get(metricName).metricValue());
     }
 
     private StoreBuilder<?> mockBuilderWithName(final String name) {
