@@ -476,29 +476,26 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
 
-        // Mirror RocksDBStore#query: under READ_UNCOMMITTED, expose the writes staged in the
-        // transaction buffer since the last commit by merging the buffer's pending position
-        // deltas into a copy of the committed position. READ_COMMITTED (and the
-        // non-transactional store) query the committed position directly.
-        // Snapshot under the position lock only, then delegate outside it: handleBasicQueries
-        // owns the store-monitor-before-position lock order (KAFKA-19629), so the position lock
-        // must not be held while it acquires the store monitor.
-        final Position queryPosition;
         synchronized (position) {
+            // Mirror RocksDBStore#query: under READ_UNCOMMITTED, expose the writes staged in the
+            // transaction buffer since the last commit by merging the buffer's pending position
+            // deltas into a copy of the committed position. READ_COMMITTED (and the
+            // non-transactional store) query the committed position directly.
+            final Position queryPosition;
             if (transactionBuffer != null && config.getIsolationLevel() == IsolationLevel.READ_UNCOMMITTED) {
                 queryPosition = position.copy().merge(transactionBuffer.pendingPosition());
             } else {
                 queryPosition = position;
             }
+            return StoreQueryUtils.handleBasicQueries(
+                query,
+                positionBound,
+                config,
+                this,
+                queryPosition,
+                context
+            );
         }
-        return StoreQueryUtils.handleBasicQueries(
-            query,
-            positionBound,
-            config,
-            this,
-            queryPosition,
-            context
-        );
     }
 
     @Override

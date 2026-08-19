@@ -536,9 +536,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         final PositionBound positionBound,
         final QueryConfig config) {
 
-        // Snapshot the query position under the position lock only, then delegate outside it:
-        // handleBasicQueries owns the store-monitor-before-position lock order (KAFKA-19629),
-        // so the position lock must not be held while it acquires the store monitor.
+        // Snapshot under the position lock only: holding it into handleBasicQueries
+        // would invert its store-then-position order (KAFKA-19629).
         final Position queryPosition;
         synchronized (position) {
             if (config.getIsolationLevel() == IsolationLevel.READ_COMMITTED) {
