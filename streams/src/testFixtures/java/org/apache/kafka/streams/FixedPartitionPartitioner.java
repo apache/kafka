@@ -14,42 +14,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.streams;
 
-import org.apache.kafka.clients.producer.internals.BuiltInPartitioner;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
 import java.util.Collections;
 import java.util.Optional;
 import java.util.Set;
 
-public class DefaultStreamPartitioner<K, V> implements StreamPartitioner<K, V> {
+public class FixedPartitionPartitioner<K, V> implements StreamPartitioner<K, V> {
 
-    private final Serializer<K> keySerializer;
+    private final int partition;
 
-    public DefaultStreamPartitioner(final Serializer<K> keySerializer) {
-        this.keySerializer = keySerializer;
+    public FixedPartitionPartitioner(final int partition) {
+        this.partition = partition;
     }
 
     @SuppressWarnings("removal")
     @Override
     public Optional<Set<Integer>> partitions(final String topic, final K key, final V value, final int numPartitions) {
-        throw new UnsupportedOperationException("This method is deprecated and should not be called.");
+        throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
     }
 
     @Override
     public Optional<Set<Integer>> partitions(final String topic, final K key, final V value, final Headers headers, final int numPartitions) {
-        final byte[] keyBytes = keySerializer.serialize(topic, headers, key);
-
-        // if the key bytes are not available, we just return empty optional to let the producer decide
-        // which partition to send internally; otherwise stick with the same built-in partitioner
-        // util functions that producer used to make sure its behavior is consistent with the producer
-        if (keyBytes == null) {
-            return Optional.empty();
-        } else {
-            return Optional.of(Collections.singleton(BuiltInPartitioner.partitionForKey(keyBytes, numPartitions)));
-        }
+        return Optional.of(Collections.singleton(partition));
     }
 }

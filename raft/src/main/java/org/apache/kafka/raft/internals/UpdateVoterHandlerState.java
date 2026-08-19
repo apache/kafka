@@ -17,7 +17,9 @@
 
 package org.apache.kafka.raft.internals;
 
-import org.apache.kafka.common.message.AddRaftVoterResponseData;
+import org.apache.kafka.common.feature.SupportedVersionRange;
+import org.apache.kafka.common.message.UpdateRaftVoterResponseData;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.Endpoints;
 import org.apache.kafka.raft.ReplicaKey;
@@ -27,30 +29,33 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 /**
- * Tracks the state of a single pending add voter operation.
+ * Tracks the state of a single pending update voter operation.
  * <p>
- * An instance is created by {@link AddVoterHandler#handleAddVoterRequest} once the API_VERSIONS
- * request has been sent to the new voter, and is held by {@link ChangeVoterHandlerState} until
- * the operation completes, is aborted, or expires.
+ * An instance is created by {@link UpdateVoterHandler#handleUpdateVoterRequest} once the
+ * API_VERSIONS request has been sent to the voter being updated, and is held by
+ * {@link ChangeVoterHandlerState} until the operation completes, is aborted, or expires.
  */
-public final class AddVoterHandlerState {
+public final class UpdateVoterHandlerState {
     private final ReplicaKey voterKey;
     private final Endpoints voterEndpoints;
-    private final boolean ackWhenCommitted;
+    private final ListenerName requestListenerName;
+    private final SupportedVersionRange supportedKraftVersions;
     private final Timer timeout;
-    private final CompletableFuture<AddRaftVoterResponseData> future = new CompletableFuture<>();
+    private final CompletableFuture<UpdateRaftVoterResponseData> future = new CompletableFuture<>();
 
     private OptionalLong lastOffset = OptionalLong.empty();
 
-    AddVoterHandlerState(
+    UpdateVoterHandlerState(
         ReplicaKey voterKey,
         Endpoints voterEndpoints,
-        boolean ackWhenCommitted,
+        ListenerName requestListenerName,
+        SupportedVersionRange supportedKraftVersions,
         Timer timeout
     ) {
         this.voterKey = voterKey;
         this.voterEndpoints = voterEndpoints;
-        this.ackWhenCommitted = ackWhenCommitted;
+        this.requestListenerName = requestListenerName;
+        this.supportedKraftVersions = supportedKraftVersions;
         this.timeout = timeout;
     }
 
@@ -76,7 +81,7 @@ public final class AddVoterHandlerState {
     }
 
     /**
-     * Sets the offset of the VotersRecord that was appended to the log for this add voter operation.
+     * Sets the last offset for this update voter operation.
      *
      * @param lastOffset the offset of the VotersRecord that was appended to the log
      * @throws IllegalStateException if the last offset has already been set
@@ -85,7 +90,7 @@ public final class AddVoterHandlerState {
         if (this.lastOffset.isPresent()) {
             throw new IllegalStateException(
                 String.format(
-                    "Cannot override last offset to %s for adding voter %s because it is " +
+                    "Cannot override last offset to %s for updating voter %s because it is " +
                     "already set to %s",
                     lastOffset,
                     voterKey,
@@ -98,7 +103,7 @@ public final class AddVoterHandlerState {
     }
 
     /**
-     * Returns the voter key for the voter being added.
+     * Returns the voter key for the voter being updated.
      *
      * @return the voter key
      */
@@ -107,7 +112,7 @@ public final class AddVoterHandlerState {
     }
 
     /**
-     * Returns the endpoints for the voter being added.
+     * Returns the endpoints for the voter being updated.
      *
      * @return the voter endpoints
      */
@@ -116,13 +121,21 @@ public final class AddVoterHandlerState {
     }
 
     /**
-     * Returns whether the AddVoter response should be withheld until the voter change commits.
+     * Returns the listener name from the update voter request.
      *
-     * @return true if the response should be sent only after the change commits, false if it
-     *         should be sent as soon as the change is appended to the log
+     * @return the listener name
      */
-    public boolean ackWhenCommitted() {
-        return ackWhenCommitted;
+    public ListenerName requestListenerName() {
+        return requestListenerName;
+    }
+
+    /**
+     * Returns the kraft version range supported by the voter being updated.
+     *
+     * @return the supported kraft version range
+     */
+    public SupportedVersionRange supportedKraftVersions() {
+        return supportedKraftVersions;
     }
 
     /**
@@ -139,11 +152,11 @@ public final class AddVoterHandlerState {
      *
      * @param response the response to complete the future with
      */
-    public void completeFuture(AddRaftVoterResponseData response) {
+    public void completeFuture(UpdateRaftVoterResponseData response) {
         future.complete(response);
     }
 
-    CompletionStage<AddRaftVoterResponseData> future() {
+    CompletionStage<UpdateRaftVoterResponseData> future() {
         return future;
     }
 }
