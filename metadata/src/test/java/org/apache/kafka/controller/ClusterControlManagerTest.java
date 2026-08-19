@@ -24,6 +24,7 @@ import org.apache.kafka.common.errors.ControllerIdNotRegisteredException;
 import org.apache.kafka.common.errors.DuplicateBrokerRegistrationException;
 import org.apache.kafka.common.errors.InconsistentClusterIdException;
 import org.apache.kafka.common.errors.InvalidRegistrationException;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
@@ -1173,6 +1174,67 @@ public class ClusterControlManagerTest {
         assertEquals(1, unregisterResult.records().size());
         RecordTestUtils.replayAll(clusterControl, unregisterResult.records());
         assertFalse(clusterControl.controllerRegistrations().containsKey(1));
+    }
+
+    @Test
+    public void testDecommissionControllerMarksBeforeKip1312AndUnregistersAfterwards() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        FeatureControlManager featureControl = new FeatureControlManager.Builder().
+            setSnapshotRegistry(snapshotRegistry).
+            setQuorumFeatures(new QuorumFeatures(0,
+                QuorumFeatures.defaultSupportedFeatureMap(true),
+                List.of(0))).
+            build();
+        featureControl.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.IBP_4_0_IV3.featureLevel()));
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+            setSnapshotRegistry(snapshotRegistry).
+            setFeatureControlManager(featureControl).
+            setBrokerShutdownHandler((brokerId, isCleanShutdown, records) -> { }).
+            build();
+        clusterControl.activate();
+        RecordTestUtils.replayAll(clusterControl, clusterControl.registerController(
+            new ControllerRegistrationRequestData().setControllerId(1)).records());
+
+        ControllerResult<Void> decommissionResult = clusterControl.decommissionController(1);
+        assertEquals(1, decommissionResult.records().size());
+        RecordTestUtils.replayAll(clusterControl, decommissionResult.records());
+        assertTrue(clusterControl.controllerRegistrations().get(1).isDecommissioned());
+        assertFalse(clusterControl.controllerSupportedFeatures().hasNext());
+
+        // A pre-existing marker remains a no-op until KIP-1312 controller unregistration is enabled.
+        assertTrue(clusterControl.decommissionController(1).records().isEmpty());
+
+        featureControl.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.IBP_4_4_IV2.featureLevel()));
+        ControllerResult<Void> unregisterResult = clusterControl.decommissionController(1);
+        assertEquals(1, unregisterResult.records().size());
+        assertTrue(unregisterResult.records().get(0).message() instanceof UnregisterControllerRecord);
+        RecordTestUtils.replayAll(clusterControl, unregisterResult.records());
+        assertFalse(clusterControl.controllerRegistrations().containsKey(1));
+    }
+
+    @Test
+    public void testDecommissionControllerRejectsQuorumVoter() {
+        FeatureControlManager featureControl = new FeatureControlManager.Builder().
+            setQuorumFeatures(new QuorumFeatures(0,
+                QuorumFeatures.defaultSupportedFeatureMap(true),
+                List.of(1))).
+            build();
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+            setFeatureControlManager(featureControl).
+            setBrokerShutdownHandler((brokerId, isCleanShutdown, records) -> { }).
+            build();
+        clusterControl.activate();
+        RecordTestUtils.replayAll(clusterControl, clusterControl.registerController(
+            new ControllerRegistrationRequestData().setControllerId(1)).records());
+
+        assertEquals("Cannot decommission controller 1 because it is present in the controller quorum. " +
+                "Remove it from the quorum before decommissioning it.",
+            assertThrows(InvalidRequestException.class,
+                () -> clusterControl.decommissionController(1)).getMessage());
     }
 
     @Test

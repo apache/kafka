@@ -24,6 +24,7 @@ import org.apache.kafka.common.errors.ControllerIdNotRegisteredException;
 import org.apache.kafka.common.errors.DuplicateBrokerRegistrationException;
 import org.apache.kafka.common.errors.InconsistentClusterIdException;
 import org.apache.kafka.common.errors.InvalidRegistrationException;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
@@ -41,6 +42,7 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
+import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
 import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
@@ -500,6 +502,47 @@ public class ClusterControlManager {
         return ControllerResult.atomicOf(records, null);
     }
 
+    /**
+     * Decommission a stopped controller that is no longer a quorum voter. Before KIP-1312 is
+     * enabled, retain its registration with an internal marker so feature validation ignores it.
+     * Once KIP-1312 is enabled, physically unregister it instead.
+     */
+    ControllerResult<Void> decommissionController(int controllerId) {
+        if (!featureControl.metadataVersionOrThrow().isControllerRegistrationSupported()) {
+            throw new UnsupportedVersionException("The current MetadataVersion is too old to " +
+                    "support controller registrations.");
+        }
+        ControllerRegistration registration = controllerRegistrations.get(controllerId);
+        if (registration == null) {
+            throw new ControllerIdNotRegisteredException("Controller ID " + controllerId +
+                    " is not currently registered.");
+        }
+        if (featureControl.isControllerId(controllerId)) {
+            throw new InvalidRequestException("Cannot decommission controller " + controllerId +
+                    " because it is present in the controller quorum. Remove it from the quorum " +
+                    "before decommissioning it.");
+        }
+        if (featureControl.metadataVersionOrThrow().isControllerUnregistrationSupported()) {
+            return unregisterController(controllerId);
+        }
+        if (registration.isDecommissioned()) {
+            log.info("Controller {} is already decommissioned. Taking no action.", controllerId);
+            return ControllerResult.of(List.of(), null);
+        }
+        ControllerRegistration decommissionedRegistration = new ControllerRegistration.Builder().
+            setId(registration.id()).
+            setIncarnationId(registration.incarnationId()).
+            setZkMigrationReady(registration.zkMigrationReady()).
+            setListeners(registration.listeners()).
+            setSupportedFeatures(registration.supportedFeatures()).
+            setDecommissioned(true).
+            build();
+        log.info("Decommissioning controller {}. Its registration remains for now, but it will " +
+                "not participate in feature or metadata.version upgrade decisions.", controllerId);
+        ImageWriterOptions options = new ImageWriterOptions.Builder(featureControl.metadataVersionOrThrow()).build();
+        return ControllerResult.atomicOf(List.of(decommissionedRegistration.toRecord(options)), null);
+    }
+
     ControllerResult<Void> unregisterController(int controllerId) {
         if (!featureControl.metadataVersionOrThrow().isControllerUnregistrationSupported()) {
             throw new UnsupportedVersionException("The current MetadataVersion is too old to " +
@@ -885,21 +928,17 @@ public class ClusterControlManager {
             throw new UnsupportedVersionException("The current MetadataVersion is too old to " +
                     "support controller registrations.");
         }
-        return new Iterator<>() {
-            private final Iterator<ControllerRegistration> iter = controllerRegistrations.values().iterator();
-
-            @Override
-            public boolean hasNext() {
-                return iter.hasNext();
+        List<Entry<Integer, Map<String, VersionRange>>> supportedControllers = new ArrayList<>();
+        for (ControllerRegistration registration : controllerRegistrations.values()) {
+            if (registration.isDecommissioned()) {
+                log.info("Skipping decommissioned controller {} when computing controller-supported " +
+                        "features.", registration.id());
+                continue;
             }
-
-            @Override
-            public Entry<Integer, Map<String, VersionRange>> next() {
-                ControllerRegistration registration = iter.next();
-                return new AbstractMap.SimpleImmutableEntry<>(registration.id(),
-                        registration.supportedFeatures());
-            }
-        };
+            supportedControllers.add(new AbstractMap.SimpleImmutableEntry<>(registration.id(),
+                    registration.supportedFeatures()));
+        }
+        return supportedControllers.iterator();
     }
 
     @FunctionalInterface

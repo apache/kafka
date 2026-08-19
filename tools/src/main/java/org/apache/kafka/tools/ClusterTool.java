@@ -81,11 +81,16 @@ public class ClusterTool {
                 .help("Unregister a broker.");
         Subparser unregisterControllerParser = subparsers.addParser("unregister-controller")
                 .help("Unregister a controller.");
+        Subparser decommissionControllerParser = subparsers.addParser("decommission-controller")
+                .help("Decommission a stopped, non-voter controller. Before metadata.version " +
+                        "4.4-IV2 this retains and marks its registration; afterwards it " +
+                        "unregisters the controller.");
         Subparser listEndpoints = subparsers.addParser("list-endpoints")
                 .help("List endpoints");
         Subparser apiVersionsParser = subparsers.addParser("api-versions")
                 .help("Get information about the api versions of the brokers or controllers.");
-        for (Subparser subpparser : List.of(clusterIdParser, unregisterParser, unregisterControllerParser, listEndpoints, apiVersionsParser)) {
+        for (Subparser subpparser : List.of(clusterIdParser, unregisterParser, unregisterControllerParser,
+                decommissionControllerParser, listEndpoints, apiVersionsParser)) {
             MutuallyExclusiveGroup connectionOptions = subpparser.addMutuallyExclusiveGroup().required(true);
             connectionOptions.addArgument("--bootstrap-server", "-b")
                     .action(store())
@@ -111,6 +116,11 @@ public class ClusterTool {
                 .action(store())
                 .required(true)
                 .help("The ID of the controller to unregister.");
+        decommissionControllerParser.addArgument("--id", "-i")
+                .type(Integer.class)
+                .action(store())
+                .required(true)
+                .help("The ID of the stopped controller to decommission. It must no longer be a quorum voter.");
         listEndpoints.addArgument("--include-fenced-brokers")
                 .action(storeTrue())
                 .help("Whether to include fenced brokers when listing broker endpoints");
@@ -148,6 +158,12 @@ public class ClusterTool {
             case "unregister-controller": {
                 try (Admin adminClient = Admin.create(properties)) {
                     unregisterControllerCommand(System.out, adminClient, namespace.getInt("id"));
+                }
+                break;
+            }
+            case "decommission-controller": {
+                try (Admin adminClient = Admin.create(properties)) {
+                    decommissionControllerCommand(System.out, adminClient, namespace.getInt("id"));
                 }
                 break;
             }
@@ -204,6 +220,26 @@ public class ClusterTool {
             Throwable cause = ee.getCause();
             if (cause instanceof UnsupportedVersionException) {
                 stream.println("The target cluster does not support the controller unregistration API.");
+            } else {
+                throw ee;
+            }
+        }
+    }
+
+    /**
+     * Invoke the upstream UnregisterController API with Aiven's transition semantics. The
+     * controller selects marking or physical unregistration from the finalized metadata version.
+     */
+    static void decommissionControllerCommand(PrintStream stream, Admin adminClient, int id) throws Exception {
+        try {
+            adminClient.unregisterController(id).all().get();
+            stream.println("Controller " + id + " was decommissioned. Before metadata.version " +
+                    "4.4-IV2 its registration remains but is excluded from feature validation; " +
+                    "at or above 4.4-IV2 it is unregistered.");
+        } catch (ExecutionException ee) {
+            Throwable cause = ee.getCause();
+            if (cause instanceof UnsupportedVersionException) {
+                stream.println("The target cluster does not support controller decommissioning.");
             } else {
                 throw ee;
             }

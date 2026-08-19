@@ -18,6 +18,7 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.clients.admin.FeatureUpdate;
+import org.apache.kafka.common.message.ControllerRegistrationRequestData;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
@@ -46,8 +47,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -188,6 +191,86 @@ public class FeatureControlManagerTest {
                 return controllerRanges.iterator();
             }
         };
+    }
+
+    @Test
+    public void testMetadataVersionUpgradeIgnoresStaleControllerRegistrations() {
+        AtomicReference<ClusterControlManager> clusterControlRef = new AtomicReference<>();
+        FeatureControlManager manager = new FeatureControlManager.Builder().
+            setQuorumFeatures(new QuorumFeatures(0,
+                QuorumFeatures.defaultSupportedFeatureMap(true),
+                List.of(0))).
+            setClusterFeatureSupportDescriber(new ClusterFeatureSupportDescriber() {
+                @Override
+                public Iterator<Map.Entry<Integer, Map<String, VersionRange>>> brokerSupported() {
+                    return List.<Map.Entry<Integer, Map<String, VersionRange>>>of().iterator();
+                }
+
+                @Override
+                public Iterator<Map.Entry<Integer, Map<String, VersionRange>>> controllerSupported() {
+                    return clusterControlRef.get().controllerSupportedFeatures();
+                }
+            }).
+            build();
+        manager.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.IBP_4_0_IV3.featureLevel()));
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+            setFeatureControlManager(manager).
+            setBrokerShutdownHandler((brokerId, isCleanShutdown, records) -> { }).
+            build();
+        clusterControlRef.set(clusterControl);
+        clusterControl.activate();
+        RecordTestUtils.replayAll(clusterControl, clusterControl.registerController(
+            new ControllerRegistrationRequestData().setControllerId(1)).records());
+        RecordTestUtils.replayAll(clusterControl, clusterControl.decommissionController(1).records());
+
+        ControllerResult<ApiError> result = manager.updateFeatures(
+            Map.of(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_4_4_IV2.featureLevel()),
+            Map.of(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.UPGRADE),
+            true,
+            0);
+        assertEquals(ApiError.NONE, result.response());
+    }
+
+    @Test
+    public void testMetadataVersionUpgradeStillChecksLiveControllers() {
+        AtomicReference<ClusterControlManager> clusterControlRef = new AtomicReference<>();
+        FeatureControlManager manager = new FeatureControlManager.Builder().
+            setQuorumFeatures(new QuorumFeatures(0,
+                QuorumFeatures.defaultSupportedFeatureMap(true),
+                List.of(0))).
+            setClusterFeatureSupportDescriber(new ClusterFeatureSupportDescriber() {
+                @Override
+                public Iterator<Map.Entry<Integer, Map<String, VersionRange>>> brokerSupported() {
+                    return List.<Map.Entry<Integer, Map<String, VersionRange>>>of().iterator();
+                }
+
+                @Override
+                public Iterator<Map.Entry<Integer, Map<String, VersionRange>>> controllerSupported() {
+                    return clusterControlRef.get().controllerSupportedFeatures();
+                }
+            }).
+            build();
+        manager.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.IBP_4_0_IV3.featureLevel()));
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+            setFeatureControlManager(manager).
+            setBrokerShutdownHandler((brokerId, isCleanShutdown, records) -> { }).
+            build();
+        clusterControlRef.set(clusterControl);
+        clusterControl.activate();
+        RecordTestUtils.replayAll(clusterControl, clusterControl.registerController(
+            new ControllerRegistrationRequestData().setControllerId(1)).records());
+
+        ControllerResult<ApiError> result = manager.updateFeatures(
+            Map.of(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_4_4_IV2.featureLevel()),
+            Map.of(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.UPGRADE),
+            true,
+            0);
+        assertFalse(result.response().isSuccess());
+        assertTrue(result.response().message().contains("Controller 1 only supports"));
     }
 
     @Test

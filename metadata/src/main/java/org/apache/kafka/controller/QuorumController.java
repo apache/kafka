@@ -2162,12 +2162,12 @@ public final class QuorumController implements Controller {
         ControllerRequestContext context,
         int controllerId
     ) {
-        return appendWriteEvent("unregisterController", context.deadlineNs(),
+        return appendWriteEvent("decommissionController", context.deadlineNs(),
             () -> {
                 if (nodeId == controllerId) {
                     throw new InvalidRequestException("Controller cannot unregister itself while it is active.");
                 }
-                return clusterControl.unregisterController(controllerId);
+                return clusterControl.decommissionController(controllerId);
             },
             EnumSet.noneOf(ControllerOperationFlag.class));
     }

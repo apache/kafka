@@ -313,6 +313,18 @@ public class ClusterToolTest {
     }
 
     @Test
+    public void testDecommissionControllerUsesUpstreamUnregisterControllerApi() throws Exception {
+        Admin adminClient = new MockAdminClient.Builder().numBrokers(3).
+                usingRaftController(true).
+                build();
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+        ClusterTool.decommissionControllerCommand(new PrintStream(stream), adminClient, 0);
+        assertEquals("Controller 0 was decommissioned. Before metadata.version 4.4-IV2 its " +
+                "registration remains but is excluded from feature validation; at or above " +
+                "4.4-IV2 it is unregistered.\n", stream.toString());
+    }
+
+    @Test
     public void testLegacyModeClusterCannotUnregisterController() throws Exception {
         Admin adminClient = new MockAdminClient.Builder().numBrokers(3).
                 usingRaftController(false).

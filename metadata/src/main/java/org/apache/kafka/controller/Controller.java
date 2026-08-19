@@ -413,13 +413,14 @@ public interface Controller extends AclMutator, AutoCloseable {
     );
 
     /**
-     * Attempt to unregister the given controller.
+     * Decommission the given controller. Before KIP-1312 is enabled, this marks a stopped,
+     * non-voter registration so it is excluded from feature validation. At or above KIP-1312's
+     * metadata version, it physically unregisters the controller instead.
      *
      * @param context       The controller request context.
-     * @param controllerId  The controller id to unregister.
+     * @param controllerId  The controller id to decommission or unregister.
      *
-     * @return              A future that is completed successfully when the controller is
-     *                      unregistered.
+     * @return              A future that is completed successfully when the operation finishes.
      */
     CompletableFuture<Void> unregisterController(
         ControllerRequestContext context,

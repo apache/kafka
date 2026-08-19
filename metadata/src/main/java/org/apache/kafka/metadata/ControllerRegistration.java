@@ -40,6 +40,14 @@ import java.util.stream.Collectors;
  * An immutable class which represents controller registrations.
  */
 public class ControllerRegistration {
+    /**
+     * A synthetic entry in a controller registration's existing feature array. It marks a
+     * stopped, non-voter controller as decommissioned during the pre-KIP-1312 transition.
+     */
+    public static final String DECOMMISSIONED_FEATURE_NAME = "__decommissioned_controller";
+
+    private static final VersionRange DECOMMISSIONED_MARKER_RANGE = VersionRange.of((short) 1, (short) 1);
+
     public static class Builder {
         private int id;
         private Uuid incarnationId;
@@ -105,6 +113,18 @@ public class ControllerRegistration {
             return this;
         }
 
+        public Builder setDecommissioned(boolean decommissioned) {
+            Map<String, VersionRange> newSupportedFeatures =
+                new HashMap<>(supportedFeatures == null ? Collections.emptyMap() : supportedFeatures);
+            if (decommissioned) {
+                newSupportedFeatures.put(DECOMMISSIONED_FEATURE_NAME, DECOMMISSIONED_MARKER_RANGE);
+            } else {
+                newSupportedFeatures.remove(DECOMMISSIONED_FEATURE_NAME);
+            }
+            this.supportedFeatures = newSupportedFeatures;
+            return this;
+        }
+
         public ControllerRegistration build() {
             if (incarnationId == null) throw new RuntimeException("You must set incarnationId.");
             if (listeners == null) throw new RuntimeException("You must set listeners.");
@@ -165,8 +185,21 @@ public class ControllerRegistration {
         return Optional.of(new Node(id, endpoint.host(), endpoint.port(), null));
     }
 
+    /**
+     * Return the effective feature ranges. The decommission marker is implementation metadata,
+     * not a Kafka feature, and must not be exposed to feature negotiation callers.
+     */
     public Map<String, VersionRange> supportedFeatures() {
-        return supportedFeatures;
+        if (!isDecommissioned()) {
+            return supportedFeatures;
+        }
+        Map<String, VersionRange> effectiveFeatures = new HashMap<>(supportedFeatures);
+        effectiveFeatures.remove(DECOMMISSIONED_FEATURE_NAME);
+        return Collections.unmodifiableMap(effectiveFeatures);
+    }
+
+    public boolean isDecommissioned() {
+        return supportedFeatures.containsKey(DECOMMISSIONED_FEATURE_NAME);
     }
 
     public ApiMessageAndVersion toRecord(ImageWriterOptions options) {
