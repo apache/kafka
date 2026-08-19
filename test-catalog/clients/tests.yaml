@@ -1971,6 +1971,7 @@ org.apache.kafka.clients.consumer.internals.FetchRequestManagerTest:
 - testEmptyControlBatch
 - testEmptyFetchResponseWakesUpBuffer
 - testEpochSetInFetchRequest
+- testFailedFetchResponseWakesUpBuffer
 - testFetchAfterPartitionWithFetchedRecordsIsUnassigned
 - testFetchCompletedBeforeHandlerAdded
 - testFetchDiscardedAfterPausedPartitionResumedAndSeekedToNewOffset
@@ -2008,6 +2009,7 @@ org.apache.kafka.clients.consumer.internals.FetchRequestManagerTest:
 - testFetchResponseMetricsWithSkippedOffset
 - testFetchResponseWithUnexpectedPartitionIsIgnored
 - testFetchResultNotProcessedForPartitionsAwaitingCallbackCompletion
+- testFetchSessionErrorResponseWakesUpBuffer
 - testFetchSessionIdError
 - testFetchSkipsBlackedOutNodes
 - testFetchTopicIdUpgradeDowngrade
@@ -2028,11 +2030,17 @@ org.apache.kafka.clients.consumer.internals.FetchRequestManagerTest:
 - testInflightFetchResultNotProcessedForPartitionsAwaitingCallbackCompletion
 - testInvalidDefaultRecordBatch
 - testLeaderEpochInConsumerRecord
+- testMaximumTimeToWaitBoundedWhenNoInflightRequest
+- testMaximumTimeToWaitBoundedWhenPartitionsSkippedDueToBackoff
+- testMaximumTimeToWaitUnboundedWhenFetchSent
+- testMaximumTimeToWaitUnboundedWhenPartitionsSkippedDueToInflight
 - testMissingLeaderEpochInRecords
 - testMultipleAbortMarkers
+- testNoFetchablePartitionsDoesNotWakeUpBuffer
 - testParseCorruptedRecord
 - testParseInvalidRecordBatch
 - testPartialFetchWithPausedPartitions
+- testPartitionsSkippedDueToBackoffDoesNotWakeUpBuffer
 - testPollWithCreateFetchRequests
 - testPollWithCreateFetchRequestsError
 - testPollWithRedundantCreateFetchRequests
