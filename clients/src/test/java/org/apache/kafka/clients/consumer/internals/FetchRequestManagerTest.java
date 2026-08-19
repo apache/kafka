@@ -389,21 +389,21 @@ public class FetchRequestManagerTest {
     }
 
     @Test
-    public void testMaximumTimeToWaitUnboundedWhenAllFetchablePartitionsBuffered() {
+    public void testMaximumTimeToWaitBoundedWhenNoInflightRequest() {
         buildFetcher();
 
         assignFromUser(singleton(tp0));
         subscriptions.seek(tp0, 0);
 
         // Fetch data for tp0, but leave it buffered (unconsumed) so the next prepare() finds every fetchable
-        // partition already buffered.
+        // partition already buffered. With no in-flight request, maximumTimeToWait is bounded.
         client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
         assertEquals(1, sendFetches());
         networkClientDelegate.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
         assertEquals(0, sendFetches());
-        assertEquals(Long.MAX_VALUE, fetcher.maximumTimeToWait(time.milliseconds()));
+        assertEquals(retryBackoffMs, fetcher.maximumTimeToWait(time.milliseconds()));
     }
 
     @Test
