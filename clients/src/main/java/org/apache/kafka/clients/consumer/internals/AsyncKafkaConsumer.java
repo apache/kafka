@@ -2001,11 +2001,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 // failure. Reduce the wait time so the application thread can consume data promptly once positions are
                 // resolved.
                 pollTimeout = retryBackoffMs;
-            } else if (subscriptions.hasFetchablePartitions(tp -> !fetchBuffer.bufferedPartitions().contains(tp))) {
-                // If any fetchable partition has no buffered data, it may have been skipped due to reconnect backoff,
-                // an in-flight request, or a missing leader. Bound the wait so the application thread can retry once
-                // the condition clears.
-                pollTimeout = retryBackoffMs;
             }
         }
 

@@ -2139,8 +2139,6 @@ public class AsyncKafkaConsumerTest {
 
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
-        // The partition is fetchable but already buffered, so pollForFetches should not bound the timeout.
-        doReturn(singleton(tp)).when(fetchBuffer).bufferedPartitions();
 
         // Capture the Timer passed to awaitWakeup so we can assert it was given the full
         // poll timeout, i.e. no busy loop. Also advance mock time by the timer's remaining ms so the
