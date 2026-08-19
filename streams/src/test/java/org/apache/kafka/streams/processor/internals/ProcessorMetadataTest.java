@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.junit.jupiter.api.Test;
 
-import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -180,16 +180,18 @@ public class ProcessorMetadataTest {
         buf.position(0);
         buf.get(serialized);
 
-        assertThrows(BufferUnderflowException.class, () -> ProcessorMetadata.deserialize(serialized));
+        assertThrows(SerializationException.class, () -> ProcessorMetadata.deserialize(serialized));
     }
 
     @Test
     public void shouldThrowWhenKeySizeIsNegative() {
-        final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES + Integer.BYTES);
-        buf.putInt(1);    // entrySize = 1, legitimate
+        final byte[] padding = new byte[Long.BYTES];
+        final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES + Integer.BYTES + padding.length);
+        buf.putInt(1);    // entrySize = 1, legitimate given the padded buffer size
         buf.putInt(-1);   // keySize is negative
+        buf.put(padding);
 
-        assertThrows(BufferUnderflowException.class, () -> ProcessorMetadata.deserialize(buf.array()));
+        assertThrows(SerializationException.class, () -> ProcessorMetadata.deserialize(buf.array()));
     }
 
     @Test
@@ -206,7 +208,7 @@ public class ProcessorMetadataTest {
         buf.position(0);
         buf.get(serialized);
 
-        assertThrows(BufferUnderflowException.class, () -> ProcessorMetadata.deserialize(serialized));
+        assertThrows(SerializationException.class, () -> ProcessorMetadata.deserialize(serialized));
     }
 
     @Test
@@ -214,6 +216,6 @@ public class ProcessorMetadataTest {
         final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES);
         buf.putInt(-1);
 
-        assertThrows(BufferUnderflowException.class, () -> ProcessorMetadata.deserialize(buf.array()));
+        assertThrows(SerializationException.class, () -> ProcessorMetadata.deserialize(buf.array()));
     }
 }
