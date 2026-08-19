@@ -18,12 +18,9 @@ package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
-import org.hamcrest.BaseMatcher;
-import org.hamcrest.Description;
 import org.junit.jupiter.api.Test;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class WallclockTimestampExtractorTest {
 
@@ -35,29 +32,8 @@ public class WallclockTimestampExtractorTest {
         final long timestamp = extractor.extract(new ConsumerRecord<>("anyTopic", 0, 0, null, null), 42);
         final long after = System.currentTimeMillis();
 
-        assertThat(timestamp, is(new InBetween(before, after)));
-    }
-
-    private static class InBetween extends BaseMatcher<Long> {
-        private final long before;
-        private final long after;
-
-        public InBetween(final long before, final long after) {
-            this.before = before;
-            this.after = after;
-        }
-
-        @Override
-        public boolean matches(final Object item) {
-            final long timestamp = (Long) item;
-            return before <= timestamp && timestamp <= after;
-        }
-
-        @Override
-        public void describeMismatch(final Object item, final Description mismatchDescription) {}
-
-        @Override
-        public void describeTo(final Description description) {}
+        assertTrue(before <= timestamp);
+        assertTrue(timestamp <= after);
     }
 
 }
