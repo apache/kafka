@@ -222,7 +222,7 @@ public class ChangedSerdeTest {
     public void shouldThrowOnNewDataLengthLargerThanRemainingBytesForFlag2() {
         final byte[] newData = STRING_SERIALIZER.serialize(TOPIC, HEADERS, nonNullNewValue);
         final byte[] oldData = STRING_SERIALIZER.serialize(TOPIC, HEADERS, nonNullOldValue);
-        final int fakeNewDataLength = newData.length + oldData.length + 1; // one past what the buffer can actually back
+        final int fakeNewDataLength = newData.length + oldData.length + ENCODING_FLAG_SIZE + 1; // one past what the buffer can actually back
 
         final int capacity = MAX_VARINT_LENGTH + newData.length + oldData.length + ENCODING_FLAG_SIZE;
         final ByteBuffer buf = ByteBuffer.allocate(capacity);
@@ -233,8 +233,8 @@ public class ChangedSerdeTest {
         buf.get(serialized);
 
         assertThrows(
-                SerializationException.class,
-                () -> CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, HEADERS, serialized)
+            SerializationException.class,
+            () -> CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, HEADERS, serialized)
         );
     }
 
@@ -242,7 +242,7 @@ public class ChangedSerdeTest {
     public void shouldThrowOnNewDataLengthLargerThanRemainingBytesForFlag5() {
         final byte[] newData = STRING_SERIALIZER.serialize(TOPIC, HEADERS, nonNullNewValue);
         final byte[] oldData = STRING_SERIALIZER.serialize(TOPIC, HEADERS, nonNullOldValue);
-        final int fakeNewDataLength = newData.length + oldData.length + 1;
+        final int fakeNewDataLength = newData.length + oldData.length + IS_LATEST_FLAG_SIZE + ENCODING_FLAG_SIZE + 1;
 
         final int capacity = MAX_VARINT_LENGTH + newData.length + oldData.length + IS_LATEST_FLAG_SIZE + ENCODING_FLAG_SIZE;
         final ByteBuffer buf = ByteBuffer.allocate(capacity);
