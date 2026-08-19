@@ -270,9 +270,13 @@ public class KafkaClusterTestKit implements AutoCloseable {
         }
 
         private Optional<File> maybeSetupJaasFile() throws Exception {
+            // Skip the auto-generated PLAIN-only JAAS file when a test has already configured its own
+            // JAAS login config (for example, a MiniKdc-based GSSAPI test that also enables PLAIN),
+            // since overwriting it here would discard mechanisms other than PLAIN.
             if ((brokerSecurityProtocol.equals(SecurityProtocol.SASL_PLAINTEXT.name) ||
                     brokerSecurityProtocol.equals(SecurityProtocol.SASL_SSL.name)) &&
-                    isPlainSaslMechanism(configProps)) {
+                    isPlainSaslMechanism(configProps) &&
+                    System.getProperty(org.apache.kafka.common.security.JaasUtils.JAVA_LOGIN_CONFIG_PARAM) == null) {
                 File file = JaasUtils.writeJaasContextsToFile(Set.of(
                     new JaasUtils.JaasSection(JaasUtils.KAFKA_SERVER_CONTEXT_NAME,
                         List.of(
