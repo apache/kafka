@@ -213,12 +213,16 @@ org.apache.kafka.raft.KafkaRaftClientReconfigTest:
 - testUpdateVoterInvalidClusterId
 - testUpdateVoterNewEpoch
 - testUpdateVoterOldEpoch
+- testUpdateVoterResetsCheckQuorumTimer
 - testUpdateVoterResponseCausesEpochChange
 - testUpdateVoterToNotLeader
+- testUpdateVoterWithBrokerNotAvailable
 - testUpdateVoterWithKraftVersion0
 - testUpdateVoterWithNoneVoter
 - testUpdateVoterWithNoneVoterId
 - testUpdateVoterWithPendingAddVoter
+- testUpdateVoterWithUnreachableListener
+- testUpdateVoterWithUnsupportedKraftVersion
 - testUpdateVoterWithoutFencedPreviousLeaders
 org.apache.kafka.raft.KafkaRaftClientSnapshotTest:
 - testCreateSnapshotAsFollowerWithInvalidSnapshotId
@@ -666,6 +670,13 @@ org.apache.kafka.raft.VoterSetTest:
 - testVoterNodeIsVoterWithDirectoryId
 - testVoterNodeIsVoterWithoutDirectoryId
 - testVoterNodes
+org.apache.kafka.raft.internals.AddVoterHandlerStateTest:
+- testCannotOverrideLastOffset
+- testCompleteFuture
+- testExpectingApiResponseBeforeLastOffset
+- testGetters
+- testSetLastOffsetOnce
+- testTimeUntilExpiration
 org.apache.kafka.raft.internals.BatchAccumulatorTest:
 - testCloseWhenEmpty
 - testCompletedBatchReleaseBuffer
@@ -702,8 +713,13 @@ org.apache.kafka.raft.internals.ChangeVoterHandlerStateTest:
 - testAddVoterLifecycle
 - testCanReplaceAddVoterWithAnotherAddVoter
 - testCanReplaceRemoveVoterWithAnotherRemoveVoter
+- testCanReplaceUpdateVoterWithAnotherUpdateVoter
 - testCannotSetAddVoterWhenRemoveVoterPresent
+- testCannotSetAddVoterWhenUpdateVoterPresent
 - testCannotSetRemoveVoterWhenAddVoterPresent
+- testCannotSetRemoveVoterWhenUpdateVoterPresent
+- testCannotSetUpdateVoterWhenAddVoterPresent
+- testCannotSetUpdateVoterWhenRemoveVoterPresent
 - testIsOperationPendingWithAddVoter
 - testIsOperationPendingWithRemoveVoter
 - testMaybeExpirePendingAddVoter
@@ -800,6 +816,10 @@ org.apache.kafka.raft.internals.RecordsIteratorTest:
 - testFileRecords
 - testMemoryRecords
 - testWithAllSupportedControlRecords
+org.apache.kafka.raft.internals.RemoveVoterHandlerStateTest:
+- testCompleteFuture
+- testLastOffset
+- testTimeUntilExpiration
 org.apache.kafka.raft.internals.ThresholdPurgatoryTest:
 - testCompleteAll
 - testCompleteAllExceptionally
@@ -815,6 +835,13 @@ org.apache.kafka.raft.internals.TreeMapLogHistoryTest:
 - testEmpty
 - testTrimPrefixTo
 - testTruncateTo
+org.apache.kafka.raft.internals.UpdateVoterHandlerStateTest:
+- testCannotOverrideLastOffset
+- testCompleteFuture
+- testExpectingApiResponseBeforeLastOffset
+- testGetters
+- testSetLastOffsetOnce
+- testTimeUntilExpiration
 org.apache.kafka.raft.internals.VoterSetHistoryTest:
 - TestNoStaticVoterSet
 - testAddAt
