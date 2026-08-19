@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -23,7 +24,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 
-import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.function.Supplier;
 
@@ -93,7 +93,7 @@ public class CombinedKeySchema<KRight, KLeft> {
         final ByteBuffer dataBuffer = ByteBuffer.wrap(dataArray);
         final int foreignKeyLength = dataBuffer.getInt();
         if (foreignKeyLength < 0 || foreignKeyLength > dataBuffer.remaining()) {
-            throw new BufferUnderflowException();
+            throw new SerializationException();
         }
         final byte[] foreignKeyRaw = new byte[foreignKeyLength];
         dataBuffer.get(foreignKeyRaw, 0, foreignKeyLength);

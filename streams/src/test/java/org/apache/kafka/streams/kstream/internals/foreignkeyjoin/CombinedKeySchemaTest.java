@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -29,7 +30,6 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 
 import org.junit.jupiter.api.Test;
 
-import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -189,8 +189,8 @@ public class CombinedKeySchemaTest {
     @Test
     public void shouldThrowWhenForeignKeyLengthExceedsRemainingBytes() {
         final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>(
-                () -> FK_TOPIC, Serdes.String(),
-                () -> PK_TOPIC, Serdes.Integer()
+            () -> FK_TOPIC, Serdes.String(),
+            () -> PK_TOPIC, Serdes.Integer()
         );
 
         final byte[] foreignKeyRaw = Serdes.String().serializer().serialize(FK_TOPIC, "foreignKey");
@@ -202,20 +202,20 @@ public class CombinedKeySchemaTest {
         buf.put(foreignKeyRaw).put(primaryKeyRaw);
         final Bytes corrupted = Bytes.wrap(buf.array());
 
-        assertThrows(BufferUnderflowException.class, () -> cks.fromBytes(corrupted, HEADERS));
+        assertThrows(SerializationException.class, () -> cks.fromBytes(corrupted, HEADERS));
     }
 
     @Test
     public void shouldThrowWhenForeignKeyLengthIsNegative() {
         final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>(
-                () -> FK_TOPIC, Serdes.String(),
-                () -> PK_TOPIC, Serdes.Integer()
+            () -> FK_TOPIC, Serdes.String(),
+            () -> PK_TOPIC, Serdes.Integer()
         );
 
         final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES);
         buf.putInt(-1);
         final Bytes corrupted = Bytes.wrap(buf.array());
 
-        assertThrows(BufferUnderflowException.class, () -> cks.fromBytes(corrupted, HEADERS));
+        assertThrows(SerializationException.class, () -> cks.fromBytes(corrupted, HEADERS));
     }
 }
