@@ -203,7 +203,7 @@
 
     <!-- Streams tests -->
     <suppress checks="ClassFanOutComplexity"
-              files="(RecordCollectorTest|StreamsPartitionAssignorTest|StreamThreadTest|StreamTaskTest|TaskManagerTest|TopologyTestDriverTest|KafkaStreamsTest|EosIntegrationTest|RestoreIntegrationTest|RocksDBStoreTest).java"/>
+              files="(RecordCollectorTest|StreamsPartitionAssignorTest|StreamThreadTest|StreamTaskTest|TaskManagerTest|TopologyTestDriverTest|KafkaStreamsTest|EosIntegrationTest|RestoreIntegrationTest).java"/>
 
     <suppress checks="MethodLength"
               files="(EosIntegrationTest|KStreamKStreamJoinTest|KStreamKStreamLeftJoinTest|KStreamKStreamOuterJoinTest|KStreamSlidingWindowAggregateTest|KTableKTableForeignKeyJoinIntegrationTest|RocksDBWindowStoreTest|TopologyTestDriverTest).java"/>

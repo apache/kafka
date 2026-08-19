@@ -128,8 +128,12 @@ public final class StoreQueryUtils {
         final QueryResult<R> result;
 
         final QueryHandler<?> handler = QUERY_HANDLER_MAP.get(query.getClass());
-        // Global lock order: every path that takes both locks must take the store monitor
-        // before the position lock, or concurrent access can deadlock (KAFKA-19629).
+        // Take the store monitor before the position lock, matching the order used by write
+        // paths that synchronize on the store (e.g. InMemoryKeyValueStore/MemoryLRUCache put),
+        // so a concurrent put/query cannot deadlock (KAFKA-19629). Note this only excludes
+        // writers that lock the store object passed here; callers that pass a wrapper (the
+        // segmented window/session stores) get ordering, not mutual exclusion. Callers must not
+        // hold the position lock when calling in.
         synchronized (store) {
             synchronized (position) {
                 if (handler == null) {

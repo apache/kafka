@@ -536,26 +536,25 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         final PositionBound positionBound,
         final QueryConfig config) {
 
-        // Lock order must match the write paths (store monitor, then position),
-        // otherwise concurrent put/query can deadlock (KAFKA-19629).
-        synchronized (this) {
-            synchronized (position) {
-                final Position queryPosition;
-                if (config.getIsolationLevel() == IsolationLevel.READ_COMMITTED) {
-                    queryPosition = position;
-                } else {
-                    queryPosition = position.copy().merge(dbAccessor.uncommittedPositionDeltas());
-                }
-                return StoreQueryUtils.handleBasicQueries(
-                    query,
-                    positionBound,
-                    config,
-                    this,
-                    queryPosition,
-                    context
-                );
+        // Snapshot the query position under the position lock only, then delegate outside it:
+        // handleBasicQueries owns the store-monitor-before-position lock order (KAFKA-19629),
+        // so the position lock must not be held while it acquires the store monitor.
+        final Position queryPosition;
+        synchronized (position) {
+            if (config.getIsolationLevel() == IsolationLevel.READ_COMMITTED) {
+                queryPosition = position;
+            } else {
+                queryPosition = position.copy().merge(dbAccessor.uncommittedPositionDeltas());
             }
         }
+        return StoreQueryUtils.handleBasicQueries(
+            query,
+            positionBound,
+            config,
+            this,
+            queryPosition,
+            context
+        );
     }
 
     @Override

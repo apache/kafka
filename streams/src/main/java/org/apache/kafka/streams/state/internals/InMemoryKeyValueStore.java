@@ -87,15 +87,21 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
             stateStoreContext.register(
                 root,
                 (RecordBatchingStateRestoreCallback) records -> {
-                    synchronized (position) {
-                        for (final ConsumerRecord<byte[], byte[]> record : records) {
-                            final Bytes key = Bytes.wrap(record.key());
-                            putInternal(key, record.value());
-                            ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
-                                record,
-                                consistencyEnabled,
-                                position
-                            );
+                    // Readers (get/range/query) hold the store monitor, so restore must too or a
+                    // reader can traverse the TreeMap mid-rebalance; take it before the position
+                    // lock to match put()'s order (KAFKA-19629). Lock per record so readers can
+                    // interleave between records of a large restore batch.
+                    for (final ConsumerRecord<byte[], byte[]> record : records) {
+                        final Bytes key = Bytes.wrap(record.key());
+                        synchronized (this) {
+                            synchronized (position) {
+                                putInternal(key, record.value());
+                                ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                                    record,
+                                    consistencyEnabled,
+                                    position
+                                );
+                            }
                         }
                     }
                 }
