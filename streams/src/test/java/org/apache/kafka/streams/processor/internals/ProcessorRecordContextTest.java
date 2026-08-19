@@ -16,14 +16,15 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 
 import org.junit.jupiter.api.Test;
 
-import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -117,7 +118,7 @@ public class ProcessorRecordContextTest {
     @Test
     public void shouldRejectHeaderCountLargerThanRemainingBuffer() {
         final Headers headers = new RecordHeaders();
-        headers.add("header-key", "header-value".getBytes());
+        headers.add("header-key", "header-value".getBytes(UTF_8));
         final ProcessorRecordContext context = new ProcessorRecordContext(
                 42L, 73L, 0, "topic", headers);
 
@@ -128,18 +129,18 @@ public class ProcessorRecordContextTest {
         // timestamp(8) + offset(8) + topicLen(4) + "topic"(5) + partition(4)
         final int headerCountOffset = 8 + 8 + 4 + "topic".getBytes().length + 4;
         final int bytesAfterHeaderCount = serialized.length - (headerCountOffset + 4);
-        final int maxPlausibleHeaderCount = bytesAfterHeaderCount / 4;
+        final int maxPlausibleHeaderCount = bytesAfterHeaderCount / (2 * Integer.BYTES);
 
         // Overwrite the real headerCount with a little more that it could support
         buffer.putInt(headerCountOffset, maxPlausibleHeaderCount + 1);
 
-        assertThrows(BufferUnderflowException.class, () -> ProcessorRecordContext.deserialize(buffer));
+        assertThrows(SerializationException.class, () -> ProcessorRecordContext.deserialize(buffer));
     }
 
     @Test
     public void shouldDeserializeValidHeaderCountWithoutRejecting() {
         final Headers headers = new RecordHeaders();
-        headers.add("header-key", "header-value".getBytes());
+        headers.add("header-key", "header-value".getBytes(UTF_8));
         final ProcessorRecordContext context = new ProcessorRecordContext(
                 42L, 73L, 0, "topic", headers);
 
@@ -159,6 +160,6 @@ public class ProcessorRecordContextTest {
         buffer.putInt(-2);     // headerCount, negative but not the -1 sentinel
         buffer.flip();
 
-        assertThrows(BufferUnderflowException.class, () -> ProcessorRecordContext.deserialize(buffer));
+        assertThrows(SerializationException.class, () -> ProcessorRecordContext.deserialize(buffer));
     }
 }
