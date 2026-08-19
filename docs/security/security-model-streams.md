@@ -40,3 +40,4 @@ In line with the [core model's classification](../security-model), the following
 
 - **Application-level issues in a Streams topology.** Streams runs inside the user's application, so bugs in user-supplied processors, state handling, or topology code fall within the application's trust boundary, not the broker's.
 - **Local state being readable on the host.** State stores and changelogs on disk are protected by the host filesystem, not by Kafka; reading them requires local access that is outside the model.
+- **SHUTDOWN_APPLICATION via StreamsGroupHeartbeat.** Streams allows application instances to send a shutdown signal to all other members of the group. This is an application feature (not an administrative request) and does not require elevated ACLs.
