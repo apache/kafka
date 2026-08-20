@@ -89,7 +89,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
     private final Metrics metrics;
-    private final Map<Sensor, Sensor> parentSensors;
     private final String clientId;
 
     private final Version version;
@@ -176,8 +175,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         this.clientId = clientId;
         version = Version.LATEST;
         rocksDBMetricsRecordingTrigger = new RocksDBMetricsRecordingTrigger(time);
-
-        this.parentSensors = new HashMap<>();
     }
 
     public Version version() {
@@ -987,26 +984,24 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return sensor;
     }
 
-    /**
-     * Deletes a sensor and its parents, if any
-     */
     @Override
     public void removeSensor(final Sensor sensor) {
         Objects.requireNonNull(sensor, "Sensor is null");
         removeSensorName(sensor.name());
         metrics.removeSensor(sensor.name());
-
-        final Sensor parent = parentSensors.remove(sensor);
-        if (parent != null) {
-            metrics.removeSensor(parent.name());
-        }
     }
 
     /**
-     * Removes a sensor name from the bookkeeping collections used by the current
-     * individual-removal paths. Client-level names are handled directly; the
-     * per-entity paths use thread- and topic-level sensors. Other levels are
-     * removed in bulk, which drops the whole bookkeeping entry.
+     * Removes a sensor name from the bookkeeping collections. Client-level names are
+     * looked up directly; for the other levels the prefix is derived from the sensor
+     * name, which maps to exactly one level.
+     *
+     * Store-level sensors are left out on purpose: they are only removed in bulk and
+     * their collection is not guarded by a lock, because a store key contains the name
+     * of the thread that created it and only that thread accesses it.
+     *
+     * A sensor suffix that contains the delimiter is not resolved to its prefix; the
+     * name is then left in the collection until the bulk removal drops the whole entry.
      */
     private void removeSensorName(final String fullSensorName) {
         synchronized (clientLevelSensors) {
@@ -1019,9 +1014,19 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             return;
         }
         final String sensorPrefix = fullSensorName.substring(0, index);
-        if (!removeSensorName(threadLevelSensors, sensorPrefix, fullSensorName)) {
-            removeSensorName(topicLevelSensors, sensorPrefix, fullSensorName);
+        if (removeSensorName(threadLevelSensors, sensorPrefix, fullSensorName)) {
+            return;
         }
+        if (removeSensorName(taskLevelSensors, sensorPrefix, fullSensorName)) {
+            return;
+        }
+        if (removeSensorName(nodeLevelSensors, sensorPrefix, fullSensorName)) {
+            return;
+        }
+        if (removeSensorName(topicLevelSensors, sensorPrefix, fullSensorName)) {
+            return;
+        }
+        removeSensorName(cacheLevelSensors, sensorPrefix, fullSensorName);
     }
 
     private boolean removeSensorName(final Map<String, Set<String>> sensors,
@@ -1042,8 +1047,31 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     /**
      * Visible for testing
      */
-    Map<Sensor, Sensor> parentSensors() {
-        return Collections.unmodifiableMap(parentSensors);
+    Map<String, Set<String>> taskLevelSensors() {
+        synchronized (taskLevelSensors) {
+            return taskLevelSensors.entrySet().stream()
+                .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, e -> Set.copyOf(e.getValue())));
+        }
+    }
+
+    /**
+     * Visible for testing
+     */
+    Map<String, Set<String>> nodeLevelSensors() {
+        synchronized (nodeLevelSensors) {
+            return nodeLevelSensors.entrySet().stream()
+                .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, e -> Set.copyOf(e.getValue())));
+        }
+    }
+
+    /**
+     * Visible for testing
+     */
+    Map<String, Set<String>> cacheLevelSensors() {
+        synchronized (cacheLevelSensors) {
+            return cacheLevelSensors.entrySet().stream()
+                .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, e -> Set.copyOf(e.getValue())));
+        }
     }
 
     /**
