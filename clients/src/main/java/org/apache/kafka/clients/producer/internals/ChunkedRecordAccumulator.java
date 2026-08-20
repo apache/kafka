@@ -153,7 +153,8 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                 }
                 setPartition(callbacks, effectivePartition);
 
-                Deque<ProducerBatch> dq = topicInfo.batches.computeIfAbsent(effectivePartition, k -> new ArrayDeque<>());
+                TopicPartition tp = new TopicPartition(topic, effectivePartition);
+                Deque<ProducerBatch> dq = topicInfo.batches.computeIfAbsent(tp, k -> new ArrayDeque<>());
                 RecordAppendResult appendResult;
                 // The batch the extension gap was sized against, non-null exactly when the result is
                 // needsBufferExtension. The acquire below runs off the deque lock, so this is used
@@ -259,7 +260,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     // Reuse the new-batch size estimate as the write-limit basis.
                     // TODO: review when compression is supported.
                     final NewBatchBuffer pendingNewBatch = newBatch;
-                    appendResult = appendNewBatch(topic, effectivePartition, dq, timestamp, key, value, headers, callbacks,
+                    appendResult = appendNewBatch(tp, dq, timestamp, key, value, headers, callbacks,
                             () -> chunkedRecordsBuilder(pendingNewBatch.stream, pendingNewBatch.firstAppendSize), nowMs);
                     if (appendResult.needsNewBatch())
                         throw new IllegalStateException("appendNewBatch must not return a needsNewBatch result");
