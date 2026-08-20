@@ -828,7 +828,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     if (currentBatch.builder.numRecords() == 0) {
                         // The only way we can get here is if append() has failed in an unexpected
                         // way and left an empty batch. Try to clean it up.
-                        log.debug("Tried to flush an empty batch for {}.", tp);
+                        log.warn("Tried to flush an empty batch for {}.", tp);
                         // There should not be any deferred events attached to the batch. We fail
                         // the batch just in case. As a side effect, coordinator state is also
                         // reverted, but there should be no changes since the batch was empty.
@@ -1092,7 +1092,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         recordsToAppend
                     );
 
-                    if (!currentBatch.builder.hasRoomFor(estimatedSizeUpperBound)) {
+                    if (currentBatch.builder.numRecords() > 0 &&
+                        !currentBatch.builder.hasRoomFor(estimatedSizeUpperBound)) {
                         // Start a new batch when the total uncompressed data size would exceed
                         // the max batch size. We still allow atomic writes with an uncompressed size
                         // larger than the max batch size as long as they compress down to under the max
